@@ -79,7 +79,7 @@ const WAVES: [number, number, number, number, number][] = [
   [8, 5, 6, 6, 0],
   [4, 2, 2, 2, 1], // boss round
 ];
-const MAX_ENEMIES = 26;
+const MAX_ENEMIES = 72;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 
@@ -418,8 +418,10 @@ function World({
   net: NetHandle | null;
   remotes: React.MutableRefObject<Map<string, RemoteState>>;
   dead: boolean;
+  players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
 }) {
+
 
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });

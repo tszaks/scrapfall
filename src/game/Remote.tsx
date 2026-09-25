@@ -19,8 +19,10 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       const g = groups.current[i];
       if (!g) continue;
       const p = list[i];
-      g.visible = !!p;
-      if (!p) continue;
+      // downed teammates are spectating: invisible to everyone
+      g.visible = !!p && p.hp > 0;
+      if (!p || p.hp <= 0) continue;
+
       const k = Math.min(1, delta * 12);
       p.rx += (p.x - p.rx) * k;
       p.rz += (p.z - p.rz) * k;
