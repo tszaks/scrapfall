@@ -785,24 +785,66 @@ function World({
     }
 
     // player bullets
+    const hurtEnemy = (e: Enemy, dmg: number) => {
+      e.hp -= dmg;
+      e.flash = 0.1;
+      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+      if (e.hp <= 0) {
+        e.alive = false;
+        onScore();
+      }
+    };
+    const burst = (b: Bullet) => {
+      if (b.cluster <= 0) return;
+      const n = b.cluster;
+      const c = b.cluster;
+      b.cluster = 0;
+      for (let s = 0; s < n; s++) {
+        const a = (s / n) * Math.PI * 2 + Math.random();
+        const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
+        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+      }
+      void c;
+    };
     bullets.current.forEach((b, i) => {
       const m = bulletMeshes.current[i];
       if (b.active) {
+        const px = b.pos.x;
+        const pz = b.pos.z;
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
-        if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
-        else {
+        const hitWall = outOfBounds(b.pos);
+        if (hitWall && b.bounce > 0) {
+          // bounce off whichever side it ran into
+          b.bounce--;
+          if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          else b.vel.z *= -1;
+          b.pos.set(px, b.pos.y, pz);
+        } else if (b.life <= 0 || hitWall) {
+          burst(b);
+          b.active = false;
+        } else {
           for (const e of enemies) {
             if (!e.alive) continue;
             const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
-              b.active = false;
-              e.hp -= b.damage;
-              e.flash = 0.1;
-              if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-              if (e.hp <= 0) {
-                e.alive = false;
-                onScore();
+              hurtEnemy(e, b.damage);
+              if (b.slow > 0) e.slow = b.slow;
+              if (b.chain > 0) {
+                let left = b.chain;
+                for (const o of enemies) {
+                  if (left <= 0) break;
+                  if (!o.alive || o === e) continue;
+                  if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
+                    hurtEnemy(o, b.damage);
+                    left--;
+                  }
+                }
+              }
+              if (b.pierce > 0) b.pierce--;
+              else {
+                burst(b);
+                b.active = false;
               }
               break;
             }
@@ -818,6 +860,7 @@ function World({
         }
       }
     });
+
 
     // enemy bullets
     enemyBullets.current.forEach((b, i) => {
