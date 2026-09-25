@@ -1157,10 +1157,10 @@ export function Game() {
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves and beat the Warlord. New guns drop on waves 3, 5, 7 and 9.`}
+                  : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-5 / Q E swap guns · Esc to pause
+              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
             </p>
             <button
               onClick={start}
