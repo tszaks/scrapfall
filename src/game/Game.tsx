@@ -486,6 +486,10 @@ function World({
   deadRef.current = dead;
   const playersRef = useRef(players);
   playersRef.current = players;
+  const healthRef = useRef(health);
+  healthRef.current = health;
+  const coopRef = useRef(!!net);
+  coopRef.current = !!net;
 
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
