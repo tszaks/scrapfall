@@ -844,21 +844,23 @@ function World({
         tTimer.current = 0.05;
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
-          hp: spectating ? 0 : MAX_HP, w: weapon.current,
+          hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
         });
       }
     }
 
     // weapon pickup
     const pk = pickup.current;
+    // in co-op a gun someone else already carries still spawns; you just can't grab a duplicate
+    const canTake = !owned.current.has(pk.gun);
     if (pickupMesh.current) {
-      pickupMesh.current.visible = pk.active;
+      pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
         pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
-    if (pk.active && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
+    if (pk.active && canTake && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
       ammo.current[pk.gun] = GUNS[pk.gun].ammo;
