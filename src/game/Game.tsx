@@ -505,7 +505,7 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size);
+      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size, g);
     }
     recoil.current = g.damage > 3 ? 1 : 0.5;
     const w = weapon.current;
