@@ -1694,8 +1694,17 @@ export function Game() {
           <div className="absolute right-5 top-16 space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
             <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
             {[...remotes.current.values()].map((r) => (
-              <div key={r.id} className="rounded bg-[#f3e6cf]/80 px-2 py-1">
-                <span style={{ color: r.color }}>■</span> {r.hp > 0 ? `${r.hp} HP` : "DOWN"}
+              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
+                {r.hp > 0 ? (
+                  <span>
+                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
+                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
+                  </span>
+                ) : (
+                  <span className="text-[#b3261e]">DOWN</span>
+                )}
               </div>
             ))}
           </div>
