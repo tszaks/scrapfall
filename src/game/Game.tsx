@@ -396,7 +396,9 @@ function World({
   net,
   remotes,
   dead,
+  players,
   msgSink,
+
 }: {
   blocks: Block[];
   enemies: Enemy[];
