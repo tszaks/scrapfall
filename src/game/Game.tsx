@@ -735,7 +735,7 @@ function World({
         if (m.type === "snap") applySnap(m);
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") onHurt();
+        else if (m.type === "hurt") onHurt(Number(m.dmg) || 1);
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
