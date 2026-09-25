@@ -591,6 +591,7 @@ function World({
     look.current = { yaw: 0, pitch: 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
+    pending.current = [];
     weapon.current = "pistol";
     owned.current = new Set(["pistol"]);
     setHeld("pistol");
@@ -1166,6 +1167,13 @@ function World({
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     recoil.current = Math.max(0, recoil.current - delta * 6);
+    markMeshes.current.forEach((g, i) => {
+      if (!g) return;
+      const pd = pending.current[i];
+      const show = !!pd && pd.t <= MARK_TIME && Math.floor(state.clock.elapsedTime * 6) % 2 === 0;
+      g.visible = show;
+      if (pd) g.position.set(pd.x, 0, pd.z);
+    });
     const v = viewModel.current;
     if (!v) return;
     v.position.copy(cam.position);
