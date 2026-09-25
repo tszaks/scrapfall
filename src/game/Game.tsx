@@ -533,10 +533,10 @@ function World({
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
-    // weapons: 80% chance each wave for a random gun you don't own
-    const candidates = ORDER.filter((w) => w !== "pistol" && !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
-    if (candidates.length && rand() < 0.8) {
-      const drop = candidates[Math.floor(rand() * candidates.length)]!;
+    // weapons: 80% chance each wave, following this run's shuffled gun order
+    const candidates = dropOrder.current.filter((w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
+    const drop = candidates[0];
+    if (drop && Math.random() < 0.8) {
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
     }
