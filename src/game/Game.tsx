@@ -59,7 +59,7 @@ const WAVES: [number, number, number, number, number][] = [
   [4, 2, 2, 2, 1], // boss round
 ];
 const MAX_ENEMIES = 26;
-const MAX_HP = 8;
+const MAX_HP = 10;
 
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
