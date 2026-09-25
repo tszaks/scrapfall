@@ -93,7 +93,7 @@ const MAX_HP = 10;
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
 const TURN_SPEED = 2.4;
-const MAX_BULLETS = 60;
+const MAX_BULLETS = 90;
 const SPEED = 7;
 const EYE = 1.6;
 
