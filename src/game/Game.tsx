@@ -384,6 +384,7 @@ function World({
   onStatus,
   onBoss,
   onWeapon,
+  onInv,
   onAmmo,
   onHeal,
   sensX,
