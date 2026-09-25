@@ -1105,9 +1105,9 @@ function World({
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
-      const hurtTarget = (t: Target) => {
-        if (t.id === null) onHurt();
-        else n?.sendTo(t.id, { type: "hurt" });
+      const hurtTarget = (t: Target, dmg: number) => {
+        if (t.id === null) onHurt(dmg);
+        else n?.sendTo(t.id, { type: "hurt", dmg });
       };
 
       // flow field per target cell (cached)
@@ -1141,7 +1141,8 @@ function World({
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
         let tz = target.z;
-        if (!clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
+        const ghost = e.kind === "specter"; // specters drift straight through cover
+        if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
           const dist = fields.current.get(toCell(target.x) * 1000 + toCell(target.z));
           if (dist) {
             const wp = nextWaypoint(solid, dist, e.x, e.z);
@@ -1154,56 +1155,85 @@ function World({
         const md = Math.hypot(mx, mz) || 1;
         let dir = 1;
         if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
+        if (e.kind === "bomber") dir = d > 16 ? 1 : d < 9 ? -1 : 0;
         if (e.kind === "brute" && d < 1.8) dir = 0;
+        if (e.kind === "vanguard" && d < 2) dir = 0;
         if (e.kind === "boss" && d < 3) dir = 0;
         if (e.swing > 0) dir = 0;
         const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
         const nx = e.x + (mx / md) * step;
         const nz = e.z + (mz / md) * step;
         const r = Math.min(st.radius, 0.8);
-        if (!blocked(blocks, nx, e.z, r)) e.x = nx;
-        if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+        if (ghost) { e.x = nx; e.z = nz; }
+        else {
+          if (!blocked(blocks, nx, e.z, r)) e.x = nx;
+          if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+        }
 
         if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
-          hurtTarget(target);
+          hurtTarget(target, st.dmg);
         }
-        if (e.kind === "brute" || e.kind === "boss") {
-          const reach = e.kind === "boss" ? 3.6 : 2.4;
+        // SPECTER: blinks in behind whoever it is hunting, then slashes
+        if (e.kind === "specter") {
+          e.shot -= delta;
+          if (e.shot <= 0 && d > 9) {
+            e.shot = 5 + rand() * 3;
+            const a = rand() * Math.PI * 2;
+            const bx = target.x + Math.sin(a) * 4;
+            const bz = target.z + Math.cos(a) * 4;
+            if (!blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
+          }
+          if (d < 1.6 && e.cooldown <= 0) {
+            e.cooldown = 1.4;
+            hurtTarget(target, st.dmg);
+          }
+        }
+        if (e.kind === "brute" || e.kind === "boss" || e.kind === "vanguard") {
+          const reach = e.kind === "boss" ? 3.6 : e.kind === "vanguard" ? 2.6 : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
-            if (before > 0.2 && e.swing <= 0.2 && d < reach) {
-              hurtTarget(target);
-              if (e.kind === "boss") hurtTarget(target);
-            }
+            if (before > 0.2 && e.swing <= 0.2 && d < reach) hurtTarget(target, st.dmg);
           } else if (d < reach - 0.2 && e.cooldown <= 0) {
             e.swing = 0.4;
-            e.cooldown = 1.6;
+            e.cooldown = e.kind === "boss" ? 1.3 : 1.6;
           }
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
-          e.cooldown = 2 + rand() * 0.8;
+          e.cooldown = 1.5 + rand() * 0.6;
           const from = new THREE.Vector3(e.x, 1.5, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
-          fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5);
+          fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
+        }
+        // BOMBER: heavy shells lobbed from above, they clear low cover
+        if (e.kind === "bomber") {
+          e.shot -= delta;
+          if (e.shot <= 0 && d < 30) {
+            e.shot = 3 + rand();
+            const from = new THREE.Vector3(e.x, 3.2, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2, target.z - e.z).normalize();
+            from.addScaledVector(vel, 1.2);
+            fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
+          }
         }
         if (e.kind === "boss") {
           e.shot -= delta;
-          if (e.shot <= 0 && d < 26) {
-            e.shot = 2.2;
+          if (e.shot <= 0 && d < 30) {
+            e.shot = 1.8;
             const from = new THREE.Vector3(e.x, 2.6, e.z);
             const base = Math.atan2(dx, dz);
-            for (let s = -2; s <= 2; s++) {
-              const a = base + s * 0.18;
+            for (let s = -3; s <= 3; s++) {
+              const a = base + s * 0.16;
               const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
-              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.9), 3.5);
+              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
             }
           }
         }
       }
+
     }
 
     // player bullets
