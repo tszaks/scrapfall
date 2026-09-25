@@ -890,7 +890,7 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: STATS[kind].hp,
+        hp: kind === "boss" ? Math.round(BOSS_HP + 20 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
@@ -899,7 +899,8 @@ function World({
         slow: 0,
       });
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      delay += i < 2 ? 0.4 : 1 + rand() * 2.5;
+      delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
+
     });
     // health: random; solo waits 2 waves between packs, co-op packs come more often
     const healGap = extra > 0 ? 1 : 2;
