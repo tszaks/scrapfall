@@ -958,7 +958,7 @@ function World({
       fireCd.current = GUNS[weapon.current].cooldown;
     }
 
-    // player movement
+    // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
     cam.getWorldDirection(FORWARD);
@@ -966,14 +966,19 @@ function World({
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
-    if (MOVE.lengthSq() > 0) {
-      MOVE.normalize().multiplyScalar(SPEED * delta);
-      const nx = cam.position.x + MOVE.x;
-      const nz = cam.position.z + MOVE.z;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
-    }
     const moving = MOVE.lengthSq() > 0;
+    if (moving) MOVE.normalize();
+    const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
+    const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    slide.current.x += (MOVE.x * SPEED - slide.current.x) * resp;
+    slide.current.z += (MOVE.z * SPEED - slide.current.z) * resp;
+    if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
+      const nx = cam.position.x + slide.current.x * delta;
+      const nz = cam.position.z + slide.current.z * delta;
+      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
+      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+    }
+
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
     cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
