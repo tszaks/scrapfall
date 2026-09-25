@@ -10,7 +10,19 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
-type Weapon = "pistol" | "scatter";
+type Weapon = "pistol" | "scatter" | "smg" | "rail" | "cannon";
+type Gun = {
+  name: string; wave: number; cooldown: number; count: number; spread: number;
+  speed: number; life: number; damage: number; size: number; color: string; body: string;
+};
+const GUNS: Record<Weapon, Gun> = {
+  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26" },
+  scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c" },
+  smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c" },
+  rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4" },
+  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e" },
+};
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon"];
 type Enemy = {
   kind: Kind;
   x: number;
@@ -22,7 +34,7 @@ type Enemy = {
   flash: number; // hit flash timer
   shot: number; // boss volley timer
 };
-type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean };
+type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number };
 
 const BOSS_HP = 45;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
@@ -46,7 +58,6 @@ const WAVES: [number, number, number, number, number][] = [
   [8, 5, 6, 6, 0],
   [4, 2, 2, 2, 1], // boss round
 ];
-const PICKUP_WAVE = 3;
 const MAX_ENEMIES = 26;
 const MAX_HP = 8;
 
@@ -253,16 +264,55 @@ function BulletPool({
   );
 }
 
-function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number) {
+function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0) {
   const slot = pool.find((b) => !b.active);
   if (slot) {
+    Object.assign(slot, { life, active: true, damage, color, size });
     slot.pos.copy(pos);
     slot.vel.copy(vel);
-    slot.life = life;
-    slot.active = true;
   } else if (pool.length < MAX_BULLETS) {
-    pool.push({ pos: pos.clone(), vel: vel.clone(), life, active: true });
+    pool.push({ pos: pos.clone(), vel: vel.clone(), life, active: true, damage, color, size });
   }
+}
+
+/** Simple blocky gun model, different silhouette per weapon. */
+function GunModel({ w }: { w: Weapon }) {
+  const g = GUNS[w];
+  const glow = <meshBasicMaterial color={g.color} fog={false} />;
+  const body = <meshLambertMaterial color={g.body} />;
+  return (
+    <group>
+      {w === "pistol" && (<>
+        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.1, 0.12, 0.35]} />{body}</mesh>
+        <mesh position={[0, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.08, 0.18, 0.1]} />{body}</mesh>
+        <mesh position={[0, 0.07, -0.3]}><boxGeometry args={[0.03, 0.03, 0.03]} />{glow}</mesh>
+      </>)}
+      {w === "scatter" && (<>
+        <mesh position={[-0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
+        <mesh position={[0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
+        <mesh position={[0, -0.04, 0.05]}><boxGeometry args={[0.14, 0.14, 0.3]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
+        <mesh position={[0, -0.06, -0.2]}><boxGeometry args={[0.16, 0.05, 0.12]} />{glow}</mesh>
+      </>)}
+      {w === "smg" && (<>
+        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.14, 0.45]} />{body}</mesh>
+        <mesh position={[0, 0, -0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.025, 0.025, 0.2, 6]} /><meshLambertMaterial color="#111" /></mesh>
+        <mesh position={[0, -0.16, -0.12]}><boxGeometry args={[0.06, 0.22, 0.08]} />{body}</mesh>
+        <mesh position={[0.065, 0.02, -0.15]}><boxGeometry args={[0.01, 0.04, 0.3]} />{glow}</mesh>
+      </>)}
+      {w === "rail" && (<>
+        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.09, 0.09, 0.8]} />{body}</mesh>
+        {[-0.5, -0.35, -0.2].map((z) => (
+          <mesh key={z} position={[0, 0, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.08, 0.018, 6, 12]} />{glow}</mesh>
+        ))}
+        <mesh position={[0, -0.1, 0.05]}><boxGeometry args={[0.08, 0.16, 0.14]} /><meshLambertMaterial color="#555" /></mesh>
+      </>)}
+      {w === "cannon" && (<>
+        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.1, 0.55, 12]} />{body}</mesh>
+        <mesh position={[0, 0, -0.53]} rotation-x={Math.PI / 2}><torusGeometry args={[0.13, 0.03, 6, 14]} />{glow}</mesh>
+        <mesh position={[0, 0.16, -0.15]}><sphereGeometry args={[0.06, 8, 8]} />{glow}</mesh>
+      </>)}
+    </group>
+  );
 }
 
 function World({
@@ -288,7 +338,7 @@ function World({
   onHurt: () => void;
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
-  onWeapon: (w: Weapon) => void;
+  onWeapon: (w: Weapon, picked: boolean) => void;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -297,7 +347,14 @@ function World({
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
   const weapon = useRef<Weapon>("pistol");
-  const pickup = useRef({ x: 0, z: 0, active: false });
+  const [held, setHeld] = useState<Weapon>("pistol");
+  const [dropGun, setDropGun] = useState<Weapon>("scatter");
+  const owned = useRef<Set<Weapon>>(new Set(["pistol"]));
+  const trigger = useRef(false);
+  const fireCd = useRef(0);
+  const viewModel = useRef<THREE.Group>(null);
+  const recoil = useRef(0);
+  const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
@@ -317,6 +374,8 @@ function World({
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     weapon.current = "pistol";
+    owned.current = new Set(["pistol"]);
+    setHeld("pistol");
     pickup.current.active = false;
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
@@ -333,35 +392,58 @@ function World({
     return () => document.removeEventListener("mousemove", onMove);
   }, []);
 
+  const equip = (w: Weapon) => {
+    weapon.current = w;
+    setHeld(w);
+    onWeapon(w, false);
+  };
+
+  const fire = () => {
+    const g = GUNS[weapon.current];
+    camera.getWorldDirection(FORWARD);
+    const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
+    pos.y -= 0.25;
+    for (let s = 0; s < g.count; s++) {
+      const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
+      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
+      dir.y += (Math.random() - 0.5) * g.spread * 0.6;
+      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size);
+    }
+    recoil.current = g.damage > 3 ? 1 : 0.5;
+  };
+
   useEffect(() => {
-    const fire = () => {
-      if (!lockedRef.current || gameOver) return;
-      camera.getWorldDirection(FORWARD);
-      const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
-      pos.y -= 0.25;
-      if (weapon.current === "scatter") {
-        for (let s = -2; s <= 2; s++) {
-          const dir = FORWARD.clone().applyAxisAngle(camera.up, s * 0.07);
-          dir.y += (Math.random() - 0.5) * 0.04;
-          fireInto(bullets.current, pos, dir.normalize().multiplyScalar(BULLET_SPEED), 0.8);
-        }
-      } else {
-        fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(BULLET_SPEED), 2);
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
+    };
+    const onUp = () => (trigger.current = false);
+    const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
+    const onKey = (e: KeyboardEvent) => {
+      if (isFire(e)) trigger.current = true;
+      const n = Number(e.key);
+      const w = ORDER[n - 1];
+      if (w && owned.current.has(w)) equip(w);
+      if (e.code === "KeyQ" || e.code === "KeyE") {
+        const list = ORDER.filter((x) => owned.current.has(x));
+        const i = list.indexOf(weapon.current);
+        const next = list[(i + (e.code === "KeyE" ? 1 : list.length - 1)) % list.length];
+        if (next) equip(next);
       }
     };
-    const onDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "CANVAS") fire();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter") && !e.repeat) fire();
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (isFire(e)) trigger.current = false;
     };
     window.addEventListener("mousedown", onDown);
+    window.addEventListener("mouseup", onUp);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
     return () => {
       window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mouseup", onUp);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
     };
-  }, [camera, gameOver]);
+  }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnWave = (n: number) => {
     const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
@@ -392,9 +474,11 @@ function World({
       });
     });
     if (boss) onBoss(BOSS_HP);
-    if (n === PICKUP_WAVE && weapon.current === "pistol") {
+    const drop = ORDER.find((w) => GUNS[w].wave === n && !owned.current.has(w));
+    if (drop) {
       const p = randomSpawn(blocks, rand);
-      pickup.current = { x: p.x, z: p.z, active: true };
+      pickup.current = { x: p.x, z: p.z, active: true, gun: drop };
+      setDropGun(drop);
     }
   };
 
@@ -416,7 +500,24 @@ function World({
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
 
+    // held gun follows the camera
+    recoil.current = Math.max(0, recoil.current - delta * 6);
+    if (viewModel.current) {
+      viewModel.current.position.copy(cam.position);
+      viewModel.current.quaternion.copy(cam.quaternion);
+      viewModel.current.translateX(0.3);
+      viewModel.current.translateY(-0.28 + recoil.current * 0.03);
+      viewModel.current.translateZ(-0.75 + recoil.current * 0.08);
+      viewModel.current.rotateX(recoil.current * 0.15);
+    }
+
     if (gameOver || !locked) return;
+
+    fireCd.current -= delta;
+    if (trigger.current && fireCd.current <= 0) {
+      fire();
+      fireCd.current = GUNS[weapon.current].cooldown;
+    }
 
     // player movement
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
@@ -446,8 +547,10 @@ function World({
     }
     if (pk.active && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
-      weapon.current = "scatter";
-      onWeapon("scatter");
+      owned.current.add(pk.gun);
+      weapon.current = pk.gun;
+      setHeld(pk.gun);
+      onWeapon(pk.gun, true);
     }
 
     // waves
@@ -566,7 +669,7 @@ function World({
             const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
               b.active = false;
-              e.hp -= 1;
+              e.hp -= b.damage;
               e.flash = 0.1;
               if (e.kind === "boss") onBoss(Math.max(0, e.hp));
               if (e.hp <= 0) {
@@ -581,6 +684,10 @@ function World({
       if (m) {
         m.visible = b.active;
         m.position.copy(b.pos);
+        if (b.active) {
+          m.scale.setScalar(b.size / 0.14);
+          (m.material as THREE.MeshBasicMaterial).color.set(b.color);
+        }
       }
     });
 
@@ -622,16 +729,14 @@ function World({
       <group ref={pickupMesh} visible={false}>
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
-          <meshBasicMaterial color="#ffd23f" fog={false} />
+          <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
         </mesh>
-        <mesh position-y={1}>
-          <boxGeometry args={[1, 0.3, 0.3]} />
-          <meshLambertMaterial color="#2b2118" emissive="#ff8a1f" emissiveIntensity={0.6} />
-        </mesh>
-        <mesh position={[-0.35, 0.8, 0]}>
-          <boxGeometry args={[0.2, 0.4, 0.25]} />
-          <meshLambertMaterial color="#6b4a2c" />
-        </mesh>
+        <group position-y={1} scale={2.2} rotation-y={Math.PI / 2}>
+          <GunModel w={dropGun} />
+        </group>
+      </group>
+      <group ref={viewModel} scale={0.7}>
+        <GunModel w={held} />
       </group>
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
@@ -748,9 +853,9 @@ export function Game() {
             if (showBanner) setBanner(true);
           }}
           onBoss={setBossHp}
-          onWeapon={(w) => {
+          onWeapon={(w, picked) => {
             setWeapon(w);
-            if (w === "scatter") setPickupMsg(true);
+            if (picked) setPickupMsg(true);
           }}
         />
       </Canvas>
@@ -779,7 +884,7 @@ export function Game() {
               KILLS {score}
             </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {weapon === "scatter" ? "SCATTER" : "PISTOL"}
+              <span style={{ color: GUNS[weapon].body }}>■</span> {GUNS[weapon].name}
             </div>
           </div>
           <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
@@ -802,7 +907,7 @@ export function Game() {
         )}
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            SCATTER GUN ACQUIRED
+            {GUNS[weapon].name} ACQUIRED · keys 1-5 or Q/E to swap
           </div>
         )}
         {locked && !ended && (
@@ -824,10 +929,10 @@ export function Game() {
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves and beat the Warlord. Grab the glowing scatter gun when it drops on wave 3.`}
+                  : `Survive ${WAVES.length} waves and beat the Warlord. New guns drop on waves 3, 5, 7 and 9.`}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse or arrow keys to look · Space to shoot · Esc to pause
+              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-5 / Q E swap guns · Esc to pause
             </p>
             <button
               onClick={start}
