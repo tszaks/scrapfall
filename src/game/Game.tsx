@@ -1839,22 +1839,24 @@ export function Game() {
               </div>
             )}
 
-            <div>
-              <button
-                onClick={() => setShowSettings((v) => !v)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-              >
-                {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
-              </button>
-              <button
-                onClick={() => setShowWeapons(true)}
-                className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-              >
-                WEAPONS
-              </button>
-              {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-            </div>
-            {showSettings && (
+            {!paused && (
+              <div>
+                <button
+                  onClick={() => setShowSettings((v) => !v)}
+                  className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
+                </button>
+                <button
+                  onClick={() => setShowWeapons(true)}
+                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  WEAPONS
+                </button>
+                {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+              </div>
+            )}
+            {showSettings && !paused && (
               <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
                 <label className="block">
                   FIELD OF VIEW · {fov}°
