@@ -1073,7 +1073,8 @@ export function Game() {
             setHealth((h) => Math.min(MAX_HP, h + 3));
             setHealMsg((n) => n + 1);
           }}
-          sens={sens}
+          sensX={sensX}
+          sensY={sensY}
           fov={fov}
           onWeapon={(w, picked) => {
             setWeapon(w);
