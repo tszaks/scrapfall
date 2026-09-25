@@ -366,6 +366,7 @@ function World({
   const pickupMesh = useRef<THREE.Group>(null);
   const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0 });
   const lostQueue = useRef<Weapon[]>([]);
+  const dropOrder = useRef<Weapon[]>(["scatter", "smg", "rail", "cannon"]);
   const bob = useRef(0);
   const sensRef = useRef(sens);
   sensRef.current = sens;
