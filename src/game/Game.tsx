@@ -1527,6 +1527,8 @@ export function Game() {
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
+  const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
+  const connected = [{ id: "host", num: 1 }, ...roster];
 
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
@@ -1599,6 +1601,8 @@ export function Game() {
           dead={dead}
           players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
+          health={health}
+          slots={slots}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
