@@ -1355,6 +1355,13 @@ export function Game() {
       return;
     }
     if (m.type === "over") { setAllDown(true); return; }
+    if (m.type === "pause") {
+      setLocked(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+      return;
+    }
+    if (m.type === "resume") { startRef.current(true); return; }
+    if (m.type === "begin") { startRef.current(true); return; }
     if (m.type === "joined") {
       const id = String(m.from);
       if (!slots.current[id]) {
