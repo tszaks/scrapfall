@@ -406,6 +406,7 @@ function World({
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
+  onInv: (inv: { w: Weapon; ammo: number }[]) => void;
   onAmmo: (n: number) => void;
   onHeal: () => void;
   sensX: number;
