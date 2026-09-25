@@ -1529,6 +1529,13 @@ export function Game() {
   const isHost = !net || net.role === "host";
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
+  // teammate health lives in a ref: nudge the HUD so it stays current
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!net) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 250);
+    return () => window.clearInterval(id);
+  }, [net]);
 
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
