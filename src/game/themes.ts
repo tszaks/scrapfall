@@ -153,3 +153,6 @@ export const THEMES: Theme[] = [
     blockShape: "rock",
     boss: { name: "FROST DRAKE", shape: "drake", body: "#7fb6dc", limb: "#4a6f96", eye: "#eaffff", weapon: "#d8f2ff", glow: "#7fe8ff" },
     hazard: { name: "PERMAFROST", slip: 0.95 },
+  },
+];
+
