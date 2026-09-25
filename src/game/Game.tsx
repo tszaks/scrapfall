@@ -98,6 +98,9 @@ function World({
   const look = useRef({ yaw: 0, pitch: 0 });
   const hurtCooldown = useRef(0);
   const { camera } = useThree();
+  useEffect(() => {
+    camera.position.set(0, EYE, 0);
+  }, [blocks, camera]);
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
 
@@ -255,6 +258,8 @@ export function Game() {
 
   const { blocks, enemies, respawnEnemy } = useMemo(() => {
     const level = generateLevel(seed);
+    // keep the player's start area clear
+    level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = [];
     for (let i = 0; i < ENEMY_COUNT; i++) {
       const p = randomSpawn(level.blocks, level.rand);
