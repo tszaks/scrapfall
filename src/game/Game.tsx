@@ -868,15 +868,14 @@ function World({
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
     const enemyMul = 1 + 0.6 * extra;
     const lootMul = 1 + 0.65 * extra;
-    const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
+    const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
-    const kinds: Kind[] = [
-      ...Array(boss).fill("boss"),
-      ...Array(scale(d)).fill("drifter"),
-      ...Array(scale(b)).fill("brute"),
-      ...Array(scale(s)).fill("shooter"),
-      ...Array(scale(r)).fill("runner"),
-    ].slice(0, MAX_ENEMIES);
+    const kinds: Kind[] = ([] as Kind[])
+      .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .sort((a) => (a === "boss" ? -1 : 0))
+      .slice(0, MAX_ENEMIES);
+    const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
     enemies.forEach((e, i) => {
