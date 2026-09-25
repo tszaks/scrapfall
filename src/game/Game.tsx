@@ -10,10 +10,13 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
-type Weapon = "pistol" | "scatter" | "smg" | "rail" | "cannon";
+type Weapon =
+  | "pistol" | "scatter" | "smg" | "rail" | "cannon"
+  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
+  bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
   pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 0 },
@@ -21,8 +24,14 @@ const GUNS: Record<Weapon, Gun> = {
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
   cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
+  rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
+  harpoon: { name: "HARPOON", wave: 6, cooldown: 0.8, count: 1, spread: 0, speed: 40, life: 2, damage: 3, size: 0.1, color: "#f2ead6", body: "#4a4238", ammo: 12, pierce: 3 },
+  cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
+  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4 },
+  tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon"];
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
+const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 type Enemy = {
   kind: Kind;
   x: number;
@@ -33,8 +42,13 @@ type Enemy = {
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
   shot: number; // boss volley timer
+  slow: number; // frozen timer
 };
-type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number };
+type Bullet = {
+  pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number;
+};
+
 
 const BOSS_HP = 45;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
