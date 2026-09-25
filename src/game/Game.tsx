@@ -7,7 +7,8 @@ import { useKeyboard } from "./useKeyboard";
 
 type Enemy = { x: number; z: number; alive: boolean };
 type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean };
-const BULLET_SPEED = 32;
+const BULLET_SPEED = 22;
+const TURN_SPEED = 2.4;
 const MAX_BULLETS = 30;
 
 const SPEED = 7;
@@ -97,6 +98,8 @@ function World({
   const look = useRef({ yaw: 0, pitch: 0 });
   const hurtCooldown = useRef(0);
   const { camera } = useThree();
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -116,7 +119,7 @@ function World({
   const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
   useEffect(() => {
     const fire = () => {
-      if (!document.pointerLockElement || gameOver) return;
+      if (!lockedRef.current || gameOver) return;
       camera.getWorldDirection(FORWARD);
       const slot = bullets.current.find((b) => !b.active);
       const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
@@ -130,9 +133,11 @@ function World({
         bullets.current.push({ pos, vel: FORWARD.clone().multiplyScalar(BULLET_SPEED), life: 2, active: true });
       }
     };
-    const onDown = () => fire();
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "CANVAS") fire();
+    };
     const onKey = (e: KeyboardEvent) => {
-      if ((e.code === "Enter" || e.code === "NumpadEnter") && !e.repeat) fire();
+      if ((e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter") && !e.repeat) fire();
     };
     window.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
@@ -180,6 +185,7 @@ function World({
     if (gameOver || !locked) return;
 
     const k = keys.current;
+    look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * delta;
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
     cam.getWorldDirection(FORWARD);
@@ -232,7 +238,7 @@ function World({
       ))}
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
         <mesh key={`b${i}`} ref={(m) => { bulletMeshes.current[i] = m; }} visible={false}>
-          <sphereGeometry args={[0.09, 8, 8]} />
+          <sphereGeometry args={[0.14, 10, 10]} />
           <meshBasicMaterial color="#ffe08a" />
         </mesh>
       ))}
@@ -264,9 +270,23 @@ export function Game() {
   }, [seed]);
 
   useEffect(() => {
-    const onChange = () => setLocked(!!document.pointerLockElement);
+    const wasLocked = { v: false };
+    const onChange = () => {
+      if (document.pointerLockElement) wasLocked.v = true;
+      else if (wasLocked.v) {
+        wasLocked.v = false;
+        setLocked(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Escape") setLocked(false);
+    };
     document.addEventListener("pointerlockchange", onChange);
-    return () => document.removeEventListener("pointerlockchange", onChange);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerlockchange", onChange);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   const gameOver = health <= 0;
@@ -277,7 +297,13 @@ export function Game() {
       setScore(0);
       setHealth(5);
     }
-    wrapRef.current?.requestPointerLock();
+    setLocked(true);
+    try {
+      const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
+      r?.catch?.(() => {});
+    } catch {
+      /* pointer lock unavailable — arrow keys still turn */
+    }
   };
 
   return (
@@ -325,7 +351,7 @@ export function Game() {
                 : "A new arena is generated every round. Clear the drifters."}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse to look · click or Enter to shoot · Esc to release the cursor
+              WASD to move · mouse or ←/→ to look · Space to shoot · Esc to release the cursor
             </p>
             <button
               onClick={start}
