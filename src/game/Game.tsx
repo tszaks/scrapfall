@@ -10,6 +10,7 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
 type Kind = "drifter" | "brute" | "shooter";
+type Weapon = "pistol" | "scatter";
 type Enemy = {
   kind: Kind;
   x: number;
@@ -19,30 +20,40 @@ type Enemy = {
   cooldown: number;
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
+  shot: number; // boss volley timer
 };
 type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean };
 
+const BOSS_HP = 45;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
   drifter: { hp: 1, speed: 2.4, radius: 0.6 },
   brute: { hp: 5, speed: 1.5, radius: 0.8 },
   shooter: { hp: 2, speed: 1.8, radius: 0.6 },
+  runner: { hp: 1, speed: 4.2, radius: 0.45 },
+  boss: { hp: BOSS_HP, speed: 1.2, radius: 1.5 },
 };
 
-// 5 waves: [drifters, brutes, shooters]
-const WAVES: [number, number, number][] = [
-  [5, 0, 0],
-  [5, 1, 1],
-  [4, 2, 2],
-  [5, 2, 4],
-  [6, 4, 4],
+// 10 waves: [drifters, brutes, shooters, runners, boss]
+const WAVES: [number, number, number, number, number][] = [
+  [5, 0, 0, 0, 0],
+  [5, 1, 1, 0, 0],
+  [4, 1, 2, 3, 0],
+  [5, 2, 3, 2, 0],
+  [6, 3, 3, 3, 0],
+  [4, 2, 4, 6, 0],
+  [6, 4, 4, 4, 0],
+  [5, 5, 5, 5, 0],
+  [8, 5, 6, 6, 0],
+  [4, 2, 2, 2, 1], // boss round
 ];
-const MAX_ENEMIES = 14;
+const PICKUP_WAVE = 3;
+const MAX_ENEMIES = 26;
 const MAX_HP = 8;
 
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
 const TURN_SPEED = 2.4;
-const MAX_BULLETS = 30;
+const MAX_BULLETS = 60;
 const SPEED = 7;
 const EYE = 1.6;
 
