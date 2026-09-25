@@ -987,6 +987,7 @@ export function Game() {
       swing: 0,
       flash: 0,
       shot: 0,
+      slow: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
   }, [seed]);
