@@ -402,6 +402,7 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+
     // fresh random gun order for this run
     const pool: Weapon[] = ["scatter", "smg", "rail", "cannon"];
     for (let i = pool.length - 1; i > 0; i--) {
