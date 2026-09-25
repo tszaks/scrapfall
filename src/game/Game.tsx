@@ -1529,6 +1529,7 @@ export function Game() {
   const isHost = !net || net.role === "host";
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
+  const paused = started && !ended && !locked;
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
   useEffect(() => {
