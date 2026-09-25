@@ -582,6 +582,7 @@ function World({
         swing: 0,
         flash: 0,
         shot: 2,
+        slow: 0,
       });
     });
     if (boss) onBoss(BOSS_HP);
