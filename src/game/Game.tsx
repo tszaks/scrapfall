@@ -480,6 +480,9 @@ function World({
   isHostRef.current = isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const playersRef = useRef(players);
+  playersRef.current = players;
+
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
   const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
