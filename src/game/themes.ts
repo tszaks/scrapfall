@@ -12,7 +12,7 @@ export type Theme = {
     shooter: { body: string; barrel: string; eye: string };
   };
   enemyBullet: string;
-  blockShape: "box" | "tree" | "crystal";
+  blockShape: "box" | "tree" | "crystal" | "rock";
 };
 
 export const THEMES: Theme[] = [
@@ -63,5 +63,69 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#d4ff3a",
     blockShape: "tree",
+  },
+  {
+    name: "Ash Crater",
+    sky: "#8a7a72",
+    ground: "#3f3634",
+    grid: ["#2e2725", "#362e2c"],
+    blocks: ["#5a4a44", "#4a3c38", "#6b3a2a"],
+    wall: "#241d1b",
+    hemi: ["#ffd2b0", "#3a1a10"],
+    enemy: {
+      drifter: { body: "#ff7a2a", emissive: "#5a1a00", eye: "#fff2c0" },
+      brute: { body: "#2a2422", head: "#1a1614", eye: "#ff5a1a", club: "#3a2a22", clubHead: "#c24a1a" },
+      shooter: { body: "#7a2a1a", barrel: "#1a0e0a", eye: "#ffe04a" },
+    },
+    enemyBullet: "#ffb02a",
+    blockShape: "rock",
+  },
+  {
+    name: "Canyon Mesa",
+    sky: "#e8b98a",
+    ground: "#c07a4a",
+    grid: ["#a86a3e", "#b47244"],
+    blocks: ["#d08a54", "#b86a3a", "#9a5530"],
+    wall: "#6a3a20",
+    hemi: ["#fff0d8", "#6a3a20"],
+    enemy: {
+      drifter: { body: "#2a8a8a", emissive: "#062a2a", eye: "#fff6d0" },
+      brute: { body: "#5a3a5a", head: "#442a44", eye: "#ffd24a", club: "#3a2418", clubHead: "#d8c8a8" },
+      shooter: { body: "#e8e0c8", barrel: "#3a2a1a", eye: "#e0462a" },
+    },
+    enemyBullet: "#1ad0c0",
+    blockShape: "box",
+  },
+  {
+    name: "Cherry Grove",
+    sky: "#f2d6dc",
+    ground: "#8fae6a",
+    grid: ["#7f9e5c", "#88a664"],
+    blocks: ["#f0a0b8", "#e888a8", "#f6c0d0"],
+    wall: "#6a4a3a",
+    hemi: ["#fff4f6", "#5a6a3a"],
+    enemy: {
+      drifter: { body: "#4a4a8a", emissive: "#10103a", eye: "#fff0f4" },
+      brute: { body: "#3a5a4a", head: "#2a4438", eye: "#ff8ab0", club: "#5a3a2a", clubHead: "#b8b0a0" },
+      shooter: { body: "#c83a4a", barrel: "#2a1014", eye: "#fff6a0" },
+    },
+    enemyBullet: "#9a4aff",
+    blockShape: "tree",
+  },
+  {
+    name: "Glacier Rift",
+    sky: "#9fb8d0",
+    ground: "#c8d8e6",
+    grid: ["#aabdd0", "#b8cadb"],
+    blocks: ["#e6f4ff", "#b0d0ec", "#8ab0d8"],
+    wall: "#3f5a78",
+    hemi: ["#f0f8ff", "#4a5a7a"],
+    enemy: {
+      drifter: { body: "#c82a4a", emissive: "#3a0612", eye: "#ffffff" },
+      brute: { body: "#3a4a6a", head: "#2a3854", eye: "#aaffea", club: "#5a6a7a", clubHead: "#e0f0ff" },
+      shooter: { body: "#e0a02a", barrel: "#3a2a0a", eye: "#2a3a6a" },
+    },
+    enemyBullet: "#ff3a6a",
+    blockShape: "rock",
   },
 ];
