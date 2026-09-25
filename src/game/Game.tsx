@@ -137,20 +137,25 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   const brute = useRef<THREE.Group>(null);
   const shooter = useRef<THREE.Group>(null);
   const club = useRef<THREE.Group>(null);
+  const crown = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
     g.visible = data.alive;
     if (!data.alive) return;
     const t = state.clock.elapsedTime;
-    const bob = data.kind === "brute" ? 0 : Math.sin(t * 4 + data.x) * 0.08;
+    const heavy = data.kind === "brute" || data.kind === "boss";
+    const bob = heavy ? 0 : Math.sin(t * (data.kind === "runner" ? 10 : 4) + data.x) * 0.08;
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
-    const s = data.flash > 0 ? 1.15 : 1;
+    const base = data.kind === "boss" ? 2 : data.kind === "runner" ? 0.6 : 1;
+    const s = base * (data.flash > 0 ? 1.15 : 1);
     g.scale.setScalar(s);
-    if (drifter.current) drifter.current.visible = data.kind === "drifter";
-    if (brute.current) brute.current.visible = data.kind === "brute";
+    if (drifter.current) drifter.current.visible = data.kind === "drifter" || data.kind === "runner";
+    if (brute.current) brute.current.visible = heavy;
+    if (crown.current) crown.current.visible = data.kind === "boss";
     if (shooter.current) shooter.current.visible = data.kind === "shooter";
+    if (drifter.current) drifter.current.rotation.y = data.kind === "runner" ? t * 8 : 0;
     if (club.current) {
       // swing from raised to forward
       const p = data.swing > 0 ? 1 - data.swing / 0.4 : 0;
@@ -170,6 +175,14 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
         </mesh>
       </group>
       <group ref={brute}>
+        <group ref={crown} position-y={2.65}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <mesh key={i} position={[Math.sin((i / 5) * Math.PI * 2) * 0.35, 0, Math.cos((i / 5) * Math.PI * 2) * 0.35]}>
+              <coneGeometry args={[0.1, 0.35, 4]} />
+              <meshBasicMaterial color={c.shooter.eye} />
+            </mesh>
+          ))}
+        </group>
         <mesh position-y={1.1} castShadow>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
