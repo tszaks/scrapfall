@@ -1481,17 +1481,41 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              <span style={{ color: GUNS[weapon].body }}>■</span> {GUNS[weapon].name} {weapon === "pistol" ? "∞" : ammoLeft}
-            </div>
           </div>
           <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
             {"♦".repeat(health)}
             <span className="opacity-30">{"♦".repeat(MAX_HP - health)}</span>
           </div>
         </div>
+
+        <div className="absolute left-1/2 top-3 flex -translate-x-1/2 gap-2">
+          {inv.map((slot, i) => {
+            const g = GUNS[slot.w];
+            const active = slot.w === weapon;
+            return (
+              <div
+                key={slot.w}
+                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${
+                  active
+                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
+                    : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
+                }`}
+              >
+                <span
+                  className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[10px] font-bold text-[#f7eeda]"
+                >
+                  {i === 9 ? 0 : i + 1}
+                </span>
+                <span style={{ color: g.color }}>■</span> {g.name}{" "}
+                <b>{slot.w === "pistol" ? "∞" : active ? ammoLeft : slot.ammo}</b>
+              </div>
+            );
+          })}
+        </div>
+
         {bossHp > 0 && locked && !ended && (
-          <div className="absolute left-1/2 top-16 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+          <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+
             <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">WARLORD</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
               <div className="h-full bg-[#b3261e]" style={{ width: `${(bossHp / BOSS_HP) * 100}%` }} />
