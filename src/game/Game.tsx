@@ -5,7 +5,9 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
+  setArenaSize, SOLO_ARENA, COOP_ARENA,
 } from "./level";
+
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
