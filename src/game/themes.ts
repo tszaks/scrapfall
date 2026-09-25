@@ -13,7 +13,19 @@ export type Theme = {
   };
   enemyBullet: string;
   blockShape: "box" | "tree" | "crystal" | "rock";
+  boss: {
+    name: string;
+    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
+    body: string;
+    limb: string;
+    eye: string;
+    weapon: string;
+    glow: string;
+  };
+  /** Ground condition that only applies during the boss round. */
+  hazard: { name: string; slip: number };
 };
+
 
 export const THEMES: Theme[] = [
   {
