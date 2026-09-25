@@ -11,7 +11,7 @@ import {
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
-import { hostRoom, joinRoom, PLAYER_COLORS, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
@@ -398,6 +398,8 @@ function World({
   dead,
   players,
   msgSink,
+  health,
+  slots,
 
 }: {
   blocks: Block[];
@@ -422,6 +424,8 @@ function World({
   dead: boolean;
   players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
+  health: number;
+  slots: React.MutableRefObject<Record<string, number>>;
 }) {
 
 
@@ -491,15 +495,18 @@ function World({
 
   const upsertRemote = (m: NetMsg) => {
     const id = String(m.from ?? "host");
+    const num = id === "host" ? 1 : (slots.current[id] ?? 2);
     let r = remotes.current.get(id);
     if (!r) {
       r = {
         id, x: 0, z: 0, yaw: 0, hp: MAX_HP, weapon: "pistol",
-        color: PLAYER_COLORS[(remotes.current.size + 1) % PLAYER_COLORS.length]!,
+        num, color: colorFor(num),
         last: 0, rx: Number(m.x ?? 0), rz: Number(m.z ?? 0), ry: 0,
       };
       remotes.current.set(id, r);
     }
+    r.num = num;
+    r.color = colorFor(num);
     r.x = Number(m.x ?? 0);
     r.z = Number(m.z ?? 0);
     r.yaw = Number(m.yaw ?? 0);
