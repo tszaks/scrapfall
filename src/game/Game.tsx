@@ -1507,16 +1507,24 @@ export function Game() {
 
 
   useEffect(() => {
+    // pausing puts the whole squad on hold
+    const pauseAll = () => {
+      if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+    };
     const wasLocked = { v: false };
     const onChange = () => {
       if (document.pointerLockElement) wasLocked.v = true;
       else if (wasLocked.v) {
         wasLocked.v = false;
         setLocked(false);
+        pauseAll();
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape") setLocked(false);
+      if (e.code === "Escape") {
+        setLocked(false);
+        pauseAll();
+      }
     };
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
