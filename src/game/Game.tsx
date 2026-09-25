@@ -78,6 +78,7 @@ const WAVES: [number, number, number, number, number][] = [
   [4, 2, 2, 2, 1], // boss round
 ];
 const MAX_ENEMIES = 26;
+const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 
 const BULLET_SPEED = 22;
@@ -457,6 +458,8 @@ function World({
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
+  const pending = useRef<({ x: number; z: number; t: number } | null)[]>([]);
+  const markMeshes = useRef<(THREE.Group | null)[]>([]);
 
   const bullets = useRef<Bullet[]>([]);
   const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
@@ -535,6 +538,11 @@ function World({
     heal.current.x = h[0]!;
     heal.current.z = h[1]!;
     heal.current.active = h[2] === 1;
+    const mk = (m.mk as number[]) ?? [];
+    pending.current = enemies.map(() => null);
+    for (let j = 0; j + 3 < mk.length; j += 4) {
+      pending.current[mk[j]!] = { x: mk[j + 1]!, z: mk[j + 2]!, t: mk[j + 3]! };
+    }
   };
 
   useEffect(() => {
@@ -707,8 +715,11 @@ function World({
       ...Array(s).fill("shooter"),
       ...Array(r).fill("runner"),
     ];
+    // spread arrivals across the wave: a few right away, the rest trickle in
+    let delay = 0;
     enemies.forEach((e, i) => {
       const kind = kinds[i];
+      pending.current[i] = null;
       if (!kind) {
         e.alive = false;
         return;
@@ -719,15 +730,16 @@ function World({
         x: p.x,
         z: p.z,
         hp: STATS[kind].hp,
-        alive: true,
+        alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
         flash: 0,
         shot: 2,
         slow: 0,
       });
+      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
+      delay += i < 2 ? 0.4 : 1 + rand() * 2.5;
     });
-    if (boss) onBoss(BOSS_HP);
     // health: random, never more than once every 2 waves
     if (n >= 2 && n - lastHealWave.current >= 2 && rand() < 0.5) {
       const h = randomSpawn(blocks, rand);
@@ -874,8 +886,21 @@ function World({
     };
 
     if (isH) {
+      // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
+      pending.current.forEach((pd, i) => {
+        if (!pd) return;
+        pd.t -= delta;
+        if (pd.t <= 0) {
+          const e = enemies[i]!;
+          e.x = pd.x;
+          e.z = pd.z;
+          e.alive = true;
+          if (e.kind === "boss") onBoss(BOSS_HP);
+          pending.current[i] = null;
+        }
+      });
       // waves
-      const remaining = enemies.filter((e) => e.alive).length;
+      const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
       if (remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
@@ -1121,8 +1146,12 @@ function World({
           for (const bu of enemyBullets.current) {
             if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
           }
+          const mk: number[] = [];
+          pending.current.forEach((pd, i) => {
+            if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
+          });
           n.broadcast({
-            type: "snap", e, b,
+            type: "snap", e, b, mk,
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
           });
@@ -1164,6 +1193,18 @@ function World({
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
+      {enemies.map((_, i) => (
+        <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
+          <mesh position-y={0.04} rotation-x={-Math.PI / 2} rotation-z={Math.PI / 4}>
+            <planeGeometry args={[2, 0.4]} />
+            <meshBasicMaterial color="#e8221a" fog={false} />
+          </mesh>
+          <mesh position-y={0.045} rotation-x={-Math.PI / 2} rotation-z={-Math.PI / 4}>
+            <planeGeometry args={[2, 0.4]} />
+            <meshBasicMaterial color="#e8221a" fog={false} />
+          </mesh>
+        </group>
+      ))}
       <group ref={pickupMesh} visible={false}>
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
@@ -1194,6 +1235,7 @@ export function Game() {
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
+  const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
   const [hurtFlash, setHurtFlash] = useState(0);
@@ -1388,6 +1430,7 @@ export function Game() {
   }, [ended]);
 
   const start = () => {
+    setStarted(true);
     if (ended) {
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
@@ -1468,15 +1511,12 @@ export function Game() {
 
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-start gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               WAVE {status.wave}/{WAVES.length}
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              LEFT {status.remaining}
             </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
@@ -1488,7 +1528,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-3 flex -translate-x-1/2 gap-2">
+        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2">
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -1581,7 +1621,7 @@ export function Game() {
               onClick={start}
               className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
             >
-              {ended ? "NEW ARENA" : "CLICK TO PLAY"}
+              {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
             </button>
 
             <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
