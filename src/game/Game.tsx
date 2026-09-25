@@ -578,7 +578,6 @@ function World({
           }
         }
       }
-      }
       if (m) {
         m.visible = b.active;
         m.position.copy(b.pos);
