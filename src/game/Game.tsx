@@ -621,6 +621,8 @@ function World({
   isHostRef.current = isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
+
   const playersRef = useRef(players);
   playersRef.current = players;
   const healthRef = useRef(health);
