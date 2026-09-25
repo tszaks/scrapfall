@@ -13,6 +13,8 @@ export type Theme = {
   };
   enemyBullet: string;
   blockShape: "box" | "tree" | "crystal" | "rock";
+    boss: { name: "DUNE COLOSSUS", shape: "golem", body: "#a9713f", limb: "#7e5230", eye: "#ffd27a", weapon: "#6b4526", glow: "#ffb34a" },
+    hazard: { name: "SAND TREMORS", slip: 0.35 },
   boss: {
     name: string;
     shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
@@ -43,6 +45,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#39d0ff",
     blockShape: "box",
+    boss: { name: "THE YETI", shape: "yeti", body: "#f2f8fb", limb: "#d4e4ee", eye: "#2fd8ff", weapon: "#7b8a96", glow: "#9ff0ff" },
+    hazard: { name: "SLICK ICE", slip: 0.93 },
   },
   {
     name: "Frost Shelf",
@@ -59,6 +63,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#ff4f7a",
     blockShape: "crystal",
+    boss: { name: "ANCIENT TREANT", shape: "treant", body: "#4a3a22", limb: "#35291a", eye: "#c8ff5a", weapon: "#2f5a2b", glow: "#b6ff6a" },
+    hazard: { name: "TANGLED ROOTS", slip: 0.22 },
   },
   {
     name: "Mossy Woods",
@@ -75,6 +81,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#d4ff3a",
     blockShape: "tree",
+    boss: { name: "MAGMA DREADNOUGHT", shape: "magma", body: "#2a211f", limb: "#3d2b25", eye: "#ff5a1a", weapon: "#c24a1a", glow: "#ff8c2a" },
+    hazard: { name: "ASH SLIDE", slip: 0.5 },
   },
   {
     name: "Ash Crater",
@@ -91,6 +99,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#ffb02a",
     blockShape: "rock",
+    boss: { name: "BRASS AUTOMATON", shape: "mech", body: "#c9a04a", limb: "#8a6a2a", eye: "#e0462a", weapon: "#5a4a2a", glow: "#ffd76a" },
+    hazard: { name: "CANYON GALE", slip: 0.45 },
   },
   {
     name: "Canyon Mesa",
@@ -107,6 +117,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#1ad0c0",
     blockShape: "box",
+    boss: { name: "BLOSSOM RONIN", shape: "ronin", body: "#b03a5a", limb: "#6a2438", eye: "#fff0a0", weapon: "#e8e0e4", glow: "#ff9ac0" },
+    hazard: { name: "PETAL CYCLONE", slip: 0.4 },
   },
   {
     name: "Cherry Grove",
@@ -123,6 +135,8 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#9a4aff",
     blockShape: "tree",
+    boss: { name: "FROST DRAKE", shape: "drake", body: "#7fb6dc", limb: "#4a6f96", eye: "#eaffff", weapon: "#d8f2ff", glow: "#7fe8ff" },
+    hazard: { name: "PERMAFROST", slip: 0.95 },
   },
   {
     name: "Glacier Rift",
