@@ -9,7 +9,7 @@ import {
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
-type Kind = "drifter" | "brute" | "shooter";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
 type Weapon = "pistol" | "scatter";
 type Enemy = {
   kind: Kind;
