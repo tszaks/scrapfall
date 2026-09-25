@@ -656,6 +656,8 @@ function World({
         equip("pistol");
         if (pickup.current.active) lostQueue.current.push(w);
         else placePickup(w);
+      } else {
+        syncInv();
       }
     }
   };
