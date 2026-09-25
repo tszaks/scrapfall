@@ -733,7 +733,7 @@ function World({
       if (e.kind === "brute" && d < 1.8) dir = 0;
       if (e.kind === "boss" && d < 3) dir = 0;
       if (e.swing > 0) dir = 0;
-      const step = st.speed * delta * dir;
+      const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
       const nx = e.x + (mx / md) * step;
       const nz = e.z + (mz / md) * step;
       // boss is big but squeezes through gaps like a brute
