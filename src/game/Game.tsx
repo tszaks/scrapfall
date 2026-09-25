@@ -163,7 +163,7 @@ function BulletPool({
   color,
   size,
 }: {
-  meshes: React.MutableRefObject<(THREE.Mesh | null)[]>;
+  meshes: { current: (THREE.Mesh | null)[] };
   color: string;
   size: number;
 }) {
