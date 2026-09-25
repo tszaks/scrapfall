@@ -1894,17 +1894,25 @@ export function Game() {
         {bossHp > 0 && locked && !ended && (
           <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
 
-            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">WARLORD</div>
+            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
-              <div className="h-full bg-[#b3261e]" style={{ width: `${(bossHp / BOSS_HP) * 100}%` }} />
+              <div className="h-full bg-[#b3261e]" style={{ width: `${Math.min(100, (bossHp / BOSS_HP) * 100)}%` }} />
             </div>
           </div>
         )}
         {banner && locked && !ended && (
-          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
-            {status.wave === WAVES.length ? "BOSS ROUND" : `WAVE ${status.wave}`}
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-center text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
+            {status.wave === WAVES.length ? (
+              <>
+                {theme.boss.name}
+                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">{theme.hazard.name}</div>
+              </>
+            ) : (
+              `WAVE ${status.wave}`
+            )}
           </div>
         )}
+
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
             {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
