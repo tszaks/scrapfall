@@ -1044,7 +1044,8 @@ function World({
           b.pos.addScaledVector(b.vel, delta);
           if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
             b.active = false;
-            onHurt();
+            onHurt(b.damage);
+
             n?.broadcast({ type: "ebhit", i });
           }
         }
