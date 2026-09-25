@@ -328,6 +328,9 @@ function World({
   onBoss,
   onWeapon,
   onAmmo,
+  onHeal,
+  sens,
+  fov,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -341,6 +344,9 @@ function World({
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
   onAmmo: (n: number) => void;
+  onHeal: () => void;
+  sens: number;
+  fov: number;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -361,6 +367,15 @@ function World({
   const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0 });
   const lostQueue = useRef<Weapon[]>([]);
   const bob = useRef(0);
+  const sensRef = useRef(sens);
+  sensRef.current = sens;
+  const heal = useRef({ x: 0, z: 0, active: false });
+  const healMesh = useRef<THREE.Group>(null);
+  useEffect(() => {
+    const c = camera as THREE.PerspectiveCamera;
+    c.fov = fov;
+    c.updateProjectionMatrix();
+  }, [fov, camera]);
   const bobAmt = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
@@ -383,6 +398,7 @@ function World({
     owned.current = new Set(["pistol"]);
     setHeld("pistol");
     pickup.current.active = false;
+    heal.current.active = false;
     lostQueue.current = [];
     onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
@@ -393,8 +409,8 @@ function World({
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!document.pointerLockElement) return;
-      look.current.yaw -= e.movementX * 0.0022;
-      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022));
+      look.current.yaw -= e.movementX * 0.0022 * sensRef.current;
+      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensRef.current));
     };
     document.addEventListener("mousemove", onMove);
     return () => document.removeEventListener("mousemove", onMove);
@@ -500,6 +516,10 @@ function World({
       });
     });
     if (boss) onBoss(BOSS_HP);
+    if (n >= 2) {
+      const h = randomSpawn(blocks, rand);
+      heal.current = { x: h.x, z: h.z, active: true };
+    }
     const drop = ORDER.find((w) => GUNS[w].wave === n && !owned.current.has(w));
     if (drop) {
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
@@ -516,10 +536,10 @@ function World({
     const k = keys.current;
 
     if (!gameOver && locked) {
-      look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * delta;
+      look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sens * delta;
       look.current.pitch = Math.max(
         -1.2,
-        Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * 0.7 * delta),
+        Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sens * 0.7 * delta),
       );
     }
     cam.rotation.order = "YXZ";
@@ -570,6 +590,20 @@ function World({
       onWeapon(pk.gun, true);
       const next = lostQueue.current.shift();
       if (next) placePickup(next);
+    }
+
+    // health pickup
+    const hp = heal.current;
+    if (healMesh.current) {
+      healMesh.current.visible = hp.active;
+      if (hp.active) {
+        healMesh.current.position.set(hp.x, 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.rotation.y += delta * 1.5;
+      }
+    }
+    if (hp.active && Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3) {
+      hp.active = false;
+      onHeal();
     }
 
     // waves
@@ -770,6 +804,11 @@ function World({
           <GunModel w={dropGun} />
         </group>
       </group>
+      <group ref={healMesh} visible={false}>
+        <mesh><boxGeometry args={[0.7, 0.22, 0.22]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
+        <mesh><boxGeometry args={[0.22, 0.7, 0.22]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
+        <mesh position-y={-0.8} rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.65, 20]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
+      </group>
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} />
       </group>
@@ -792,6 +831,25 @@ export function Game() {
   const [pickupMsg, setPickupMsg] = useState(false);
   const [ammoLeft, setAmmoLeft] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [fov, setFov] = useState(75);
+  const [sens, setSens] = useState(1);
+  const [healMsg, setHealMsg] = useState(0);
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
+      if (typeof v.fov === "number") setFov(v.fov);
+      if (typeof v.sens === "number") setSens(v.sens);
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sens }));
+  }, [fov, sens]);
+  useEffect(() => {
+    if (!healMsg) return;
+    const t = window.setTimeout(() => setHealMsg(0), 1500);
+    return () => window.clearTimeout(t);
+  }, [healMsg]);
 
   useEffect(() => {
     if (!pickupMsg) return;
@@ -890,6 +948,12 @@ export function Game() {
           }}
           onBoss={setBossHp}
           onAmmo={setAmmoLeft}
+          onHeal={() => {
+            setHealth((h) => Math.min(MAX_HP, h + 3));
+            setHealMsg((n) => n + 1);
+          }}
+          sens={sens}
+          fov={fov}
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
@@ -955,6 +1019,11 @@ export function Game() {
         )}
       </div>
 
+      {healMsg > 0 && locked && !ended && (
+        <div className="pointer-events-none fixed left-1/2 top-1/3 z-10 -translate-x-1/2 rounded-md bg-[#f3e6cf]/85 px-4 py-1.5 font-mono text-sm tracking-widest text-[#b3261e]">
+          +3 HEALTH
+        </div>
+      )}
       {(!locked || ended) && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
           <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
@@ -977,6 +1046,30 @@ export function Game() {
             >
               {ended ? "NEW ARENA" : "CLICK TO PLAY"}
             </button>
+            <div>
+              <button
+                onClick={() => setShowSettings((v) => !v)}
+                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+              >
+                {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
+              </button>
+            </div>
+            {showSettings && (
+              <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
+                <label className="block">
+                  FIELD OF VIEW · {fov}°
+                  <input type="range" min={50} max={110} step={1} value={fov}
+                    onChange={(e) => setFov(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  LOOK SPEED · {sens.toFixed(1)}x
+                  <input type="range" min={0.2} max={3} step={0.1} value={sens}
+                    onChange={(e) => setSens(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+              </div>
+            )}
           </div>
         </div>
       )}
