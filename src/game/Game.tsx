@@ -381,7 +381,8 @@ function World({
   onWeapon,
   onAmmo,
   onHeal,
-  sens,
+  sensX,
+  sensY,
   fov,
 }: {
   blocks: Block[];
