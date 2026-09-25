@@ -13,14 +13,14 @@ type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
 type Weapon = "pistol" | "scatter" | "smg" | "rail" | "cannon";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
-  speed: number; life: number; damage: number; size: number; color: string; body: string;
+  speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
 };
 const GUNS: Record<Weapon, Gun> = {
-  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26" },
-  scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c" },
-  smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c" },
-  rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4" },
-  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e" },
+  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 0 },
+  scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
+  smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
+  rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
+  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon"];
 type Enemy = {
@@ -327,6 +327,7 @@ function World({
   onStatus,
   onBoss,
   onWeapon,
+  onAmmo,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -339,6 +340,7 @@ function World({
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
+  onAmmo: (n: number) => void;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -356,6 +358,10 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
+  const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0 });
+  const lostQueue = useRef<Weapon[]>([]);
+  const bob = useRef(0);
+  const bobAmt = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
@@ -377,6 +383,8 @@ function World({
     owned.current = new Set(["pistol"]);
     setHeld("pistol");
     pickup.current.active = false;
+    lostQueue.current = [];
+    onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
     onStatus(1, 0, false, true);
@@ -396,6 +404,13 @@ function World({
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
+    onAmmo(ammo.current[w]);
+  };
+
+  const placePickup = (gun: Weapon) => {
+    const p = randomSpawn(blocks, rand);
+    pickup.current = { x: p.x, z: p.z, active: true, gun };
+    setDropGun(gun);
   };
 
   const fire = () => {
@@ -410,6 +425,17 @@ function World({
       fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size);
     }
     recoil.current = g.damage > 3 ? 1 : 0.5;
+    const w = weapon.current;
+    if (w !== "pistol") {
+      ammo.current[w]--;
+      onAmmo(ammo.current[w]);
+      if (ammo.current[w] <= 0) {
+        owned.current.delete(w);
+        equip("pistol");
+        if (pickup.current.active) lostQueue.current.push(w);
+        else placePickup(w);
+      }
+    }
   };
 
   useEffect(() => {
@@ -476,9 +502,8 @@ function World({
     if (boss) onBoss(BOSS_HP);
     const drop = ORDER.find((w) => GUNS[w].wave === n && !owned.current.has(w));
     if (drop) {
-      const p = randomSpawn(blocks, rand);
-      pickup.current = { x: p.x, z: p.z, active: true, gun: drop };
-      setDropGun(drop);
+      if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
+      placePickup(drop);
     }
   };
 
@@ -499,17 +524,6 @@ function World({
     }
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
-
-    // held gun follows the camera
-    recoil.current = Math.max(0, recoil.current - delta * 6);
-    if (viewModel.current) {
-      viewModel.current.position.copy(cam.position);
-      viewModel.current.quaternion.copy(cam.quaternion);
-      viewModel.current.translateX(0.3);
-      viewModel.current.translateY(-0.28 + recoil.current * 0.03);
-      viewModel.current.translateZ(-0.75 + recoil.current * 0.08);
-      viewModel.current.rotateX(recoil.current * 0.15);
-    }
 
     if (gameOver || !locked) return;
 
@@ -534,7 +548,10 @@ function World({
       if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx;
       if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
     }
-    cam.position.y = EYE + Math.sin(state.clock.elapsedTime * 9) * (MOVE.lengthSq() > 0 ? 0.04 : 0);
+    const moving = MOVE.lengthSq() > 0;
+    bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
+    bob.current += delta * 9 * bobAmt.current;
+    cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
     // weapon pickup
     const pk = pickup.current;
@@ -548,9 +565,11 @@ function World({
     if (pk.active && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
-      weapon.current = pk.gun;
-      setHeld(pk.gun);
+      ammo.current[pk.gun] = GUNS[pk.gun].ammo;
+      equip(pk.gun);
       onWeapon(pk.gun, true);
+      const next = lostQueue.current.shift();
+      if (next) placePickup(next);
     }
 
     // waves
@@ -710,6 +729,22 @@ function World({
     });
   });
 
+  // runs after the main frame so the gun uses this frame's final camera pose
+  useFrame((state, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.05);
+    const cam = state.camera;
+    recoil.current = Math.max(0, recoil.current - delta * 6);
+    const v = viewModel.current;
+    if (!v) return;
+    v.position.copy(cam.position);
+    v.quaternion.copy(cam.quaternion);
+    const sway = bobAmt.current;
+    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
+    v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
+    v.translateZ(-0.75 + recoil.current * 0.08);
+    v.rotateX(recoil.current * 0.15);
+  });
+
   return (
     <>
       <color attach="background" args={[theme.sky]} />
@@ -755,6 +790,7 @@ export function Game() {
   const [weapon, setWeapon] = useState<Weapon>("pistol");
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
+  const [ammoLeft, setAmmoLeft] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -853,6 +889,7 @@ export function Game() {
             if (showBanner) setBanner(true);
           }}
           onBoss={setBossHp}
+          onAmmo={setAmmoLeft}
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
@@ -884,7 +921,7 @@ export function Game() {
               KILLS {score}
             </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              <span style={{ color: GUNS[weapon].body }}>■</span> {GUNS[weapon].name}
+              <span style={{ color: GUNS[weapon].body }}>■</span> {GUNS[weapon].name} {weapon === "pistol" ? "∞" : ammoLeft}
             </div>
           </div>
           <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
