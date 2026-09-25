@@ -370,6 +370,7 @@ function World({
   const sensRef = useRef(sens);
   sensRef.current = sens;
   const heal = useRef({ x: 0, z: 0, active: false });
+  const lastHealWave = useRef(-99);
   const healMesh = useRef<THREE.Group>(null);
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
