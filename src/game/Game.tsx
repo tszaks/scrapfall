@@ -1332,7 +1332,8 @@ function World({
           if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
-            onHurt();
+            onHurt(b.damage);
+
           }
         }
         if (m) {
