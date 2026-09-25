@@ -348,6 +348,7 @@ function World({
   lockedRef.current = locked;
   const weapon = useRef<Weapon>("pistol");
   const [held, setHeld] = useState<Weapon>("pistol");
+  const [dropGun, setDropGun] = useState<Weapon>("scatter");
   const owned = useRef<Set<Weapon>>(new Set(["pistol"]));
   const trigger = useRef(false);
   const fireCd = useRef(0);
@@ -477,6 +478,7 @@ function World({
     if (drop) {
       const p = randomSpawn(blocks, rand);
       pickup.current = { x: p.x, z: p.z, active: true, gun: drop };
+      setDropGun(drop);
     }
   };
 
@@ -727,10 +729,10 @@ function World({
       <group ref={pickupMesh} visible={false}>
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
-          <meshBasicMaterial color={GUNS[pickup.current.gun].color} fog={false} />
+          <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
         </mesh>
         <group position-y={1} scale={2.2} rotation-y={Math.PI / 2}>
-          <GunModel w={pickup.current.gun} />
+          <GunModel w={dropGun} />
         </group>
       </group>
       <group ref={viewModel}>
