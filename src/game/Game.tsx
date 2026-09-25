@@ -1742,18 +1742,22 @@ export function Game() {
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
           <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : theme.name}
+              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
             <p className="mt-2 text-sm opacity-70">
               {gameOver
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
+                  : paused
+                    ? `Wave ${status.wave} · ${score} kills so far.`
+                    : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
             </p>
-            <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
-            </p>
+            {!paused && (
+              <p className="mt-4 text-xs leading-relaxed opacity-60">
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
+              </p>
+            )}
             {ended && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
                 WAITING FOR THE HOST TO START A NEW ARENA
@@ -1767,54 +1771,72 @@ export function Game() {
               </button>
             )}
 
-
-            <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
-              {!net ? (
-                <>
-                  <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
-                  <div className="mt-3 flex gap-2">
+            {paused ? (
+              <div className="mt-3">
+                <button
+                  onClick={leaveGame}
+                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                >
+                  LEAVE GAME
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
+                {!net ? (
+                  <>
+                    <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={startHost}
+                        disabled={joining}
+                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      >
+                        HOST
+                      </button>
+                      <input
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
+                        placeholder="CODE"
+                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
+                      />
+                      <button
+                        onClick={startJoin}
+                        disabled={joining}
+                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      >
+                        JOIN
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
+                    <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
+                    <div className="mt-3 space-y-1 text-left">
+                      {connected.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2">
+                          <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                          <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                          <span className="opacity-50">· CONNECTED</span>
+                          {p.num === myNum && <span className="opacity-50">(YOU)</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 opacity-60">
+                      {net.role === "host" ? "share the code" : "waiting for the host"}
+                    </div>
                     <button
-                      onClick={startHost}
-                      disabled={joining}
-                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      onClick={leaveRoom}
+                      className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
                     >
-                      HOST
+                      LEAVE ROOM
                     </button>
-                    <input
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
-                      placeholder="CODE"
-                      className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
-                    />
-                    <button
-                      onClick={startJoin}
-                      disabled={joining}
-                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                    >
-                      JOIN
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
-                  <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
-                  <div className="mt-1 opacity-60">
-                    {net.role === "host"
-                      ? `${peerCount + 1} of 4 players · share the code`
-                      : "connected to the host"}
-                  </div>
-                  <button
-                    onClick={leaveRoom}
-                    className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
-                  >
-                    LEAVE ROOM
-                  </button>
-                </>
-              )}
-              {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
-              {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
-            </div>
+                  </>
+                )}
+                {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
+                {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
+              </div>
+            )}
 
             <div>
               <button
