@@ -1640,7 +1640,7 @@ const GUN_INFO: Record<Weapon, string> = {
   pistol: "Your trusty sidearm. Never runs out of ammo, fires one steady shot at a time.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",
-  rail: "Slow, heavy beam that flies extremely fast and hits for 5 damage.",
+  rail: "Heavy long-range beam. The shot itself is near-instant and hits for 5 damage, but it takes almost a second to charge the next one.",
   cannon: "Lobs a huge slow shell for 8 damage. Only a handful of shots — make them count.",
   rebound: "Fires saw discs that bounce off walls up to 3 times. Great around corners.",
   harpoon: "Fast bolts that pierce straight through up to 3 enemies in a line.",
