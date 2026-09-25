@@ -1453,6 +1453,7 @@ export function Game() {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
+          onInv={setInv}
 
         />
       </Canvas>
