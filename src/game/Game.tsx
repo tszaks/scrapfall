@@ -1655,12 +1655,6 @@ export function Game() {
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex flex-col items-start gap-2">
-            {multiplayer && (
-              <div className="flex items-center gap-2 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-                <span style={{ color: colorFor(myNum), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                YOU ARE {myNum === 1 ? "THE HOST (PLAYER 1)" : `PLAYER ${myNum}`}
-              </div>
-            )}
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
