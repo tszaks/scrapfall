@@ -1776,10 +1776,11 @@ export function Game() {
           locked={locked}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
-          onHurt={() => {
-            setHealth((h) => Math.max(0, h - 1));
+          onHurt={(dmg = 1) => {
+            setHealth((h) => Math.max(0, h - dmg));
             setHurtFlash((n) => n + 1);
           }}
+
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
             if (showBanner) {
