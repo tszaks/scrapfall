@@ -548,7 +548,7 @@ function World({
     const p = (m.p as number[]) ?? [0, 0, 0, 1];
     pickup.current.x = p[0]!;
     pickup.current.z = p[1]!;
-    pickup.current.active = p[2] === 1 && !owned.current.has(ORDER[p[3]!] ?? "pistol");
+    pickup.current.active = p[2] === 1;
     pickup.current.gun = ORDER[p[3]!] ?? "scatter";
     if (dropGunRef.current !== pickup.current.gun) {
       dropGunRef.current = pickup.current.gun;
