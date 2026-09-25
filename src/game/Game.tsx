@@ -366,6 +366,7 @@ function World({
   const pickupMesh = useRef<THREE.Group>(null);
   const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0 });
   const lostQueue = useRef<Weapon[]>([]);
+  const dropOrder = useRef<Weapon[]>(["scatter", "smg", "rail", "cannon"]);
   const bob = useRef(0);
   const sensRef = useRef(sens);
   sensRef.current = sens;
@@ -402,6 +403,14 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+
+    // fresh random gun order for this run
+    const pool: Weapon[] = ["scatter", "smg", "rail", "cannon"];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j]!, pool[i]!];
+    }
+    dropOrder.current = pool;
     onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
@@ -524,10 +533,10 @@ function World({
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
-    // weapons: 80% chance each wave for a random gun you don't own
-    const candidates = ORDER.filter((w) => w !== "pistol" && !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
-    if (candidates.length && rand() < 0.8) {
-      const drop = candidates[Math.floor(rand() * candidates.length)]!;
+    // weapons: 80% chance each wave, following this run's shuffled gun order
+    const candidates = dropOrder.current.filter((w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
+    const drop = candidates[0];
+    if (drop && Math.random() < 0.8) {
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
     }
