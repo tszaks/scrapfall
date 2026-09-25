@@ -5,7 +5,9 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
+  setArenaSize, SOLO_ARENA, COOP_ARENA,
 } from "./level";
+
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
@@ -77,7 +79,7 @@ const WAVES: [number, number, number, number, number][] = [
   [8, 5, 6, 6, 0],
   [4, 2, 2, 2, 1], // boss round
 ];
-const MAX_ENEMIES = 26;
+const MAX_ENEMIES = 72;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 
@@ -394,7 +396,9 @@ function World({
   net,
   remotes,
   dead,
+  players,
   msgSink,
+
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -416,8 +420,10 @@ function World({
   net: NetHandle | null;
   remotes: React.MutableRefObject<Map<string, RemoteState>>;
   dead: boolean;
+  players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
 }) {
+
 
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -474,6 +480,9 @@ function World({
   isHostRef.current = isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const playersRef = useRef(players);
+  playersRef.current = players;
+
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
   const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
@@ -708,14 +717,18 @@ function World({
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnWave = (n: number) => {
+    const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
+    const enemyMul = 1 + 0.6 * extra;
+    const lootMul = 1 + 0.65 * extra;
     const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
+    const scale = (v: number) => Math.round(v * enemyMul);
     const kinds: Kind[] = [
       ...Array(boss).fill("boss"),
-      ...Array(d).fill("drifter"),
-      ...Array(b).fill("brute"),
-      ...Array(s).fill("shooter"),
-      ...Array(r).fill("runner"),
-    ];
+      ...Array(scale(d)).fill("drifter"),
+      ...Array(scale(b)).fill("brute"),
+      ...Array(scale(s)).fill("shooter"),
+      ...Array(scale(r)).fill("runner"),
+    ].slice(0, MAX_ENEMIES);
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
     enemies.forEach((e, i) => {
@@ -741,20 +754,27 @@ function World({
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 1 + rand() * 2.5;
     });
-    // health: random, never more than once every 2 waves
-    if (n >= 2 && n - lastHealWave.current >= 2 && rand() < 0.5) {
+    // health: random; solo waits 2 waves between packs, co-op packs come more often
+    const healGap = extra > 0 ? 1 : 2;
+    if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
-    // weapons: 80% chance each wave, following this run's shuffled gun order
-    const candidates = dropOrder.current.filter((w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
-    const drop = candidates[0];
-    if (drop && Math.random() < 0.8) {
+    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
+    const rolls = Math.max(1, Math.round(lootMul));
+    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
+    for (let i = 0; i < rolls; i++) {
+      const candidates = dropOrder.current.filter(
+        (w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w),
+      );
+      const drop = candidates[0];
+      if (!drop || Math.random() >= chance) continue;
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
     }
   };
+
 
   const outOfBounds = (p: THREE.Vector3) =>
     p.y < 0 || Math.abs(p.x) > HALF || Math.abs(p.z) > HALF || blocked(blocks, p.x, p.z, 0.05);
@@ -1176,6 +1196,8 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
+    v.visible = !deadRef.current; // spectators carry no weapon
+
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
     const sway = bobAmt.current;
@@ -1188,7 +1210,7 @@ function World({
   return (
     <>
       <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={[theme.sky, 12, 46]} />
+      <fog attach="fog" args={[theme.sky, 12, ARENA + 4]} />
       <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
       <directionalLight
         position={[18, 26, 10]}
@@ -1381,7 +1403,9 @@ export function Game() {
     return () => window.clearTimeout(t);
   }, [pickupMsg]);
 
+  const coop = !!net;
   const { blocks, enemies, rand, theme } = useMemo(() => {
+    setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = generateLevel(seed);
     const theme = THEMES[seed % THEMES.length]!;
     level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
@@ -1398,7 +1422,8 @@ export function Game() {
       slow: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
-  }, [seed]);
+  }, [seed, coop]);
+
 
   useEffect(() => {
     const wasLocked = { v: false };
@@ -1438,8 +1463,10 @@ export function Game() {
   }, [ended]);
 
   const start = () => {
+    if (ended && !isHost) return; // only the host starts a new arena
     setStarted(true);
     if (ended) {
+
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
         setSeed(s);
@@ -1499,7 +1526,9 @@ export function Game() {
           net={net}
           remotes={remotes}
           dead={dead}
+          players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
+
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
@@ -1604,10 +1633,13 @@ export function Game() {
         </div>
       )}
       {multiplayer && dead && !ended && locked && (
-        <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-6 py-3 text-center font-mono text-sm tracking-[0.25em] text-[#f3e6cf]">
-          DOWNED · BACK UP NEXT WAVE
+        <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
+          <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
+          <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
+          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · ESC TO PAUSE</div>
         </div>
       )}
+
 
       {(!locked || ended) && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
@@ -1625,12 +1657,19 @@ export function Game() {
             <p className="mt-4 text-xs leading-relaxed opacity-60">
               WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
             </p>
-            <button
-              onClick={start}
-              className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
-            >
-              {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
-            </button>
+            {ended && !isHost ? (
+              <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
+                WAITING FOR THE HOST TO START A NEW ARENA
+              </div>
+            ) : (
+              <button
+                onClick={start}
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+              >
+                {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
+              </button>
+            )}
+
 
             <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
               {!net ? (

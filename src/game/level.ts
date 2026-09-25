@@ -1,8 +1,11 @@
 export type Block = { x: number; z: number; h: number; tone: number };
 
-export const ARENA = 44; // world size (centered at origin)
-export const HALF = ARENA / 2;
+export const SOLO_ARENA = 44;
+export const COOP_ARENA = 62;
+export let ARENA = SOLO_ARENA; // world size (centered at origin)
+export let HALF = ARENA / 2;
 export const BLOCK = 2; // block footprint (square)
+
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -57,7 +60,15 @@ export function randomSpawn(blocks: Block[], rand: () => number) {
 }
 
 // ---------- pathfinding (flow field over the block grid) ----------
-export const CELLS = Math.floor(ARENA / BLOCK);
+export let CELLS = Math.floor(ARENA / BLOCK);
+
+/** Resize the arena (co-op uses a bigger field). Call before generating a level. */
+export function setArenaSize(size: number) {
+  ARENA = size;
+  HALF = size / 2;
+  CELLS = Math.floor(size / BLOCK);
+}
+
 export const toCell = (v: number) =>
   Math.max(0, Math.min(CELLS - 1, Math.floor((v + HALF) / BLOCK)));
 export const cellCenter = (i: number) => -HALF + BLOCK / 2 + i * BLOCK;
