@@ -461,7 +461,7 @@ function World({
     lostQueue.current = [];
 
     // fresh random gun order for this run
-    const pool: Weapon[] = ["scatter", "smg", "rail", "cannon"];
+    const pool: Weapon[] = [...DROPPABLE];
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
