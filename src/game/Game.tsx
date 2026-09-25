@@ -1196,6 +1196,8 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
+    v.visible = !deadRef.current; // spectators carry no weapon
+
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
     const sway = bobAmt.current;
