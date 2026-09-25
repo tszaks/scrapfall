@@ -178,37 +178,108 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   );
 }
 
+function BossBody({ theme }: { theme: Theme }) {
+  const b = theme.boss;
+  const skin = <meshLambertMaterial color={b.body} flatShading />;
+  const limb = <meshLambertMaterial color={b.limb} flatShading />;
+  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
+  return (
+    <group>
+      {/* torso + head shared by every boss, dressed differently per map */}
+      <mesh position-y={1.35} castShadow><boxGeometry args={[1.7, 2, 1.2]} />{skin}</mesh>
+      <mesh position-y={2.75} castShadow><boxGeometry args={[1, 0.8, 0.9]} />{skin}</mesh>
+      <mesh position={[-0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
+      <mesh position={[0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
+      <mesh position={[-0.95, 1.2, 0]} castShadow><boxGeometry args={[0.35, 1.6, 0.4]} />{limb}</mesh>
+      <mesh position={[0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
+      <mesh position={[-0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
+
+      {b.shape === "yeti" && (<>
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={x} position={[x, 3.15, 0]} rotation-z={x * 0.4}><coneGeometry args={[0.14, 0.7, 5]} />{glow}</mesh>
+        ))}
+        <mesh position-y={1.5} castShadow><sphereGeometry args={[1.05, 8, 6]} />{skin}</mesh>
+      </>)}
+      {b.shape === "golem" && (<>
+        <mesh position-y={2.2} rotation-y={0.4} castShadow><boxGeometry args={[2, 0.35, 1.4]} />{limb}</mesh>
+        <mesh position={[0, 3.35, 0]}><coneGeometry args={[0.5, 0.7, 4]} />{glow}</mesh>
+      </>)}
+      {b.shape === "treant" && (<>
+        <mesh position-y={3.3} castShadow><sphereGeometry args={[1.2, 7, 5]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} position={[Math.sin(i * 2) * 0.8, 3.9, Math.cos(i * 2) * 0.8]}><sphereGeometry args={[0.22, 6, 6]} />{glow}</mesh>
+        ))}
+      </>)}
+      {b.shape === "magma" && (<>
+        <mesh position={[0, 1.5, 0.62]}><boxGeometry args={[0.7, 0.9, 0.1]} />{glow}</mesh>
+        {[-0.6, 0, 0.6].map((x) => (
+          <mesh key={x} position={[x, 3.2, -0.2]}><coneGeometry args={[0.16, 0.6, 4]} />{glow}</mesh>
+        ))}
+      </>)}
+      {b.shape === "mech" && (<>
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={x} position={[x, 3.3, -0.35]} rotation-x={0.2}><cylinderGeometry args={[0.13, 0.16, 0.8, 8]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        ))}
+        <mesh position={[0, 1.6, 0.64]} rotation-x={Math.PI / 2}><torusGeometry args={[0.35, 0.08, 6, 14]} />{glow}</mesh>
+      </>)}
+      {b.shape === "ronin" && (<>
+        <mesh position={[0, 3.25, -0.1]} rotation-x={-0.25}><coneGeometry args={[0.75, 0.45, 6]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
+        <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
+      </>)}
+      {b.shape === "drake" && (<>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
+            <boxGeometry args={[1.8, 0.12, 1.1]} /><meshLambertMaterial color={b.weapon} flatShading />
+          </mesh>
+        ))}
+        {[0.4, 1.1, 1.8].map((y) => (
+          <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
+        ))}
+      </>)}
+    </group>
+  );
+}
+
 function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   const c = theme.enemy;
   const ref = useRef<THREE.Group>(null);
   const drifter = useRef<THREE.Group>(null);
   const brute = useRef<THREE.Group>(null);
   const shooter = useRef<THREE.Group>(null);
+  const specter = useRef<THREE.Group>(null);
+  const bomber = useRef<THREE.Group>(null);
+  const vanguard = useRef<THREE.Group>(null);
+  const bossGrp = useRef<THREE.Group>(null);
   const club = useRef<THREE.Group>(null);
-  const crown = useRef<THREE.Group>(null);
+  const bossArm = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
     g.visible = data.alive;
     if (!data.alive) return;
     const t = state.clock.elapsedTime;
-    const heavy = data.kind === "brute" || data.kind === "boss";
-    const bob = heavy ? 0 : Math.sin(t * (data.kind === "runner" ? 10 : 4) + data.x) * 0.08;
+    const k = data.kind;
+    const heavy = k === "brute" || k === "boss" || k === "vanguard";
+    const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
-    const base = data.kind === "boss" ? 2 : data.kind === "runner" ? 0.6 : 1;
-    const s = base * (data.flash > 0 ? 1.15 : 1);
-    g.scale.setScalar(s);
-    if (drifter.current) drifter.current.visible = data.kind === "drifter" || data.kind === "runner";
-    if (brute.current) brute.current.visible = heavy;
-    if (crown.current) crown.current.visible = data.kind === "boss";
-    if (shooter.current) shooter.current.visible = data.kind === "shooter";
-    if (drifter.current) drifter.current.rotation.y = data.kind === "runner" ? t * 8 : 0;
-    if (club.current) {
-      // swing from raised to forward
-      const p = data.swing > 0 ? 1 - data.swing / 0.4 : 0;
-      club.current.rotation.x = -1.4 + p * 2.4;
+    const base = k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
+    g.scale.setScalar(base * (data.flash > 0 ? 1.15 : 1));
+    if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
+    if (brute.current) brute.current.visible = k === "brute";
+    if (bossGrp.current) bossGrp.current.visible = k === "boss";
+    if (shooter.current) shooter.current.visible = k === "shooter";
+    if (specter.current) {
+      specter.current.visible = k === "specter";
+      specter.current.rotation.y = t * 1.6;
     }
+    if (bomber.current) bomber.current.visible = k === "bomber";
+    if (vanguard.current) vanguard.current.visible = k === "vanguard";
+    if (drifter.current) drifter.current.rotation.y = k === "runner" ? t * 8 : 0;
+    const swingRot = data.swing > 0 ? -1.4 + (1 - data.swing / 0.4) * 2.4 : -1.4;
+    if (club.current) club.current.rotation.x = swingRot;
+    if (bossArm.current) bossArm.current.rotation.x = swingRot;
   });
   return (
     <group ref={ref}>
@@ -223,14 +294,6 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
         </mesh>
       </group>
       <group ref={brute}>
-        <group ref={crown} position-y={2.65}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <mesh key={i} position={[Math.sin((i / 5) * Math.PI * 2) * 0.35, 0, Math.cos((i / 5) * Math.PI * 2) * 0.35]}>
-              <coneGeometry args={[0.1, 0.35, 4]} />
-              <meshBasicMaterial color={c.shooter.eye} />
-            </mesh>
-          ))}
-        </group>
         <mesh position-y={1.1} castShadow>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
@@ -254,6 +317,19 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           </mesh>
         </group>
       </group>
+      <group ref={bossGrp}>
+        <BossBody theme={theme} />
+        <group ref={bossArm} position={[1.05, 1.9, 0]}>
+          <mesh position={[0, 0.9, 0]} castShadow>
+            <boxGeometry args={[0.24, 1.8, 0.24]} />
+            <meshLambertMaterial color={theme.boss.limb} flatShading />
+          </mesh>
+          <mesh position={[0, 1.95, 0]} castShadow>
+            <boxGeometry args={[0.6, 0.6, 0.6]} />
+            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          </mesh>
+        </group>
+      </group>
       <group ref={shooter} position-y={1.3}>
         <mesh castShadow>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
@@ -268,9 +344,63 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
       </group>
+      {/* SPECTER: drifting, see-through wraith that blinks toward you */}
+      <group ref={specter} position-y={1.5}>
+        <mesh castShadow>
+          <coneGeometry args={[0.6, 1.8, 6]} />
+          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
+        </mesh>
+        <mesh position={[0, 0.5, 0.35]}>
+          <sphereGeometry args={[0.14, 8, 8]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+        <mesh position={[0, 0.5, -0.35]}>
+          <sphereGeometry args={[0.1, 8, 8]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+      </group>
+      {/* BOMBER: squat mortar unit that lobs shells over cover */}
+      <group ref={bomber} position-y={0.8}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.75, 8, 6]} />
+          <meshLambertMaterial color={c.brute.body} flatShading />
+        </mesh>
+        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7} castShadow>
+          <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
+          <meshLambertMaterial color={c.shooter.barrel} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.6]}>
+          <sphereGeometry args={[0.13, 8, 8]} />
+          <meshBasicMaterial color={theme.enemyBullet} />
+        </mesh>
+      </group>
+      {/* VANGUARD: armoured shield wall, tough from the front */}
+      <group ref={vanguard}>
+        <mesh position-y={1.2} castShadow>
+          <boxGeometry args={[1.2, 2, 0.9]} />
+          <meshLambertMaterial color={c.shooter.body} flatShading />
+        </mesh>
+        <mesh position={[0, 2.45, 0]} castShadow>
+          <boxGeometry args={[0.7, 0.55, 0.7]} />
+          <meshLambertMaterial color={c.brute.head} flatShading />
+        </mesh>
+        <mesh position={[0, 2.5, 0.37]}>
+          <boxGeometry args={[0.45, 0.1, 0.05]} />
+          <meshBasicMaterial color={c.brute.eye} />
+        </mesh>
+        <mesh position={[0, 1.3, 0.75]} castShadow>
+          <boxGeometry args={[1.7, 2.1, 0.18]} />
+          <meshLambertMaterial color={c.brute.clubHead} flatShading />
+        </mesh>
+        <mesh position={[0, 1.3, 0.86]}>
+          <boxGeometry args={[0.3, 0.9, 0.04]} />
+          <meshBasicMaterial color={theme.enemyBullet} />
+        </mesh>
+      </group>
     </group>
   );
 }
+
 
 function BulletPool({
   meshes,
