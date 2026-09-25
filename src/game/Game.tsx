@@ -1201,6 +1201,8 @@ export function Game() {
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
   const [ammoLeft, setAmmoLeft] = useState(0);
+  const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
+  const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
