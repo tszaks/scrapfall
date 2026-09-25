@@ -529,9 +529,11 @@ function World({
     const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
-      const n = Number(e.key);
-      const w = ORDER[n - 1];
-      if (w && owned.current.has(w)) equip(w);
+      if (/^[0-9]$/.test(e.key)) {
+        const n = Number(e.key);
+        const w = ORDER[n === 0 ? 9 : n - 1];
+        if (w && owned.current.has(w)) equip(w);
+      }
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = ORDER.filter((x) => owned.current.has(x));
         const i = list.indexOf(weapon.current);
