@@ -797,14 +797,12 @@ function World({
     const burst = (b: Bullet) => {
       if (b.cluster <= 0) return;
       const n = b.cluster;
-      const c = b.cluster;
       b.cluster = 0;
       for (let s = 0; s < n; s++) {
         const a = (s / n) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
         fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
       }
-      void c;
     };
     bullets.current.forEach((b, i) => {
       const m = bulletMeshes.current[i];
