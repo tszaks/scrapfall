@@ -1776,26 +1776,26 @@ export function Game() {
                 WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
               </p>
             )}
-            {ended && !isHost ? (
+            {multiplayer && !isHost && (ended || !started) ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START A NEW ARENA
+                {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
               </div>
             ) : (
               <button
-                onClick={start}
+                onClick={() => start()}
                 className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
               </button>
             )}
 
-            {paused ? (
+            {paused || (multiplayer && ended) ? (
               <div className="mt-3">
                 <button
                   onClick={leaveGame}
                   className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
                 >
-                  LEAVE GAME
+                  {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
                 </button>
               </div>
             ) : (
