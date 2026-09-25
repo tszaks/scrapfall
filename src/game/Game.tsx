@@ -949,18 +949,22 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [fov, setFov] = useState(75);
-  const [sens, setSens] = useState(1);
+  const [sensX, setSensX] = useState(1);
+  const [sensY, setSensY] = useState(1);
   const [healMsg, setHealMsg] = useState(0);
   useEffect(() => {
     try {
       const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
       if (typeof v.fov === "number") setFov(v.fov);
-      if (typeof v.sens === "number") setSens(v.sens);
+      if (typeof v.sensX === "number") setSensX(v.sensX);
+      else if (typeof v.sens === "number") setSensX(v.sens);
+      if (typeof v.sensY === "number") setSensY(v.sensY);
+      else if (typeof v.sens === "number") setSensY(v.sens);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sens }));
-  }, [fov, sens]);
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY }));
+  }, [fov, sensX, sensY]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
