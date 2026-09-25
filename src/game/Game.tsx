@@ -505,9 +505,9 @@ function World({
     if (viewModel.current) {
       viewModel.current.position.copy(cam.position);
       viewModel.current.quaternion.copy(cam.quaternion);
-      viewModel.current.translateX(0.28);
-      viewModel.current.translateY(-0.25 + recoil.current * 0.03);
-      viewModel.current.translateZ(-0.35 + recoil.current * 0.08);
+      viewModel.current.translateX(0.3);
+      viewModel.current.translateY(-0.28 + recoil.current * 0.03);
+      viewModel.current.translateZ(-0.75 + recoil.current * 0.08);
       viewModel.current.rotateX(recoil.current * 0.15);
     }
 
@@ -735,7 +735,7 @@ function World({
           <GunModel w={dropGun} />
         </group>
       </group>
-      <group ref={viewModel}>
+      <group ref={viewModel} scale={0.7}>
         <GunModel w={held} />
       </group>
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
