@@ -278,16 +278,22 @@ function BulletPool({
   );
 }
 
-function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0) {
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number };
+function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
+  const base = {
+    life, active: true, damage, color, size,
+    bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
+  };
   const slot = pool.find((b) => !b.active);
   if (slot) {
-    Object.assign(slot, { life, active: true, damage, color, size });
+    Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
   } else if (pool.length < MAX_BULLETS) {
-    pool.push({ pos: pos.clone(), vel: vel.clone(), life, active: true, damage, color, size });
+    pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
   }
 }
+
 
 /** Simple blocky gun model, different silhouette per weapon. */
 function GunModel({ w }: { w: Weapon }) {
