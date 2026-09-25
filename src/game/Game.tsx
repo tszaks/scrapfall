@@ -776,8 +776,12 @@ function World({
     const rolls = Math.max(1, Math.round(lootMul));
     const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
     for (let i = 0; i < rolls; i++) {
+      // in co-op a gun you are carrying can still drop for your teammates
       const candidates = dropOrder.current.filter(
-        (w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w),
+        (w) =>
+          (coopRef.current || !owned.current.has(w)) &&
+          !lostQueue.current.includes(w) &&
+          !(pickup.current.active && pickup.current.gun === w),
       );
       const drop = candidates[0];
       if (!drop || Math.random() >= chance) continue;
