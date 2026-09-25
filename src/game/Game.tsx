@@ -1415,9 +1415,25 @@ export function Game() {
     netHolder.current?.close();
     netHolder.current = null;
     remotes.current.clear();
+    slots.current = {};
+    setRoster([]);
     setNet(null);
     setPeerCount(0);
     setAllDown(false);
+  };
+
+  /** quit a match in progress and go back to the title screen */
+  const leaveGame = () => {
+    leaveRoom();
+    setLocked(false);
+    setStarted(false);
+    setScore(0);
+    setHealth(MAX_HP);
+    setBossHp(0);
+    setStatus({ wave: 1, remaining: 0, won: false });
+    setWeapon("pistol");
+    setSeed(Math.floor(Math.random() * 1e9));
+    if (document.pointerLockElement) document.exitPointerLock();
   };
 
   // host: end the run when the whole squad is down
