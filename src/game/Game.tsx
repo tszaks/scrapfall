@@ -615,11 +615,18 @@ function World({
     return () => document.removeEventListener("mousemove", onMove);
   }, []);
 
+  const onInvRef = useRef(onInv);
+  onInvRef.current = onInv;
+  const syncInv = () => {
+    onInvRef.current([...owned.current].map((w) => ({ w, ammo: ammo.current[w] })));
+  };
+
   const equip = (w: Weapon) => {
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
     onAmmo(ammo.current[w]);
+    syncInv();
   };
 
   const placePickup = (gun: Weapon) => {
