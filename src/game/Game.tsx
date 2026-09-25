@@ -398,7 +398,8 @@ function World({
   onWeapon: (w: Weapon, picked: boolean) => void;
   onAmmo: (n: number) => void;
   onHeal: () => void;
-  sens: number;
+  sensX: number;
+  sensY: number;
   fov: number;
 }) {
   const keys = useKeyboard();
