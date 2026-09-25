@@ -546,7 +546,7 @@ function World({
   locked: boolean;
   gameOver: boolean;
   onScore: () => void;
-  onHurt: () => void;
+  onHurt: (dmg?: number) => void;
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
