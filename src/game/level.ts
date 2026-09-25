@@ -60,7 +60,15 @@ export function randomSpawn(blocks: Block[], rand: () => number) {
 }
 
 // ---------- pathfinding (flow field over the block grid) ----------
-export const CELLS = Math.floor(ARENA / BLOCK);
+export let CELLS = Math.floor(ARENA / BLOCK);
+
+/** Resize the arena (co-op uses a bigger field). Call before generating a level. */
+export function setArenaSize(size: number) {
+  ARENA = size;
+  HALF = size / 2;
+  CELLS = Math.floor(size / BLOCK);
+}
+
 export const toCell = (v: number) =>
   Math.max(0, Math.min(CELLS - 1, Math.floor((v + HALF) / BLOCK)));
 export const cellCenter = (i: number) => -HALF + BLOCK / 2 + i * BLOCK;
