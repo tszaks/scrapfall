@@ -84,7 +84,7 @@ const GUN_SOUNDS: Record<string, Tone[]> = {
 };
 
 export function playGun(w: string) {
-  (GUN_SOUNDS[w] ?? GUN_SOUNDS.pistol!).forEach((t) => tone(t));
+  (GUN_SOUNDS[w] ?? GUN_SOUNDS['pistol']!).forEach((t) => tone(t));
 }
 
 export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny") {
