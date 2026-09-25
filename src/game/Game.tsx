@@ -82,6 +82,14 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
       </group>
     );
   }
+  if (theme.blockShape === "rock") {
+    return (
+      <mesh position={[b.x, b.h * 0.4, b.z]} rotation={[b.tone, b.tone * 3, 0]} scale={[1.2, b.h * 0.5 + 0.4, 1.2]} castShadow receiveShadow>
+        <dodecahedronGeometry args={[1, 0]} />
+        <meshLambertMaterial color={color} flatShading />
+      </mesh>
+    );
+  }
   if (theme.blockShape === "crystal") {
     return (
       <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
