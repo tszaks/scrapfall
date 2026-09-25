@@ -11,7 +11,7 @@ import {
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
-import { hostRoom, joinRoom, PLAYER_COLORS, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
@@ -398,6 +398,8 @@ function World({
   dead,
   players,
   msgSink,
+  health,
+  slots,
 
 }: {
   blocks: Block[];
@@ -422,6 +424,8 @@ function World({
   dead: boolean;
   players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
+  health: number;
+  slots: React.MutableRefObject<Record<string, number>>;
 }) {
 
 
@@ -482,6 +486,10 @@ function World({
   deadRef.current = dead;
   const playersRef = useRef(players);
   playersRef.current = players;
+  const healthRef = useRef(health);
+  healthRef.current = health;
+  const coopRef = useRef(!!net);
+  coopRef.current = !!net;
 
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
@@ -491,15 +499,18 @@ function World({
 
   const upsertRemote = (m: NetMsg) => {
     const id = String(m.from ?? "host");
+    const num = id === "host" ? 1 : (slots.current[id] ?? 2);
     let r = remotes.current.get(id);
     if (!r) {
       r = {
         id, x: 0, z: 0, yaw: 0, hp: MAX_HP, weapon: "pistol",
-        color: PLAYER_COLORS[(remotes.current.size + 1) % PLAYER_COLORS.length]!,
+        num, color: colorFor(num),
         last: 0, rx: Number(m.x ?? 0), rz: Number(m.z ?? 0), ry: 0,
       };
       remotes.current.set(id, r);
     }
+    r.num = num;
+    r.color = colorFor(num);
     r.x = Number(m.x ?? 0);
     r.z = Number(m.z ?? 0);
     r.yaw = Number(m.yaw ?? 0);
@@ -537,7 +548,7 @@ function World({
     const p = (m.p as number[]) ?? [0, 0, 0, 1];
     pickup.current.x = p[0]!;
     pickup.current.z = p[1]!;
-    pickup.current.active = p[2] === 1 && !owned.current.has(ORDER[p[3]!] ?? "pistol");
+    pickup.current.active = p[2] === 1;
     pickup.current.gun = ORDER[p[3]!] ?? "scatter";
     if (dropGunRef.current !== pickup.current.gun) {
       dropGunRef.current = pickup.current.gun;
@@ -765,8 +776,12 @@ function World({
     const rolls = Math.max(1, Math.round(lootMul));
     const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
     for (let i = 0; i < rolls; i++) {
+      // in co-op a gun you are carrying can still drop for your teammates
       const candidates = dropOrder.current.filter(
-        (w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w),
+        (w) =>
+          (coopRef.current || !owned.current.has(w)) &&
+          !lostQueue.current.includes(w) &&
+          !(pickup.current.active && pickup.current.gun === w),
       );
       const drop = candidates[0];
       if (!drop || Math.random() >= chance) continue;
@@ -833,21 +848,23 @@ function World({
         tTimer.current = 0.05;
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
-          hp: spectating ? 0 : MAX_HP, w: weapon.current,
+          hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
         });
       }
     }
 
     // weapon pickup
     const pk = pickup.current;
+    // in co-op a gun someone else already carries still spawns; you just can't grab a duplicate
+    const canTake = !owned.current.has(pk.gun);
     if (pickupMesh.current) {
-      pickupMesh.current.visible = pk.active;
+      pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
         pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
-    if (pk.active && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
+    if (pk.active && canTake && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
       ammo.current[pk.gun] = GUNS[pk.gun].ammo;
@@ -1297,8 +1314,36 @@ export function Game() {
   const netHolder = useRef<NetHandle | null>(null);
   const healthRef = useRef(MAX_HP);
   healthRef.current = health;
+  // player numbers: host is always 1, guests take 2-4 in join order
+  const slots = useRef<Record<string, number>>({});
+  const [roster, setRoster] = useState<{ id: string; num: number }[]>([]);
+
+  const publishRoster = () => {
+    const list = Object.entries(slots.current)
+      .map(([id, num]) => ({ id, num }))
+      .sort((a, b) => a.num - b.num);
+    setRoster(list);
+    remotes.current.forEach((r) => {
+      r.num = r.id === "host" ? 1 : (slots.current[r.id] ?? r.num);
+      r.color = colorFor(r.num);
+    });
+    netHolder.current?.broadcast({ type: "roster", slots: { ...slots.current } });
+  };
 
   const handleMsg = (m: NetMsg) => {
+    if (m.type === "roster") {
+      slots.current = (m.slots ?? {}) as Record<string, number>;
+      setRoster(
+        Object.entries(slots.current)
+          .map(([id, num]) => ({ id, num: Number(num) }))
+          .sort((a, b) => a.num - b.num),
+      );
+      remotes.current.forEach((r) => {
+        r.num = r.id === "host" ? 1 : (slots.current[r.id] ?? r.num);
+        r.color = colorFor(r.num);
+      });
+      return;
+    }
     if (m.type === "seed") {
       setSeed(Number(m.seed));
       setScore(0);
@@ -1311,7 +1356,17 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "joined") {
-      netHolder.current?.sendTo(String(m.from), { type: "seed", seed: seedRef.current });
+      const id = String(m.from);
+      if (!slots.current[id]) {
+        const used = new Set(Object.values(slots.current));
+        for (let n = 2; n <= 4; n++) if (!used.has(n)) { slots.current[id] = n; break; }
+      }
+      netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
+      publishRoster();
+    }
+    if (m.type === "left") {
+      delete slots.current[String(m.from)];
+      publishRoster();
     }
     if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? MAX_HP : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
@@ -1360,9 +1415,25 @@ export function Game() {
     netHolder.current?.close();
     netHolder.current = null;
     remotes.current.clear();
+    slots.current = {};
+    setRoster([]);
     setNet(null);
     setPeerCount(0);
     setAllDown(false);
+  };
+
+  /** quit a match in progress and go back to the title screen */
+  const leaveGame = () => {
+    leaveRoom();
+    setLocked(false);
+    setStarted(false);
+    setScore(0);
+    setHealth(MAX_HP);
+    setBossHp(0);
+    setStatus({ wave: 1, remaining: 0, won: false });
+    setWeapon("pistol");
+    setSeed(Math.floor(Math.random() * 1e9));
+    if (document.pointerLockElement) document.exitPointerLock();
   };
 
   // host: end the run when the whole squad is down
@@ -1456,6 +1527,16 @@ export function Game() {
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
+  const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
+  const connected = [{ id: "host", num: 1 }, ...roster];
+  const paused = started && !ended && !locked;
+  // teammate health lives in a ref: nudge the HUD so it stays current
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!net) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 250);
+    return () => window.clearInterval(id);
+  }, [net]);
 
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
@@ -1528,6 +1609,8 @@ export function Game() {
           dead={dead}
           players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
+          health={health}
+          slots={slots}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
@@ -1549,6 +1632,12 @@ export function Game() {
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex flex-col items-start gap-2">
+            {multiplayer && (
+              <div className="flex items-center gap-2 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
+                <span style={{ color: colorFor(myNum), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                YOU ARE {myNum === 1 ? "THE HOST (PLAYER 1)" : `PLAYER ${myNum}`}
+              </div>
+            )}
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
@@ -1619,8 +1708,17 @@ export function Game() {
           <div className="absolute right-5 top-16 space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
             <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
             {[...remotes.current.values()].map((r) => (
-              <div key={r.id} className="rounded bg-[#f3e6cf]/80 px-2 py-1">
-                <span style={{ color: r.color }}>■</span> {r.hp > 0 ? `${r.hp} HP` : "DOWN"}
+              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
+                {r.hp > 0 ? (
+                  <span>
+                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
+                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
+                  </span>
+                ) : (
+                  <span className="text-[#b3261e]">DOWN</span>
+                )}
               </div>
             ))}
           </div>
@@ -1645,18 +1743,22 @@ export function Game() {
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
           <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : theme.name}
+              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
             <p className="mt-2 text-sm opacity-70">
               {gameOver
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
+                  : paused
+                    ? `Wave ${status.wave} · ${score} kills so far.`
+                    : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
             </p>
-            <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
-            </p>
+            {!paused && (
+              <p className="mt-4 text-xs leading-relaxed opacity-60">
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
+              </p>
+            )}
             {ended && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
                 WAITING FOR THE HOST TO START A NEW ARENA
@@ -1670,71 +1772,91 @@ export function Game() {
               </button>
             )}
 
-
-            <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
-              {!net ? (
-                <>
-                  <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
-                  <div className="mt-3 flex gap-2">
+            {paused ? (
+              <div className="mt-3">
+                <button
+                  onClick={leaveGame}
+                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                >
+                  LEAVE GAME
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
+                {!net ? (
+                  <>
+                    <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={startHost}
+                        disabled={joining}
+                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      >
+                        HOST
+                      </button>
+                      <input
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
+                        placeholder="CODE"
+                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
+                      />
+                      <button
+                        onClick={startJoin}
+                        disabled={joining}
+                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      >
+                        JOIN
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
+                    <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
+                    <div className="mt-3 space-y-1 text-left">
+                      {connected.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2">
+                          <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                          <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                          <span className="opacity-50">· CONNECTED</span>
+                          {p.num === myNum && <span className="opacity-50">(YOU)</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 opacity-60">
+                      {net.role === "host" ? "share the code" : "waiting for the host"}
+                    </div>
                     <button
-                      onClick={startHost}
-                      disabled={joining}
-                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                      onClick={leaveRoom}
+                      className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
                     >
-                      HOST
+                      LEAVE ROOM
                     </button>
-                    <input
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
-                      placeholder="CODE"
-                      className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
-                    />
-                    <button
-                      onClick={startJoin}
-                      disabled={joining}
-                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                    >
-                      JOIN
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
-                  <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
-                  <div className="mt-1 opacity-60">
-                    {net.role === "host"
-                      ? `${peerCount + 1} of 4 players · share the code`
-                      : "connected to the host"}
-                  </div>
-                  <button
-                    onClick={leaveRoom}
-                    className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
-                  >
-                    LEAVE ROOM
-                  </button>
-                </>
-              )}
-              {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
-              {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
-            </div>
+                  </>
+                )}
+                {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
+                {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
+              </div>
+            )}
 
-            <div>
-              <button
-                onClick={() => setShowSettings((v) => !v)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-              >
-                {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
-              </button>
-              <button
-                onClick={() => setShowWeapons(true)}
-                className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-              >
-                WEAPONS
-              </button>
-              {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-            </div>
-            {showSettings && (
+            {!paused && (
+              <div>
+                <button
+                  onClick={() => setShowSettings((v) => !v)}
+                  className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
+                </button>
+                <button
+                  onClick={() => setShowWeapons(true)}
+                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  WEAPONS
+                </button>
+                {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+              </div>
+            )}
+            {showSettings && !paused && (
               <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
                 <label className="block">
                   FIELD OF VIEW · {fov}°

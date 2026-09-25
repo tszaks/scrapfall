@@ -24,6 +24,8 @@ export type RemoteState = {
   hp: number;
   weapon: string;
   color: string;
+  /** 1 = host, 2-4 = guests */
+  num: number;
   last: number;
   // render smoothing
   rx: number;
@@ -31,7 +33,9 @@ export type RemoteState = {
   ry: number;
 };
 
-export const PLAYER_COLORS = ["#4fe3ff", "#ffb03b", "#7cff4f", "#ff5fd2"];
+/** player 1 (host) white, player 2 purple, player 3 orange, player 4 pink */
+export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
+export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
 const PREFIX = "dustfield-arena-v1-";
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
