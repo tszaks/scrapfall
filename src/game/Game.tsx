@@ -1529,7 +1529,7 @@ export function Game() {
         )}
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · keys 1-0 or Q/E to swap
+            {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
           </div>
         )}
         {locked && !ended && (
