@@ -384,6 +384,7 @@ function World({
   onStatus,
   onBoss,
   onWeapon,
+  onInv,
   onAmmo,
   onHeal,
   sensX,
@@ -405,6 +406,7 @@ function World({
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
+  onInv: (inv: { w: Weapon; ammo: number }[]) => void;
   onAmmo: (n: number) => void;
   onHeal: () => void;
   sensX: number;
@@ -588,6 +590,7 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    syncInv();
 
     // fresh random gun order for this run
     const pool: Weapon[] = [...DROPPABLE];
@@ -612,11 +615,18 @@ function World({
     return () => document.removeEventListener("mousemove", onMove);
   }, []);
 
+  const onInvRef = useRef(onInv);
+  onInvRef.current = onInv;
+  const syncInv = () => {
+    onInvRef.current([...owned.current].map((w) => ({ w, ammo: ammo.current[w] })));
+  };
+
   const equip = (w: Weapon) => {
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
     onAmmo(ammo.current[w]);
+    syncInv();
   };
 
   const placePickup = (gun: Weapon) => {
@@ -646,6 +656,8 @@ function World({
         equip("pistol");
         if (pickup.current.active) lostQueue.current.push(w);
         else placePickup(w);
+      } else {
+        syncInv();
       }
     }
   };
@@ -660,11 +672,12 @@ function World({
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
         const n = Number(e.key);
-        const w = ORDER[n === 0 ? 9 : n - 1];
-        if (w && owned.current.has(w)) equip(w);
+        const slot = n === 0 ? 10 : n; // 0 acts as slot 10
+        const w = [...owned.current][slot - 1];
+        if (w) equip(w);
       }
       if (e.code === "KeyQ" || e.code === "KeyE") {
-        const list = ORDER.filter((x) => owned.current.has(x));
+        const list = [...owned.current];
         const i = list.indexOf(weapon.current);
         const next = list[(i + (e.code === "KeyE" ? 1 : list.length - 1)) % list.length];
         if (next) equip(next);
@@ -1188,6 +1201,8 @@ export function Game() {
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
   const [ammoLeft, setAmmoLeft] = useState(0);
+  const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
+  const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
@@ -1438,6 +1453,7 @@ export function Game() {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
+          onInv={setInv}
 
         />
       </Canvas>
@@ -1465,17 +1481,41 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              <span style={{ color: GUNS[weapon].body }}>■</span> {GUNS[weapon].name} {weapon === "pistol" ? "∞" : ammoLeft}
-            </div>
           </div>
           <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
             {"♦".repeat(health)}
             <span className="opacity-30">{"♦".repeat(MAX_HP - health)}</span>
           </div>
         </div>
+
+        <div className="absolute left-1/2 top-3 flex -translate-x-1/2 gap-2">
+          {inv.map((slot, i) => {
+            const g = GUNS[slot.w];
+            const active = slot.w === weapon;
+            return (
+              <div
+                key={slot.w}
+                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${
+                  active
+                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
+                    : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
+                }`}
+              >
+                <span
+                  className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[10px] font-bold text-[#f7eeda]"
+                >
+                  {i === 9 ? 0 : i + 1}
+                </span>
+                <span style={{ color: g.color }}>■</span> {g.name}{" "}
+                <b>{slot.w === "pistol" ? "∞" : active ? ammoLeft : slot.ammo}</b>
+              </div>
+            );
+          })}
+        </div>
+
         {bossHp > 0 && locked && !ended && (
-          <div className="absolute left-1/2 top-16 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+          <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+
             <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">WARLORD</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
               <div className="h-full bg-[#b3261e]" style={{ width: `${(bossHp / BOSS_HP) * 100}%` }} />
@@ -1489,7 +1529,7 @@ export function Game() {
         )}
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · keys 1-0 or Q/E to swap
+            {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
           </div>
         )}
         {locked && !ended && (
@@ -1640,7 +1680,7 @@ const GUN_INFO: Record<Weapon, string> = {
   pistol: "Your trusty sidearm. Never runs out of ammo, fires one steady shot at a time.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",
-  rail: "Slow, heavy beam that flies extremely fast and hits for 5 damage.",
+  rail: "Heavy long-range beam. The shot itself is near-instant and hits for 5 damage, but it takes almost a second to charge the next one.",
   cannon: "Lobs a huge slow shell for 8 damage. Only a handful of shots — make them count.",
   rebound: "Fires saw discs that bounce off walls up to 3 times. Great around corners.",
   harpoon: "Fast bolts that pierce straight through up to 3 enemies in a line.",
@@ -1665,7 +1705,7 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
           {ORDER.map((w, i) => (
             <button key={w} onClick={() => setSel(w)}
               className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === w ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
-              <span className="opacity-60">{i === 9 ? 0 : i + 1}</span> {GUNS[w].name}
+              <span className="opacity-60">{i + 1}</span> {GUNS[w].name}
             </button>
           ))}
         </div>
