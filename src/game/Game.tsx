@@ -1317,6 +1317,9 @@ export function Game() {
   // player numbers: host is always 1, guests take 2-4 in join order
   const slots = useRef<Record<string, number>>({});
   const [roster, setRoster] = useState<{ id: string; num: number }[]>([]);
+  // lets network messages kick off / resume the match, and keeps pause state handy
+  const startRef = useRef<(fromNet?: boolean) => void>(() => {});
+  const phase = useRef({ started: false, ended: false });
 
   const publishRoster = () => {
     const list = Object.entries(slots.current)
@@ -1355,6 +1358,13 @@ export function Game() {
       return;
     }
     if (m.type === "over") { setAllDown(true); return; }
+    if (m.type === "pause") {
+      setLocked(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+      return;
+    }
+    if (m.type === "resume") { startRef.current(true); return; }
+    if (m.type === "begin") { startRef.current(true); return; }
     if (m.type === "joined") {
       const id = String(m.from);
       if (!slots.current[id]) {
@@ -1497,16 +1507,24 @@ export function Game() {
 
 
   useEffect(() => {
+    // pausing puts the whole squad on hold
+    const pauseAll = () => {
+      if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+    };
     const wasLocked = { v: false };
     const onChange = () => {
       if (document.pointerLockElement) wasLocked.v = true;
       else if (wasLocked.v) {
         wasLocked.v = false;
         setLocked(false);
+        pauseAll();
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape") setLocked(false);
+      if (e.code === "Escape") {
+        setLocked(false);
+        pauseAll();
+      }
     };
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
@@ -1543,10 +1561,11 @@ export function Game() {
     if (ended && document.pointerLockElement) document.exitPointerLock();
   }, [ended]);
 
-  const start = () => {
-    if (ended && !isHost) return; // only the host starts a new arena
+  const start = (fromNet = false) => {
+    if (!fromNet && ended && !isHost) return; // only the host starts a new arena
+    const resuming = started && !ended;
     setStarted(true);
-    if (ended) {
+    if (ended && !fromNet) {
 
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
@@ -1561,6 +1580,8 @@ export function Game() {
       setBossHp(0);
     }
     setLocked(true);
+    // the whole squad starts and resumes together
+    if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
@@ -1568,6 +1589,8 @@ export function Game() {
       /* pointer lock unavailable — arrow keys still work */
     }
   };
+  startRef.current = start;
+  phase.current = { started, ended };
 
 
   return (
@@ -1632,12 +1655,6 @@ export function Game() {
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex flex-col items-start gap-2">
-            {multiplayer && (
-              <div className="flex items-center gap-2 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-                <span style={{ color: colorFor(myNum), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                YOU ARE {myNum === 1 ? "THE HOST (PLAYER 1)" : `PLAYER ${myNum}`}
-              </div>
-            )}
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
@@ -1759,26 +1776,26 @@ export function Game() {
                 WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
               </p>
             )}
-            {ended && !isHost ? (
+            {multiplayer && !isHost && (ended || !started) ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START A NEW ARENA
+                {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
               </div>
             ) : (
               <button
-                onClick={start}
+                onClick={() => start()}
                 className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
               </button>
             )}
 
-            {paused ? (
+            {paused || (multiplayer && ended) ? (
               <div className="mt-3">
                 <button
                   onClick={leaveGame}
                   className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
                 >
-                  LEAVE GAME
+                  {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
                 </button>
               </div>
             ) : (
