@@ -1185,9 +1185,15 @@ export function Game() {
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
                 <label className="block">
-                  LOOK SPEED · {sens.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sens}
-                    onChange={(e) => setSens(Number(e.target.value))}
+                  LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
+                  <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                    onChange={(e) => setSensX(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
+                  <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                    onChange={(e) => setSensY(Number(e.target.value))}
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
               </div>
