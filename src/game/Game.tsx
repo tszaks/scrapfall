@@ -243,6 +243,8 @@ function World({
   onScore,
   onHurt,
   onStatus,
+  onBoss,
+  onWeapon,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -253,6 +255,8 @@ function World({
   onScore: () => void;
   onHurt: () => void;
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
+  onBoss: (hp: number) => void;
+  onWeapon: (w: Weapon) => void;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -260,6 +264,9 @@ function World({
   const { camera } = useThree();
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
+  const weapon = useRef<Weapon>("pistol");
+  const pickup = useRef({ x: 0, z: 0, active: false });
+  const pickupMesh = useRef<THREE.Group>(null);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
@@ -277,6 +284,8 @@ function World({
     look.current = { yaw: 0, pitch: 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
+    weapon.current = "pistol";
+    pickup.current.active = false;
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
     onStatus(1, 0, false, true);
@@ -298,7 +307,15 @@ function World({
       camera.getWorldDirection(FORWARD);
       const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
       pos.y -= 0.25;
-      fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(BULLET_SPEED), 2);
+      if (weapon.current === "scatter") {
+        for (let s = -2; s <= 2; s++) {
+          const dir = FORWARD.clone().applyAxisAngle(camera.up, s * 0.07);
+          dir.y += (Math.random() - 0.5) * 0.04;
+          fireInto(bullets.current, pos, dir.normalize().multiplyScalar(BULLET_SPEED), 0.8);
+        }
+      } else {
+        fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(BULLET_SPEED), 2);
+      }
     };
     const onDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.tagName === "CANVAS") fire();
@@ -315,11 +332,13 @@ function World({
   }, [camera, gameOver]);
 
   const spawnWave = (n: number) => {
-    const [d, b, s] = WAVES[n - 1] ?? [0, 0, 0];
+    const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
     const kinds: Kind[] = [
+      ...Array(boss).fill("boss"),
       ...Array(d).fill("drifter"),
       ...Array(b).fill("brute"),
       ...Array(s).fill("shooter"),
+      ...Array(r).fill("runner"),
     ];
     enemies.forEach((e, i) => {
       const kind = kinds[i];
@@ -337,8 +356,14 @@ function World({
         cooldown: 1 + rand() * 2,
         swing: 0,
         flash: 0,
+        shot: 2,
       });
     });
+    if (boss) onBoss(BOSS_HP);
+    if (n === PICKUP_WAVE && weapon.current === "pistol") {
+      const p = randomSpawn(blocks, rand);
+      pickup.current = { x: p.x, z: p.z, active: true };
+    }
   };
 
   const outOfBounds = (p: THREE.Vector3) =>
@@ -377,6 +402,21 @@ function World({
       if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
     }
     cam.position.y = EYE + Math.sin(state.clock.elapsedTime * 9) * (MOVE.lengthSq() > 0 ? 0.04 : 0);
+
+    // weapon pickup
+    const pk = pickup.current;
+    if (pickupMesh.current) {
+      pickupMesh.current.visible = pk.active;
+      if (pk.active) {
+        pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.rotation.y += delta * 2;
+      }
+    }
+    if (pk.active && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
+      pk.active = false;
+      weapon.current = "scatter";
+      onWeapon("scatter");
+    }
 
     // waves
     const remaining = enemies.filter((e) => e.alive).length;
@@ -417,7 +457,7 @@ function World({
       // route around obstacles: go straight if clear, else follow the flow field
       let tx = cam.position.x;
       let tz = cam.position.z;
-      if (!clearLine(blocks, e.x, e.z, tx, tz, st.radius * 0.9)) {
+      if (!clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
         const wp = nextWaypoint(solid, field.current!.dist, e.x, e.z);
         tx = wp.x;
         tz = wp.z;
@@ -428,24 +468,30 @@ function World({
       let dir = 1;
       if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
       if (e.kind === "brute" && d < 1.8) dir = 0;
+      if (e.kind === "boss" && d < 3) dir = 0;
       if (e.swing > 0) dir = 0;
       const step = st.speed * delta * dir;
       const nx = e.x + (mx / md) * step;
       const nz = e.z + (mz / md) * step;
-      if (!blocked(blocks, nx, e.z, st.radius)) e.x = nx;
-      if (!blocked(blocks, e.x, nz, st.radius)) e.z = nz;
+      // boss is big but squeezes through gaps like a brute
+      const r = Math.min(st.radius, 0.8);
+      if (!blocked(blocks, nx, e.z, r)) e.x = nx;
+      if (!blocked(blocks, e.x, nz, r)) e.z = nz;
 
-      if (e.kind === "drifter" && d < 1.3 && meleeCooldown.current <= 0) {
+      if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
         meleeCooldown.current = 1;
         onHurt();
       }
-      if (e.kind === "brute") {
+      if (e.kind === "brute" || e.kind === "boss") {
+        const reach = e.kind === "boss" ? 3.6 : 2.4;
         if (e.swing > 0) {
           const before = e.swing;
           e.swing -= delta;
-          // damage lands midway through the swing
-          if (before > 0.2 && e.swing <= 0.2 && d < 2.4) onHurt();
-        } else if (d < 2.2 && e.cooldown <= 0) {
+          if (before > 0.2 && e.swing <= 0.2 && d < reach) {
+            onHurt();
+            if (e.kind === "boss") onHurt();
+          }
+        } else if (d < reach - 0.2 && e.cooldown <= 0) {
           e.swing = 0.4;
           e.cooldown = 1.6;
         }
@@ -459,6 +505,20 @@ function World({
         from.addScaledVector(vel, 0.8);
         fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5);
       }
+      if (e.kind === "boss") {
+        e.shot -= delta;
+        if (e.shot <= 0 && d < 26) {
+          e.shot = 2.2;
+          const from = new THREE.Vector3(e.x, 2.6, e.z);
+          const base = Math.atan2(dx, dz);
+          for (let s = -2; s <= 2; s++) {
+            const a = base + s * 0.18;
+            const vel = new THREE.Vector3(Math.sin(a), (cam.position.y - 2.6) / d, Math.cos(a)).normalize();
+            const p = from.clone().addScaledVector(vel, 1.6);
+            fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.9), 3.5);
+          }
+        }
+      }
     }
 
     // player bullets
@@ -471,11 +531,12 @@ function World({
         else {
           for (const e of enemies) {
             if (!e.alive) continue;
-            const h = e.kind === "brute" ? 2.6 : 2;
+            const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
               b.active = false;
               e.hp -= 1;
               e.flash = 0.1;
+              if (e.kind === "boss") onBoss(Math.max(0, e.hp));
               if (e.hp <= 0) {
                 e.alive = false;
                 onScore();
@@ -484,6 +545,7 @@ function World({
             }
           }
         }
+      }
       }
       if (m) {
         m.visible = b.active;
@@ -526,6 +588,20 @@ function World({
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
+      <group ref={pickupMesh} visible={false}>
+        <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.7, 0.9, 24]} />
+          <meshBasicMaterial color="#ffd23f" fog={false} />
+        </mesh>
+        <mesh position-y={1}>
+          <boxGeometry args={[1, 0.3, 0.3]} />
+          <meshLambertMaterial color="#2b2118" emissive="#ff8a1f" emissiveIntensity={0.6} />
+        </mesh>
+        <mesh position={[-0.35, 0.8, 0]}>
+          <boxGeometry args={[0.2, 0.4, 0.25]} />
+          <meshLambertMaterial color="#6b4a2c" />
+        </mesh>
+      </group>
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
     </>
@@ -540,7 +616,16 @@ export function Game() {
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
   const [hurtFlash, setHurtFlash] = useState(0);
+  const [weapon, setWeapon] = useState<Weapon>("pistol");
+  const [bossHp, setBossHp] = useState(0);
+  const [pickupMsg, setPickupMsg] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickupMsg) return;
+    const t = window.setTimeout(() => setPickupMsg(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [pickupMsg]);
 
   const { blocks, enemies, rand, theme } = useMemo(() => {
     const level = generateLevel(seed);
@@ -599,6 +684,8 @@ export function Game() {
       setScore(0);
       setHealth(MAX_HP);
       setStatus({ wave: 1, remaining: 0, won: false });
+      setWeapon("pistol");
+      setBossHp(0);
     }
     setLocked(true);
     try {
@@ -628,6 +715,11 @@ export function Game() {
             setStatus({ wave, remaining, won });
             if (showBanner) setBanner(true);
           }}
+          onBoss={setBossHp}
+          onWeapon={(w) => {
+            setWeapon(w);
+            if (w === "scatter") setPickupMsg(true);
+          }}
         />
       </Canvas>
 
@@ -641,7 +733,7 @@ export function Game() {
 
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
@@ -654,15 +746,31 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
+            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
+              {weapon === "scatter" ? "SCATTER" : "PISTOL"}
+            </div>
           </div>
           <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
             {"♦".repeat(health)}
             <span className="opacity-30">{"♦".repeat(MAX_HP - health)}</span>
           </div>
         </div>
+        {bossHp > 0 && locked && !ended && (
+          <div className="absolute left-1/2 top-16 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">WARLORD</div>
+            <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
+              <div className="h-full bg-[#b3261e]" style={{ width: `${(bossHp / BOSS_HP) * 100}%` }} />
+            </div>
+          </div>
+        )}
         {banner && locked && !ended && (
           <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
-            WAVE {status.wave}
+            {status.wave === WAVES.length ? "BOSS ROUND" : `WAVE ${status.wave}`}
+          </div>
+        )}
+        {pickupMsg && locked && !ended && (
+          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
+            SCATTER GUN ACQUIRED
           </div>
         )}
         {locked && !ended && (
@@ -684,7 +792,7 @@ export function Game() {
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves. Red drifters ram you, green brutes swing clubs, blue gunners shoot from range.`}
+                  : `Survive ${WAVES.length} waves and beat the Warlord. Grab the glowing scatter gun when it drops on wave 3.`}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
               WASD to move · mouse or arrow keys to look · Space to shoot · Esc to pause
