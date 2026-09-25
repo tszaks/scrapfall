@@ -6,6 +6,9 @@ import { ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block } f
 import { useKeyboard } from "./useKeyboard";
 
 type Enemy = { x: number; z: number; alive: boolean };
+type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean };
+const BULLET_SPEED = 32;
+const MAX_BULLETS = 30;
 
 const SPEED = 7;
 const ENEMY_SPEED = 2.1;
@@ -108,35 +111,65 @@ function World({
     return () => document.removeEventListener("mousemove", onMove);
   }, []);
 
-  // Shooting
+  // Shooting: spawn a bullet from the player
+  const bullets = useRef<Bullet[]>([]);
+  const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
   useEffect(() => {
-    const onClick = () => {
+    const fire = () => {
       if (!document.pointerLockElement || gameOver) return;
       camera.getWorldDirection(FORWARD);
-      let best: Enemy | null = null;
-      let bestDist = Infinity;
-      for (const e of enemies) {
-        if (!e.alive) continue;
-        TO_ENEMY.set(e.x - camera.position.x, 0, e.z - camera.position.z);
-        const dist = TO_ENEMY.length();
-        TO_ENEMY.normalize();
-        const flat = FORWARD.clone();
-        flat.y = 0;
-        flat.normalize();
-        if (TO_ENEMY.dot(flat) > 1 - 0.006 * Math.max(1, dist * 0.5) && dist < bestDist) {
-          best = e;
-          bestDist = dist;
-        }
-      }
-      if (best) {
-        best.alive = false;
-        onScore();
-        window.setTimeout(() => respawnEnemy(best!), 1200);
+      const slot = bullets.current.find((b) => !b.active);
+      const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
+      pos.y -= 0.25;
+      if (slot) {
+        slot.pos.copy(pos);
+        slot.vel.copy(FORWARD).multiplyScalar(BULLET_SPEED);
+        slot.life = 2;
+        slot.active = true;
+      } else if (bullets.current.length < MAX_BULLETS) {
+        bullets.current.push({ pos, vel: FORWARD.clone().multiplyScalar(BULLET_SPEED), life: 2, active: true });
       }
     };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [camera, enemies, gameOver, onScore, respawnEnemy]);
+    const onDown = () => fire();
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.code === "Enter" || e.code === "NumpadEnter") && !e.repeat) fire();
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [camera, gameOver]);
+
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.05);
+    bullets.current.forEach((b, i) => {
+      const m = bulletMeshes.current[i];
+      if (b.active) {
+        b.pos.addScaledVector(b.vel, delta);
+        b.life -= delta;
+        if (b.life <= 0 || b.pos.y < 0 || blocked(blocks, b.pos.x, b.pos.z, 0.05) || Math.abs(b.pos.x) > HALF || Math.abs(b.pos.z) > HALF) {
+          b.active = false;
+        } else {
+          for (const e of enemies) {
+            if (!e.alive) continue;
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < 0.9 && b.pos.y < 2) {
+              e.alive = false;
+              b.active = false;
+              onScore();
+              window.setTimeout(() => respawnEnemy(e), 1200);
+              break;
+            }
+          }
+        }
+      }
+      if (m) {
+        m.visible = b.active;
+        m.position.copy(b.pos);
+      }
+    });
+  });
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -196,6 +229,12 @@ function World({
       <Level blocks={blocks} />
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} />
+      ))}
+      {Array.from({ length: MAX_BULLETS }, (_, i) => (
+        <mesh key={`b${i}`} ref={(m) => { bulletMeshes.current[i] = m; }} visible={false}>
+          <sphereGeometry args={[0.09, 8, 8]} />
+          <meshBasicMaterial color="#ffe08a" />
+        </mesh>
       ))}
     </>
   );
@@ -286,7 +325,7 @@ export function Game() {
                 : "A new arena is generated every round. Clear the drifters."}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse to look · click to shoot · Esc to release the cursor
+              WASD to move · mouse to look · click or Enter to shoot · Esc to release the cursor
             </p>
             <button
               onClick={start}
