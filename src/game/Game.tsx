@@ -1972,7 +1972,7 @@ export function Game() {
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
                   : paused
                     ? `Wave ${status.wave} · ${score} kills so far.`
-                    : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
+                    : `Survive ${WAVES.length} waves, then face the ${theme.boss.name}. Die and you lose every gun but the pistol.`}
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
