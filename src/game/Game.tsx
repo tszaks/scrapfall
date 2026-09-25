@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 
 
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
@@ -37,7 +37,7 @@ const GUNS: Record<Weapon, Gun> = {
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
-const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss"];
+const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard"];
 
 type Enemy = {
   kind: Kind;
@@ -57,36 +57,43 @@ type Bullet = {
 };
 
 
-const BOSS_HP = 45;
-const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
-  drifter: { hp: 1, speed: 2.4, radius: 0.6 },
-  brute: { hp: 5, speed: 1.5, radius: 0.8 },
-  shooter: { hp: 2, speed: 1.8, radius: 0.6 },
-  runner: { hp: 1, speed: 4.2, radius: 0.45 },
-  boss: { hp: BOSS_HP, speed: 1.2, radius: 1.5 },
+const BOSS_HP = 80;
+const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
+  drifter: { hp: 2, speed: 2.8, radius: 0.6, dmg: 2 },
+  brute: { hp: 9, speed: 1.7, radius: 0.8, dmg: 3 },
+  shooter: { hp: 4, speed: 2, radius: 0.6, dmg: 2 },
+  runner: { hp: 2, speed: 4.8, radius: 0.45, dmg: 2 },
+  boss: { hp: BOSS_HP, speed: 1.5, radius: 1.5, dmg: 4 },
+  specter: { hp: 3, speed: 3.6, radius: 0.55, dmg: 2 },
+  bomber: { hp: 5, speed: 1.6, radius: 0.7, dmg: 3 },
+  vanguard: { hp: 14, speed: 1.3, radius: 0.9, dmg: 3 },
 };
 
-// 10 waves: [drifters, brutes, shooters, runners, boss]
-const WAVES: [number, number, number, number, number][] = [
-  [5, 0, 0, 0, 0],
-  [5, 1, 1, 0, 0],
-  [4, 1, 2, 3, 0],
-  [5, 2, 3, 2, 0],
-  [6, 3, 3, 3, 0],
-  [4, 2, 4, 6, 0],
-  [6, 4, 4, 4, 0],
-  [5, 5, 5, 5, 0],
-  [8, 5, 6, 6, 0],
-  [4, 2, 2, 2, 1], // boss round
+// 12 rounds, ramping hard; the last one is the map boss
+type WaveSpec = Partial<Record<Kind, number>>;
+const WAVES: WaveSpec[] = [
+  { drifter: 6 },
+  { drifter: 7, shooter: 2, runner: 2 },
+  { drifter: 7, brute: 2, shooter: 3, specter: 2 },
+  { drifter: 8, brute: 2, shooter: 4, runner: 4, bomber: 1 },
+  { drifter: 8, brute: 3, shooter: 4, runner: 5, specter: 3, vanguard: 1 },
+  { drifter: 9, brute: 4, shooter: 5, runner: 6, bomber: 2, vanguard: 1 },
+  { drifter: 10, brute: 5, shooter: 6, runner: 6, specter: 4, bomber: 2, vanguard: 2 },
+  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 2 },
+  { drifter: 12, brute: 7, shooter: 8, runner: 9, specter: 6, bomber: 3, vanguard: 3 },
+  { drifter: 12, brute: 8, shooter: 9, runner: 10, specter: 7, bomber: 4, vanguard: 4 },
+  { drifter: 14, brute: 9, shooter: 10, runner: 12, specter: 8, bomber: 5, vanguard: 5 },
+  { boss: 1, drifter: 8, brute: 4, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 2 },
 ];
-const MAX_ENEMIES = 72;
+const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
+
 
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
 const TURN_SPEED = 2.4;
-const MAX_BULLETS = 60;
+const MAX_BULLETS = 90;
 const SPEED = 7;
 const EYE = 1.6;
 
@@ -171,37 +178,108 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   );
 }
 
+function BossBody({ theme }: { theme: Theme }) {
+  const b = theme.boss;
+  const skin = <meshLambertMaterial color={b.body} flatShading />;
+  const limb = <meshLambertMaterial color={b.limb} flatShading />;
+  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
+  return (
+    <group>
+      {/* torso + head shared by every boss, dressed differently per map */}
+      <mesh position-y={1.35} castShadow><boxGeometry args={[1.7, 2, 1.2]} />{skin}</mesh>
+      <mesh position-y={2.75} castShadow><boxGeometry args={[1, 0.8, 0.9]} />{skin}</mesh>
+      <mesh position={[-0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
+      <mesh position={[0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
+      <mesh position={[-0.95, 1.2, 0]} castShadow><boxGeometry args={[0.35, 1.6, 0.4]} />{limb}</mesh>
+      <mesh position={[0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
+      <mesh position={[-0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
+
+      {b.shape === "yeti" && (<>
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={x} position={[x, 3.15, 0]} rotation-z={x * 0.4}><coneGeometry args={[0.14, 0.7, 5]} />{glow}</mesh>
+        ))}
+        <mesh position-y={1.5} castShadow><sphereGeometry args={[1.05, 8, 6]} />{skin}</mesh>
+      </>)}
+      {b.shape === "golem" && (<>
+        <mesh position-y={2.2} rotation-y={0.4} castShadow><boxGeometry args={[2, 0.35, 1.4]} />{limb}</mesh>
+        <mesh position={[0, 3.35, 0]}><coneGeometry args={[0.5, 0.7, 4]} />{glow}</mesh>
+      </>)}
+      {b.shape === "treant" && (<>
+        <mesh position-y={3.3} castShadow><sphereGeometry args={[1.2, 7, 5]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} position={[Math.sin(i * 2) * 0.8, 3.9, Math.cos(i * 2) * 0.8]}><sphereGeometry args={[0.22, 6, 6]} />{glow}</mesh>
+        ))}
+      </>)}
+      {b.shape === "magma" && (<>
+        <mesh position={[0, 1.5, 0.62]}><boxGeometry args={[0.7, 0.9, 0.1]} />{glow}</mesh>
+        {[-0.6, 0, 0.6].map((x) => (
+          <mesh key={x} position={[x, 3.2, -0.2]}><coneGeometry args={[0.16, 0.6, 4]} />{glow}</mesh>
+        ))}
+      </>)}
+      {b.shape === "mech" && (<>
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={x} position={[x, 3.3, -0.35]} rotation-x={0.2}><cylinderGeometry args={[0.13, 0.16, 0.8, 8]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        ))}
+        <mesh position={[0, 1.6, 0.64]} rotation-x={Math.PI / 2}><torusGeometry args={[0.35, 0.08, 6, 14]} />{glow}</mesh>
+      </>)}
+      {b.shape === "ronin" && (<>
+        <mesh position={[0, 3.25, -0.1]} rotation-x={-0.25}><coneGeometry args={[0.75, 0.45, 6]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
+        <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
+        <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
+      </>)}
+      {b.shape === "drake" && (<>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
+            <boxGeometry args={[1.8, 0.12, 1.1]} /><meshLambertMaterial color={b.weapon} flatShading />
+          </mesh>
+        ))}
+        {[0.4, 1.1, 1.8].map((y) => (
+          <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
+        ))}
+      </>)}
+    </group>
+  );
+}
+
 function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   const c = theme.enemy;
   const ref = useRef<THREE.Group>(null);
   const drifter = useRef<THREE.Group>(null);
   const brute = useRef<THREE.Group>(null);
   const shooter = useRef<THREE.Group>(null);
+  const specter = useRef<THREE.Group>(null);
+  const bomber = useRef<THREE.Group>(null);
+  const vanguard = useRef<THREE.Group>(null);
+  const bossGrp = useRef<THREE.Group>(null);
   const club = useRef<THREE.Group>(null);
-  const crown = useRef<THREE.Group>(null);
+  const bossArm = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
     g.visible = data.alive;
     if (!data.alive) return;
     const t = state.clock.elapsedTime;
-    const heavy = data.kind === "brute" || data.kind === "boss";
-    const bob = heavy ? 0 : Math.sin(t * (data.kind === "runner" ? 10 : 4) + data.x) * 0.08;
+    const k = data.kind;
+    const heavy = k === "brute" || k === "boss" || k === "vanguard";
+    const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
-    const base = data.kind === "boss" ? 2 : data.kind === "runner" ? 0.6 : 1;
-    const s = base * (data.flash > 0 ? 1.15 : 1);
-    g.scale.setScalar(s);
-    if (drifter.current) drifter.current.visible = data.kind === "drifter" || data.kind === "runner";
-    if (brute.current) brute.current.visible = heavy;
-    if (crown.current) crown.current.visible = data.kind === "boss";
-    if (shooter.current) shooter.current.visible = data.kind === "shooter";
-    if (drifter.current) drifter.current.rotation.y = data.kind === "runner" ? t * 8 : 0;
-    if (club.current) {
-      // swing from raised to forward
-      const p = data.swing > 0 ? 1 - data.swing / 0.4 : 0;
-      club.current.rotation.x = -1.4 + p * 2.4;
+    const base = k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
+    g.scale.setScalar(base * (data.flash > 0 ? 1.15 : 1));
+    if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
+    if (brute.current) brute.current.visible = k === "brute";
+    if (bossGrp.current) bossGrp.current.visible = k === "boss";
+    if (shooter.current) shooter.current.visible = k === "shooter";
+    if (specter.current) {
+      specter.current.visible = k === "specter";
+      specter.current.rotation.y = t * 1.6;
     }
+    if (bomber.current) bomber.current.visible = k === "bomber";
+    if (vanguard.current) vanguard.current.visible = k === "vanguard";
+    if (drifter.current) drifter.current.rotation.y = k === "runner" ? t * 8 : 0;
+    const swingRot = data.swing > 0 ? -1.4 + (1 - data.swing / 0.4) * 2.4 : -1.4;
+    if (club.current) club.current.rotation.x = swingRot;
+    if (bossArm.current) bossArm.current.rotation.x = swingRot;
   });
   return (
     <group ref={ref}>
@@ -216,14 +294,6 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
         </mesh>
       </group>
       <group ref={brute}>
-        <group ref={crown} position-y={2.65}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <mesh key={i} position={[Math.sin((i / 5) * Math.PI * 2) * 0.35, 0, Math.cos((i / 5) * Math.PI * 2) * 0.35]}>
-              <coneGeometry args={[0.1, 0.35, 4]} />
-              <meshBasicMaterial color={c.shooter.eye} />
-            </mesh>
-          ))}
-        </group>
         <mesh position-y={1.1} castShadow>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
@@ -247,6 +317,19 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           </mesh>
         </group>
       </group>
+      <group ref={bossGrp}>
+        <BossBody theme={theme} />
+        <group ref={bossArm} position={[1.05, 1.9, 0]}>
+          <mesh position={[0, 0.9, 0]} castShadow>
+            <boxGeometry args={[0.24, 1.8, 0.24]} />
+            <meshLambertMaterial color={theme.boss.limb} flatShading />
+          </mesh>
+          <mesh position={[0, 1.95, 0]} castShadow>
+            <boxGeometry args={[0.6, 0.6, 0.6]} />
+            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          </mesh>
+        </group>
+      </group>
       <group ref={shooter} position-y={1.3}>
         <mesh castShadow>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
@@ -261,9 +344,63 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
       </group>
+      {/* SPECTER: drifting, see-through wraith that blinks toward you */}
+      <group ref={specter} position-y={1.5}>
+        <mesh castShadow>
+          <coneGeometry args={[0.6, 1.8, 6]} />
+          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
+        </mesh>
+        <mesh position={[0, 0.5, 0.35]}>
+          <sphereGeometry args={[0.14, 8, 8]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+        <mesh position={[0, 0.5, -0.35]}>
+          <sphereGeometry args={[0.1, 8, 8]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+      </group>
+      {/* BOMBER: squat mortar unit that lobs shells over cover */}
+      <group ref={bomber} position-y={0.8}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.75, 8, 6]} />
+          <meshLambertMaterial color={c.brute.body} flatShading />
+        </mesh>
+        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7} castShadow>
+          <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
+          <meshLambertMaterial color={c.shooter.barrel} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.6]}>
+          <sphereGeometry args={[0.13, 8, 8]} />
+          <meshBasicMaterial color={theme.enemyBullet} />
+        </mesh>
+      </group>
+      {/* VANGUARD: armoured shield wall, tough from the front */}
+      <group ref={vanguard}>
+        <mesh position-y={1.2} castShadow>
+          <boxGeometry args={[1.2, 2, 0.9]} />
+          <meshLambertMaterial color={c.shooter.body} flatShading />
+        </mesh>
+        <mesh position={[0, 2.45, 0]} castShadow>
+          <boxGeometry args={[0.7, 0.55, 0.7]} />
+          <meshLambertMaterial color={c.brute.head} flatShading />
+        </mesh>
+        <mesh position={[0, 2.5, 0.37]}>
+          <boxGeometry args={[0.45, 0.1, 0.05]} />
+          <meshBasicMaterial color={c.brute.eye} />
+        </mesh>
+        <mesh position={[0, 1.3, 0.75]} castShadow>
+          <boxGeometry args={[1.7, 2.1, 0.18]} />
+          <meshLambertMaterial color={c.brute.clubHead} flatShading />
+        </mesh>
+        <mesh position={[0, 1.3, 0.86]}>
+          <boxGeometry args={[0.3, 0.9, 0.04]} />
+          <meshBasicMaterial color={theme.enemyBullet} />
+        </mesh>
+      </group>
     </group>
   );
 }
+
 
 function BulletPool({
   meshes,
@@ -409,7 +546,7 @@ function World({
   locked: boolean;
   gameOver: boolean;
   onScore: () => void;
-  onHurt: () => void;
+  onHurt: (dmg?: number) => void;
   onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
   onBoss: (hp: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
@@ -484,6 +621,8 @@ function World({
   isHostRef.current = isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
+
   const playersRef = useRef(players);
   playersRef.current = players;
   const healthRef = useRef(health);
@@ -598,7 +737,7 @@ function World({
         if (m.type === "snap") applySnap(m);
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") onHurt();
+        else if (m.type === "hurt") onHurt(Number(m.dmg) || 1);
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -691,6 +830,21 @@ function World({
     }
   };
 
+  // dying costs you every gun but the pistol; the lost ones go back in the drop pool
+  useEffect(() => {
+    if (!dead) return;
+    const lost = [...owned.current].filter((w) => w !== "pistol");
+    if (lost.length === 0) return;
+    lost.forEach((w) => {
+      owned.current.delete(w);
+      ammo.current[w] = 0;
+      if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
+    });
+    equip("pistol");
+  }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
@@ -731,15 +885,14 @@ function World({
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
     const enemyMul = 1 + 0.6 * extra;
     const lootMul = 1 + 0.65 * extra;
-    const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
+    const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
-    const kinds: Kind[] = [
-      ...Array(boss).fill("boss"),
-      ...Array(scale(d)).fill("drifter"),
-      ...Array(scale(b)).fill("brute"),
-      ...Array(scale(s)).fill("shooter"),
-      ...Array(scale(r)).fill("runner"),
-    ].slice(0, MAX_ENEMIES);
+    const kinds: Kind[] = ([] as Kind[])
+      .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .sort((a) => (a === "boss" ? -1 : 0))
+      .slice(0, MAX_ENEMIES);
+    const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
     enemies.forEach((e, i) => {
@@ -754,7 +907,7 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: STATS[kind].hp,
+        hp: kind === "boss" ? Math.round(BOSS_HP + 20 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
@@ -763,7 +916,8 @@ function World({
         slow: 0,
       });
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      delay += i < 2 ? 0.4 : 1 + rand() * 2.5;
+      delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
+
     });
     // health: random; solo waits 2 waves between packs, co-op packs come more often
     const healGap = extra > 0 ? 1 : 2;
@@ -821,7 +975,7 @@ function World({
       fireCd.current = GUNS[weapon.current].cooldown;
     }
 
-    // player movement
+    // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
     cam.getWorldDirection(FORWARD);
@@ -829,14 +983,19 @@ function World({
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
-    if (MOVE.lengthSq() > 0) {
-      MOVE.normalize().multiplyScalar(SPEED * delta);
-      const nx = cam.position.x + MOVE.x;
-      const nz = cam.position.z + MOVE.z;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
-    }
     const moving = MOVE.lengthSq() > 0;
+    if (moving) MOVE.normalize();
+    const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
+    const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    slide.current.x += (MOVE.x * SPEED - slide.current.x) * resp;
+    slide.current.z += (MOVE.z * SPEED - slide.current.z) * resp;
+    if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
+      const nx = cam.position.x + slide.current.x * delta;
+      const nz = cam.position.z + slide.current.z * delta;
+      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
+      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+    }
+
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
     cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
@@ -907,7 +1066,8 @@ function World({
           b.pos.addScaledVector(b.vel, delta);
           if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
             b.active = false;
-            onHurt();
+            onHurt(b.damage);
+
             n?.broadcast({ type: "ebhit", i });
           }
         }
@@ -968,9 +1128,9 @@ function World({
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
-      const hurtTarget = (t: Target) => {
-        if (t.id === null) onHurt();
-        else n?.sendTo(t.id, { type: "hurt" });
+      const hurtTarget = (t: Target, dmg: number) => {
+        if (t.id === null) onHurt(dmg);
+        else n?.sendTo(t.id, { type: "hurt", dmg });
       };
 
       // flow field per target cell (cached)
@@ -1004,7 +1164,8 @@ function World({
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
         let tz = target.z;
-        if (!clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
+        const ghost = e.kind === "specter"; // specters drift straight through cover
+        if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
           const dist = fields.current.get(toCell(target.x) * 1000 + toCell(target.z));
           if (dist) {
             const wp = nextWaypoint(solid, dist, e.x, e.z);
@@ -1017,56 +1178,85 @@ function World({
         const md = Math.hypot(mx, mz) || 1;
         let dir = 1;
         if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
+        if (e.kind === "bomber") dir = d > 16 ? 1 : d < 9 ? -1 : 0;
         if (e.kind === "brute" && d < 1.8) dir = 0;
+        if (e.kind === "vanguard" && d < 2) dir = 0;
         if (e.kind === "boss" && d < 3) dir = 0;
         if (e.swing > 0) dir = 0;
         const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
         const nx = e.x + (mx / md) * step;
         const nz = e.z + (mz / md) * step;
         const r = Math.min(st.radius, 0.8);
-        if (!blocked(blocks, nx, e.z, r)) e.x = nx;
-        if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+        if (ghost) { e.x = nx; e.z = nz; }
+        else {
+          if (!blocked(blocks, nx, e.z, r)) e.x = nx;
+          if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+        }
 
         if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
-          hurtTarget(target);
+          hurtTarget(target, st.dmg);
         }
-        if (e.kind === "brute" || e.kind === "boss") {
-          const reach = e.kind === "boss" ? 3.6 : 2.4;
+        // SPECTER: blinks in behind whoever it is hunting, then slashes
+        if (e.kind === "specter") {
+          e.shot -= delta;
+          if (e.shot <= 0 && d > 9) {
+            e.shot = 5 + rand() * 3;
+            const a = rand() * Math.PI * 2;
+            const bx = target.x + Math.sin(a) * 4;
+            const bz = target.z + Math.cos(a) * 4;
+            if (!blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
+          }
+          if (d < 1.6 && e.cooldown <= 0) {
+            e.cooldown = 1.4;
+            hurtTarget(target, st.dmg);
+          }
+        }
+        if (e.kind === "brute" || e.kind === "boss" || e.kind === "vanguard") {
+          const reach = e.kind === "boss" ? 3.6 : e.kind === "vanguard" ? 2.6 : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
-            if (before > 0.2 && e.swing <= 0.2 && d < reach) {
-              hurtTarget(target);
-              if (e.kind === "boss") hurtTarget(target);
-            }
+            if (before > 0.2 && e.swing <= 0.2 && d < reach) hurtTarget(target, st.dmg);
           } else if (d < reach - 0.2 && e.cooldown <= 0) {
             e.swing = 0.4;
-            e.cooldown = 1.6;
+            e.cooldown = e.kind === "boss" ? 1.3 : 1.6;
           }
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
-          e.cooldown = 2 + rand() * 0.8;
+          e.cooldown = 1.5 + rand() * 0.6;
           const from = new THREE.Vector3(e.x, 1.5, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
-          fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5);
+          fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
+        }
+        // BOMBER: heavy shells lobbed from above, they clear low cover
+        if (e.kind === "bomber") {
+          e.shot -= delta;
+          if (e.shot <= 0 && d < 30) {
+            e.shot = 3 + rand();
+            const from = new THREE.Vector3(e.x, 3.2, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2, target.z - e.z).normalize();
+            from.addScaledVector(vel, 1.2);
+            fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
+          }
         }
         if (e.kind === "boss") {
           e.shot -= delta;
-          if (e.shot <= 0 && d < 26) {
-            e.shot = 2.2;
+          if (e.shot <= 0 && d < 30) {
+            e.shot = 1.8;
             const from = new THREE.Vector3(e.x, 2.6, e.z);
             const base = Math.atan2(dx, dz);
-            for (let s = -2; s <= 2; s++) {
-              const a = base + s * 0.18;
+            for (let s = -3; s <= 3; s++) {
+              const a = base + s * 0.16;
               const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
-              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.9), 3.5);
+              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
             }
           }
         }
       }
+
     }
 
     // player bullets
@@ -1116,9 +1306,12 @@ function World({
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
-            const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
+            const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
-              hurtEnemy(e, b.damage, ei, b.slow);
+              // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
+              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              hurtEnemy(e, dmg, ei, b.slow);
+
               if (b.chain > 0) {
                 let left = b.chain;
                 for (let oi = 0; oi < enemies.length; oi++) {
@@ -1162,7 +1355,8 @@ function World({
           if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
-            onHurt();
+            onHurt(b.damage);
+
           }
         }
         if (m) {
@@ -1604,10 +1798,11 @@ export function Game() {
           locked={locked}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
-          onHurt={() => {
-            setHealth((h) => Math.max(0, h - 1));
+          onHurt={(dmg = 1) => {
+            setHealth((h) => Math.max(0, h - dmg));
             setHurtFlash((n) => n + 1);
           }}
+
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
             if (showBanner) {
@@ -1699,17 +1894,25 @@ export function Game() {
         {bossHp > 0 && locked && !ended && (
           <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
 
-            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">WARLORD</div>
+            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
-              <div className="h-full bg-[#b3261e]" style={{ width: `${(bossHp / BOSS_HP) * 100}%` }} />
+              <div className="h-full bg-[#b3261e]" style={{ width: `${Math.min(100, (bossHp / BOSS_HP) * 100)}%` }} />
             </div>
           </div>
         )}
         {banner && locked && !ended && (
-          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
-            {status.wave === WAVES.length ? "BOSS ROUND" : `WAVE ${status.wave}`}
+          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-center text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
+            {status.wave === WAVES.length ? (
+              <>
+                {theme.boss.name}
+                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">{theme.hazard.name}</div>
+              </>
+            ) : (
+              `WAVE ${status.wave}`
+            )}
           </div>
         )}
+
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
             {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
@@ -1769,7 +1972,7 @@ export function Game() {
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
                   : paused
                     ? `Wave ${status.wave} · ${score} kills so far.`
-                    : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
+                    : `Survive ${WAVES.length} waves, then face ${theme.boss.name}. Die and you lose every gun but the pistol.`}
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
