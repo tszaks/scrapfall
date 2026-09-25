@@ -476,8 +476,8 @@ function World({
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!document.pointerLockElement) return;
-      look.current.yaw -= e.movementX * 0.0022 * sensRef.current;
-      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensRef.current));
+      look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
+      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensYRef.current));
     };
     document.addEventListener("mousemove", onMove);
     return () => document.removeEventListener("mousemove", onMove);
