@@ -1283,9 +1283,12 @@ function World({
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
-            const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
+            const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
-              hurtEnemy(e, b.damage, ei, b.slow);
+              // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
+              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              hurtEnemy(e, dmg, ei, b.slow);
+
               if (b.chain > 0) {
                 let left = b.chain;
                 for (let oi = 0; oi < enemies.length; oi++) {
