@@ -1526,7 +1526,9 @@ export function Game() {
           net={net}
           remotes={remotes}
           dead={dead}
+          players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
+
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
