@@ -55,3 +55,86 @@ export function randomSpawn(blocks: Block[], rand: () => number) {
   }
   return { x: HALF - 4, z: HALF - 4 };
 }
+
+// ---------- pathfinding (flow field over the block grid) ----------
+export const CELLS = Math.floor(ARENA / BLOCK);
+export const toCell = (v: number) =>
+  Math.max(0, Math.min(CELLS - 1, Math.floor((v + HALF) / BLOCK)));
+export const cellCenter = (i: number) => -HALF + BLOCK / 2 + i * BLOCK;
+
+export function solidGrid(blocks: Block[]) {
+  const g = new Uint8Array(CELLS * CELLS);
+  for (const b of blocks) g[toCell(b.x) * CELLS + toCell(b.z)] = 1;
+  // edge ring is against the arena wall — treat as solid for routing
+  for (let i = 0; i < CELLS; i++) {
+    g[i * CELLS] = g[i * CELLS + CELLS - 1] = 1;
+    g[i] = g[(CELLS - 1) * CELLS + i] = 1;
+  }
+  return g;
+}
+
+const DIRS = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+] as const;
+
+/** Distance (in steps) from every cell to the target cell. */
+export function flowField(solid: Uint8Array, ti: number, tj: number) {
+  const dist = new Float32Array(CELLS * CELLS).fill(Infinity);
+  const q: number[] = [];
+  const start = ti * CELLS + tj;
+  dist[start] = 0;
+  q.push(start);
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h]!;
+    const ci = Math.floor(c / CELLS);
+    const cj = c % CELLS;
+    for (const [di, dj] of DIRS) {
+      const ni = ci + di;
+      const nj = cj + dj;
+      if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) continue;
+      const n = ni * CELLS + nj;
+      if (solid[n]) continue;
+      if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
+      const nd = dist[c]! + (di && dj ? 1.414 : 1);
+      if (nd < dist[n]!) {
+        dist[n] = nd;
+        q.push(n);
+      }
+    }
+  }
+  return dist;
+}
+
+/** World-space point the enemy should walk to next. */
+export function nextWaypoint(solid: Uint8Array, dist: Float32Array, x: number, z: number) {
+  const ci = toCell(x);
+  const cj = toCell(z);
+  let best = dist[ci * CELLS + cj]!;
+  let bi = ci;
+  let bj = cj;
+  for (const [di, dj] of DIRS) {
+    const ni = ci + di;
+    const nj = cj + dj;
+    if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) continue;
+    if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
+    const d = dist[ni * CELLS + nj]!;
+    if (d < best) {
+      best = d;
+      bi = ni;
+      bj = nj;
+    }
+  }
+  return { x: cellCenter(bi), z: cellCenter(bj) };
+}
+
+/** True when a straight walk from a to b is clear for the given radius. */
+export function clearLine(blocks: Block[], ax: number, az: number, bx: number, bz: number, r: number) {
+  const len = Math.hypot(bx - ax, bz - az);
+  const steps = Math.ceil(len / 0.5);
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    if (blocked(blocks, ax + (bx - ax) * t, az + (bz - az) * t, r)) return false;
+  }
+  return true;
+}
