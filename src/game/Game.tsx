@@ -1403,7 +1403,9 @@ export function Game() {
     return () => window.clearTimeout(t);
   }, [pickupMsg]);
 
+  const coop = !!net;
   const { blocks, enemies, rand, theme } = useMemo(() => {
+    setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = generateLevel(seed);
     const theme = THEMES[seed % THEMES.length]!;
     level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
@@ -1420,7 +1422,8 @@ export function Game() {
       slow: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
-  }, [seed]);
+  }, [seed, coop]);
+
 
   useEffect(() => {
     const wasLocked = { v: false };
