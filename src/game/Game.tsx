@@ -57,31 +57,38 @@ type Bullet = {
 };
 
 
-const BOSS_HP = 45;
-const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
-  drifter: { hp: 1, speed: 2.4, radius: 0.6 },
-  brute: { hp: 5, speed: 1.5, radius: 0.8 },
-  shooter: { hp: 2, speed: 1.8, radius: 0.6 },
-  runner: { hp: 1, speed: 4.2, radius: 0.45 },
-  boss: { hp: BOSS_HP, speed: 1.2, radius: 1.5 },
+const BOSS_HP = 80;
+const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
+  drifter: { hp: 2, speed: 2.8, radius: 0.6, dmg: 2 },
+  brute: { hp: 9, speed: 1.7, radius: 0.8, dmg: 3 },
+  shooter: { hp: 4, speed: 2, radius: 0.6, dmg: 2 },
+  runner: { hp: 2, speed: 4.8, radius: 0.45, dmg: 2 },
+  boss: { hp: BOSS_HP, speed: 1.5, radius: 1.5, dmg: 4 },
+  specter: { hp: 3, speed: 3.6, radius: 0.55, dmg: 2 },
+  bomber: { hp: 5, speed: 1.6, radius: 0.7, dmg: 3 },
+  vanguard: { hp: 14, speed: 1.3, radius: 0.9, dmg: 3 },
 };
 
-// 10 waves: [drifters, brutes, shooters, runners, boss]
-const WAVES: [number, number, number, number, number][] = [
-  [5, 0, 0, 0, 0],
-  [5, 1, 1, 0, 0],
-  [4, 1, 2, 3, 0],
-  [5, 2, 3, 2, 0],
-  [6, 3, 3, 3, 0],
-  [4, 2, 4, 6, 0],
-  [6, 4, 4, 4, 0],
-  [5, 5, 5, 5, 0],
-  [8, 5, 6, 6, 0],
-  [4, 2, 2, 2, 1], // boss round
+// 12 rounds, ramping hard; the last one is the map boss
+type WaveSpec = Partial<Record<Kind, number>>;
+const WAVES: WaveSpec[] = [
+  { drifter: 6 },
+  { drifter: 7, shooter: 2, runner: 2 },
+  { drifter: 7, brute: 2, shooter: 3, specter: 2 },
+  { drifter: 8, brute: 2, shooter: 4, runner: 4, bomber: 1 },
+  { drifter: 8, brute: 3, shooter: 4, runner: 5, specter: 3, vanguard: 1 },
+  { drifter: 9, brute: 4, shooter: 5, runner: 6, bomber: 2, vanguard: 1 },
+  { drifter: 10, brute: 5, shooter: 6, runner: 6, specter: 4, bomber: 2, vanguard: 2 },
+  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 2 },
+  { drifter: 12, brute: 7, shooter: 8, runner: 9, specter: 6, bomber: 3, vanguard: 3 },
+  { drifter: 12, brute: 8, shooter: 9, runner: 10, specter: 7, bomber: 4, vanguard: 4 },
+  { drifter: 14, brute: 9, shooter: 10, runner: 12, specter: 8, bomber: 5, vanguard: 5 },
+  { boss: 1, drifter: 8, brute: 4, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 2 },
 ];
-const MAX_ENEMIES = 72;
+const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
+
 
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
