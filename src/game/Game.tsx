@@ -1463,8 +1463,10 @@ export function Game() {
   }, [ended]);
 
   const start = () => {
+    if (ended && !isHost) return; // only the host starts a new arena
     setStarted(true);
     if (ended) {
+
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
         setSeed(s);
