@@ -590,6 +590,7 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    syncInv();
 
     // fresh random gun order for this run
     const pool: Weapon[] = [...DROPPABLE];
