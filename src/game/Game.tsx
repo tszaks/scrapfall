@@ -1314,8 +1314,36 @@ export function Game() {
   const netHolder = useRef<NetHandle | null>(null);
   const healthRef = useRef(MAX_HP);
   healthRef.current = health;
+  // player numbers: host is always 1, guests take 2-4 in join order
+  const slots = useRef<Record<string, number>>({});
+  const [roster, setRoster] = useState<{ id: string; num: number }[]>([]);
+
+  const publishRoster = () => {
+    const list = Object.entries(slots.current)
+      .map(([id, num]) => ({ id, num }))
+      .sort((a, b) => a.num - b.num);
+    setRoster(list);
+    remotes.current.forEach((r) => {
+      r.num = r.id === "host" ? 1 : (slots.current[r.id] ?? r.num);
+      r.color = colorFor(r.num);
+    });
+    netHolder.current?.broadcast({ type: "roster", slots: { ...slots.current } });
+  };
 
   const handleMsg = (m: NetMsg) => {
+    if (m.type === "roster") {
+      slots.current = (m.slots ?? {}) as Record<string, number>;
+      setRoster(
+        Object.entries(slots.current)
+          .map(([id, num]) => ({ id, num: Number(num) }))
+          .sort((a, b) => a.num - b.num),
+      );
+      remotes.current.forEach((r) => {
+        r.num = r.id === "host" ? 1 : (slots.current[r.id] ?? r.num);
+        r.color = colorFor(r.num);
+      });
+      return;
+    }
     if (m.type === "seed") {
       setSeed(Number(m.seed));
       setScore(0);
@@ -1328,7 +1356,17 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "joined") {
-      netHolder.current?.sendTo(String(m.from), { type: "seed", seed: seedRef.current });
+      const id = String(m.from);
+      if (!slots.current[id]) {
+        const used = new Set(Object.values(slots.current));
+        for (let n = 2; n <= 4; n++) if (!used.has(n)) { slots.current[id] = n; break; }
+      }
+      netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
+      publishRoster();
+    }
+    if (m.type === "left") {
+      delete slots.current[String(m.from)];
+      publishRoster();
     }
     if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? MAX_HP : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
