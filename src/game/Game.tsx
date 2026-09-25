@@ -1317,6 +1317,9 @@ export function Game() {
   // player numbers: host is always 1, guests take 2-4 in join order
   const slots = useRef<Record<string, number>>({});
   const [roster, setRoster] = useState<{ id: string; num: number }[]>([]);
+  // lets network messages kick off / resume the match, and keeps pause state handy
+  const startRef = useRef<(fromNet?: boolean) => void>(() => {});
+  const phase = useRef({ started: false, ended: false });
 
   const publishRoster = () => {
     const list = Object.entries(slots.current)
