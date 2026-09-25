@@ -400,6 +400,7 @@ function World({
     setHeld("pistol");
     pickup.current.active = false;
     heal.current.active = false;
+    lastHealWave.current = -99;
     lostQueue.current = [];
     onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
