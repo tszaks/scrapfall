@@ -10,10 +10,13 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
-type Weapon = "pistol" | "scatter" | "smg" | "rail" | "cannon";
+type Weapon =
+  | "pistol" | "scatter" | "smg" | "rail" | "cannon"
+  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
+  bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
   pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 0 },
@@ -21,8 +24,14 @@ const GUNS: Record<Weapon, Gun> = {
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
   cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
+  rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
+  harpoon: { name: "HARPOON", wave: 6, cooldown: 0.8, count: 1, spread: 0, speed: 40, life: 2, damage: 3, size: 0.1, color: "#f2ead6", body: "#4a4238", ammo: 12, pierce: 3 },
+  cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
+  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4 },
+  tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon"];
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
+const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 type Enemy = {
   kind: Kind;
   x: number;
@@ -33,8 +42,13 @@ type Enemy = {
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
   shot: number; // boss volley timer
+  slow: number; // frozen timer
 };
-type Bullet = { pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number };
+type Bullet = {
+  pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number;
+};
+
 
 const BOSS_HP = 45;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number }> = {
@@ -264,16 +278,22 @@ function BulletPool({
   );
 }
 
-function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0) {
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number };
+function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
+  const base = {
+    life, active: true, damage, color, size,
+    bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
+  };
   const slot = pool.find((b) => !b.active);
   if (slot) {
-    Object.assign(slot, { life, active: true, damage, color, size });
+    Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
   } else if (pool.length < MAX_BULLETS) {
-    pool.push({ pos: pos.clone(), vel: vel.clone(), life, active: true, damage, color, size });
+    pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
   }
 }
+
 
 /** Simple blocky gun model, different silhouette per weapon. */
 function GunModel({ w }: { w: Weapon }) {
@@ -311,6 +331,38 @@ function GunModel({ w }: { w: Weapon }) {
         <mesh position={[0, 0, -0.53]} rotation-x={Math.PI / 2}><torusGeometry args={[0.13, 0.03, 6, 14]} />{glow}</mesh>
         <mesh position={[0, 0.16, -0.15]}><sphereGeometry args={[0.06, 8, 8]} />{glow}</mesh>
       </>)}
+      {w === "rebound" && (<>
+        <mesh position={[0, 0, -0.18]}><boxGeometry args={[0.11, 0.16, 0.42]} />{body}</mesh>
+        <mesh position={[0, 0.06, -0.42]} rotation-y={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.03, 10]} />{glow}</mesh>
+        <mesh position={[0, -0.14, 0]}><boxGeometry args={[0.07, 0.2, 0.1]} />{body}</mesh>
+      </>)}
+      {w === "harpoon" && (<>
+        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.07, 0.08, 0.7]} />{body}</mesh>
+        <mesh position={[0, 0.02, -0.25]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.012, 0.012, 0.44, 6]} /><meshLambertMaterial color="#8c7f66" /></mesh>
+        <mesh position={[0, 0.02, -0.62]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.05, 0.18, 6]} />{glow}</mesh>
+        <mesh position={[0, -0.12, 0.02]}><boxGeometry args={[0.07, 0.18, 0.12]} />{body}</mesh>
+      </>)}
+      {w === "cryo" && (<>
+        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.1, 0.13, 0.5]} />{body}</mesh>
+        <mesh position={[0, 0.11, -0.2]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.06, 0.06, 0.3, 8]} />{glow}</mesh>
+        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.07, 0.16, 6]} />{glow}</mesh>
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+      {w === "flak" && (<>
+        <mesh position={[0, 0, -0.28]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.1, 0.14, 0.5, 8]} />{body}</mesh>
+        <mesh position={[0, 0, -0.55]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.15, 0.11, 0.12, 8]} />{glow}</mesh>
+        <mesh position={[0, 0.14, -0.06]}><boxGeometry args={[0.1, 0.12, 0.22]} /><meshLambertMaterial color="#6b6450" /></mesh>
+        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
+      </>)}
+      {w === "tesla" && (<>
+        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.11, 0.12, 0.5]} />{body}</mesh>
+        {[-0.42, -0.3].map((z) => (
+          <mesh key={z} position={[0, 0.08, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.09, 0.022, 6, 12]} />{glow}</mesh>
+        ))}
+        <mesh position={[0, 0.2, -0.36]}><sphereGeometry args={[0.07, 10, 10]} />{glow}</mesh>
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+
     </group>
   );
 }
@@ -329,7 +381,8 @@ function World({
   onWeapon,
   onAmmo,
   onHeal,
-  sens,
+  sensX,
+  sensY,
   fov,
 }: {
   blocks: Block[];
@@ -345,7 +398,8 @@ function World({
   onWeapon: (w: Weapon, picked: boolean) => void;
   onAmmo: (n: number) => void;
   onHeal: () => void;
-  sens: number;
+  sensX: number;
+  sensY: number;
   fov: number;
 }) {
   const keys = useKeyboard();
@@ -364,12 +418,14 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0 });
+  const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
   const lostQueue = useRef<Weapon[]>([]);
-  const dropOrder = useRef<Weapon[]>(["scatter", "smg", "rail", "cannon"]);
+  const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
-  const sensRef = useRef(sens);
-  sensRef.current = sens;
+  const sensXRef = useRef(sensX);
+  const sensYRef = useRef(sensY);
+  sensXRef.current = sensX;
+  sensYRef.current = sensY;
   const heal = useRef({ x: 0, z: 0, active: false });
   const lastHealWave = useRef(-99);
   const healMesh = useRef<THREE.Group>(null);
@@ -405,7 +461,7 @@ function World({
     lostQueue.current = [];
 
     // fresh random gun order for this run
-    const pool: Weapon[] = ["scatter", "smg", "rail", "cannon"];
+    const pool: Weapon[] = [...DROPPABLE];
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
@@ -420,8 +476,8 @@ function World({
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!document.pointerLockElement) return;
-      look.current.yaw -= e.movementX * 0.0022 * sensRef.current;
-      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensRef.current));
+      look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
+      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensYRef.current));
     };
     document.addEventListener("mousemove", onMove);
     return () => document.removeEventListener("mousemove", onMove);
@@ -449,7 +505,7 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size);
+      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size, g);
     }
     recoil.current = g.damage > 3 ? 1 : 0.5;
     const w = weapon.current;
@@ -473,9 +529,11 @@ function World({
     const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
-      const n = Number(e.key);
-      const w = ORDER[n - 1];
-      if (w && owned.current.has(w)) equip(w);
+      if (/^[0-9]$/.test(e.key)) {
+        const n = Number(e.key);
+        const w = ORDER[n === 0 ? 9 : n - 1];
+        if (w && owned.current.has(w)) equip(w);
+      }
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = ORDER.filter((x) => owned.current.has(x));
         const i = list.indexOf(weapon.current);
@@ -524,6 +582,7 @@ function World({
         swing: 0,
         flash: 0,
         shot: 2,
+        slow: 0,
       });
     });
     if (boss) onBoss(BOSS_HP);
@@ -551,10 +610,10 @@ function World({
     const k = keys.current;
 
     if (!gameOver && locked) {
-      look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sens * delta;
+      look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
       look.current.pitch = Math.max(
         -1.2,
-        Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sens * 0.7 * delta),
+        Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sensY * 0.7 * delta),
       );
     }
     cam.rotation.order = "YXZ";
@@ -652,6 +711,7 @@ function World({
       if (!e.alive) continue;
       e.flash -= delta;
       e.cooldown -= delta;
+      if (e.slow > 0) e.slow -= delta;
       const st = STATS[e.kind];
       const dx = cam.position.x - e.x;
       const dz = cam.position.z - e.z;
@@ -673,7 +733,7 @@ function World({
       if (e.kind === "brute" && d < 1.8) dir = 0;
       if (e.kind === "boss" && d < 3) dir = 0;
       if (e.swing > 0) dir = 0;
-      const step = st.speed * delta * dir;
+      const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
       const nx = e.x + (mx / md) * step;
       const nz = e.z + (mz / md) * step;
       // boss is big but squeezes through gaps like a brute
@@ -725,24 +785,64 @@ function World({
     }
 
     // player bullets
+    const hurtEnemy = (e: Enemy, dmg: number) => {
+      e.hp -= dmg;
+      e.flash = 0.1;
+      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+      if (e.hp <= 0) {
+        e.alive = false;
+        onScore();
+      }
+    };
+    const burst = (b: Bullet) => {
+      if (b.cluster <= 0) return;
+      const n = b.cluster;
+      b.cluster = 0;
+      for (let s = 0; s < n; s++) {
+        const a = (s / n) * Math.PI * 2 + Math.random();
+        const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
+        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+      }
+    };
     bullets.current.forEach((b, i) => {
       const m = bulletMeshes.current[i];
       if (b.active) {
+        const px = b.pos.x;
+        const pz = b.pos.z;
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
-        if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
-        else {
+        const hitWall = outOfBounds(b.pos);
+        if (hitWall && b.bounce > 0) {
+          // bounce off whichever side it ran into
+          b.bounce--;
+          if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          else b.vel.z *= -1;
+          b.pos.set(px, b.pos.y, pz);
+        } else if (b.life <= 0 || hitWall) {
+          burst(b);
+          b.active = false;
+        } else {
           for (const e of enemies) {
             if (!e.alive) continue;
             const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
-              b.active = false;
-              e.hp -= b.damage;
-              e.flash = 0.1;
-              if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-              if (e.hp <= 0) {
-                e.alive = false;
-                onScore();
+              hurtEnemy(e, b.damage);
+              if (b.slow > 0) e.slow = b.slow;
+              if (b.chain > 0) {
+                let left = b.chain;
+                for (const o of enemies) {
+                  if (left <= 0) break;
+                  if (!o.alive || o === e) continue;
+                  if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
+                    hurtEnemy(o, b.damage);
+                    left--;
+                  }
+                }
+              }
+              if (b.pierce > 0) b.pierce--;
+              else {
+                burst(b);
+                b.active = false;
               }
               break;
             }
@@ -758,6 +858,7 @@ function World({
         }
       }
     });
+
 
     // enemy bullets
     enemyBullets.current.forEach((b, i) => {
@@ -848,18 +949,22 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [fov, setFov] = useState(75);
-  const [sens, setSens] = useState(1);
+  const [sensX, setSensX] = useState(1);
+  const [sensY, setSensY] = useState(1);
   const [healMsg, setHealMsg] = useState(0);
   useEffect(() => {
     try {
       const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
       if (typeof v.fov === "number") setFov(v.fov);
-      if (typeof v.sens === "number") setSens(v.sens);
+      if (typeof v.sensX === "number") setSensX(v.sensX);
+      else if (typeof v.sens === "number") setSensX(v.sens);
+      if (typeof v.sensY === "number") setSensY(v.sensY);
+      else if (typeof v.sens === "number") setSensY(v.sens);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sens }));
-  }, [fov, sens]);
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY }));
+  }, [fov, sensX, sensY]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -886,6 +991,7 @@ export function Game() {
       swing: 0,
       flash: 0,
       shot: 0,
+      slow: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
   }, [seed]);
@@ -967,7 +1073,8 @@ export function Game() {
             setHealth((h) => Math.min(MAX_HP, h + 3));
             setHealMsg((n) => n + 1);
           }}
-          sens={sens}
+          sensX={sensX}
+          sensY={sensY}
           fov={fov}
           onWeapon={(w, picked) => {
             setWeapon(w);
@@ -1023,7 +1130,7 @@ export function Game() {
         )}
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · keys 1-5 or Q/E to swap
+            {GUNS[weapon].name} ACQUIRED · keys 1-0 or Q/E to swap
           </div>
         )}
         {locked && !ended && (
@@ -1050,10 +1157,10 @@ export function Game() {
                 ? `You fell on wave ${status.wave} with ${score} kills.`
                 : status.won
                   ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : `Survive ${WAVES.length} waves and beat the Warlord. New guns drop on waves 3, 5, 7 and 9.`}
+                  : `Survive ${WAVES.length} waves and beat the Warlord. Nine different guns can drop along the way.`}
             </p>
             <p className="mt-4 text-xs leading-relaxed opacity-60">
-              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-5 / Q E swap guns · Esc to pause
+              WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
             </p>
             <button
               onClick={start}
@@ -1078,9 +1185,15 @@ export function Game() {
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
                 <label className="block">
-                  LOOK SPEED · {sens.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sens}
-                    onChange={(e) => setSens(Number(e.target.value))}
+                  LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
+                  <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                    onChange={(e) => setSensX(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
+                  <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                    onChange={(e) => setSensY(Number(e.target.value))}
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
               </div>
