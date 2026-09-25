@@ -672,11 +672,12 @@ function World({
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
         const n = Number(e.key);
-        const w = ORDER[n === 0 ? 9 : n - 1];
-        if (w && owned.current.has(w)) equip(w);
+        const slot = n === 0 ? 10 : n; // 0 acts as slot 10
+        const w = [...owned.current][slot - 1];
+        if (w) equip(w);
       }
       if (e.code === "KeyQ" || e.code === "KeyE") {
-        const list = ORDER.filter((x) => owned.current.has(x));
+        const list = [...owned.current];
         const i = list.indexOf(weapon.current);
         const next = list[(i + (e.code === "KeyE" ? 1 : list.length - 1)) % list.length];
         if (next) equip(next);
