@@ -12,6 +12,9 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { Shards } from "./Shards";
+import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
+import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -537,6 +540,9 @@ function World({
   msgSink,
   health,
   slots,
+  stats,
+  onShard,
+
 
 }: {
   blocks: Block[];
@@ -563,6 +569,8 @@ function World({
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
   health: number;
   slots: React.MutableRefObject<Record<string, number>>;
+  stats: React.MutableRefObject<Derived>;
+  onShard: (v: number) => void;
 }) {
 
 
@@ -572,6 +580,10 @@ function World({
   const { camera } = useThree();
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
+  const shardActive = useRef(false);
+  shardActive.current = locked && !gameOver && !dead;
+  const magnetRef = useRef(2);
+  magnetRef.current = stats.current.magnet;
   const weapon = useRef<Weapon>("pistol");
   const [held, setHeld] = useState<Weapon>("pistol");
   const [dropGun, setDropGun] = useState<Weapon>("scatter");
@@ -812,8 +824,9 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage, g.color, g.size, g);
+      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage * stats.current.dmg, g.color, g.size, g);
     }
+    playGun(weapon.current);
     recoil.current = g.damage > 3 ? 1 : 0.5;
     const w = weapon.current;
     if (w !== "pistol") {
@@ -972,7 +985,7 @@ function World({
     fireCd.current -= delta;
     if (trigger.current && !spectating && fireCd.current <= 0) {
       fire();
-      fireCd.current = GUNS[weapon.current].cooldown;
+      fireCd.current = GUNS[weapon.current].cooldown / stats.current.rate;
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
@@ -987,8 +1000,9 @@ function World({
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
-    slide.current.x += (MOVE.x * SPEED - slide.current.x) * resp;
-    slide.current.z += (MOVE.z * SPEED - slide.current.z) * resp;
+    const spd = SPEED * stats.current.speed;
+    slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
+    slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
@@ -1105,11 +1119,16 @@ function World({
           status(WAVES.length, 0, true, false);
           return;
         }
+        // wave cleared: tell everyone so the shop opens during the break
+        if (wave.current > 0 && lastRemaining.current !== 0) {
+          lastRemaining.current = 0;
+          status(wave.current, 0, false, false);
+        }
         nextWaveTimer.current -= delta;
         if (nextWaveTimer.current <= 0) {
           wave.current++;
           spawnWave(wave.current);
-          nextWaveTimer.current = 2.5;
+          nextWaveTimer.current = 12; // shopping break before the next wave
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
@@ -1464,6 +1483,7 @@ function World({
         <GunModel w={held} />
       </group>
       <RemotePlayers remotes={remotes} />
+      <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
