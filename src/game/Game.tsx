@@ -1190,6 +1190,7 @@ export function Game() {
   const [ammoLeft, setAmmoLeft] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showWeapons, setShowWeapons] = useState(false);
   const [fov, setFov] = useState(75);
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
@@ -1598,6 +1599,13 @@ export function Game() {
               >
                 {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
               </button>
+              <button
+                onClick={() => setShowWeapons(true)}
+                className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+              >
+                WEAPONS
+              </button>
+              {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
             </div>
             {showSettings && (
               <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
@@ -1624,6 +1632,61 @@ export function Game() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const GUN_INFO: Record<Weapon, string> = {
+  pistol: "Your trusty sidearm. Never runs out of ammo, fires one steady shot at a time.",
+  scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
+  smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",
+  rail: "Slow, heavy beam that flies extremely fast and hits for 5 damage.",
+  cannon: "Lobs a huge slow shell for 8 damage. Only a handful of shots — make them count.",
+  rebound: "Fires saw discs that bounce off walls up to 3 times. Great around corners.",
+  harpoon: "Fast bolts that pierce straight through up to 3 enemies in a line.",
+  cryo: "Rapid icy shots that freeze enemies, slowing them to half speed.",
+  flak: "Fires a shell that bursts into shrapnel when it hits something or runs out of range.",
+  tesla: "Electric shots that chain lightning to 2 more nearby enemies.",
+};
+
+function Spin({ children }: { children: React.ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame((_, d) => { if (g.current) g.current.rotation.y += d * 0.8; });
+  return <group ref={g}>{children}</group>;
+}
+
+export function WeaponsPanel({ onClose }: { onClose: () => void }) {
+  const [sel, setSel] = useState<Weapon>("pistol");
+  const g = GUNS[sel];
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
+      <div className="flex max-h-full w-full max-w-3xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
+        <div className="grid grid-cols-2 gap-1 md:w-56 md:grid-cols-1">
+          {ORDER.map((w, i) => (
+            <button key={w} onClick={() => setSel(w)}
+              className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === w ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+              <span className="opacity-60">{i === 9 ? 0 : i + 1}</span> {GUNS[w].name}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1">
+          <div className="h-56 w-full overflow-hidden rounded bg-[#1a1410]">
+            <Canvas camera={{ position: [0.9, 0.35, 0.9], fov: 40 }}>
+              <ambientLight intensity={0.8} />
+              <directionalLight position={[2, 3, 2]} intensity={1.4} />
+              <Spin><group position={[0, -0.05, 0.15]}><GunModel w={sel} /></group></Spin>
+            </Canvas>
+          </div>
+          <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: g.color }}>{g.name}</h2>
+          <p className="mt-2 text-sm opacity-90">{GUN_INFO[sel]}</p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] tracking-widest opacity-80">
+            <div>DAMAGE<br /><b className="text-base">{g.damage}{g.count > 1 ? `×${g.count}` : ""}</b></div>
+            <div>AMMO<br /><b className="text-base">{g.ammo || "∞"}</b></div>
+            <div>FIRE RATE<br /><b className="text-base">{(1 / g.cooldown).toFixed(1)}/s</b></div>
+          </div>
+          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
+        </div>
+      </div>
     </div>
   );
 }
