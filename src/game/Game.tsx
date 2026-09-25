@@ -2,7 +2,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-import { ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block } from "./level";
+import {
+  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
+  solidGrid, flowField, nextWaypoint, clearLine, toCell,
+} from "./level";
+import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 
 type Kind = "drifter" | "brute" | "shooter";
@@ -46,22 +50,59 @@ const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const MOVE = new THREE.Vector3();
 
-function Level({ blocks }: { blocks: Block[] }) {
+function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
+  const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
+  if (theme.blockShape === "tree") {
+    const trunk = 1 + b.h * 0.25;
+    return (
+      <group position={[b.x, 0, b.z]}>
+        <mesh position-y={trunk / 2} castShadow>
+          <cylinderGeometry args={[0.3, 0.4, trunk, 6]} />
+          <meshLambertMaterial color="#4a3320" flatShading />
+        </mesh>
+        <mesh position-y={trunk + b.h * 0.45} castShadow>
+          <coneGeometry args={[1.3, b.h * 0.9 + 1, 7]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={trunk + b.h * 0.9} castShadow>
+          <coneGeometry args={[0.9, b.h * 0.6 + 0.6, 7]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+      </group>
+    );
+  }
+  if (theme.blockShape === "crystal") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
+        <mesh position-y={b.h / 2} castShadow receiveShadow>
+          <cylinderGeometry args={[0.8, 1.1, b.h, 5]} />
+          <meshLambertMaterial color={color} flatShading emissive={color} emissiveIntensity={0.15} />
+        </mesh>
+        <mesh position-y={b.h + 0.5}>
+          <coneGeometry args={[0.8, 1, 5]} />
+          <meshLambertMaterial color="#f4fbff" flatShading />
+        </mesh>
+      </group>
+    );
+  }
+  return (
+    <mesh position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
+      <boxGeometry args={[BLOCK, b.h, BLOCK]} />
+      <meshLambertMaterial color={color} flatShading />
+    </mesh>
+  );
+}
+
+function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[ARENA, ARENA]} />
-        <meshLambertMaterial color="#8d7f63" />
+        <meshLambertMaterial color={theme.ground} />
       </mesh>
-      <gridHelper args={[ARENA, ARENA / 2, "#6e6350", "#7b6f59"]} position-y={0.01} />
+      <gridHelper args={[ARENA, ARENA / 2, theme.grid[0], theme.grid[1]]} position-y={0.01} />
       {blocks.map((b, i) => (
-        <mesh key={i} position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
-          <boxGeometry args={[BLOCK, b.h, BLOCK]} />
-          <meshLambertMaterial
-            color={b.tone > 0.6 ? "#b4653f" : b.tone > 0.3 ? "#9a6b4b" : "#6f5945"}
-            flatShading
-          />
-        </mesh>
+        <Obstacle key={i} b={b} theme={theme} />
       ))}
       {([
         [0, -HALF, ARENA, 1],
@@ -71,14 +112,15 @@ function Level({ blocks }: { blocks: Block[] }) {
       ] as const).map(([x, z, w, d], i) => (
         <mesh key={`w${i}`} position={[x, 2, z]}>
           <boxGeometry args={[w, 4, d]} />
-          <meshLambertMaterial color="#54473a" flatShading />
+          <meshLambertMaterial color={theme.wall} flatShading />
         </mesh>
       ))}
     </group>
   );
 }
 
-function EnemyMesh({ data }: { data: Enemy }) {
+function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
+  const c = theme.enemy;
   const ref = useRef<THREE.Group>(null);
   const drifter = useRef<THREE.Group>(null);
   const brute = useRef<THREE.Group>(null);
@@ -109,49 +151,49 @@ function EnemyMesh({ data }: { data: Enemy }) {
       <group ref={drifter} position-y={0.9}>
         <mesh castShadow>
           <octahedronGeometry args={[0.8, 0]} />
-          <meshLambertMaterial color="#c9452f" flatShading emissive="#3d0e06" />
+          <meshLambertMaterial color={c.drifter.body} flatShading emissive={c.drifter.emissive} />
         </mesh>
         <mesh position={[0, 0, 0.65]}>
           <sphereGeometry args={[0.15, 8, 8]} />
-          <meshBasicMaterial color="#ffd9a0" />
+          <meshBasicMaterial color={c.drifter.eye} />
         </mesh>
       </group>
       <group ref={brute}>
         <mesh position-y={1.1} castShadow>
           <boxGeometry args={[1.4, 1.8, 1]} />
-          <meshLambertMaterial color="#4f5a3a" flatShading />
+          <meshLambertMaterial color={c.brute.body} flatShading />
         </mesh>
         <mesh position={[0, 2.25, 0]} castShadow>
           <boxGeometry args={[0.8, 0.6, 0.7]} />
-          <meshLambertMaterial color="#3b4429" flatShading />
+          <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
         <mesh position={[0, 2.3, 0.36]}>
           <boxGeometry args={[0.55, 0.12, 0.05]} />
-          <meshBasicMaterial color="#ffcf6a" />
+          <meshBasicMaterial color={c.brute.eye} />
         </mesh>
         <group ref={club} position={[0.85, 1.6, 0]}>
           <mesh position={[0, 0.7, 0]} castShadow>
             <boxGeometry args={[0.18, 1.4, 0.18]} />
-            <meshLambertMaterial color="#6b4a2c" />
+            <meshLambertMaterial color={c.brute.club} />
           </mesh>
           <mesh position={[0, 1.45, 0]} castShadow>
             <boxGeometry args={[0.4, 0.4, 0.4]} />
-            <meshLambertMaterial color="#8a8a86" flatShading />
+            <meshLambertMaterial color={c.brute.clubHead} flatShading />
           </mesh>
         </group>
       </group>
       <group ref={shooter} position-y={1.3}>
         <mesh castShadow>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
-          <meshLambertMaterial color="#3d6f86" flatShading />
+          <meshLambertMaterial color={c.shooter.body} flatShading />
         </mesh>
         <mesh position={[0, 0.2, 0.55]} rotation-x={Math.PI / 2}>
           <cylinderGeometry args={[0.12, 0.12, 0.7, 8]} />
-          <meshLambertMaterial color="#222" />
+          <meshLambertMaterial color={c.shooter.barrel} />
         </mesh>
         <mesh position={[0, 0.5, 0.4]}>
           <sphereGeometry args={[0.12, 8, 8]} />
-          <meshBasicMaterial color="#9ef0ff" />
+          <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
       </group>
     </group>
@@ -195,6 +237,7 @@ function World({
   blocks,
   enemies,
   rand,
+  theme,
   locked,
   gameOver,
   onScore,
@@ -204,6 +247,7 @@ function World({
   blocks: Block[];
   enemies: Enemy[];
   rand: () => number;
+  theme: Theme;
   locked: boolean;
   gameOver: boolean;
   onScore: () => void;
@@ -217,6 +261,8 @@ function World({
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
 
+  const solid = useMemo(() => solidGrid(blocks), [blocks]);
+  const field = useRef<{ key: number; dist: Float32Array } | null>(null);
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
@@ -354,6 +400,10 @@ function World({
     }
 
     // enemies
+    const pi = toCell(cam.position.x);
+    const pj = toCell(cam.position.z);
+    const key = pi * 1000 + pj;
+    if (!field.current || field.current.key !== key) field.current = { key, dist: flowField(solid, pi, pj) };
     meleeCooldown.current -= delta;
     for (const e of enemies) {
       if (!e.alive) continue;
@@ -364,13 +414,24 @@ function World({
       const dz = cam.position.z - e.z;
       const d = Math.hypot(dx, dz) || 1;
 
+      // route around obstacles: go straight if clear, else follow the flow field
+      let tx = cam.position.x;
+      let tz = cam.position.z;
+      if (!clearLine(blocks, e.x, e.z, tx, tz, st.radius * 0.9)) {
+        const wp = nextWaypoint(solid, field.current!.dist, e.x, e.z);
+        tx = wp.x;
+        tz = wp.z;
+      }
+      const mx = tx - e.x;
+      const mz = tz - e.z;
+      const md = Math.hypot(mx, mz) || 1;
       let dir = 1;
       if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
       if (e.kind === "brute" && d < 1.8) dir = 0;
       if (e.swing > 0) dir = 0;
       const step = st.speed * delta * dir;
-      const nx = e.x + (dx / d) * step;
-      const nz = e.z + (dz / d) * step;
+      const nx = e.x + (mx / md) * step;
+      const nz = e.z + (mz / md) * step;
       if (!blocked(blocks, nx, e.z, st.radius)) e.x = nx;
       if (!blocked(blocks, e.x, nz, st.radius)) e.z = nz;
 
@@ -451,9 +512,9 @@ function World({
 
   return (
     <>
-      <color attach="background" args={["#c9b28c"]} />
-      <fog attach="fog" args={["#c9b28c", 12, 46]} />
-      <hemisphereLight args={["#ffe7c4", "#5b4a34", 1.1]} />
+      <color attach="background" args={[theme.sky]} />
+      <fog attach="fog" args={[theme.sky, 12, 46]} />
+      <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
       <directionalLight
         position={[18, 26, 10]}
         intensity={1.5}
@@ -461,12 +522,12 @@ function World({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <Level blocks={blocks} />
+      <Level blocks={blocks} theme={theme} />
       {enemies.map((e, i) => (
-        <EnemyMesh key={i} data={e} />
+        <EnemyMesh key={i} data={e} theme={theme} />
       ))}
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
-      <BulletPool meshes={enemyBulletMeshes} color="#39d0ff" size={0.18} />
+      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
     </>
   );
 }
@@ -481,8 +542,9 @@ export function Game() {
   const [hurtFlash, setHurtFlash] = useState(0);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { blocks, enemies, rand } = useMemo(() => {
+  const { blocks, enemies, rand, theme } = useMemo(() => {
     const level = generateLevel(seed);
+    const theme = THEMES[seed % THEMES.length]!;
     level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
@@ -494,7 +556,7 @@ export function Game() {
       swing: 0,
       flash: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand };
+    return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
   }, [seed]);
 
   useEffect(() => {
@@ -526,6 +588,11 @@ export function Game() {
   const gameOver = health <= 0;
   const ended = gameOver || status.won;
 
+  // free the mouse when the round ends so the button can be clicked
+  useEffect(() => {
+    if (ended && document.pointerLockElement) document.exitPointerLock();
+  }, [ended]);
+
   const start = () => {
     if (ended) {
       setSeed(Math.floor(Math.random() * 1e9));
@@ -549,6 +616,7 @@ export function Game() {
           blocks={blocks}
           enemies={enemies}
           rand={rand}
+          theme={theme}
           locked={locked}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
@@ -574,6 +642,9 @@ export function Game() {
       <div className="pointer-events-none fixed inset-0 z-10 font-mono">
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex gap-2">
+            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
+              {theme.name.toUpperCase()}
+            </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               WAVE {status.wave}/{WAVES.length}
             </div>
@@ -606,7 +677,7 @@ export function Game() {
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
           <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : "DUSTFIELD"}
+              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : theme.name}
             </h1>
             <p className="mt-2 text-sm opacity-70">
               {gameOver
