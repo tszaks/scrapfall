@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 
 
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
