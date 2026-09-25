@@ -1210,7 +1210,7 @@ function World({
   return (
     <>
       <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={[theme.sky, 12, 46]} />
+      <fog attach="fog" args={[theme.sky, 12, ARENA + 4]} />
       <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
       <directionalLight
         position={[18, 26, 10]}
