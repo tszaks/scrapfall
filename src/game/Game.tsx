@@ -830,6 +830,21 @@ function World({
     }
   };
 
+  // dying costs you every gun but the pistol; the lost ones go back in the drop pool
+  useEffect(() => {
+    if (!dead) return;
+    const lost = [...owned.current].filter((w) => w !== "pistol");
+    if (lost.length === 0) return;
+    lost.forEach((w) => {
+      owned.current.delete(w);
+      ammo.current[w] = 0;
+      if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
+    });
+    equip("pistol");
+  }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
