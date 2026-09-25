@@ -239,7 +239,7 @@ function World({
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
         <mesh key={`b${i}`} ref={(m) => { bulletMeshes.current[i] = m; }} visible={false}>
           <sphereGeometry args={[0.14, 10, 10]} />
-          <meshBasicMaterial color="#ffe08a" />
+          <meshBasicMaterial color="#ff8a1f" fog={false} />
         </mesh>
       ))}
     </>
