@@ -35,12 +35,12 @@ function Level({ blocks }: { blocks: Block[] }) {
         </mesh>
       ))}
       {/* arena walls */}
-      {[
+      {([
         [0, -HALF, ARENA, 1],
         [0, HALF, ARENA, 1],
         [-HALF, 0, 1, ARENA],
         [HALF, 0, 1, ARENA],
-      ].map(([x, z, w, d], i) => (
+      ] as const).map(([x, z, w, d], i) => (
         <mesh key={`w${i}`} position={[x, 2, z]}>
           <boxGeometry args={[w, 4, d]} />
           <meshLambertMaterial color="#54473a" flatShading />
