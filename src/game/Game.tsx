@@ -91,6 +91,7 @@ const WAVES: WaveSpec[] = [
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
+const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
 
 
 const BULLET_SPEED = 22;
@@ -1513,6 +1514,15 @@ export function Game() {
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
   const [healMsg, setHealMsg] = useState(0);
+  const [musicVol, setMusicVol] = useState(0.5);
+  const [sfxVol, setSfxVol] = useState(0.7);
+  const [shards, setShards] = useState(0);
+  const [perks, setPerks] = useState<Perks>(NO_PERKS);
+  const perksRef = useRef(perks);
+  perksRef.current = perks;
+  const statsRef = useRef<Derived>(derive(perks));
+  statsRef.current = derive(perks);
+  const maxHp = statsRef.current.maxHp;
 
   // ---------- co-op room ----------
   const [net, setNet] = useState<NetHandle | null>(null);
@@ -1565,6 +1575,8 @@ export function Game() {
       setSeed(Number(m.seed));
       setScore(0);
       setHealth(MAX_HP);
+      setPerks(NO_PERKS);
+      setShards(0);
       setAllDown(false);
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
@@ -1592,7 +1604,7 @@ export function Game() {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? MAX_HP : h));
+    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -1653,6 +1665,8 @@ export function Game() {
     setStarted(false);
     setScore(0);
     setHealth(MAX_HP);
+    setPerks(NO_PERKS);
+    setShards(0);
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
@@ -1681,11 +1695,13 @@ export function Game() {
       else if (typeof v.sens === "number") setSensX(v.sens);
       if (typeof v.sensY === "number") setSensY(v.sensY);
       else if (typeof v.sens === "number") setSensY(v.sens);
+      if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
+      if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY }));
-  }, [fov, sensX, sensY]);
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
+  }, [fov, sensX, sensY, musicVol, sfxVol]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -1776,6 +1792,7 @@ export function Game() {
   }, [ended]);
 
   const start = (fromNet = false) => {
+    initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
     setStarted(true);
@@ -1788,6 +1805,8 @@ export function Game() {
       }
       setScore(0);
       setHealth(MAX_HP);
+      setPerks(NO_PERKS);
+      setShards(0);
       setAllDown(false);
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
@@ -1804,6 +1823,54 @@ export function Game() {
     }
   };
   startRef.current = start;
+
+  // ---- shop: open during the break after a cleared wave ----
+  const shopOpen = started && locked && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  const [offers, setOffers] = useState<PerkId[]>([]);
+  const [bought, setBought] = useState<number[]>([]);
+  useEffect(() => {
+    if (!shopOpen) return;
+    const pool = [...PERK_IDS].sort(() => Math.random() - 0.5);
+    setOffers(pool.slice(0, 3));
+    setBought([]);
+  }, [shopOpen, status.wave]);
+  const buyRef = useRef<(i: number) => void>(() => {});
+  buyRef.current = (i: number) => {
+    const id = offers[i];
+    if (!shopOpen || !id || bought.includes(i)) return;
+    const cost = perkCost(id, perks[id]);
+    if (shards < cost) { playSfx("deny"); return; }
+    setShards((s) => s - cost);
+    setBought((b) => [...b, i]);
+    playSfx("buy");
+    if (id === "heal") { setHealth((h) => Math.min(maxHp, h + 5)); return; }
+    setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
+    if (id === "maxhp") setHealth((h) => h + 2);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const i = SHOP_KEYS.indexOf(e.code);
+      if (i >= 0) buyRef.current(i);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // regen perk
+  useEffect(() => {
+    if (!perks.regen || !started || !locked || ended || dead) return;
+    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / perks.regen);
+    return () => window.clearInterval(id);
+  }, [perks.regen, started, locked, ended, dead, maxHp]);
+
+  // soundtrack
+  useEffect(() => {
+    if (started && locked && !ended) startMusic();
+    else stopMusic();
+  }, [started, locked, ended]);
+  useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
+  useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
+  useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
 
 
@@ -1821,13 +1888,14 @@ export function Game() {
           onHurt={(dmg = 1) => {
             setHealth((h) => Math.max(0, h - dmg));
             setHurtFlash((n) => n + 1);
+            playSfx("hurt");
           }}
 
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
             if (showBanner) {
               setBanner(true);
-              if (multiplayer) setHealth((h) => (h <= 0 ? MAX_HP : h));
+              if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
             }
           }}
           onBoss={(hp) => {
@@ -1836,7 +1904,8 @@ export function Game() {
           }}
           onAmmo={setAmmoLeft}
           onHeal={() => {
-            setHealth((h) => Math.min(MAX_HP, h + 3));
+            setHealth((h) => Math.min(maxHp, h + 3));
+            playSfx("pickup");
             setHealMsg((n) => n + 1);
           }}
           sensX={sensX}
@@ -1849,6 +1918,11 @@ export function Game() {
           msgSink={msgSink}
           health={health}
           slots={slots}
+          stats={statsRef}
+          onShard={(v) => {
+            setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed)));
+            playSfx("shard");
+          }}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
@@ -1880,9 +1954,14 @@ export function Game() {
               KILLS {score}
             </div>
           </div>
-          <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-            {"♦".repeat(health)}
-            <span className="opacity-30">{"♦".repeat(MAX_HP - health)}</span>
+          <div className="flex flex-col items-end gap-2">
+            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
+              {"♦".repeat(Math.max(0, health))}
+              <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
+            </div>
+            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
+              <span className="text-[#1aa6b8]">◆</span> {shards}
+            </div>
           </div>
         </div>
 
@@ -1965,6 +2044,36 @@ export function Game() {
         )}
       </div>
 
+      {shopOpen && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-10 -translate-x-1/2 font-mono text-[#2b2118]">
+          <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
+            SHOP · NEXT WAVE SOON · {shards} SHARDS
+          </div>
+          <div className="flex gap-3">
+            {offers.map((id, i) => {
+              const info = PERK_INFO[id];
+              const cost = perkCost(id, perks[id]);
+              const sold = bought.includes(i);
+              const afford = shards >= cost;
+              return (
+                <div
+                  key={i}
+                  className={`relative w-44 rounded-lg border-2 bg-[#f3e6cf]/95 p-3 text-center ${sold ? "opacity-35" : afford ? "" : "opacity-70"}`}
+                  style={{ borderColor: info.color }}
+                >
+                  <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
+                    {SHOP_KEYS[i]!.slice(3)}
+                  </span>
+                  <div className="text-xs font-bold tracking-widest" style={{ color: info.color }}>{info.name}</div>
+                  <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
+                  <div className="mt-2 text-sm font-bold">{sold ? "BOUGHT" : `◆ ${cost}`}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {healMsg > 0 && locked && !ended && (
         <div className="pointer-events-none fixed left-1/2 top-1/3 z-10 -translate-x-1/2 rounded-md bg-[#f3e6cf]/85 px-4 py-1.5 font-mono text-sm tracking-widest text-[#b3261e]">
           +3 HEALTH
@@ -2114,6 +2223,18 @@ export function Game() {
                   LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
                   <input type="range" min={0.2} max={3} step={0.1} value={sensY}
                     onChange={(e) => setSensY(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  MUSIC VOLUME · {Math.round(musicVol * 100)}%
+                  <input type="range" min={0} max={1} step={0.05} value={musicVol}
+                    onChange={(e) => setMusicVol(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
+                  <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                    onChange={(e) => setSfxVol(Number(e.target.value))}
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
               </div>
