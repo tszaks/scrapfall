@@ -1,8 +1,11 @@
 export type Block = { x: number; z: number; h: number; tone: number };
 
-export const ARENA = 44; // world size (centered at origin)
-export const HALF = ARENA / 2;
+export const SOLO_ARENA = 44;
+export const COOP_ARENA = 62;
+export let ARENA = SOLO_ARENA; // world size (centered at origin)
+export let HALF = ARENA / 2;
 export const BLOCK = 2; // block footprint (square)
+
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
