@@ -269,7 +269,7 @@ function World({
   }, [camera, gameOver]);
 
   const spawnWave = (n: number) => {
-    const [d, b, s] = WAVES[n - 1];
+    const [d, b, s] = WAVES[n - 1] ?? [0, 0, 0];
     const kinds: Kind[] = [
       ...Array(d).fill("drifter"),
       ...Array(b).fill("brute"),
