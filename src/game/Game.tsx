@@ -518,12 +518,16 @@ function World({
       });
     });
     if (boss) onBoss(BOSS_HP);
-    if (n >= 2) {
+    // health: random, never more than once every 2 waves
+    if (n >= 2 && n - lastHealWave.current >= 2 && rand() < 0.5) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
+      lastHealWave.current = n;
     }
-    const drop = ORDER.find((w) => GUNS[w].wave === n && !owned.current.has(w));
-    if (drop) {
+    // weapons: 80% chance each wave for a random gun you don't own
+    const candidates = ORDER.filter((w) => w !== "pistol" && !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
+    if (candidates.length && rand() < 0.8) {
+      const drop = candidates[Math.floor(rand() * candidates.length)]!;
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
     }
