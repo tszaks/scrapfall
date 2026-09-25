@@ -1665,7 +1665,7 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
           {ORDER.map((w, i) => (
             <button key={w} onClick={() => setSel(w)}
               className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === w ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
-              <span className="opacity-60">{i === 9 ? 0 : i + 1}</span> {GUNS[w].name}
+              <span className="opacity-60">{i + 1}</span> {GUNS[w].name}
             </button>
           ))}
         </div>
