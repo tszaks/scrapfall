@@ -8,6 +8,9 @@ import {
 } from "./level";
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
+import { RemotePlayers } from "./Remote";
+import { hostRoom, joinRoom, PLAYER_COLORS, type NetHandle, type NetMsg, type RemoteState } from "./net";
+
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss";
 type Weapon =
@@ -32,6 +35,8 @@ const GUNS: Record<Weapon, Gun> = {
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
+const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss"];
+
 type Enemy = {
   kind: Kind;
   x: number;
@@ -384,6 +389,10 @@ function World({
   sensX,
   sensY,
   fov,
+  net,
+  remotes,
+  dead,
+  msgSink,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -401,7 +410,12 @@ function World({
   sensX: number;
   sensY: number;
   fov: number;
+  net: NetHandle | null;
+  remotes: React.MutableRefObject<Map<string, RemoteState>>;
+  dead: boolean;
+  msgSink: React.MutableRefObject<(m: NetMsg) => void>;
 }) {
+
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
   const meleeCooldown = useRef(0);
@@ -446,6 +460,121 @@ function World({
   const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
   const enemyBullets = useRef<Bullet[]>([]);
   const enemyBulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
+
+  // ---------- networking ----------
+  const netRef = useRef<NetHandle | null>(net);
+  netRef.current = net;
+  const isHost = !net || net.role === "host";
+  const isHostRef = useRef(isHost);
+  isHostRef.current = isHost;
+  const deadRef = useRef(dead);
+  deadRef.current = dead;
+  const tTimer = useRef(0);
+  const snapTimer = useRef(0);
+  const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
+  const fields = useRef(new Map<number, Float32Array>());
+  const dropGunRef = useRef<Weapon>("scatter");
+
+  const upsertRemote = (m: NetMsg) => {
+    const id = String(m.from ?? "host");
+    let r = remotes.current.get(id);
+    if (!r) {
+      r = {
+        id, x: 0, z: 0, yaw: 0, hp: MAX_HP, weapon: "pistol",
+        color: PLAYER_COLORS[(remotes.current.size + 1) % PLAYER_COLORS.length]!,
+        last: 0, rx: Number(m.x ?? 0), rz: Number(m.z ?? 0), ry: 0,
+      };
+      remotes.current.set(id, r);
+    }
+    r.x = Number(m.x ?? 0);
+    r.z = Number(m.z ?? 0);
+    r.yaw = Number(m.yaw ?? 0);
+    r.hp = Number(m.hp ?? MAX_HP);
+    r.weapon = String(m.w ?? "pistol");
+    r.last = performance.now();
+  };
+
+  const applySnap = (m: NetMsg) => {
+    const arr = (m.e as number[]) ?? [];
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      const o = i * 5;
+      if (o + 4 >= arr.length) { e.alive = false; continue; }
+      const alive = arr[o] === 1;
+      e.kind = KINDS[arr[o + 1]!] ?? "drifter";
+      e.swing = arr[o + 4]!;
+      const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0 });
+      t.x = arr[o + 2]!;
+      t.z = arr[o + 3]!;
+      if (!e.alive || !alive) { e.x = t.x; e.z = t.z; }
+      e.alive = alive;
+    }
+    const eb = (m.b as number[]) ?? [];
+    enemyBullets.current.forEach((b) => (b.active = false));
+    for (let i = 0; i * 3 + 2 < eb.length; i++) {
+      let b = enemyBullets.current[i];
+      if (!b) {
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0 };
+        enemyBullets.current.push(b);
+      }
+      b.active = true;
+      b.pos.set(eb[i * 3]!, eb[i * 3 + 1]!, eb[i * 3 + 2]!);
+    }
+    const p = (m.p as number[]) ?? [0, 0, 0, 1];
+    pickup.current.x = p[0]!;
+    pickup.current.z = p[1]!;
+    pickup.current.active = p[2] === 1 && !owned.current.has(ORDER[p[3]!] ?? "pistol");
+    pickup.current.gun = ORDER[p[3]!] ?? "scatter";
+    if (dropGunRef.current !== pickup.current.gun) {
+      dropGunRef.current = pickup.current.gun;
+      setDropGun(pickup.current.gun);
+    }
+    const h = (m.h as number[]) ?? [0, 0, 0];
+    heal.current.x = h[0]!;
+    heal.current.z = h[1]!;
+    heal.current.active = h[2] === 1;
+  };
+
+  useEffect(() => {
+    msgSink.current = (m: NetMsg) => {
+      const n = netRef.current;
+      if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
+      if (isHostRef.current) {
+        if (m.type === "hit") {
+          const e = enemies[Number(m.i)];
+          if (e?.alive) {
+            e.hp -= Number(m.dmg);
+            e.flash = 0.1;
+            if (Number(m.slow) > 0) e.slow = Number(m.slow);
+            if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+            if (e.hp <= 0) { e.alive = false; onScore(); }
+          }
+        } else if (m.type === "ebhit") {
+          const b = enemyBullets.current[Number(m.i)];
+          if (b) b.active = false;
+        } else if (m.type === "take") {
+          if (m.what === "gun") {
+            pickup.current.active = false;
+            const next = lostQueue.current.shift();
+            if (next) placePickup(next);
+          } else {
+            heal.current.active = false;
+          }
+        } else if (m.type === "joined") {
+          n?.sendTo(String(m.from), { type: "status", w: Math.max(1, wave.current), rem: enemies.filter((e) => e.alive).length, won: false, banner: true });
+        }
+      } else {
+        if (m.type === "snap") applySnap(m);
+        else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
+        else if (m.type === "boss") onBoss(Number(m.hp));
+        else if (m.type === "hurt") onHurt();
+      }
+    };
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+
 
   useEffect(() => {
     camera.position.set(0, EYE, 0);
@@ -621,8 +750,12 @@ function World({
 
     if (gameOver || !locked) return;
 
+    const n = netRef.current;
+    const isH = isHostRef.current;
+    const spectating = deadRef.current;
+
     fireCd.current -= delta;
-    if (trigger.current && fireCd.current <= 0) {
+    if (trigger.current && !spectating && fireCd.current <= 0) {
       fire();
       fireCd.current = GUNS[weapon.current].cooldown;
     }
@@ -647,6 +780,18 @@ function World({
     bob.current += delta * 9 * bobAmt.current;
     cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
+    // share my position with the room
+    if (n) {
+      tTimer.current -= delta;
+      if (tTimer.current <= 0) {
+        tTimer.current = 0.05;
+        n.broadcast({
+          type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
+          hp: spectating ? 0 : MAX_HP, w: weapon.current,
+        });
+      }
+    }
+
     // weapon pickup
     const pk = pickup.current;
     if (pickupMesh.current) {
@@ -656,14 +801,16 @@ function World({
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
-    if (pk.active && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
+    if (pk.active && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
       ammo.current[pk.gun] = GUNS[pk.gun].ammo;
       equip(pk.gun);
       onWeapon(pk.gun, true);
-      const next = lostQueue.current.shift();
-      if (next) placePickup(next);
+      if (isH) {
+        const next = lostQueue.current.shift();
+        if (next) placePickup(next);
+      } else n?.broadcast({ type: "take", what: "gun" });
     }
 
     // health pickup
@@ -675,119 +822,187 @@ function World({
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
-    if (hp.active && Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3) {
+    if (hp.active && !spectating && Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3) {
       hp.active = false;
       onHeal();
+      if (!isH) n?.broadcast({ type: "take", what: "heal" });
     }
 
-    // waves
-    const remaining = enemies.filter((e) => e.alive).length;
-    if (remaining === 0 && wave.current <= WAVES.length) {
-      if (wave.current === WAVES.length) {
-        wave.current++;
-        onStatus(WAVES.length, 0, true, false);
-        return;
-      }
-      nextWaveTimer.current -= delta;
-      if (nextWaveTimer.current <= 0) {
-        wave.current++;
-        spawnWave(wave.current);
-        nextWaveTimer.current = 2.5;
-        onStatus(wave.current, enemies.filter((e) => e.alive).length, false, true);
-        lastRemaining.current = -1;
-      }
-    } else if (remaining !== lastRemaining.current) {
-      lastRemaining.current = remaining;
-      onStatus(Math.max(1, wave.current), remaining, false, false);
-    }
-
-    // enemies
-    const pi = toCell(cam.position.x);
-    const pj = toCell(cam.position.z);
-    const key = pi * 1000 + pj;
-    if (!field.current || field.current.key !== key) field.current = { key, dist: flowField(solid, pi, pj) };
-    meleeCooldown.current -= delta;
-    for (const e of enemies) {
-      if (!e.alive) continue;
-      e.flash -= delta;
-      e.cooldown -= delta;
-      if (e.slow > 0) e.slow -= delta;
-      const st = STATS[e.kind];
-      const dx = cam.position.x - e.x;
-      const dz = cam.position.z - e.z;
-      const d = Math.hypot(dx, dz) || 1;
-
-      // route around obstacles: go straight if clear, else follow the flow field
-      let tx = cam.position.x;
-      let tz = cam.position.z;
-      if (!clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-        const wp = nextWaypoint(solid, field.current!.dist, e.x, e.z);
-        tx = wp.x;
-        tz = wp.z;
-      }
-      const mx = tx - e.x;
-      const mz = tz - e.z;
-      const md = Math.hypot(mx, mz) || 1;
-      let dir = 1;
-      if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
-      if (e.kind === "brute" && d < 1.8) dir = 0;
-      if (e.kind === "boss" && d < 3) dir = 0;
-      if (e.swing > 0) dir = 0;
-      const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
-      const nx = e.x + (mx / md) * step;
-      const nz = e.z + (mz / md) * step;
-      // boss is big but squeezes through gaps like a brute
-      const r = Math.min(st.radius, 0.8);
-      if (!blocked(blocks, nx, e.z, r)) e.x = nx;
-      if (!blocked(blocks, e.x, nz, r)) e.z = nz;
-
-      if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
-        meleeCooldown.current = 1;
-        onHurt();
-      }
-      if (e.kind === "brute" || e.kind === "boss") {
-        const reach = e.kind === "boss" ? 3.6 : 2.4;
-        if (e.swing > 0) {
-          const before = e.swing;
-          e.swing -= delta;
-          if (before > 0.2 && e.swing <= 0.2 && d < reach) {
+    // ---- guests: play back the host's world, then handle their own bullets ----
+    if (!isH) {
+      enemies.forEach((e, i) => {
+        const t = guestTarget.current[i];
+        if (!t || !e.alive) return;
+        const f = Math.min(1, delta * 12);
+        e.x += (t.x - e.x) * f;
+        e.z += (t.z - e.z) * f;
+        e.flash -= delta;
+      });
+      enemyBullets.current.forEach((b, i) => {
+        const m = enemyBulletMeshes.current[i];
+        if (b.active) {
+          b.pos.addScaledVector(b.vel, delta);
+          if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
+            b.active = false;
             onHurt();
-            if (e.kind === "boss") onHurt();
+            n?.broadcast({ type: "ebhit", i });
           }
-        } else if (d < reach - 0.2 && e.cooldown <= 0) {
-          e.swing = 0.4;
-          e.cooldown = 1.6;
         }
+        if (m) {
+          m.visible = b.active;
+          m.position.copy(b.pos);
+        }
+      });
+    }
+
+    const status = (w: number, rem: number, won: boolean, bannerOn: boolean) => {
+      onStatus(w, rem, won, bannerOn);
+      if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
+    };
+
+    if (isH) {
+      // waves
+      const remaining = enemies.filter((e) => e.alive).length;
+      if (remaining === 0 && wave.current <= WAVES.length) {
+        if (wave.current === WAVES.length) {
+          wave.current++;
+          status(WAVES.length, 0, true, false);
+          return;
+        }
+        nextWaveTimer.current -= delta;
+        if (nextWaveTimer.current <= 0) {
+          wave.current++;
+          spawnWave(wave.current);
+          nextWaveTimer.current = 2.5;
+          status(wave.current, enemies.filter((e) => e.alive).length, false, true);
+          lastRemaining.current = -1;
+        }
+      } else if (remaining !== lastRemaining.current) {
+        lastRemaining.current = remaining;
+        status(Math.max(1, wave.current), remaining, false, false);
       }
-      if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
-        e.cooldown = 2 + rand() * 0.8;
-        const from = new THREE.Vector3(e.x, 1.5, e.z);
-        const vel = new THREE.Vector3(cam.position.x, cam.position.y - 0.2, cam.position.z)
-          .sub(from)
-          .normalize();
-        from.addScaledVector(vel, 0.8);
-        fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5);
+
+      // everyone the enemies can go after
+      const now = performance.now();
+      type Target = { id: string | null; x: number; z: number; y: number };
+      const targets: Target[] = [];
+      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+      remotes.current.forEach((r) => {
+        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE });
+      });
+      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+
+      const hurtTarget = (t: Target) => {
+        if (t.id === null) onHurt();
+        else n?.sendTo(t.id, { type: "hurt" });
+      };
+
+      // flow field per target cell (cached)
+      const used = new Set<number>();
+      for (const t of targets) {
+        const key = toCell(t.x) * 1000 + toCell(t.z);
+        used.add(key);
+        if (!fields.current.has(key)) fields.current.set(key, flowField(solid, toCell(t.x), toCell(t.z)));
       }
-      if (e.kind === "boss") {
-        e.shot -= delta;
-        if (e.shot <= 0 && d < 26) {
-          e.shot = 2.2;
-          const from = new THREE.Vector3(e.x, 2.6, e.z);
-          const base = Math.atan2(dx, dz);
-          for (let s = -2; s <= 2; s++) {
-            const a = base + s * 0.18;
-            const vel = new THREE.Vector3(Math.sin(a), (cam.position.y - 2.6) / d, Math.cos(a)).normalize();
-            const p = from.clone().addScaledVector(vel, 1.6);
-            fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.9), 3.5);
+      if (fields.current.size > 12) {
+        fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
+      }
+
+      meleeCooldown.current -= delta;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        e.flash -= delta;
+        e.cooldown -= delta;
+        if (e.slow > 0) e.slow -= delta;
+        const st = STATS[e.kind];
+        // nearest player
+        let target = targets[0]!;
+        let d = Math.hypot(target.x - e.x, target.z - e.z) || 1;
+        for (const t of targets) {
+          const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
+          if (dd < d) { d = dd; target = t; }
+        }
+        const dx = target.x - e.x;
+        const dz = target.z - e.z;
+
+        // route around obstacles: go straight if clear, else follow the flow field
+        let tx = target.x;
+        let tz = target.z;
+        if (!clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
+          const dist = fields.current.get(toCell(target.x) * 1000 + toCell(target.z));
+          if (dist) {
+            const wp = nextWaypoint(solid, dist, e.x, e.z);
+            tx = wp.x;
+            tz = wp.z;
+          }
+        }
+        const mx = tx - e.x;
+        const mz = tz - e.z;
+        const md = Math.hypot(mx, mz) || 1;
+        let dir = 1;
+        if (e.kind === "shooter") dir = d > 11 ? 1 : d < 7 ? -1 : 0;
+        if (e.kind === "brute" && d < 1.8) dir = 0;
+        if (e.kind === "boss" && d < 3) dir = 0;
+        if (e.swing > 0) dir = 0;
+        const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        const nx = e.x + (mx / md) * step;
+        const nz = e.z + (mz / md) * step;
+        const r = Math.min(st.radius, 0.8);
+        if (!blocked(blocks, nx, e.z, r)) e.x = nx;
+        if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+
+        if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
+          meleeCooldown.current = 1;
+          hurtTarget(target);
+        }
+        if (e.kind === "brute" || e.kind === "boss") {
+          const reach = e.kind === "boss" ? 3.6 : 2.4;
+          if (e.swing > 0) {
+            const before = e.swing;
+            e.swing -= delta;
+            if (before > 0.2 && e.swing <= 0.2 && d < reach) {
+              hurtTarget(target);
+              if (e.kind === "boss") hurtTarget(target);
+            }
+          } else if (d < reach - 0.2 && e.cooldown <= 0) {
+            e.swing = 0.4;
+            e.cooldown = 1.6;
+          }
+        }
+        if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
+          e.cooldown = 2 + rand() * 0.8;
+          const from = new THREE.Vector3(e.x, 1.5, e.z);
+          const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
+          from.addScaledVector(vel, 0.8);
+          fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5);
+        }
+        if (e.kind === "boss") {
+          e.shot -= delta;
+          if (e.shot <= 0 && d < 26) {
+            e.shot = 2.2;
+            const from = new THREE.Vector3(e.x, 2.6, e.z);
+            const base = Math.atan2(dx, dz);
+            for (let s = -2; s <= 2; s++) {
+              const a = base + s * 0.18;
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
+              const p = from.clone().addScaledVector(vel, 1.6);
+              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.9), 3.5);
+            }
           }
         }
       }
     }
 
     // player bullets
-    const hurtEnemy = (e: Enemy, dmg: number) => {
+    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0) => {
+      if (!isH) {
+        n?.broadcast({ type: "hit", i: idx, dmg, slow });
+        e.flash = 0.1;
+        return;
+      }
       e.hp -= dmg;
       e.flash = 0.1;
+      if (slow > 0) e.slow = slow;
       if (e.kind === "boss") onBoss(Math.max(0, e.hp));
       if (e.hp <= 0) {
         e.alive = false;
@@ -796,10 +1011,10 @@ function World({
     };
     const burst = (b: Bullet) => {
       if (b.cluster <= 0) return;
-      const n = b.cluster;
+      const n2 = b.cluster;
       b.cluster = 0;
-      for (let s = 0; s < n; s++) {
-        const a = (s / n) * Math.PI * 2 + Math.random();
+      for (let s = 0; s < n2; s++) {
+        const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
         fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
       }
@@ -822,19 +1037,20 @@ function World({
           burst(b);
           b.active = false;
         } else {
-          for (const e of enemies) {
+          for (let ei = 0; ei < enemies.length; ei++) {
+            const e = enemies[ei]!;
             if (!e.alive) continue;
             const h = e.kind === "boss" ? 5 : e.kind === "brute" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
-              hurtEnemy(e, b.damage);
-              if (b.slow > 0) e.slow = b.slow;
+              hurtEnemy(e, b.damage, ei, b.slow);
               if (b.chain > 0) {
                 let left = b.chain;
-                for (const o of enemies) {
+                for (let oi = 0; oi < enemies.length; oi++) {
+                  const o = enemies[oi]!;
                   if (left <= 0) break;
                   if (!o.alive || o === e) continue;
                   if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
-                    hurtEnemy(o, b.damage);
+                    hurtEnemy(o, b.damage, oi);
                     left--;
                   }
                 }
@@ -860,23 +1076,47 @@ function World({
     });
 
 
-    // enemy bullets
-    enemyBullets.current.forEach((b, i) => {
-      const m = enemyBulletMeshes.current[i];
-      if (b.active) {
-        b.pos.addScaledVector(b.vel, delta);
-        b.life -= delta;
-        if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
-        else if (b.pos.distanceTo(cam.position) < 0.6) {
-          b.active = false;
-          onHurt();
+    // enemy bullets (host simulates them for everyone)
+    if (isH) {
+      enemyBullets.current.forEach((b, i) => {
+        const m = enemyBulletMeshes.current[i];
+        if (b.active) {
+          b.pos.addScaledVector(b.vel, delta);
+          b.life -= delta;
+          if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
+          else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
+            b.active = false;
+            onHurt();
+          }
+        }
+        if (m) {
+          m.visible = b.active;
+          m.position.copy(b.pos);
+        }
+      });
+
+      // broadcast the world to the guests
+      if (n) {
+        snapTimer.current -= delta;
+        if (snapTimer.current <= 0) {
+          snapTimer.current = 0.05;
+          const e: number[] = [];
+          for (const en of enemies) {
+            e.push(en.alive ? 1 : 0, KINDS.indexOf(en.kind), Math.round(en.x * 100) / 100, Math.round(en.z * 100) / 100, en.swing);
+          }
+          const b: number[] = [];
+          for (const bu of enemyBullets.current) {
+            if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
+          }
+          n.broadcast({
+            type: "snap", e, b,
+            p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
+            h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
+          });
         }
       }
-      if (m) {
-        m.visible = b.active;
-        m.position.copy(b.pos);
-      }
-    });
+    }
+
   });
 
   // runs after the main frame so the gun uses this frame's final camera pose
@@ -928,7 +1168,9 @@ function World({
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} />
       </group>
+      <RemotePlayers remotes={remotes} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
+
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
     </>
   );
@@ -952,6 +1194,102 @@ export function Game() {
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
   const [healMsg, setHealMsg] = useState(0);
+
+  // ---------- co-op room ----------
+  const [net, setNet] = useState<NetHandle | null>(null);
+  const [peerCount, setPeerCount] = useState(0);
+  const [joining, setJoining] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [netError, setNetError] = useState("");
+  const [allDown, setAllDown] = useState(false);
+  const remotes = useRef(new Map<string, RemoteState>());
+  const msgSink = useRef<(m: NetMsg) => void>(() => {});
+  const seedRef = useRef(seed);
+  seedRef.current = seed;
+  const netHolder = useRef<NetHandle | null>(null);
+  const healthRef = useRef(MAX_HP);
+  healthRef.current = health;
+
+  const handleMsg = (m: NetMsg) => {
+    if (m.type === "seed") {
+      setSeed(Number(m.seed));
+      setScore(0);
+      setHealth(MAX_HP);
+      setAllDown(false);
+      setStatus({ wave: 1, remaining: 0, won: false });
+      setWeapon("pistol");
+      setBossHp(0);
+      return;
+    }
+    if (m.type === "over") { setAllDown(true); return; }
+    if (m.type === "joined") {
+      netHolder.current?.sendTo(String(m.from), { type: "seed", seed: seedRef.current });
+    }
+    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? MAX_HP : h));
+    if (m.type === "hurt") setHurtFlash((x) => x + 1);
+    msgSink.current(m);
+  };
+  const handleMsgRef = useRef(handleMsg);
+  handleMsgRef.current = handleMsg;
+
+  const startHost = async () => {
+    setNetError("");
+    setJoining(true);
+    try {
+      const h = await hostRoom({
+        onMsg: (m) => handleMsgRef.current(m),
+        onPeers: (ids) => setPeerCount(ids.length),
+      });
+      netHolder.current = h;
+      setNet(h);
+    } catch {
+      setNetError("Couldn't open a room. Check your connection and try again.");
+    }
+    setJoining(false);
+  };
+
+  const startJoin = async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length < 4) { setNetError("Enter the 4-letter code."); return; }
+    setNetError("");
+    setJoining(true);
+    try {
+      const h = await joinRoom(code, {
+        onMsg: (m) => handleMsgRef.current(m),
+        onPeers: () => setPeerCount(1),
+        onClose: () => setNetError("Lost connection to the host."),
+      });
+      netHolder.current = h;
+      setNet(h);
+      setPeerCount(1);
+    } catch {
+      setNetError("No arena found with that code.");
+    }
+    setJoining(false);
+  };
+
+  const leaveRoom = () => {
+    netHolder.current?.close();
+    netHolder.current = null;
+    remotes.current.clear();
+    setNet(null);
+    setPeerCount(0);
+    setAllDown(false);
+  };
+
+  // host: end the run when the whole squad is down
+  useEffect(() => {
+    if (!net || net.role !== "host") return;
+    const id = window.setInterval(() => {
+      const list = [...remotes.current.values()].filter((r) => performance.now() - r.last < 5000);
+      if (healthRef.current <= 0 && list.length > 0 && list.every((r) => r.hp <= 0)) {
+        net.broadcast({ type: "over" });
+        setAllDown(true);
+      }
+    }, 800);
+    return () => window.clearInterval(id);
+  }, [net]);
+
   useEffect(() => {
     try {
       const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
@@ -1022,8 +1360,11 @@ export function Game() {
     return () => window.clearTimeout(t);
   }, [banner, status.wave]);
 
-  const gameOver = health <= 0;
+  const multiplayer = !!net;
+  const dead = health <= 0;
+  const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
+  const isHost = !net || net.role === "host";
 
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
@@ -1032,9 +1373,14 @@ export function Game() {
 
   const start = () => {
     if (ended) {
-      setSeed(Math.floor(Math.random() * 1e9));
+      if (isHost) {
+        const s = Math.floor(Math.random() * 1e9);
+        setSeed(s);
+        net?.broadcast({ type: "seed", seed: s });
+      }
       setScore(0);
       setHealth(MAX_HP);
+      setAllDown(false);
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
@@ -1047,6 +1393,7 @@ export function Game() {
       /* pointer lock unavailable — arrow keys still work */
     }
   };
+
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
@@ -1065,9 +1412,15 @@ export function Game() {
           }}
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
-            if (showBanner) setBanner(true);
+            if (showBanner) {
+              setBanner(true);
+              if (multiplayer) setHealth((h) => (h <= 0 ? MAX_HP : h));
+            }
           }}
-          onBoss={setBossHp}
+          onBoss={(hp) => {
+            setBossHp(hp);
+            if (isHost) net?.broadcast({ type: "boss", hp });
+          }}
           onAmmo={setAmmoLeft}
           onHeal={() => {
             setHealth((h) => Math.min(MAX_HP, h + 3));
@@ -1076,10 +1429,15 @@ export function Game() {
           sensX={sensX}
           sensY={sensY}
           fov={fov}
+          net={net}
+          remotes={remotes}
+          dead={dead}
+          msgSink={msgSink}
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
+
         />
       </Canvas>
 
@@ -1139,6 +1497,16 @@ export function Game() {
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
           </div>
         )}
+        {multiplayer && locked && !ended && (
+          <div className="absolute right-5 top-16 space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
+            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
+            {[...remotes.current.values()].map((r) => (
+              <div key={r.id} className="rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <span style={{ color: r.color }}>■</span> {r.hp > 0 ? `${r.hp} HP` : "DOWN"}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {healMsg > 0 && locked && !ended && (
@@ -1146,6 +1514,12 @@ export function Game() {
           +3 HEALTH
         </div>
       )}
+      {multiplayer && dead && !ended && locked && (
+        <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-6 py-3 text-center font-mono text-sm tracking-[0.25em] text-[#f3e6cf]">
+          DOWNED · BACK UP NEXT WAVE
+        </div>
+      )}
+
       {(!locked || ended) && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
           <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
@@ -1168,6 +1542,55 @@ export function Game() {
             >
               {ended ? "NEW ARENA" : "CLICK TO PLAY"}
             </button>
+
+            <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
+              {!net ? (
+                <>
+                  <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={startHost}
+                      disabled={joining}
+                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                    >
+                      HOST
+                    </button>
+                    <input
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
+                      placeholder="CODE"
+                      className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
+                    />
+                    <button
+                      onClick={startJoin}
+                      disabled={joining}
+                      className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                    >
+                      JOIN
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
+                  <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
+                  <div className="mt-1 opacity-60">
+                    {net.role === "host"
+                      ? `${peerCount + 1} of 4 players · share the code`
+                      : "connected to the host"}
+                  </div>
+                  <button
+                    onClick={leaveRoom}
+                    className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
+                  >
+                    LEAVE ROOM
+                  </button>
+                </>
+              )}
+              {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
+              {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
+            </div>
+
             <div>
               <button
                 onClick={() => setShowSettings((v) => !v)}
