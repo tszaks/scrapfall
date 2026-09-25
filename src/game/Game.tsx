@@ -717,14 +717,18 @@ function World({
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnWave = (n: number) => {
+    const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
+    const enemyMul = 1 + 0.6 * extra;
+    const lootMul = 1 + 0.65 * extra;
     const [d, b, s, r, boss] = WAVES[n - 1] ?? [0, 0, 0, 0, 0];
+    const scale = (v: number) => Math.round(v * enemyMul);
     const kinds: Kind[] = [
       ...Array(boss).fill("boss"),
-      ...Array(d).fill("drifter"),
-      ...Array(b).fill("brute"),
-      ...Array(s).fill("shooter"),
-      ...Array(r).fill("runner"),
-    ];
+      ...Array(scale(d)).fill("drifter"),
+      ...Array(scale(b)).fill("brute"),
+      ...Array(scale(s)).fill("shooter"),
+      ...Array(scale(r)).fill("runner"),
+    ].slice(0, MAX_ENEMIES);
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
     enemies.forEach((e, i) => {
@@ -750,20 +754,27 @@ function World({
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 1 + rand() * 2.5;
     });
-    // health: random, never more than once every 2 waves
-    if (n >= 2 && n - lastHealWave.current >= 2 && rand() < 0.5) {
+    // health: random; solo waits 2 waves between packs, co-op packs come more often
+    const healGap = extra > 0 ? 1 : 2;
+    if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
-    // weapons: 80% chance each wave, following this run's shuffled gun order
-    const candidates = dropOrder.current.filter((w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w));
-    const drop = candidates[0];
-    if (drop && Math.random() < 0.8) {
+    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
+    const rolls = Math.max(1, Math.round(lootMul));
+    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
+    for (let i = 0; i < rolls; i++) {
+      const candidates = dropOrder.current.filter(
+        (w) => !owned.current.has(w) && !lostQueue.current.includes(w) && !(pickup.current.active && pickup.current.gun === w),
+      );
+      const drop = candidates[0];
+      if (!drop || Math.random() >= chance) continue;
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
     }
   };
+
 
   const outOfBounds = (p: THREE.Vector3) =>
     p.y < 0 || Math.abs(p.x) > HALF || Math.abs(p.z) > HALF || blocked(blocks, p.x, p.z, 0.05);
