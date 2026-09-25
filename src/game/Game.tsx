@@ -711,6 +711,7 @@ function World({
       if (!e.alive) continue;
       e.flash -= delta;
       e.cooldown -= delta;
+      if (e.slow > 0) e.slow -= delta;
       const st = STATS[e.kind];
       const dx = cam.position.x - e.x;
       const dz = cam.position.z - e.z;
