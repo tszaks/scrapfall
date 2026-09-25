@@ -1561,10 +1561,11 @@ export function Game() {
     if (ended && document.pointerLockElement) document.exitPointerLock();
   }, [ended]);
 
-  const start = () => {
-    if (ended && !isHost) return; // only the host starts a new arena
+  const start = (fromNet = false) => {
+    if (!fromNet && ended && !isHost) return; // only the host starts a new arena
+    const resuming = started && !ended;
     setStarted(true);
-    if (ended) {
+    if (ended && !fromNet) {
 
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
@@ -1579,6 +1580,8 @@ export function Game() {
       setBossHp(0);
     }
     setLocked(true);
+    // the whole squad starts and resumes together
+    if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
@@ -1586,6 +1589,8 @@ export function Game() {
       /* pointer lock unavailable — arrow keys still work */
     }
   };
+  startRef.current = start;
+  phase.current = { started, ended };
 
 
   return (
