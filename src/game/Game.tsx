@@ -53,10 +53,12 @@ type Enemy = {
   flash: number; // hit flash timer
   shot: number; // boss volley timer
   slow: number; // frozen timer
+  burn: number; // burning timer from incendiary rounds
+  burnTick: number;
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
-  bounce: number; pierce: number; slow: number; cluster: number; chain: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number;
 };
 
 
@@ -427,11 +429,12 @@ function BulletPool({
   );
 }
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number };
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
+    burn: fx.burn ?? 0, knock: fx.knock ?? 0,
   };
   const slot = pool.find((b) => !b.active);
   if (slot) {
@@ -691,7 +694,7 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0 };
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0 };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -928,6 +931,8 @@ function World({
         flash: 0,
         shot: 2,
         slow: 0,
+        burn: 0,
+        burnTick: 0,
       });
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
@@ -1731,6 +1736,8 @@ export function Game() {
       flash: 0,
       shot: 0,
       slow: 0,
+      burn: 0,
+      burnTick: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
   }, [seed, coop]);
