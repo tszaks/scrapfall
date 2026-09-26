@@ -1734,6 +1734,7 @@ export function Game() {
   const [weapon, setWeapon] = useState<Weapon>("pistol");
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
+  const [crateMsg, setCrateMsg] = useState<string | null>(null);
   const [ammoLeft, setAmmoLeft] = useState(0);
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
