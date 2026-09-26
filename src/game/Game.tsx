@@ -117,6 +117,8 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
+const PATCH_COST = 6; // permanent emergency heal slot in the shop
+
 
 
 const BULLET_SPEED = 22;
