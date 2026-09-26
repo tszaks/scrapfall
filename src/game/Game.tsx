@@ -3399,38 +3399,113 @@ export function Game() {
       )}
 
 
-      {(!locked || ended) && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
-          <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
-            </h1>
-            <p className="mt-2 text-sm opacity-70">
-              {gameOver
-                ? `You fell on wave ${status.wave} with ${score} kills.`
-                : status.won
-                  ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : paused
-                    ? `Wave ${status.wave} · ${score} kills so far.`
-                    : `Survive ${WAVES.length} waves, then face ${theme.boss.name}. Die and you lose every gun but the pistol.`}
-            </p>
-            {!paused && (
-              <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · Esc to pause
-              </p>
+      {(!locked || ended) && picking && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
+          <div className="w-full max-w-md rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+            <h1 className="text-2xl font-bold tracking-tight">Choose your ability</h1>
+            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">PRESS F IN GAME</p>
+            <div className="mt-4 grid grid-cols-2 gap-1">
+              {ABILITY_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setAbility(id)}
+                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
+                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  }`}
+                >
+                  {ABILITIES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
+
+            {multiplayer && (
+              <div className="mt-5 text-left">
+                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
+                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
+                  {connected.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                      <span className="opacity-60">
+                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
+                      </span>
+                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-            {multiplayer && !isHost && (ended || !started) ? (
+
+            {multiplayer && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
+                WAITING FOR THE HOST TO START
               </div>
             ) : (
               <button
                 onClick={() => start()}
                 className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
               >
-                {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
+                ENTER ARENA
               </button>
             )}
+            <div>
+              <button
+                onClick={() => setPicking(false)}
+                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
+              >
+                BACK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!locked || ended) && !picking && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
+          <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+            <h1 className="text-2xl font-bold tracking-tight">
+              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
+            </h1>
+            {(gameOver || status.won || paused) && (
+              <p className="mt-2 text-sm opacity-70">
+                {gameOver
+                  ? `You fell on wave ${status.wave} with ${score} kills.`
+                  : status.won
+                    ? `All ${WAVES.length} waves survived · ${score} kills.`
+                    : `Wave ${status.wave} · ${score} kills so far.`}
+              </p>
+            )}
+            {!paused && (
+              <p className="mt-4 text-xs leading-relaxed opacity-60">
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · Esc to pause
+              </p>
+            )}
+            {multiplayer && !isHost && (ended || !started) ? (
+              <div className="mt-6">
+                <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
+                  {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
+                </div>
+                <button
+                  onClick={() => { initAudio(); setPicking(true); }}
+                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                >
+                  CHOOSE ABILITY
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  if (started && !ended) { start(); return; } // resume straight back in
+                  initAudio();
+                  setPicking(true);
+                }}
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+              >
+                {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
+              </button>
+            )}
+
 
             {ended && (() => {
               const r = run.current;
