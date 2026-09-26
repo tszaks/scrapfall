@@ -777,7 +777,7 @@ function World({
         if (m.type === "snap") applySnap(m);
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") onHurt(Number(m.dmg) || 1);
+        else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1152,7 +1152,7 @@ function World({
           b.pos.addScaledVector(b.vel, delta);
           if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
             b.active = false;
-            onHurt(b.damage);
+            takeHit(b.damage);
 
             n?.broadcast({ type: "ebhit", i });
           }
@@ -1256,7 +1256,7 @@ function World({
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
       const hurtTarget = (t: Target, dmg: number) => {
-        if (t.id === null) onHurt(dmg);
+        if (t.id === null) takeHit(dmg);
         else n?.sendTo(t.id, { type: "hurt", dmg });
       };
 
@@ -1478,7 +1478,7 @@ function World({
           if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
-            onHurt(b.damage);
+            takeHit(b.damage);
 
           }
         }
