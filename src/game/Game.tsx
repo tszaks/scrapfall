@@ -2715,6 +2715,12 @@ function World({
 
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
+  // Anti-repeat: roll a new seed whose map differs from the current one.
+  const freshSeed = (prev: number) => {
+    let s = Math.floor(Math.random() * 1e9);
+    while (s % THEMES.length === prev % THEMES.length) s = Math.floor(Math.random() * 1e9);
+    return s;
+  };
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
@@ -2926,7 +2932,7 @@ export function Game() {
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
-    setSeed(Math.floor(Math.random() * 1e9));
+    setSeed((p) => freshSeed(p));
     if (document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -3088,7 +3094,7 @@ export function Game() {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
-        const s = Math.floor(Math.random() * 1e9);
+        const s = freshSeed(seed);
         setSeed(s);
         net?.broadcast({ type: "seed", seed: s });
       }
