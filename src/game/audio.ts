@@ -220,11 +220,15 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
 }
 
 export function startMusic() {
+  initAudio(); // safe if already running; also resumes a suspended context
   if (!ctx || timer !== null) return;
   nextT = ctx.currentTime + 0.05;
   timer = window.setInterval(() => {
     if (!ctx) return;
+    if (ctx.state === "suspended") { void ctx.resume(); return; }
     const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+    // after a tab switch or a late unlock the clock jumps; never replay the backlog
+    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
     while (nextT < ctx.currentTime + 0.12) {
       scheduleStep(step, nextT, stepDur);
       step++;
@@ -232,6 +236,7 @@ export function startMusic() {
     }
   }, 25);
 }
+
 
 export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
