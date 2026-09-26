@@ -1518,6 +1518,7 @@ function World({
             type: "snap", e, b, mk,
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
+            c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
           });
         }
       }
