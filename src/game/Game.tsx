@@ -42,14 +42,14 @@ const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound"
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard"];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
-const CRATE_KINDS: CrateKind[] = ["turret", "shield", "mine", "ammo"];
+const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   turret: { name: "SENTRY TURRET", color: "#4fe3ff" },
   shield: { name: "NANO BARRIER", color: "#7cc6ff" },
   mine: { name: "CRYO MINE", color: "#9fe8ff" },
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
-const TURRET_LIFE = 60; // roughly a wave and a half
+const TURRET_LIFE = 15;
 
 type Enemy = {
   kind: Kind;
@@ -1018,7 +1018,7 @@ function World({
       lastHealWave.current = n;
     }
     // supply crate: turret kit, barrier, cryo mine or ammo cache
-    if (n >= 2 && !crate.current.active && rand() < Math.min(0.9, 0.55 * lootMul)) {
+    if (!crate.current.active) { // exactly one supply drop per wave
       const c = randomSpawn(blocks, rand);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
@@ -1199,7 +1199,7 @@ function World({
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
       let best: Enemy | null = null;
-      let bd = 26;
+      let bd = 11;
       for (const e of enemies) {
         if (!e.alive) continue;
         const d2 = Math.hypot(e.x - t.x, e.z - t.z);
@@ -1207,6 +1207,7 @@ function World({
       }
       if (best && t.cd <= 0) {
         t.cd = 0.3;
+        playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
         fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 1.4, 2, "#4fe3ff", 0.11, { knock: stats.current.knock });
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
@@ -1344,7 +1345,7 @@ function World({
         if (nextWaveTimer.current <= 0) {
           wave.current++;
           spawnWave(wave.current);
-          nextWaveTimer.current = 5; // shopping break before the next wave
+          nextWaveTimer.current = 10; // shopping break before the next wave
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
@@ -2067,7 +2068,7 @@ export function Game() {
   const shopOpen = started && locked && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
-  const [shopLeft, setShopLeft] = useState(5);
+  const [shopLeft, setShopLeft] = useState(10);
   const lastOffered = useRef<PerkId[]>([]);
   useEffect(() => {
     if (!shopOpen) return;
@@ -2079,7 +2080,7 @@ export function Game() {
     lastOffered.current = picks;
     setOffers(picks);
     setBought([]);
-    setShopLeft(5);
+    setShopLeft(10);
     const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, [shopOpen, status.wave]);

@@ -87,7 +87,8 @@ export function playGun(w: string) {
   (GUN_SOUNDS[w] ?? GUN_SOUNDS['pistol']!).forEach((t) => tone(t));
 }
 
-export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny") {
+export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret") {
+  if (kind === "turret") tone({ wave: "square", f0: 900, f1: 400, dur: 0.06, gain: 0.12, noise: 0.3, cut: 4000 });
   if (kind === "shard") tone({ wave: "sine", f0: 1400 + Math.random() * 300, f1: 2400, dur: 0.08, gain: 0.18, noise: 0, cut: 9000 });
   if (kind === "hurt") tone({ wave: "sawtooth", f0: 160, f1: 60, dur: 0.25, gain: 0.45, noise: 0.5, cut: 1200 });
   if (kind === "pickup") tone({ wave: "triangle", f0: 500, f1: 1100, dur: 0.2, gain: 0.3, noise: 0, cut: 6000 });
