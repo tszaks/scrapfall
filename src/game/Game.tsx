@@ -2125,13 +2125,16 @@ export function Game() {
   startRef.current = start;
 
   // ---- shop: open during the break after a cleared wave ----
-  const shopOpen = started && locked && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  // NOTE: the break itself does not depend on pointer lock, so pausing and
+  // resuming keeps the same cards and remembers the ones already bought.
+  const shopBreak = started && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(10);
   const lastOffered = useRef<PerkId[]>([]);
   useEffect(() => {
-    if (!shopOpen) return;
+    if (!shopBreak) return;
     // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
     const avail = PERK_IDS.filter((p) => !perkMaxed(p, perksRef.current[p]));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
@@ -2143,7 +2146,7 @@ export function Game() {
     setShopLeft(10);
     const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
-  }, [shopOpen, status.wave]);
+  }, [shopBreak, status.wave]);
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
     const id = offers[i];
