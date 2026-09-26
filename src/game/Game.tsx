@@ -3398,7 +3398,7 @@ export function Game() {
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
