@@ -1217,6 +1217,17 @@ function World({
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
+        if (e.burn > 0) {
+          e.burn -= delta;
+          e.burnTick -= delta;
+          if (e.burnTick <= 0) {
+            e.burnTick = 1;
+            e.hp -= 1;
+            e.flash = 0.1;
+            if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+            if (e.hp <= 0) { e.alive = false; e.burn = 0; onScore(); onKill(e); continue; }
+          }
+        }
         const st = STATS[e.kind];
         // nearest player
         let target = targets[0]!;
