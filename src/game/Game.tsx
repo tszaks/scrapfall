@@ -3390,10 +3390,25 @@ export function Game() {
   }, [perks.regen, started, locked, ended, dead, maxHp]);
 
   // soundtrack
+  useEffect(() => { hookAudioUnlock(); }, []);
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
   }, [started, locked, ended]);
+  // if the browser blocked sound until now, the next click/keypress restarts it
+  useEffect(() => {
+    if (!(started && locked && !ended)) return;
+    const retry = () => { initAudio(); startMusic(); };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [started, locked, ended]);
+
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
