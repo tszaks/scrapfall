@@ -776,6 +776,8 @@ function World({
             pickup.current.active = false;
             const next = lostQueue.current.shift();
             if (next) placePickup(next);
+          } else if (m.what === "crate") {
+            crate.current.active = false;
           } else {
             heal.current.active = false;
           }
