@@ -586,6 +586,8 @@ function World({
   slots: React.MutableRefObject<Record<string, number>>;
   stats: React.MutableRefObject<Derived>;
   onShard: (v: number) => void;
+  onLeech: () => void;
+  onCrate: (kind: CrateKind) => void;
 }) {
 
 
