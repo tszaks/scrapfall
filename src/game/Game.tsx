@@ -1218,6 +1218,10 @@ function World({
   onLeech,
   onCrate,
   onDeploys,
+  ability,
+  onAbilityCd,
+  onStat,
+  onEvent,
 
 
 
@@ -1251,6 +1255,10 @@ function World({
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
   onDeploys: (d: { turret: number; mines: number }) => void;
+  ability: AbilityId;
+  onAbilityCd: (left: number, max: number) => void;
+  onStat: (k: "shot" | "hit" | "dmg", n: number) => void;
+  onEvent: (name: string | null) => void;
 
 }) {
 
@@ -1299,11 +1307,25 @@ function World({
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
   const thornsPending = useRef(0);
+  // ---- active ability (F) ----
+  const abilityRef = useRef<AbilityId>(ability);
+  abilityRef.current = ability;
+  const abilCd = useRef(0);
+  const abilFire = useRef(false);
+  const invuln = useRef(0);
+  const overdrive = useRef(0);
+  const poolTicks = useRef(0);
+  const poolTimer = useRef(0);
+  const flareTimer = useRef(0);
+  const barrierMesh = useRef<THREE.Mesh>(null);
+  const cdReport = useRef(0);
   // armour soaks damage; getting hit can discharge a shock ring
   const takeHit = (dmg: number) => {
+    if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     const s2 = stats.current;
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
+    onStat("dmg", 0);
     onHurt(d);
   };
   useEffect(() => {
@@ -1571,6 +1593,7 @@ function World({
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      onStat("shot", 1);
     }
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
@@ -1580,6 +1603,7 @@ function World({
     const w = weapon.current;
     if (ammo.current[w] <= 0) return; // dry: wait for a drop or the next wave
     spit();
+    if (overdrive.current > 0) return; // adrenaline burns no reserve
     ammo.current[w]--;
     onAmmo(ammo.current[w]);
     if (w === "pistol") {
@@ -1630,6 +1654,7 @@ function World({
         const w = [...owned.current][slot - 1];
         if (w) equip(w);
       }
+      if (e.code === "KeyF") abilFire.current = true;
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -1773,7 +1798,8 @@ function World({
       const w = weapon.current;
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
-      fireCd.current = w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate;
+      fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
+        * (overdrive.current > 0 ? 0.5 : 1);
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
@@ -1788,7 +1814,9 @@ function World({
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
-    const spd = SPEED * stats.current.speed * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1);
+    const spd = SPEED * stats.current.speed
+      * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
+      * (overdrive.current > 0 ? 1.3 : 1);
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -2331,6 +2359,8 @@ function World({
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
               const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              onStat("hit", 1);
+              onStat("dmg", dmg);
               if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
               if (b.mods & M_BOUNTY && lethal) {
                 onShard(1);
