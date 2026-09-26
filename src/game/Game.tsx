@@ -457,16 +457,33 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
 
 
 /** Simple blocky gun model, different silhouette per weapon. */
-function GunModel({ w }: { w: Weapon }) {
+function GunModel({ w, mods }: { w: Weapon; mods?: { burst: boolean; incend: boolean; magnum: boolean } }) {
   const g = GUNS[w];
   const glow = <meshBasicMaterial color={g.color} fog={false} />;
   const body = <meshLambertMaterial color={g.body} />;
+  const mg = w === "pistol" && mods?.magnum;
   return (
     <group>
       {w === "pistol" && (<>
-        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.1, 0.12, 0.35]} />{body}</mesh>
+        {/* magnum: longer gold-trimmed barrel */}
+        <mesh position={[0, 0, mg ? -0.22 : -0.15]}><boxGeometry args={[0.1, 0.12, mg ? 0.5 : 0.35]} />{body}</mesh>
         <mesh position={[0, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.08, 0.18, 0.1]} />{body}</mesh>
-        <mesh position={[0, 0.07, -0.3]}><boxGeometry args={[0.03, 0.03, 0.03]} />{glow}</mesh>
+        <mesh position={[0, 0.07, mg ? -0.44 : -0.3]}><boxGeometry args={[0.03, 0.03, 0.03]} />{glow}</mesh>
+        {mg && (<>
+          <mesh position={[0, 0.075, -0.2]}><boxGeometry args={[0.11, 0.02, 0.46]} /><meshBasicMaterial color="#e8b93a" fog={false} /></mesh>
+          <mesh position={[0, 0, -0.03]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.075, 0.075, 0.12, 6]} /><meshLambertMaterial color="#8a6a24" /></mesh>
+        </>)}
+        {/* burst: extended magazine + triple muzzle vents */}
+        {mods?.burst && (<>
+          <mesh position={[0, -0.27, 0]} rotation-x={0.3}><boxGeometry args={[0.06, 0.14, 0.07]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
+          {[-0.03, 0, 0.03].map((x) => (
+            <mesh key={x} position={[x, -0.035, mg ? -0.48 : -0.33]}><boxGeometry args={[0.018, 0.018, 0.04]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
+          ))}
+        </>)}
+        {/* incendiary: glowing fuel canister under the barrel */}
+        {mods?.incend && (
+          <mesh position={[0, -0.09, -0.2]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.22, 8]} /><meshBasicMaterial color="#ff5a1f" fog={false} /></mesh>
+        )}
       </>)}
       {w === "scatter" && (<>
         <mesh position={[-0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
@@ -1738,7 +1755,7 @@ function World({
         </group>
       ))}
       <group ref={viewModel} scale={0.7}>
-        <GunModel w={held} />
+        <GunModel w={held} mods={{ burst: stats.current.burst, incend: stats.current.incend, magnum: stats.current.magnum }} />
       </group>
       <RemotePlayers remotes={remotes} />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
@@ -2357,18 +2374,17 @@ export function Game() {
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
-              const sold = bought.includes(i);
-              const afford = shards >= cost;
+              if (bought.includes(i)) return null;
+              const sold = false;
               return (
                 <div
                   key={i}
-                  className={`relative w-44 rounded-lg border-2 bg-[#f3e6cf]/95 p-3 text-center ${sold ? "opacity-35" : afford ? "" : "opacity-70"}`}
-                  style={{ borderColor: info.color }}
+                  className="relative w-44 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]"
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
                   </span>
-                  <div className="text-xs font-bold tracking-widest" style={{ color: info.color }}>{info.name}</div>
+                  <div className="text-xs font-bold tracking-widest">{info.name}</div>
                   <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
                   <div className="mt-2 text-sm font-bold">{sold ? "BOUGHT" : `◆ ${cost}`}</div>
