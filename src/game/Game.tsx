@@ -818,6 +818,11 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    turrets.current = [];
+    mines.current = [];
+    lastDeploys.current = { turret: -1, mines: -1 };
+    onDeploys({ turret: 0, mines: 0 });
+
     syncInv();
 
     // fresh random gun order for this run
