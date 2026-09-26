@@ -699,6 +699,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const bossGrp = useRef<THREE.Group>(null);
   const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
+  const aura = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -712,7 +713,11 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
-    g.scale.setScalar(base * (data.flash > 0 ? 1.15 : 1));
+    g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
+    if (aura.current) {
+      aura.current.visible = !!data.elite;
+      aura.current.rotation.y = t * 1.2;
+    }
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
@@ -730,6 +735,17 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   });
   return (
     <group ref={ref}>
+      {/* event champion: gold halo + ground ring */}
+      <group ref={aura} visible={false}>
+        <mesh position-y={0.06} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[1.1, 1.35, 20]} />
+          <meshBasicMaterial color="#ffd24a" fog={false} />
+        </mesh>
+        <mesh position-y={2.5} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.55, 0.08, 6, 16]} />
+          <meshBasicMaterial color="#ffd24a" fog={false} />
+        </mesh>
+      </group>
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
@@ -2627,6 +2643,10 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      <mesh ref={barrierMesh} visible={false}>
+        <sphereGeometry args={[1.6, 16, 12]} />
+        <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
+      </mesh>
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} mods={stats.current} />
       </group>
