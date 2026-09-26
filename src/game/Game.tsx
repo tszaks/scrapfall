@@ -27,7 +27,7 @@ type Gun = {
   bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
-  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 0 },
+  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
   scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
@@ -71,7 +71,7 @@ type Bullet = {
 };
 
 
-const BOSS_HP = 65;
+const BOSS_HP = 300;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
   brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
@@ -168,6 +168,20 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
 }
 
 function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
+  // deterministic scatter so the arena dressing matches for everyone in co-op
+  const debris = blocks.flatMap((b, i) => {
+    if (i % 2 === 1) return [];
+    const a = (i * 2.399) % (Math.PI * 2);
+    const r = 1.5 + ((i * 37) % 9) * 0.12;
+    return [{
+      key: `d${i}`,
+      x: b.x + Math.cos(a) * r,
+      z: b.z + Math.sin(a) * r,
+      s: 0.22 + ((i * 13) % 5) * 0.06,
+      rot: a,
+    }];
+  });
+  const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
@@ -178,16 +192,60 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
       {blocks.map((b, i) => (
         <Obstacle key={i} b={b} theme={theme} />
       ))}
+      {/* loose rubble around the cover, so the floor is not a bare plane */}
+      {debris.map((d) => (
+        <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} castShadow receiveShadow>
+          <dodecahedronGeometry args={[d.s, 0]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+      ))}
+      {/* marker posts with a lit cap dotted through the arena */}
+      {posts.map((b, i) => (
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
+          <mesh position-y={0.55} castShadow>
+            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          <mesh position-y={1.18}>
+            <sphereGeometry args={[0.13, 8, 6]} />
+            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
+          </mesh>
+        </group>
+      ))}
       {([
         [0, -HALF, ARENA, 1],
         [0, HALF, ARENA, 1],
         [-HALF, 0, 1, ARENA],
         [HALF, 0, 1, ARENA],
       ] as const).map(([x, z, w, d], i) => (
-        <mesh key={`w${i}`} position={[x, 2, z]}>
-          <boxGeometry args={[w, 4, d]} />
-          <meshLambertMaterial color={theme.wall} flatShading />
-        </mesh>
+        <group key={`w${i}`}>
+          <mesh position={[x, 2, z]}>
+            <boxGeometry args={[w, 4, d]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          {/* capping rail + a darker plinth give the walls some depth */}
+          <mesh position={[x, 4.15, z]}>
+            <boxGeometry args={[w + 0.3, 0.3, d + 0.3]} />
+            <meshLambertMaterial color={theme.blocks[2]} flatShading />
+          </mesh>
+          <mesh position={[x, 0.35, z]}>
+            <boxGeometry args={[w + 0.45, 0.7, d + 0.45]} />
+            <meshLambertMaterial color={theme.blocks[2]} flatShading />
+          </mesh>
+        </group>
+      ))}
+      {/* corner beacons */}
+      {([[-HALF + 1.2, -HALF + 1.2], [HALF - 1.2, -HALF + 1.2], [-HALF + 1.2, HALF - 1.2], [HALF - 1.2, HALF - 1.2]] as const).map(([x, z], i) => (
+        <group key={`c${i}`} position={[x, 0, z]}>
+          <mesh position-y={1.4} castShadow>
+            <cylinderGeometry args={[0.18, 0.3, 2.8, 6]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          <mesh position-y={3}>
+            <octahedronGeometry args={[0.32, 0]} />
+            <meshBasicMaterial color={theme.enemyBullet} fog={false} />
+          </mesh>
+        </group>
       ))}
     </group>
   );
@@ -298,21 +356,65 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   });
   return (
     <group ref={ref}>
+      {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       <group ref={drifter} position-y={0.9}>
         <mesh castShadow>
           <octahedronGeometry args={[0.8, 0]} />
           <meshLambertMaterial color={c.drifter.body} flatShading emissive={c.drifter.emissive} />
         </mesh>
+        <mesh rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.82, 0.07, 6, 12]} />
+          <meshLambertMaterial color={c.brute.clubHead} flatShading />
+        </mesh>
+        <mesh rotation-z={Math.PI / 2}>
+          <torusGeometry args={[0.7, 0.05, 6, 12]} />
+          <meshLambertMaterial color={c.brute.club} flatShading />
+        </mesh>
         <mesh position={[0, 0, 0.65]}>
           <sphereGeometry args={[0.15, 8, 8]} />
           <meshBasicMaterial color={c.drifter.eye} />
         </mesh>
+        <mesh position={[0, 0, 0.72]} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.24, 0.04, 5, 10]} />
+          <meshBasicMaterial color={c.drifter.eye} />
+        </mesh>
+        {[-0.55, 0.55].map((x) => (
+          <mesh key={x} position={[x, -0.35, -0.2]} rotation-z={x * 0.5} castShadow>
+            <coneGeometry args={[0.14, 0.4, 5]} />
+            <meshLambertMaterial color={c.brute.club} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0, -0.78, 0]}>
+          <sphereGeometry args={[0.18, 8, 6]} />
+          <meshBasicMaterial color={c.drifter.eye} />
+        </mesh>
       </group>
+      {/* BRUTE: hulking bruiser with layered plating and a power maul */}
       <group ref={brute}>
         <mesh position-y={1.1} castShadow>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
         </mesh>
+        <mesh position={[0, 1.55, 0.53]} castShadow>
+          <boxGeometry args={[1.05, 0.75, 0.16]} />
+          <meshLambertMaterial color={c.brute.head} flatShading />
+        </mesh>
+        <mesh position={[0, 1.05, 0.58]}>
+          <boxGeometry args={[0.3, 0.12, 0.06]} />
+          <meshBasicMaterial color={c.brute.eye} />
+        </mesh>
+        {[-0.82, 0.82].map((x) => (
+          <mesh key={x} position={[x, 1.85, 0]} rotation-z={x * 0.25} castShadow>
+            <boxGeometry args={[0.5, 0.42, 1.05]} />
+            <meshLambertMaterial color={c.brute.head} flatShading />
+          </mesh>
+        ))}
+        {[-0.3, 0.3].map((x) => (
+          <mesh key={`v${x}`} position={[x, 2.05, -0.5]} castShadow>
+            <cylinderGeometry args={[0.1, 0.13, 0.5, 6]} />
+            <meshLambertMaterial color={c.brute.club} flatShading />
+          </mesh>
+        ))}
         <mesh position={[0, 2.25, 0]} castShadow>
           <boxGeometry args={[0.8, 0.6, 0.7]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
@@ -321,6 +423,18 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <boxGeometry args={[0.55, 0.12, 0.05]} />
           <meshBasicMaterial color={c.brute.eye} />
         </mesh>
+        {[-0.45, 0.45].map((x) => (
+          <mesh key={`h${x}`} position={[x, 2.6, 0]} rotation-z={x * 0.6}>
+            <coneGeometry args={[0.1, 0.42, 4]} />
+            <meshLambertMaterial color={c.brute.clubHead} flatShading />
+          </mesh>
+        ))}
+        {[-0.4, 0.4].map((x) => (
+          <mesh key={`l${x}`} position={[x, 0.15, 0]} castShadow>
+            <boxGeometry args={[0.42, 0.5, 0.52]} />
+            <meshLambertMaterial color={c.brute.head} flatShading />
+          </mesh>
+        ))}
         <group ref={club} position={[0.85, 1.6, 0]}>
           <mesh position={[0, 0.7, 0]} castShadow>
             <boxGeometry args={[0.18, 1.4, 0.18]} />
@@ -330,6 +444,16 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
             <boxGeometry args={[0.4, 0.4, 0.4]} />
             <meshLambertMaterial color={c.brute.clubHead} flatShading />
           </mesh>
+          <mesh position={[0, 1.45, 0]}>
+            <boxGeometry args={[0.46, 0.1, 0.46]} />
+            <meshBasicMaterial color={c.brute.eye} />
+          </mesh>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[s * 0.28, 1.45, 0]} rotation-z={-s * Math.PI / 2}>
+              <coneGeometry args={[0.13, 0.22, 4]} />
+              <meshLambertMaterial color={c.brute.clubHead} flatShading />
+            </mesh>
+          ))}
         </group>
       </group>
       <group ref={bossGrp}>
@@ -339,20 +463,61 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
             <boxGeometry args={[0.24, 1.8, 0.24]} />
             <meshLambertMaterial color={theme.boss.limb} flatShading />
           </mesh>
+          <mesh position={[0, 0.5, 0]} castShadow>
+            <boxGeometry args={[0.36, 0.3, 0.36]} />
+            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          </mesh>
           <mesh position={[0, 1.95, 0]} castShadow>
             <boxGeometry args={[0.6, 0.6, 0.6]} />
             <meshLambertMaterial color={theme.boss.weapon} flatShading />
           </mesh>
+          <mesh position={[0, 1.95, 0]}>
+            <boxGeometry args={[0.66, 0.12, 0.66]} />
+            <meshBasicMaterial color={theme.boss.glow} fog={false} />
+          </mesh>
+          <mesh position={[0, 2.42, 0]}>
+            <coneGeometry args={[0.24, 0.45, 5]} />
+            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          </mesh>
         </group>
       </group>
+      {/* SHOOTER: sensor-headed gunner on a tripod chassis */}
       <group ref={shooter} position-y={1.3}>
         <mesh castShadow>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
         </mesh>
+        <mesh position-y={0.62} castShadow>
+          <cylinderGeometry args={[0.5, 0.42, 0.22, 6]} />
+          <meshLambertMaterial color={c.shooter.barrel} flatShading />
+        </mesh>
+        <mesh position-y={0.8} castShadow>
+          <sphereGeometry args={[0.3, 8, 6]} />
+          <meshLambertMaterial color={c.shooter.barrel} flatShading />
+        </mesh>
+        <mesh position={[0, 0.82, 0.26]}>
+          <boxGeometry args={[0.36, 0.1, 0.06]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={x} position={[x, 0.15, -0.1]} rotation-z={x * 0.35} castShadow>
+            <boxGeometry args={[0.12, 0.8, 0.3]} />
+            <meshLambertMaterial color={c.shooter.barrel} flatShading />
+          </mesh>
+        ))}
+        {[-0.42, 0, 0.42].map((x) => (
+          <mesh key={`leg${x}`} position={[x, -1.0, 0]} rotation-z={x * 0.5} castShadow>
+            <cylinderGeometry args={[0.07, 0.05, 0.9, 5]} />
+            <meshLambertMaterial color={c.shooter.barrel} flatShading />
+          </mesh>
+        ))}
         <mesh position={[0, 0.2, 0.55]} rotation-x={Math.PI / 2}>
           <cylinderGeometry args={[0.12, 0.12, 0.7, 8]} />
           <meshLambertMaterial color={c.shooter.barrel} />
+        </mesh>
+        <mesh position={[0, 0.2, 0.86]}>
+          <torusGeometry args={[0.16, 0.04, 5, 10]} />
+          <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
         <mesh position={[0, 0.5, 0.4]}>
           <sphereGeometry args={[0.12, 8, 8]} />
@@ -364,6 +529,22 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
         <mesh castShadow>
           <coneGeometry args={[0.6, 1.8, 6]} />
           <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
+        </mesh>
+        <mesh position-y={-0.75} rotation-x={Math.PI}>
+          <coneGeometry args={[0.45, 1.1, 6]} />
+          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.3} emissive={c.drifter.emissive} />
+        </mesh>
+        <mesh position-y={0.1} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.72, 0.05, 5, 14]} />
+          <meshBasicMaterial color={c.shooter.eye} />
+        </mesh>
+        <mesh position-y={-0.3} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.5, 0.04, 5, 12]} />
+          <meshBasicMaterial color={c.drifter.eye} />
+        </mesh>
+        <mesh position-y={0.55}>
+          <sphereGeometry args={[0.2, 8, 6]} />
+          <meshBasicMaterial color={c.drifter.eye} />
         </mesh>
         <mesh position={[0, 0.5, 0.35]}>
           <sphereGeometry args={[0.14, 8, 8]} />
@@ -380,10 +561,30 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <sphereGeometry args={[0.75, 8, 6]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
         </mesh>
+        <mesh position-y={0.1} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.76, 0.08, 6, 12]} />
+          <meshLambertMaterial color={c.brute.head} flatShading />
+        </mesh>
         <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7} castShadow>
           <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
           <meshLambertMaterial color={c.shooter.barrel} flatShading />
         </mesh>
+        <mesh position={[0, 1.05, 0.33]} rotation-x={-0.7}>
+          <torusGeometry args={[0.24, 0.05, 5, 10]} />
+          <meshBasicMaterial color={theme.enemyBullet} />
+        </mesh>
+        {[-0.62, 0.62].map((x) => (
+          <mesh key={x} position={[x, 0.35, -0.1]} rotation-z={x * 0.6} castShadow>
+            <boxGeometry args={[0.24, 0.4, 0.34]} />
+            <meshLambertMaterial color={c.brute.head} flatShading />
+          </mesh>
+        ))}
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={`f${x}`} position={[x, -0.55, 0.2]} rotation-z={x * 0.5} castShadow>
+            <cylinderGeometry args={[0.09, 0.14, 0.5, 5]} />
+            <meshLambertMaterial color={c.shooter.barrel} flatShading />
+          </mesh>
+        ))}
         <mesh position={[0, 0.3, 0.6]}>
           <sphereGeometry args={[0.13, 8, 8]} />
           <meshBasicMaterial color={theme.enemyBullet} />
@@ -395,6 +596,16 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <boxGeometry args={[1.2, 2, 0.9]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
         </mesh>
+        <mesh position={[0, 1.55, 0.48]} castShadow>
+          <boxGeometry args={[0.95, 0.9, 0.14]} />
+          <meshLambertMaterial color={c.brute.head} flatShading />
+        </mesh>
+        {[-0.72, 0.72].map((x) => (
+          <mesh key={x} position={[x, 1.95, 0]} rotation-z={x * 0.3} castShadow>
+            <boxGeometry args={[0.42, 0.38, 0.95]} />
+            <meshLambertMaterial color={c.brute.head} flatShading />
+          </mesh>
+        ))}
         <mesh position={[0, 2.45, 0]} castShadow>
           <boxGeometry args={[0.7, 0.55, 0.7]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
@@ -403,10 +614,32 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <boxGeometry args={[0.45, 0.1, 0.05]} />
           <meshBasicMaterial color={c.brute.eye} />
         </mesh>
+        <mesh position={[0, 2.78, 0]}>
+          <boxGeometry args={[0.16, 0.34, 0.16]} />
+          <meshLambertMaterial color={c.brute.clubHead} flatShading />
+        </mesh>
+        {[-0.38, 0.38].map((x) => (
+          <mesh key={`lg${x}`} position={[x, 0.2, 0]} castShadow>
+            <boxGeometry args={[0.38, 0.55, 0.48]} />
+            <meshLambertMaterial color={c.brute.head} flatShading />
+          </mesh>
+        ))}
         <mesh position={[0, 1.3, 0.75]} castShadow>
           <boxGeometry args={[1.7, 2.1, 0.18]} />
           <meshLambertMaterial color={c.brute.clubHead} flatShading />
         </mesh>
+        {[-0.6, 0.6].map((x) => (
+          <mesh key={`r${x}`} position={[x, 1.3, 0.86]} castShadow>
+            <boxGeometry args={[0.16, 2, 0.08]} />
+            <meshLambertMaterial color={c.shooter.body} flatShading />
+          </mesh>
+        ))}
+        {[-0.7, 0, 0.7].map((y) => (
+          <mesh key={`b${y}`} position={[0, 1.3 + y, 0.86]} rotation-z={Math.PI / 4}>
+            <boxGeometry args={[0.18, 0.18, 0.05]} />
+            <meshBasicMaterial color={theme.enemyBullet} />
+          </mesh>
+        ))}
         <mesh position={[0, 1.3, 0.86]}>
           <boxGeometry args={[0.3, 0.9, 0.04]} />
           <meshBasicMaterial color={theme.enemyBullet} />
@@ -632,7 +865,7 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
+  const ammo = useRef<Record<Weapon, number>>({ pistol: GUNS.pistol.ammo, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
@@ -927,17 +1160,20 @@ function World({
   };
 
   const fire = () => {
-    spit();
     const w = weapon.current;
-    if (w === "pistol") {
-      if (stats.current.burst) {
-        burstQueue.current = 2;
-        burstTimer.current = 0.07;
-      }
-      return;
-    }
+    if (ammo.current[w] <= 0) return; // dry: wait for a drop or the next wave
+    spit();
     ammo.current[w]--;
     onAmmo(ammo.current[w]);
+    if (w === "pistol") {
+      // the pistol never drops; it just refills at the start of each wave
+      if (stats.current.burst && ammo.current[w] > 0) {
+        burstQueue.current = Math.min(2, ammo.current[w]);
+        burstTimer.current = 0.07;
+      }
+      syncInv();
+      return;
+    }
     if (ammo.current[w] <= 0) {
       owned.current.delete(w);
       equip("pistol");
@@ -948,16 +1184,16 @@ function World({
     }
   };
 
-  // dying costs you every gun but the pistol; the lost ones go back in the drop pool
+  // dying costs you every gun but the pistol; upgrades and pistol mods are kept
   useEffect(() => {
     if (!dead) return;
     const lost = [...owned.current].filter((w) => w !== "pistol");
-    if (lost.length === 0) return;
     lost.forEach((w) => {
       owned.current.delete(w);
       ammo.current[w] = 0;
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
+    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1000,6 +1236,10 @@ function World({
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnWave = (n: number) => {
+    // every wave hands the sidearm a fresh magazine
+    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
+    onAmmo(ammo.current[weapon.current]);
+    syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
     const enemyMul = 1 + 0.6 * extra;
     const lootMul = 1 + 0.65 * extra;
@@ -1025,7 +1265,7 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: kind === "boss" ? Math.round(BOSS_HP + 20 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
@@ -1101,11 +1341,19 @@ function World({
       if (burstTimer.current <= 0) {
         burstQueue.current--;
         burstTimer.current = 0.07;
-        spit();
+        if (ammo.current.pistol > 0) {
+          spit();
+          ammo.current.pistol--;
+          onAmmo(ammo.current.pistol);
+        } else {
+          burstQueue.current = 0;
+        }
       }
     } else if (trigger.current && !spectating && fireCd.current <= 0) {
+      const w = weapon.current;
       fire();
-      fireCd.current = GUNS[weapon.current].cooldown / stats.current.rate;
+      // the sidearm always fires at its stock cadence; fire-rate perks skip it
+      fireCd.current = w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate;
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
@@ -1771,6 +2019,8 @@ export function Game() {
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
+  const pausedRef = useRef(false);
+  pausedRef.current = !locked;
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
@@ -2110,13 +2360,16 @@ export function Game() {
   startRef.current = start;
 
   // ---- shop: open during the break after a cleared wave ----
-  const shopOpen = started && locked && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  // NOTE: the break itself does not depend on pointer lock, so pausing and
+  // resuming keeps the same cards and remembers the ones already bought.
+  const shopBreak = started && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(10);
   const lastOffered = useRef<PerkId[]>([]);
   useEffect(() => {
-    if (!shopOpen) return;
+    if (!shopBreak) return;
     // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
     const avail = PERK_IDS.filter((p) => !perkMaxed(p, perksRef.current[p]));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
@@ -2126,9 +2379,10 @@ export function Game() {
     setOffers(picks);
     setBought([]);
     setShopLeft(10);
-    const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
+    // the countdown holds while the game is paused
+    const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
     return () => clearInterval(id);
-  }, [shopOpen, status.wave]);
+  }, [shopBreak, status.wave]);
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
     const id = offers[i];
@@ -2300,7 +2554,7 @@ export function Game() {
                   {i === 9 ? 0 : i + 1}
                 </span>
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
-                <b>{slot.w === "pistol" ? "∞" : active ? ammoLeft : slot.ammo}</b>
+                <b>{active ? ammoLeft : slot.ammo}</b>
               </div>
             );
           })}
@@ -2586,7 +2840,7 @@ export function Game() {
 }
 
 const GUN_INFO: Record<Weapon, string> = {
-  pistol: "Your trusty sidearm. Never runs out of ammo, fires one steady shot at a time.",
+  pistol: "Your trusty sidearm. 140 rounds, refilled at the start of every wave.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",
   rail: "Heavy long-range beam. The shot itself is near-instant and hits for 5 damage, but it takes almost a second to charge the next one.",
