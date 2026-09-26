@@ -2909,7 +2909,10 @@ function World({
 /** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
 function debugHandles() {
   if (import.meta.env.DEV) return true;
-  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "1"
+  );
 }
 
 /** `?map=vice` (case-insensitive name substring), `?map=city` (layout type) or `?map=3` (index) forces the solo map for testing. */
