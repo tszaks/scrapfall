@@ -123,7 +123,10 @@ const MOVE = new THREE.Vector3();
 
 function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
-  if (theme.blockShape === "tree") {
+  const shape = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  if (shape === "tree") {
     const trunk = 1 + b.h * 0.25;
     return (
       <group position={[b.x, 0, b.z]}>
@@ -142,15 +145,8 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
       </group>
     );
   }
-  if (theme.blockShape === "rock") {
-    return (
-      <mesh position={[b.x, b.h * 0.4, b.z]} rotation={[b.tone, b.tone * 3, 0]} scale={[1.2, b.h * 0.5 + 0.4, 1.2]} castShadow receiveShadow>
-        <dodecahedronGeometry args={[1, 0]} />
-        <meshLambertMaterial color={color} flatShading />
-      </mesh>
-    );
-  }
-  if (theme.blockShape === "crystal") {
+
+  if (shape === "crystal") {
     return (
       <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
         <mesh position-y={b.h / 2} castShadow receiveShadow>
@@ -161,9 +157,213 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
           <coneGeometry args={[0.8, 1, 5]} />
           <meshLambertMaterial color="#f4fbff" flatShading />
         </mesh>
+        {[0, 1].map((i) => (
+          <mesh key={i} position={[Math.sin(i * 2.2) * 0.9, b.h * 0.3, Math.cos(i * 2.2) * 0.9]} rotation-z={0.3 - i * 0.6} castShadow>
+            <coneGeometry args={[0.28, b.h * 0.7, 5]} />
+            <meshLambertMaterial color={theme.blocks[1]} flatShading />
+          </mesh>
+        ))}
       </group>
     );
   }
+
+  // DESERT: stepped sandstone monument with a bleached bone arch
+  if (shape === "monument") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.2}>
+        <mesh position-y={b.h * 0.3} castShadow receiveShadow>
+          <boxGeometry args={[BLOCK, b.h * 0.6, BLOCK]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.75} castShadow>
+          <boxGeometry args={[BLOCK * 0.72, b.h * 0.3, BLOCK * 0.72]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.98} castShadow>
+          <boxGeometry args={[BLOCK * 0.42, b.h * 0.16, BLOCK * 0.42]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 1.15, 0.45, 0.2]} rotation-z={s * 0.35}>
+            <cylinderGeometry args={[0.07, 0.09, 1, 5]} />
+            <meshLambertMaterial color="#e8dcc0" flatShading />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  // VOLCANO: hexagonal basalt columns split by a magma seam
+  if (shape === "basalt") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
+        {[[-0.45, -0.3, 1], [0.5, 0.35, 0.78], [0.1, -0.6, 0.6]].map(([dx, dz, f], i) => (
+          <mesh key={i} position={[dx as number, (b.h * (f as number)) / 2, dz as number]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.55, 0.6, b.h * (f as number), 6]} />
+            <meshLambertMaterial color={i === 1 ? theme.blocks[1] : color} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.06, 0]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.7, 1.15, 12]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+        <mesh position={[-0.45, b.h + 0.18, -0.3]}>
+          <sphereGeometry args={[0.2, 8, 6]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // BADLANDS: layered flat-topped butte with a rusted strut
+  if (shape === "butte") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 2}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} position-y={b.h * (0.18 + i * 0.28)} castShadow receiveShadow>
+            <cylinderGeometry args={[1.25 - i * 0.22, 1.35 - i * 0.22, b.h * 0.3, 7]} />
+            <meshLambertMaterial color={i === 1 ? theme.blocks[1] : color} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0.9, b.h * 0.6, 0.5]} rotation-z={0.4} castShadow>
+          <boxGeometry args={[0.1, b.h * 1.1, 0.1]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // BLOSSOM: tiered stone pagoda lantern
+  if (shape === "pagoda") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.5}>
+        <mesh position-y={0.25} castShadow receiveShadow>
+          <boxGeometry args={[1.5, 0.5, 1.5]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.45} castShadow>
+          <cylinderGeometry args={[0.42, 0.5, b.h * 0.7, 8]} />
+          <meshLambertMaterial color="#d8d2c4" flatShading />
+        </mesh>
+        {[0.55, 0.9].map((f, i) => (
+          <mesh key={i} position-y={b.h * f} castShadow>
+            <coneGeometry args={[1.15 - i * 0.25, 0.45, 4]} />
+            <meshLambertMaterial color={color} flatShading />
+          </mesh>
+        ))}
+        <mesh position-y={b.h * 0.68}>
+          <boxGeometry args={[0.36, 0.4, 0.36]} />
+          <meshBasicMaterial color="#ffd98a" fog={false} />
+        </mesh>
+        <mesh position-y={b.h + 0.3}>
+          <sphereGeometry args={[0.16, 8, 6]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // DEEP ICE: fractured iceberg slabs
+  if (shape === "berg") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
+        <mesh position-y={b.h * 0.42} rotation-y={0.4} castShadow receiveShadow>
+          <boxGeometry args={[1.7, b.h * 0.85, 1.4]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position={[0.35, b.h * 0.8, -0.2]} rotation-z={0.45} rotation-y={0.8} castShadow>
+          <boxGeometry args={[1.1, b.h * 0.6, 0.9]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
+        </mesh>
+        <mesh position={[-0.6, b.h * 0.35, 0.6]} rotation-z={-0.3} castShadow>
+          <coneGeometry args={[0.4, b.h * 0.9, 4]} />
+          <meshLambertMaterial color="#f2fbff" flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // OCEAN: branching bioluminescent coral
+  if (shape === "coral") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        <mesh position-y={0.28} castShadow receiveShadow>
+          <sphereGeometry args={[0.85, 8, 6]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = (i / 3) * Math.PI * 2 + b.tone;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4]} rotation-z={Math.cos(a) * 0.3} rotation-x={-Math.sin(a) * 0.3}>
+              <mesh position-y={b.h * 0.45} castShadow>
+                <cylinderGeometry args={[0.13, 0.26, b.h * 0.9, 6]} />
+                <meshLambertMaterial color={color} flatShading />
+              </mesh>
+              <mesh position-y={b.h * 0.92}>
+                <sphereGeometry args={[0.26, 8, 6]} />
+                <meshBasicMaterial color={glow} fog={false} />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // CYBERPUNK: server mainframe tower with lit circuit strips
+  if (shape === "server") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.6}>
+        <mesh position-y={b.h / 2} castShadow receiveShadow>
+          <boxGeometry args={[1.5, b.h, 1.2]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        {[0.3, 0.55, 0.8].map((f, i) => (
+          <mesh key={i} position={[0, b.h * f, 0.62]}>
+            <boxGeometry args={[1.1, 0.07, 0.04]} />
+            <meshBasicMaterial color={i % 2 ? theme.grid[0] : theme.grid[1]} fog={false} />
+          </mesh>
+        ))}
+        <mesh position-y={b.h + 0.12} castShadow>
+          <boxGeometry args={[1.6, 0.24, 1.3]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        <mesh position-y={b.h + 0.5} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.3, 0.06, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // INDUSTRIAL: chemical vat with hazard band and pipework
+  if (shape === "vat") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 3}>
+        <mesh position-y={b.h * 0.45} castShadow receiveShadow>
+          <cylinderGeometry args={[0.95, 0.95, b.h * 0.9, 10]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.55}>
+          <cylinderGeometry args={[0.98, 0.98, 0.3, 10]} />
+          <meshLambertMaterial color="#2b2118" flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.92}>
+          <cylinderGeometry args={[0.8, 0.95, 0.24, 10]} />
+          <meshBasicMaterial color={glow} fog={false} />
+        </mesh>
+        <mesh position={[0.95, b.h * 0.3, 0]} rotation-z={Math.PI / 2}>
+          <cylinderGeometry args={[0.12, 0.12, 0.9, 8]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.12, 0]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[1.05, 1.3, 12]} />
+          <meshBasicMaterial color={glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
   return (
     <mesh position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
       <boxGeometry args={[BLOCK, b.h, BLOCK]} />
