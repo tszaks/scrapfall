@@ -1,7 +1,7 @@
 // Procedural canvas textures for the city map. Built once, lazily, in the browser.
 import * as THREE from "three";
 
-export type FacadeKind = "glass" | "office" | "brick";
+export type FacadeKind = "glass" | "office" | "brick" | "ribbon" | "resid";
 /** One texture tile covers this many window columns and floors. */
 export const TILE_COLS = 8;
 export const TILE_ROWS = 16;
@@ -46,14 +46,17 @@ export function facadeTextures(kind: FacadeKind) {
   const H = CH * TILE_ROWS;
   const [dc, d] = canvas(W, H);
   const [nc, n] = canvas(W, H);
-  const r = rng(kind === "glass" ? 11 : kind === "office" ? 23 : 37);
+  const r = rng({ glass: 11, office: 23, brick: 37, ribbon: 51, resid: 67 }[kind]);
   n.fillStyle = "#000";
   n.fillRect(0, 0, W, H);
   if (kind === "glass") {
     d.fillStyle = "#e4ebef";
     d.fillRect(0, 0, W, H);
-  } else if (kind === "office") {
+  } else if (kind === "office" || kind === "resid") {
     d.fillStyle = "#f4f1ea";
+    d.fillRect(0, 0, W, H);
+  } else if (kind === "ribbon") {
+    d.fillStyle = "#f0efec";
     d.fillRect(0, 0, W, H);
   } else {
     d.fillStyle = "#f2efea";
@@ -62,7 +65,7 @@ export function facadeTextures(kind: FacadeKind) {
     d.fillStyle = "rgba(0,0,0,0.07)";
     for (let y = 0; y < H; y += 4) d.fillRect(0, y, W, 1);
   }
-  const litChance = kind === "glass" ? 0.42 : kind === "office" ? 0.38 : 0.34;
+  const litChance = { glass: 0.42, office: 0.38, brick: 0.34, ribbon: 0.4, resid: 0.3 }[kind];
   for (let row = 0; row < TILE_ROWS; row++) {
     // whole floors of an office are often lit together
     const floorLit = r() < 0.18;
@@ -75,6 +78,17 @@ export function facadeTextures(kind: FacadeKind) {
         wy = y0 + 5;
         ww = CW - 2;
         wh = CH - 7;
+      } else if (kind === "ribbon") {
+        // continuous horizontal band of glass, thin mullions
+        wx = x0;
+        wy = y0 + 11;
+        ww = CW - 1;
+        wh = CH - 18;
+      } else if (kind === "resid") {
+        wx = x0 + 7;
+        wy = y0 + 7;
+        ww = CW - 14;
+        wh = CH - 11;
       } else if (kind === "office") {
         wx = x0 + 5;
         wy = y0 + 8;
@@ -99,7 +113,7 @@ export function facadeTextures(kind: FacadeKind) {
         d.fillRect(x0, y0 + 2, CW, 3); // spandrel between floors
       } else {
         d.fillStyle =
-          kind === "office"
+          kind === "office" || kind === "ribbon"
             ? `rgb(${80 + j},${100 + j},${120 + j})`
             : `rgb(${58 + j},${66 + j},${80 + j})`;
         d.fillRect(wx, wy, ww, wh);
@@ -107,7 +121,7 @@ export function facadeTextures(kind: FacadeKind) {
         d.fillRect(wx, wy, ww, 2);
         d.fillStyle = "rgba(0,0,0,0.18)";
         d.fillRect(wx - 1, wy + wh, ww + 2, 2); // sill shadow
-        if (kind === "brick" && r() < 0.35) {
+        if ((kind === "brick" || kind === "resid") && r() < 0.4) {
           d.fillStyle = r() < 0.5 ? "rgba(230,210,170,0.55)" : "rgba(160,60,50,0.4)"; // curtains
           d.fillRect(wx, wy, ww, wh * (0.4 + r() * 0.5));
         }
@@ -117,6 +131,17 @@ export function facadeTextures(kind: FacadeKind) {
         n.fillStyle = LIT[Math.floor(r() * LIT.length)]!;
         n.globalAlpha = 0.65 + r() * 0.35;
         n.fillRect(wx, wy, ww, wh);
+        // blinds / curtains half drawn on some lit windows
+        const blind = r();
+        if (blind < 0.25) {
+          n.globalAlpha = 1;
+          n.fillStyle = "#000";
+          n.fillRect(wx, wy, ww, wh * (0.3 + r() * 0.5));
+        } else if (blind < 0.35) {
+          n.globalAlpha = 0.5;
+          n.fillStyle = "#000";
+          for (let y = wy; y < wy + wh; y += 3) n.fillRect(wx, y, ww, 1);
+        }
         n.globalAlpha = 1;
       } else if (kind === "glass") {
         n.fillStyle = "#070b12";
@@ -210,4 +235,36 @@ export function glowTexture() {
   g.fillRect(0, 0, 128, 128);
   glowTex = toTexture(c, false);
   return glowTex;
+}
+
+let signTex: THREE.CanvasTexture | null = null;
+export const SIGN_WORDS = [
+  "DINER", "HOTEL", "GAS", "PHARMACY", "PIZZA", "BAR", "LIQUOR", "DELI",
+  "CAFE", "PAWN", "TATTOO", "NAILS", "VIDEO", "BANK", "SUSHI", "OPEN",
+];
+/** 4x4 atlas of shop / neon sign words (bright text on dark panels). */
+export function signTexture() {
+  if (signTex) return signTex;
+  const [c, g] = canvas(1024, 512);
+  const cols = ["#ff4fa0", "#3affd8", "#ffe14a", "#ff7a3a", "#9a6aff", "#4fd0ff", "#ff3a3a", "#7cff6a"];
+  SIGN_WORDS.forEach((w, i) => {
+    const x = (i % 4) * 256;
+    const y = Math.floor(i / 4) * 128;
+    g.fillStyle = "#15121a";
+    g.fillRect(x, y, 256, 128);
+    const col = cols[i % cols.length]!;
+    g.strokeStyle = col;
+    g.lineWidth = 6;
+    g.strokeRect(x + 8, y + 8, 240, 112);
+    g.fillStyle = col;
+    g.shadowColor = col;
+    g.shadowBlur = 12;
+    g.font = `bold ${w.length > 6 ? 40 : 58}px sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(w, x + 128, y + 66);
+    g.shadowBlur = 0;
+  });
+  signTex = toTexture(c, false);
+  return signTex;
 }

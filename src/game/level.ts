@@ -5,6 +5,9 @@ export type LayoutMode = "scatter" | "city";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
+/** Vice Heights is real-scale (1 unit = 1 m): ~6x4 city blocks solo, ~8x6 in co-op */
+export const CITY_SOLO = 600;
+export const CITY_COOP = 800;
 export let ARENA = SOLO_ARENA; // world size (centered at origin)
 export let HALF = ARENA / 2;
 export const BLOCK = 2; // block footprint (square)
@@ -109,29 +112,76 @@ export function randomSpawn(blocks: Block[], rand: () => number) {
   return { x: HALF - 4, z: HALF - 4 };
 }
 
-// ---------- pathfinding (flow field over the block grid) ----------
+// ---------- pathfinding (flow field over a nav grid) ----------
 export let CELLS = Math.floor(ARENA / BLOCK);
+/** Nav grid: BLOCK * NAV_SCALE metres per cell. The big city routes on 4 m cells
+ * (collision stays on the 2 m grid) so each flow field stays cheap. */
+export let NAV_SCALE = 1;
+export let NAV_CELLS = CELLS;
 
-/** Resize the arena (co-op uses a bigger field). Call before generating a level. */
-export function setArenaSize(size: number) {
+/** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level. */
+export function setArenaSize(size: number, navScale = 1) {
   ARENA = size;
   HALF = size / 2;
   CELLS = Math.floor(size / BLOCK);
+  NAV_SCALE = navScale;
+  NAV_CELLS = Math.ceil(CELLS / navScale);
 }
 
 export const toCell = (v: number) =>
   Math.max(0, Math.min(CELLS - 1, Math.floor((v + HALF) / BLOCK)));
 export const cellCenter = (i: number) => -HALF + BLOCK / 2 + i * BLOCK;
+export const toNav = (v: number) =>
+  Math.max(0, Math.min(NAV_CELLS - 1, Math.floor((v + HALF) / (BLOCK * NAV_SCALE))));
 
-export function solidGrid(blocks: Block[]) {
-  const g = new Uint8Array(CELLS * CELLS);
-  for (const b of blocks) g[toCell(b.x) * CELLS + toCell(b.z)] = 1;
-  // edge ring is against the arena wall — treat as solid for routing
-  for (let i = 0; i < CELLS; i++) {
-    g[i * CELLS] = g[i * CELLS + CELLS - 1] = 1;
-    g[i] = g[(CELLS - 1) * CELLS + i] = 1;
+export type NavGrid = {
+  /** 1 = solid nav cell */
+  g: Uint8Array;
+  /** walk-to point per nav cell (centre of its open 2 m sub-cells) */
+  px: Float32Array;
+  pz: Float32Array;
+  n: number;
+};
+
+export function solidGrid(blocks: Block[]): NavGrid {
+  const n = NAV_CELLS;
+  const sc = NAV_SCALE;
+  const fine = new Uint8Array(CELLS * CELLS);
+  for (const b of blocks) fine[toCell(b.x) * CELLS + toCell(b.z)] = 1;
+  const g = new Uint8Array(n * n);
+  const px = new Float32Array(n * n);
+  const pz = new Float32Array(n * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let open = 0;
+      let sx = 0;
+      let sz = 0;
+      let total = 0;
+      for (let a = 0; a < sc; a++) {
+        for (let b = 0; b < sc; b++) {
+          const fi = i * sc + a;
+          const fj = j * sc + b;
+          if (fi >= CELLS || fj >= CELLS) continue;
+          total++;
+          if (fine[fi * CELLS + fj]) continue;
+          open++;
+          sx += cellCenter(fi);
+          sz += cellCenter(fj);
+        }
+      }
+      const k = i * n + j;
+      // solid unless at least half of the sub-cells are open
+      g[k] = open * 2 < total || open === 0 ? 1 : 0;
+      px[k] = open ? sx / open : 0;
+      pz[k] = open ? sz / open : 0;
+    }
   }
-  return g;
+  // edge ring is against the arena wall — treat as solid for routing
+  for (let i = 0; i < n; i++) {
+    g[i * n] = g[i * n + n - 1] = 1;
+    g[i] = g[(n - 1) * n + i] = 1;
+  }
+  return { g, px, pz, n };
 }
 
 const DIRS = [
@@ -139,28 +189,30 @@ const DIRS = [
   [1, 1], [1, -1], [-1, 1], [-1, -1],
 ] as const;
 
-/** Distance (in steps) from every cell to the target cell. */
-export function flowField(solid: Uint8Array, ti: number, tj: number) {
-  const dist = new Float32Array(CELLS * CELLS).fill(Infinity);
+/** Distance (in steps) from every nav cell to the target nav cell. */
+export function flowField(nav: NavGrid, ti: number, tj: number) {
+  const { g: solid, n } = nav;
+  const dist = new Float32Array(n * n).fill(Infinity);
   const q: number[] = [];
-  const start = ti * CELLS + tj;
+  const start = ti * n + tj;
   dist[start] = 0;
   q.push(start);
   for (let h = 0; h < q.length; h++) {
     const c = q[h]!;
-    const ci = Math.floor(c / CELLS);
-    const cj = c % CELLS;
+    const ci = Math.floor(c / n);
+    const cj = c - ci * n;
+    const dc = dist[c]!;
     for (const [di, dj] of DIRS) {
       const ni = ci + di;
       const nj = cj + dj;
-      if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) continue;
-      const n = ni * CELLS + nj;
-      if (solid[n]) continue;
-      if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
-      const nd = dist[c]! + (di && dj ? 1.414 : 1);
-      if (nd < dist[n]!) {
-        dist[n] = nd;
-        q.push(n);
+      if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+      const k = ni * n + nj;
+      if (solid[k]) continue;
+      if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
+      const nd = dc + (di && dj ? 1.414 : 1);
+      if (nd < dist[k]!) {
+        dist[k] = nd;
+        q.push(k);
       }
     }
   }
@@ -168,25 +220,28 @@ export function flowField(solid: Uint8Array, ti: number, tj: number) {
 }
 
 /** World-space point the enemy should walk to next. */
-export function nextWaypoint(solid: Uint8Array, dist: Float32Array, x: number, z: number) {
-  const ci = toCell(x);
-  const cj = toCell(z);
-  let best = dist[ci * CELLS + cj]!;
+export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: number) {
+  const { g: solid, n } = nav;
+  const ci = toNav(x);
+  const cj = toNav(z);
+  let best = dist[ci * n + cj]!;
   let bi = ci;
   let bj = cj;
   for (const [di, dj] of DIRS) {
     const ni = ci + di;
     const nj = cj + dj;
-    if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS) continue;
-    if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
-    const d = dist[ni * CELLS + nj]!;
+    if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+    if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
+    const d = dist[ni * n + nj]!;
     if (d < best) {
       best = d;
       bi = ni;
       bj = nj;
     }
   }
-  return { x: cellCenter(bi), z: cellCenter(bj) };
+  const k = bi * n + bj;
+  if (NAV_SCALE === 1) return { x: cellCenter(bi), z: cellCenter(bj) };
+  return { x: nav.px[k]!, z: nav.pz[k]! };
 }
 
 /** True when a straight walk from a to b is clear for the given radius. */

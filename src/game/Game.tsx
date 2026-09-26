@@ -4,7 +4,7 @@ import * as THREE from "three";
 
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
-  solidGrid, flowField, nextWaypoint, clearLine, toCell,
+  solidGrid, flowField, nextWaypoint, clearLine, toNav,
   setArenaSize, SOLO_ARENA, COOP_ARENA,
 } from "./level";
 
@@ -2373,9 +2373,9 @@ function World({
       // flow field per target cell (cached)
       const used = new Set<number>();
       for (const t of targets) {
-        const key = toCell(t.x) * 1000 + toCell(t.z);
+        const key = toNav(t.x) * 1000 + toNav(t.z);
         used.add(key);
-        if (!fields.current.has(key)) fields.current.set(key, flowField(solid, toCell(t.x), toCell(t.z)));
+        if (!fields.current.has(key)) fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z)));
       }
       if (fields.current.size > 12) {
         fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
@@ -2415,7 +2415,7 @@ function World({
         let tz = target.z;
         const ghost = e.kind === "specter"; // specters drift straight through cover
         if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-          const dist = fields.current.get(toCell(target.x) * 1000 + toCell(target.z));
+          const dist = fields.current.get(toNav(target.x) * 1000 + toNav(target.z));
           if (dist) {
             const wp = nextWaypoint(solid, dist, e.x, e.z);
             tx = wp.x;
