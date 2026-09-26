@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
@@ -167,7 +167,7 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
-function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
+const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
     if (i % 2 === 1) return [];
@@ -194,7 +194,7 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
       ))}
       {/* loose rubble around the cover, so the floor is not a bare plane */}
       {debris.map((d) => (
-        <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} castShadow receiveShadow>
+        <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} receiveShadow>
           <dodecahedronGeometry args={[d.s, 0]} />
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
@@ -249,7 +249,7 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
       ))}
     </group>
   );
-}
+});
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
@@ -314,8 +314,9 @@ function BossBody({ theme }: { theme: Theme }) {
   );
 }
 
-function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
+const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   const c = theme.enemy;
+  const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
   const drifter = useRef<THREE.Group>(null);
   const brute = useRef<THREE.Group>(null);
@@ -331,6 +332,7 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
     if (!g) return;
     g.visible = data.alive;
     if (!data.alive) return;
+    if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
@@ -357,8 +359,8 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   return (
     <group ref={ref}>
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
-      <group ref={drifter} position-y={0.9}>
-        <mesh castShadow>
+      {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
+        <mesh>
           <octahedronGeometry args={[0.8, 0]} />
           <meshLambertMaterial color={c.drifter.body} flatShading emissive={c.drifter.emissive} />
         </mesh>
@@ -379,7 +381,7 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={c.drifter.eye} />
         </mesh>
         {[-0.55, 0.55].map((x) => (
-          <mesh key={x} position={[x, -0.35, -0.2]} rotation-z={x * 0.5} castShadow>
+          <mesh key={x} position={[x, -0.35, -0.2]} rotation-z={x * 0.5}>
             <coneGeometry args={[0.14, 0.4, 5]} />
             <meshLambertMaterial color={c.brute.club} flatShading />
           </mesh>
@@ -388,14 +390,14 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <sphereGeometry args={[0.18, 8, 6]} />
           <meshBasicMaterial color={c.drifter.eye} />
         </mesh>
-      </group>
+      </group> )}
       {/* BRUTE: hulking bruiser with layered plating and a power maul */}
-      <group ref={brute}>
-        <mesh position-y={1.1} castShadow>
+      {(kind==="brute") && (<group ref={brute}>
+        <mesh position-y={1.1}>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
         </mesh>
-        <mesh position={[0, 1.55, 0.53]} castShadow>
+        <mesh position={[0, 1.55, 0.53]}>
           <boxGeometry args={[1.05, 0.75, 0.16]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
@@ -404,18 +406,18 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={c.brute.eye} />
         </mesh>
         {[-0.82, 0.82].map((x) => (
-          <mesh key={x} position={[x, 1.85, 0]} rotation-z={x * 0.25} castShadow>
+          <mesh key={x} position={[x, 1.85, 0]} rotation-z={x * 0.25}>
             <boxGeometry args={[0.5, 0.42, 1.05]} />
             <meshLambertMaterial color={c.brute.head} flatShading />
           </mesh>
         ))}
         {[-0.3, 0.3].map((x) => (
-          <mesh key={`v${x}`} position={[x, 2.05, -0.5]} castShadow>
+          <mesh key={`v${x}`} position={[x, 2.05, -0.5]}>
             <cylinderGeometry args={[0.1, 0.13, 0.5, 6]} />
             <meshLambertMaterial color={c.brute.club} flatShading />
           </mesh>
         ))}
-        <mesh position={[0, 2.25, 0]} castShadow>
+        <mesh position={[0, 2.25, 0]}>
           <boxGeometry args={[0.8, 0.6, 0.7]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
@@ -430,17 +432,17 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           </mesh>
         ))}
         {[-0.4, 0.4].map((x) => (
-          <mesh key={`l${x}`} position={[x, 0.15, 0]} castShadow>
+          <mesh key={`l${x}`} position={[x, 0.15, 0]}>
             <boxGeometry args={[0.42, 0.5, 0.52]} />
             <meshLambertMaterial color={c.brute.head} flatShading />
           </mesh>
         ))}
         <group ref={club} position={[0.85, 1.6, 0]}>
-          <mesh position={[0, 0.7, 0]} castShadow>
+          <mesh position={[0, 0.7, 0]}>
             <boxGeometry args={[0.18, 1.4, 0.18]} />
             <meshLambertMaterial color={c.brute.club} />
           </mesh>
-          <mesh position={[0, 1.45, 0]} castShadow>
+          <mesh position={[0, 1.45, 0]}>
             <boxGeometry args={[0.4, 0.4, 0.4]} />
             <meshLambertMaterial color={c.brute.clubHead} flatShading />
           </mesh>
@@ -455,19 +457,19 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
             </mesh>
           ))}
         </group>
-      </group>
-      <group ref={bossGrp}>
+      </group> )}
+      {(kind==="boss") && (<group ref={bossGrp}>
         <BossBody theme={theme} />
         <group ref={bossArm} position={[1.05, 1.9, 0]}>
-          <mesh position={[0, 0.9, 0]} castShadow>
+          <mesh position={[0, 0.9, 0]}>
             <boxGeometry args={[0.24, 1.8, 0.24]} />
             <meshLambertMaterial color={theme.boss.limb} flatShading />
           </mesh>
-          <mesh position={[0, 0.5, 0]} castShadow>
+          <mesh position={[0, 0.5, 0]}>
             <boxGeometry args={[0.36, 0.3, 0.36]} />
             <meshLambertMaterial color={theme.boss.weapon} flatShading />
           </mesh>
-          <mesh position={[0, 1.95, 0]} castShadow>
+          <mesh position={[0, 1.95, 0]}>
             <boxGeometry args={[0.6, 0.6, 0.6]} />
             <meshLambertMaterial color={theme.boss.weapon} flatShading />
           </mesh>
@@ -480,18 +482,18 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
             <meshLambertMaterial color={theme.boss.weapon} flatShading />
           </mesh>
         </group>
-      </group>
+      </group> )}
       {/* SHOOTER: sensor-headed gunner on a tripod chassis */}
-      <group ref={shooter} position-y={1.3}>
-        <mesh castShadow>
+      {(kind==="shooter") && (<group ref={shooter} position-y={1.3}>
+        <mesh>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
         </mesh>
-        <mesh position-y={0.62} castShadow>
+        <mesh position-y={0.62}>
           <cylinderGeometry args={[0.5, 0.42, 0.22, 6]} />
           <meshLambertMaterial color={c.shooter.barrel} flatShading />
         </mesh>
-        <mesh position-y={0.8} castShadow>
+        <mesh position-y={0.8}>
           <sphereGeometry args={[0.3, 8, 6]} />
           <meshLambertMaterial color={c.shooter.barrel} flatShading />
         </mesh>
@@ -500,13 +502,13 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
         {[-0.5, 0.5].map((x) => (
-          <mesh key={x} position={[x, 0.15, -0.1]} rotation-z={x * 0.35} castShadow>
+          <mesh key={x} position={[x, 0.15, -0.1]} rotation-z={x * 0.35}>
             <boxGeometry args={[0.12, 0.8, 0.3]} />
             <meshLambertMaterial color={c.shooter.barrel} flatShading />
           </mesh>
         ))}
         {[-0.42, 0, 0.42].map((x) => (
-          <mesh key={`leg${x}`} position={[x, -1.0, 0]} rotation-z={x * 0.5} castShadow>
+          <mesh key={`leg${x}`} position={[x, -1.0, 0]} rotation-z={x * 0.5}>
             <cylinderGeometry args={[0.07, 0.05, 0.9, 5]} />
             <meshLambertMaterial color={c.shooter.barrel} flatShading />
           </mesh>
@@ -523,10 +525,10 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <sphereGeometry args={[0.12, 8, 8]} />
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
-      </group>
+      </group> )}
       {/* SPECTER: drifting, see-through wraith that blinks toward you */}
-      <group ref={specter} position-y={1.5}>
-        <mesh castShadow>
+      {(kind==="specter") && (<group ref={specter} position-y={1.5}>
+        <mesh>
           <coneGeometry args={[0.6, 1.8, 6]} />
           <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
         </mesh>
@@ -554,10 +556,10 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <sphereGeometry args={[0.1, 8, 8]} />
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
-      </group>
+      </group> )}
       {/* BOMBER: squat mortar unit that lobs shells over cover */}
-      <group ref={bomber} position-y={0.8}>
-        <mesh castShadow>
+      {(kind==="bomber") && (<group ref={bomber} position-y={0.8}>
+        <mesh>
           <sphereGeometry args={[0.75, 8, 6]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
         </mesh>
@@ -565,7 +567,7 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <torusGeometry args={[0.76, 0.08, 6, 12]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
-        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7} castShadow>
+        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7}>
           <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
           <meshLambertMaterial color={c.shooter.barrel} flatShading />
         </mesh>
@@ -574,13 +576,13 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshBasicMaterial color={theme.enemyBullet} />
         </mesh>
         {[-0.62, 0.62].map((x) => (
-          <mesh key={x} position={[x, 0.35, -0.1]} rotation-z={x * 0.6} castShadow>
+          <mesh key={x} position={[x, 0.35, -0.1]} rotation-z={x * 0.6}>
             <boxGeometry args={[0.24, 0.4, 0.34]} />
             <meshLambertMaterial color={c.brute.head} flatShading />
           </mesh>
         ))}
         {[-0.5, 0.5].map((x) => (
-          <mesh key={`f${x}`} position={[x, -0.55, 0.2]} rotation-z={x * 0.5} castShadow>
+          <mesh key={`f${x}`} position={[x, -0.55, 0.2]} rotation-z={x * 0.5}>
             <cylinderGeometry args={[0.09, 0.14, 0.5, 5]} />
             <meshLambertMaterial color={c.shooter.barrel} flatShading />
           </mesh>
@@ -589,24 +591,24 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <sphereGeometry args={[0.13, 8, 8]} />
           <meshBasicMaterial color={theme.enemyBullet} />
         </mesh>
-      </group>
+      </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      <group ref={vanguard}>
-        <mesh position-y={1.2} castShadow>
+      {(kind==="vanguard") && (<group ref={vanguard}>
+        <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
         </mesh>
-        <mesh position={[0, 1.55, 0.48]} castShadow>
+        <mesh position={[0, 1.55, 0.48]}>
           <boxGeometry args={[0.95, 0.9, 0.14]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
         {[-0.72, 0.72].map((x) => (
-          <mesh key={x} position={[x, 1.95, 0]} rotation-z={x * 0.3} castShadow>
+          <mesh key={x} position={[x, 1.95, 0]} rotation-z={x * 0.3}>
             <boxGeometry args={[0.42, 0.38, 0.95]} />
             <meshLambertMaterial color={c.brute.head} flatShading />
           </mesh>
         ))}
-        <mesh position={[0, 2.45, 0]} castShadow>
+        <mesh position={[0, 2.45, 0]}>
           <boxGeometry args={[0.7, 0.55, 0.7]} />
           <meshLambertMaterial color={c.brute.head} flatShading />
         </mesh>
@@ -619,17 +621,17 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <meshLambertMaterial color={c.brute.clubHead} flatShading />
         </mesh>
         {[-0.38, 0.38].map((x) => (
-          <mesh key={`lg${x}`} position={[x, 0.2, 0]} castShadow>
+          <mesh key={`lg${x}`} position={[x, 0.2, 0]}>
             <boxGeometry args={[0.38, 0.55, 0.48]} />
             <meshLambertMaterial color={c.brute.head} flatShading />
           </mesh>
         ))}
-        <mesh position={[0, 1.3, 0.75]} castShadow>
+        <mesh position={[0, 1.3, 0.75]}>
           <boxGeometry args={[1.7, 2.1, 0.18]} />
           <meshLambertMaterial color={c.brute.clubHead} flatShading />
         </mesh>
         {[-0.6, 0.6].map((x) => (
-          <mesh key={`r${x}`} position={[x, 1.3, 0.86]} castShadow>
+          <mesh key={`r${x}`} position={[x, 1.3, 0.86]}>
             <boxGeometry args={[0.16, 2, 0.08]} />
             <meshLambertMaterial color={c.shooter.body} flatShading />
           </mesh>
@@ -644,13 +646,12 @@ function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
           <boxGeometry args={[0.3, 0.9, 0.04]} />
           <meshBasicMaterial color={theme.enemyBullet} />
         </mesh>
-      </group>
+      </group> )}
     </group>
   );
-}
+});
 
-
-function BulletPool({
+const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
@@ -669,7 +670,7 @@ function BulletPool({
       ))}
     </>
   );
-}
+});
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
@@ -2432,7 +2433,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
-      <Canvas shadows camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows dpr={[1, 1.25]} gl={{ powerPreference: "high-performance", antialias: false }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
           enemies={enemies}
