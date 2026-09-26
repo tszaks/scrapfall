@@ -1442,6 +1442,8 @@ function World({
   const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = 0.12) => {
     ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
   };
+  const cdReport = useRef(0);
+
 
   // armour soaks damage; getting hit can discharge a shock ring
   const takeHit = (dmg: number) => {
