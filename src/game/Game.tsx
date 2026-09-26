@@ -117,6 +117,8 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
+const PATCH_COST = 6; // permanent emergency heal slot in the shop
+
 
 
 const BULLET_SPEED = 22;
@@ -1808,13 +1810,14 @@ function World({
       onEvent(event);
       netRef.current?.broadcast({ type: "event", name: event });
     }
-    // health: random; solo waits 2 waves between packs, co-op packs come more often
+    // health: guaranteed pack every wave in co-op, every other wave solo
     const healGap = extra > 0 ? 1 : 2;
-    if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
+    if (n >= 2 && n - lastHealWave.current >= healGap) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
+
     // supply crate: turret kit, barrier, cryo mine or ammo cache
     if (!crate.current.active) { // exactly one supply drop per wave
       const c = randomSpawn(blocks, rand);
@@ -2120,7 +2123,10 @@ function World({
         }
         onScore();
         if (e.elite) { onShard(15); e.elite = 0; }
+        // elites, mini-bosses and bosses always leave a medkit behind
+        if (e.kind === "boss" || e.kind === "vanguard") heal.current = { x: e.x, z: e.z, active: true };
         onKill(e);
+
       }
     };
 
@@ -3133,22 +3139,54 @@ export function Game() {
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(10);
+  const [rerolls, setRerolls] = useState(0);
   const lastOffered = useRef<PerkId[]>([]);
-  useEffect(() => {
-    if (!shopBreak) return;
-    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+  // reroll price climbs with the wave: +1 +1 +1 +2 +2 +2 +3 ... and doubles
+  // for every reroll bought inside the same break
+  const rerollBase = (w: number) => {
+    let p = 4;
+    for (let i = 2; i <= w; i++) p += Math.ceil((i - 1) / 3);
+    return p;
+  };
+  const rerollCost = rerollBase(status.wave) * Math.pow(2, rerolls);
+  const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
     if (pool.length < 3) pool = avail;
     const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
     lastOffered.current = picks;
     setOffers(picks);
+  };
+  useEffect(() => {
+    if (!shopBreak) return;
+    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+    drawOffers();
     setBought([]);
     setShopLeft(10);
+    setRerolls(0);
     // the countdown holds while the game is paused
     const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
+  const rerollRef = useRef<() => void>(() => {});
+  rerollRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < rerollCost) { playSfx("deny"); return; }
+    setShards((s) => s - rerollCost);
+    setRerolls((r) => r + 1);
+    setBought([]);
+    drawOffers();
+    playSfx("buy");
+  };
+  const patchRef = useRef<() => void>(() => {});
+  patchRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < PATCH_COST) { playSfx("deny"); return; }
+    if (health >= maxHp) { playSfx("deny"); return; }
+    setShards((s) => s - PATCH_COST);
+    setHealth((h) => Math.min(maxHp, h + 5));
+    playSfx("buy");
+  };
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
     const id = offers[i];
@@ -3166,9 +3204,12 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       const i = SHOP_KEYS.indexOf(e.code);
       if (i >= 0) buyRef.current(i);
+      else if (e.code === "KeyR") rerollRef.current();
+      else if (e.code === "KeyV") patchRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+
   }, []);
 
   // regen perk
@@ -3443,7 +3484,22 @@ export function Game() {
                 </div>
               );
             })}
+            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
+              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">V</span>
+              <div className="text-xs font-bold tracking-widest">FIELD DRESSING</div>
+              <div className="mt-1 text-[11px] leading-snug opacity-80">Restore 5 health · always available</div>
+              <div className="mt-1 text-[10px] opacity-50">HP {health}/{maxHp}</div>
+              <div className="mt-2 text-sm font-bold">◆ {PATCH_COST}</div>
+            </div>
+            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
+              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">R</span>
+              <div className="text-xs font-bold tracking-widest">REROLL</div>
+              <div className="mt-1 text-[11px] leading-snug opacity-80">Draw three new cards</div>
+              <div className="mt-1 text-[10px] opacity-50">{rerolls > 0 ? `USED ${rerolls}x THIS BREAK` : "PRICE DOUBLES EACH USE"}</div>
+              <div className="mt-2 text-sm font-bold">◆ {rerollCost}</div>
+            </div>
           </div>
+
         </div>
       )}
       {healMsg > 0 && locked && !ended && (
