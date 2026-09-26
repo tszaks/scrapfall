@@ -2315,7 +2315,7 @@ export function Game() {
                   {i === 9 ? 0 : i + 1}
                 </span>
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
-                <b>{slot.w === "pistol" ? "∞" : active ? ammoLeft : slot.ammo}</b>
+                <b>{active ? ammoLeft : slot.ammo}</b>
               </div>
             );
           })}
@@ -2601,7 +2601,7 @@ export function Game() {
 }
 
 const GUN_INFO: Record<Weapon, string> = {
-  pistol: "Your trusty sidearm. Never runs out of ammo, fires one steady shot at a time.",
+  pistol: "Your trusty sidearm. 140 rounds, refilled at the start of every wave.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",
   rail: "Heavy long-range beam. The shot itself is near-instant and hits for 5 damage, but it takes almost a second to charge the next one.",
