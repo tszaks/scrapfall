@@ -2145,7 +2145,8 @@ export function Game() {
     setOffers(picks);
     setBought([]);
     setShopLeft(10);
-    const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
+    // the countdown holds while the game is paused
+    const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
   const buyRef = useRef<(i: number) => void>(() => {});
