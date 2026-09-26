@@ -2242,6 +2242,7 @@ function World({
           slide.current.x += FORWARD.x * 26;
           slide.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
+          playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
           const cx = cam.position.x + FORWARD.x * 6, cz = cam.position.z + FORWARD.z * 6;
           for (let ei = 0; ei < enemies.length; ei++) {
@@ -2249,22 +2250,46 @@ function World({
             const d = Math.hypot(cx - e.x, cz - e.z);
             if (e.alive && d < 13) hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
           }
+          // collapsing vortex ring at the well's centre
+          playFx("#a55cff", 13, 0.6, 0.9, cx, cz);
         } else if (id === "repulse") {
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+          playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
           near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+          playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
           const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
             .filter((o) => o.e.alive && o.d < 20).sort((a, b) => a.d - b.d).slice(0, 6);
           list.forEach((o) => hurtEnemy(o.e, 4, o.i));
+          // draw a lightning arc from the player to every zapped enemy
+          boltFx.current = { t: 0.42, dur: 0.42 };
+          for (let bi = 0; bi < 6; bi++) {
+            const m = boltMeshes.current[bi];
+            if (!m) continue;
+            const tgt = list[bi];
+            m.visible = !!tgt;
+            if (!tgt) continue;
+            const ax = cam.position.x, az = cam.position.z, ay = cam.position.y - 0.4;
+            const bx = tgt.e.x, bz = tgt.e.z, by = 1.1;
+            const len = Math.hypot(bx - ax, bz - az, by - ay);
+            m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+            m.scale.set(1, len, 1);
+            TMP_DIR.set(bx - ax, by - ay, bz - az).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
+          playFx("#7fdcff", 0.6, 20, 0.35, cam.position.x, cam.position.z);
         } else if (id === "warp") {
           near(9999, (e, ei) => hurtEnemy(e, 0, ei, 5));
+          playFx("#c9a6ff", 0.6, 40, 0.8, cam.position.x, cam.position.z);
         } else if (id === "strike") {
           strikeAt.current = { x: cam.position.x + FORWARD.x * 10, z: cam.position.z + FORWARD.z * 10 };
           flareTimer.current = 1.2;
         } else if (id === "barrier") {
           invuln.current = 6;
+          playFx("#7ad7ff", 0.6, 3.2, 0.5, cam.position.x, cam.position.z);
         }
+
       } else if (abilCd.current > 0) {
         playSfx("deny");
       }
