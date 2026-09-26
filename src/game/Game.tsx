@@ -3414,6 +3414,73 @@ export function Game() {
               </button>
             )}
 
+            {ended && (() => {
+              const r = run.current;
+              const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
+              const mine = { kills: score, dmg: Math.round(r.dmg), acc, shards: r.shards, taken: r.taken };
+              const rows = [{ num: myNum, ...mine }, ...Object.entries(squad)
+                .filter(([n]) => Number(n) !== myNum)
+                .map(([n, v]) => ({ num: Number(n), ...v }))]
+                .sort((a, b) => a.num - b.num);
+              const badges: string[] = [];
+              if (acc >= 60) badges.push("SHARPSHOOTER");
+              if (rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
+              if (rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
+              if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              if (status.won) badges.push("BOSS SLAYER");
+              return (
+                <div className="mt-5 text-left text-black">
+                  <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
+                  <div className="mt-2 space-y-1 text-[11px] tracking-wider">
+                    <div>WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>KILLS · {mine.kills}</div>
+                    <div>DAMAGE DEALT · {mine.dmg}</div>
+                    <div>ACCURACY · {acc}%</div>
+                    <div>SHARDS COLLECTED · {mine.shards}</div>
+                    <div>DAMAGE TAKEN · {mine.taken}</div>
+                  </div>
+                  {badges.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
+                      {badges.map((b) => <span key={b}>{b}</span>)}
+                    </div>
+                  )}
+                  {multiplayer && rows.length > 1 && (
+                    <div className="mt-3 space-y-1 text-[10px] tracking-wider">
+                      <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
+                      {rows.map((x) => (
+                        <div key={x.num} className="flex items-center gap-2">
+                          <span style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                          <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
+                          <span className="opacity-60">{x.kills} kills · {x.dmg} dmg · {x.acc}%</span>
+                          {x.num === myNum && <span className="opacity-40">(YOU)</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {(!started || ended) && !paused && (
+              <div className="mt-5 text-left text-black">
+                <div className="text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {ABILITY_IDS.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => setAbility(id)}
+                      className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
+                        ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                      }`}
+                    >
+                      {ABILITIES[id].name}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1.5 text-[10px] leading-snug opacity-60">{ABILITIES[ability].desc}</div>
+              </div>
+            )}
+
             {paused && (activeMods.length > 0 || activePerks.length > 0) && (
               <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
                 <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
