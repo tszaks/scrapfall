@@ -2061,10 +2061,16 @@ export function Game() {
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(5);
+  const lastOffered = useRef<PerkId[]>([]);
   useEffect(() => {
     if (!shopOpen) return;
-    const pool = [...PERK_IDS].sort(() => Math.random() - 0.5);
-    setOffers(pool.slice(0, 3));
+    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+    const avail = PERK_IDS.filter((p) => !perkMaxed(p, perksRef.current[p]));
+    let pool = avail.filter((p) => !lastOffered.current.includes(p));
+    if (pool.length < 3) pool = avail;
+    const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+    lastOffered.current = picks;
+    setOffers(picks);
     setBought([]);
     setShopLeft(5);
     const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
