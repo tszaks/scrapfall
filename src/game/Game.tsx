@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
-import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -2179,7 +2179,7 @@ export function Game() {
           onCrate={(kind) => {
             playSfx("pickup");
             if (kind === "shield") setHealth((h) => (h > 0 ? Math.min(maxHp + 5, h + 5) : h));
-            setMsg(CRATE_INFO[kind].label);
+            setCrateMsg(CRATE_INFO[kind].name);
           }}
 
 
