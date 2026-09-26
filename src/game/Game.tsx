@@ -17,7 +17,7 @@ import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolum
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special";
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
@@ -40,7 +40,7 @@ const GUNS: Record<Weapon, Gun> = {
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
-const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard"];
+const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
 const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
@@ -66,6 +66,7 @@ type Enemy = {
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
+  aux?: number; // special-enemy state (leap / beam timer)
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
@@ -84,6 +85,7 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
   specter: { hp: 3, speed: 3.3, radius: 0.55, dmg: 2 },
   bomber: { hp: 4, speed: 1.5, radius: 0.7, dmg: 2 },
   vanguard: { hp: 11, speed: 1.2, radius: 0.9, dmg: 2 },
+  special: { hp: 6, speed: 2.6, radius: 0.65, dmg: 1 },
 };
 
 // 12 rounds, ramping; the last one is the map boss
@@ -91,16 +93,16 @@ type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
   { drifter: 5 },
   { drifter: 6, shooter: 1, runner: 1 },
-  { drifter: 6, brute: 1, shooter: 2, specter: 1 },
-  { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1 },
-  { drifter: 7, brute: 2, shooter: 3, runner: 3, specter: 2, vanguard: 1 },
-  { drifter: 7, brute: 3, shooter: 3, runner: 4, bomber: 1, vanguard: 1 },
-  { drifter: 8, brute: 3, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 1 },
-  { drifter: 8, brute: 4, shooter: 5, runner: 5, specter: 3, bomber: 2, vanguard: 2 },
-  { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2 },
-  { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3 },
-  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3 },
-  { boss: 1, drifter: 6, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1 },
+  { drifter: 6, brute: 1, shooter: 2, specter: 1, special: 1 },
+  { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1, special: 1 },
+  { drifter: 7, brute: 2, shooter: 3, runner: 3, specter: 2, vanguard: 1, special: 2 },
+  { drifter: 7, brute: 3, shooter: 3, runner: 4, bomber: 1, vanguard: 1, special: 2 },
+  { drifter: 8, brute: 3, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 1, special: 2 },
+  { drifter: 8, brute: 4, shooter: 5, runner: 5, specter: 3, bomber: 2, vanguard: 2, special: 3 },
+  { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2, special: 3 },
+  { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3, special: 3 },
+  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3, special: 4 },
+  { boss: 1, drifter: 6, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 1 },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
@@ -342,7 +344,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
-    const base = k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
+    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
     g.scale.setScalar(base * (data.flash > 0 ? 1.15 : 1));
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
@@ -596,6 +598,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
+      {kind === "special" && <SpecialModel theme={theme} data={data} />}
       {(kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
@@ -1315,6 +1318,7 @@ function World({
         hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         max: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         shredUntil: 0,
+        aux: 0,
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
@@ -1604,6 +1608,7 @@ function World({
     };
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
+      if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
@@ -1622,6 +1627,14 @@ function World({
       if (e.kind === "boss") onBoss(Math.max(0, e.hp));
       if (e.hp <= 0) {
         e.alive = false;
+        if (e.kind === "special" && theme.special.type === "mite") {
+          // shell shatters into a ring of cold shrapnel
+          for (let s = 0; s < 8; s++) {
+            const a = (s / 8) * Math.PI * 2;
+            const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+          }
+        }
         onScore();
         onKill(e);
       }
@@ -1770,10 +1783,30 @@ function World({
         if (e.kind === "brute" && d < 1.8) dir = 0;
         if (e.kind === "vanguard" && d < 2) dir = 0;
         if (e.kind === "boss" && d < 3) dir = 0;
+        const spType = e.kind === "special" ? theme.special.type : null;
+        let spMul = 1;
+        if (spType) {
+          if (spType === "stalker") { dir = d > 7 ? 1 : 0; spMul = 1.3; }
+          if (spType === "mite") spMul = 1.6;
+          if (spType === "spore") dir = d > 14 ? 1 : d < 8 ? -1 : 0;
+          if (spType === "pyre" || spType === "wyrm") dir = d > 12 ? 1 : d < 7 ? -1 : 0;
+          if (spType === "leaper") dir = d > 9 ? 1 : 0;
+          if (spType === "shinobi") spMul = 1.4;
+          if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
+          if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
+          if (spType === "bile") dir = d > 5 ? 1 : 0;
+        }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * (e.slow > 0 ? 0.5 : 1) * delta * dir;
-        const nx = e.x + (mx / md) * step;
-        const nz = e.z + (mz / md) * step;
+        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        let nx = e.x + (mx / md) * step;
+        let nz = e.z + (mz / md) * step;
+        if (spType === "stalker" || spType === "shinobi") {
+          // flanking arcs / zig-zag dash-steps
+          const now = performance.now() / 1000;
+          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + ei)) * 3.2 : Math.sin(now * 1.3 + ei) * 2.4;
+          nx += (-dz / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
+          nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
+        }
         const r = Math.min(st.radius, 0.8);
         if (ghost) { e.x = nx; e.z = nz; }
         else {
@@ -1828,6 +1861,51 @@ function World({
             from.addScaledVector(vel, 1.2);
             fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
           }
+        }
+        if (spType) {
+          e.shot -= delta;
+          const aim = (y: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+            const from = new THREE.Vector3(e.x, y, e.z);
+            const base = Math.atan2(dx, dz);
+            for (let s = 0; s < n; s++) {
+              const a = base + (n > 1 ? (s - (n - 1) / 2) * spread : 0);
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
+              fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 0.8), vel.multiplyScalar(spd), life, dmg, "", size);
+            }
+          };
+          const ready = e.shot <= 0;
+          if (spType === "stalker" && ready && d < 18) { e.shot = 2.4; aim(0.9, 16, 0.08, 3, 1, 2.5, 0.12); }
+          if ((spType === "mite") && d < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
+          if (spType === "spore" && ready && d < 26) { e.shot = 3.2; aim(3, ENEMY_BULLET_SPEED * 0.7, 0, 1, 1, 5, 0.42); }
+          if (spType === "pyre" && ready && d < 24) { e.shot = 3; aim(1.1, 22, 0, 1, 2, 2.5, 0.34); }
+          if (spType === "leaper") {
+            if ((e.aux ?? 0) > 0) {
+              e.aux = (e.aux ?? 0) - delta;
+              const lx = e.x + (dx / d) * 14 * delta;
+              const lz = e.z + (dz / d) * 14 * delta;
+              if (!blocked(blocks, lx, e.z, 0.6)) e.x = lx;
+              if (!blocked(blocks, e.x, lz, 0.6)) e.z = lz;
+              if (d < 1.4) { e.aux = 0; hurtTarget(target, 2); }
+            } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
+          }
+          if (spType === "shinobi" && ready && d < 16) { e.shot = 2; aim(1.3, 15, 0.25, 2, 1, 2, 0.16); }
+          if (spType === "wyrm") {
+            if ((e.aux ?? 0) > 0) {
+              e.aux = (e.aux ?? 0) - delta;
+              if (e.cooldown <= 0) { e.cooldown = 0.15; aim(1.8, 20, 0, 1, 1, 2, 0.1); }
+            } else if (ready && d < 20) { e.shot = 4; e.aux = 0.6; }
+          }
+          if (spType === "nautilus" && ready && d < 22) { e.shot = 2.8; aim(1.2, 8, 0.3, 2, 1, 4.5, 0.3); }
+          if (spType === "hacker" && ready) {
+            // overcharge pulse: nearby enemies shake off slows, fire right away and patch up
+            e.shot = 5;
+            for (const o of enemies) {
+              if (!o.alive || o === e || Math.hypot(o.x - e.x, o.z - e.z) > 9) continue;
+              o.cooldown = 0; o.slow = 0; o.hp = Math.min(o.max ?? o.hp, o.hp + 1);
+            }
+            if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
+          }
+          if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
         }
         if (e.kind === "boss") {
           e.shot -= delta;
