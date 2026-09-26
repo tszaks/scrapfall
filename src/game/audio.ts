@@ -9,6 +9,7 @@ export function initAudio() {
   if (typeof window === "undefined") return;
   if (!ctx) {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
     ctx = new AC();
     const master = ctx.createGain();
     master.gain.value = 0.8;
@@ -23,7 +24,29 @@ export function initAudio() {
     applyVol();
   }
   if (ctx.state === "suspended") void ctx.resume();
+  // iOS/Safari: a zero-length buffer on a real gesture clears the hardware mute flag
+  try {
+    const s = ctx.createBufferSource();
+    s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    s.connect(ctx.destination);
+    s.start(0);
+  } catch { /* already unlocked */ }
 }
+
+// Browsers block audio until the visitor interacts with the page. Any click,
+// tap or key press anywhere wakes the sound up, not just the START button.
+let unlockHooked = false;
+export function hookAudioUnlock() {
+  if (unlockHooked || typeof window === "undefined") return;
+  unlockHooked = true;
+  const wake = () => initAudio();
+  ["pointerdown", "touchstart", "keydown", "mousedown"].forEach((ev) =>
+    window.addEventListener(ev, wake, { passive: true }));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && ctx && ctx.state === "suspended") void ctx.resume();
+  });
+}
+
 
 function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * 0.35;
