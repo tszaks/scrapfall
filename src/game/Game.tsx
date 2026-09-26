@@ -3554,25 +3554,6 @@ export function Game() {
               );
             })()}
 
-            {(!started || ended) && !paused && (
-              <div className="mt-5 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
-                <div className="mt-2 grid grid-cols-2 gap-1">
-                  {ABILITY_IDS.map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => setAbility(id)}
-                      className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
-                        ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                      }`}
-                    >
-                      {ABILITIES[id].name}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug opacity-60">{ABILITIES[ability].desc}</div>
-              </div>
-            )}
 
             {paused && (activeMods.length > 0 || activePerks.length > 0) && (
               <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
