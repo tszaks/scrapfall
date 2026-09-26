@@ -6,7 +6,7 @@ import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
 import { makeVehicle, vehicleHeight, vehicleParts, type Part, type Vehicle } from "./vehicles";
-import { GREEN, YELLOW, liveCars, signal, type TrafficLink } from "./trafficCore";
+import { GREEN, YELLOW, liveCars, signal, trafficClock, type TrafficLink } from "./trafficCore";
 import { playSfx } from "./audio";
 import { glowTexture } from "./cityTextures";
 
@@ -28,7 +28,16 @@ type Car = {
   yawVis: number;
   honk: number;
   hitCd: number;
+  /** guest-side smoothed render position (follows host snapshots) */
+  gx?: number;
+  gz?: number;
 };
+
+/** Numbers per car in the network snapshot: x, z, heading, speed. */
+export const CAR_FIELDS = 4;
+// integers on the wire: PeerJS binarypack sends small ints in ~3 bytes but any
+// fractional number as a 9-byte float64
+const q100 = (v: number) => Math.round(v * 100);
 
 function mulberry(seed: number) {
   let a = seed >>> 0;
@@ -253,6 +262,54 @@ export function CityTraffic({
   }, [slots, night]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rand = useMemo(() => mulberry(seed ^ 0x7a11c), [seed]);
+  // guest: latest host state per car + when it arrived
+  const netCars = useRef<{ x: number; z: number; yaw: number; speed: number; at: number }[]>([]);
+  const hostClock = useRef<{ t: number; at: number } | null>(null);
+
+  const posOf = (c: Car) => {
+    const perp = (c.axis === 0 ? roadZ : roadX)[c.line]! + laneOff(c.axis, c.dir);
+    return c.axis === 0 ? { x: c.s, z: perp } : { x: perp, z: c.s };
+  };
+
+  // a new arena (new seed) restarts traffic identically everywhere
+  useEffect(() => {
+    trafficClock.t = 0;
+    netCars.current = [];
+    hostClock.current = null;
+  }, [cars]);
+
+  // network hooks: the host encodes, guests decode (motion only; types come from the seed)
+  useEffect(() => {
+    const L = link.current;
+    L.encode = () => {
+      const out: number[] = [q100(trafficClock.t)];
+      for (const c of cars) {
+        const p = posOf(c);
+        const yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
+        out.push(q100(p.x), q100(p.z), q100(yaw), Math.round(c.speed * 10));
+      }
+      return out;
+    };
+    L.decode = (a) => {
+      if (!Array.isArray(a) || a.length !== 1 + cars.length * CAR_FIELDS) return;
+      const now = performance.now();
+      hostClock.current = { t: a[0]! / 100, at: now };
+      for (let i = 0; i < cars.length; i++) {
+        const o = 1 + i * CAR_FIELDS;
+        netCars.current[i] = {
+          x: a[o]! / 100,
+          z: a[o + 1]! / 100,
+          yaw: a[o + 2]! / 100,
+          speed: a[o + 3]! / 10,
+          at: now,
+        };
+      }
+    };
+    return () => {
+      L.encode = null;
+      L.decode = null;
+    };
+  }, [cars]); // eslint-disable-line react-hooks/exhaustive-deps
   const enemyHit = useRef(new Map<number, number>());
 
   useEffect(
@@ -265,18 +322,18 @@ export function CityTraffic({
     if (import.meta.env.DEV) (window as unknown as { __rsCars?: Car[] }).__rsCars = cars;
   }, [cars]);
 
-  useFrame((state, raw) => {
+  useFrame((_, raw) => {
     const dt = Math.min(raw, 0.05);
-    const t = state.clock.elapsedTime;
     const L = link.current;
+    const guest = L.role === "guest";
+    const now = performance.now();
+    if (guest && hostClock.current)
+      trafficClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
+    else trafficClock.t += dt;
+    const t = trafficClock.t;
     const isNight = nightRef.current;
     const flash = Math.floor(t * 4) % 2 === 0;
     liveCars.length = 0;
-
-    const posOf = (c: Car) => {
-      const perp = (c.axis === 0 ? roadZ : roadX)[c.line]! + laneOff(c.axis, c.dir);
-      return c.axis === 0 ? { x: c.s, z: perp } : { x: perp, z: c.s };
-    };
 
     for (let ci = 0; ci < cars.length; ci++) {
       const c = cars[ci]!;
@@ -285,174 +342,212 @@ export function CityTraffic({
       c.hitCd -= dt;
       c.honk -= dt;
 
-      // decide what to do at the next intersection
-      if (c.turn === null) {
-        const opts: (-1 | 0 | 1)[] = [];
-        const w: number[] = [];
-        if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) {
-          opts.push(0);
-          w.push(2);
-        }
-        for (const turn of [1, -1] as const) {
-          // right of heading (dx, dz) is (-dz, dx)
-          const dx = c.axis === 0 ? c.dir : 0;
-          const dz = c.axis === 1 ? c.dir : 0;
-          const nx = turn === 1 ? -dz : dz;
-          const nz = turn === 1 ? dx : -dx;
-          const ndir = (c.axis === 0 ? nz : nx) as 1 | -1;
-          const nextIdx = c.line + ndir;
-          if (nextIdx >= 0 && nextIdx < along.length) {
-            opts.push(turn);
-            w.push(1);
-          }
-        }
-        let r = rand() * w.reduce((a, b) => a + b, 0);
-        c.turn = opts[opts.length - 1] ?? 0;
-        for (let k = 0; k < opts.length; k++) {
-          r -= w[k]!;
-          if (r <= 0) {
-            c.turn = opts[k]!;
-            break;
-          }
-        }
-      }
-
-      const cx = cross[c.next]!;
-      const node = c.axis === 0 ? c.next * roadZ.length + c.line : c.line * roadZ.length + c.next;
       const half = c.v.len / 2;
-      const stopCentre = cx - c.dir * (STOP_GAP + half);
-      const committed = (c.s - stopCentre) * c.dir > 0.05;
-      let room = Infinity;
-
-      const light = signal(node, t, c.axis);
-      if (!committed && light !== GREEN) {
-        const dist = (stopCentre - c.s) * c.dir;
-        const canStop = dist > (c.speed * c.speed) / (2 * 6);
-        if (light !== YELLOW || canStop) room = Math.min(room, dist);
-      }
-      // don't enter the box while cross traffic is still in it, or if our exit lane is backed up
-      if (!committed) {
-        const ix = c.axis === 0 ? cx : along[c.line]!;
-        const iz = c.axis === 0 ? along[c.line]! : cx;
-        // the lane we will leave the intersection in
-        let exAxis: 0 | 1 = c.axis;
-        let exDir: 1 | -1 = c.dir;
-        let exLine = c.line;
-        let exEntry = cx + c.dir * HALF_ROAD;
-        if (c.turn !== 0 && c.turn !== null) {
-          const dx = c.axis === 0 ? c.dir : 0;
-          const dz = c.axis === 1 ? c.dir : 0;
-          exAxis = (1 - c.axis) as 0 | 1;
-          exDir = (exAxis === 0 ? (c.turn === 1 ? -dz : dz) : c.turn === 1 ? dx : -dx) as 1 | -1;
-          exLine = c.next;
-          exEntry = along[c.line]! + exDir * HALF_ROAD;
+      let np: { x: number; z: number };
+      let yaw: number;
+      if (guest) {
+        // follow the host: dead-reckon from the last snapshot, then ease toward it
+        const ns = netCars.current[ci];
+        const start = posOf(c);
+        if (c.gx === undefined || c.gz === undefined) {
+          c.gx = start.x;
+          c.gz = start.z;
         }
-        let busy = false;
-        for (const o of cars) {
-          if (o === c) continue;
-          const op = posOf(o);
-          if (
-            o.axis !== c.axis &&
-            Math.abs(op.x - ix) < HALF_ROAD + 1 &&
-            Math.abs(op.z - iz) < HALF_ROAD + 1
-          ) {
-            busy = true;
-            break;
+        if (ns) {
+          const age = (now - ns.at) / 1000;
+          const live = age < 0.4; // host went quiet (paused): hold still
+          const sp = live ? ns.speed : 0;
+          const ahead = Math.min(age, 0.25); // short horizon: braking cars would overshoot
+          const tx = ns.x + Math.sin(ns.yaw) * ns.speed * ahead;
+          const tz = ns.z + Math.cos(ns.yaw) * ns.speed * ahead;
+          c.gx += Math.sin(ns.yaw) * sp * dt;
+          c.gz += Math.cos(ns.yaw) * sp * dt;
+          if (Math.hypot(tx - c.gx, tz - c.gz) > 6) {
+            c.gx = tx; // first snapshot or a big correction: snap
+            c.gz = tz;
+            c.yawVis = ns.yaw;
+          } else {
+            const k = Math.min(1, dt * 8);
+            c.gx += (tx - c.gx) * k;
+            c.gz += (tz - c.gz) * k;
           }
-          if (o.axis === exAxis && o.dir === exDir && o.line === exLine) {
-            const past = (o.s - exEntry) * exDir; // how far into the exit lane it is
-            // a queued car needs a full car length of room; a moving one just needs to be clear of the entry
-            const need =
-              o.speed < 2 ? o.v.len / 2 + c.v.len + 1.5 : o.v.len / 2 + c.v.len / 2 + 1.5;
-            if (past > -o.v.len / 2 - 1 && past < need) {
-              busy = true;
+          c.speed = sp;
+          yaw = ns.yaw;
+        } else {
+          yaw = c.yawVis;
+          c.speed = 0;
+        }
+        np = { x: c.gx, z: c.gz };
+      } else {
+        // decide what to do at the next intersection
+        if (c.turn === null) {
+          const opts: (-1 | 0 | 1)[] = [];
+          const w: number[] = [];
+          if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) {
+            opts.push(0);
+            w.push(2);
+          }
+          for (const turn of [1, -1] as const) {
+            // right of heading (dx, dz) is (-dz, dx)
+            const dx = c.axis === 0 ? c.dir : 0;
+            const dz = c.axis === 1 ? c.dir : 0;
+            const nx = turn === 1 ? -dz : dz;
+            const nz = turn === 1 ? dx : -dx;
+            const ndir = (c.axis === 0 ? nz : nx) as 1 | -1;
+            const nextIdx = c.line + ndir;
+            if (nextIdx >= 0 && nextIdx < along.length) {
+              opts.push(turn);
+              w.push(1);
+            }
+          }
+          let r = rand() * w.reduce((a, b) => a + b, 0);
+          c.turn = opts[opts.length - 1] ?? 0;
+          for (let k = 0; k < opts.length; k++) {
+            r -= w[k]!;
+            if (r <= 0) {
+              c.turn = opts[k]!;
               break;
             }
           }
         }
-        if (busy) room = Math.min(room, (stopCentre - c.s) * c.dir);
-      }
-      // keep distance to whoever is ahead in our lane
-      for (const o of cars) {
-        if (o === c || o.axis !== c.axis || o.dir !== c.dir || o.line !== c.line) continue;
-        const ahead = (o.s - c.s) * c.dir;
-        if (ahead <= 0) continue;
-        room = Math.min(room, ahead - o.v.len / 2 - half - 2);
-      }
-      const p = posOf(c);
-      const fx = c.axis === 0 ? c.dir : 0;
-      const fz = c.axis === 1 ? c.dir : 0;
-      // right-hand vector of the heading
-      const rx = -fz;
-      const rz = fx;
-      // brake for a player standing in the lane, and lean on the horn
-      {
-        const dx = L.px - p.x;
-        const dz = L.pz - p.z;
-        const a = dx * fx + dz * fz;
-        const lat = dx * rx + dz * rz;
-        if (a > 0 && a < half + 11 && Math.abs(lat) < c.v.wid / 2 + 0.9) {
-          room = Math.min(room, a - half - 1.4);
-          if (L.active && c.honk <= 0 && c.speed > 2.5 && a < half + 8) {
-            c.honk = 3;
-            playSfx("horn");
+
+        const cx = cross[c.next]!;
+        const node = c.axis === 0 ? c.next * roadZ.length + c.line : c.line * roadZ.length + c.next;
+        const stopCentre = cx - c.dir * (STOP_GAP + half);
+        const committed = (c.s - stopCentre) * c.dir > 0.05;
+        let room = Infinity;
+
+        const light = signal(node, t, c.axis);
+        if (!committed && light !== GREEN) {
+          const dist = (stopCentre - c.s) * c.dir;
+          const canStop = dist > (c.speed * c.speed) / (2 * 6);
+          if (light !== YELLOW || canStop) room = Math.min(room, dist);
+        }
+        // don't enter the box while cross traffic is still in it, or if our exit lane is backed up
+        if (!committed) {
+          const ix = c.axis === 0 ? cx : along[c.line]!;
+          const iz = c.axis === 0 ? along[c.line]! : cx;
+          // the lane we will leave the intersection in
+          let exAxis: 0 | 1 = c.axis;
+          let exDir: 1 | -1 = c.dir;
+          let exLine = c.line;
+          let exEntry = cx + c.dir * HALF_ROAD;
+          if (c.turn !== 0 && c.turn !== null) {
+            const dx = c.axis === 0 ? c.dir : 0;
+            const dz = c.axis === 1 ? c.dir : 0;
+            exAxis = (1 - c.axis) as 0 | 1;
+            exDir = (exAxis === 0 ? (c.turn === 1 ? -dz : dz) : c.turn === 1 ? dx : -dx) as 1 | -1;
+            exLine = c.next;
+            exEntry = along[c.line]! + exDir * HALF_ROAD;
+          }
+          let busy = false;
+          for (const o of cars) {
+            if (o === c) continue;
+            const op = posOf(o);
+            if (
+              o.axis !== c.axis &&
+              Math.abs(op.x - ix) < HALF_ROAD + 1 &&
+              Math.abs(op.z - iz) < HALF_ROAD + 1
+            ) {
+              busy = true;
+              break;
+            }
+            if (o.axis === exAxis && o.dir === exDir && o.line === exLine) {
+              const past = (o.s - exEntry) * exDir; // how far into the exit lane it is
+              // a queued car needs a full car length of room; a moving one just needs to be clear of the entry
+              const need =
+                o.speed < 2 ? o.v.len / 2 + c.v.len + 1.5 : o.v.len / 2 + c.v.len / 2 + 1.5;
+              if (past > -o.v.len / 2 - 1 && past < need) {
+                busy = true;
+                break;
+              }
+            }
+          }
+          if (busy) room = Math.min(room, (stopCentre - c.s) * c.dir);
+        }
+        // keep distance to whoever is ahead in our lane
+        for (const o of cars) {
+          if (o === c || o.axis !== c.axis || o.dir !== c.dir || o.line !== c.line) continue;
+          const ahead = (o.s - c.s) * c.dir;
+          if (ahead <= 0) continue;
+          room = Math.min(room, ahead - o.v.len / 2 - half - 2);
+        }
+        const p = posOf(c);
+        const fx = c.axis === 0 ? c.dir : 0;
+        const fz = c.axis === 1 ? c.dir : 0;
+        // right-hand vector of the heading
+        const rx = -fz;
+        const rz = fx;
+        // brake for any player standing in the lane (the host sees everyone); honk at the local one
+        for (let pi = -1; pi < L.others.length; pi++) {
+          const who = pi < 0 ? { x: L.px, z: L.pz } : L.others[pi]!;
+          const dx = who.x - p.x;
+          const dz = who.z - p.z;
+          const a = dx * fx + dz * fz;
+          const lat = dx * rx + dz * rz;
+          if (a > 0 && a < half + 11 && Math.abs(lat) < c.v.wid / 2 + 0.9) {
+            room = Math.min(room, a - half - 1.4);
+            if (pi < 0 && L.active && c.honk <= 0 && c.speed > 2.5 && a < half + 8) {
+              c.honk = 3;
+              playSfx("horn");
+            }
           }
         }
-      }
-      // the boss is too big to plough through: stop for it
-      for (const e of L.enemies) {
-        if (!e.alive || e.kind !== "boss") continue;
-        const dx = e.x - p.x;
-        const dz = e.z - p.z;
-        const a = dx * fx + dz * fz;
-        if (a > 0 && a < half + 8 && Math.abs(dx * rx + dz * rz) < c.v.wid / 2 + 1.6)
-          room = Math.min(room, a - half - 1.8);
-      }
+        // the boss is too big to plough through: stop for it
+        for (const e of L.enemies) {
+          if (!e.alive || e.kind !== "boss") continue;
+          const dx = e.x - p.x;
+          const dz = e.z - p.z;
+          const a = dx * fx + dz * fz;
+          if (a > 0 && a < half + 8 && Math.abs(dx * rx + dz * rz) < c.v.wid / 2 + 1.6)
+            room = Math.min(room, a - half - 1.8);
+        }
 
-      const target = Math.min(c.vmax, Math.sqrt(Math.max(0, 2 * 7 * room)));
-      if (c.speed < target) c.speed = Math.min(target, c.speed + 3.5 * dt);
-      else c.speed = Math.max(target, c.speed - 16 * dt);
-      if (c.speed < 0) c.speed = 0;
+        const target = Math.min(c.vmax, Math.sqrt(Math.max(0, 2 * 7 * room)));
+        if (c.speed < target) c.speed = Math.min(target, c.speed + 3.5 * dt);
+        else c.speed = Math.max(target, c.speed - 16 * dt);
+        if (c.speed < 0) c.speed = 0;
 
-      c.s += c.dir * c.speed * dt;
+        c.s += c.dir * c.speed * dt;
 
-      if (c.turn !== 0) {
-        // turn when our lane meets the target lane
-        const dx = c.axis === 0 ? c.dir : 0;
-        const dz = c.axis === 1 ? c.dir : 0;
-        const nx = c.turn === 1 ? -dz : dz;
-        const nz = c.turn === 1 ? dx : -dx;
-        const naxis = (1 - c.axis) as 0 | 1;
-        const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
-        const turnS = cx + laneOff(naxis, ndir);
-        if ((c.s - turnS) * c.dir >= 0) {
-          const over = (c.s - turnS) * c.dir;
-          const perp = along[c.line]! + laneOff(c.axis, c.dir);
-          const oldLine = c.line;
-          c.axis = naxis;
-          c.dir = ndir;
-          c.line = c.next;
-          c.s = perp + ndir * over;
-          c.next = oldLine + ndir;
+        if (c.turn !== 0) {
+          // turn when our lane meets the target lane
+          const dx = c.axis === 0 ? c.dir : 0;
+          const dz = c.axis === 1 ? c.dir : 0;
+          const nx = c.turn === 1 ? -dz : dz;
+          const nz = c.turn === 1 ? dx : -dx;
+          const naxis = (1 - c.axis) as 0 | 1;
+          const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
+          const turnS = cx + laneOff(naxis, ndir);
+          if ((c.s - turnS) * c.dir >= 0) {
+            const over = (c.s - turnS) * c.dir;
+            const perp = along[c.line]! + laneOff(c.axis, c.dir);
+            const oldLine = c.line;
+            c.axis = naxis;
+            c.dir = ndir;
+            c.line = c.next;
+            c.s = perp + ndir * over;
+            c.next = oldLine + ndir;
+            c.turn = null;
+          }
+        } else if ((c.s - cx) * c.dir > HALF_ROAD + half) {
+          c.next += c.dir;
           c.turn = null;
         }
-      } else if ((c.s - cx) * c.dir > HALF_ROAD + half) {
-        c.next += c.dir;
-        c.turn = null;
-      }
-      if (c.next < 0 || c.next >= (c.axis === 0 ? roadX : roadZ).length) {
-        // should not happen (turns only pick roads that continue): turn around safely
-        c.dir = -c.dir as 1 | -1;
-        c.next = Math.max(
-          0,
-          Math.min((c.axis === 0 ? roadX : roadZ).length - 1, c.next - c.dir * 2),
-        );
-        c.turn = null;
-      }
+        if (c.next < 0 || c.next >= (c.axis === 0 ? roadX : roadZ).length) {
+          // should not happen (turns only pick roads that continue): turn around safely
+          c.dir = -c.dir as 1 | -1;
+          c.next = Math.max(
+            0,
+            Math.min((c.axis === 0 ? roadX : roadZ).length - 1, c.next - c.dir * 2),
+          );
+          c.turn = null;
+        }
 
+        np = posOf(c);
+        yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
+      }
       // ---- draw ----
-      const np = posOf(c);
-      const yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
       let dy = yaw - c.yawVis;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       c.yawVis += dy * Math.min(1, dt * 9);

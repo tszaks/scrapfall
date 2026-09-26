@@ -1122,7 +1122,7 @@ function World({
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (import.meta.env.DEV) {
-      const handle = { gl, scene, camera, look, liveCars, knock, city };
+      const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city]);
@@ -1163,10 +1163,17 @@ function World({
     px: 0,
     pz: 0,
     isHost: true,
+    role: "solo",
+    others: [],
+    encode: null,
+    decode: null,
     enemies,
     hurtEnemy: null,
     hitPlayer: () => {},
   });
+  // guests never simulate traffic; they follow the host's snapshots
+  traffic.current.role = !net ? "solo" : net.role;
+  traffic.current.isHost = !net || net.role === "host";
   traffic.current.enemies = enemies;
   traffic.current.hitPlayer = (dmg, kx, kz, shake) => {
     knock.current.x = kx;
@@ -1255,6 +1262,7 @@ function World({
     crate.current.z = c[1]!;
     crate.current.active = c[2] === 1;
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
+    if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -1585,6 +1593,13 @@ function World({
     traffic.current.active = false;
     traffic.current.px = cam.position.x;
     traffic.current.pz = cam.position.z;
+    if (traffic.current.role === "host") {
+      // the host's cars must brake for every live player in the lane, not just the host
+      const now = performance.now();
+      traffic.current.others = [...remotes.current.values()]
+        .filter((r) => r.hp > 0 && now - r.last < 4000)
+        .map((r) => ({ x: r.x, z: r.z }));
+    } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
       look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
@@ -1875,7 +1890,6 @@ function World({
 
     // city traffic reads the player and can shove enemies through the regular hit path
     traffic.current.active = !spectating;
-    traffic.current.isHost = isH;
     traffic.current.hurtEnemy = (idx, dmg, kx, kz) => {
       const e = enemies[idx];
       if (e?.alive) hurtEnemy(e, dmg, idx, 0, 0, 1.6, kx, kz);
@@ -2282,8 +2296,10 @@ function World({
           pending.current.forEach((pd, i) => {
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
+          const tr = traffic.current.encode?.();
           n.broadcast({
             type: "snap", e, b, mk,
+            ...(tr ? { tr } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -2451,8 +2467,16 @@ function nightOverride(): boolean | null {
   return raw === "1" ? true : raw === "0" ? false : null;
 }
 
+/** New arena seed. With `?map=` the seed is nudged onto that map, so a co-op host's
+ * guests (who derive the map from the shared seed) land on the same one. */
+function newSeed() {
+  const s = Math.floor(Math.random() * 1e9);
+  const f = forcedMapIndex();
+  return f === null ? s : s - (s % THEMES.length) + f;
+}
+
 export function Game() {
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
+  const [seed, setSeed] = useState(newSeed);
   const [forcedMap] = useState(forcedMapIndex);
   const [night, setNight] = useState(false);
   useEffect(() => {
@@ -2658,7 +2682,7 @@ export function Game() {
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
-    setSeed(Math.floor(Math.random() * 1e9));
+    setSeed(newSeed());
     if (document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -2803,7 +2827,7 @@ export function Game() {
     if (ended && !fromNet) {
 
       if (isHost) {
-        const s = Math.floor(Math.random() * 1e9);
+        const s = newSeed();
         setSeed(s);
         net?.broadcast({ type: "seed", seed: s });
       }

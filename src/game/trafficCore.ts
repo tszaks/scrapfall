@@ -16,6 +16,12 @@ export function signal(node: number, t: number, axis: 0 | 1): 0 | 1 | 2 {
   return local < 7 ? GREEN : local < 9 ? YELLOW : RED;
 }
 
+/**
+ * Shared traffic time. The host (or solo player) advances it; guests follow the host's
+ * value from snapshots, so traffic lights show the same phase on every screen.
+ */
+export const trafficClock = { t: 0 };
+
 /** Moving cars publish their boxes here each frame so bullets can stop on them. */
 export type CarBox = {
   x: number;
@@ -47,6 +53,14 @@ export type TrafficLink = {
   px: number;
   pz: number;
   isHost: boolean;
+  /** solo and host simulate traffic; guests only follow the host's snapshots */
+  role: "solo" | "host" | "guest";
+  /** other players (host only) the cars must also brake for */
+  others: { x: number; z: number }[];
+  /** host: compact car state for the snapshot (set by the traffic component) */
+  encode: (() => number[]) | null;
+  /** guest: apply car state from a host snapshot (set by the traffic component) */
+  decode: ((a: number[]) => void) | null;
   /** knock the local player: velocity (kx, kz), light damage, camera shake strength 0..1 */
   hitPlayer: (dmg: number, kx: number, kz: number, shake: number) => void;
   enemies: { x: number; z: number; alive: boolean; kind: string }[];

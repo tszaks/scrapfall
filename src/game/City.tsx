@@ -14,7 +14,7 @@ import {
   glowTexture,
   type FacadeKind,
 } from "./cityTextures";
-import { signal, GREEN, YELLOW } from "./trafficCore";
+import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
 
 type V3 = [number, number, number];
 const _col = new THREE.Color();
@@ -908,7 +908,8 @@ export const CityScene = memo(function CityScene({
     mats.beacon.color.setScalar(Math.sin(t * 3.2) > 0.2 ? 1 : 0.12).multiply(_col.set("#ff2a1a"));
     const m = lampRef.current;
     if (!m) return;
-    const states = props.lamps.map((l) => signal(l.node, t, l.axis));
+    const tt = trafficClock.t; // synced with the host in co-op
+    const states = props.lamps.map((l) => signal(l.node, tt, l.axis));
     const key = states.join("");
     if (key === lastPhase.current) return;
     lastPhase.current = key;
