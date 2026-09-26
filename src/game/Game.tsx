@@ -2994,6 +2994,11 @@ export function Game() {
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
+  // keep my own pick in the squad list and tell everyone else about it
+  useEffect(() => {
+    setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability });
+  }, [ability, myNum, roster.length, picking]);
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
   useEffect(() => {
