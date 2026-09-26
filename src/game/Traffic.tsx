@@ -6,32 +6,19 @@ import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
 import { makeVehicle, vehicleHeight, vehicleParts, type Part, type Vehicle } from "./vehicles";
-import { GREEN, YELLOW, liveCars, signal, trafficClock, type TrafficLink } from "./trafficCore";
+import { liveCars, trafficClock, type TrafficLink } from "./trafficCore";
+import {
+  HALF_ROAD,
+  SIM_DT,
+  headingOf,
+  laneOff,
+  posOf as simPos,
+  stepCars,
+  type Car,
+  type SimEnemy,
+} from "./trafficSim";
 import { playSfx } from "./audio";
 import { glowTexture } from "./cityTextures";
-
-type Car = {
-  v: Vehicle;
-  h: number;
-  axis: 0 | 1;
-  dir: 1 | -1;
-  /** index of the road we drive on (roadZ for axis 0, roadX for axis 1) */
-  line: number;
-  /** position along the axis of travel */
-  s: number;
-  speed: number;
-  vmax: number;
-  /** index of the next cross road ahead */
-  next: number;
-  /** -1 left, 0 straight, 1 right, null = not decided yet */
-  turn: -1 | 0 | 1 | null;
-  yawVis: number;
-  honk: number;
-  hitCd: number;
-  /** guest-side smoothed render position (follows host snapshots) */
-  gx?: number;
-  gz?: number;
-};
 
 /** Numbers per car in the network snapshot: x, z, heading, speed. */
 const CAR_FIELDS = 4;
@@ -48,11 +35,6 @@ function mulberry(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-/** Right-hand traffic: lane centre offset from the road centre line. */
-const laneOff = (axis: 0 | 1, dir: 1 | -1) => (axis === 0 ? dir : -dir);
-const HALF_ROAD = 2;
-const STOP_GAP = 4.1; // road half width + crosswalk
 
 const _m = new THREE.Matrix4();
 const _car = new THREE.Matrix4();
@@ -142,6 +124,10 @@ export function CityTraffic({
         yawVis: Math.atan2(axis === 0 ? dir : 0, axis === 1 ? dir : 0),
         honk: 0,
         hitCd: 0,
+        px: x,
+        pz: z,
+        x,
+        z,
       });
     }
     return list;
@@ -266,16 +252,18 @@ export function CityTraffic({
   const netCars = useRef<{ x: number; z: number; yaw: number; speed: number; at: number }[]>([]);
   const hostClock = useRef<{ t: number; at: number } | null>(null);
 
-  const posOf = (c: Car) => {
-    const perp = (c.axis === 0 ? roadZ : roadX)[c.line]! + laneOff(c.axis, c.dir);
-    return c.axis === 0 ? { x: c.s, z: perp } : { x: perp, z: c.s };
-  };
+  const posOf = (c: Car) => simPos(c, roadX, roadZ);
+  const acc = useRef(0);
 
   // a new arena (new seed) restarts traffic identically everywhere
   useEffect(() => {
+    // new arena: drop every piece of per-run traffic state so nothing stale survives
     trafficClock.t = 0;
     netCars.current = [];
     hostClock.current = null;
+    enemyHit.current.clear();
+    acc.current = 0;
+    liveCars.length = 0;
   }, [cars]);
 
   // network hooks: the host encodes, guests decode (motion only; types come from the seed)
@@ -322,6 +310,23 @@ export function CityTraffic({
     if (import.meta.env.DEV) (window as unknown as { __rsCars?: Car[] }).__rsCars = cars;
   }, [cars]);
 
+  // a moving car touched an enemy (host only). Small ones get thrown aside and hurt;
+  // big ones (brute, vanguard, elites, mini-boss, boss) stop the car and just take a knock.
+  const contact = (c: Car, idx: number, big: boolean) => {
+    const L = link.current;
+    const tt = trafficClock.t;
+    const last = enemyHit.current.get(idx) ?? -9;
+    if (tt - last < 0.8 || !L.hurtEnemy) return;
+    enemyHit.current.set(idx, tt);
+    const e = L.enemies[idx]!;
+    const yaw = headingOf(c);
+    const sin = Math.sin(yaw);
+    const cos = Math.cos(yaw);
+    const side = (e.x - c.x) * cos - (e.z - c.z) * sin >= 0 ? 1 : -1;
+    if (big) L.hurtEnemy(idx, 1, 0, 0);
+    else L.hurtEnemy(idx, Math.round(2 + c.speed * c.v.mass * 0.35), cos * side, -sin * side);
+  };
+
   useFrame((_, raw) => {
     const dt = Math.min(raw, 0.05);
     const L = link.current;
@@ -329,7 +334,34 @@ export function CityTraffic({
     const now = performance.now();
     if (guest && hostClock.current)
       trafficClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
-    else trafficClock.t += dt;
+    if (!guest) {
+      // fixed timestep: the same path at any frame rate
+      const enemies: SimEnemy[] = L.enemies.map((e) => ({
+        x: e.x,
+        z: e.z,
+        alive: e.alive,
+        r: L.radiusOf(e),
+        big: L.isBig(e),
+      }));
+      const players = [{ x: L.px, z: L.pz }, ...L.others];
+      const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
+      acc.current += dt;
+      let steps = 0;
+      while (acc.current >= SIM_DT && steps < 6) {
+        acc.current -= SIM_DT;
+        steps++;
+        trafficClock.t += SIM_DT;
+        const env = { roadX, roadZ, rand, players, enemies, onEnemyContact };
+        for (const ci of stepCars(cars, env, SIM_DT, trafficClock.t)) {
+          const c = cars[ci]!;
+          if (L.active && c.honk <= 0 && c.speed > 2.5) {
+            c.honk = 3;
+            playSfx("horn");
+          }
+        }
+      }
+      if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
+    }
     const t = trafficClock.t;
     const isNight = nightRef.current;
     const flash = Math.floor(t * 4) % 2 === 0;
@@ -367,7 +399,7 @@ export function CityTraffic({
             c.gz = tz;
             c.yawVis = ns.yaw;
           } else {
-            const k = Math.min(1, dt * 8);
+            const k = 1 - Math.exp(-dt * 8);
             c.gx += (tx - c.gx) * k;
             c.gz += (tz - c.gz) * k;
           }
@@ -379,178 +411,15 @@ export function CityTraffic({
         }
         np = { x: c.gx, z: c.gz };
       } else {
-        // decide what to do at the next intersection
-        if (c.turn === null) {
-          const opts: (-1 | 0 | 1)[] = [];
-          const w: number[] = [];
-          if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) {
-            opts.push(0);
-            w.push(2);
-          }
-          for (const turn of [1, -1] as const) {
-            // right of heading (dx, dz) is (-dz, dx)
-            const dx = c.axis === 0 ? c.dir : 0;
-            const dz = c.axis === 1 ? c.dir : 0;
-            const nx = turn === 1 ? -dz : dz;
-            const nz = turn === 1 ? dx : -dx;
-            const ndir = (c.axis === 0 ? nz : nx) as 1 | -1;
-            const nextIdx = c.line + ndir;
-            if (nextIdx >= 0 && nextIdx < along.length) {
-              opts.push(turn);
-              w.push(1);
-            }
-          }
-          let r = rand() * w.reduce((a, b) => a + b, 0);
-          c.turn = opts[opts.length - 1] ?? 0;
-          for (let k = 0; k < opts.length; k++) {
-            r -= w[k]!;
-            if (r <= 0) {
-              c.turn = opts[k]!;
-              break;
-            }
-          }
-        }
-
-        const cx = cross[c.next]!;
-        const node = c.axis === 0 ? c.next * roadZ.length + c.line : c.line * roadZ.length + c.next;
-        const stopCentre = cx - c.dir * (STOP_GAP + half);
-        const committed = (c.s - stopCentre) * c.dir > 0.05;
-        let room = Infinity;
-
-        const light = signal(node, t, c.axis);
-        if (!committed && light !== GREEN) {
-          const dist = (stopCentre - c.s) * c.dir;
-          const canStop = dist > (c.speed * c.speed) / (2 * 6);
-          if (light !== YELLOW || canStop) room = Math.min(room, dist);
-        }
-        // don't enter the box while cross traffic is still in it, or if our exit lane is backed up
-        if (!committed) {
-          const ix = c.axis === 0 ? cx : along[c.line]!;
-          const iz = c.axis === 0 ? along[c.line]! : cx;
-          // the lane we will leave the intersection in
-          let exAxis: 0 | 1 = c.axis;
-          let exDir: 1 | -1 = c.dir;
-          let exLine = c.line;
-          let exEntry = cx + c.dir * HALF_ROAD;
-          if (c.turn !== 0 && c.turn !== null) {
-            const dx = c.axis === 0 ? c.dir : 0;
-            const dz = c.axis === 1 ? c.dir : 0;
-            exAxis = (1 - c.axis) as 0 | 1;
-            exDir = (exAxis === 0 ? (c.turn === 1 ? -dz : dz) : c.turn === 1 ? dx : -dx) as 1 | -1;
-            exLine = c.next;
-            exEntry = along[c.line]! + exDir * HALF_ROAD;
-          }
-          let busy = false;
-          for (const o of cars) {
-            if (o === c) continue;
-            const op = posOf(o);
-            if (
-              o.axis !== c.axis &&
-              Math.abs(op.x - ix) < HALF_ROAD + 1 &&
-              Math.abs(op.z - iz) < HALF_ROAD + 1
-            ) {
-              busy = true;
-              break;
-            }
-            if (o.axis === exAxis && o.dir === exDir && o.line === exLine) {
-              const past = (o.s - exEntry) * exDir; // how far into the exit lane it is
-              // a queued car needs a full car length of room; a moving one just needs to be clear of the entry
-              const need =
-                o.speed < 2 ? o.v.len / 2 + c.v.len + 1.5 : o.v.len / 2 + c.v.len / 2 + 1.5;
-              if (past > -o.v.len / 2 - 1 && past < need) {
-                busy = true;
-                break;
-              }
-            }
-          }
-          if (busy) room = Math.min(room, (stopCentre - c.s) * c.dir);
-        }
-        // keep distance to whoever is ahead in our lane
-        for (const o of cars) {
-          if (o === c || o.axis !== c.axis || o.dir !== c.dir || o.line !== c.line) continue;
-          const ahead = (o.s - c.s) * c.dir;
-          if (ahead <= 0) continue;
-          room = Math.min(room, ahead - o.v.len / 2 - half - 2);
-        }
-        const p = posOf(c);
-        const fx = c.axis === 0 ? c.dir : 0;
-        const fz = c.axis === 1 ? c.dir : 0;
-        // right-hand vector of the heading
-        const rx = -fz;
-        const rz = fx;
-        // brake for any player standing in the lane (the host sees everyone); honk at the local one
-        for (let pi = -1; pi < L.others.length; pi++) {
-          const who = pi < 0 ? { x: L.px, z: L.pz } : L.others[pi]!;
-          const dx = who.x - p.x;
-          const dz = who.z - p.z;
-          const a = dx * fx + dz * fz;
-          const lat = dx * rx + dz * rz;
-          if (a > 0 && a < half + 11 && Math.abs(lat) < c.v.wid / 2 + 0.9) {
-            room = Math.min(room, a - half - 1.4);
-            if (pi < 0 && L.active && c.honk <= 0 && c.speed > 2.5 && a < half + 8) {
-              c.honk = 3;
-              playSfx("horn");
-            }
-          }
-        }
-        // the boss is too big to plough through: stop for it
-        for (const e of L.enemies) {
-          if (!e.alive || e.kind !== "boss") continue;
-          const dx = e.x - p.x;
-          const dz = e.z - p.z;
-          const a = dx * fx + dz * fz;
-          if (a > 0 && a < half + 8 && Math.abs(dx * rx + dz * rz) < c.v.wid / 2 + 1.6)
-            room = Math.min(room, a - half - 1.8);
-        }
-
-        const target = Math.min(c.vmax, Math.sqrt(Math.max(0, 2 * 7 * room)));
-        if (c.speed < target) c.speed = Math.min(target, c.speed + 3.5 * dt);
-        else c.speed = Math.max(target, c.speed - 16 * dt);
-        if (c.speed < 0) c.speed = 0;
-
-        c.s += c.dir * c.speed * dt;
-
-        if (c.turn !== 0) {
-          // turn when our lane meets the target lane
-          const dx = c.axis === 0 ? c.dir : 0;
-          const dz = c.axis === 1 ? c.dir : 0;
-          const nx = c.turn === 1 ? -dz : dz;
-          const nz = c.turn === 1 ? dx : -dx;
-          const naxis = (1 - c.axis) as 0 | 1;
-          const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
-          const turnS = cx + laneOff(naxis, ndir);
-          if ((c.s - turnS) * c.dir >= 0) {
-            const over = (c.s - turnS) * c.dir;
-            const perp = along[c.line]! + laneOff(c.axis, c.dir);
-            const oldLine = c.line;
-            c.axis = naxis;
-            c.dir = ndir;
-            c.line = c.next;
-            c.s = perp + ndir * over;
-            c.next = oldLine + ndir;
-            c.turn = null;
-          }
-        } else if ((c.s - cx) * c.dir > HALF_ROAD + half) {
-          c.next += c.dir;
-          c.turn = null;
-        }
-        if (c.next < 0 || c.next >= (c.axis === 0 ? roadX : roadZ).length) {
-          // should not happen (turns only pick roads that continue): turn around safely
-          c.dir = -c.dir as 1 | -1;
-          c.next = Math.max(
-            0,
-            Math.min((c.axis === 0 ? roadX : roadZ).length - 1, c.next - c.dir * 2),
-          );
-          c.turn = null;
-        }
-
-        np = posOf(c);
-        yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
+        // interpolate between the last two fixed simulation steps
+        const a = acc.current / SIM_DT;
+        np = { x: c.px + (c.x - c.px) * a, z: c.pz + (c.z - c.pz) * a };
+        yaw = headingOf(c);
       }
       // ---- draw ----
       let dy = yaw - c.yawVis;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      c.yawVis += dy * Math.min(1, dt * 9);
+      c.yawVis += dy * (1 - Math.exp(-dt * 9)); // same easing at any frame rate
       placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, flash, isNight);
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
@@ -598,23 +467,6 @@ export function CityTraffic({
           c.hitCd = 0.25;
         }
       }
-      // ---- ploughing through regular enemies (host decides, like every other hit) ----
-      if (L.isHost && L.hurtEnemy && c.speed > 3) {
-        for (let ei = 0; ei < L.enemies.length; ei++) {
-          const e = L.enemies[ei]!;
-          if (!e.alive || e.kind === "boss") continue;
-          const ex = e.x - np.x;
-          const ez = e.z - np.z;
-          const ea = ex * sin + ez * cos;
-          const el = ex * cos - ez * sin;
-          if (Math.abs(ea) > half + 0.5 || Math.abs(el) > c.v.wid / 2 + 0.5) continue;
-          const last = enemyHit.current.get(ei) ?? -9;
-          if (t - last < 0.8) continue;
-          enemyHit.current.set(ei, t);
-          const side = el >= 0 ? 1 : -1;
-          L.hurtEnemy(ei, Math.round(2 + c.speed * c.v.mass * 0.35), cos * side, -sin * side);
-        }
-      }
     }
     for (const m of [
       paintRef.current,
@@ -637,7 +489,6 @@ export function CityTraffic({
         <instancedMesh
           ref={paintRef}
           args={[geo.box, mats.paint, counts.paint]}
-          castShadow
           receiveShadow
           frustumCulled={false}
         />

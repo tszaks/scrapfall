@@ -63,6 +63,10 @@ export type TrafficLink = {
   decode: ((a: number[]) => void) | null;
   /** knock the local player: velocity (kx, kz), light damage, camera shake strength 0..1 */
   hitPlayer: (dmg: number, kx: number, kz: number, shake: number) => void;
-  enemies: { x: number; z: number; alive: boolean; kind: string }[];
+  enemies: { x: number; z: number; alive: boolean; kind: string; elite?: number }[];
+  /** real body radius of an enemy (elites are drawn 1.6x bigger) */
+  radiusOf: (e: { kind: string; elite?: number }) => number;
+  /** big enemies stop cars instead of being thrown around */
+  isBig: (e: { kind: string; elite?: number }) => boolean;
   hurtEnemy: ((idx: number, dmg: number, kx: number, kz: number) => void) | null;
 };

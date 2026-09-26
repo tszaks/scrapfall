@@ -10,7 +10,7 @@ import {
 
 import { THEMES, type Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
-import { CityScene } from "./City";
+import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
@@ -1365,7 +1365,7 @@ function World({
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
-  }, [gl, scene, camera, city]);
+  }, [gl, scene, camera, city, remotes]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1408,6 +1408,9 @@ function World({
     encode: null,
     decode: null,
     enemies,
+    // cars treat enemies at their drawn size: elites (bounty champion, mini-boss) are 1.6x
+    radiusOf: (e) => (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1),
+    isBig: (e) => !!e.elite || e.kind === "boss" || e.kind === "brute" || e.kind === "vanguard",
     hurtEnemy: null,
     hitPlayer: () => {},
   });
@@ -2692,23 +2695,12 @@ function World({
         />
       )}
       {city ? (
-        // tall towers: wider, deeper shadow frustum (the other maps keep the defaults)
-        <directionalLight
+        // city sun: shadow frustum follows the player, auto-off on slow devices
+        <CitySun
           key="sun-city"
-          position={look3.sun.pos}
+          pos={look3.sun.pos}
           color={look3.sun.color}
           intensity={look3.sun.intensity}
-          castShadow
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-          shadow-camera-left={-HALF - 10}
-          shadow-camera-right={HALF + 10}
-          shadow-camera-top={HALF + 10}
-          shadow-camera-bottom={-HALF - 10}
-          shadow-camera-near={1}
-          shadow-camera-far={260}
-          shadow-bias={-0.0004}
-          shadow-normalBias={0.03}
         />
       ) : (
         <directionalLight

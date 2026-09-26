@@ -2,7 +2,7 @@
 // handful of meshes by material, street furniture is instanced, and night mode only
 // flips material parameters (lit-window emissive maps, glowing bulbs, fake light pools).
 import { useFrame } from "@react-three/fiber";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { K_PARK, K_ROAD, K_WALK, type Building, type CityLayout } from "./cityLayout";
@@ -134,6 +134,8 @@ const AWNING = ["#d8403a", "#2e8a6a", "#2a5aa8", "#e8a82a", "#f4f4f4", "#ff6fae"
 type Groups = {
   facade: Record<FacadeKind, Geo>;
   plain: Geo;
+  /** rooftop clutter: drawn, but never casts shadows */
+  detail: Geo;
   glow: Geo;
   ads: Geo;
   beacons: V3[];
@@ -348,12 +350,12 @@ function addBuilding(b: Building, G: Groups) {
   // ---- rooftop dressing ----
   if (b.helipad) {
     const rad = Math.min(topW, topD) * 0.45;
-    G.plain.add(CYL, place(b.x, topY + 0.1, b.z, rad, 0.2, rad), "#2a2d33");
-    G.plain.add(RING, place(b.x, topY + 0.215, b.z, rad * 0.8, 1, rad * 0.8), "#f2c21a");
+    G.detail.add(CYL, place(b.x, topY + 0.1, b.z, rad, 0.2, rad), "#2a2d33");
+    G.detail.add(RING, place(b.x, topY + 0.215, b.z, rad * 0.8, 1, rad * 0.8), "#f2c21a");
     const hs = rad * 0.5;
-    G.plain.box(b.x - hs * 0.45, topY + 0.2, b.z, hs * 0.18, 0.03, hs, "#f4f4f4");
-    G.plain.box(b.x + hs * 0.45, topY + 0.2, b.z, hs * 0.18, 0.03, hs, "#f4f4f4");
-    G.plain.box(b.x, topY + 0.2, b.z, hs * 0.9, 0.03, hs * 0.18, "#f4f4f4");
+    G.detail.box(b.x - hs * 0.45, topY + 0.2, b.z, hs * 0.18, 0.03, hs, "#f4f4f4");
+    G.detail.box(b.x + hs * 0.45, topY + 0.2, b.z, hs * 0.18, 0.03, hs, "#f4f4f4");
+    G.detail.box(b.x, topY + 0.2, b.z, hs * 0.9, 0.03, hs * 0.18, "#f4f4f4");
     for (const [dx, dz] of [
       [1, 1],
       [1, -1],
@@ -367,8 +369,8 @@ function addBuilding(b: Building, G: Groups) {
   for (let u = 0; u < units && topW > 2.2 && topD > 2.2; u++) {
     const ux = b.x + (r() - 0.5) * (topW - 1.4);
     const uz = b.z + (r() - 0.5) * (topD - 1.4);
-    G.plain.box(ux, topY, uz, 0.9, 0.6, 0.9, "#c8ccd0");
-    G.plain.box(ux, topY + 0.6, uz, 0.6, 0.06, 0.6, "#8a8e92");
+    G.detail.box(ux, topY, uz, 0.9, 0.6, 0.9, "#c8ccd0");
+    G.detail.box(ux, topY + 0.6, uz, 0.6, 0.06, 0.6, "#8a8e92");
   }
   if (
     (b.style === "brick" || b.style === "office") &&
@@ -386,13 +388,13 @@ function addBuilding(b: Building, G: Groups) {
       [-0.45, 0.45],
       [-0.45, -0.45],
     ] as const)
-      G.plain.box(tx + dx, topY, tz + dz, 0.08, 1, 0.08, "#3a3430");
-    G.plain.add(CYL, place(tx, topY + 1.65, tz, 0.7, 1.3, 0.7), "#7a5a3a");
-    G.plain.add(CONE, place(tx, topY + 2.55, tz, 0.78, 0.5, 0.78), "#5a4030");
+      G.detail.box(tx + dx, topY, tz + dz, 0.08, 1, 0.08, "#3a3430");
+    G.detail.add(CYL, place(tx, topY + 1.65, tz, 0.7, 1.3, 0.7), "#7a5a3a");
+    G.detail.add(CONE, place(tx, topY + 2.55, tz, 0.78, 0.5, 0.78), "#5a4030");
   }
   if (topY > 24) {
     const ah = 3.5 + b.roll * 6;
-    G.plain.add(
+    G.detail.add(
       CYL,
       place(b.x + topW * 0.2, topY + ah / 2, b.z - topD * 0.2, 0.06, ah, 0.06),
       "#b0b4b8",
@@ -409,7 +411,7 @@ function addBuilding(b: Building, G: Groups) {
     const cx = b.x + (alongX ? 0 : fs * off);
     const cz = b.z + (alongX ? fs * off : 0);
     for (const s of [-0.35, 0.35]) {
-      G.plain.box(
+      G.detail.box(
         cx + (alongX ? s * bw : 0),
         topY,
         cz + (alongX ? 0 : s * bw),
@@ -419,7 +421,7 @@ function addBuilding(b: Building, G: Groups) {
         "#4a4d52",
       );
     }
-    G.plain.box(
+    G.detail.box(
       cx,
       y0,
       cz,
@@ -599,14 +601,20 @@ export const CityScene = memo(function CityScene({
   const half = city.half;
 
   const built = useMemo(() => {
-    const G: Groups = {
+    const groups = (): Groups => ({
       facade: { glass: new Geo(), office: new Geo(), brick: new Geo() },
       plain: new Geo(),
+      detail: new Geo(),
       glow: new Geo(),
       ads: new Geo(),
       beacons: [],
-    };
-    for (const b of city.buildings) addBuilding(b, G);
+    });
+    // arena buildings cast shadows; the backdrop skyline never does (it is outside the
+    // shadow frustum anyway, and skipping it keeps the shadow pass cheap)
+    const G = groups();
+    const B = groups();
+    for (const b of city.buildings) addBuilding(b, b.backdrop ? B : G);
+    B.beacons.forEach((p) => G.beacons.push(p));
 
     const S = new Geo();
     // raised sidewalks with a kerb
@@ -625,11 +633,13 @@ export const CityScene = memo(function CityScene({
         emissiveMap: tex.night,
         emissive: 0x000000,
       });
-      return { k, geo: G.facade[k].build(), mat };
+      return { k, geo: G.facade[k].build(), far: B.facade[k].build(), mat };
     });
     return {
       facades,
       plain: G.plain.build(),
+      farPlain: B.plain.build(),
+      detail: G.detail.build(),
       glow: G.glow.build(),
       ads: G.ads.build(),
       streets: S.build(),
@@ -853,7 +863,10 @@ export const CityScene = memo(function CityScene({
         f.geo.dispose();
         f.mat.dispose();
       });
-      [built.plain, built.glow, built.ads, built.streets].forEach((g) => g.dispose());
+      built.facades.forEach((f) => f.far.dispose());
+      [built.plain, built.farPlain, built.detail, built.glow, built.ads, built.streets].forEach(
+        (g) => g.dispose(),
+      );
     },
     [built],
   );
@@ -950,22 +963,27 @@ export const CityScene = memo(function CityScene({
       {built.facades.map((f) => (
         <mesh key={f.k} geometry={f.geo} material={f.mat} castShadow receiveShadow />
       ))}
+      {built.facades.map((f) => (
+        <mesh key={`far-${f.k}`} geometry={f.far} material={f.mat} />
+      ))}
       <mesh geometry={built.plain} material={mats.plain} castShadow receiveShadow />
+      <mesh geometry={built.farPlain} material={mats.plain} />
+      <mesh geometry={built.detail} material={mats.plain} receiveShadow />
       <mesh geometry={built.glow} material={mats.glow} />
       <mesh geometry={built.ads} material={mats.ads} />
       {built.beacons.length > 0 && (
         <instancedMesh ref={beaconRef} args={[BEACON, mats.beacon, built.beacons.length]} />
       )}
 
-      <Instanced geometry={props.streetlight} material={mats.prop} items={props.lights} cast />
+      <Instanced geometry={props.streetlight} material={mats.prop} items={props.lights} />
       <Instanced geometry={props.bulb} material={mats.bulb} items={props.lights} />
       {night && <Instanced geometry={props.cone} material={mats.cone} items={props.lights} />}
       {night && <Instanced geometry={props.pool} material={mats.pool} items={props.lights} />}
-      <Instanced geometry={props.trunk} material={mats.prop} items={props.palms} cast />
-      <Instanced geometry={props.fronds} material={mats.prop} items={props.fr} cast />
+      <Instanced geometry={props.trunk} material={mats.prop} items={props.palms} />
+      <Instanced geometry={props.fronds} material={mats.prop} items={props.fr} />
       <Instanced geometry={props.hydrant} material={mats.prop} items={props.hyd} />
       <Instanced geometry={props.bench} material={mats.prop} items={props.ben} />
-      <Instanced geometry={props.tlPole} material={mats.prop} items={props.poles} cast />
+      <Instanced geometry={props.tlPole} material={mats.prop} items={props.poles} />
       {props.lamps.length > 0 && (
         <instancedMesh ref={lampRef} args={[props.tlLamp, mats.lamp, props.lamps.length]} />
       )}
@@ -975,3 +993,72 @@ export const CityScene = memo(function CityScene({
     </group>
   );
 });
+
+/** `?shadows=0` forces city shadows off, `?shadows=1` keeps them on (no auto fallback). */
+function shadowParam(): boolean | null {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("shadows");
+  return v === "0" ? false : v === "1" ? true : null;
+}
+
+const SUN_RANGE = 28; // shadow frustum half-size around the player, metres
+const SUN_MAP = 1024;
+
+/**
+ * The city's sun: its shadow frustum follows the player (snapped to shadow texels so
+ * edges don't shimmer) instead of covering the whole city. If frames stay slow for a
+ * few seconds, shadows switch off automatically (weak GPUs / laptops on battery).
+ */
+export function CitySun({
+  pos,
+  color,
+  intensity,
+}: {
+  pos: [number, number, number];
+  color: string;
+  intensity: number;
+}) {
+  const ref = useRef<THREE.DirectionalLight>(null);
+  const forced = useMemo(shadowParam, []);
+  const [low, setLow] = useState(forced === false);
+  const ema = useRef(1 / 60);
+  const slowFor = useRef(0);
+  useFrame((state, raw) => {
+    const l = ref.current;
+    if (!l) return;
+    const texel = (SUN_RANGE * 2) / SUN_MAP;
+    const cx = Math.round(state.camera.position.x / texel) * texel;
+    const cz = Math.round(state.camera.position.z / texel) * texel;
+    l.target.position.set(cx, 0, cz);
+    l.target.updateMatrixWorld();
+    l.position.set(cx + pos[0], pos[1], cz + pos[2]);
+    if (forced !== null || low) return;
+    ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
+    if (ema.current > 0.04) {
+      slowFor.current += raw;
+      if (slowFor.current > 3) {
+        console.info("[city] frames are slow: switching shadows off (use ?shadows=1 to keep them)");
+        setLow(true);
+      }
+    } else slowFor.current = 0;
+  });
+  return (
+    <directionalLight
+      ref={ref}
+      position={pos}
+      color={color}
+      intensity={intensity}
+      castShadow={!low}
+      shadow-mapSize-width={SUN_MAP}
+      shadow-mapSize-height={SUN_MAP}
+      shadow-camera-left={-SUN_RANGE}
+      shadow-camera-right={SUN_RANGE}
+      shadow-camera-top={SUN_RANGE}
+      shadow-camera-bottom={-SUN_RANGE}
+      shadow-camera-near={1}
+      shadow-camera-far={400}
+      shadow-bias={-0.0004}
+      shadow-normalBias={0.03}
+    />
+  );
+}
