@@ -1211,7 +1211,7 @@ function World({
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
       let best: Enemy | null = null;
-      let bd = 11;
+      let bd = 5.5;
       for (const e of enemies) {
         if (!e.alive) continue;
         const d2 = Math.hypot(e.x - t.x, e.z - t.z);
@@ -1221,7 +1221,7 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 1.4, 2, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2251,70 +2251,6 @@ export function Game() {
               KILLS {score}
             </div>
 
-            {/* run status: pistol mods, active deployables, perk stacks */}
-            {locked && !ended && (activeMods.length > 0 || deploys.turret > 0 || deploys.mines > 0 || health > maxHp || activePerks.length > 0) && (
-              <div className="flex w-52 flex-col gap-1.5 rounded-md bg-[#f3e6cf]/80 px-3 py-2">
-                {activeMods.length > 0 && (
-                  <div>
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">PISTOL MODS</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {activeMods.map((id) => (
-                        <span
-                          key={id}
-                          className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#2b2118]"
-                          style={{ background: PERK_INFO[id].color }}
-                        >
-                          {perkBadge(id, 1)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {(deploys.turret > 0 || deploys.mines > 0 || health > maxHp) && (
-                  <div>
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">DEPLOYED</div>
-                    <div className="mt-1 flex flex-col gap-0.5 text-[10px] tracking-wider">
-                      {deploys.turret > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span><span className="text-[#4fe3ff]">■</span> SENTRY</span>
-                          <b>{deploys.turret}s</b>
-                        </div>
-                      )}
-                      {deploys.mines > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span><span className="text-[#5ff6ff]">■</span> CRYO MINE</span>
-                          <b>x{deploys.mines}</b>
-                        </div>
-                      )}
-                      {health > maxHp && (
-                        <div className="flex items-center justify-between">
-                          <span><span className="text-[#9ad0ff]">■</span> BARRIER</span>
-                          <b>+{health - maxHp}</b>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {activePerks.length > 0 && (
-                  <div>
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">UPGRADES</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {activePerks.map(({ id, label }) => (
-                        <span
-                          key={id}
-                          className="rounded border px-1 py-0.5 text-[10px] tracking-wider"
-                          style={{ borderColor: PERK_INFO[id].color, color: "#2b2118" }}
-                        >
-                          <span style={{ color: PERK_INFO[id].color }}>◆</span> {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -2488,6 +2424,25 @@ export function Game() {
                 {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
               </button>
             )}
+
+            {paused && (activeMods.length > 0 || activePerks.length > 0) && (
+              <div className="mt-5 w-full max-w-sm rounded-md bg-[#2b2118]/10 px-4 py-3 text-left">
+                <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {activeMods.map((id) => (
+                    <span key={id} className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#2b2118]" style={{ background: PERK_INFO[id].color }}>
+                      {perkBadge(id, 1)}
+                    </span>
+                  ))}
+                  {activePerks.map(({ id, label }) => (
+                    <span key={id} className="rounded border px-1 py-0.5 text-[10px] tracking-wider" style={{ borderColor: PERK_INFO[id].color, color: "#2b2118" }}>
+                      <span style={{ color: PERK_INFO[id].color }}>◆</span> {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
 
             {paused || (multiplayer && ended) ? (
               <div className="mt-3">
