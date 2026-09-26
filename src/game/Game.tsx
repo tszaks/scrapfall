@@ -2761,17 +2761,17 @@ export function Game() {
             )}
 
             {paused && (activeMods.length > 0 || activePerks.length > 0) && (
-              <div className="mt-5 w-full max-w-sm rounded-md bg-[#2b2118]/10 px-4 py-3 text-left">
+              <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
                 <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                   {activeMods.map((id) => (
-                    <span key={id} className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#2b2118]" style={{ background: PERK_INFO[id].color }}>
+                    <span key={id} className="text-[10px] font-bold tracking-wider text-black">
                       {perkBadge(id, 1)}
                     </span>
                   ))}
                   {activePerks.map(({ id, label }) => (
-                    <span key={id} className="rounded border px-1 py-0.5 text-[10px] tracking-wider" style={{ borderColor: PERK_INFO[id].color, color: "#2b2118" }}>
-                      <span style={{ color: PERK_INFO[id].color }}>◆</span> {label}
+                    <span key={id} className="text-[10px] tracking-wider text-black">
+                      {label}
                     </span>
                   ))}
                 </div>
