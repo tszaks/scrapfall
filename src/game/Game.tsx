@@ -2269,6 +2269,11 @@ export function Game() {
             {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
           </div>
         )}
+        {crateMsg && locked && !ended && (
+          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
+            {crateMsg} DEPLOYED
+          </div>
+        )}
         {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
