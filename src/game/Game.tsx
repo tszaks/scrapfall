@@ -632,6 +632,9 @@ function World({
   const [crateKind, setCrateKind] = useState<CrateKind>("turret");
   const crateKindRef = useRef<CrateKind>("turret");
   const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
+  const deployTick = useRef(0);
+  const lastDeploys = useRef({ turret: -1, mines: -1 });
+
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
@@ -1219,6 +1222,20 @@ function World({
     }
     for (let i = turrets.current.length; i < 6; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
     for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
+
+    // keep the HUD status panel in sync with what's deployed
+    deployTick.current -= delta;
+    if (deployTick.current <= 0) {
+      deployTick.current = 0.25;
+      const tl = turrets.current.reduce((m2, t) => Math.max(m2, t.t), 0);
+      const secs = Math.ceil(tl);
+      const mc = mines.current.length;
+      if (secs !== lastDeploys.current.turret || mc !== lastDeploys.current.mines) {
+        lastDeploys.current = { turret: secs, mines: mc };
+        onDeploys({ turret: secs, mines: mc });
+      }
+    }
+
 
 
 
