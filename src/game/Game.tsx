@@ -3138,7 +3138,7 @@ export function Game() {
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
-  const [shopLeft, setShopLeft] = useState(10);
+  const [shopLeft, setShopLeft] = useState(15);
   const [rerolls, setRerolls] = useState(0);
   const lastOffered = useRef<PerkId[]>([]);
   // reroll price climbs with the wave: +1 +1 +1 +2 +2 +2 +3 ... and doubles
@@ -3162,7 +3162,7 @@ export function Game() {
     // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
     drawOffers();
     setBought([]);
-    setShopLeft(10);
+    setShopLeft(15);
     setRerolls(0);
     // the countdown holds while the game is paused
     const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
