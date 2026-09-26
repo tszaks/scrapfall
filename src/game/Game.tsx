@@ -41,6 +41,15 @@ const GUNS: Record<Weapon, Gun> = {
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard"];
+type CrateKind = "turret" | "shield" | "mine" | "ammo";
+const CRATE_KINDS: CrateKind[] = ["turret", "shield", "mine", "ammo"];
+const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
+  turret: { name: "SENTRY TURRET", color: "#4fe3ff" },
+  shield: { name: "NANO BARRIER", color: "#7cc6ff" },
+  mine: { name: "CRYO MINE", color: "#9fe8ff" },
+  ammo: { name: "AMMO CACHE", color: "#e7b25c" },
+};
+const TURRET_LIFE = 60; // roughly a wave and a half
 
 type Enemy = {
   kind: Kind;
