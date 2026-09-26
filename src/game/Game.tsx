@@ -2262,7 +2262,7 @@ function World({
         if (nextWaveTimer.current <= 0) {
           wave.current++;
           spawnWave(wave.current);
-          nextWaveTimer.current = 10; // shopping break before the next wave
+          nextWaveTimer.current = 15; // shopping break before the next wave
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
@@ -3138,7 +3138,7 @@ export function Game() {
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
-  const [shopLeft, setShopLeft] = useState(10);
+  const [shopLeft, setShopLeft] = useState(15);
   const [rerolls, setRerolls] = useState(0);
   const lastOffered = useRef<PerkId[]>([]);
   // reroll price climbs with the wave: +1 +1 +1 +2 +2 +2 +3 ... and doubles
@@ -3162,7 +3162,7 @@ export function Game() {
     // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
     drawOffers();
     setBought([]);
-    setShopLeft(10);
+    setShopLeft(15);
     setRerolls(0);
     // the countdown holds while the game is paused
     const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
@@ -3463,7 +3463,22 @@ export function Game() {
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
+          <div className="mb-2 flex justify-center gap-2">
+            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
+              <span className="font-bold tracking-widest">FIELD DRESSING</span>
+              <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
+              <span className="font-bold">◆ {PATCH_COST}</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
+              <span className="font-bold tracking-widest">REROLL</span>
+              <span className="opacity-60">{rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}</span>
+              <span className="font-bold">◆ {rerollCost}</span>
+            </div>
+          </div>
           <div className="flex justify-center gap-3">
+
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
@@ -3484,21 +3499,8 @@ export function Game() {
                 </div>
               );
             })}
-            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
-              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">V</span>
-              <div className="text-xs font-bold tracking-widest">FIELD DRESSING</div>
-              <div className="mt-1 text-[11px] leading-snug opacity-80">Restore 5 health · always available</div>
-              <div className="mt-1 text-[10px] opacity-50">HP {health}/{maxHp}</div>
-              <div className="mt-2 text-sm font-bold">◆ {PATCH_COST}</div>
-            </div>
-            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
-              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">R</span>
-              <div className="text-xs font-bold tracking-widest">REROLL</div>
-              <div className="mt-1 text-[11px] leading-snug opacity-80">Draw three new cards</div>
-              <div className="mt-1 text-[10px] opacity-50">{rerolls > 0 ? `USED ${rerolls}x THIS BREAK` : "PRICE DOUBLES EACH USE"}</div>
-              <div className="mt-2 text-sm font-bold">◆ {rerollCost}</div>
-            </div>
           </div>
+
 
         </div>
       )}
