@@ -121,10 +121,17 @@ const STYLES: Record<string, Style> = {
   magma: { roots: [40, 40, 41, 38], bpm: 136, arp: [0, 1, 7, 6, 0, 12, 1, 7], lead: "sawtooth", leadCut: 1800, bass: "sawtooth", kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: "all" },
   // blossom: dreamy pentatonic
   blossom: { roots: [45, 50, 52, 48], bpm: 104, arp: [0, 3, 5, 7, 10, 7, 5, 3], lead: "sine", leadCut: 6000, bass: "triangle", kick: [0, 8], snare: [4, 12], hat: "odd", pad: true },
+  // abyss: slow, deep sub-bass with resonant bells
+  abyss: { roots: [38, 41, 36, 43], bpm: 92, arp: [0, 7, 12, 15, 19, 15, 12, 7], lead: "sine", leadCut: 3000, bass: "sine", kick: [0, 10], snare: [8], hat: "none", pad: true },
+  // cyber: driving electro with a gritty saw bass
+  cyber: { roots: [45, 45, 43, 48], bpm: 128, arp: [0, 12, 7, 12, 3, 12, 10, 12], lead: "sawtooth", leadCut: 5000, bass: "sawtooth", kick: [0, 4, 8, 12], snare: [4, 12], hat: "all" },
+  // toxic: industrial acid groove
+  toxic: { roots: [40, 43, 40, 38], bpm: 118, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "square", leadCut: 1400, bass: "sawtooth", kick: [0, 3, 8, 11], snare: [4, 12], hat: "odd" },
 };
 const MAP_STYLE: Record<string, string> = {
   "Dust Basin": "desert", "Canyon Mesa": "desert", "Frost Shelf": "ice", "Glacier Rift": "ice",
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
+  "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {
