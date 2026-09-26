@@ -20,6 +20,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
@@ -73,6 +74,7 @@ type Enemy = {
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
+  elite?: number; // 1 = event champion (gold, tougher, big shard payout)
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
@@ -129,7 +131,10 @@ const MOVE = new THREE.Vector3();
 
 function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
-  if (theme.blockShape === "tree") {
+  const shape = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  if (shape === "tree") {
     const trunk = 1 + b.h * 0.25;
     return (
       <group position={[b.x, 0, b.z]}>
@@ -148,15 +153,8 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
       </group>
     );
   }
-  if (theme.blockShape === "rock") {
-    return (
-      <mesh position={[b.x, b.h * 0.4, b.z]} rotation={[b.tone, b.tone * 3, 0]} scale={[1.2, b.h * 0.5 + 0.4, 1.2]} castShadow receiveShadow>
-        <dodecahedronGeometry args={[1, 0]} />
-        <meshLambertMaterial color={color} flatShading />
-      </mesh>
-    );
-  }
-  if (theme.blockShape === "crystal") {
+
+  if (shape === "crystal") {
     return (
       <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
         <mesh position-y={b.h / 2} castShadow receiveShadow>
@@ -167,9 +165,213 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
           <coneGeometry args={[0.8, 1, 5]} />
           <meshLambertMaterial color="#f4fbff" flatShading />
         </mesh>
+        {[0, 1].map((i) => (
+          <mesh key={i} position={[Math.sin(i * 2.2) * 0.9, b.h * 0.3, Math.cos(i * 2.2) * 0.9]} rotation-z={0.3 - i * 0.6} castShadow>
+            <coneGeometry args={[0.28, b.h * 0.7, 5]} />
+            <meshLambertMaterial color={theme.blocks[1]} flatShading />
+          </mesh>
+        ))}
       </group>
     );
   }
+
+  // DESERT: stepped sandstone monument with a bleached bone arch
+  if (shape === "monument") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.2}>
+        <mesh position-y={b.h * 0.3} castShadow receiveShadow>
+          <boxGeometry args={[BLOCK, b.h * 0.6, BLOCK]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.75} castShadow>
+          <boxGeometry args={[BLOCK * 0.72, b.h * 0.3, BLOCK * 0.72]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.98} castShadow>
+          <boxGeometry args={[BLOCK * 0.42, b.h * 0.16, BLOCK * 0.42]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 1.15, 0.45, 0.2]} rotation-z={s * 0.35}>
+            <cylinderGeometry args={[0.07, 0.09, 1, 5]} />
+            <meshLambertMaterial color="#e8dcc0" flatShading />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  // VOLCANO: hexagonal basalt columns split by a magma seam
+  if (shape === "basalt") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
+        {[[-0.45, -0.3, 1], [0.5, 0.35, 0.78], [0.1, -0.6, 0.6]].map(([dx, dz, f], i) => (
+          <mesh key={i} position={[dx as number, (b.h * (f as number)) / 2, dz as number]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.55, 0.6, b.h * (f as number), 6]} />
+            <meshLambertMaterial color={i === 1 ? theme.blocks[1] : color} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.06, 0]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.7, 1.15, 12]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+        <mesh position={[-0.45, b.h + 0.18, -0.3]}>
+          <sphereGeometry args={[0.2, 8, 6]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // BADLANDS: layered flat-topped butte with a rusted strut
+  if (shape === "butte") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 2}>
+        {[0, 1, 2].map((i) => (
+          <mesh key={i} position-y={b.h * (0.18 + i * 0.28)} castShadow receiveShadow>
+            <cylinderGeometry args={[1.25 - i * 0.22, 1.35 - i * 0.22, b.h * 0.3, 7]} />
+            <meshLambertMaterial color={i === 1 ? theme.blocks[1] : color} flatShading />
+          </mesh>
+        ))}
+        <mesh position={[0.9, b.h * 0.6, 0.5]} rotation-z={0.4} castShadow>
+          <boxGeometry args={[0.1, b.h * 1.1, 0.1]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // BLOSSOM: tiered stone pagoda lantern
+  if (shape === "pagoda") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.5}>
+        <mesh position-y={0.25} castShadow receiveShadow>
+          <boxGeometry args={[1.5, 0.5, 1.5]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.45} castShadow>
+          <cylinderGeometry args={[0.42, 0.5, b.h * 0.7, 8]} />
+          <meshLambertMaterial color="#d8d2c4" flatShading />
+        </mesh>
+        {[0.55, 0.9].map((f, i) => (
+          <mesh key={i} position-y={b.h * f} castShadow>
+            <coneGeometry args={[1.15 - i * 0.25, 0.45, 4]} />
+            <meshLambertMaterial color={color} flatShading />
+          </mesh>
+        ))}
+        <mesh position-y={b.h * 0.68}>
+          <boxGeometry args={[0.36, 0.4, 0.36]} />
+          <meshBasicMaterial color="#ffd98a" fog={false} />
+        </mesh>
+        <mesh position-y={b.h + 0.3}>
+          <sphereGeometry args={[0.16, 8, 6]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // DEEP ICE: fractured iceberg slabs
+  if (shape === "berg") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
+        <mesh position-y={b.h * 0.42} rotation-y={0.4} castShadow receiveShadow>
+          <boxGeometry args={[1.7, b.h * 0.85, 1.4]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position={[0.35, b.h * 0.8, -0.2]} rotation-z={0.45} rotation-y={0.8} castShadow>
+          <boxGeometry args={[1.1, b.h * 0.6, 0.9]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
+        </mesh>
+        <mesh position={[-0.6, b.h * 0.35, 0.6]} rotation-z={-0.3} castShadow>
+          <coneGeometry args={[0.4, b.h * 0.9, 4]} />
+          <meshLambertMaterial color="#f2fbff" flatShading />
+        </mesh>
+      </group>
+    );
+  }
+
+  // OCEAN: branching bioluminescent coral
+  if (shape === "coral") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        <mesh position-y={0.28} castShadow receiveShadow>
+          <sphereGeometry args={[0.85, 8, 6]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = (i / 3) * Math.PI * 2 + b.tone;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4]} rotation-z={Math.cos(a) * 0.3} rotation-x={-Math.sin(a) * 0.3}>
+              <mesh position-y={b.h * 0.45} castShadow>
+                <cylinderGeometry args={[0.13, 0.26, b.h * 0.9, 6]} />
+                <meshLambertMaterial color={color} flatShading />
+              </mesh>
+              <mesh position-y={b.h * 0.92}>
+                <sphereGeometry args={[0.26, 8, 6]} />
+                <meshBasicMaterial color={glow} fog={false} />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // CYBERPUNK: server mainframe tower with lit circuit strips
+  if (shape === "server") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 1.6}>
+        <mesh position-y={b.h / 2} castShadow receiveShadow>
+          <boxGeometry args={[1.5, b.h, 1.2]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        {[0.3, 0.55, 0.8].map((f, i) => (
+          <mesh key={i} position={[0, b.h * f, 0.62]}>
+            <boxGeometry args={[1.1, 0.07, 0.04]} />
+            <meshBasicMaterial color={i % 2 ? theme.grid[0] : theme.grid[1]} fog={false} />
+          </mesh>
+        ))}
+        <mesh position-y={b.h + 0.12} castShadow>
+          <boxGeometry args={[1.6, 0.24, 1.3]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        <mesh position-y={b.h + 0.5} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.3, 0.06, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // INDUSTRIAL: chemical vat with hazard band and pipework
+  if (shape === "vat") {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * 3}>
+        <mesh position-y={b.h * 0.45} castShadow receiveShadow>
+          <cylinderGeometry args={[0.95, 0.95, b.h * 0.9, 10]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.55}>
+          <cylinderGeometry args={[0.98, 0.98, 0.3, 10]} />
+          <meshLambertMaterial color="#2b2118" flatShading />
+        </mesh>
+        <mesh position-y={b.h * 0.92}>
+          <cylinderGeometry args={[0.8, 0.95, 0.24, 10]} />
+          <meshBasicMaterial color={glow} fog={false} />
+        </mesh>
+        <mesh position={[0.95, b.h * 0.3, 0]} rotation-z={Math.PI / 2}>
+          <cylinderGeometry args={[0.12, 0.12, 0.9, 8]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.12, 0]} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[1.05, 1.3, 12]} />
+          <meshBasicMaterial color={glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
   return (
     <mesh position={[b.x, b.h / 2, b.z]} castShadow receiveShadow>
       <boxGeometry args={[BLOCK, b.h, BLOCK]} />
@@ -503,6 +705,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const bossGrp = useRef<THREE.Group>(null);
   const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
+  const aura = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -516,7 +719,11 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
-    g.scale.setScalar(base * (data.flash > 0 ? 1.15 : 1));
+    g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
+    if (aura.current) {
+      aura.current.visible = !!data.elite;
+      aura.current.rotation.y = t * 1.2;
+    }
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
@@ -534,6 +741,17 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   });
   return (
     <group ref={ref}>
+      {/* event champion: gold halo + ground ring */}
+      <group ref={aura} visible={false}>
+        <mesh position-y={0.06} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[1.1, 1.35, 20]} />
+          <meshBasicMaterial color="#ffd24a" fog={false} />
+        </mesh>
+        <mesh position-y={2.5} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.55, 0.08, 6, 16]} />
+          <meshBasicMaterial color="#ffd24a" fog={false} />
+        </mesh>
+      </group>
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
@@ -1025,6 +1243,10 @@ function World({
   city,
   seed,
   night,
+  ability,
+  onAbilityCd,
+  onStat,
+  onEvent,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -1058,6 +1280,10 @@ function World({
   city: CityLayout | null;
   seed: number;
   night: boolean;
+  ability: AbilityId;
+  onAbilityCd: (left: number, max: number) => void;
+  onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
+  onEvent: (name: string | null) => void;
 }) {
 
 
@@ -1105,11 +1331,25 @@ function World({
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
   const thornsPending = useRef(0);
+  // ---- active ability (F) ----
+  const abilityRef = useRef<AbilityId>(ability);
+  abilityRef.current = ability;
+  const abilCd = useRef(0);
+  const abilFire = useRef(false);
+  const invuln = useRef(0);
+  const overdrive = useRef(0);
+  const poolTicks = useRef(0);
+  const poolTimer = useRef(0);
+  const flareTimer = useRef(0);
+  const barrierMesh = useRef<THREE.Mesh>(null);
+  const cdReport = useRef(0);
   // armour soaks damage; getting hit can discharge a shock ring
   const takeHit = (dmg: number) => {
+    if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     const s2 = stats.current;
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
+    onStat("taken", d);
     onHurt(d);
   };
   useEffect(() => {
@@ -1419,6 +1659,7 @@ function World({
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      onStat("shot", 1);
     }
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
@@ -1428,6 +1669,7 @@ function World({
     const w = weapon.current;
     if (ammo.current[w] <= 0) return; // dry: wait for a drop or the next wave
     spit();
+    if (overdrive.current > 0) return; // adrenaline burns no reserve
     ammo.current[w]--;
     onAmmo(ammo.current[w]);
     if (w === "pistol") {
@@ -1478,6 +1720,7 @@ function World({
         const w = [...owned.current][slot - 1];
         if (w) equip(w);
       }
+      if (e.code === "KeyF") abilFire.current = true;
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -1510,8 +1753,11 @@ function World({
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
+    // wave events: a horde rush, a bounty champion, then a recon mini-boss
+    const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
     const kinds: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : [])
       .sort((a) => (a === "boss" ? -1 : 0))
       .slice(0, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
@@ -1543,10 +1789,29 @@ function World({
         burn: 0,
         burnTick: 0,
       });
+      e.elite = 0;
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
 
     });
+    // the champion: a gold, far tougher version of one of the wave's heavies
+    if (event === "ELITE BOUNTY" || event === "RECON ENFORCER") {
+      const mul = event === "RECON ENFORCER" ? 9 : 5;
+      const pick =
+        enemies.findIndex((e, i) => kinds[i] === "vanguard") >= 0
+          ? enemies.findIndex((e, i) => kinds[i] === "vanguard")
+          : enemies.findIndex((e, i) => kinds[i] === "brute");
+      const champ = enemies[pick >= 0 ? pick : 0];
+      if (champ && kinds[pick >= 0 ? pick : 0]) {
+        champ.elite = 1;
+        champ.hp = Math.round(champ.hp * mul);
+        champ.max = champ.hp;
+      }
+    }
+    if (event) {
+      onEvent(event);
+      netRef.current?.broadcast({ type: "event", name: event });
+    }
     // health: random; solo waits 2 waves between packs, co-op packs come more often
     const healGap = extra > 0 ? 1 : 2;
     if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
@@ -1638,7 +1903,8 @@ function World({
       const w = weapon.current;
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
-      fireCd.current = w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate;
+      fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
+        * (overdrive.current > 0 ? 0.5 : 1);
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
@@ -1653,7 +1919,9 @@ function World({
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
-    const spd = SPEED * stats.current.speed * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1);
+    const spd = SPEED * stats.current.speed
+      * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
+      * (overdrive.current > 0 ? 1.3 : 1);
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -1884,6 +2152,7 @@ function World({
           }
         }
         onScore();
+        if (e.elite) { onShard(15); e.elite = 0; }
         onKill(e);
       }
     };
@@ -1903,6 +2172,75 @@ function World({
         if (!e.alive) continue;
         if (Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 4) hurtEnemy(e, 2, ei);
       }
+    }
+
+    // ---- active ability (F) ----
+    if (abilCd.current > 0) abilCd.current = Math.max(0, abilCd.current - delta);
+    if (invuln.current > 0) invuln.current -= delta;
+    if (overdrive.current > 0) overdrive.current -= delta;
+    if (barrierMesh.current) {
+      barrierMesh.current.visible = invuln.current > 0 && abilityRef.current === "barrier";
+      barrierMesh.current.position.copy(cam.position);
+    }
+    if (poolTicks.current > 0) {
+      poolTimer.current -= delta;
+      if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
+    }
+    if (flareTimer.current > 0) {
+      flareTimer.current -= delta;
+      if (flareTimer.current <= 0) {
+        for (let ei = 0; ei < enemies.length; ei++) {
+          const e = enemies[ei]!;
+          if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 9) hurtEnemy(e, 3, ei);
+        }
+      }
+    }
+    if (abilFire.current) {
+      abilFire.current = false;
+      const id = abilityRef.current;
+      if (!spectating && abilCd.current <= 0) {
+        abilCd.current = ABILITIES[id].cd;
+        playSfx("buy");
+        cam.getWorldDirection(FORWARD);
+        FORWARD.y = 0;
+        FORWARD.normalize();
+        const near = (radius: number, fn: (e: Enemy, i: number) => void) => {
+          for (let ei = 0; ei < enemies.length; ei++) {
+            const e = enemies[ei]!;
+            if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < radius) fn(e, ei);
+          }
+        };
+        if (id === "dash") {
+          slide.current.x += FORWARD.x * 26;
+          slide.current.z += FORWARD.z * 26;
+          invuln.current = 0.7;
+        } else if (id === "pool") {
+          poolTicks.current = 3;
+          poolTimer.current = 0.1;
+        } else if (id === "repulse") {
+          near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+        } else if (id === "nova") {
+          near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+        } else if (id === "flare") {
+          near(12, (e, ei) => hurtEnemy(e, 1, ei, 4));
+          flareTimer.current = 4;
+        } else if (id === "mortar") {
+          const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
+          pos.y -= 0.2;
+          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+        } else if (id === "barrier") {
+          invuln.current = 6;
+        } else if (id === "overdrive") {
+          overdrive.current = 4;
+        }
+      } else if (abilCd.current > 0) {
+        playSfx("deny");
+      }
+    }
+    cdReport.current -= delta;
+    if (cdReport.current <= 0) {
+      cdReport.current = 0.2;
+      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd);
     }
 
     // cryo mines freeze and hurt whatever walks onto them
@@ -2219,6 +2557,8 @@ function World({
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
               const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              onStat("hit", 1);
+              onStat("dmg", dmg);
               if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
               if (b.mods & M_BOUNTY && lethal) {
                 onShard(1);
@@ -2436,6 +2776,10 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      <mesh ref={barrierMesh} visible={false}>
+        <sphereGeometry args={[1.6, 16, 12]} />
+        <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
+      </mesh>
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} mods={stats.current} />
       </group>
@@ -2529,6 +2873,16 @@ export function Game() {
   const [musicVol, setMusicVol] = useState(0.5);
   const [sfxVol, setSfxVol] = useState(0.7);
   const [shards, setShards] = useState(0);
+  const [ability, setAbility] = useState<AbilityId>(() => {
+    if (typeof window === "undefined") return "dash";
+    const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
+    return saved && ABILITIES[saved] ? saved : "dash";
+  });
+  const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
+  const [eventMsg, setEventMsg] = useState<string | null>(null);
+  // run tally for the post-game recap
+  const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
+  const [squad, setSquad] = useState<Record<number, { kills: number; dmg: number; acc: number; shards: number; taken: number }>>({});
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
@@ -2584,6 +2938,8 @@ export function Game() {
       return;
     }
     if (m.type === "seed") {
+      run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
+      setSquad({});
       setSeed(Number(m.seed));
       setScore(0);
       setHealth(MAX_HP);
@@ -2596,6 +2952,12 @@ export function Game() {
       return;
     }
     if (m.type === "over") { setAllDown(true); return; }
+    if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "statline") {
+      const num = Number(m.num);
+      setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
+      return;
+    }
     if (m.type === "pause") {
       setLocked(false);
       if (document.pointerLockElement) document.exitPointerLock();
@@ -2793,6 +3155,14 @@ export function Game() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
+  }, [ability]);
+  useEffect(() => {
+    if (!eventMsg) return;
+    const t = window.setTimeout(() => setEventMsg(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [eventMsg]);
+  useEffect(() => {
     if (!banner) return;
     const t = window.setTimeout(() => setBanner(false), 1800);
     return () => window.clearTimeout(t);
@@ -2814,6 +3184,16 @@ export function Game() {
     return () => window.clearInterval(id);
   }, [net]);
 
+  // hand my run report to the rest of the squad
+  useEffect(() => {
+    if (!ended) return;
+    const r = run.current;
+    netHolder.current?.broadcast({
+      type: "statline", num: myNum, kills: score, dmg: Math.round(r.dmg),
+      acc: r.shots ? Math.round((r.hits / r.shots) * 100) : 0, shards: r.shards, taken: r.taken,
+    });
+  }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
     if (ended && document.pointerLockElement) document.exitPointerLock();
@@ -2825,7 +3205,8 @@ export function Game() {
     const resuming = started && !ended;
     setStarted(true);
     if (ended && !fromNet) {
-
+      run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
+      setSquad({});
       if (isHost) {
         const s = newSeed();
         setSeed(s);
@@ -2976,7 +3357,9 @@ export function Game() {
           slots={slots}
           stats={statsRef}
           onShard={(v) => {
-            setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1))));
+            const gain = Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)));
+            run.current.shards += gain;
+            setShards((s) => s + gain);
             playSfx("shard");
           }}
           onLeech={() => {
@@ -2992,6 +3375,16 @@ export function Game() {
           city={city}
           seed={seed}
           night={night}
+          ability={ability}
+          onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
+          onStat={(k, n) => {
+            const r = run.current;
+            if (k === "shot") r.shots += n;
+            else if (k === "hit") r.hits += n;
+            else if (k === "dmg") r.dmg += n;
+            else r.taken += n;
+          }}
+          onEvent={setEventMsg}
 
 
 
@@ -3103,6 +3496,17 @@ export function Game() {
           </div>
         )}
         {locked && !ended && (
+          <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
+            [F] {ABILITIES[ability].name} ·{" "}
+            {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
+          </div>
+        )}
+        {eventMsg && locked && !ended && (
+          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
+            ⚠ {eventMsg} ⚠
+          </div>
+        )}
+        {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
@@ -3189,8 +3593,8 @@ export function Game() {
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap
-                guns · N day/night · Esc to pause
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E
+                swap guns · N day/night · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -3204,6 +3608,73 @@ export function Game() {
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
               </button>
+            )}
+
+            {ended && (() => {
+              const r = run.current;
+              const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
+              const mine = { kills: score, dmg: Math.round(r.dmg), acc, shards: r.shards, taken: r.taken };
+              const rows = [{ num: myNum, ...mine }, ...Object.entries(squad)
+                .filter(([n]) => Number(n) !== myNum)
+                .map(([n, v]) => ({ num: Number(n), ...v }))]
+                .sort((a, b) => a.num - b.num);
+              const badges: string[] = [];
+              if (acc >= 60) badges.push("SHARPSHOOTER");
+              if (rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
+              if (rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
+              if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              if (status.won) badges.push("BOSS SLAYER");
+              return (
+                <div className="mt-5 text-left text-black">
+                  <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
+                  <div className="mt-2 space-y-1 text-[11px] tracking-wider">
+                    <div>WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>KILLS · {mine.kills}</div>
+                    <div>DAMAGE DEALT · {mine.dmg}</div>
+                    <div>ACCURACY · {acc}%</div>
+                    <div>SHARDS COLLECTED · {mine.shards}</div>
+                    <div>DAMAGE TAKEN · {mine.taken}</div>
+                  </div>
+                  {badges.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
+                      {badges.map((b) => <span key={b}>{b}</span>)}
+                    </div>
+                  )}
+                  {multiplayer && rows.length > 1 && (
+                    <div className="mt-3 space-y-1 text-[10px] tracking-wider">
+                      <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
+                      {rows.map((x) => (
+                        <div key={x.num} className="flex items-center gap-2">
+                          <span style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                          <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
+                          <span className="opacity-60">{x.kills} kills · {x.dmg} dmg · {x.acc}%</span>
+                          {x.num === myNum && <span className="opacity-40">(YOU)</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {(!started || ended) && !paused && (
+              <div className="mt-5 text-left text-black">
+                <div className="text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {ABILITY_IDS.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => setAbility(id)}
+                      className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
+                        ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                      }`}
+                    >
+                      {ABILITIES[id].name}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-1.5 text-[10px] leading-snug opacity-60">{ABILITIES[ability].desc}</div>
+              </div>
             )}
 
             {paused && (activeMods.length > 0 || activePerks.length > 0) && (
