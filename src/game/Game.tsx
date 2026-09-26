@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
-import { NO_PERKS, PERK_IDS, PERK_INFO, PISTOL_MODS, derive, perkBadge, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
+import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -64,11 +64,14 @@ type Enemy = {
   slow: number; // frozen timer
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
+  max?: number; // spawn health, for the executioner hammer
+  shredUntil?: number; // shredder rounds: takes extra damage until this time
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
-  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
 };
+const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
 
 const BOSS_HP = 300;
@@ -672,12 +675,12 @@ const BulletPool = memo(function BulletPool({
   );
 });
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number };
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
-    burn: fx.burn ?? 0, knock: fx.knock ?? 0,
+    burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
   };
   const slot = pool.find((b) => !b.active);
   if (slot) {
@@ -691,7 +694,8 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
 
 
 /** Simple blocky gun model, different silhouette per weapon. */
-function GunModel({ w, mods }: { w: Weapon; mods?: { burst: boolean; incend: boolean; magnum: boolean } }) {
+type ModLooks = Partial<Record<"burst" | "incend" | "magnum" | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty", boolean>>;
+function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
   const g = GUNS[w];
   const glow = <meshBasicMaterial color={g.color} fog={false} />;
   const body = <meshLambertMaterial color={g.body} />;
@@ -717,6 +721,41 @@ function GunModel({ w, mods }: { w: Weapon; mods?: { burst: boolean; incend: boo
         {/* incendiary: glowing fuel canister under the barrel */}
         {mods?.incend && (
           <mesh position={[0, -0.09, -0.2]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.22, 8]} /><meshBasicMaterial color="#ff5a1f" fog={false} /></mesh>
+        )}
+        {/* extended mag: chunky drum at the grip base */}
+        {mods?.extmag && (
+          <mesh position={[0, -0.25, 0.02]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.09, 10]} /><meshLambertMaterial color="#2a2a2a" /></mesh>
+        )}
+        {/* shredder: serrated muzzle brake */}
+        {mods?.shred && [0, 1, 2].map((k) => (
+          <mesh key={k} position={[0, 0, (mg ? -0.47 : -0.32) - (mods?.suppr ? 0.2 : 0) - k * 0.035]} rotation-z={k * 0.5}><boxGeometry args={[0.14, 0.14, 0.02]} /><meshLambertMaterial color="#9a9a9a" /></mesh>
+        ))}
+        {/* laser sight: emitter + beam */}
+        {mods?.laser && (<>
+          <mesh position={[0.07, -0.05, -0.22]}><boxGeometry args={[0.04, 0.04, 0.12]} /><meshLambertMaterial color="#222" /></mesh>
+          <mesh position={[0.07, -0.05, -3.3]}><boxGeometry args={[0.006, 0.006, 6]} /><meshBasicMaterial color="#ff2020" fog={false} transparent opacity={0.6} /></mesh>
+        </>)}
+        {/* compensator: squared ported block on the tip */}
+        {mods?.comp && !mods?.suppr && (<>
+          <mesh position={[0, 0, mg ? -0.5 : -0.36]}><boxGeometry args={[0.13, 0.13, 0.08]} /><meshLambertMaterial color="#4a4a4a" /></mesh>
+          <mesh position={[0, 0.066, mg ? -0.5 : -0.36]}><boxGeometry args={[0.06, 0.01, 0.05]} /><meshBasicMaterial color="#111" /></mesh>
+        </>)}
+        {/* suppressor: long matte shroud */}
+        {mods?.suppr && (
+          <mesh position={[0, 0, mg ? -0.57 : -0.43]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.055, 0.055, 0.22, 12]} /><meshLambertMaterial color="#141414" /></mesh>
+        )}
+        {/* executioner: serrated hammer on the rear */}
+        {mods?.exec && (<>
+          <mesh position={[0, 0.1, 0.06]} rotation-x={-0.5}><boxGeometry args={[0.04, 0.1, 0.05]} /><meshLambertMaterial color="#6a1010" /></mesh>
+          <mesh position={[0, 0.15, 0.09]}><boxGeometry args={[0.1, 0.03, 0.03]} /><meshLambertMaterial color="#b8b8b8" /></mesh>
+        </>)}
+        {/* holster: skeletonized match grip panels */}
+        {mods?.holster && [-0.045, 0.045].map((x) => (
+          <mesh key={x} position={[x, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.012, 0.16, 0.09]} /><meshLambertMaterial color="#3fae5a" /></mesh>
+        ))}
+        {/* bounty: glowing capacitor under the trigger guard */}
+        {mods?.bounty && (
+          <mesh position={[0, -0.09, -0.06]}><boxGeometry args={[0.05, 0.04, 0.07]} /><meshBasicMaterial color="#39c6ff" fog={false} /></mesh>
         )}
       </>)}
       {w === "scatter" && (<>
@@ -982,7 +1021,7 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0 };
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0 };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -1122,11 +1161,16 @@ function World({
   // pistol mod cards rewrite the sidearm
   const gunFor = (w: Weapon): Gun => {
     const g = GUNS[w];
-    if (w !== "pistol" || !stats.current.magnum) return g;
-    return { ...g, damage: g.damage + 1, speed: g.speed * 1.5, pierce: 1, color: "#ffd9a0" };
+    if (w !== "pistol") return g;
+    const s = stats.current;
+    let out: Gun = g;
+    if (s.magnum) out = { ...out, damage: out.damage + 1, speed: out.speed * 1.5, pierce: 1, color: "#ffd9a0" };
+    if (s.comp) out = { ...out, speed: out.speed * 1.3 };
+    return out;
   };
 
   const burstQueue = useRef(0);
+  const bountyKills = useRef(0);
   const burstTimer = useRef(0);
 
   const spit = () => {
@@ -1140,24 +1184,26 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      const crit = Math.random() < s2.crit;
-      const dmg = g.damage * s2.dmg * (crit ? 2 : 1);
+      const isP = w === "pistol";
+      const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
+      const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
       const fx: Fx = {
         bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
         pierce: g.pierce ?? 0,
         slow: g.slow ?? 0,
         cluster: g.cluster ?? 0,
         chain: g.chain ?? 0,
-        knock: s2.knock,
-        burn: w === "pistol" && s2.incend ? 3 : 0,
+        knock: s2.knock + (isP && s2.comp ? 0.8 : 0),
+        burn: isP && s2.incend ? 3 : 0,
+        mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
       fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
     }
-    playGun(w);
-    recoil.current = g.damage > 3 ? 1 : 0.5;
+    playGun(w, w === "pistol" && s2.suppr);
+    recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
 
   const fire = () => {
@@ -1194,7 +1240,7 @@ function World({
       ammo.current[w] = 0;
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
-    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1238,7 +1284,7 @@ function World({
 
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
-    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
@@ -1267,6 +1313,8 @@ function World({
         x: p.x,
         z: p.z,
         hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        max: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        shredUntil: 0,
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
@@ -1369,7 +1417,7 @@ function World({
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
-    const spd = SPEED * stats.current.speed;
+    const spd = SPEED * stats.current.speed * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1);
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -1555,6 +1603,7 @@ function World({
       }
     };
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
+      if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
@@ -1833,8 +1882,16 @@ function World({
             const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
-              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              let dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
+              const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
+              if (b.mods & M_BOUNTY && lethal) {
+                onShard(1);
+                bountyKills.current++;
+                if (bountyKills.current % 6 === 0) onLeech();
+              }
 
               if (b.chain > 0) {
                 let left = b.chain;
@@ -2004,7 +2061,7 @@ function World({
         </group>
       ))}
       <group ref={viewModel} scale={0.7}>
-        <GunModel w={held} mods={{ burst: stats.current.burst, incend: stats.current.incend, magnum: stats.current.magnum }} />
+        <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
@@ -2372,7 +2429,7 @@ export function Game() {
   useEffect(() => {
     if (!shopBreak) return;
     // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
-    const avail = PERK_IDS.filter((p) => !perkMaxed(p, perksRef.current[p]));
+    const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
     if (pool.length < 3) pool = avail;
     const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
@@ -2556,6 +2613,13 @@ export function Game() {
                 </span>
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
+                {slot.w === "pistol" && (
+                  <div className="mt-0.5 flex justify-center gap-1">
+                    {Array.from({ length: MOD_SLOTS }, (_, k) => (
+                      <span key={k} className={`h-1.5 w-1.5 rounded-full border border-[#2b2118] ${k < modsEquipped(perks) ? "bg-[#2b2118]" : ""}`} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
