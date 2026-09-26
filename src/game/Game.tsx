@@ -1104,11 +1104,19 @@ function World({
       if (burstTimer.current <= 0) {
         burstQueue.current--;
         burstTimer.current = 0.07;
-        spit();
+        if (ammo.current.pistol > 0) {
+          spit();
+          ammo.current.pistol--;
+          onAmmo(ammo.current.pistol);
+        } else {
+          burstQueue.current = 0;
+        }
       }
     } else if (trigger.current && !spectating && fireCd.current <= 0) {
+      const w = weapon.current;
       fire();
-      fireCd.current = GUNS[weapon.current].cooldown / stats.current.rate;
+      // the sidearm always fires at its stock cadence; fire-rate perks skip it
+      fireCd.current = w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate;
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
