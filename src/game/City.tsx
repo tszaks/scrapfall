@@ -131,7 +131,7 @@ export const CityScene = memo(function CityScene({
         vertexColors: true,
         map: glowTexture(),
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.9,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         polygonOffset: true,

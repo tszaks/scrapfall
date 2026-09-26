@@ -2153,10 +2153,10 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
       const sodium = p.k === "light";
       ch.glow.col(sodium ? "#ffb04a" : "#eef4ff").mat(0);
       ch.glow.obox(hx, y + 8.5, hz, 0.3, 0.05, 0.6, p.rot);
-      ch.pools.col(sodium ? "#ff9a3a" : "#dfe8ff").mat(0);
+      ch.pools.col(sodium ? "#ff8a2a" : "#b8c8f0").mat(0);
       const px = p.x + s * 3.2;
       const pz = p.z + c * 3.2;
-      const r = 7.5;
+      const r = 9;
       ch.pools.flat(px - r, pz - r, px + r, pz + r, 0.2, [0, 0, 1, 1]);
       break;
     }
