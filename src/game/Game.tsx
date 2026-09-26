@@ -2433,7 +2433,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
-      <Canvas shadows dpr={[1, 1.25]} gl={{ powerPreference: "high-performance", antialias: false }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
           enemies={enemies}
@@ -2782,7 +2782,7 @@ export function Game() {
               </div>
             )}
 
-            {!paused && (
+            {(
               <div>
                 <button
                   onClick={() => setShowSettings((v) => !v)}
@@ -2790,16 +2790,16 @@ export function Game() {
                 >
                   {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
                 </button>
-                <button
+                {!paused && <button
                   onClick={() => setShowWeapons(true)}
                   className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
                 >
                   WEAPONS
-                </button>
+                </button>}
                 {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
               </div>
             )}
-            {showSettings && !paused && (
+            {showSettings && (
               <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
                 <label className="block">
                   FIELD OF VIEW · {fov}°
