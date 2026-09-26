@@ -1024,7 +1024,14 @@ function World({
     const spectating = deadRef.current;
 
     fireCd.current -= delta;
-    if (trigger.current && !spectating && fireCd.current <= 0) {
+    if (burstQueue.current > 0 && !spectating) {
+      burstTimer.current -= delta;
+      if (burstTimer.current <= 0) {
+        burstQueue.current--;
+        burstTimer.current = 0.07;
+        spit();
+      }
+    } else if (trigger.current && !spectating && fireCd.current <= 0) {
       fire();
       fireCd.current = GUNS[weapon.current].cooldown / stats.current.rate;
     }
