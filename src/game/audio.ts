@@ -149,14 +149,15 @@ type Style = {
 const STYLES: Record<string, Style> = {
   // desert: swung, twangy minor groove with a walking bass
   desert: { roots: [45, 41, 48, 43], bpm: 116, arp: [0, 3, 5, 6, 7, 10, 7, 3], lead: "sawtooth", leadCut: 1800, bass: "triangle", kick: [0, 7, 10], snare: [4, 12], hat: "off", arpRate: 3, oct: 12, bassRate: 4, swing: 0.28, leadLen: 1.6 },
-  // ice: sparse, slow music-box bells with long echoes, no drums to speak of
-  ice: { roots: [62, 57, 59, 55], bpm: 76, arp: [0, 7, 12, 16, 19, 16, 12, 7], lead: "sine", leadCut: 9000, bass: "sine", kick: [0], snare: [], hat: "none", pad: true, arpRate: 4, oct: 12, bassRate: 16, leadLen: 3, echo: true },
-  // forest: bouncy major pentatonic plucks, woodblock clicks, fast tempo
-  forest: { roots: [55, 60, 57, 62], bpm: 132, arp: [0, 4, 7, 12, 9, 7, 4, 2], lead: "triangle", leadCut: 5000, bass: "square", kick: [0, 8], snare: [4, 10, 12], hat: "none", arpRate: 1, oct: 12, bassRate: 8, leadLen: 0.6, wood: true },
+  // ice: cold bells over a relentless sub pulse — freezing, not restful
+  ice: { roots: [50, 48, 45, 46], bpm: 104, arp: [0, 7, 12, 15, 19, 15, 12, 7], lead: "sine", leadCut: 9000, bass: "sine", kick: [0, 6, 8], snare: [4, 12], hat: "off", pad: true, arpRate: 2, oct: 12, bassRate: 2, leadLen: 1.2, echo: true },
+  // forest: primal war drums and a tense minor pluck line
+  forest: { roots: [45, 43, 41, 45], bpm: 128, arp: [0, 3, 7, 10, 12, 10, 7, 3], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 3, 6, 8, 11], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, wood: true },
   // magma: heavy, fast, distorted (kept as-is)
   magma: { roots: [40, 40, 41, 38], bpm: 136, arp: [0, 1, 7, 6, 0, 12, 1, 7], lead: "sawtooth", leadCut: 1800, bass: "sawtooth", kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: "all" },
-  // blossom: gentle waltz-like koto plucks over pads (Japanese in-scale)
-  blossom: { roots: [57, 52, 53, 50], bpm: 90, arp: [0, 1, 5, 7, 8, 12, 8, 5], lead: "triangle", leadCut: 3500, bass: "sine", kick: [0], snare: [12], hat: "none", pad: true, arpRate: 3, oct: 12, bassRate: 16, leadLen: 2.2, echo: true },
+  // blossom: driving ronin duel — sharp koto accents over taiko hits
+  blossom: { roots: [45, 41, 40, 43], bpm: 124, arp: [0, 1, 5, 7, 8, 7, 5, 1], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 4, 6, 10, 12], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, swing: 0.1 },
+
   // abyss: very slow, deep sub drones and a lonely sonar ping
   abyss: { roots: [33, 36, 31, 34], bpm: 64, arp: [24, 19, 24, 31], lead: "sine", leadCut: 2500, bass: "sine", kick: [0, 10], snare: [], hat: "none", pad: true, arpRate: 8, oct: 12, bassRate: 16, leadLen: 5, echo: true },
   // cyber: four-on-the-floor electro, octave-jumping saw bass, off-beat hats
