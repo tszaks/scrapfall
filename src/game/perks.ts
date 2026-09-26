@@ -1,16 +1,18 @@
 export type PerkId =
   | "dmg" | "rate" | "speed" | "maxhp" | "heal" | "magnet" | "greed" | "regen"
   | "crit" | "boom" | "knock" | "ammo" | "armor" | "thorns" | "ricochet" | "leech"
-  | "burst" | "incend" | "magnum";
+  | "burst" | "incend" | "magnum"
+  | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty";
 export type Perks = Record<PerkId, number>;
 
 export const NO_PERKS: Perks = {
   dmg: 0, rate: 0, speed: 0, maxhp: 0, heal: 0, magnet: 0, greed: 0, regen: 0,
   crit: 0, boom: 0, knock: 0, ammo: 0, armor: 0, thorns: 0, ricochet: 0, leech: 0,
   burst: 0, incend: 0, magnum: 0,
+  extmag: 0, shred: 0, laser: 0, comp: 0, suppr: 0, exec: 0, holster: 0, bounty: 0,
 };
 
-export const PERK_INFO: Record<PerkId, { name: string; desc: string; base: number; color: string; max?: number }> = {
+export const PERK_INFO: Record<PerkId, { name: string; desc: string; base: number; color: string; max?: number; trigger?: boolean }> = {
   dmg: { name: "HOLLOW POINTS", desc: "+15% damage, every gun", base: 8, color: "#e8322a" },
   rate: { name: "HAIR TRIGGER", desc: "+15% fire rate, every gun", base: 8, color: "#ff9d3b" },
   speed: { name: "LIGHT BOOTS", desc: "+20% move speed", base: 6, color: "#4fe3ff" },
@@ -27,9 +29,17 @@ export const PERK_INFO: Record<PerkId, { name: string; desc: string; base: numbe
   thorns: { name: "SHOCK THORNS", desc: "+20% chance to zap attackers for 2", base: 9, color: "#7ce8ff" },
   ricochet: { name: "RUBBER BULLETS", desc: "+25% chance shots bounce off walls", base: 8, color: "#7cff4f" },
   leech: { name: "VAMPIRIC LEECH", desc: "+8% chance a kill restores 1 health", base: 10, color: "#ff4f8b" },
-  burst: { name: "BURST RECEIVER", desc: "Pistol fires a 3-round burst", base: 14, color: "#ffb347", max: 1 },
+  burst: { name: "BURST RECEIVER", desc: "Pistol fires a 3-round burst", base: 14, color: "#ffb347", max: 1, trigger: true },
   incend: { name: "INCENDIARY ROUNDS", desc: "Pistol hits burn for 1/sec over 3s", base: 14, color: "#ff7043", max: 1 },
   magnum: { name: "MAGNUM BREECH", desc: "Pistol: +1 damage, faster, pierces 1", base: 14, color: "#e8e2d4", max: 1 },
+  extmag: { name: "EXTENDED MAG", desc: "Pistol: 220 rounds each wave instead of 140", base: 12, color: "#000", max: 1 },
+  shred: { name: "SHREDDER ROUNDS", desc: "Pistol hits make enemies take +30% damage for 3s", base: 14, color: "#000", max: 1 },
+  laser: { name: "LASER SIGHT", desc: "Pistol: red aiming laser, +25% crit chance", base: 13, color: "#000", max: 1 },
+  comp: { name: "HEAVY COMPENSATOR", desc: "Pistol: no recoil, +30% bullet speed, heavy knockback", base: 12, color: "#000", max: 1 },
+  suppr: { name: "WHISPER SUPPRESSOR", desc: "Pistol: quiet shots, crits deal triple damage", base: 13, color: "#000", max: 1 },
+  exec: { name: "EXECUTIONER HAMMER", desc: "Pistol: double damage to enemies under half health", base: 14, color: "#000", max: 1 },
+  holster: { name: "SPEED HOLSTER", desc: "+15% move speed while holding the pistol", base: 11, color: "#000", max: 1 },
+  bounty: { name: "BOUNTY EXTRACTOR", desc: "Pistol kills: +1 shard, every 6th heals 1", base: 13, color: "#000", max: 1 },
 };
 
 export const PERK_IDS = Object.keys(PERK_INFO) as PerkId[];
@@ -61,6 +71,14 @@ export const derive = (p: Perks) => ({
   burst: p.burst > 0,
   incend: p.incend > 0,
   magnum: p.magnum > 0,
+  extmag: p.extmag > 0,
+  shred: p.shred > 0,
+  laser: p.laser > 0,
+  comp: p.comp > 0,
+  suppr: p.suppr > 0,
+  exec: p.exec > 0,
+  holster: p.holster > 0,
+  bounty: p.bounty > 0,
 });
 export type Derived = ReturnType<typeof derive>;
 
@@ -90,9 +108,21 @@ export const perkBadge = (id: PerkId, lvl: number): string | null => {
     case "burst": return "BURST";
     case "incend": return "INCENDIARY";
     case "magnum": return "MAGNUM";
-    default: return null;
+    default: return PERK_INFO[id].name;
   }
 };
 
-export const PISTOL_MODS: PerkId[] = ["burst", "incend", "magnum"];
+export const PISTOL_MODS: PerkId[] = ["burst", "incend", "magnum", "extmag", "shred", "laser", "comp", "suppr", "exec", "holster", "bounty"];
+export const MOD_SLOTS = 3;
+export const modsEquipped = (p: Perks) => PISTOL_MODS.filter((id) => p[id] > 0).length;
+
+// what the shop may offer: pistol mods vanish once all 3 slots are filled,
+// and only one mod that changes how the pistol fires is ever allowed
+export const perkAvailable = (id: PerkId, p: Perks) => {
+  if (perkMaxed(id, p[id])) return false;
+  if (!PISTOL_MODS.includes(id)) return true;
+  if (modsEquipped(p) >= MOD_SLOTS) return false;
+  if (PERK_INFO[id].trigger && PISTOL_MODS.some((m) => PERK_INFO[m].trigger && p[m] > 0)) return false;
+  return true;
+};
 
