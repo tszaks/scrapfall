@@ -1129,7 +1129,7 @@ function World({
         if (nextWaveTimer.current <= 0) {
           wave.current++;
           spawnWave(wave.current);
-          nextWaveTimer.current = 12; // shopping break before the next wave
+          nextWaveTimer.current = 5; // shopping break before the next wave
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
@@ -1828,11 +1828,15 @@ export function Game() {
   const shopOpen = started && locked && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
+  const [shopLeft, setShopLeft] = useState(5);
   useEffect(() => {
     if (!shopOpen) return;
     const pool = [...PERK_IDS].sort(() => Math.random() - 0.5);
     setOffers(pool.slice(0, 3));
     setBought([]);
+    setShopLeft(5);
+    const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
   }, [shopOpen, status.wave]);
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
@@ -2047,7 +2051,7 @@ export function Game() {
       {shopOpen && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-10 -translate-x-1/2 font-mono text-[#2b2118]">
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
-            SHOP · NEXT WAVE SOON · {shards} SHARDS
+            SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
           <div className="flex gap-3">
             {offers.map((id, i) => {
