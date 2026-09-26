@@ -105,8 +105,32 @@ export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny" | "tu
   }
 }
 
-// ---- music: tiny lookahead step sequencer ----
-const ROOTS = [45, 41, 48, 43]; // A F C G (midi)
+// ---- music: tiny lookahead step sequencer, one style per map ----
+type Style = {
+  roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;
+  bass: OscillatorType; kick: number[]; snare: number[]; hat: "odd" | "all" | "none"; pad?: boolean;
+};
+const STYLES: Record<string, Style> = {
+  // desert: dusty minor groove
+  desert: { roots: [45, 41, 48, 43], bpm: 122, arp: [0, 3, 7, 12, 7, 3, 10, 7], lead: "square", leadCut: 2600, bass: "sawtooth", kick: [0, 4, 8, 12], snare: [4, 12], hat: "odd" },
+  // ice: slow, glassy, sparkly bells over soft pulses
+  ice: { roots: [50, 46, 43, 45], bpm: 100, arp: [0, 7, 14, 19, 14, 7, 12, 5], lead: "sine", leadCut: 9000, bass: "triangle", kick: [0, 8], snare: [12], hat: "none", pad: true },
+  // forest: bouncy pentatonic plucks, woody percussion
+  forest: { roots: [43, 48, 45, 50], bpm: 112, arp: [0, 2, 4, 7, 9, 7, 4, 2], lead: "triangle", leadCut: 4000, bass: "triangle", kick: [0, 6, 8, 14], snare: [4, 12], hat: "odd" },
+  // magma: heavy, fast, distorted
+  magma: { roots: [40, 40, 41, 38], bpm: 136, arp: [0, 1, 7, 6, 0, 12, 1, 7], lead: "sawtooth", leadCut: 1800, bass: "sawtooth", kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: "all" },
+  // blossom: dreamy pentatonic
+  blossom: { roots: [45, 50, 52, 48], bpm: 104, arp: [0, 3, 5, 7, 10, 7, 5, 3], lead: "sine", leadCut: 6000, bass: "triangle", kick: [0, 8], snare: [4, 12], hat: "odd", pad: true },
+};
+const MAP_STYLE: Record<string, string> = {
+  "Dust Basin": "desert", "Canyon Mesa": "desert", "Frost Shelf": "ice", "Glacier Rift": "ice",
+  "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
+};
+let style: Style = STYLES['desert']!;
+export function setMusicTheme(mapName: string) {
+  style = STYLES[MAP_STYLE[mapName] ?? "desert"]!;
+}
+
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 let timer: number | null = null;
 let step = 0;
@@ -119,18 +143,22 @@ export function setMusicIntensity(boss: boolean) {
 
 function scheduleStep(s: number, t: number) {
   if (!musicGain) return;
+  const S = style;
   const bar = Math.floor(s / 16) % 4;
   const i = s % 16;
-  const root = ROOTS[bar]!;
-  if (i % 4 === 0) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
-  if (i === 4 || i === 12) tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
-  if (i % 2 === 1 || intense) tone({ wave: "square", f0: 0, f1: 0, dur: 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
+  const root = S.roots[bar]!;
+  if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
+  if (S.snare.includes(i)) tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+  const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || intense;
+  if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
   const bassNote = i % 4 === 2 ? root + 12 : root;
-  if (i % 2 === 0 || intense) tone({ wave: "sawtooth", f0: midi(bassNote), f1: midi(bassNote), dur: 0.14, gain: 0.35, noise: 0, cut: 700, q: 6 }, musicGain, t);
-  const arp = [0, 3, 7, 12, 7, 3, 10, 7];
+  if (i % 2 === 0 || intense) tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: 0.14, gain: 0.35, noise: 0, cut: 700, q: 6 }, musicGain, t);
+  if (S.pad && i === 0) {
+    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: 1.6, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t));
+  }
   if (intense || i % 2 === 0) {
-    const n = root + 24 + arp[i % arp.length]!;
-    tone({ wave: "square", f0: midi(n), f1: midi(n), dur: 0.12, gain: 0.1, noise: 0, cut: 2600 }, musicGain, t);
+    const n = root + 24 + S.arp[i % S.arp.length]!;
+    tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur: S.lead === "sine" ? 0.25 : 0.12, gain: S.lead === "sine" ? 0.14 : 0.1, noise: 0, cut: S.leadCut }, musicGain, t);
   }
 }
 
@@ -139,7 +167,7 @@ export function startMusic() {
   nextT = ctx.currentTime + 0.05;
   timer = window.setInterval(() => {
     if (!ctx) return;
-    const stepDur = 60 / (intense ? 142 : 122) / 4;
+    const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
     while (nextT < ctx.currentTime + 0.12) {
       scheduleStep(step, nextT);
       step++;
