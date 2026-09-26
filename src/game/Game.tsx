@@ -1015,6 +1015,12 @@ function World({
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
+    // supply crate: turret kit, barrier, cryo mine or ammo cache
+    if (n >= 2 && !crate.current.active && rand() < Math.min(0.9, 0.55 * lootMul)) {
+      const c = randomSpawn(blocks, rand);
+      const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
+      crate.current = { x: c.x, z: c.z, active: true, kind };
+    }
     // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
     const rolls = Math.max(1, Math.round(lootMul));
     const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
