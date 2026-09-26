@@ -3499,21 +3499,8 @@ export function Game() {
                 </div>
               );
             })}
-            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
-              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">V</span>
-              <div className="text-xs font-bold tracking-widest">FIELD DRESSING</div>
-              <div className="mt-1 text-[11px] leading-snug opacity-80">Restore 5 health · always available</div>
-              <div className="mt-1 text-[10px] opacity-50">HP {health}/{maxHp}</div>
-              <div className="mt-2 text-sm font-bold">◆ {PATCH_COST}</div>
-            </div>
-            <div className="relative w-40 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]">
-              <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">R</span>
-              <div className="text-xs font-bold tracking-widest">REROLL</div>
-              <div className="mt-1 text-[11px] leading-snug opacity-80">Draw three new cards</div>
-              <div className="mt-1 text-[10px] opacity-50">{rerolls > 0 ? `USED ${rerolls}x THIS BREAK` : "PRICE DOUBLES EACH USE"}</div>
-              <div className="mt-2 text-sm font-bold">◆ {rerollCost}</div>
-            </div>
           </div>
+
 
         </div>
       )}
