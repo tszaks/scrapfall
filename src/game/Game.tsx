@@ -2214,6 +2214,7 @@ function World({
       poolTimer.current -= delta;
       if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
     }
+    // --- orbital strike: targeting marker, then a beam crashing out of the sky ---
     if (flareTimer.current > 0) {
       flareTimer.current -= delta;
       if (flareTimer.current <= 0) {
@@ -2221,8 +2222,62 @@ function World({
           const e = enemies[ei]!;
           if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5) hurtEnemy(e, 7, ei);
         }
+        strikeFlash.current.t = 0.5;
+        playFx("#ffd46a", 1, 10, 0.5, strikeAt.current.x, strikeAt.current.z);
       }
     }
+    if (strikeRing.current) {
+      const aiming = flareTimer.current > 0;
+      strikeRing.current.visible = aiming;
+      if (aiming) {
+        const p = 1 - flareTimer.current / 1.2;
+        strikeRing.current.position.set(strikeAt.current.x, 0.08, strikeAt.current.z);
+        strikeRing.current.rotation.z = time * 3;
+        strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
+        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(time * 26) * 0.3;
+      }
+    }
+    if (strikeBeam.current) {
+      const f = strikeFlash.current;
+      if (f.t > 0) f.t -= delta;
+      strikeBeam.current.visible = f.t > 0;
+      if (f.t > 0) {
+        const k = f.t / 0.5;
+        strikeBeam.current.position.set(strikeAt.current.x, 22, strikeAt.current.z);
+        strikeBeam.current.scale.set(1 + (1 - k) * 1.6, 1, 1 + (1 - k) * 1.6);
+        (strikeBeam.current.material as THREE.MeshBasicMaterial).opacity = Math.min(1, k * 1.2);
+      }
+    }
+    // --- shared ground shockwave ring used by the other abilities ---
+    if (ringMesh.current) {
+      const r = ringFx.current;
+      if (r.t > 0) r.t -= delta;
+      ringMesh.current.visible = r.t > 0;
+      if (r.t > 0) {
+        const p = 1 - r.t / r.dur;
+        ringMesh.current.position.set(r.x, r.y, r.z);
+        ringMesh.current.scale.setScalar(r.r0 + (r.r1 - r.r0) * p);
+        const mat = ringMesh.current.material as THREE.MeshBasicMaterial;
+        mat.color.set(r.color);
+        mat.opacity = 0.85 * (1 - p);
+      }
+    }
+    // --- chain storm lightning arcs ---
+    {
+      const b = boltFx.current;
+      if (b.t > 0) {
+        b.t -= delta;
+        const flick = b.t > 0 ? 0.35 + Math.random() * 0.65 : 0;
+        for (let bi = 0; bi < 6; bi++) {
+          const m = boltMeshes.current[bi];
+          if (!m || !m.visible) continue;
+          if (b.t <= 0) { m.visible = false; continue; }
+          m.rotateOnAxis(BULLET_UP, delta * 24);
+          (m.material as THREE.MeshBasicMaterial).opacity = flick;
+        }
+      }
+    }
+
     if (abilFire.current) {
       abilFire.current = false;
       const id = abilityRef.current;
