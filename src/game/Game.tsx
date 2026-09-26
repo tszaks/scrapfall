@@ -2243,6 +2243,72 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
+
+            {/* run status: pistol mods, active deployables, perk stacks */}
+            {locked && !ended && (activeMods.length > 0 || deploys.turret > 0 || deploys.mines > 0 || health > maxHp || activePerks.length > 0) && (
+              <div className="flex w-52 flex-col gap-1.5 rounded-md bg-[#f3e6cf]/80 px-3 py-2">
+                {activeMods.length > 0 && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">PISTOL MODS</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {activeMods.map((id) => (
+                        <span
+                          key={id}
+                          className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#2b2118]"
+                          style={{ background: PERK_INFO[id].color }}
+                        >
+                          {perkBadge(id, 1)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(deploys.turret > 0 || deploys.mines > 0 || health > maxHp) && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">DEPLOYED</div>
+                    <div className="mt-1 flex flex-col gap-0.5 text-[10px] tracking-wider">
+                      {deploys.turret > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#4fe3ff]">■</span> SENTRY</span>
+                          <b>{deploys.turret}s</b>
+                        </div>
+                      )}
+                      {deploys.mines > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#5ff6ff]">■</span> CRYO MINE</span>
+                          <b>x{deploys.mines}</b>
+                        </div>
+                      )}
+                      {health > maxHp && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#9ad0ff]">■</span> BARRIER</span>
+                          <b>+{health - maxHp}</b>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activePerks.length > 0 && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">UPGRADES</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {activePerks.map(({ id, label }) => (
+                        <span
+                          key={id}
+                          className="rounded border px-1 py-0.5 text-[10px] tracking-wider"
+                          style={{ borderColor: PERK_INFO[id].color, color: "#2b2118" }}
+                        >
+                          <span style={{ color: PERK_INFO[id].color }}>◆</span> {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
