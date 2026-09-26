@@ -77,6 +77,12 @@ const GUN_SOUNDS: Record<string, Tone[]> = {
   harpoon: [{ wave: "sawtooth", f0: 700, f1: 200, dur: 0.18, gain: 0.3, noise: 0.5, cut: 5000, q: 6 }],
   cryo: [{ wave: "sine", f0: 1800, f1: 2600, dur: 0.12, gain: 0.25, noise: 0.2, cut: 8000, q: 10 }],
   flak: [{ wave: "square", f0: 220, f1: 60, dur: 0.35, gain: 0.45, noise: 1, cut: 1600 }],
+  revolver: [{ wave: "square", f0: 300, f1: 60, dur: 0.3, gain: 0.5, noise: 1.1, cut: 2500 }],
+  minigun: [{ wave: "square", f0: 700, f1: 250, dur: 0.04, gain: 0.16, noise: 0.5, cut: 4000 }],
+  crossbow: [{ wave: "triangle", f0: 900, f1: 180, dur: 0.12, gain: 0.3, noise: 0.3, cut: 3500, q: 5 }],
+  plasma: [{ wave: "sawtooth", f0: 500, f1: 1500, dur: 0.15, gain: 0.25, noise: 0, cut: 5000, q: 6 }],
+  voidorb: [{ wave: "sine", f0: 90, f1: 400, dur: 0.5, gain: 0.5, noise: 0.2, cut: 2000, q: 8 }],
+  shatter: [{ wave: "triangle", f0: 2200, f1: 400, dur: 0.25, gain: 0.3, noise: 0.8, cut: 7000 }],
   tesla: [
     { wave: "sawtooth", f0: 1200, f1: 400, dur: 0.14, gain: 0.25, noise: 0.3, cut: 7000, q: 12 },
     { wave: "square", f0: 60, f1: 50, dur: 0.14, gain: 0.2, noise: 0, cut: 800 },

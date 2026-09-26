@@ -2,7 +2,8 @@ export type PerkId =
   | "dmg" | "rate" | "speed" | "maxhp" | "heal" | "magnet" | "greed" | "regen"
   | "crit" | "boom" | "knock" | "ammo" | "armor" | "thorns" | "ricochet" | "leech"
   | "burst" | "incend" | "magnum"
-  | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty";
+  | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty"
+  | "steal" | "mend";
 export type Perks = Record<PerkId, number>;
 
 export const NO_PERKS: Perks = {
@@ -10,6 +11,7 @@ export const NO_PERKS: Perks = {
   crit: 0, boom: 0, knock: 0, ammo: 0, armor: 0, thorns: 0, ricochet: 0, leech: 0,
   burst: 0, incend: 0, magnum: 0,
   extmag: 0, shred: 0, laser: 0, comp: 0, suppr: 0, exec: 0, holster: 0, bounty: 0,
+  steal: 0, mend: 0,
 };
 
 export const PERK_INFO: Record<PerkId, { name: string; desc: string; base: number; color: string; max?: number; trigger?: boolean }> = {
@@ -21,6 +23,8 @@ export const PERK_INFO: Record<PerkId, { name: string; desc: string; base: numbe
   magnet: { name: "SHARD MAGNET", desc: "Pull shards from farther away", base: 4, color: "#5ff6ff" },
   greed: { name: "PROSPECTOR", desc: "+25% shards from kills", base: 7, color: "#e7b25c" },
   regen: { name: "NANO MEND", desc: "Slowly regenerate health", base: 12, color: "#a855f7" },
+  steal: { name: "BLOOD SIPHON", desc: "+3% life steal on all damage you deal", base: 9, color: "#d6204f" },
+  mend: { name: "FIELD MEDIC", desc: "+3 health after every wave", base: 8, color: "#4fd88a" },
   crit: { name: "EAGLE EYE", desc: "+15% chance to hit for double damage", base: 9, color: "#ffe14f" },
   boom: { name: "COMBUSTION", desc: "+10% chance kills explode for 3 splash", base: 10, color: "#ff5c1f" },
   knock: { name: "KINETIC FORCE", desc: "+20% knockback on every hit", base: 6, color: "#9ad0ff" },
@@ -60,6 +64,7 @@ export const derive = (p: Perks) => ({
   magnet: 2 + 1.5 * p.magnet,
   greed: 1 + 0.25 * p.greed,
   regen: p.regen,
+  steal: 0.03 * p.steal,
   crit: Math.min(0.75, 0.15 * p.crit),
   boom: Math.min(0.6, 0.1 * p.boom),
   knock: 0.2 * p.knock,
@@ -97,6 +102,8 @@ export const perkBadge = (id: PerkId, lvl: number): string | null => {
     case "magnet": return `MAGNET x${lvl}`;
     case "greed": return `SHARDS +${pct(0.25)}`;
     case "regen": return `REGEN x${lvl}`;
+    case "steal": return `LIFESTEAL ${pct(0.03)}`;
+    case "mend": return `WAVE HEAL +${lvl * 3}`;
     case "crit": return `CRIT ${pct(0.15, 0.75)}`;
     case "boom": return `COMBUST ${pct(0.1, 0.6)}`;
     case "knock": return `KNOCK +${pct(0.2)}`;

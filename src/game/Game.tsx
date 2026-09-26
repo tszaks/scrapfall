@@ -21,7 +21,8 @@ import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEqui
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special";
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
-  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
+  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla"
+  | "revolver" | "minigun" | "crossbow" | "plasma" | "voidorb" | "shatter";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
@@ -38,8 +39,14 @@ const GUNS: Record<Weapon, Gun> = {
   cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
   flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4 },
   tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
+  revolver: { name: "HAND CANNON", wave: 3, cooldown: 0.55, count: 1, spread: 0, speed: 30, life: 2, damage: 4, size: 0.13, color: "#ffcf6b", body: "#5a4a3a", ammo: 24, pierce: 1 },
+  minigun: { name: "SHREDDER", wave: 7, cooldown: 0.05, count: 1, spread: 0.06, speed: 28, life: 1.3, damage: 1, size: 0.08, color: "#ffe14f", body: "#3a3a3a", ammo: 220 },
+  crossbow: { name: "CROSSBOW", wave: 5, cooldown: 0.75, count: 1, spread: 0, speed: 44, life: 2, damage: 4, size: 0.09, color: "#c8f07a", body: "#6b4a2c", ammo: 14, pierce: 2, slow: 1 },
+  plasma: { name: "PLASMA FAN", wave: 6, cooldown: 0.45, count: 3, spread: 0.05, speed: 24, life: 1.6, damage: 2, size: 0.15, color: "#ff4fd8", body: "#3a2050", ammo: 30, bounce: 1 },
+  voidorb: { name: "VOID ORB", wave: 8, cooldown: 1.1, count: 1, spread: 0, speed: 8, life: 4, damage: 3, size: 0.36, color: "#b06bff", body: "#1c1030", ammo: 10, chain: 4, pierce: 4 },
+  shatter: { name: "SHATTERGUN", wave: 9, cooldown: 0.9, count: 1, spread: 0, speed: 18, life: 1.8, damage: 3, size: 0.25, color: "#b8f4ff", body: "#2a4a5a", ammo: 12, cluster: 5, slow: 2 },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
@@ -1191,6 +1198,43 @@ function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
         <mesh position={[0, 0.14, -0.06]}><boxGeometry args={[0.1, 0.12, 0.22]} /><meshLambertMaterial color="#6b6450" /></mesh>
         <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
       </>)}
+      {w === "revolver" && (<>
+        <mesh position={[0, 0.02, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.45, 8]} />{body}</mesh>
+        <mesh position={[0, 0, -0.05]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.08, 0.08, 0.14, 6]} /><meshLambertMaterial color="#8a7a66" /></mesh>
+        <mesh position={[0, 0.07, -0.46]}><boxGeometry args={[0.02, 0.03, 0.03]} />{glow}</mesh>
+        <mesh position={[0, -0.13, 0.06]} rotation-x={0.35}><boxGeometry args={[0.07, 0.2, 0.1]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
+      </>)}
+      {w === "minigun" && (<>
+        {[0, 1, 2, 3, 4, 5].map((k) => (
+          <mesh key={k} position={[Math.cos(k) * 0.05, Math.sin(k) * 0.05, -0.32]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.018, 0.018, 0.55, 6]} /><meshLambertMaterial color="#222" /></mesh>
+        ))}
+        <mesh position={[0, 0, -0.05]}><boxGeometry args={[0.18, 0.18, 0.25]} />{body}</mesh>
+        <mesh position={[0, 0, -0.58]} rotation-x={Math.PI / 2}><torusGeometry args={[0.07, 0.015, 6, 12]} />{glow}</mesh>
+      </>)}
+      {w === "crossbow" && (<>
+        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.07, 0.08, 0.55]} />{body}</mesh>
+        <mesh position={[0, 0.02, -0.4]}><boxGeometry args={[0.5, 0.03, 0.04]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
+        <mesh position={[0, 0.06, -0.35]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.008, 0.008, 0.45, 4]} />{glow}</mesh>
+      </>)}
+      {w === "plasma" && (<>
+        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.14, 0.12, 0.45]} />{body}</mesh>
+        {[-0.06, 0, 0.06].map((x) => (
+          <mesh key={x} position={[x, 0.02, -0.46]}><sphereGeometry args={[0.03, 8, 8]} />{glow}</mesh>
+        ))}
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+      {w === "voidorb" && (<>
+        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.12, 0.35]} />{body}</mesh>
+        <mesh position={[0, 0.03, -0.45]}><sphereGeometry args={[0.1, 12, 12]} />{glow}</mesh>
+        <mesh position={[0, 0.03, -0.45]} rotation-x={Math.PI / 2}><torusGeometry args={[0.14, 0.015, 6, 16]} /><meshLambertMaterial color="#444" /></mesh>
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+      {w === "shatter" && (<>
+        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.09, 0.12, 0.5, 6]} />{body}</mesh>
+        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.1, 0.12, 6]} />{glow}</mesh>
+        <mesh position={[0, 0.13, -0.2]}><octahedronGeometry args={[0.06]} />{glow}</mesh>
+        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
+      </>)}
       {w === "tesla" && (<>
         <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.11, 0.12, 0.5]} />{body}</mesh>
         {[-0.42, -0.3].map((z) => (
@@ -1299,7 +1343,7 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>({ pistol: GUNS.pistol.ammo, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
+  const ammo = useRef<Record<Weapon, number>>(Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<Weapon, number>);
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
@@ -1333,6 +1377,8 @@ function World({
   const poolTicks = useRef(0);
   const poolTimer = useRef(0);
   const flareTimer = useRef(0);
+  const strikeAt = useRef({ x: 0, z: 0 });
+  const stealBank = useRef(0);
   const barrierMesh = useRef<THREE.Mesh>(null);
   const cdReport = useRef(0);
   // armour soaks damage; getting hit can discharge a shock ring
@@ -2042,6 +2088,10 @@ function World({
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
+      if (stats.current.steal > 0 && dmg > 0) {
+        stealBank.current += dmg * stats.current.steal;
+        if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+      }
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
@@ -2101,7 +2151,7 @@ function World({
       if (flareTimer.current <= 0) {
         for (let ei = 0; ei < enemies.length; ei++) {
           const e = enemies[ei]!;
-          if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 9) hurtEnemy(e, 3, ei);
+          if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5) hurtEnemy(e, 7, ei);
         }
       }
     }
@@ -2124,24 +2174,28 @@ function World({
           slide.current.x += FORWARD.x * 26;
           slide.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
-        } else if (id === "pool") {
-          poolTicks.current = 3;
-          poolTimer.current = 0.1;
+        } else if (id === "well") {
+          const cx = cam.position.x + FORWARD.x * 6, cz = cam.position.z + FORWARD.z * 6;
+          for (let ei = 0; ei < enemies.length; ei++) {
+            const e = enemies[ei]!;
+            const d = Math.hypot(cx - e.x, cz - e.z);
+            if (e.alive && d < 13) hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
+          }
         } else if (id === "repulse") {
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
         } else if (id === "nova") {
           near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
-        } else if (id === "flare") {
-          near(12, (e, ei) => hurtEnemy(e, 1, ei, 4));
-          flareTimer.current = 4;
-        } else if (id === "mortar") {
-          const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
-          pos.y -= 0.2;
-          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+        } else if (id === "storm") {
+          const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
+            .filter((o) => o.e.alive && o.d < 20).sort((a, b) => a.d - b.d).slice(0, 6);
+          list.forEach((o) => hurtEnemy(o.e, 4, o.i));
+        } else if (id === "warp") {
+          near(9999, (e, ei) => hurtEnemy(e, 0, ei, 5));
+        } else if (id === "strike") {
+          strikeAt.current = { x: cam.position.x + FORWARD.x * 10, z: cam.position.z + FORWARD.z * 10 };
+          flareTimer.current = 1.2;
         } else if (id === "barrier") {
           invuln.current = 6;
-        } else if (id === "overdrive") {
-          overdrive.current = 4;
         }
       } else if (abilCd.current > 0) {
         playSfx("deny");
@@ -3158,6 +3212,7 @@ export function Game() {
             setStatus({ wave, remaining, won });
             if (showBanner) {
               setBanner(true);
+              if (perksRef.current.mend > 0 && wave > 1) setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
               if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
             }
           }}
@@ -3710,6 +3765,12 @@ const GUN_INFO: Record<Weapon, string> = {
   cryo: "Rapid icy shots that freeze enemies, slowing them to half speed.",
   flak: "Fires a shell that bursts into shrapnel when it hits something or runs out of range.",
   tesla: "Electric shots that chain lightning to 2 more nearby enemies.",
+  revolver: "Heavy six-shooter. Slow, but each round hits for 4 and punches through one enemy.",
+  minigun: "Spins up a huge wall of lead. 220 rounds, sprays wide.",
+  crossbow: "Silent bolts that pierce 2 enemies and briefly slow them.",
+  plasma: "Fans out 3 pink plasma bolts that bounce off a wall once.",
+  voidorb: "A slow drifting orb that passes through enemies and arcs lightning to 4 more.",
+  shatter: "Frozen shell that bursts into 5 icy shards, slowing everything it hits.",
 };
 
 function Spin({ children }: { children: React.ReactNode }) {
