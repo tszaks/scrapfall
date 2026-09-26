@@ -2819,7 +2819,29 @@ function World({
           </mesh>
         </group>
       ))}
+      {/* ability shockwave ring (unit radius, scaled per effect) */}
+      <mesh ref={ringMesh} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.86, 1, 48]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.8} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {/* chain storm arcs */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={`bolt${i}`} ref={(m) => { boltMeshes.current[i] = m; }} visible={false}>
+          <cylinderGeometry args={[0.05, 0.05, 1, 3, 1, true]} />
+          <meshBasicMaterial color="#9fe8ff" transparent opacity={0.9} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      ))}
+      {/* orbital strike: ground marker + falling beam */}
+      <mesh ref={strikeRing} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.72, 1, 6]} />
+        <meshBasicMaterial color="#ff5a28" transparent opacity={0.7} fog={false} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh ref={strikeBeam} visible={false}>
+        <cylinderGeometry args={[4.4, 2.6, 44, 20, 1, true]} />
+        <meshBasicMaterial color="#ffd77a" transparent opacity={0.9} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
       <group ref={pickupMesh} visible={false}>
+
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
           <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
