@@ -728,6 +728,16 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
+    if (flame.current) {
+      const burning = data.burn > 0;
+      flame.current.visible = burning;
+      if (burning) {
+        flame.current.rotation.y = t * 6;
+        const f = 0.85 + Math.sin(t * 24 + data.x) * 0.18 + Math.sin(t * 37) * 0.07;
+        flame.current.scale.set(f, 1.05 + Math.sin(t * 19 + data.z) * 0.3, f);
+      }
+    }
+
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
