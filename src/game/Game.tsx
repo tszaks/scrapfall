@@ -2685,11 +2685,11 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-10 -translate-x-1/2 font-mono text-[#2b2118]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 font-mono text-[#2b2118]">
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
-          <div className="flex gap-3">
+          <div className="flex justify-center gap-3">
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
