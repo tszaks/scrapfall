@@ -3620,7 +3620,7 @@ export function Game() {
                         <div key={p.id} className="flex items-center gap-2">
                           <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                           <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">· CONNECTED</span>
+                          <span className="opacity-50">· {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}</span>
                           {p.num === myNum && <span className="opacity-50">(YOU)</span>}
                         </div>
                       ))}
