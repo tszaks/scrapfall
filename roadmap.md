@@ -6,7 +6,7 @@
 - [x] Shop: cards may repeat, but never two rounds in a row
 - [x] HUD status panel under KILLS: pistol mods, deployed crate effects, perk stacks
 - [x] Distinct sentry turret firing sound; clear deployables on new arena
-- [ ] Main menu: drop the "Survive 12 waves… / Die and you lose…" line
-- [ ] Rename the play button to START
-- [ ] Move ability selection to a screen shown after pressing START
-- [ ] Co-op: show every player, their colour, and the ability they picked
+- [x] Main menu: drop the "Survive 12 waves… / Die and you lose…" line
+- [x] Rename the play button to START
+- [x] Move ability selection to a screen shown after pressing START
+- [x] Co-op: show every player, their colour, and the ability they picked
