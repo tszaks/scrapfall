@@ -2689,6 +2689,16 @@ export function Game() {
   const [musicVol, setMusicVol] = useState(0.5);
   const [sfxVol, setSfxVol] = useState(0.7);
   const [shards, setShards] = useState(0);
+  const [ability, setAbility] = useState<AbilityId>(() => {
+    if (typeof window === "undefined") return "dash";
+    const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
+    return saved && ABILITIES[saved] ? saved : "dash";
+  });
+  const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
+  const [eventMsg, setEventMsg] = useState<string | null>(null);
+  // run tally for the post-game recap
+  const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
+  const [squad, setSquad] = useState<Record<number, { kills: number; dmg: number; acc: number; shards: number; taken: number }>>({});
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
@@ -2744,6 +2754,8 @@ export function Game() {
       return;
     }
     if (m.type === "seed") {
+      run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
+      setSquad({});
       setSeed(Number(m.seed));
       setScore(0);
       setHealth(MAX_HP);
@@ -2756,6 +2768,12 @@ export function Game() {
       return;
     }
     if (m.type === "over") { setAllDown(true); return; }
+    if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "statline") {
+      const num = Number(m.num);
+      setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
+      return;
+    }
     if (m.type === "pause") {
       setLocked(false);
       if (document.pointerLockElement) document.exitPointerLock();
@@ -2945,6 +2963,14 @@ export function Game() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
+  }, [ability]);
+  useEffect(() => {
+    if (!eventMsg) return;
+    const t = window.setTimeout(() => setEventMsg(null), 3500);
+    return () => window.clearTimeout(t);
+  }, [eventMsg]);
+  useEffect(() => {
     if (!banner) return;
     const t = window.setTimeout(() => setBanner(false), 1800);
     return () => window.clearTimeout(t);
@@ -2977,7 +3003,8 @@ export function Game() {
     const resuming = started && !ended;
     setStarted(true);
     if (ended && !fromNet) {
-
+      run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
+      setSquad({});
       if (isHost) {
         const s = Math.floor(Math.random() * 1e9);
         setSeed(s);
@@ -3128,7 +3155,9 @@ export function Game() {
           slots={slots}
           stats={statsRef}
           onShard={(v) => {
-            setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1))));
+            const gain = Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)));
+            run.current.shards += gain;
+            setShards((s) => s + gain);
             playSfx("shard");
           }}
           onLeech={() => {
@@ -3141,6 +3170,16 @@ export function Game() {
             setCrateMsg(CRATE_INFO[kind].name);
           }}
           onDeploys={setDeploys}
+          ability={ability}
+          onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
+          onStat={(k, n) => {
+            const r = run.current;
+            if (k === "shot") r.shots += n;
+            else if (k === "hit") r.hits += n;
+            else if (k === "dmg") r.dmg += n;
+            else r.taken += n;
+          }}
+          onEvent={setEventMsg}
 
 
 
