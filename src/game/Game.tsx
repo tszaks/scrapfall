@@ -2210,6 +2210,8 @@ export function Game() {
             if (kind === "shield") setHealth((h) => (h > 0 ? Math.min(maxHp + 5, h + 5) : h));
             setCrateMsg(CRATE_INFO[kind].name);
           }}
+          onDeploys={setDeploys}
+
 
 
           onWeapon={(w, picked) => {
