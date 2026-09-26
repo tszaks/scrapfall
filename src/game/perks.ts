@@ -63,3 +63,36 @@ export const derive = (p: Perks) => ({
   magnum: p.magnum > 0,
 });
 export type Derived = ReturnType<typeof derive>;
+
+// short HUD label for a purchased perk, e.g. "DMG +30%"
+export const perkBadge = (id: PerkId, lvl: number): string | null => {
+  if (lvl <= 0) return null;
+  const pct = (per: number, cap?: number) => {
+    const v = cap !== undefined ? Math.min(cap, per * lvl) : per * lvl;
+    return `${Math.round(v * 100)}%`;
+  };
+  switch (id) {
+    case "dmg": return `DMG +${pct(0.15)}`;
+    case "rate": return `RATE +${pct(0.15)}`;
+    case "speed": return `SPEED +${pct(0.2)}`;
+    case "maxhp": return `MAX HP +${lvl * 2}`;
+    case "magnet": return `MAGNET x${lvl}`;
+    case "greed": return `SHARDS +${pct(0.25)}`;
+    case "regen": return `REGEN x${lvl}`;
+    case "crit": return `CRIT ${pct(0.15, 0.75)}`;
+    case "boom": return `COMBUST ${pct(0.1, 0.6)}`;
+    case "knock": return `KNOCK +${pct(0.2)}`;
+    case "ammo": return `AMMO +${pct(0.25)}`;
+    case "armor": return `ARMOR ${pct(0.15, 0.6)}`;
+    case "thorns": return `THORNS ${pct(0.2, 0.8)}`;
+    case "ricochet": return `BOUNCE ${pct(0.25, 0.75)}`;
+    case "leech": return `LEECH ${pct(0.08, 0.5)}`;
+    case "burst": return "BURST";
+    case "incend": return "INCENDIARY";
+    case "magnum": return "MAGNUM";
+    default: return null;
+  }
+};
+
+export const PISTOL_MODS: PerkId[] = ["burst", "incend", "magnum"];
+
