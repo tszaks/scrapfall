@@ -168,6 +168,20 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
 }
 
 function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
+  // deterministic scatter so the arena dressing matches for everyone in co-op
+  const debris = blocks.flatMap((b, i) => {
+    if (i % 2 === 1) return [];
+    const a = (i * 2.399) % (Math.PI * 2);
+    const r = 1.5 + ((i * 37) % 9) * 0.12;
+    return [{
+      key: `d${i}`,
+      x: b.x + Math.cos(a) * r,
+      z: b.z + Math.sin(a) * r,
+      s: 0.22 + ((i * 13) % 5) * 0.06,
+      rot: a,
+    }];
+  });
+  const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
     <group>
       <mesh rotation-x={-Math.PI / 2} receiveShadow>
@@ -178,16 +192,60 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
       {blocks.map((b, i) => (
         <Obstacle key={i} b={b} theme={theme} />
       ))}
+      {/* loose rubble around the cover, so the floor is not a bare plane */}
+      {debris.map((d) => (
+        <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} castShadow receiveShadow>
+          <dodecahedronGeometry args={[d.s, 0]} />
+          <meshLambertMaterial color={theme.block} flatShading />
+        </mesh>
+      ))}
+      {/* marker posts with a lit cap dotted through the arena */}
+      {posts.map((b, i) => (
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
+          <mesh position-y={0.55} castShadow>
+            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          <mesh position-y={1.18}>
+            <sphereGeometry args={[0.13, 8, 6]} />
+            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
+          </mesh>
+        </group>
+      ))}
       {([
         [0, -HALF, ARENA, 1],
         [0, HALF, ARENA, 1],
         [-HALF, 0, 1, ARENA],
         [HALF, 0, 1, ARENA],
       ] as const).map(([x, z, w, d], i) => (
-        <mesh key={`w${i}`} position={[x, 2, z]}>
-          <boxGeometry args={[w, 4, d]} />
-          <meshLambertMaterial color={theme.wall} flatShading />
-        </mesh>
+        <group key={`w${i}`}>
+          <mesh position={[x, 2, z]}>
+            <boxGeometry args={[w, 4, d]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          {/* capping rail + a darker plinth give the walls some depth */}
+          <mesh position={[x, 4.15, z]}>
+            <boxGeometry args={[w + 0.3, 0.3, d + 0.3]} />
+            <meshLambertMaterial color={theme.block} flatShading />
+          </mesh>
+          <mesh position={[x, 0.35, z]}>
+            <boxGeometry args={[w + 0.45, 0.7, d + 0.45]} />
+            <meshLambertMaterial color={theme.block} flatShading />
+          </mesh>
+        </group>
+      ))}
+      {/* corner beacons */}
+      {([[-HALF + 1.2, -HALF + 1.2], [HALF - 1.2, -HALF + 1.2], [-HALF + 1.2, HALF - 1.2], [HALF - 1.2, HALF - 1.2]] as const).map(([x, z], i) => (
+        <group key={`c${i}`} position={[x, 0, z]}>
+          <mesh position-y={1.4} castShadow>
+            <cylinderGeometry args={[0.18, 0.3, 2.8, 6]} />
+            <meshLambertMaterial color={theme.wall} flatShading />
+          </mesh>
+          <mesh position-y={3}>
+            <octahedronGeometry args={[0.32, 0]} />
+            <meshBasicMaterial color={theme.enemyBullet} fog={false} />
+          </mesh>
+        </group>
       ))}
     </group>
   );
