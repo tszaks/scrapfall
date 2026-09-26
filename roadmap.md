@@ -4,3 +4,5 @@
 - [x] Pistol mod cards (burst, incendiary, magnum)
 - [x] Deployable crate drops (sentry turret ~1.5 waves, overshield, cryo mine, ammo cache)
 - [x] Shop: cards may repeat, but never two rounds in a row
+- [x] HUD status panel under KILLS: pistol mods, deployed crate effects, perk stacks
+- [x] Distinct sentry turret firing sound; clear deployables on new arena
