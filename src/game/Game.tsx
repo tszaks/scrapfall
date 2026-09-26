@@ -1157,18 +1157,21 @@ function World({
 
     // supply crate pickup
     const ck = crate.current;
+    if (crateKindRef.current !== ck.kind) {
+      crateKindRef.current = ck.kind;
+      setCrateKind(ck.kind);
+    }
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
         crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
         crateMesh.current.rotation.y += delta * 1.2;
-        (crateMesh.current.children[0] as THREE.Mesh | undefined)?.traverse?.(() => {});
       }
     }
     if (ck.active && !spectating && Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4) {
       ck.active = false;
-      if (ck.kind === "turret") turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
-      if (ck.kind === "mine") mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "turret" && turrets.current.length < 6) turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
+      if (ck.kind === "mine" && mines.current.length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
           if (w === "pistol") return;
