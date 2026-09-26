@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
-import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
+import { NO_PERKS, PERK_IDS, PERK_INFO, PISTOL_MODS, derive, perkBadge, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -2150,6 +2150,13 @@ export function Game() {
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
+
+  // HUD status lists
+  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
+  const activePerks = PERK_IDS.filter((id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0)
+    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
+    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
+
 
 
   return (
