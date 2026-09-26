@@ -13,3 +13,8 @@
 - [x] 6 new guns (Hand Cannon, Shredder, Crossbow, Plasma Fan, Void Orb, Shattergun)
 - [x] Health cards: Blood Siphon (+3% life steal), Field Medic (+3 heal after each wave)
 - [x] Swap 4 abilities for Gravity Well, Chain Storm, Time Warp, Orbital Strike
+- [ ] Music must start reliably on the published site (audio unlock on first gesture)
+- [ ] Player bullets: bullet-shaped mesh aligned to flight direction, same colors
+- [ ] Visible effects for every ability (storm lightning arcs, orbital beam + ground marker, etc.)
+- [ ] Burning enemies show flames only while the burn lasts
+- [ ] Rework "happy" biome music into battle-intensity versions, keeping each theme
