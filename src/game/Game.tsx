@@ -319,6 +319,171 @@ function BossBody({ theme }: { theme: Theme }) {
   );
 }
 
+// Map-exclusive special enemies: one intricate model per biome.
+function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
+  const sp = theme.special;
+  const spin = useRef<THREE.Group>(null);
+  const part = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (spin.current) spin.current.rotation.y = t * (sp.type === "hacker" ? 6 : 1.4);
+    if (part.current) {
+      if (sp.type === "stalker") part.current.rotation.x = -0.6 + Math.sin(t * 6) * 0.25;
+      else if (sp.type === "spore") part.current.scale.setScalar(1 + Math.sin(t * 3) * 0.12);
+      else if (sp.type === "leaper") part.current.position.y = (data.aux ?? 0) > 0 ? 1.4 : Math.abs(Math.sin(t * 5)) * 0.15;
+      else if (sp.type === "wyrm") part.current.rotation.z = Math.sin(t * 2) * 0.3;
+      else part.current.rotation.z = Math.sin(t * 4) * 0.15;
+    }
+  });
+  const B = <meshLambertMaterial color={sp.body} flatShading />;
+  const A = <meshLambertMaterial color={sp.accent} flatShading />;
+  const G = <meshBasicMaterial color={sp.glow} />;
+  return (
+    <group>
+      {sp.type === "stalker" && (<group>
+        <mesh position-y={0.45} castShadow><boxGeometry args={[0.9, 0.35, 1.3]} />{B}</mesh>
+        <mesh position={[0, 0.65, 0.2]}><boxGeometry args={[0.6, 0.2, 0.7]} />{A}</mesh>
+        {[-0.55, 0.55].map((x) => [-0.4, 0, 0.4].map((z) => (
+          <mesh key={`${x}${z}`} position={[x, 0.25, z]} rotation-z={x > 0 ? -0.8 : 0.8}><boxGeometry args={[0.5, 0.07, 0.07]} />{A}</mesh>
+        )))}
+        {[-0.35, 0.35].map((x) => (
+          <group key={`p${x}`} position={[x, 0.45, 0.75]}>
+            <mesh><boxGeometry args={[0.14, 0.14, 0.4]} />{A}</mesh>
+            <mesh position={[x * 0.3, 0, 0.25]} rotation-y={x * 1.2}><coneGeometry args={[0.08, 0.3, 4]} />{B}</mesh>
+          </group>
+        ))}
+        <group ref={part} position={[0, 0.6, -0.6]}>
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[0, 0.25 + i * 0.3, -0.1 * i]}><sphereGeometry args={[0.16 - i * 0.02, 6, 5]} />{B}</mesh>
+          ))}
+          <mesh position={[0, 1.2, 0.15]} rotation-x={1.2}><coneGeometry args={[0.08, 0.35, 5]} />{G}</mesh>
+        </group>
+        {[-0.15, 0.15].map((x) => <mesh key={`e${x}`} position={[x, 0.7, 0.58]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
+      </group>)}
+      {sp.type === "mite" && (<group>
+        <mesh position-y={0.55} castShadow><octahedronGeometry args={[0.5, 0]} />{B}</mesh>
+        <mesh position-y={0.55}><octahedronGeometry args={[0.22, 0]} />{G}</mesh>
+        {[0, 1, 2, 3, 4, 5].map((i) => {
+          const a = (i / 6) * Math.PI * 2;
+          return (
+            <mesh key={i} position={[Math.sin(a) * 0.55, 0.3, Math.cos(a) * 0.55]} rotation={[Math.cos(a) * 0.9, 0, -Math.sin(a) * 0.9]}>
+              <coneGeometry args={[0.06, 0.7, 4]} />{A}
+            </mesh>
+          );
+        })}
+        {[-0.2, 0, 0.2].map((x) => <mesh key={`c${x}`} position={[x, 0.95, 0]} rotation-z={x * 2}><coneGeometry args={[0.07, 0.35, 4]} />{B}</mesh>)}
+        {[-0.12, 0.12].map((x) => <mesh key={`e${x}`} position={[x, 0.62, 0.42]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
+      </group>)}
+      {sp.type === "spore" && (<group>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const a = (i / 5) * Math.PI * 2;
+          return <mesh key={i} position={[Math.sin(a) * 0.5, 0.1, Math.cos(a) * 0.5]} rotation={[Math.cos(a) * 1.2, 0, -Math.sin(a) * 1.2]}><cylinderGeometry args={[0.04, 0.1, 0.8, 5]} />{A}</mesh>;
+        })}
+        <mesh position-y={0.6} castShadow><cylinderGeometry args={[0.25, 0.4, 0.8, 7]} />{A}</mesh>
+        <group ref={part} position-y={1.2}>
+          <mesh><sphereGeometry args={[0.45, 9, 7]} />{B}</mesh>
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const a = (i / 6) * Math.PI * 2;
+            return <mesh key={i} position={[Math.sin(a) * 0.42, 0.1, Math.cos(a) * 0.42]} rotation={[Math.cos(a) * 0.8, 0, -Math.sin(a) * 0.8]}><coneGeometry args={[0.16, 0.5, 4]} />{A}</mesh>;
+          })}
+          {[0, 1, 2, 3].map((i) => <mesh key={`g${i}`} position={[Math.sin(i * 1.6) * 0.3, 0.3, Math.cos(i * 1.6) * 0.3]}><sphereGeometry args={[0.07, 6, 6]} />{G}</mesh>)}
+        </group>
+      </group>)}
+      {sp.type === "pyre" && (<group position-y={1.2}>
+        <mesh castShadow><sphereGeometry args={[0.45, 12, 10]} />{G}</mesh>
+        <group ref={spin}>
+          {[0, 1, 2, 3].map((i) => {
+            const a = (i / 4) * Math.PI * 2;
+            return <mesh key={i} position={[Math.sin(a) * 0.6, 0, Math.cos(a) * 0.6]} rotation-y={a}><boxGeometry args={[0.5, 0.8, 0.12]} />{B}</mesh>;
+          })}
+        </group>
+        <group ref={part}>
+          {[-1, 1].map((y) => <mesh key={y} position-y={y * 0.55} rotation-x={Math.PI / 2}><torusGeometry args={[0.35, 0.06, 5, 10]} />{A}</mesh>)}
+        </group>
+        <mesh position-y={-0.9}><coneGeometry args={[0.2, 0.5, 6]} />{G}</mesh>
+      </group>)}
+      {sp.type === "leaper" && (<group ref={part}>
+        <mesh position-y={1.1} castShadow><boxGeometry args={[0.8, 0.6, 0.7]} />{B}</mesh>
+        <mesh position={[0, 1.2, 0.36]}><sphereGeometry args={[0.1, 8, 8]} />{G}</mesh>
+        <mesh position={[0, 1.45, 0]}><boxGeometry args={[0.5, 0.15, 0.5]} />{A}</mesh>
+        {[-0.3, 0.3].map((x) => (
+          <group key={x} position={[x, 0.5, 0]}>
+            <mesh rotation-x={0.4}><cylinderGeometry args={[0.07, 0.07, 0.6, 6]} />{A}</mesh>
+            <mesh position-y={-0.25}><torusGeometry args={[0.1, 0.03, 4, 8]} />{A}</mesh>
+            <mesh position={[0, -0.4, 0.1]}><boxGeometry args={[0.2, 0.08, 0.35]} />{B}</mesh>
+          </group>
+        ))}
+        {[-0.5, 0.5].map((x) => (
+          <mesh key={`s${x}`} position={[x, 1.1, 0.35]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.28, 0.28, 0.04, 10]} />{A}</mesh>
+        ))}
+      </group>)}
+      {sp.type === "shinobi" && (<group>
+        <mesh position-y={0.9} castShadow><cylinderGeometry args={[0.2, 0.32, 1.1, 7]} />{B}</mesh>
+        <mesh position-y={0.9}><torusGeometry args={[0.26, 0.05, 4, 10]} />{A}</mesh>
+        <mesh position-y={1.65}><sphereGeometry args={[0.25, 8, 7]} />{B}</mesh>
+        <mesh position={[0, 1.66, 0.2]}><boxGeometry args={[0.36, 0.08, 0.1]} />{A}</mesh>
+        {[-0.08, 0.08].map((x) => <mesh key={x} position={[x, 1.68, 0.26]}><boxGeometry args={[0.05, 0.03, 0.02]} />{G}</mesh>)}
+        {[-0.12, 0.12].map((x) => <mesh key={`r${x}`} position={[x, 1.95, -0.15]} rotation-x={-0.6}><boxGeometry args={[0.04, 0.6, 0.02]} />{A}</mesh>)}
+        {[-0.3, 0.3].map((x) => <mesh key={`l${x}`} position={[x * 0.5, 0.25, 0]}><cylinderGeometry args={[0.06, 0.05, 0.5, 5]} />{A}</mesh>)}
+        <group ref={spin} position-y={1.1}>
+          {[-1, 1].map((sd) => (
+            <mesh key={sd} position={[sd * 0.6, 0, 0]} rotation-x={Math.PI / 2}><coneGeometry args={[0.07, 0.45, 4]} />{G}</mesh>
+          ))}
+        </group>
+      </group>)}
+      {sp.type === "wyrm" && (<group ref={part} position-y={1.6}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <mesh key={i} position={[Math.sin(i * 0.9) * 0.25, -i * 0.05, -i * 0.38]}><icosahedronGeometry args={[0.3 - i * 0.04, 0]} />{i === 0 ? B : A}</mesh>
+        ))}
+        {[0, 1, 2, 3].map((i) => <mesh key={`f${i}`} position={[Math.sin(i * 0.9) * 0.25, 0.25 - i * 0.05, -i * 0.38]}><coneGeometry args={[0.07, 0.3, 4]} />{B}</mesh>)}
+        {[-0.12, 0.12].map((x) => <mesh key={x} position={[x, 0.08, 0.26]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
+        <mesh position={[0, -0.05, 0.3]} rotation-x={Math.PI / 2}><coneGeometry args={[0.1, 0.25, 6]} />{G}</mesh>
+      </group>)}
+      {sp.type === "nautilus" && (<group position-y={1.1}>
+        <mesh castShadow><sphereGeometry args={[0.6, 12, 10]} />{B}</mesh>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <mesh key={i} rotation-y={Math.PI / 2} rotation-x={i * 0.5} position-z={-0.05}><torusGeometry args={[0.6, 0.05, 4, 16, Math.PI]} />{A}</mesh>
+        ))}
+        <mesh position={[0, 0, 0.55]}><sphereGeometry args={[0.18, 10, 8]} />{G}</mesh>
+        <group ref={part}>
+          {[0, 1, 2, 3].map((i) => {
+            const a = (i / 4) * Math.PI * 2;
+            return <mesh key={i} position={[Math.sin(a) * 0.35, -0.6, 0.3 + Math.cos(a) * 0.15]}><cylinderGeometry args={[0.04, 0.07, 0.6, 5]} />{A}</mesh>;
+          })}
+        </group>
+      </group>)}
+      {sp.type === "hacker" && (<group position-y={1.7}>
+        <mesh castShadow><octahedronGeometry args={[0.4, 0]} />{B}</mesh>
+        <mesh position-z={0.3}><boxGeometry args={[0.3, 0.1, 0.1]} />{G}</mesh>
+        <group ref={spin}>
+          {[-0.65, 0.65].map((x) => (
+            <group key={x} position-x={x}>
+              <mesh rotation-x={Math.PI / 2}><torusGeometry args={[0.28, 0.04, 4, 14]} />{A}</mesh>
+              <mesh><boxGeometry args={[0.5, 0.02, 0.06]} />{A}</mesh>
+            </group>
+          ))}
+        </group>
+        <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
+        <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
+      </group>)}
+      {sp.type === "bile" && (<group>
+        <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
+        <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
+        <mesh position={[0, 1.55, 0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.1, 0.22, 0.4, 8]} />{A}</mesh>
+        <mesh position={[0, 1.55, 0.66]} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.04, 4, 10]} />{G}</mesh>
+        {[-0.22, 0.22].map((x) => (
+          <group key={x} position={[x, 1.2, -0.5]}>
+            <mesh><cylinderGeometry args={[0.16, 0.16, 0.8, 8]} /><meshLambertMaterial color={sp.glow} transparent opacity={0.8} /></mesh>
+            <mesh position-y={0.45}><cylinderGeometry args={[0.1, 0.16, 0.12, 8]} />{A}</mesh>
+          </group>
+        ))}
+        {[0.8, 1.2].map((y) => <mesh key={y} position={[0, y, 0.36]}><boxGeometry args={[0.82, 0.08, 0.02]} />{A}</mesh>)}
+        {[-0.25, 0.25].map((x) => <mesh key={`l${x}`} position={[x, 0.3, 0]}><boxGeometry args={[0.22, 0.6, 0.3]} />{A}</mesh>)}
+      </group>)}
+    </group>
+  );
+}
+
 const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
@@ -1803,7 +1968,7 @@ function World({
         if (spType === "stalker" || spType === "shinobi") {
           // flanking arcs / zig-zag dash-steps
           const now = performance.now() / 1000;
-          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + ei)) * 3.2 : Math.sin(now * 1.3 + ei) * 2.4;
+          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2 : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
           nx += (-dz / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
           nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
         }
