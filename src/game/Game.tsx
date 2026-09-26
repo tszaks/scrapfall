@@ -609,6 +609,21 @@ function World({
   const heal = useRef({ x: 0, z: 0, active: false });
   const lastHealWave = useRef(-99);
   const healMesh = useRef<THREE.Group>(null);
+  // supply crates: turret kit, overshield, cryo mine, ammo cache
+  const crate = useRef<{ x: number; z: number; active: boolean; kind: CrateKind }>({ x: 0, z: 0, active: false, kind: "turret" });
+  const crateMesh = useRef<THREE.Group>(null);
+  const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
+  const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
+  const turretMeshes = useRef<(THREE.Group | null)[]>([]);
+  const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  const thornsPending = useRef(0);
+  // armour soaks damage; getting hit can discharge a shock ring
+  const takeHit = (dmg: number) => {
+    const s2 = stats.current;
+    const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
+    onHurt(d);
+  };
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     c.fov = fov;
