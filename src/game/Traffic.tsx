@@ -1,17 +1,17 @@
-// Parked cars + moving traffic for the city map. Every vehicle part is an instance
-// in one of three InstancedMeshes (paint / wheels / lamps), updated in one useFrame.
+// Moving traffic for the city map (parked cars are static chunk geometry, see cityMesh.ts).
+// Every vehicle part is an instance in one of three InstancedMeshes (paint / wheels / lamps),
+// updated in one useFrame.
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import type { CityLayout } from "./cityLayout";
+import { CURB, LANES, type CityLayout } from "./cityLayout";
 import { makeVehicle, vehicleHeight, vehicleParts, type Part, type Vehicle } from "./vehicles";
 import { liveCars, trafficClock, type TrafficLink } from "./trafficCore";
 import {
-  HALF_ROAD,
   SIM_DT,
   headingOf,
-  laneOff,
+  laneOffset,
   posOf as simPos,
   stepCars,
   type Car,
@@ -20,8 +20,13 @@ import {
 import { playSfx } from "./audio";
 import { glowTexture } from "./cityTextures";
 
-/** Numbers per car in the network snapshot: x, z, heading, speed. */
-const CAR_FIELDS = 4;
+/** Numbers per car in the network snapshot: index, x, z, heading, speed. */
+const CAR_FIELDS = 5;
+/** cars farther than this from every player are simulated at a quarter of the rate */
+const FAR_SIM = 220;
+/** cars within this of any player go in every snapshot; the rest take turns */
+const NEAR_NET = 260;
+const FAR_NET_SLICES = 5;
 // integers on the wire: PeerJS binarypack sends small ints in ~3 bytes but any
 // fractional number as a 9-byte float64
 const q100 = (v: number) => Math.round(v * 100);
@@ -73,22 +78,29 @@ export function CityTraffic({
   const cars = useMemo(() => {
     const rand = mulberry(seed ^ 0x51f15e);
     const list: Car[] = [];
-    if (roadX.length < 2) return list;
-    const lo = roadX[0]!;
-    const hi = roadX[roadX.length - 1]!;
-    const want = Math.round(roadX.length * roadZ.length * 1.5) + (city.cells > 26 ? 2 : 0);
-    for (let tries = 0; list.length < want && tries < 400; tries++) {
+    if (roadX.length < 2 || roadZ.length < 2) return list;
+    // about one car per 45 m of street, 40-60 in all
+    const len =
+      (roadX.length * (roadZ[roadZ.length - 1]!.c - roadZ[0]!.c) +
+        roadZ.length * (roadX[roadX.length - 1]!.c - roadX[0]!.c)) *
+      2;
+    const want = Math.max(40, Math.min(60, Math.round(len / 45)));
+    for (let tries = 0; list.length < want && tries < 2000; tries++) {
       const axis = (rand() < 0.5 ? 0 : 1) as 0 | 1;
       const dir = (rand() < 0.5 ? 1 : -1) as 1 | -1;
       const line = Math.floor(rand() * (axis === 0 ? roadZ.length : roadX.length));
+      const road = (axis === 0 ? roadZ : roadX)[line]!;
+      const lane = Math.floor(rand() * LANES[road.cls].length);
       const cross = axis === 0 ? roadX : roadZ;
+      const lo = cross[0]!.c;
+      const hi = cross[cross.length - 1]!.c;
       const s = lo + 5 + rand() * (hi - lo - 10);
-      // never start inside an intersection or right on top of the spawn plaza
-      if (cross.some((c) => Math.abs(c - s) < HALF_ROAD + 3)) continue;
-      const perp = (axis === 0 ? roadZ : roadX)[line]! + laneOff(axis, dir);
+      // never start inside an intersection
+      if (cross.some((c) => Math.abs(c.c - s) < CURB[c.cls] + 3)) continue;
+      const perp = road.c + laneOffset(road, axis, dir, lane);
       const x = axis === 0 ? s : perp;
       const z = axis === 0 ? perp : s;
-      if (Math.hypot(x, z) < 9) continue;
+      if (Math.hypot(x - city.spawn.x, z - city.spawn.z) < 12) continue;
       const v = makeVehicle(rand, Infinity)!;
       if (
         list.some(
@@ -96,26 +108,28 @@ export function CityTraffic({
             o.axis === axis &&
             o.dir === dir &&
             o.line === line &&
-            Math.abs(o.s - s) < (o.v.len + v.len) / 2 + 4,
+            o.lane === lane &&
+            Math.abs(o.s - s) < (o.v.len + v.len) / 2 + 5,
         )
       )
         continue;
-      let next = dir > 0 ? cross.findIndex((c) => c > s) : -1;
+      let next = dir > 0 ? cross.findIndex((c) => c.c > s) : -1;
       if (dir < 0)
         for (let k = cross.length - 1; k >= 0; k--)
-          if (cross[k]! < s) {
+          if (cross[k]!.c < s) {
             next = k;
             break;
           }
       if (next < 0) continue;
-      const vmax =
-        v.type === "bus" ? 5.5 : v.type === "van" ? 6.5 : v.type === "sports" ? 8.5 : 7.5;
+      // real city speeds: ~40-50 km/h
+      const vmax = v.type === "bus" ? 9 : v.type === "van" ? 10.5 : v.type === "sports" ? 14 : 12.5;
       list.push({
         v,
         h: vehicleHeight(v),
         axis,
         dir,
         line,
+        lane,
         s,
         speed: vmax * 0.6,
         vmax,
@@ -131,7 +145,7 @@ export function CityTraffic({
       });
     }
     return list;
-  }, [seed, roadX, roadZ, city.cells]);
+  }, [seed, roadX, roadZ, city.spawn.x, city.spawn.z]);
 
   // ---- instance slots for every part of every vehicle (parked first, then moving) ----
   const { slots, counts, parkedCount } = useMemo(() => {
@@ -145,10 +159,9 @@ export function CityTraffic({
       }
       slots.push(mine);
     };
-    city.parked.forEach((p) => add(p.v));
     cars.forEach((c) => add(c.v));
-    return { slots, counts, parkedCount: city.parked.length };
-  }, [city.parked, cars]);
+    return { slots, counts, parkedCount: 0 };
+  }, [cars]);
 
   const geo = useMemo(() => {
     const wheel = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
@@ -233,19 +246,18 @@ export function CityTraffic({
     }
   };
 
-  // static colours + parked cars, once per layout (and again when day/night flips)
+  // static colours, once per layout
   useLayoutEffect(() => {
     for (const sl of slots.flat()) {
       if (sl.mesh === "lamp") continue;
       meshOf(sl.mesh)?.setColorAt(sl.index, _c.set(sl.part.color));
     }
-    city.parked.forEach((p, i) => placeCar(i, p.x, p.z, p.rot, false, false, night));
     for (const m of [paintRef.current, wheelRef.current, lampRef.current]) {
       if (!m) continue;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
-  }, [slots, night]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [slots]);
 
   const rand = useMemo(() => mulberry(seed ^ 0x7a11c), [seed]);
   // guest: latest host state per car + when it arrived
@@ -254,6 +266,7 @@ export function CityTraffic({
 
   const posOf = (c: Car) => simPos(c, roadX, roadZ);
   const acc = useRef(0);
+  const tick = useRef(0);
 
   // a new arena (new seed) restarts traffic identically everywhere
   useEffect(() => {
@@ -266,29 +279,38 @@ export function CityTraffic({
     liveCars.length = 0;
   }, [cars]);
 
-  // network hooks: the host encodes, guests decode (motion only; types come from the seed)
+  // network hooks: the host encodes, guests decode (motion only; types come from the seed).
+  // The payload is bounded: cars near any player every snapshot, far cars a slice at a time.
+  const netSlice = useRef(0);
   useEffect(() => {
     const L = link.current;
     L.encode = () => {
       const out: number[] = [q100(trafficClock.t)];
-      for (const c of cars) {
+      const players = [{ x: L.px, z: L.pz }, ...L.others];
+      const slice = netSlice.current++ % FAR_NET_SLICES;
+      cars.forEach((c, i) => {
+        const near = players.some(
+          (p) => Math.abs(p.x - c.x) < NEAR_NET && Math.abs(p.z - c.z) < NEAR_NET,
+        );
+        if (!near && i % FAR_NET_SLICES !== slice) return;
         const p = posOf(c);
         const yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
-        out.push(q100(p.x), q100(p.z), q100(yaw), Math.round(c.speed * 10));
-      }
+        out.push(i, q100(p.x), q100(p.z), q100(yaw), Math.round(c.speed * 10));
+      });
       return out;
     };
     L.decode = (a) => {
-      if (!Array.isArray(a) || a.length !== 1 + cars.length * CAR_FIELDS) return;
+      if (!Array.isArray(a) || (a.length - 1) % CAR_FIELDS !== 0) return;
       const now = performance.now();
       hostClock.current = { t: a[0]! / 100, at: now };
-      for (let i = 0; i < cars.length; i++) {
-        const o = 1 + i * CAR_FIELDS;
+      for (let o = 1; o + CAR_FIELDS - 1 < a.length; o += CAR_FIELDS) {
+        const i = a[o]!;
+        if (i < 0 || i >= cars.length) continue;
         netCars.current[i] = {
-          x: a[o]! / 100,
-          z: a[o + 1]! / 100,
-          yaw: a[o + 2]! / 100,
-          speed: a[o + 3]! / 10,
+          x: a[o + 1]! / 100,
+          z: a[o + 2]! / 100,
+          yaw: a[o + 3]! / 100,
+          speed: a[o + 4]! / 10,
           at: now,
         };
       }
@@ -345,14 +367,21 @@ export function CityTraffic({
       }));
       const players = [{ x: L.px, z: L.pz }, ...L.others];
       const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
+      // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step
+      for (const c of cars)
+        c.far = !players.some(
+          (p) => Math.abs(p.x - c.x) < FAR_SIM && Math.abs(p.z - c.z) < FAR_SIM,
+        );
       acc.current += dt;
       let steps = 0;
       while (acc.current >= SIM_DT && steps < 6) {
         acc.current -= SIM_DT;
         steps++;
         trafficClock.t += SIM_DT;
+        tick.current++;
         const env = { roadX, roadZ, rand, players, enemies, onEnemyContact };
-        for (const ci of stepCars(cars, env, SIM_DT, trafficClock.t)) {
+        if (tick.current % 4 === 0) stepCars(cars, env, SIM_DT * 4, trafficClock.t, true);
+        for (const ci of stepCars(cars, env, SIM_DT, trafficClock.t, false)) {
           const c = cars[ci]!;
           if (L.active && c.honk <= 0 && c.speed > 2.5) {
             c.honk = 3;
@@ -369,8 +398,6 @@ export function CityTraffic({
 
     for (let ci = 0; ci < cars.length; ci++) {
       const c = cars[ci]!;
-      const cross = c.axis === 0 ? roadX : roadZ;
-      const along = c.axis === 0 ? roadZ : roadX; // roads parallel to us, indexed by line
       c.hitCd -= dt;
       c.honk -= dt;
 
@@ -411,8 +438,10 @@ export function CityTraffic({
         }
         np = { x: c.gx, z: c.gz };
       } else {
-        // interpolate between the last two fixed simulation steps
-        const a = acc.current / SIM_DT;
+        // interpolate between the last two fixed simulation steps (far cars step 4x coarser)
+        const a = c.far
+          ? Math.min(1, ((tick.current % 4) + acc.current / SIM_DT) / 4)
+          : acc.current / SIM_DT;
         np = { x: c.px + (c.x - c.px) * a, z: c.pz + (c.z - c.pz) * a };
         yaw = headingOf(c);
       }

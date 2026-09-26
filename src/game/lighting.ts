@@ -28,22 +28,24 @@ const mix = (a: string, b: string, t: number) => {
 export function worldLook(theme: Theme, night: boolean, arena: number): Look {
   const city = theme.blockShape === "city";
   if (city) {
+    // real-scale downtown: a long view with aerial haze so the skyline reads, a low warm
+    // sun (long tower shadows) by day, sodium and LED street light by night
     return night
       ? {
-          sky: "#0b1228",
-          fog: [22, 175],
-          hemi: ["#6a80c8", "#2a2030", 0.75],
-          sun: { color: "#a8bcff", intensity: 0.55, pos: [-45, 85, -30] },
-          ambient: 0.25,
-          camFar: 320,
+          sky: "#161a2a",
+          fog: [120, 1650],
+          hemi: ["#7088d0", "#3a3040", 0.75],
+          sun: { color: "#a8bcff", intensity: 0.5, pos: [-45, 85, -30] },
+          ambient: 0.22,
+          camFar: 1600,
         }
       : {
-          sky: "#9ccbee",
-          fog: [30, 230],
-          hemi: ["#ffffff", "#6b6255", 0.95],
-          sun: { color: "#fff1d8", intensity: 1.9, pos: [48, 85, 30] },
+          sky: "#c9d7df",
+          fog: [140, 1750],
+          hemi: ["#dce8f4", "#6b6255", 0.6],
+          sun: { color: "#ffd9a8", intensity: 2.6, pos: [48, 85, 30] },
           ambient: 0,
-          camFar: 320,
+          camFar: 1600,
         };
   }
   if (!night) {

@@ -4,14 +4,15 @@ import * as THREE from "three";
 
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
-  solidGrid, flowField, nextWaypoint, clearLine, toNav,
-  setArenaSize, SOLO_ARENA, COOP_ARENA,
+  solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
+  setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_SOLO, CITY_COOP,
 } from "./level";
 
 import { THEMES, type Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
+import { Minimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
 import { Stars } from "@react-three/drei";
@@ -1250,6 +1251,7 @@ function World({
   onAbilityCd,
   onStat,
   onEvent,
+  mapFeed,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -1287,6 +1289,7 @@ function World({
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
+  mapFeed: React.MutableRefObject<MapFeed>;
 }) {
 
 
@@ -1383,7 +1386,7 @@ function World({
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
-  const pending = useRef<({ x: number; z: number; t: number } | null)[]>([]);
+  const pending = useRef<({ x: number; z: number; t: number; placed?: boolean } | null)[]>([]);
   const markMeshes = useRef<(THREE.Group | null)[]>([]);
 
   const bullets = useRef<Bullet[]>([]);
@@ -1447,6 +1450,7 @@ function World({
   type GuestTarget = { x: number; z: number; yaw: number };
   const guestTarget = useRef<GuestTarget[]>(enemies.map(() => ({ x: 0, z: 0, yaw: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
+  const recycleT = useRef(1);
   const dropGunRef = useRef<Weapon>("scatter");
 
   const upsertRemote = (m: NetMsg) => {
@@ -1590,8 +1594,9 @@ function World({
 
 
   useEffect(() => {
-    camera.position.set(0, EYE, 0);
-    look.current = { yaw: 0, pitch: 0 };
+    // the city starts on the landmark's plaza, looking up the tower
+    camera.position.set(city ? city.spawn.x : 0, EYE, city ? city.spawn.z : 0);
+    look.current = { yaw: 0, pitch: city ? 0.12 : 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -1648,8 +1653,26 @@ function World({
     syncInv();
   };
 
+  /** where the living players are (the host sees everyone) */
+  const livePlayers = () => {
+    const out: { x: number; z: number }[] = [];
+    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z });
+    const now = performance.now();
+    remotes.current.forEach((r) => {
+      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z });
+    });
+    if (out.length === 0) out.push({ x: camera.position.x, z: camera.position.z });
+    return out;
+  };
+  /** a spawn spot: anywhere on the small maps; near a living player in the big city */
+  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)];
+  const spot = (rMin: number, rMax: number, hidden: boolean) =>
+    city
+      ? spawnNear(blocks, rand, livePlayers(), rMin, rMax, hidden, 1, navOpen)
+      : randomSpawn(blocks, rand);
+
   const placePickup = (gun: Weapon) => {
-    const p = randomSpawn(blocks, rand);
+    const p = spot(8, 26, false);
     pickup.current = { x: p.x, z: p.z, active: true, gun };
     setDropGun(gun);
   };
@@ -1809,7 +1832,7 @@ function World({
         e.alive = false;
         return;
       }
-      const p = randomSpawn(blocks, rand);
+      const p = kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
       Object.assign(e, {
         kind,
         x: p.x,
@@ -1853,13 +1876,13 @@ function World({
     // health: random; solo waits 2 waves between packs, co-op packs come more often
     const healGap = extra > 0 ? 1 : 2;
     if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
-      const h = randomSpawn(blocks, rand);
+      const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
     // supply crate: turret kit, barrier, cryo mine or ammo cache
     if (!crate.current.active) { // exactly one supply drop per wave
-      const c = randomSpawn(blocks, rand);
+      const c = spot(8, 28, false);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
@@ -1988,6 +2011,28 @@ function World({
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
     cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+
+    // minimap feed (the HUD reads it)
+    if (city) {
+      const mf = mapFeed.current;
+      mf.x = cam.position.x;
+      mf.z = cam.position.z;
+      mf.yaw = look.current.yaw;
+      const [g0, h0, c0] = mf.items;
+      if (g0 && h0 && c0) {
+        g0.x = pickup.current.x;
+        g0.z = pickup.current.z;
+        g0.active = pickup.current.active && !owned.current.has(pickup.current.gun);
+        g0.color = GUNS[pickup.current.gun].color;
+        h0.x = heal.current.x;
+        h0.z = heal.current.z;
+        h0.active = heal.current.active;
+        c0.x = crate.current.x;
+        c0.z = crate.current.z;
+        c0.active = crate.current.active;
+        c0.color = CRATE_INFO[crate.current.kind].color;
+      }
+    }
 
     // share my position with the room
     if (n) {
@@ -2320,6 +2365,13 @@ function World({
       pending.current.forEach((pd, i) => {
         if (!pd) return;
         pd.t -= delta;
+        if (city && !pd.placed && pd.t <= MARK_TIME) {
+          // late arrivals appear near wherever the squad is now, not where it was
+          pd.placed = true;
+          const q = enemies[i]!.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+          pd.x = q.x;
+          pd.z = q.z;
+        }
         if (pd.t <= 0) {
           const e = enemies[i]!;
           e.x = pd.x;
@@ -2375,10 +2427,29 @@ function World({
       for (const t of targets) {
         const key = toNav(t.x) * 1000 + toNav(t.z);
         used.add(key);
-        if (!fields.current.has(key)) fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z)));
+        if (!fields.current.has(key))
+          fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z), city ? 70 : Infinity));
       }
       if (fields.current.size > 12) {
         fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
+      }
+
+      // the city is huge: enemies stranded far from every player get recycled nearby
+      if (city) {
+        recycleT.current -= delta;
+        if (recycleT.current <= 0) {
+          recycleT.current = 1;
+          for (const e of enemies) {
+            if (!e.alive) continue;
+            let dmin = Infinity;
+            for (const t of targets) dmin = Math.min(dmin, Math.hypot(t.x - e.x, t.z - e.z));
+            if (dmin > (e.kind === "boss" ? 70 : 80)) {
+              const q = e.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+              e.x = q.x;
+              e.z = q.z;
+            }
+          }
+        }
       }
 
       meleeCooldown.current -= delta;
@@ -2730,16 +2801,16 @@ function World({
 
   return (
     <>
-      <color attach="background" args={[look3.sky]} />
+      {!city && <color attach="background" args={[look3.sky]} />}
       <fog attach="fog" args={[look3.sky, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
       {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color="#9fb0e0" />}
       {night && (
         <Stars
-          radius={city ? 240 : 90}
-          depth={city ? 40 : 20}
-          count={city ? 2500 : 1500}
-          factor={city ? 7 : 4}
+          radius={city ? 900 : 90}
+          depth={city ? 200 : 20}
+          count={city ? 3000 : 1500}
+          factor={city ? 26 : 4}
           fade
           speed={0.3}
         />
@@ -2748,7 +2819,7 @@ function World({
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
-          pos={look3.sun.pos}
+          night={night}
           color={look3.sun.color}
           intensity={look3.sun.intensity}
         />
@@ -3138,11 +3209,23 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
+  const mapFeed = useRef<MapFeed>({
+    x: 0,
+    z: 0,
+    yaw: 0,
+    items: [
+      { x: 0, z: 0, kind: "gun", color: "#ffffff", active: false },
+      { x: 0, z: 0, kind: "heal", color: "#e8322a", active: false },
+      { x: 0, z: 0, kind: "crate", color: "#9fe8ff", active: false },
+    ],
+  });
   const { blocks, enemies, rand, theme, city } = useMemo(() => {
-    setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     // the map decides the layout, so pick the theme first (still purely from the shared seed)
     const forced = !coop && forcedMap !== null ? THEMES[forcedMap] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
+    // co-op gets a bigger field; the real-scale city is far bigger and routes on 4 m nav cells
+    if (theme.blockShape === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
     const level = generateLevel(seed, theme.blockShape === "city" ? "city" : "scatter");
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
@@ -3428,6 +3511,7 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          mapFeed={mapFeed}
 
 
 
@@ -3553,6 +3637,18 @@ export function Game() {
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
+          </div>
+        )}
+        {city && started && !ended && (
+          <div className="absolute bottom-5 right-5">
+            <Minimap
+              city={city}
+              blocks={blocks}
+              feed={mapFeed}
+              enemies={enemies}
+              remotes={remotes}
+              myColor={colorFor(myNum)}
+            />
           </div>
         )}
         {multiplayer && locked && !ended && (

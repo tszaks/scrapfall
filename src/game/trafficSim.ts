@@ -1,14 +1,19 @@
 // Pure traffic simulation (no three.js, no React), stepped at a FIXED timestep so the
 // cars take exactly the same path at 30, 60 or 144 fps. The renderer interpolates
 // between the previous and current step for smooth motion.
+//
+// Roads come from the city layout: each has a centre line and a class that sets its
+// lanes (1 per direction on side streets, 2 on avenues and the boulevard) and its
+// curb-to-curb width. Right-hand traffic; right turns go to the outer lane, left turns
+// to the inner one.
+import { CURB, LANES, type Road } from "./cityLayout";
 import { signal, GREEN, YELLOW } from "./trafficCore";
 import type { Vehicle } from "./vehicles";
 
 export const SIM_DT = 1 / 60;
-/** Right-hand traffic: lane centre offset from the road centre line. */
-export const laneOff = (axis: 0 | 1, dir: 1 | -1) => (axis === 0 ? dir : -dir);
-export const HALF_ROAD = 2;
-const STOP_GAP = 4.1; // road half width + crosswalk
+/** Right-hand traffic: which side of the centre line a direction drives on (+1 / -1). */
+export const laneSign = (axis: 0 | 1, dir: 1 | -1) => (axis === 0 ? dir : -dir);
+const CROSSWALK = 3.8; // stop line distance past the curb line
 
 export type Car = {
   v: Vehicle;
@@ -17,6 +22,8 @@ export type Car = {
   dir: 1 | -1;
   /** index of the road we drive on (roadZ for axis 0, roadX for axis 1) */
   line: number;
+  /** lane index on that road, 0 = inner */
+  lane: number;
   /** position along the axis of travel */
   s: number;
   speed: number;
@@ -33,6 +40,8 @@ export type Car = {
   pz: number;
   x: number;
   z: number;
+  /** far from every player: stepped at a quarter of the rate */
+  far?: boolean;
   /** guest-side smoothed render position (follows host snapshots) */
   gx?: number;
   gz?: number;
@@ -40,8 +49,8 @@ export type Car = {
 
 export type SimEnemy = { x: number; z: number; alive: boolean; r: number; big: boolean };
 export type SimEnv = {
-  roadX: number[];
-  roadZ: number[];
+  roadX: Road[];
+  roadZ: Road[];
   rand: () => number;
   /** players the cars brake for; index 0 is the local player (for the horn) */
   players: { x: number; z: number }[];
@@ -50,21 +59,48 @@ export type SimEnv = {
   onEnemyContact?: ((car: Car, idx: number, big: boolean) => void) | undefined;
 };
 
-export const posOf = (c: Car, roadX: number[], roadZ: number[]) => {
-  const perp = (c.axis === 0 ? roadZ : roadX)[c.line]! + laneOff(c.axis, c.dir);
+/** lateral offset of a lane from the road centre line */
+export const laneOffset = (road: Road, axis: 0 | 1, dir: 1 | -1, lane: number) => {
+  const ls = LANES[road.cls];
+  return laneSign(axis, dir) * ls[Math.max(0, Math.min(ls.length - 1, lane))]!;
+};
+
+export const posOf = (c: Car, roadX: Road[], roadZ: Road[]) => {
+  const road = (c.axis === 0 ? roadZ : roadX)[c.line]!;
+  const perp = road.c + laneOffset(road, c.axis, c.dir, c.lane);
   return c.axis === 0 ? { x: c.s, z: perp } : { x: perp, z: c.s };
 };
 export const headingOf = (c: Car) => Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
 
+/** new heading after turning (1 right / -1 left) from (axis, dir) */
+function turned(axis: 0 | 1, dir: 1 | -1, turn: 1 | -1) {
+  const dx = axis === 0 ? dir : 0;
+  const dz = axis === 1 ? dir : 0;
+  // right of heading (dx, dz) is (-dz, dx)
+  const nx = turn === 1 ? -dz : dz;
+  const nz = turn === 1 ? dx : -dx;
+  const naxis = (1 - axis) as 0 | 1;
+  const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
+  return { naxis, ndir };
+}
+
 /**
- * Advance every car by exactly `dt` (call with SIM_DT). Returns the indices of cars
- * that are braking for the local player (so the caller can honk).
+ * Advance cars by exactly `dt`. `only` limits the step to near (false) or far (true) cars,
+ * so far cars can run at a lower rate with a larger dt. Returns the indices of cars that
+ * are braking for the local player (so the caller can honk).
  */
-export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
+export function stepCars(
+  cars: Car[],
+  env: SimEnv,
+  dt: number,
+  t: number,
+  only: boolean | null = null,
+) {
   const { roadX, roadZ, rand } = env;
   const brakingForLocal: number[] = [];
   for (let ci = 0; ci < cars.length; ci++) {
     const c = cars[ci]!;
+    if (only !== null && !!c.far !== only) continue;
     const cross = c.axis === 0 ? roadX : roadZ;
     const along = c.axis === 0 ? roadZ : roadX; // roads parallel to us, indexed by line
     const half = c.v.len / 2;
@@ -77,15 +113,10 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
       const w: number[] = [];
       if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) {
         opts.push(0);
-        w.push(2);
+        w.push(2.2);
       }
       for (const turn of [1, -1] as const) {
-        // right of heading (dx, dz) is (-dz, dx)
-        const dx = c.axis === 0 ? c.dir : 0;
-        const dz = c.axis === 1 ? c.dir : 0;
-        const nx = turn === 1 ? -dz : dz;
-        const nz = turn === 1 ? dx : -dx;
-        const ndir = (c.axis === 0 ? nz : nx) as 1 | -1;
+        const { ndir } = turned(c.axis, c.dir, turn);
         const nextIdx = c.line + ndir;
         if (nextIdx >= 0 && nextIdx < along.length) {
           opts.push(turn);
@@ -103,9 +134,12 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
       }
     }
 
-    const cx = cross[c.next]!;
+    const crossRoad = cross[c.next]!;
+    const cx = crossRoad.c;
+    const crossHalf = CURB[crossRoad.cls];
+    const ownRoad = along[c.line]!;
     const node = c.axis === 0 ? c.next * roadZ.length + c.line : c.line * roadZ.length + c.next;
-    const stopCentre = cx - c.dir * (STOP_GAP + half);
+    const stopCentre = cx - c.dir * (crossHalf + CROSSWALK + half);
     const committed = (c.s - stopCentre) * c.dir > 0.05;
     let room = Infinity;
 
@@ -117,32 +151,31 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
     }
     // don't enter the box while cross traffic is still in it, or if our exit lane is backed up
     if (!committed) {
-      const ix = c.axis === 0 ? cx : along[c.line]!;
-      const iz = c.axis === 0 ? along[c.line]! : cx;
+      const ix = c.axis === 0 ? cx : ownRoad.c;
+      const iz = c.axis === 0 ? ownRoad.c : cx;
+      const boxX = c.axis === 0 ? crossHalf : CURB[ownRoad.cls];
+      const boxZ = c.axis === 0 ? CURB[ownRoad.cls] : crossHalf;
       let exAxis: 0 | 1 = c.axis;
       let exDir: 1 | -1 = c.dir;
       let exLine = c.line;
-      let exEntry = cx + c.dir * HALF_ROAD;
+      let exLane = c.lane;
+      let exEntry = cx + c.dir * crossHalf;
       if (c.turn !== 0 && c.turn !== null) {
-        const dx = c.axis === 0 ? c.dir : 0;
-        const dz = c.axis === 1 ? c.dir : 0;
-        exAxis = (1 - c.axis) as 0 | 1;
-        exDir = (exAxis === 0 ? (c.turn === 1 ? -dz : dz) : c.turn === 1 ? dx : -dx) as 1 | -1;
+        const { naxis, ndir } = turned(c.axis, c.dir, c.turn);
+        exAxis = naxis;
+        exDir = ndir;
         exLine = c.next;
-        exEntry = along[c.line]! + exDir * HALF_ROAD;
+        exLane = c.turn === 1 ? LANES[crossRoad.cls].length - 1 : 0;
+        exEntry = ownRoad.c + exDir * CURB[ownRoad.cls];
       }
       let busy = false;
       for (const o of cars) {
         if (o === c) continue;
-        if (
-          o.axis !== c.axis &&
-          Math.abs(o.x - ix) < HALF_ROAD + 1 &&
-          Math.abs(o.z - iz) < HALF_ROAD + 1
-        ) {
+        if (o.axis !== c.axis && Math.abs(o.x - ix) < boxX && Math.abs(o.z - iz) < boxZ) {
           busy = true;
           break;
         }
-        if (o.axis === exAxis && o.dir === exDir && o.line === exLine) {
+        if (o.axis === exAxis && o.dir === exDir && o.line === exLine && o.lane === exLane) {
           const past = (o.s - exEntry) * exDir; // how far into the exit lane it is
           // a queued car needs a full car length of room; a moving one just needs to be clear of the entry
           const need = o.speed < 2 ? o.v.len / 2 + c.v.len + 1.5 : o.v.len / 2 + c.v.len / 2 + 1.5;
@@ -156,7 +189,8 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
     }
     // keep distance to whoever is ahead in our lane
     for (const o of cars) {
-      if (o === c || o.axis !== c.axis || o.dir !== c.dir || o.line !== c.line) continue;
+      if (o === c || o.axis !== c.axis || o.dir !== c.dir || o.line !== c.line || o.lane !== c.lane)
+        continue;
       const ahead = (o.s - c.s) * c.dir;
       if (ahead <= 0) continue;
       room = Math.min(room, ahead - o.v.len / 2 - half - 2);
@@ -172,7 +206,7 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
       const dz = who.z - c.z;
       const a = dx * fx + dz * fz;
       const lat = dx * rx + dz * rz;
-      if (a > 0 && a < half + 11 && Math.abs(lat) < c.v.wid / 2 + 0.9) {
+      if (a > 0 && a < half + 12 && Math.abs(lat) < c.v.wid / 2 + 0.9) {
         room = Math.min(room, a - half - 1.4);
         if (pi === 0 && a < half + 8) brakingForLocal.push(ci);
       }
@@ -192,29 +226,30 @@ export function stepCars(cars: Car[], env: SimEnv, dt: number, t: number) {
     if (c.speed < target) c.speed = Math.min(target, c.speed + 3.5 * dt);
     else c.speed = Math.max(target, c.speed - 16 * dt);
     if (c.speed < 0) c.speed = 0;
-    c.s += c.dir * ((v0 + c.speed) / 2) * dt;
+    let move = c.dir * ((v0 + c.speed) / 2) * dt;
+    // a coarse far step must not jump past a red light
+    if (c.far && !committed && room < Infinity)
+      move = c.dir * Math.min(Math.abs(move), Math.max(0, room));
+    c.s += move;
 
     if (c.turn !== 0) {
-      // turn exactly where our lane meets the target lane; overshoot carries into the new lane
-      const dx = c.axis === 0 ? c.dir : 0;
-      const dz = c.axis === 1 ? c.dir : 0;
-      const nx = c.turn === 1 ? -dz : dz;
-      const nz = c.turn === 1 ? dx : -dx;
-      const naxis = (1 - c.axis) as 0 | 1;
-      const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
-      const turnS = cx + laneOff(naxis, ndir);
+      // turn where our lane meets the target lane; overshoot carries into the new lane
+      const { naxis, ndir } = turned(c.axis, c.dir, c.turn);
+      const nlane = c.turn === 1 ? LANES[crossRoad.cls].length - 1 : 0;
+      const turnS = cx + laneOffset(crossRoad, naxis, ndir, nlane);
       if ((c.s - turnS) * c.dir >= 0) {
         const over = (c.s - turnS) * c.dir;
-        const perp = along[c.line]! + laneOff(c.axis, c.dir);
+        const perp = ownRoad.c + laneOffset(ownRoad, c.axis, c.dir, c.lane);
         const oldLine = c.line;
         c.axis = naxis;
         c.dir = ndir;
         c.line = c.next;
+        c.lane = nlane;
         c.s = perp + ndir * over;
         c.next = oldLine + ndir;
         c.turn = null;
       }
-    } else if ((c.s - cx) * c.dir > HALF_ROAD + half) {
+    } else if ((c.s - cx) * c.dir > crossHalf + half) {
       c.next += c.dir;
       c.turn = null;
     }

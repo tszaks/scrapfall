@@ -12,7 +12,6 @@ export let ARENA = SOLO_ARENA; // world size (centered at origin)
 export let HALF = ARENA / 2;
 export const BLOCK = 2; // block footprint (square)
 
-
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -112,6 +111,48 @@ export function randomSpawn(blocks: Block[], rand: () => number) {
   return { x: HALF - 4, z: HALF - 4 };
 }
 
+/**
+ * A walkable spot rMin..rMax metres from a random one of `players`, preferably out of that
+ * player's line of sight (so enemies don't pop in on screen). Every open city cell is
+ * reachable (the generator seals the rest), so "not blocked" means "reachable".
+ */
+export function spawnNear(
+  blocks: Block[],
+  rand: () => number,
+  players: { x: number; z: number }[],
+  rMin: number,
+  rMax: number,
+  hidden = true,
+  radius = 1,
+  /** extra test, e.g. "the coarse nav grid can route from here" */
+  ok: (x: number, z: number) => boolean = () => true,
+) {
+  if (players.length === 0) return randomSpawn(blocks, rand);
+  let fallback: { x: number; z: number } | null = null;
+  for (let i = 0; i < 48; i++) {
+    const p = players[Math.floor(rand() * players.length)]!;
+    const a = rand() * Math.PI * 2;
+    const d = rMin + rand() * (rMax - rMin);
+    const x = p.x + Math.sin(a) * d;
+    const z = p.z + Math.cos(a) * d;
+    if (Math.abs(x) > HALF - 3 || Math.abs(z) > HALF - 3) continue;
+    if (blocked(blocks, x, z, radius) || !ok(x, z)) continue;
+    if (players.some((q) => Math.hypot(q.x - x, q.z - z) < rMin * 0.8)) continue;
+    if (!hidden || !clearLine(blocks, p.x, p.z, x, z, 0.1)) return { x, z };
+    fallback ??= { x, z };
+  }
+  if (fallback) return fallback;
+  // tight spot (e.g. deep in an alley): accept anything open near the first player
+  const p = players[0]!;
+  for (let i = 0; i < 80; i++) {
+    const x = p.x + (rand() - 0.5) * rMax * 2;
+    const z = p.z + (rand() - 0.5) * rMax * 2;
+    if (Math.abs(x) < HALF - 3 && Math.abs(z) < HALF - 3 && !blocked(blocks, x, z, radius))
+      return { x, z };
+  }
+  return randomSpawn(blocks, rand);
+}
+
 // ---------- pathfinding (flow field over a nav grid) ----------
 export let CELLS = Math.floor(ARENA / BLOCK);
 /** Nav grid: BLOCK * NAV_SCALE metres per cell. The big city routes on 4 m cells
@@ -185,12 +226,19 @@ export function solidGrid(blocks: Block[]): NavGrid {
 }
 
 const DIRS = [
-  [1, 0], [-1, 0], [0, 1], [0, -1],
-  [1, 1], [1, -1], [-1, 1], [-1, -1],
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
 ] as const;
 
-/** Distance (in steps) from every nav cell to the target nav cell. */
-export function flowField(nav: NavGrid, ti: number, tj: number) {
+/** Distance (in steps) from every nav cell to the target nav cell. `maxD` bounds the search
+ * (the big city only needs routes within a couple of hundred metres of each player). */
+export function flowField(nav: NavGrid, ti: number, tj: number, maxD = Infinity) {
   const { g: solid, n } = nav;
   const dist = new Float32Array(n * n).fill(Infinity);
   const q: number[] = [];
@@ -210,6 +258,7 @@ export function flowField(nav: NavGrid, ti: number, tj: number) {
       if (solid[k]) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
       const nd = dc + (di && dj ? 1.414 : 1);
+      if (nd > maxD) continue;
       if (nd < dist[k]!) {
         dist[k] = nd;
         q.push(k);
@@ -245,7 +294,14 @@ export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: num
 }
 
 /** True when a straight walk from a to b is clear for the given radius. */
-export function clearLine(blocks: Block[], ax: number, az: number, bx: number, bz: number, r: number) {
+export function clearLine(
+  blocks: Block[],
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  r: number,
+) {
   const len = Math.hypot(bx - ax, bz - az);
   const steps = Math.ceil(len / 0.5);
   for (let s = 1; s < steps; s++) {
