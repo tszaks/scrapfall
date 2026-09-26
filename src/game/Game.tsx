@@ -1945,6 +1945,12 @@ export function Game() {
     return () => window.clearTimeout(t);
   }, [pickupMsg]);
 
+  useEffect(() => {
+    if (!crateMsg) return;
+    const t = window.setTimeout(() => setCrateMsg(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [crateMsg]);
+
   const coop = !!net;
   const { blocks, enemies, rand, theme } = useMemo(() => {
     setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
