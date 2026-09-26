@@ -9,6 +9,12 @@ import {
 } from "./level";
 
 import { THEMES, type Theme } from "./themes";
+import type { CityLayout } from "./cityLayout";
+import { CityScene } from "./City";
+import { CityTraffic } from "./Traffic";
+import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
+import { worldLook } from "./lighting";
+import { Stars } from "@react-three/drei";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
@@ -1016,9 +1022,9 @@ function World({
   onLeech,
   onCrate,
   onDeploys,
-
-
-
+  city,
+  seed,
+  night,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -1049,7 +1055,9 @@ function World({
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
   onDeploys: (d: { turret: number; mines: number }) => void;
-
+  city: CityLayout | null;
+  seed: number;
+  night: boolean;
 }) {
 
 
@@ -1109,6 +1117,21 @@ function World({
     c.fov = fov;
     c.updateProjectionMatrix();
   }, [fov, camera]);
+  const look3 = worldLook(theme, night, ARENA);
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    // dev-only handle for poking at the scene from the console / test tooling
+    if (import.meta.env.DEV) {
+      const handle = { gl, scene, camera, look, liveCars, knock, city };
+      (window as unknown as { __rs?: unknown }).__rs = handle;
+    }
+  }, [gl, scene, camera, city]);
+  useEffect(() => {
+    // the city needs a much deeper view so the skyline reads; other maps keep 120
+    const c = camera as THREE.PerspectiveCamera;
+    c.far = look3.camFar;
+    c.updateProjectionMatrix();
+  }, [look3.camFar, camera]);
   const bobAmt = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
@@ -1133,6 +1156,25 @@ function World({
   const deadRef = useRef(dead);
   deadRef.current = dead;
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
+  // city traffic: bumped around by cars (velocity decays), with a short camera shake
+  const knock = useRef({ x: 0, z: 0, shake: 0 });
+  const traffic = useRef<TrafficLink>({
+    active: false,
+    px: 0,
+    pz: 0,
+    isHost: true,
+    enemies,
+    hurtEnemy: null,
+    hitPlayer: () => {},
+  });
+  traffic.current.enemies = enemies;
+  traffic.current.hitPlayer = (dmg, kx, kz, shake) => {
+    knock.current.x = kx;
+    knock.current.z = kz;
+    knock.current.shake = Math.max(knock.current.shake, shake);
+    if (shake > 0) playSfx("thud");
+    if (dmg > 0) takeHit(dmg);
+  };
 
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -1530,12 +1572,19 @@ function World({
 
 
   const outOfBounds = (p: THREE.Vector3) =>
-    p.y < 0 || Math.abs(p.x) > HALF || Math.abs(p.z) > HALF || blocked(blocks, p.x, p.z, 0.05);
+    p.y < 0 ||
+    Math.abs(p.x) > HALF ||
+    Math.abs(p.z) > HALF ||
+    blocked(blocks, p.x, p.z, 0.05) ||
+    (city !== null && hitsTraffic(p.x, p.y, p.z));
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const k = keys.current;
+    traffic.current.active = false;
+    traffic.current.px = cam.position.x;
+    traffic.current.pz = cam.position.z;
 
     if (!gameOver && locked) {
       look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
@@ -1545,7 +1594,10 @@ function World({
       );
     }
     cam.rotation.order = "YXZ";
-    cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+    const kn = knock.current;
+    kn.shake = Math.max(0, kn.shake - delta * 2.2);
+    const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
+    cam.rotation.set(look.current.pitch + roll * 0.4, look.current.yaw, roll);
 
     if (gameOver || !locked) return;
 
@@ -1594,6 +1646,22 @@ function World({
       const nz = cam.position.z + slide.current.z * delta;
       if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
       if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+    }
+
+    // car bumps: velocity that decays quickly, sliding along walls instead of through them
+    if (Math.abs(kn.x) > 0.01 || Math.abs(kn.z) > 0.01) {
+      const steps = Math.ceil((Math.hypot(kn.x, kn.z) * delta) / 0.25);
+      for (let st = 0; st < steps; st++) {
+        const nx = cam.position.x + (kn.x * delta) / steps;
+        const nz = cam.position.z + (kn.z * delta) / steps;
+        if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx;
+        else kn.x *= -0.2;
+        if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
+        else kn.z *= -0.2;
+      }
+      const decay = Math.exp(-delta * 6);
+      kn.x *= decay;
+      kn.z *= decay;
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
@@ -1803,6 +1871,14 @@ function World({
         onScore();
         onKill(e);
       }
+    };
+
+    // city traffic reads the player and can shove enemies through the regular hit path
+    traffic.current.active = !spectating;
+    traffic.current.isHost = isH;
+    traffic.current.hurtEnemy = (idx, dmg, kx, kz) => {
+      const e = enemies[idx];
+      if (e?.alive) hurtEnemy(e, dmg, idx, 0, 0, 1.6, kx, kz);
     };
 
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
@@ -2245,17 +2321,58 @@ function World({
 
   return (
     <>
-      <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={[theme.sky, 12, ARENA + 4]} />
-      <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
-      <directionalLight
-        position={[18, 26, 10]}
-        intensity={1.5}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-      <Level blocks={blocks} theme={theme} />
+      <color attach="background" args={[look3.sky]} />
+      <fog attach="fog" args={[look3.sky, look3.fog[0], look3.fog[1]]} />
+      <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
+      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color="#9fb0e0" />}
+      {night && (
+        <Stars
+          radius={city ? 240 : 90}
+          depth={city ? 40 : 20}
+          count={city ? 2500 : 1500}
+          factor={city ? 7 : 4}
+          fade
+          speed={0.3}
+        />
+      )}
+      {city ? (
+        // tall towers: wider, deeper shadow frustum (the other maps keep the defaults)
+        <directionalLight
+          key="sun-city"
+          position={look3.sun.pos}
+          color={look3.sun.color}
+          intensity={look3.sun.intensity}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-camera-left={-HALF - 10}
+          shadow-camera-right={HALF + 10}
+          shadow-camera-top={HALF + 10}
+          shadow-camera-bottom={-HALF - 10}
+          shadow-camera-near={1}
+          shadow-camera-far={260}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.03}
+        />
+      ) : (
+        <directionalLight
+          key="sun"
+          position={look3.sun.pos}
+          color={look3.sun.color}
+          intensity={look3.sun.intensity}
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+        />
+      )}
+      {city ? (
+        <>
+          <CityScene city={city} night={night} />
+          <CityTraffic city={city} seed={seed} night={night} link={traffic} />
+        </>
+      ) : (
+        <Level blocks={blocks} theme={theme} />
+      )}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
@@ -2315,8 +2432,51 @@ function World({
   );
 }
 
+/** `?map=vice` (case-insensitive name substring), `?map=city` (layout type) or `?map=3` (index) forces the solo map for testing. */
+function forcedMapIndex(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("map");
+  if (!raw) return null;
+  const n = Number(raw);
+  if (Number.isInteger(n) && n >= 0 && n < THEMES.length) return n;
+  const q = raw.toLowerCase();
+  const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
+  return i >= 0 ? i : null;
+}
+const NIGHT_KEY = "dustfield-night";
+/** `?night=1` / `?night=0` overrides the saved preference (without overwriting it). */
+function nightOverride(): boolean | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("night");
+  return raw === "1" ? true : raw === "0" ? false : null;
+}
+
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
+  const [forcedMap] = useState(forcedMapIndex);
+  const [night, setNight] = useState(false);
+  useEffect(() => {
+    const o = nightOverride();
+    if (o !== null) setNight(o);
+    else setNight(localStorage.getItem(NIGHT_KEY) === "1");
+  }, []);
+  const toggleNight = () => {
+    setNight((v) => {
+      localStorage.setItem(NIGHT_KEY, v ? "0" : "1");
+      return !v;
+    });
+  };
+  const toggleNightRef = useRef(toggleNight);
+  toggleNightRef.current = toggleNight;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyN" || e.repeat) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      toggleNightRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
@@ -2549,11 +2709,19 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
-  const { blocks, enemies, rand, theme } = useMemo(() => {
+  const { blocks, enemies, rand, theme, city } = useMemo(() => {
     setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
-    const level = generateLevel(seed);
-    const theme = THEMES[seed % THEMES.length]!;
-    level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
+    // the map decides the layout, so pick the theme first (still purely from the shared seed)
+    const forced = !coop && forcedMap !== null ? THEMES[forcedMap] : undefined;
+    const theme = forced ?? THEMES[seed % THEMES.length]!;
+    const level = generateLevel(seed, theme.blockShape === "city" ? "city" : "scatter");
+    // the city generator keeps its own spawn plaza clear and every cell reachable;
+    // trimming its blocks here would leave buildings without collision
+    if (!level.city) {
+      level.blocks = level.blocks.filter(
+        (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
+      );
+    }
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
       x: 0,
@@ -2568,8 +2736,8 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
-  }, [seed, coop]);
+    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city };
+  }, [seed, coop, forcedMap]);
 
 
   useEffect(() => {
@@ -2797,6 +2965,9 @@ export function Game() {
             setCrateMsg(CRATE_INFO[kind].name);
           }}
           onDeploys={setDeploys}
+          city={city}
+          seed={seed}
+          night={night}
 
 
 
@@ -2994,7 +3165,8 @@ export function Game() {
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap guns · Esc to pause
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · 1-0 / Q E swap
+                guns · N day/night · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -3098,6 +3270,14 @@ export function Game() {
 
             {(
               <div>
+                <button
+                  onClick={toggleNight}
+                  aria-pressed={night}
+                  title="Toggle day / night (N)"
+                  className="pointer-events-auto mt-4 block w-full rounded-md border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]"
+                >
+                  {night ? "☾ NIGHT" : "☀ DAY"} · PRESS N TO SWITCH
+                </button>
                 <button
                   onClick={() => setShowSettings((v) => !v)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"

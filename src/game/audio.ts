@@ -88,7 +88,17 @@ export function playGun(w: string, quiet = false) {
     tone(quiet ? { ...t, gain: t.gain * 0.3, cut: Math.min(t.cut, 1400) } : t));
 }
 
-export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret") {
+type Sfx = "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret" | "thud" | "horn";
+export function playSfx(kind: Sfx) {
+  if (kind === "thud") {
+    // dull body-meets-bumper thump
+    tone({ wave: "sine", f0: 110, f1: 40, dur: 0.3, gain: 0.7, noise: 0.8, cut: 700 });
+    tone({ wave: "square", f0: 70, f1: 45, dur: 0.12, gain: 0.25, noise: 0, cut: 400 });
+  }
+  if (kind === "horn") {
+    tone({ wave: "square", f0: 392, f1: 392, dur: 0.32, gain: 0.12, noise: 0, cut: 2200 });
+    tone({ wave: "square", f0: 494, f1: 494, dur: 0.32, gain: 0.1, noise: 0, cut: 2200 });
+  }
   if (kind === "turret") {
     // mechanical pneumatic pop + metallic ring, distinct from the music's square arps
     tone({ wave: "triangle", f0: 240, f1: 90, dur: 0.07, gain: 0.22, noise: 1.1, cut: 2600 });
@@ -133,12 +143,31 @@ const STYLES: Record<string, Style> = {
   // cyber: four-on-the-floor electro, octave-jumping saw bass, off-beat hats
   cyber: { roots: [45, 45, 43, 48], bpm: 128, arp: [0, 12, 7, 12, 3, 12, 10, 12], lead: "square", leadCut: 6000, bass: "sawtooth", kick: [0, 4, 8, 12], snare: [4, 12], hat: "off", arpRate: 1, bassRate: 1, leadLen: 0.5 },
   // toxic: lurching industrial acid line, resonant squelch, broken beat
+  // vice: 80s synthwave cruise, gated snare, echoing saw lead over pads
+  vice: {
+    roots: [45, 41, 43, 40],
+    bpm: 108,
+    arp: [0, 7, 12, 15, 12, 7, 3, 7],
+    lead: "sawtooth",
+    leadCut: 3200,
+    bass: "sawtooth",
+    kick: [0, 8],
+    snare: [4, 12],
+    hat: "off",
+    pad: true,
+    arpRate: 2,
+    oct: 12,
+    bassRate: 2,
+    leadLen: 1.2,
+    echo: true,
+  },
   toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
 };
 const MAP_STYLE: Record<string, string> = {
   "Dust Basin": "desert", "Canyon Mesa": "desert", "Frost Shelf": "ice", "Glacier Rift": "ice",
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
+  "Vice Heights": "vice",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {

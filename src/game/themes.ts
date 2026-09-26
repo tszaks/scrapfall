@@ -12,7 +12,8 @@ export type Theme = {
     shooter: { body: string; barrel: string; eye: string };
   };
   enemyBullet: string;
-  blockShape: "box" | "tree" | "crystal" | "rock";
+  /** "city" swaps the random scatter for a street grid with skyscrapers (see cityLayout.ts). */
+  blockShape: "box" | "tree" | "crystal" | "rock" | "city";
   boss: {
     name: string;
     shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
@@ -225,5 +226,44 @@ export const THEMES: Theme[] = [
     boss: { name: "CORROSIVE TITAN", shape: "golem", body: "#6a5a3a", limb: "#4a3e28", eye: "#9aff3a", weapon: "#8a6a2a", glow: "#9aff3a" },
     hazard: { name: "SLUDGE BOG", slip: 0.3 },
     special: { name: "BILE SPRAYER", type: "bile", body: "#c8b02a", accent: "#3a3a2a", glow: "#9aff3a" },
+  },
+  {
+    name: "Vice Heights",
+    sky: "#9cc9ec",
+    ground: "#3b3e44",
+    grid: ["#2e3136", "#34373c"],
+    blocks: ["#f2a7b8", "#9ee0c8", "#f8e0a8"],
+    wall: "#8a8a86",
+    hemi: ["#ffffff", "#6b6255"],
+    enemy: {
+      drifter: { body: "#ff4fa0", emissive: "#3a0620", eye: "#fff4a0" },
+      brute: {
+        body: "#3a3f4a",
+        head: "#2a2e36",
+        eye: "#3affd8",
+        club: "#1a1c20",
+        clubHead: "#c8ccd6",
+      },
+      shooter: { body: "#f2f2f2", barrel: "#1a1a1a", eye: "#ff3a8a" },
+    },
+    enemyBullet: "#ff3aa8",
+    blockShape: "city",
+    boss: {
+      name: "THE KINGPIN",
+      shape: "mech",
+      body: "#d8b04a",
+      limb: "#2a2a30",
+      eye: "#ff3aa8",
+      weapon: "#1a1a1e",
+      glow: "#3affd8",
+    },
+    hazard: { name: "OIL SLICK", slip: 0.55 },
+    special: {
+      name: "ROOFTOP RUNNER",
+      type: "leaper",
+      body: "#2a2a30",
+      accent: "#ff4fa0",
+      glow: "#3affd8",
+    },
   },
 ];
