@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
-import { ABILITIES, type AbilityId } from "./abilities";
+import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
@@ -2992,6 +2992,16 @@ export function Game() {
     return () => window.clearInterval(id);
   }, [net]);
 
+  // hand my run report to the rest of the squad
+  useEffect(() => {
+    if (!ended) return;
+    const r = run.current;
+    netHolder.current?.broadcast({
+      type: "statline", num: myNum, kills: score, dmg: Math.round(r.dmg),
+      acc: r.shots ? Math.round((r.hits / r.shots) * 100) : 0, shards: r.shards, taken: r.taken,
+    });
+  }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // free the mouse when the round ends so the button can be clicked
   useEffect(() => {
     if (ended && document.pointerLockElement) document.exitPointerLock();
@@ -3288,6 +3298,17 @@ export function Game() {
         {crateMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
             {crateMsg} DEPLOYED
+          </div>
+        )}
+        {locked && !ended && (
+          <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
+            [F] {ABILITIES[ability].name} ·{" "}
+            {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
+          </div>
+        )}
+        {eventMsg && locked && !ended && (
+          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
+            ⚠ {eventMsg} ⚠
           </div>
         )}
         {locked && !ended && (
