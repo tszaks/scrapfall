@@ -1129,7 +1129,7 @@ function World({
     if (pk.active && canTake && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
-      ammo.current[pk.gun] = GUNS[pk.gun].ammo;
+      ammo.current[pk.gun] = Math.round(GUNS[pk.gun].ammo * stats.current.ammoMul);
       equip(pk.gun);
       onWeapon(pk.gun, true);
       if (isH) {
