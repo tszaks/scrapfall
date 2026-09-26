@@ -2660,10 +2660,16 @@ export function Game() {
   };
   startRef.current = start;
 
+  // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
+  const [fought, setFought] = useState(0);
+  useEffect(() => {
+    if (status.remaining > 0) setFought(status.wave);
+    else if (status.wave === 1 && !started) setFought(0);
+  }, [status.remaining, status.wave, started]);
   // ---- shop: open during the break after a cleared wave ----
   // NOTE: the break itself does not depend on pointer lock, so pausing and
   // resuming keeps the same cards and remembers the ones already bought.
-  const shopBreak = started && !ended && !dead && status.remaining === 0 && score > 0 && status.wave < WAVES.length;
+  const shopBreak = started && !ended && !dead && status.remaining === 0 && fought === status.wave && status.wave < WAVES.length;
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
@@ -2778,7 +2784,7 @@ export function Game() {
           slots={slots}
           stats={statsRef}
           onShard={(v) => {
-            setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed)));
+            setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1))));
             playSfx("shard");
           }}
           onLeech={() => {
@@ -2908,7 +2914,7 @@ export function Game() {
           </div>
         )}
         {multiplayer && locked && !ended && (
-          <div className="absolute right-5 top-16 space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
+          <div className="absolute right-5 top-[7.5rem] space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
             <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
             {[...remotes.current.values()].map((r) => (
               <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
