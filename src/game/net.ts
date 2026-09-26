@@ -88,7 +88,7 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
     conn.on("data", (raw) => {
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
-      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume") {
+      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume" || m.type === "pick") {
         conns.forEach((c, id) => { if (id !== conn.peer && c.open) c.send(m); });
       }
       opts.onMsg(m);
