@@ -1060,6 +1060,8 @@ const BULLET_GEO = new THREE.LatheGeometry(
   10,
 );
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
+const TMP_DIR = new THREE.Vector3();
+
 
 const BulletPool = memo(function BulletPool({
   meshes,
