@@ -2584,8 +2584,14 @@ function World({
         if (b.active) {
           m.scale.setScalar(b.size / 0.14);
           (m.material as THREE.MeshBasicMaterial).color.set(b.color);
+          // point the round along its flight path
+          if (b.vel.lengthSq() > 0.0001) {
+            TMP_DIR.copy(b.vel).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
         }
       }
+
     });
 
 
