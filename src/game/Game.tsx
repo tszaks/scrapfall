@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
-import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -41,6 +41,15 @@ const GUNS: Record<Weapon, Gun> = {
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard"];
+type CrateKind = "turret" | "shield" | "mine" | "ammo";
+const CRATE_KINDS: CrateKind[] = ["turret", "shield", "mine", "ammo"];
+const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
+  turret: { name: "SENTRY TURRET", color: "#4fe3ff" },
+  shield: { name: "NANO BARRIER", color: "#7cc6ff" },
+  mine: { name: "CRYO MINE", color: "#9fe8ff" },
+  ammo: { name: "AMMO CACHE", color: "#e7b25c" },
+};
+const TURRET_LIFE = 60; // roughly a wave and a half
 
 type Enemy = {
   kind: Kind;
@@ -53,10 +62,12 @@ type Enemy = {
   flash: number; // hit flash timer
   shot: number; // boss volley timer
   slow: number; // frozen timer
+  burn: number; // burning timer from incendiary rounds
+  burnTick: number;
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
-  bounce: number; pierce: number; slow: number; cluster: number; chain: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number;
 };
 
 
@@ -427,11 +438,12 @@ function BulletPool({
   );
 }
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number };
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
+    burn: fx.burn ?? 0, knock: fx.knock ?? 0,
   };
   const slot = pool.find((b) => !b.active);
   if (slot) {
@@ -543,6 +555,8 @@ function World({
   slots,
   stats,
   onShard,
+  onLeech,
+  onCrate,
 
 
 }: {
@@ -572,6 +586,8 @@ function World({
   slots: React.MutableRefObject<Record<string, number>>;
   stats: React.MutableRefObject<Derived>;
   onShard: (v: number) => void;
+  onLeech: () => void;
+  onCrate: (kind: CrateKind) => void;
 }) {
 
 
@@ -606,6 +622,23 @@ function World({
   const heal = useRef({ x: 0, z: 0, active: false });
   const lastHealWave = useRef(-99);
   const healMesh = useRef<THREE.Group>(null);
+  // supply crates: turret kit, overshield, cryo mine, ammo cache
+  const crate = useRef<{ x: number; z: number; active: boolean; kind: CrateKind }>({ x: 0, z: 0, active: false, kind: "turret" });
+  const crateMesh = useRef<THREE.Group>(null);
+  const [crateKind, setCrateKind] = useState<CrateKind>("turret");
+  const crateKindRef = useRef<CrateKind>("turret");
+  const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
+  const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
+  const turretMeshes = useRef<(THREE.Group | null)[]>([]);
+  const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  const thornsPending = useRef(0);
+  // armour soaks damage; getting hit can discharge a shock ring
+  const takeHit = (dmg: number) => {
+    const s2 = stats.current;
+    const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
+    onHurt(d);
+  };
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     c.fov = fov;
@@ -691,7 +724,7 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0 };
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0 };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -710,6 +743,11 @@ function World({
     heal.current.x = h[0]!;
     heal.current.z = h[1]!;
     heal.current.active = h[2] === 1;
+    const c = (m.c as number[]) ?? [0, 0, 0, 0];
+    crate.current.x = c[0]!;
+    crate.current.z = c[1]!;
+    crate.current.active = c[2] === 1;
+    crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -740,6 +778,8 @@ function World({
             pickup.current.active = false;
             const next = lostQueue.current.shift();
             if (next) placePickup(next);
+          } else if (m.what === "crate") {
+            crate.current.active = false;
           } else {
             heal.current.active = false;
           }
@@ -750,7 +790,7 @@ function World({
         if (m.type === "snap") applySnap(m);
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") onHurt(Number(m.dmg) || 1);
+        else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -816,8 +856,20 @@ function World({
     setDropGun(gun);
   };
 
-  const fire = () => {
-    const g = GUNS[weapon.current];
+  // pistol mod cards rewrite the sidearm
+  const gunFor = (w: Weapon): Gun => {
+    const g = GUNS[w];
+    if (w !== "pistol" || !stats.current.magnum) return g;
+    return { ...g, damage: g.damage + 1, speed: g.speed * 1.5, pierce: 1, color: "#ffd9a0" };
+  };
+
+  const burstQueue = useRef(0);
+  const burstTimer = useRef(0);
+
+  const spit = () => {
+    const w = weapon.current;
+    const g = gunFor(w);
+    const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
@@ -825,22 +877,45 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage * stats.current.dmg, g.color, g.size, g);
+      const crit = Math.random() < s2.crit;
+      const dmg = g.damage * s2.dmg * (crit ? 2 : 1);
+      const fx: Fx = {
+        bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
+        pierce: g.pierce ?? 0,
+        slow: g.slow ?? 0,
+        cluster: g.cluster ?? 0,
+        chain: g.chain ?? 0,
+        knock: s2.knock,
+        burn: w === "pistol" && s2.incend ? 3 : 0,
+      };
+      fireInto(
+        bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
+        crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
+      );
     }
-    playGun(weapon.current);
+    playGun(w);
     recoil.current = g.damage > 3 ? 1 : 0.5;
+  };
+
+  const fire = () => {
+    spit();
     const w = weapon.current;
-    if (w !== "pistol") {
-      ammo.current[w]--;
-      onAmmo(ammo.current[w]);
-      if (ammo.current[w] <= 0) {
-        owned.current.delete(w);
-        equip("pistol");
-        if (pickup.current.active) lostQueue.current.push(w);
-        else placePickup(w);
-      } else {
-        syncInv();
+    if (w === "pistol") {
+      if (stats.current.burst) {
+        burstQueue.current = 2;
+        burstTimer.current = 0.07;
       }
+      return;
+    }
+    ammo.current[w]--;
+    onAmmo(ammo.current[w]);
+    if (ammo.current[w] <= 0) {
+      owned.current.delete(w);
+      equip("pistol");
+      if (pickup.current.active) lostQueue.current.push(w);
+      else placePickup(w);
+    } else {
+      syncInv();
     }
   };
 
@@ -928,6 +1003,8 @@ function World({
         flash: 0,
         shot: 2,
         slow: 0,
+        burn: 0,
+        burnTick: 0,
       });
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
@@ -939,6 +1016,12 @@ function World({
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
+    }
+    // supply crate: turret kit, barrier, cryo mine or ammo cache
+    if (n >= 2 && !crate.current.active && rand() < Math.min(0.9, 0.55 * lootMul)) {
+      const c = randomSpawn(blocks, rand);
+      const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
+      crate.current = { x: c.x, z: c.z, active: true, kind };
     }
     // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
     const rolls = Math.max(1, Math.round(lootMul));
@@ -984,7 +1067,14 @@ function World({
     const spectating = deadRef.current;
 
     fireCd.current -= delta;
-    if (trigger.current && !spectating && fireCd.current <= 0) {
+    if (burstQueue.current > 0 && !spectating) {
+      burstTimer.current -= delta;
+      if (burstTimer.current <= 0) {
+        burstQueue.current--;
+        burstTimer.current = 0.07;
+        spit();
+      }
+    } else if (trigger.current && !spectating && fireCd.current <= 0) {
       fire();
       fireCd.current = GUNS[weapon.current].cooldown / stats.current.rate;
     }
@@ -1041,7 +1131,7 @@ function World({
     if (pk.active && canTake && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
       pk.active = false;
       owned.current.add(pk.gun);
-      ammo.current[pk.gun] = GUNS[pk.gun].ammo;
+      ammo.current[pk.gun] = Math.round(GUNS[pk.gun].ammo * stats.current.ammoMul);
       equip(pk.gun);
       onWeapon(pk.gun, true);
       if (isH) {
@@ -1065,6 +1155,68 @@ function World({
       if (!isH) n?.broadcast({ type: "take", what: "heal" });
     }
 
+    // supply crate pickup
+    const ck = crate.current;
+    if (crateKindRef.current !== ck.kind) {
+      crateKindRef.current = ck.kind;
+      setCrateKind(ck.kind);
+    }
+    if (crateMesh.current) {
+      crateMesh.current.visible = ck.active;
+      if (ck.active) {
+        crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.rotation.y += delta * 1.2;
+      }
+    }
+    if (ck.active && !spectating && Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4) {
+      ck.active = false;
+      if (ck.kind === "turret" && turrets.current.length < 6) turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
+      if (ck.kind === "mine" && mines.current.length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "ammo") {
+        owned.current.forEach((w) => {
+          if (w === "pistol") return;
+          ammo.current[w] = Math.min(
+            Math.round(GUNS[w].ammo * stats.current.ammoMul),
+            ammo.current[w] + Math.round(GUNS[w].ammo * 0.5),
+          );
+        });
+        onAmmo(ammo.current[weapon.current]);
+        syncInv();
+      }
+      onCrate(ck.kind);
+      if (!isH) n?.broadcast({ type: "take", what: "crate" });
+    }
+
+    // deployed sentries shoot the nearest enemy for you
+    for (let ti = turrets.current.length - 1; ti >= 0; ti--) {
+      const t = turrets.current[ti]!;
+      t.t -= delta;
+      const mesh = turretMeshes.current[ti];
+      if (mesh) {
+        mesh.visible = t.t > 0;
+        mesh.position.set(t.x, 0, t.z);
+      }
+      if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
+      t.cd -= delta;
+      let best: Enemy | null = null;
+      let bd = 26;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const d2 = Math.hypot(e.x - t.x, e.z - t.z);
+        if (d2 < bd) { bd = d2; best = e; }
+      }
+      if (best && t.cd <= 0) {
+        t.cd = 0.3;
+        const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
+        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 1.4, 2, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
+      }
+    }
+    for (let i = turrets.current.length; i < 6; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
+    for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
+
+
+
     // ---- guests: play back the host's world, then handle their own bullets ----
     if (!isH) {
       enemies.forEach((e, i) => {
@@ -1081,7 +1233,7 @@ function World({
           b.pos.addScaledVector(b.vel, delta);
           if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
             b.active = false;
-            onHurt(b.damage);
+            takeHit(b.damage);
 
             n?.broadcast({ type: "ebhit", i });
           }
@@ -1097,6 +1249,69 @@ function World({
       onStatus(w, rem, won, bannerOn);
       if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
     };
+
+    const onKill = (e: Enemy) => {
+      const s2 = stats.current;
+      if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
+      if (s2.boom > 0 && Math.random() < s2.boom) {
+        for (let oi = 0; oi < enemies.length; oi++) {
+          const o = enemies[oi]!;
+          if (!o.alive || o === e) continue;
+          if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
+        }
+      }
+    };
+    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
+      if (kb > 0 && e.kind !== "boss") {
+        const len = Math.hypot(kx, kz) || 1;
+        const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
+        e.x += (kx / len) * push;
+        e.z += (kz / len) * push;
+      }
+      if (!isH) {
+        n?.broadcast({ type: "hit", i: idx, dmg, slow });
+        e.flash = 0.1;
+        return;
+      }
+      e.hp -= dmg;
+      e.flash = 0.1;
+      if (slow > 0) e.slow = slow;
+      if (burn > 0) { e.burn = burn; e.burnTick = 1; }
+      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+      if (e.hp <= 0) {
+        e.alive = false;
+        onScore();
+        onKill(e);
+      }
+    };
+
+    // shock thorns: getting hit can discharge a ring that zaps whoever is close
+    if (thornsPending.current > 0) {
+      thornsPending.current = 0;
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        if (Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 4) hurtEnemy(e, 2, ei);
+      }
+    }
+
+    // cryo mines freeze and hurt whatever walks onto them
+    for (let mi = mines.current.length - 1; mi >= 0; mi--) {
+      const mn = mines.current[mi]!;
+      const mesh = mineMeshes.current[mi];
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2, mn.z); }
+      let hit = false;
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) { hurtEnemy(e, 2, ei, 4); hit = true; }
+      }
+      if (hit) {
+        mines.current.splice(mi, 1);
+        if (mesh) mesh.visible = false;
+      }
+    }
+
 
     if (isH) {
       // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
@@ -1149,7 +1364,7 @@ function World({
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
       const hurtTarget = (t: Target, dmg: number) => {
-        if (t.id === null) onHurt(dmg);
+        if (t.id === null) takeHit(dmg);
         else n?.sendTo(t.id, { type: "hurt", dmg });
       };
 
@@ -1170,6 +1385,17 @@ function World({
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
+        if (e.burn > 0) {
+          e.burn -= delta;
+          e.burnTick -= delta;
+          if (e.burnTick <= 0) {
+            e.burnTick = 1;
+            e.hp -= 1;
+            e.flash = 0.1;
+            if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+            if (e.hp <= 0) { e.alive = false; e.burn = 0; onScore(); onKill(e); continue; }
+          }
+        }
         const st = STATS[e.kind];
         // nearest player
         let target = targets[0]!;
@@ -1280,21 +1506,6 @@ function World({
     }
 
     // player bullets
-    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0) => {
-      if (!isH) {
-        n?.broadcast({ type: "hit", i: idx, dmg, slow });
-        e.flash = 0.1;
-        return;
-      }
-      e.hp -= dmg;
-      e.flash = 0.1;
-      if (slow > 0) e.slow = slow;
-      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-      if (e.hp <= 0) {
-        e.alive = false;
-        onScore();
-      }
-    };
     const burst = (b: Bullet) => {
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
@@ -1330,7 +1541,7 @@ function World({
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
-              hurtEnemy(e, dmg, ei, b.slow);
+              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
 
               if (b.chain > 0) {
                 let left = b.chain;
@@ -1375,7 +1586,7 @@ function World({
           if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
-            onHurt(b.damage);
+            takeHit(b.damage);
 
           }
         }
@@ -1406,6 +1617,7 @@ function World({
             type: "snap", e, b, mk,
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
+            c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
           });
         }
       }
@@ -1480,6 +1692,24 @@ function World({
         <mesh><boxGeometry args={[0.22, 0.7, 0.22]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
         <mesh position-y={-0.8} rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.65, 20]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
       </group>
+      <group ref={crateMesh} visible={false}>
+        <mesh><boxGeometry args={[0.8, 0.8, 0.8]} /><meshStandardMaterial color="#2a2a2a" /></mesh>
+        <mesh scale={1.02}><boxGeometry args={[0.82, 0.3, 0.82]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
+        <mesh position-y={-0.6} rotation-x={-Math.PI / 2}><ringGeometry args={[0.6, 0.78, 20]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
+      </group>
+      {Array.from({ length: 6 }, (_, i) => (
+        <group key={`turret${i}`} ref={(g) => { turretMeshes.current[i] = g; }} visible={false}>
+          <mesh position-y={0.35}><cylinderGeometry args={[0.28, 0.36, 0.7, 8]} /><meshStandardMaterial color="#39424d" /></mesh>
+          <mesh position-y={0.85}><sphereGeometry args={[0.28, 10, 8]} /><meshStandardMaterial color="#1f2731" /></mesh>
+          <mesh position={[0, 0.9, 0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.8, 8]} /><meshBasicMaterial color="#4fe3ff" fog={false} /></mesh>
+        </group>
+      ))}
+      {Array.from({ length: 6 }, (_, i) => (
+        <group key={`mine${i}`} ref={(g) => { mineMeshes.current[i] = g; }} visible={false}>
+          <mesh rotation-x={-Math.PI / 2}><cylinderGeometry args={[0.35, 0.35, 0.12, 10]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
+          <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
+        </group>
+      ))}
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} />
       </group>
@@ -1504,6 +1734,7 @@ export function Game() {
   const [weapon, setWeapon] = useState<Weapon>("pistol");
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
+  const [crateMsg, setCrateMsg] = useState<string | null>(null);
   const [ammoLeft, setAmmoLeft] = useState(0);
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
@@ -1714,6 +1945,12 @@ export function Game() {
     return () => window.clearTimeout(t);
   }, [pickupMsg]);
 
+  useEffect(() => {
+    if (!crateMsg) return;
+    const t = window.setTimeout(() => setCrateMsg(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [crateMsg]);
+
   const coop = !!net;
   const { blocks, enemies, rand, theme } = useMemo(() => {
     setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
@@ -1731,6 +1968,8 @@ export function Game() {
       flash: 0,
       shot: 0,
       slow: 0,
+      burn: 0,
+      burnTick: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
   }, [seed, coop]);
@@ -1829,10 +2068,16 @@ export function Game() {
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(5);
+  const lastOffered = useRef<PerkId[]>([]);
   useEffect(() => {
     if (!shopOpen) return;
-    const pool = [...PERK_IDS].sort(() => Math.random() - 0.5);
-    setOffers(pool.slice(0, 3));
+    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+    const avail = PERK_IDS.filter((p) => !perkMaxed(p, perksRef.current[p]));
+    let pool = avail.filter((p) => !lastOffered.current.includes(p));
+    if (pool.length < 3) pool = avail;
+    const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
+    lastOffered.current = picks;
+    setOffers(picks);
     setBought([]);
     setShopLeft(5);
     const id = setInterval(() => setShopLeft((s) => Math.max(0, s - 1)), 1000);
@@ -1927,6 +2172,16 @@ export function Game() {
             setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed)));
             playSfx("shard");
           }}
+          onLeech={() => {
+            setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h));
+            playSfx("pickup");
+          }}
+          onCrate={(kind) => {
+            playSfx("pickup");
+            if (kind === "shield") setHealth((h) => (h > 0 ? Math.min(maxHp + 5, h + 5) : h));
+            setCrateMsg(CRATE_INFO[kind].name);
+          }}
+
 
           onWeapon={(w, picked) => {
             setWeapon(w);
@@ -2019,6 +2274,11 @@ export function Game() {
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
             {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
+          </div>
+        )}
+        {crateMsg && locked && !ended && (
+          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
+            {crateMsg} DEPLOYED
           </div>
         )}
         {locked && !ended && (
