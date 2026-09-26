@@ -27,7 +27,7 @@ type Gun = {
   bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
-  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 0 },
+  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
   scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
@@ -71,7 +71,7 @@ type Bullet = {
 };
 
 
-const BOSS_HP = 65;
+const BOSS_HP = 300;
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
   brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
@@ -927,17 +927,20 @@ function World({
   };
 
   const fire = () => {
-    spit();
     const w = weapon.current;
-    if (w === "pistol") {
-      if (stats.current.burst) {
-        burstQueue.current = 2;
-        burstTimer.current = 0.07;
-      }
-      return;
-    }
+    if (ammo.current[w] <= 0) return; // dry: wait for a drop or the next wave
+    spit();
     ammo.current[w]--;
     onAmmo(ammo.current[w]);
+    if (w === "pistol") {
+      // the pistol never drops; it just refills at the start of each wave
+      if (stats.current.burst && ammo.current[w] > 0) {
+        burstQueue.current = Math.min(2, ammo.current[w]);
+        burstTimer.current = 0.07;
+      }
+      syncInv();
+      return;
+    }
     if (ammo.current[w] <= 0) {
       owned.current.delete(w);
       equip("pistol");
@@ -1025,7 +1028,7 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: kind === "boss" ? Math.round(BOSS_HP + 20 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         alive: false,
         cooldown: 1 + rand() * 2,
         swing: 0,
