@@ -1808,13 +1808,14 @@ function World({
       onEvent(event);
       netRef.current?.broadcast({ type: "event", name: event });
     }
-    // health: random; solo waits 2 waves between packs, co-op packs come more often
+    // health: guaranteed pack every wave in co-op, every other wave solo
     const healGap = extra > 0 ? 1 : 2;
-    if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
+    if (n >= 2 && n - lastHealWave.current >= healGap) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
+
     // supply crate: turret kit, barrier, cryo mine or ammo cache
     if (!crate.current.active) { // exactly one supply drop per wave
       const c = randomSpawn(blocks, rand);
