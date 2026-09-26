@@ -1396,7 +1396,7 @@ function World({
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
-              hurtEnemy(e, dmg, ei, b.slow);
+              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
 
               if (b.chain > 0) {
                 let left = b.chain;
