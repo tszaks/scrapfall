@@ -172,7 +172,7 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
     const bassNote = bRate === 1 ? (i % 2 ? root + 12 : root) : i % 4 === 2 ? root + 12 : root;
-    const bDur = Math.min(2.5, stepDur * bRate * 0.9);
+    const bDur = S.bassRate ? Math.min(2.5, stepDur * bRate * 0.9) : 0.14;
     tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: bDur, gain: 0.35, noise: 0, cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700, q: bRate === 1 ? 10 : 6 }, musicGain, t);
   }
   if (S.pad && i === 0) {
