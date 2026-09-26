@@ -632,7 +632,7 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>({ pistol: 0, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
+  const ammo = useRef<Record<Weapon, number>>({ pistol: GUNS.pistol.ammo, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
@@ -1003,6 +1003,10 @@ function World({
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spawnWave = (n: number) => {
+    // every wave hands the sidearm a fresh magazine
+    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
+    onAmmo(ammo.current[weapon.current]);
+    syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
     const enemyMul = 1 + 0.6 * extra;
     const lootMul = 1 + 0.65 * extra;
