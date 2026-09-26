@@ -741,6 +741,11 @@ function World({
     heal.current.x = h[0]!;
     heal.current.z = h[1]!;
     heal.current.active = h[2] === 1;
+    const c = (m.c as number[]) ?? [0, 0, 0, 0];
+    crate.current.x = c[0]!;
+    crate.current.z = c[1]!;
+    crate.current.active = c[2] === 1;
+    crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
