@@ -1153,6 +1153,63 @@ function World({
       if (!isH) n?.broadcast({ type: "take", what: "heal" });
     }
 
+    // supply crate pickup
+    const ck = crate.current;
+    if (crateMesh.current) {
+      crateMesh.current.visible = ck.active;
+      if (ck.active) {
+        crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.rotation.y += delta * 1.2;
+        (crateMesh.current.children[0] as THREE.Mesh | undefined)?.traverse?.(() => {});
+      }
+    }
+    if (ck.active && !spectating && Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4) {
+      ck.active = false;
+      if (ck.kind === "turret") turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
+      if (ck.kind === "mine") mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "ammo") {
+        owned.current.forEach((w) => {
+          if (w === "pistol") return;
+          ammo.current[w] = Math.min(
+            Math.round(GUNS[w].ammo * stats.current.ammoMul),
+            ammo.current[w] + Math.round(GUNS[w].ammo * 0.5),
+          );
+        });
+        onAmmo(ammo.current[weapon.current]);
+        syncInv();
+      }
+      onCrate(ck.kind);
+      if (!isH) n?.broadcast({ type: "take", what: "crate" });
+    }
+
+    // deployed sentries shoot the nearest enemy for you
+    for (let ti = turrets.current.length - 1; ti >= 0; ti--) {
+      const t = turrets.current[ti]!;
+      t.t -= delta;
+      const mesh = turretMeshes.current[ti];
+      if (mesh) {
+        mesh.visible = t.t > 0;
+        mesh.position.set(t.x, 0, t.z);
+      }
+      if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
+      t.cd -= delta;
+      let best: Enemy | null = null;
+      let bd = 26;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const d2 = Math.hypot(e.x - t.x, e.z - t.z);
+        if (d2 < bd) { bd = d2; best = e; }
+      }
+      if (best && t.cd <= 0) {
+        t.cd = 0.3;
+        const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
+        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 1.4, 2, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
+      }
+    }
+
+
+
     // ---- guests: play back the host's world, then handle their own bullets ----
     if (!isH) {
       enemies.forEach((e, i) => {
