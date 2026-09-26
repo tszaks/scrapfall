@@ -1278,6 +1278,33 @@ function World({
       }
     };
 
+    // shock thorns: getting hit can discharge a ring that zaps whoever is close
+    if (thornsPending.current > 0) {
+      thornsPending.current = 0;
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        if (Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 4) hurtEnemy(e, 2, ei);
+      }
+    }
+
+    // cryo mines freeze and hurt whatever walks onto them
+    for (let mi = mines.current.length - 1; mi >= 0; mi--) {
+      const mn = mines.current[mi]!;
+      const mesh = mineMeshes.current[mi];
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2, mn.z); }
+      let hit = false;
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) { hurtEnemy(e, 2, ei, 4); hit = true; }
+      }
+      if (hit) {
+        mines.current.splice(mi, 1);
+        if (mesh) mesh.visible = false;
+      }
+    }
+
 
     if (isH) {
       // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
