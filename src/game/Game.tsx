@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
@@ -167,7 +167,7 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
-function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
+const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
     if (i % 2 === 1) return [];
@@ -649,10 +649,9 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       </group> )}
     </group>
   );
-}
+});
 
-
-function BulletPool({
+const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
@@ -2434,7 +2433,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
-      <Canvas shadows camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows dpr={[1, 1.25]} gl={{ powerPreference: "high-performance", antialias: false }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
           enemies={enemies}
