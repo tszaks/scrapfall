@@ -2165,6 +2165,16 @@ export function Game() {
             setShards((s) => s + Math.max(1, Math.round(v * statsRef.current.greed)));
             playSfx("shard");
           }}
+          onLeech={() => {
+            setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h));
+            playSfx("pickup");
+          }}
+          onCrate={(kind) => {
+            playSfx("pickup");
+            if (kind === "shield") setHealth((h) => (h > 0 ? Math.min(maxHp + 5, h + 5) : h));
+            setMsg(CRATE_INFO[kind].label);
+          }}
+
 
           onWeapon={(w, picked) => {
             setWeapon(w);
