@@ -2773,6 +2773,12 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "pick") {
+      const num = Number(m.num);
+      const id = String(m.ability) as AbilityId;
+      if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
+      return;
+    }
     if (m.type === "statline") {
       const num = Number(m.num);
       setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
