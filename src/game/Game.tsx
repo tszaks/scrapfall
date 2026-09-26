@@ -951,16 +951,16 @@ function World({
     }
   };
 
-  // dying costs you every gun but the pistol; the lost ones go back in the drop pool
+  // dying costs you every gun but the pistol; upgrades and pistol mods are kept
   useEffect(() => {
     if (!dead) return;
     const lost = [...owned.current].filter((w) => w !== "pistol");
-    if (lost.length === 0) return;
     lost.forEach((w) => {
       owned.current.delete(w);
       ammo.current[w] = 0;
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
+    ammo.current.pistol = Math.round(GUNS.pistol.ammo * stats.current.ammoMul);
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
