@@ -1786,6 +1786,7 @@ export function Game() {
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
+  const pausedRef = useRef(false);
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
