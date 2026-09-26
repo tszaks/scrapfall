@@ -14,6 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { ABILITIES, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
@@ -67,6 +68,7 @@ type Enemy = {
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
+  elite?: number; // 1 = event champion (gold, tougher, big shard payout)
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
