@@ -1145,6 +1145,42 @@ function World({
       if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
     };
 
+    const onKill = (e: Enemy) => {
+      const s2 = stats.current;
+      if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
+      if (s2.boom > 0 && Math.random() < s2.boom) {
+        for (let oi = 0; oi < enemies.length; oi++) {
+          const o = enemies[oi]!;
+          if (!o.alive || o === e) continue;
+          if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
+        }
+      }
+    };
+    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
+      if (kb > 0 && e.kind !== "boss") {
+        const len = Math.hypot(kx, kz) || 1;
+        const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
+        e.x += (kx / len) * push;
+        e.z += (kz / len) * push;
+      }
+      if (!isH) {
+        n?.broadcast({ type: "hit", i: idx, dmg, slow });
+        e.flash = 0.1;
+        return;
+      }
+      e.hp -= dmg;
+      e.flash = 0.1;
+      if (slow > 0) e.slow = slow;
+      if (burn > 0) { e.burn = burn; e.burnTick = 1; }
+      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+      if (e.hp <= 0) {
+        e.alive = false;
+        onScore();
+        onKill(e);
+      }
+    };
+
+
     if (isH) {
       // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
       pending.current.forEach((pd, i) => {
