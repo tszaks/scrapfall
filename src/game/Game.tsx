@@ -2856,12 +2856,14 @@ export function Game() {
     setNet(null);
     setPeerCount(0);
     setAllDown(false);
+    setPicks({});
   };
 
   /** quit a match in progress and go back to the title screen */
   const leaveGame = () => {
     leaveRoom();
     setLocked(false);
+    setPicking(false);
     setStarted(false);
     setScore(0);
     setHealth(MAX_HP);
