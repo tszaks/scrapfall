@@ -34,7 +34,7 @@ type Car = {
 };
 
 /** Numbers per car in the network snapshot: x, z, heading, speed. */
-export const CAR_FIELDS = 4;
+const CAR_FIELDS = 4;
 // integers on the wire: PeerJS binarypack sends small ints in ~3 bytes but any
 // fractional number as a 9-byte float64
 const q100 = (v: number) => Math.round(v * 100);
