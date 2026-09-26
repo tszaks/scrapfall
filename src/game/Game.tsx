@@ -1049,26 +1049,46 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   );
 });
 
+// A real bullet silhouette: straight casing with a tapered nose, lathed as one
+// mesh so the pool stays one draw call per slot and keeps per-shot tinting.
+const BULLET_PROFILE = [
+  [0, -1.35], [0.52, -1.35], [0.56, -0.55], [0.56, 0.25],
+  [0.48, 0.7], [0.32, 1.05], [0.14, 1.28], [0, 1.35],
+] as const;
+const BULLET_GEO = new THREE.LatheGeometry(
+  BULLET_PROFILE.map(([x, y]) => new THREE.Vector2(x * 0.14, y * 0.14)),
+  10,
+);
+const BULLET_UP = new THREE.Vector3(0, 1, 0);
+
 const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
+  shape = "bullet",
 }: {
   meshes: { current: (THREE.Mesh | null)[] };
   color: string;
   size: number;
+  shape?: "bullet" | "sphere";
 }) {
   return (
     <>
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
-        <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
-          <sphereGeometry args={[size, 10, 10]} />
+        <mesh
+          key={i}
+          ref={(m) => { meshes.current[i] = m; }}
+          visible={false}
+          {...(shape === "bullet" ? { geometry: BULLET_GEO } : {})}
+        >
+          {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
         </mesh>
       ))}
     </>
   );
 });
+
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
