@@ -1687,8 +1687,11 @@ function World({
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
+    // wave events: a horde rush, a bounty champion, then a recon mini-boss
+    const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
     const kinds: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : [])
       .sort((a) => (a === "boss" ? -1 : 0))
       .slice(0, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
@@ -1720,10 +1723,29 @@ function World({
         burn: 0,
         burnTick: 0,
       });
+      e.elite = 0;
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
 
     });
+    // the champion: a gold, far tougher version of one of the wave's heavies
+    if (event === "ELITE BOUNTY" || event === "RECON ENFORCER") {
+      const mul = event === "RECON ENFORCER" ? 9 : 5;
+      const pick =
+        enemies.findIndex((e, i) => kinds[i] === "vanguard") >= 0
+          ? enemies.findIndex((e, i) => kinds[i] === "vanguard")
+          : enemies.findIndex((e, i) => kinds[i] === "brute");
+      const champ = enemies[pick >= 0 ? pick : 0];
+      if (champ && kinds[pick >= 0 ? pick : 0]) {
+        champ.elite = 1;
+        champ.hp = Math.round(champ.hp * mul);
+        champ.max = champ.hp;
+      }
+    }
+    if (event) {
+      onEvent(event);
+      netRef.current?.broadcast({ type: "event", name: event });
+    }
     // health: random; solo waits 2 waves between packs, co-op packs come more often
     const healGap = extra > 0 ? 1 : 2;
     if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
