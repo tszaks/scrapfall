@@ -1257,7 +1257,7 @@ function World({
   onDeploys: (d: { turret: number; mines: number }) => void;
   ability: AbilityId;
   onAbilityCd: (left: number, max: number) => void;
-  onStat: (k: "shot" | "hit" | "dmg", n: number) => void;
+  onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
 
 }) {
@@ -1325,7 +1325,7 @@ function World({
     const s2 = stats.current;
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
-    onStat("dmg", 0);
+    onStat("taken", d);
     onHurt(d);
   };
   useEffect(() => {
@@ -2031,6 +2031,7 @@ function World({
           }
         }
         onScore();
+        if (e.elite) { onShard(15); e.elite = 0; }
         onKill(e);
       }
     };
@@ -2043,6 +2044,75 @@ function World({
         if (!e.alive) continue;
         if (Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 4) hurtEnemy(e, 2, ei);
       }
+    }
+
+    // ---- active ability (F) ----
+    if (abilCd.current > 0) abilCd.current = Math.max(0, abilCd.current - delta);
+    if (invuln.current > 0) invuln.current -= delta;
+    if (overdrive.current > 0) overdrive.current -= delta;
+    if (barrierMesh.current) {
+      barrierMesh.current.visible = invuln.current > 0 && abilityRef.current === "barrier";
+      barrierMesh.current.position.copy(cam.position);
+    }
+    if (poolTicks.current > 0) {
+      poolTimer.current -= delta;
+      if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
+    }
+    if (flareTimer.current > 0) {
+      flareTimer.current -= delta;
+      if (flareTimer.current <= 0) {
+        for (let ei = 0; ei < enemies.length; ei++) {
+          const e = enemies[ei]!;
+          if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 9) hurtEnemy(e, 3, ei);
+        }
+      }
+    }
+    if (abilFire.current) {
+      abilFire.current = false;
+      const id = abilityRef.current;
+      if (!spectating && abilCd.current <= 0) {
+        abilCd.current = ABILITIES[id].cd;
+        playSfx("buy");
+        cam.getWorldDirection(FORWARD);
+        FORWARD.y = 0;
+        FORWARD.normalize();
+        const near = (radius: number, fn: (e: Enemy, i: number) => void) => {
+          for (let ei = 0; ei < enemies.length; ei++) {
+            const e = enemies[ei]!;
+            if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < radius) fn(e, ei);
+          }
+        };
+        if (id === "dash") {
+          slide.current.x += FORWARD.x * 26;
+          slide.current.z += FORWARD.z * 26;
+          invuln.current = 0.7;
+        } else if (id === "pool") {
+          poolTicks.current = 3;
+          poolTimer.current = 0.1;
+        } else if (id === "repulse") {
+          near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+        } else if (id === "nova") {
+          near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+        } else if (id === "flare") {
+          near(12, (e, ei) => hurtEnemy(e, 1, ei, 4));
+          flareTimer.current = 4;
+        } else if (id === "mortar") {
+          const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
+          pos.y -= 0.2;
+          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+        } else if (id === "barrier") {
+          invuln.current = 6;
+        } else if (id === "overdrive") {
+          overdrive.current = 4;
+        }
+      } else if (abilCd.current > 0) {
+        playSfx("deny");
+      }
+    }
+    cdReport.current -= delta;
+    if (cdReport.current <= 0) {
+      cdReport.current = 0.2;
+      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd);
     }
 
     // cryo mines freeze and hurt whatever walks onto them
