@@ -13,7 +13,7 @@ import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
+import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
@@ -2476,6 +2476,7 @@ export function Game() {
     else stopMusic();
   }, [started, locked, ended]);
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
+  useEffect(() => setMusicTheme(theme.name), [theme.name]);
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
@@ -2685,11 +2686,11 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-10 -translate-x-1/2 font-mono text-[#2b2118]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 font-mono text-[#2b2118]">
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
-          <div className="flex gap-3">
+          <div className="flex justify-center gap-3">
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
