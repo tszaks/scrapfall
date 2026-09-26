@@ -2694,6 +2694,10 @@ export function Game() {
     const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
     return saved && ABILITIES[saved] ? saved : "dash";
   });
+  /** ability pick screen shown after pressing START, before the match begins */
+  const [picking, setPicking] = useState(false);
+  /** what every squad member has chosen, keyed by player number */
+  const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
