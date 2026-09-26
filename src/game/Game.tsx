@@ -3137,22 +3137,54 @@ export function Game() {
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(10);
+  const [rerolls, setRerolls] = useState(0);
   const lastOffered = useRef<PerkId[]>([]);
-  useEffect(() => {
-    if (!shopBreak) return;
-    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+  // reroll price climbs with the wave: +1 +1 +1 +2 +2 +2 +3 ... and doubles
+  // for every reroll bought inside the same break
+  const rerollBase = (w: number) => {
+    let p = 4;
+    for (let i = 2; i <= w; i++) p += Math.ceil((i - 1) / 3);
+    return p;
+  };
+  const rerollCost = rerollBase(status.wave) * Math.pow(2, rerolls);
+  const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
     if (pool.length < 3) pool = avail;
     const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
     lastOffered.current = picks;
     setOffers(picks);
+  };
+  useEffect(() => {
+    if (!shopBreak) return;
+    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+    drawOffers();
     setBought([]);
     setShopLeft(10);
+    setRerolls(0);
     // the countdown holds while the game is paused
     const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
+  const rerollRef = useRef<() => void>(() => {});
+  rerollRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < rerollCost) { playSfx("deny"); return; }
+    setShards((s) => s - rerollCost);
+    setRerolls((r) => r + 1);
+    setBought([]);
+    drawOffers();
+    playSfx("buy");
+  };
+  const patchRef = useRef<() => void>(() => {});
+  patchRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < PATCH_COST) { playSfx("deny"); return; }
+    if (health >= maxHp) { playSfx("deny"); return; }
+    setShards((s) => s - PATCH_COST);
+    setHealth((h) => Math.min(maxHp, h + 5));
+    playSfx("buy");
+  };
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
     const id = offers[i];
@@ -3170,9 +3202,12 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       const i = SHOP_KEYS.indexOf(e.code);
       if (i >= 0) buyRef.current(i);
+      else if (e.code === "KeyR") rerollRef.current();
+      else if (e.code === "KeyV") patchRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+
   }, []);
 
   // regen perk
