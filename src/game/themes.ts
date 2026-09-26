@@ -12,7 +12,9 @@ export type Theme = {
     shooter: { body: string; barrel: string; eye: string };
   };
   enemyBullet: string;
-  blockShape: "box" | "tree" | "crystal" | "rock";
+  blockShape:
+    | "monument" | "crystal" | "tree" | "basalt" | "butte"
+    | "pagoda" | "berg" | "coral" | "server" | "vat";
   boss: {
     name: string;
     shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
