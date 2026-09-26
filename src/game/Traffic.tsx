@@ -329,7 +329,9 @@ export function CityTraffic({
     [],
   );
   useEffect(() => {
-    if (import.meta.env.DEV) (window as unknown as { __rsCars?: Car[] }).__rsCars = cars;
+    const debug =
+      import.meta.env.DEV || new URLSearchParams(window.location.search).get("debug") === "1";
+    if (debug) (window as unknown as { __rsCars?: Car[] }).__rsCars = cars;
   }, [cars]);
 
   // a moving car touched an enemy (host only). Small ones get thrown aside and hurt;

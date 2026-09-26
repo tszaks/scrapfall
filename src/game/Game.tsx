@@ -1367,7 +1367,7 @@ function World({
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
-    if (import.meta.env.DEV) {
+    if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps });
       (window as unknown as { __rs?: unknown }).__rs = handle;
@@ -2904,6 +2904,12 @@ function World({
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
     </>
   );
+}
+
+/** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
+function debugHandles() {
+  if (import.meta.env.DEV) return true;
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "1";
 }
 
 /** `?map=vice` (case-insensitive name substring), `?map=city` (layout type) or `?map=3` (index) forces the solo map for testing. */
