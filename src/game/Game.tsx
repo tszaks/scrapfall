@@ -3026,6 +3026,7 @@ export function Game() {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
+    setPicking(false);
     setStarted(true);
     if (ended && !fromNet) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
