@@ -557,6 +557,8 @@ function World({
   onShard,
   onLeech,
   onCrate,
+  onDeploys,
+
 
 
 }: {
