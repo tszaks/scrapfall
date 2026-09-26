@@ -2120,7 +2120,10 @@ function World({
         }
         onScore();
         if (e.elite) { onShard(15); e.elite = 0; }
+        // elites, mini-bosses and bosses always leave a medkit behind
+        if (e.kind === "boss" || e.kind === "vanguard") heal.current = { x: e.x, z: e.z, active: true };
         onKill(e);
+
       }
     };
 
