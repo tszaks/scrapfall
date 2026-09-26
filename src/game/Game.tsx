@@ -755,6 +755,22 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
           <meshBasicMaterial color="#ffd24a" fog={false} />
         </mesh>
       </group>
+      {/* burning: flame tongues shown only while incendiary damage ticks */}
+      <group ref={flame} visible={false} position-y={0.75}>
+        {[
+          [0, 0.55, 0, 0.42, 1.5, "#ffe066"],
+          [0.38, 0.3, 0.1, 0.3, 1.0, "#ff8c1a"],
+          [-0.34, 0.25, -0.16, 0.28, 0.9, "#ff5a1a"],
+          [0.08, 0.15, 0.4, 0.26, 0.8, "#e02a12"],
+          [-0.12, 0.2, -0.42, 0.24, 0.85, "#ffb020"],
+        ].map(([x, y, z, r, h, col], i) => (
+          <mesh key={i} position={[x as number, y as number, z as number]}>
+            <coneGeometry args={[r as number, h as number, 6]} />
+            <meshBasicMaterial color={col as string} transparent opacity={0.8} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+      </group>
+
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
