@@ -2234,7 +2234,7 @@ function World({
         strikeRing.current.position.set(strikeAt.current.x, 0.08, strikeAt.current.z);
         strikeRing.current.rotation.z = time * 3;
         strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
-        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(time * 26) * 0.3;
+        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
       }
     }
     if (strikeBeam.current) {
