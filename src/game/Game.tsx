@@ -196,7 +196,7 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
       {debris.map((d) => (
         <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} castShadow receiveShadow>
           <dodecahedronGeometry args={[d.s, 0]} />
-          <meshLambertMaterial color={theme.block} flatShading />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
       ))}
       {/* marker posts with a lit cap dotted through the arena */}
@@ -226,11 +226,11 @@ function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
           {/* capping rail + a darker plinth give the walls some depth */}
           <mesh position={[x, 4.15, z]}>
             <boxGeometry args={[w + 0.3, 0.3, d + 0.3]} />
-            <meshLambertMaterial color={theme.block} flatShading />
+            <meshLambertMaterial color={theme.blocks[2]} flatShading />
           </mesh>
           <mesh position={[x, 0.35, z]}>
             <boxGeometry args={[w + 0.45, 0.7, d + 0.45]} />
-            <meshLambertMaterial color={theme.block} flatShading />
+            <meshLambertMaterial color={theme.blocks[2]} flatShading />
           </mesh>
         </group>
       ))}
