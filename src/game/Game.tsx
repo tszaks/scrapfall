@@ -1431,7 +1431,18 @@ function World({
   const strikeAt = useRef({ x: 0, z: 0 });
   const stealBank = useRef(0);
   const barrierMesh = useRef<THREE.Mesh>(null);
-  const cdReport = useRef(0);
+  // ---- visible ability effects ----
+  const ringMesh = useRef<THREE.Mesh>(null);
+  const ringFx = useRef({ t: 0, dur: 0, r0: 1, r1: 9, x: 0, y: 0.12, z: 0, color: "#ffffff" });
+  const boltMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const boltFx = useRef({ t: 0, dur: 0 });
+  const strikeRing = useRef<THREE.Mesh>(null);
+  const strikeBeam = useRef<THREE.Mesh>(null);
+  const strikeFlash = useRef({ t: 0 });
+  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = 0.12) => {
+    ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
+  };
+
   // armour soaks damage; getting hit can discharge a shock ring
   const takeHit = (dmg: number) => {
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
