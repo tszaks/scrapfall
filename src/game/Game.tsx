@@ -3463,7 +3463,22 @@ export function Game() {
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
+          <div className="mb-2 flex justify-center gap-2">
+            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
+              <span className="font-bold tracking-widest">FIELD DRESSING</span>
+              <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
+              <span className="font-bold">◆ {PATCH_COST}</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
+              <span className="font-bold tracking-widest">REROLL</span>
+              <span className="opacity-60">{rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}</span>
+              <span className="font-bold">◆ {rerollCost}</span>
+            </div>
+          </div>
           <div className="flex justify-center gap-3">
+
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
