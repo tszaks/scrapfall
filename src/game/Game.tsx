@@ -590,6 +590,8 @@ function World({
   onShard: (v: number) => void;
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
+  onDeploys: (d: { turret: number; mines: number }) => void;
+
 }) {
 
 
