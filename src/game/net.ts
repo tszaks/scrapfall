@@ -38,6 +38,8 @@ export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
 export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
 const PREFIX = "dustfield-arena-v1-";
+/** player-to-player chatter the host forwards to the other guests */
+const RELAYED = new Set(["t", "fire", "pause", "resume", "dep"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
@@ -88,7 +90,7 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
     conn.on("data", (raw) => {
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
-      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume") {
+      if (RELAYED.has(m.type)) {
         conns.forEach((c, id) => { if (id !== conn.peer && c.open) c.send(m); });
       }
       opts.onMsg(m);

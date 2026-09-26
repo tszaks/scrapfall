@@ -15,6 +15,8 @@ import { CityTraffic } from "./Traffic";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
 import { Stars } from "@react-three/drei";
+import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
+import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
@@ -74,6 +76,7 @@ type Enemy = {
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
+  yaw?: number; // facing, decided by the host (toward its target) and synced to guests
   elite?: number; // 1 = event champion (gold, tougher, big shard payout)
 };
 type Bullet = {
@@ -717,7 +720,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob, data.z);
-    g.lookAt(state.camera.position.x, 0, state.camera.position.z);
+    g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
@@ -1363,9 +1366,10 @@ function World({
     // dev-only handle for poking at the scene from the console / test tooling
     if (import.meta.env.DEV) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
-  }, [gl, scene, camera, city, remotes]);
+  }, [gl, scene, camera, city, remotes, enemies]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1435,7 +1439,13 @@ function World({
 
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
-  const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
+  // other players' turrets / mines (visual copies; their owner's client fires them and the
+  // host applies the damage through the normal "hit" messages)
+  const remoteDeps = useRef<RemoteDeps>(new Map());
+  const depTick = useRef(0);
+  const lastDepKey = useRef("");
+  type GuestTarget = { x: number; z: number; yaw: number };
+  const guestTarget = useRef<GuestTarget[]>(enemies.map(() => ({ x: 0, z: 0, yaw: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
   const dropGunRef = useRef<Weapon>("scatter");
 
@@ -1465,16 +1475,27 @@ function World({
     const arr = (m.e as number[]) ?? [];
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i]!;
-      const o = i * 5;
-      if (o + 4 >= arr.length) { e.alive = false; continue; }
-      const alive = arr[o] === 1;
-      e.kind = KINDS[arr[o + 1]!] ?? "drifter";
-      e.swing = arr[o + 4]!;
-      const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0 });
-      t.x = arr[o + 2]!;
-      t.z = arr[o + 3]!;
-      if (!e.alive || !alive) { e.x = t.x; e.z = t.z; }
-      e.alive = alive;
+      const o = i * ENEMY_FIELDS;
+      if (o + ENEMY_FIELDS - 1 >= arr.length) {
+        e.alive = false;
+        continue;
+      }
+      const u = unpackEnemy(arr, o, KINDS);
+      e.kind = u.kind;
+      e.swing = u.swing;
+      if (u.flash) e.flash = 0.1;
+      e.elite = u.elite ? 1 : 0;
+      e.aux = u.leaping ? 1 : 0; // only drives the leaper's jump pose on guests
+      const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0, yaw: 0 });
+      t.x = u.x;
+      t.z = u.z;
+      t.yaw = u.yaw;
+      if (!e.alive || !u.alive) {
+        e.x = t.x;
+        e.z = t.z;
+        e.yaw = u.yaw;
+      }
+      e.alive = u.alive;
     }
     const eb = (m.b as number[]) ?? [];
     enemyBullets.current.forEach((b) => (b.active = false));
@@ -1517,7 +1538,19 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
-      if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
+      if (m.type === "left") {
+        remotes.current.delete(String(m.from));
+        remoteDeps.current.delete(String(m.from));
+        return;
+      }
+      if (m.type === "dep") {
+        remoteDeps.current.set(String(m.from ?? "host"), {
+          t: Array.isArray(m.t) ? (m.t as number[]) : [],
+          m: Array.isArray(m.m) ? (m.m as number[]) : [],
+          at: performance.now(),
+        });
+        return;
+      }
       if (isHostRef.current) {
         if (m.type === "hit") {
           const e = enemies[Number(m.i)];
@@ -1571,6 +1604,8 @@ function World({
     lostQueue.current = [];
     turrets.current = [];
     mines.current = [];
+    remoteDeps.current.clear();
+    lastDepKey.current = "";
     lastDeploys.current = { turret: -1, mines: -1 };
     onDeploys({ turret: 0, mines: 0 });
 
@@ -2066,6 +2101,20 @@ function World({
     for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
 
     // keep the HUD status panel in sync with what's deployed
+    // share my turrets / mines with the room: on change, and a 1 s heartbeat
+    if (n) {
+      depTick.current -= delta;
+      const r100 = (v: number) => Math.round(v * 100);
+      const t = turrets.current.flatMap((q) => [r100(q.x), r100(q.z), Math.round(q.t * 10)]);
+      const m = mines.current.flatMap((q) => [r100(q.x), r100(q.z)]);
+      const key = `${turrets.current.length}:${m.join(",")}`;
+      if (key !== lastDepKey.current || depTick.current <= 0) {
+        lastDepKey.current = key;
+        depTick.current = 1;
+        n.broadcast({ type: "dep", t, m });
+      }
+    }
+
     deployTick.current -= delta;
     if (deployTick.current <= 0) {
       deployTick.current = 0.25;
@@ -2089,6 +2138,8 @@ function World({
         const f = Math.min(1, delta * 12);
         e.x += (t.x - e.x) * f;
         e.z += (t.z - e.z) * f;
+        const dy = Math.atan2(Math.sin(t.yaw - (e.yaw ?? 0)), Math.cos(t.yaw - (e.yaw ?? 0)));
+        e.yaw = (e.yaw ?? 0) + dy * (1 - Math.exp(-delta * 14));
         e.flash -= delta;
       });
       enemyBullets.current.forEach((b, i) => {
@@ -2357,6 +2408,7 @@ function World({
         }
         const dx = target.x - e.x;
         const dz = target.z - e.z;
+        e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
 
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
@@ -2628,9 +2680,7 @@ function World({
         if (snapTimer.current <= 0) {
           snapTimer.current = 0.05;
           const e: number[] = [];
-          for (const en of enemies) {
-            e.push(en.alive ? 1 : 0, KINDS.indexOf(en.kind), Math.round(en.x * 100) / 100, Math.round(en.z * 100) / 100, en.swing);
-          }
+          for (const en of enemies) e.push(...packEnemy(en, KINDS));
           const b: number[] = [];
           for (const bu of enemyBullets.current) {
             if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
@@ -2768,6 +2818,7 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      <RemoteDeployables deps={remoteDeps} enemies={enemies} />
       <mesh ref={barrierMesh} visible={false}>
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
@@ -3585,8 +3636,8 @@ export function Game() {
             </p>
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E
-                swap guns · N day/night · Esc to pause
+                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your
+                ability · 1-0 / Q E swap guns · N day/night · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
