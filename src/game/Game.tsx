@@ -249,7 +249,7 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
       ))}
     </group>
   );
-}
+});
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
@@ -670,7 +670,7 @@ const BulletPool = memo(function BulletPool({
       ))}
     </>
   );
-}
+});
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
