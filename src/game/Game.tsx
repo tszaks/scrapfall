@@ -14,7 +14,7 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { initAudio, playGun, playSfx, setMusicIntensity, setVolumes, startMusic, stopMusic } from "./audio";
-import { NO_PERKS, PERK_IDS, PERK_INFO, derive, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
+import { NO_PERKS, PERK_IDS, PERK_INFO, PISTOL_MODS, derive, perkBadge, perkCost, perkMaxed, type Derived, type PerkId, type Perks } from "./perks";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard";
@@ -557,6 +557,8 @@ function World({
   onShard,
   onLeech,
   onCrate,
+  onDeploys,
+
 
 
 }: {
@@ -588,6 +590,8 @@ function World({
   onShard: (v: number) => void;
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
+  onDeploys: (d: { turret: number; mines: number }) => void;
+
 }) {
 
 
@@ -628,6 +632,9 @@ function World({
   const [crateKind, setCrateKind] = useState<CrateKind>("turret");
   const crateKindRef = useRef<CrateKind>("turret");
   const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
+  const deployTick = useRef(0);
+  const lastDeploys = useRef({ turret: -1, mines: -1 });
+
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
@@ -811,6 +818,11 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    turrets.current = [];
+    mines.current = [];
+    lastDeploys.current = { turret: -1, mines: -1 };
+    onDeploys({ turret: 0, mines: 0 });
+
     syncInv();
 
     // fresh random gun order for this run
@@ -1215,6 +1227,20 @@ function World({
     }
     for (let i = turrets.current.length; i < 6; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
     for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
+
+    // keep the HUD status panel in sync with what's deployed
+    deployTick.current -= delta;
+    if (deployTick.current <= 0) {
+      deployTick.current = 0.25;
+      const tl = turrets.current.reduce((m2, t) => Math.max(m2, t.t), 0);
+      const secs = Math.ceil(tl);
+      const mc = mines.current.length;
+      if (secs !== lastDeploys.current.turret || mc !== lastDeploys.current.mines) {
+        lastDeploys.current = { turret: secs, mines: mc };
+        onDeploys({ turret: secs, mines: mc });
+      }
+    }
+
 
 
 
@@ -1736,6 +1762,8 @@ export function Game() {
   const [bossHp, setBossHp] = useState(0);
   const [pickupMsg, setPickupMsg] = useState(false);
   const [crateMsg, setCrateMsg] = useState<string | null>(null);
+  const [deploys, setDeploys] = useState({ turret: 0, mines: 0 });
+
   const [ammoLeft, setAmmoLeft] = useState(0);
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
@@ -2123,6 +2151,13 @@ export function Game() {
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
 
+  // HUD status lists
+  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
+  const activePerks = PERK_IDS.filter((id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0)
+    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
+    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
+
+
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
@@ -2182,6 +2217,8 @@ export function Game() {
             if (kind === "shield") setHealth((h) => (h > 0 ? Math.min(maxHp + 5, h + 5) : h));
             setCrateMsg(CRATE_INFO[kind].name);
           }}
+          onDeploys={setDeploys}
+
 
 
           onWeapon={(w, picked) => {
@@ -2213,6 +2250,72 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
+
+            {/* run status: pistol mods, active deployables, perk stacks */}
+            {locked && !ended && (activeMods.length > 0 || deploys.turret > 0 || deploys.mines > 0 || health > maxHp || activePerks.length > 0) && (
+              <div className="flex w-52 flex-col gap-1.5 rounded-md bg-[#f3e6cf]/80 px-3 py-2">
+                {activeMods.length > 0 && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">PISTOL MODS</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {activeMods.map((id) => (
+                        <span
+                          key={id}
+                          className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-[#2b2118]"
+                          style={{ background: PERK_INFO[id].color }}
+                        >
+                          {perkBadge(id, 1)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(deploys.turret > 0 || deploys.mines > 0 || health > maxHp) && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">DEPLOYED</div>
+                    <div className="mt-1 flex flex-col gap-0.5 text-[10px] tracking-wider">
+                      {deploys.turret > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#4fe3ff]">■</span> SENTRY</span>
+                          <b>{deploys.turret}s</b>
+                        </div>
+                      )}
+                      {deploys.mines > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#5ff6ff]">■</span> CRYO MINE</span>
+                          <b>x{deploys.mines}</b>
+                        </div>
+                      )}
+                      {health > maxHp && (
+                        <div className="flex items-center justify-between">
+                          <span><span className="text-[#9ad0ff]">■</span> BARRIER</span>
+                          <b>+{health - maxHp}</b>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activePerks.length > 0 && (
+                  <div>
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">UPGRADES</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {activePerks.map(({ id, label }) => (
+                        <span
+                          key={id}
+                          className="rounded border px-1 py-0.5 text-[10px] tracking-wider"
+                          style={{ borderColor: PERK_INFO[id].color, color: "#2b2118" }}
+                        >
+                          <span style={{ color: PERK_INFO[id].color }}>◆</span> {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
