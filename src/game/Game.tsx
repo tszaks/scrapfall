@@ -555,6 +555,8 @@ function World({
   slots,
   stats,
   onShard,
+  onLeech,
+  onCrate,
 
 
 }: {
