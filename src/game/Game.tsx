@@ -2742,7 +2742,7 @@ function World({
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
-      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
+      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
     </>
   );
 }
