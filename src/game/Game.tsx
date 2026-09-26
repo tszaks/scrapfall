@@ -625,6 +625,8 @@ function World({
   // supply crates: turret kit, overshield, cryo mine, ammo cache
   const crate = useRef<{ x: number; z: number; active: boolean; kind: CrateKind }>({ x: 0, z: 0, active: false, kind: "turret" });
   const crateMesh = useRef<THREE.Group>(null);
+  const [crateKind, setCrateKind] = useState<CrateKind>("turret");
+  const crateKindRef = useRef<CrateKind>("turret");
   const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
