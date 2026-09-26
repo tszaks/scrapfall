@@ -709,6 +709,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
+  const flame = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
