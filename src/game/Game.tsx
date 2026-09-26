@@ -13,7 +13,7 @@ import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
@@ -709,6 +709,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
+  const flame = useRef<THREE.Group>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -727,6 +728,16 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
+    if (flame.current) {
+      const burning = data.burn > 0;
+      flame.current.visible = burning;
+      if (burning) {
+        flame.current.rotation.y = t * 6;
+        const f = 0.85 + Math.sin(t * 24 + data.x) * 0.18 + Math.sin(t * 37) * 0.07;
+        flame.current.scale.set(f, 1.05 + Math.sin(t * 19 + data.z) * 0.3, f);
+      }
+    }
+
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
@@ -755,6 +766,22 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
           <meshBasicMaterial color="#ffd24a" fog={false} />
         </mesh>
       </group>
+      {/* burning: flame tongues shown only while incendiary damage ticks */}
+      <group ref={flame} visible={false} position-y={0.75}>
+        {[
+          [0, 0.55, 0, 0.42, 1.5, "#ffe066"],
+          [0.38, 0.3, 0.1, 0.3, 1.0, "#ff8c1a"],
+          [-0.34, 0.25, -0.16, 0.28, 0.9, "#ff5a1a"],
+          [0.08, 0.15, 0.4, 0.26, 0.8, "#e02a12"],
+          [-0.12, 0.2, -0.42, 0.24, 0.85, "#ffb020"],
+        ].map(([x, y, z, r, h, col], i) => (
+          <mesh key={i} position={[x as number, y as number, z as number]}>
+            <coneGeometry args={[r as number, h as number, 6]} />
+            <meshBasicMaterial color={col as string} transparent opacity={0.8} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+      </group>
+
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
@@ -1049,26 +1076,48 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   );
 });
 
+// A real bullet silhouette: straight casing with a tapered nose, lathed as one
+// mesh so the pool stays one draw call per slot and keeps per-shot tinting.
+const BULLET_PROFILE = [
+  [0, -1.35], [0.52, -1.35], [0.56, -0.55], [0.56, 0.25],
+  [0.48, 0.7], [0.32, 1.05], [0.14, 1.28], [0, 1.35],
+] as const;
+const BULLET_GEO = new THREE.LatheGeometry(
+  BULLET_PROFILE.map(([x, y]) => new THREE.Vector2(x * 0.14, y * 0.14)),
+  10,
+);
+const BULLET_UP = new THREE.Vector3(0, 1, 0);
+const TMP_DIR = new THREE.Vector3();
+
+
 const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
+  shape = "bullet",
 }: {
   meshes: { current: (THREE.Mesh | null)[] };
   color: string;
   size: number;
+  shape?: "bullet" | "sphere";
 }) {
   return (
     <>
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
-        <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
-          <sphereGeometry args={[size, 10, 10]} />
+        <mesh
+          key={i}
+          ref={(m) => { meshes.current[i] = m; }}
+          visible={false}
+          {...(shape === "bullet" ? { geometry: BULLET_GEO } : {})}
+        >
+          {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
         </mesh>
       ))}
     </>
   );
 });
+
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
@@ -1382,7 +1431,20 @@ function World({
   const strikeAt = useRef({ x: 0, z: 0 });
   const stealBank = useRef(0);
   const barrierMesh = useRef<THREE.Mesh>(null);
+  // ---- visible ability effects ----
+  const ringMesh = useRef<THREE.Mesh>(null);
+  const ringFx = useRef({ t: 0, dur: 0, r0: 1, r1: 9, x: 0, y: 0.12, z: 0, color: "#ffffff" });
+  const boltMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const boltFx = useRef({ t: 0, dur: 0 });
+  const strikeRing = useRef<THREE.Mesh>(null);
+  const strikeBeam = useRef<THREE.Mesh>(null);
+  const strikeFlash = useRef({ t: 0 });
+  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = 0.12) => {
+    ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
+  };
   const cdReport = useRef(0);
+
+
   // armour soaks damage; getting hit can discharge a shock ring
   const takeHit = (dmg: number) => {
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
@@ -2152,6 +2214,7 @@ function World({
       poolTimer.current -= delta;
       if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
     }
+    // --- orbital strike: targeting marker, then a beam crashing out of the sky ---
     if (flareTimer.current > 0) {
       flareTimer.current -= delta;
       if (flareTimer.current <= 0) {
@@ -2159,8 +2222,62 @@ function World({
           const e = enemies[ei]!;
           if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5) hurtEnemy(e, 7, ei);
         }
+        strikeFlash.current.t = 0.5;
+        playFx("#ffd46a", 1, 10, 0.5, strikeAt.current.x, strikeAt.current.z);
       }
     }
+    if (strikeRing.current) {
+      const aiming = flareTimer.current > 0;
+      strikeRing.current.visible = aiming;
+      if (aiming) {
+        const p = 1 - flareTimer.current / 1.2;
+        strikeRing.current.position.set(strikeAt.current.x, 0.08, strikeAt.current.z);
+        strikeRing.current.rotation.z = state.clock.elapsedTime * 3;
+        strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
+        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
+      }
+    }
+    if (strikeBeam.current) {
+      const f = strikeFlash.current;
+      if (f.t > 0) f.t -= delta;
+      strikeBeam.current.visible = f.t > 0;
+      if (f.t > 0) {
+        const k = f.t / 0.5;
+        strikeBeam.current.position.set(strikeAt.current.x, 22, strikeAt.current.z);
+        strikeBeam.current.scale.set(1 + (1 - k) * 1.6, 1, 1 + (1 - k) * 1.6);
+        (strikeBeam.current.material as THREE.MeshBasicMaterial).opacity = Math.min(1, k * 1.2);
+      }
+    }
+    // --- shared ground shockwave ring used by the other abilities ---
+    if (ringMesh.current) {
+      const r = ringFx.current;
+      if (r.t > 0) r.t -= delta;
+      ringMesh.current.visible = r.t > 0;
+      if (r.t > 0) {
+        const p = 1 - r.t / r.dur;
+        ringMesh.current.position.set(r.x, r.y, r.z);
+        ringMesh.current.scale.setScalar(r.r0 + (r.r1 - r.r0) * p);
+        const mat = ringMesh.current.material as THREE.MeshBasicMaterial;
+        mat.color.set(r.color);
+        mat.opacity = 0.85 * (1 - p);
+      }
+    }
+    // --- chain storm lightning arcs ---
+    {
+      const b = boltFx.current;
+      if (b.t > 0) {
+        b.t -= delta;
+        const flick = b.t > 0 ? 0.35 + Math.random() * 0.65 : 0;
+        for (let bi = 0; bi < 6; bi++) {
+          const m = boltMeshes.current[bi];
+          if (!m || !m.visible) continue;
+          if (b.t <= 0) { m.visible = false; continue; }
+          m.rotateOnAxis(BULLET_UP, delta * 24);
+          (m.material as THREE.MeshBasicMaterial).opacity = flick;
+        }
+      }
+    }
+
     if (abilFire.current) {
       abilFire.current = false;
       const id = abilityRef.current;
@@ -2180,6 +2297,7 @@ function World({
           slide.current.x += FORWARD.x * 26;
           slide.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
+          playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
           const cx = cam.position.x + FORWARD.x * 6, cz = cam.position.z + FORWARD.z * 6;
           for (let ei = 0; ei < enemies.length; ei++) {
@@ -2187,22 +2305,46 @@ function World({
             const d = Math.hypot(cx - e.x, cz - e.z);
             if (e.alive && d < 13) hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
           }
+          // collapsing vortex ring at the well's centre
+          playFx("#a55cff", 13, 0.6, 0.9, cx, cz);
         } else if (id === "repulse") {
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+          playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
           near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+          playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
           const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
             .filter((o) => o.e.alive && o.d < 20).sort((a, b) => a.d - b.d).slice(0, 6);
           list.forEach((o) => hurtEnemy(o.e, 4, o.i));
+          // draw a lightning arc from the player to every zapped enemy
+          boltFx.current = { t: 0.42, dur: 0.42 };
+          for (let bi = 0; bi < 6; bi++) {
+            const m = boltMeshes.current[bi];
+            if (!m) continue;
+            const tgt = list[bi];
+            m.visible = !!tgt;
+            if (!tgt) continue;
+            const ax = cam.position.x, az = cam.position.z, ay = cam.position.y - 0.4;
+            const bx = tgt.e.x, bz = tgt.e.z, by = 1.1;
+            const len = Math.hypot(bx - ax, bz - az, by - ay);
+            m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+            m.scale.set(1, len, 1);
+            TMP_DIR.set(bx - ax, by - ay, bz - az).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
+          playFx("#7fdcff", 0.6, 20, 0.35, cam.position.x, cam.position.z);
         } else if (id === "warp") {
           near(9999, (e, ei) => hurtEnemy(e, 0, ei, 5));
+          playFx("#c9a6ff", 0.6, 40, 0.8, cam.position.x, cam.position.z);
         } else if (id === "strike") {
           strikeAt.current = { x: cam.position.x + FORWARD.x * 10, z: cam.position.z + FORWARD.z * 10 };
           flareTimer.current = 1.2;
         } else if (id === "barrier") {
           invuln.current = 6;
+          playFx("#7ad7ff", 0.6, 3.2, 0.5, cam.position.x, cam.position.z);
         }
+
       } else if (abilCd.current > 0) {
         playSfx("deny");
       }
@@ -2564,8 +2706,14 @@ function World({
         if (b.active) {
           m.scale.setScalar(b.size / 0.14);
           (m.material as THREE.MeshBasicMaterial).color.set(b.color);
+          // point the round along its flight path
+          if (b.vel.lengthSq() > 0.0001) {
+            TMP_DIR.copy(b.vel).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
         }
       }
+
     });
 
 
@@ -2671,7 +2819,29 @@ function World({
           </mesh>
         </group>
       ))}
+      {/* ability shockwave ring (unit radius, scaled per effect) */}
+      <mesh ref={ringMesh} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.86, 1, 48]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.8} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {/* chain storm arcs */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={`bolt${i}`} ref={(m) => { boltMeshes.current[i] = m; }} visible={false}>
+          <cylinderGeometry args={[0.05, 0.05, 1, 3, 1, true]} />
+          <meshBasicMaterial color="#9fe8ff" transparent opacity={0.9} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      ))}
+      {/* orbital strike: ground marker + falling beam */}
+      <mesh ref={strikeRing} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.72, 1, 6]} />
+        <meshBasicMaterial color="#ff5a28" transparent opacity={0.7} fog={false} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh ref={strikeBeam} visible={false}>
+        <cylinderGeometry args={[4.4, 2.6, 44, 20, 1, true]} />
+        <meshBasicMaterial color="#ffd77a" transparent opacity={0.9} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
       <group ref={pickupMesh} visible={false}>
+
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
           <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
@@ -2714,7 +2884,7 @@ function World({
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
-      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
+      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
     </>
   );
 }
@@ -3220,10 +3390,25 @@ export function Game() {
   }, [perks.regen, started, locked, ended, dead, maxHp]);
 
   // soundtrack
+  useEffect(() => { hookAudioUnlock(); }, []);
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
   }, [started, locked, ended]);
+  // if the browser blocked sound until now, the next click/keypress restarts it
+  useEffect(() => {
+    if (!(started && locked && !ended)) return;
+    const retry = () => { initAudio(); startMusic(); };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [started, locked, ended]);
+
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
