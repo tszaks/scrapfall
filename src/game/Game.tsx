@@ -819,8 +819,20 @@ function World({
     setDropGun(gun);
   };
 
-  const fire = () => {
-    const g = GUNS[weapon.current];
+  // pistol mod cards rewrite the sidearm
+  const gunFor = (w: Weapon): Gun => {
+    const g = GUNS[w];
+    if (w !== "pistol" || !stats.current.magnum) return g;
+    return { ...g, damage: g.damage + 1, speed: g.speed * 1.5, pierce: 1, color: "#ffd9a0" };
+  };
+
+  const burstQueue = useRef(0);
+  const burstTimer = useRef(0);
+
+  const spit = () => {
+    const w = weapon.current;
+    const g = gunFor(w);
+    const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
@@ -828,22 +840,45 @@ function World({
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
-      fireInto(bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, g.damage * stats.current.dmg, g.color, g.size, g);
+      const crit = Math.random() < s2.crit;
+      const dmg = g.damage * s2.dmg * (crit ? 2 : 1);
+      const fx: Fx = {
+        bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
+        pierce: g.pierce ?? 0,
+        slow: g.slow ?? 0,
+        cluster: g.cluster ?? 0,
+        chain: g.chain ?? 0,
+        knock: s2.knock,
+        burn: w === "pistol" && s2.incend ? 3 : 0,
+      };
+      fireInto(
+        bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
+        crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
+      );
     }
-    playGun(weapon.current);
+    playGun(w);
     recoil.current = g.damage > 3 ? 1 : 0.5;
+  };
+
+  const fire = () => {
+    spit();
     const w = weapon.current;
-    if (w !== "pistol") {
-      ammo.current[w]--;
-      onAmmo(ammo.current[w]);
-      if (ammo.current[w] <= 0) {
-        owned.current.delete(w);
-        equip("pistol");
-        if (pickup.current.active) lostQueue.current.push(w);
-        else placePickup(w);
-      } else {
-        syncInv();
+    if (w === "pistol") {
+      if (stats.current.burst) {
+        burstQueue.current = 2;
+        burstTimer.current = 0.07;
       }
+      return;
+    }
+    ammo.current[w]--;
+    onAmmo(ammo.current[w]);
+    if (ammo.current[w] <= 0) {
+      owned.current.delete(w);
+      equip("pistol");
+      if (pickup.current.active) lostQueue.current.push(w);
+      else placePickup(w);
+    } else {
+      syncInv();
     }
   };
 
