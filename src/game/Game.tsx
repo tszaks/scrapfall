@@ -3248,8 +3248,10 @@ export function Game() {
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
-    netHolder.current?.broadcast({ type: "pick", num: myNum, ability });
-  }, [ability, myNum, roster.length, picking]);
+    setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
+  }, [ability, cls, myNum, roster.length, picking]);
+
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
   useEffect(() => {
