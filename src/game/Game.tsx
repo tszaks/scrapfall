@@ -10,6 +10,8 @@ import {
 
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
+import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
+import { MobileControls } from "./MobileControls";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -1923,6 +1925,13 @@ function World({
         -1.2,
         Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sensY * 0.7 * delta),
       );
+      // touch drag look (right thumb)
+      if (touchInput.lookX || touchInput.lookY) {
+        look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current;
+        look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current));
+        touchInput.lookX = 0;
+        touchInput.lookY = 0;
+      }
     }
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
@@ -1932,6 +1941,20 @@ function World({
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
+
+    // on-screen controls
+    if (touchInput.ability) {
+      touchInput.ability = false;
+      abilFire.current = true;
+    }
+    if (touchInput.swap) {
+      const dir = touchInput.swap;
+      touchInput.swap = 0;
+      const list = [...owned.current];
+      const i = list.indexOf(weapon.current);
+      const next = list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length];
+      if (next) equip(next);
+    }
 
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
@@ -1947,7 +1970,7 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if (trigger.current && !spectating && fireCd.current <= 0) {
+    } else if ((trigger.current || touchInput.fire) && !spectating && fireCd.current <= 0) {
       const w = weapon.current;
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
@@ -1956,15 +1979,15 @@ function World({
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
+    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
+    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
-    const moving = MOVE.lengthSq() > 0;
-    if (moving) MOVE.normalize();
+    const moving = MOVE.lengthSq() > 0.0004;
+    if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
@@ -2946,6 +2969,23 @@ export function Game() {
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
+  /** phones and tablets play with on-screen controls instead of mouse + keyboard */
+  useEffect(() => {
+    if (!locked) resetTouchInput();
+  }, [locked]);
+  const [touchUi, setTouchUi] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    setTouchUi(isTouchDevice());
+    const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
   const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
@@ -3311,6 +3351,10 @@ export function Game() {
     setLocked(true);
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
+    if (touchUi) {
+      resetTouchInput();
+      return; // touch devices steer with the on-screen controls, no pointer lock
+    }
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
@@ -3454,7 +3498,7 @@ export function Game() {
 
 
   return (
-    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
+    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
       <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
@@ -3674,27 +3718,34 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 font-mono text-[#2b2118]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30 font-mono text-[#2b2118]">
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
-          <div className="mb-2 flex justify-center gap-2">
-            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+          <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
+            <button
+              onClick={() => patchRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
               <span className="font-bold tracking-widest">FIELD DRESSING</span>
               <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
               <span className="font-bold">◆ {PATCH_COST}</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+            </button>
+            <button
+              onClick={() => rerollRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
               <span className="font-bold tracking-widest">REROLL</span>
               <span className="opacity-60">
                 {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
               </span>
               <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
-            </div>
+            </button>
           </div>
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
+
 
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
@@ -3702,9 +3753,10 @@ export function Game() {
               if (bought.includes(i)) return null;
               const isMod = PISTOL_MODS.includes(id);
               return (
-                <div
+                <button
                   key={i}
-                  className="relative w-44 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]"
+                  onClick={() => buyRef.current(i)}
+                  className="pointer-events-auto relative w-36 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000] active:bg-[#e8c98f] sm:w-44"
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
@@ -3725,13 +3777,32 @@ export function Game() {
                   )}
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
                   <div className="mt-2 text-sm font-bold">◆ {cost}</div>
-                </div>
+                </button>
 
               );
             })}
           </div>
 
 
+        </div>
+      )}
+
+      {touchUi && locked && !ended && (
+        <MobileControls
+          onPause={() => {
+            setLocked(false);
+            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+          }}
+          abilityName={ABILITIES[ability].name}
+          abilityLeft={abilCd.left}
+        />
+      )}
+      {touchUi && portrait && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
+          <div>
+            <div className="text-2xl font-bold tracking-[0.2em]">ROTATE YOUR DEVICE</div>
+            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">DUSTFIELD PLAYS IN LANDSCAPE</div>
+          </div>
         </div>
       )}
       {healMsg > 0 && locked && !ended && (
