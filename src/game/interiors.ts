@@ -50,12 +50,6 @@ const vgrad = (g: Ctx, y0: number, y1: number, a: string, b: string) => {
   gr.addColorStop(1, b);
   return gr;
 };
-const hgrad = (g: Ctx, x0: number, x1: number, a: string, b: string) => {
-  const gr = g.createLinearGradient(x0, 0, x1, 0);
-  gr.addColorStop(0, a);
-  gr.addColorStop(1, b);
-  return gr;
-};
 const glow = (F: Face, x: number, y: number, w: number, h: number, col: string, k = 1) => {
   box(F.c, col, x, y, w, h);
   F.e.globalAlpha = k;
