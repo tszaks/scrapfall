@@ -3025,9 +3025,12 @@ export function Game() {
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
+      const c = String(m.cls) as ClassId;
       if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
+      if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
       return;
     }
+
     if (m.type === "statline") {
       const num = Number(m.num);
       setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
