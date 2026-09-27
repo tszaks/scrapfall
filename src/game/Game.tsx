@@ -4019,6 +4019,9 @@ export function Game() {
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
 
 
+            {!started && !ended && !paused && (
+              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+            )}
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
