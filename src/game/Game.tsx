@@ -2934,10 +2934,17 @@ export function Game() {
     const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
     return saved && ABILITIES[saved] ? saved : "dash";
   });
+  /** starter class, chosen on the loadout screen alongside the ability */
+  const [cls, setCls] = useState<ClassId>(() => {
+    if (typeof window === "undefined") return "vanguard";
+    const saved = window.localStorage.getItem("df-class") as ClassId | null;
+    return saved && CLASSES[saved] ? saved : "vanguard";
+  });
   /** ability pick screen shown after pressing START, before the match begins */
   const [picking, setPicking] = useState(false);
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
+  const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
@@ -2946,8 +2953,10 @@ export function Game() {
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
-  const statsRef = useRef<Derived>(derive(perks));
-  statsRef.current = derive(perks);
+  const clsMods = CLASSES[cls].mods;
+  const statsRef = useRef<Derived>(derive(perks, clsMods));
+  statsRef.current = derive(perks, clsMods);
+
   const maxHp = statsRef.current.maxHp;
 
   // ---------- co-op room ----------
