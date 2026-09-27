@@ -1633,7 +1633,13 @@ function World({
   const trafficCity = useMemo(() => {
     if (!city || gaps.length === 0) return null;
     const inside = (r: CityLayout["roadX"][number]) => Math.abs(r.c) + CURB[r.cls] + 6 < PLAY_HALF;
-    return { ...city, roadX: city.roadX.filter(inside), roadZ: city.roadZ.filter(inside) };
+    // (each road keeps its index in the full grid, so the light phases stay the drawn ones)
+    const nz = city.roadZ.length;
+    return {
+      ...city,
+      roadX: city.roadX.map((r, i) => ({ ...r, sig: i })).filter(inside),
+      roadZ: city.roadZ.map((r, i) => ({ ...r, sig: i, sigN: nz })).filter(inside),
+    };
   }, [city, gaps]);
   const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
   const { gl, scene } = useThree();
