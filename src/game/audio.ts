@@ -249,7 +249,8 @@ export function startMusic() {
   timer = window.setInterval(() => {
     if (!ctx) return;
     if (ctx.state === "suspended") { void ctx.resume(); return; }
-    const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+    const bpm = (style.bpm + (intense ? 20 : 0)) * (menuMode ? 0.82 : 1);
+    const stepDur = 60 / bpm / 4;
     // after a tab switch or a late unlock the clock jumps; never replay the backlog
     if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
     while (nextT < ctx.currentTime + 0.12) {
