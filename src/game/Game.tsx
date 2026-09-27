@@ -3750,9 +3750,10 @@ export function Game() {
               if (bought.includes(i)) return null;
               const isMod = PISTOL_MODS.includes(id);
               return (
-                <div
+                <button
                   key={i}
-                  className="relative w-44 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]"
+                  onClick={() => buyRef.current(i)}
+                  className="pointer-events-auto relative w-36 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000] active:bg-[#e8c98f] sm:w-44"
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
