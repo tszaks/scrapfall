@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { blocked, type Block } from "../level";
 import { groundY, wind } from "../terrain";
 import type { TimeOfDay } from "../lighting";
+import { liveLook } from "../timeOfDay";
 import { skyFog } from "../skyFog";
 import type { TrafficLink } from "../trafficCore";
 import type { WesternLayout } from "./layout";
@@ -201,12 +202,13 @@ export function WesternWeather({
     // ---- the haze closes in ----
     const fog = scene.fog as THREE.Fog | null;
     const b = base.current;
-    if (fog && fog !== b.fog) {
+    if (fog) {
+      // the clear-weather haze comes from the blended time-of-day look (timeOfDay.ts)
       b.fog = fog;
-      b.near = fog.near;
-      b.far = fog.far;
-      b.color.copy(fog.color);
-      b.sunK = skyFog.fogSunK.value;
+      b.near = liveLook.fogNear;
+      b.far = liveLook.fogFar;
+      b.color.copy(liveLook.fogColor);
+      b.sunK = liveLook.hazeK;
     }
     if (fog) {
       _c.set(look.storm);

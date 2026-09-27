@@ -6,6 +6,9 @@
 import { useEffect, useRef } from "react";
 
 import { pursuitDots } from "./trafficCore";
+import { colorFor } from "./net";
+import { pings } from "./ping";
+import { DOWN, squad } from "./revive";
 
 export type MapItem = {
   x: number;
@@ -32,7 +35,7 @@ export type MinimapSource = {
   playHalf: number;
 };
 type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number; vis?: number };
-type MapRemote = { x: number; z: number; color: string; hp: number; last: number };
+type MapRemote = { id?: string; x: number; z: number; color: string; hp: number; last: number };
 
 const SIZE = 184; // css px
 const RANGE = 95; // metres from the centre to the rim
@@ -183,11 +186,30 @@ export function Minimap({
         g.fill();
         g.stroke();
       }
+      // pings: a diamond in the pinger's colour (enemy pings ringed red), on the rim if far
+      for (const p of pings) {
+        const [x, z] = rim(wx(p.x), wz(p.z), 7);
+        const pulse = 1 + 0.25 * Math.sin(now / 110);
+        const sz = (p.kind === "enemy" ? 5.5 : 5) * dpr * pulse;
+        g.fillStyle = colorFor(p.num);
+        g.strokeStyle = p.kind === "enemy" ? "#ff2a1a" : "#2b2118";
+        g.lineWidth = (p.kind === "enemy" ? 2.4 : 1.4) * dpr;
+        g.beginPath();
+        g.moveTo(x!, z! - sz);
+        g.lineTo(x! + sz, z!);
+        g.lineTo(x!, z! + sz);
+        g.lineTo(x! - sz, z!);
+        g.closePath();
+        g.fill();
+        g.stroke();
+      }
       const now2 = performance.now();
       remotes.current.forEach((r) => {
         if (now2 - r.last > 4000) return;
         const [x, z] = rim(wx(r.x), wz(r.z), 8);
-        g.fillStyle = r.hp > 0 ? r.color : "#8a8680";
+        // a downed teammate flashes red until someone revives them
+        const down = r.hp <= 0 && r.id !== undefined && squad.get(r.id)?.st === DOWN;
+        g.fillStyle = r.hp > 0 ? r.color : down ? (blink ? "#ff2a1a" : r.color) : "#8a8680";
         g.strokeStyle = "#2b2118";
         g.lineWidth = 1.5 * dpr;
         g.beginPath();

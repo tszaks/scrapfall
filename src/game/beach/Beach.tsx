@@ -8,7 +8,10 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { MutableRefObject } from "react";
 import * as THREE from "three";
 
-import { CitySun, facadeMaterial, rippleNormals } from "../City";
+import { CitySun, facadeMaterial, rippleNormals, setEnvMix, withEnvMix } from "../City";
+import { blendTable } from "../lookBlend";
+import { tod, useTodK } from "../timeOfDay";
+import { SkyDome } from "../TimeScene";
 import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture } from "../cityTextures";
 import { worldFx } from "../terrain";
 import type { Look, TimeOfDay } from "../lighting";
@@ -18,7 +21,7 @@ import { addSkyFogUniforms, skyFog } from "../skyFog";
 import { CityTraffic } from "../Traffic";
 import type { TrafficLink } from "../trafficCore";
 import { BLUFF_H, DECK, SEA, X, type BeachLayout } from "./beachLayout";
-import { BEACH_SKY_KEY, BEACH_SUNSET, beachLook } from "./beachLook";
+import { BEACH_SKY_KEY, BEACH_SUNSET, beachLook, type BeachLook } from "./beachLook";
 import { DETAIL_RANGE, buildBeachMeshes } from "./beachMesh";
 import { beachSignTexture } from "./beachTextures";
 
@@ -28,6 +31,21 @@ const _v = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
 const _c = new THREE.Color();
+
+/** the look part-way from sunset (0) to night (1): the waves carry the match into night */
+const blended = new Map<number, BeachLook>();
+function beachLookAt(k: number): BeachLook {
+  if (k <= 0) return beachLook("sunset");
+  if (k >= 1) return beachLook("night");
+  const key = Math.round(k * 256);
+  let l = blended.get(key);
+  if (!l) {
+    if (blended.size > 300) blended.clear();
+    l = blendTable(beachLook("sunset"), beachLook("night"), key / 256);
+    blended.set(key, l);
+  }
+  return l;
+}
 
 /** terrain: facade-atlas grain, vertex colours, per-vertex roughness (wet sand shines) */
 function groundMaterial() {
@@ -278,10 +296,10 @@ function BeachPalms({ city }: { city: BeachLayout }) {
 
 const BeachScene = memo(function BeachScene({
   city,
-  time,
 }: {
   city: BeachLayout;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts */
+  time?: TimeOfDay;
 }) {
   const { gl, scene } = useThree();
   const built = useMemo(() => {
@@ -302,7 +320,7 @@ const BeachScene = memo(function BeachScene({
   const mats = useMemo(
     () => ({
       facade: facadeMaterial(nightK, darkK),
-      ground: groundMaterial(),
+      ground: withEnvMix(groundMaterial()),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
       signs: new THREE.MeshBasicMaterial({
         vertexColors: true,
@@ -319,13 +337,14 @@ const BeachScene = memo(function BeachScene({
         polygonOffset: true,
         polygonOffsetFactor: -2,
       }),
-      sea: seaMaterial(seaTime, foamCol, moon),
+      sea: withEnvMix(seaMaterial(seaTime, foamCol, moon)),
       lights: new THREE.PointsMaterial({
         color: "#ffd8a0",
         size: 2.4,
         sizeAttenuation: false,
         fog: false,
         toneMapped: false,
+        transparent: true,
       }),
       mist: new THREE.MeshBasicMaterial({
         color: "#d8aaa6",
@@ -378,39 +397,39 @@ const BeachScene = memo(function BeachScene({
     };
   }, [gl, envFor]);
 
+  // both env maps up front (the match runs from sunset into night), cross-faded in the shader
+  const envNight = useRef<THREE.Texture | null>(null);
   useEffect(() => {
-    const rt = envFor(time);
-    const B = beachLook(time);
-    for (const m of [mats.facade, mats.ground]) {
-      m.envMap = rt.texture;
+    const sun = envFor("sunset");
+    envNight.current = envFor("night").texture;
+    for (const m of [mats.facade, mats.ground, mats.sea]) {
+      m.envMap = sun.texture;
       m.needsUpdate = true;
     }
+  }, [envFor, mats]);
+  // the time of day (1/64 steps): uniforms and colours only
+  const nk = useTodK();
+  useEffect(() => {
+    const B = beachLookAt(nk);
+    for (const m of [mats.facade, mats.ground, mats.sea]) setEnvMix(m, envNight.current, nk);
     mats.facade.envMapIntensity = B.env;
-    mats.sea.envMap = rt.texture;
     mats.sea.color.set(B.water.color);
     mats.sea.roughness = B.water.roughness;
     mats.sea.metalness = B.water.metalness;
-    mats.sea.needsUpdate = true;
     foamCol.value.set(B.water.foam);
-    moon.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2], time === "night" ? 1 : 0);
+    moon.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2], nk);
     nightK.value = B.windows;
     darkK.value = B.dark;
     mats.glow.color.setScalar(B.glow);
-    mats.signs.color.setScalar((B.glow + B.signs) / 2);
     mats.signs.color.setScalar(B.signs);
     mats.pools.opacity = B.pools;
-    mats.lights.opacity = time === "night" ? 1 : 0.35;
-    mats.lights.transparent = time !== "night";
+    mats.lights.opacity = 0.35 + 0.65 * nk;
     mats.mist.color.set(B.hazardCol);
-    const prev = scene.background;
-    scene.background =
-      time === "night"
-        ? skyTexture("night")
-        : paletteSkyTextures(BEACH_SKY_KEY, BEACH_SUNSET).background;
-    return () => {
-      scene.background = prev;
-    };
-  }, [time, envFor, mats, nightK, darkK, foamCol, moon, scene]);
+  }, [nk, mats, nightK, darkK, foamCol, moon]);
+  const skies = useMemo(
+    () => ({ sunset: paletteSkyTextures(BEACH_SKY_KEY, BEACH_SUNSET).background, night: skyTexture("night") }),
+    [],
+  );
 
   useEffect(
     () => () => {
@@ -450,8 +469,6 @@ const BeachScene = memo(function BeachScene({
   const signRefs = useRef<(THREE.Mesh | null)[]>([]);
   const poolRefs = useRef<(THREE.Mesh | null)[]>([]);
   const mistRef = useRef<THREE.Mesh>(null);
-  const timeRef = useRef(time);
-  timeRef.current = time;
   const lodTick = useRef(0);
   const haze = useRef(0);
   const fogCol = useMemo(() => new THREE.Color(), []);
@@ -460,7 +477,7 @@ const BeachScene = memo(function BeachScene({
     const t = state.clock.elapsedTime;
     seaTime.value = t;
     const cam = state.camera.position;
-    const B = beachLook(timeRef.current);
+    const B = beachLookAt(tod.v);
     // directional haze points at our own sun (the shared Atmosphere assumes the city's)
     skyFog.fogSunDir.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2]);
     // MARINE LAYER: in the boss round the fog rolls in off the sea
@@ -502,7 +519,8 @@ const BeachScene = memo(function BeachScene({
     <group>
       <mesh geometry={seaGeo.far} material={mats.sea} />
       <mesh geometry={seaGeo.strip} material={mats.sea} receiveShadow />
-      <points geometry={lightsGeo} material={mats.lights} visible={time === "night" || true} />
+      <SkyDome sunset={skies.sunset} night={skies.night} />
+      <points geometry={lightsGeo} material={mats.lights} />
       <mesh ref={mistRef} material={mats.mist} visible={false} renderOrder={-1}>
         <sphereGeometry args={[2000, 16, 10]} />
       </mesh>
@@ -559,8 +577,9 @@ function debugOn() {
 // ---------------------------------------------------------------------------------------
 // moving set pieces
 
-function SetPieces({ city, time }: { city: BeachLayout; time: TimeOfDay }) {
-  const B = beachLook(time);
+function SetPieces({ city }: { city: BeachLayout; time?: TimeOfDay }) {
+  const nk = useTodK();
+  const B = beachLookAt(nk);
   const ledTime = useMemo(() => ({ value: 0 }), []);
   const ledK = useMemo(() => ({ value: 1 }), []);
   useEffect(() => {
@@ -603,7 +622,7 @@ function SetPieces({ city, time }: { city: BeachLayout; time: TimeOfDay }) {
       <Coaster city={city} mats={mats} />
       <DropTower city={city} mats={mats} />
       <Carousel city={city} mats={mats} />
-      <Bonfires city={city} mats={mats} time={time} />
+      <Bonfires city={city} mats={mats} nk={nk} />
     </>
   );
 }
@@ -1034,7 +1053,7 @@ function Carousel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
   );
 }
 
-function Bonfires({ city, mats, time }: { city: BeachLayout; mats: SetMats; time: TimeOfDay }) {
+function Bonfires({ city, mats, nk }: { city: BeachLayout; mats: SetMats; nk: number }) {
   const fires = useMemo(() => {
     const out: { x: number; y: number; z: number }[] = [];
     for (const f of city.beach.firesLit) {
@@ -1088,8 +1107,8 @@ function Bonfires({ city, mats, time }: { city: BeachLayout; mats: SetMats; time
       m.setMatrixAt(i, _m4);
     });
     m.instanceMatrix.needsUpdate = true;
-    mats.emb.opacity = (time === "night" ? 0.7 : 0.25) * (0.85 + Math.sin(t * 9) * 0.08);
-    mats.flame.opacity = time === "night" ? 0.95 : 0.55;
+    mats.emb.opacity = (0.25 + 0.45 * nk) * (0.85 + Math.sin(t * 9) * 0.08);
+    mats.flame.opacity = 0.55 + 0.4 * nk;
   });
   if (!fires.length) return null;
   return (
@@ -1109,7 +1128,8 @@ function Bonfires({ city, mats, time }: { city: BeachLayout; mats: SetMats; time
  * in the north-west, the Palos Verdes hills in the south-west, the San Gabriels inland.
  * Unfogged silhouettes in the haze colour of the time of day, darker toward the ridgeline.
  */
-function Mountains({ time }: { time: TimeOfDay }) {
+function Mountains(_props: { time?: TimeOfDay }) {
+  const nk = useTodK();
   const geo = useMemo(() => {
     const pos: number[] = [];
     const tone: number[] = [];
@@ -1183,10 +1203,8 @@ void main() {
   }, []);
   useEffect(() => () => mat.dispose(), [mat]);
   useEffect(() => {
-    const base = time === "night" ? "#1a1e30" : "#c490a6";
-    const top = time === "night" ? "#0c0f1c" : "#8a6a96";
-    (mat.uniforms["uBase"]!.value as THREE.Color).set(base);
-    (mat.uniforms["uTop"]!.value as THREE.Color).set(top);
-  }, [time, mat]);
+    (mat.uniforms["uBase"]!.value as THREE.Color).set("#c490a6").lerp(_c.set("#1a1e30"), nk);
+    (mat.uniforms["uTop"]!.value as THREE.Color).set("#8a6a96").lerp(_c.set("#0c0f1c"), nk);
+  }, [nk, mat]);
   return <mesh geometry={geo} material={mat} frustumCulled={false} renderOrder={-2} />;
 }

@@ -30,8 +30,10 @@ import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
 import { alpineMinimap, cityMinimap } from "./cityMinimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
-import { Atmosphere } from "./Atmosphere";
-import { worldLook, type TimeOfDay } from "./lighting";
+import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
+import { arenaSunsetSky } from "./sky";
+import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
+import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
 import { climbable, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
@@ -40,7 +42,6 @@ import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weathe
 import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
 import { resetRide, ride, riderEye, stepRide } from "./alpine/ride";
-import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
 import {
@@ -60,6 +61,13 @@ import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMus
 import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
+import { MapEvents } from "./events/EventsLayer";
+import { forceMapEvent, mapEvent, onMapEventMsg } from "./events/mapEvents";
+import { power } from "./events/power";
+import { HudOverlay, SquadDriver } from "./Squad";
+import { handleSquadMsg, resetSquad, showToast } from "./squadState";
+import { pings, type PingWorld } from "./ping";
+import { REVIVE_HP, reviveInterrupted, squad } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
@@ -1478,6 +1486,8 @@ function World({
   onStat,
   onEvent,
   mapFeed,
+  downed,
+  pingWorld,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -1520,6 +1530,10 @@ function World({
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
   mapFeed: React.MutableRefObject<MapFeed>;
+  /** co-op: out of health but not yet bled out (crawling, waiting for a revive) */
+  downed: boolean;
+  /** what pings can hit (filled here, read by the SquadDriver) */
+  pingWorld: React.MutableRefObject<PingWorld | null>;
 }) {
 
 
@@ -1590,6 +1604,7 @@ function World({
   const takeHit = (dmg: number) => {
     if (hitLog.current.length < 400) hitLog.current.push({ dmg, t: performance.now() });
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
+    reviveInterrupted(); // taking damage breaks off a revive in progress
     const s2 = stats.current;
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
@@ -1602,6 +1617,7 @@ function World({
     c.updateProjectionMatrix();
   }, [fov, camera]);
   const look3 = worldLook(theme, time, ARENA);
+  const arenaNight = useMemo(() => new THREE.Color(worldLook(theme, "night", ARENA).sky), [theme]);
   /** the big real-scale maps (the city, Dry Gulch) share spawning, recycling and the minimap */
   const big = city ?? western;
   // solo on the city: traffic keeps to the streets inside the blockades (it turns back at
@@ -1626,6 +1642,8 @@ function World({
         syncInv();
       };
       Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
+      // gameplay testing: the time of day, map events, the power grid, pings and revives
+      Object.assign(handle, { tod, mapEvent, forceMapEvent, power, pings, squad, waveTotal, healthRef, owned, downedRef });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, western, gaps, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
@@ -1653,6 +1671,24 @@ function World({
   const bobAmt = useRef(0);
   /** smoothed ground height under the player (decks, stairs, bowls on maps with relief) */
   const camGround = useRef(0);
+
+  // what a ping can land on (read by the SquadDriver)
+  useEffect(() => {
+    pingWorld.current = {
+      enemies,
+      items: [
+        { get x() { return pickup.current.x; }, get z() { return pickup.current.z; }, get active() { return pickup.current.active; }, kind: "gun", get label() { return GUNS[pickup.current.gun].name; } },
+        { get x() { return heal.current.x; }, get z() { return heal.current.z; }, get active() { return heal.current.active; }, kind: "heal", label: "HEALTH" },
+        { get x() { return crate.current.x; }, get z() { return crate.current.z; }, get active() { return crate.current.active; }, kind: "crate", get label() { return CRATE_INFO[crate.current.kind].name; } },
+      ],
+      solid: (x, z) => blocked(blocks, x, z, 0),
+      ground: groundY,
+      los: (ax, az, bx, bz) => clearLine(blocks, ax, az, bx, bz, 0.05),
+      band: (k) => hitBand(k),
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      enemyLabel: (e) => (e.kind === "boss" ? theme.boss.name : e.kind === "special" ? theme.special.name : (ENEMY_INFO[e.kind]?.name ?? e.kind.toUpperCase())),
+    };
+  }, [blocks, enemies, theme, pingWorld]);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
@@ -1684,6 +1720,11 @@ function World({
   guestRef.current = !isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const downedRef = useRef(downed);
+  downedRef.current = downed;
+  const aliveRef = useRef(!dead);
+  aliveRef.current = !dead;
+  const waveTotal = useRef(1);
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
   // city traffic: bumped around by cars (velocity decays), with a short camera shake
   const knock = useRef({ x: 0, z: 0, shake: 0 });
@@ -1819,6 +1860,7 @@ function World({
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
     if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
+    if (typeof m.tk === "number") tod.hostK = m.tk / 1000;
     if (typeof m.rn === "number") decodeWeather(m.rn);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
@@ -1830,6 +1872,7 @@ function World({
   useEffect(() => {
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
+      if (onMapEventMsg(m)) return;
       if (m.type === "t") { upsertRemote(m); return; }
       if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
       if (m.type === "left") {
@@ -2189,9 +2232,10 @@ function World({
     }
   };
 
-  // dying costs you every gun but the pistol; upgrades and pistol mods are kept
+  // dying costs you every gun but the pistol; upgrades and pistol mods are kept. Going DOWN
+  // in co-op is not dying: the guns go only if the bleed-out runs out (or solo death).
   useEffect(() => {
-    if (!dead) return;
+    if (!dead || downed) return;
     const lost = [...owned.current].filter((w) => w !== "pistol");
     lost.forEach((w) => {
       owned.current.delete(w);
@@ -2200,7 +2244,7 @@ function World({
     });
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
     equip("pistol");
-  }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
 
@@ -2289,6 +2333,7 @@ function World({
       unit.forEach((k, m) => { kinds.push(k); leadOf.push(m === 0 ? -1 : first); });
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
+    waveTotal.current = Math.max(1, kinds.length); // the time of day follows how much is cleared
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
     // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
     const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
@@ -2485,7 +2530,8 @@ function World({
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1)
-      * groundSpeed(cam.position.x, cam.position.z); // deep snow off the paths
+      * groundSpeed(cam.position.x, cam.position.z) // deep snow off the paths
+      * (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -2560,7 +2606,8 @@ function World({
       const dg = gy - camGround.current;
       camGround.current = !groundOwnsHits() || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
     }
-    cam.position.y = camGround.current + EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    // DOWN in co-op: the view drops to the ground (a crawl)
+    cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
     // alpine chairlift: stand on a loading line to board; seated, the chair carries you
     if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current)) {
       slide.current.x = 0;
@@ -2909,6 +2956,7 @@ function World({
       });
       // waves
       const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      setWaveClock(wave.current, wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current);
       if (remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
@@ -3552,6 +3600,7 @@ function World({
           const od = packOrds(ords.current);
           n.broadcast({
             type: "snap", e, b, mk,
+            tk: Math.round(waveStage(tod.wave, tod.progress) * 1000), // the host's time of day
             ...(od.length ? { od } : {}),
             ...(tr ? { tr } : {}),
             ...(al ? { al } : {}),
@@ -3601,43 +3650,26 @@ function World({
 
   return (
     <>
-      <Atmosphere theme={theme} time={time} look={look3} city={!!big} />
-      <fog attach="fog" args={[look3.fogColor, look3.fog[0], look3.fog[1]]} />
-      <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
-      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color={look3.ambientColor} />}
-      {time === "night" && !alpineMap && (
-        <Stars
+      {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
+      <TimeDriver theme={theme} arena={ARENA} />
+      <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
+      {!big && <SkyDome sunset={arenaSunsetSky(theme.name, theme.sky, ARENA_SUN.sunset)} night={arenaNight} />}
+      {!alpineMap && (
+        <NightStars
           radius={big ? 900 : 90}
           depth={big ? 200 : 20}
           count={big ? 3000 : 1500}
           factor={big ? 26 : 4}
-          fade
-          speed={0.3}
         />
       )}
       {western ? (
-        <WesternSun key="sun-western" time={time} />
+        <WesternSun key="sun-western" />
       ) : alpineMap ? (
-        <AlpineSun key="sun-alpine" time={time} />
+        <AlpineSun key="sun-alpine" />
       ) : isBeach(city) ? null : city ? (
         // city sun: shadow frustum follows the player, auto-off on slow devices
-        <CitySun
-          key="sun-city"
-          time={time}
-          color={look3.sun.color}
-          intensity={look3.sun.intensity}
-        />
-      ) : (
-        <directionalLight
-          key="sun"
-          position={look3.sun.pos}
-          color={look3.sun.color}
-          intensity={look3.sun.intensity}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
-      )}
+        <CitySun key="sun-city" />
+      ) : null}
       {alpineMap ? (
         <AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
       ) : isBeach(city) ? (
@@ -3658,6 +3690,58 @@ function World({
       ) : (
         <Level blocks={blocks} theme={theme} />
       )}
+      <MapEvents
+        theme={theme}
+        city={city}
+        enemies={enemies}
+        net={net}
+        isHost={isHost}
+        wave={wave}
+        playing={locked && !gameOver}
+        matchSeed={seed}
+        alive={aliveRef}
+        hurtPlayer={(dmg, kx, kz, shake) => {
+          if (deadRef.current) return;
+          if (kx || kz) shove(kx, kz);
+          knock.current.shake = Math.max(knock.current.shake, shake);
+          if (dmg > 0) takeHit(dmg);
+        }}
+        movePlayer={(dx, dz) => {
+          const p = camera.position;
+          if (!blocked(blocks, p.x + dx, p.z, 0.4)) p.x += dx;
+          if (!blocked(blocks, p.x, p.z + dz, 0.4)) p.z += dz;
+        }}
+        hurtEnemy={(i, dmg, kx, kz) => {
+          const e = enemies[i];
+          if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, 3, kx, kz);
+        }}
+        spawnEnemies={(kindName, n, x, z) => {
+          // extra enemies for an event (the train robbery's gang): free slots, the same set-up
+          // as a wave's arrivals, a red X first; they count toward the wave
+          if (!(KINDS as string[]).includes(kindName) || kindName === "boss") return 0;
+          const kind = kindName as Kind;
+          const hpMul = 1 + 0.09 * (Math.max(1, wave.current) - 1);
+          let placed = 0;
+          for (let i = 0; i < enemies.length && placed < n; i++) {
+            const e = enemies[i]!;
+            if (e.alive || pending.current[i]) continue;
+            const p = besides(x, z);
+            const hp = Math.max(1, Math.round(STATS[kind].hp * hpMul));
+            Object.assign(e, {
+              kind, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false,
+              cooldown: 1 + rand() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0,
+              vis: 0, st: 0, t1: 0, ax: undefined, az: undefined, side: undefined, plan: 0, shots: 0,
+              stuck: 0, gd0: 99, detour: 0, shield: 0, shieldMax: 0, shieldT: 0, blockT: 0, hitT: 0, tgt: -1,
+            });
+            e.elite = 0;
+            packLead.current[i] = -1;
+            pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + placed * 0.3, placed: true };
+            placed++;
+          }
+          waveTotal.current += placed;
+          return placed;
+        }}
+      />
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} all={enemies} />
       ))}
@@ -3750,16 +3834,6 @@ function forcedMapIndex(): number | null {
   const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
   return i >= 0 ? i : null;
 }
-/** Every visit opens at night. `?time=night|sunset` picks the opening look for testing
- * (old links: `?night=1` is night, `?night=0` is sunset). The choice isn't saved. */
-function initialTime(): TimeOfDay {
-  if (typeof window === "undefined") return "night";
-  const q = new URLSearchParams(window.location.search);
-  const t = q.get("time");
-  if (t === "night" || t === "sunset") return t;
-  return q.get("night") === "0" ? "sunset" : "night";
-}
-
 /** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
 function seedParam(): number | null {
   if (typeof window === "undefined") return null;
@@ -3789,16 +3863,23 @@ export function Game() {
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
   const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
-  const [time, setTime] = useState<TimeOfDay>("night");
-  useEffect(() => setTime(initialTime()), []);
-  const toggleTime = () => setTime((t) => (t === "night" ? "sunset" : "night"));
-  const toggleTimeRef = useRef(toggleTime);
-  toggleTimeRef.current = toggleTime;
+  // time of day (timeOfDay.ts): AUTO follows the waves from sunset into night; N locks
+  // this player's choice for the rest of the match. `?time=` overrides for testing.
+  const time = useTodNearest();
+  const timeMode = useTodMode();
+  useEffect(() => {
+    const init = initialMode();
+    setTimeMode(init.mode);
+    if (init.k !== null) pinTime(init.k);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyN" || e.repeat) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      toggleTimeRef.current();
+      pinTime(null);
+      const inMatch = phase.current.started && !phase.current.ended;
+      toggleTimeLock(inMatch);
+      if (inMatch) showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -3857,6 +3938,9 @@ export function Game() {
   const [joinCode, setJoinCode] = useState("");
   const [netError, setNetError] = useState("");
   const [allDown, setAllDown] = useState(false);
+  // co-op revive (revive.ts): the bleed-out ran out, so this player is dead until next wave
+  const [bledOut, setBledOut] = useState(false);
+  const pingWorld = useRef<PingWorld | null>(null);
   const remotes = useRef(new Map<string, RemoteState>());
   const msgSink = useRef<(m: NetMsg) => void>(() => {});
   const seedRef = useRef(seed);
@@ -3884,6 +3968,8 @@ export function Game() {
   };
 
   const handleMsg = (m: NetMsg) => {
+    // pings and revives (Squad.tsx)
+    if (handleSquadMsg(m, squadCb)) return;
     if (m.type === "roster") {
       slots.current = (m.slots ?? {}) as Record<string, number>;
       setRoster(
@@ -3941,6 +4027,14 @@ export function Game() {
     if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
+  };
+  const squadCb = {
+    isHost: () => !netHolder.current || netHolder.current.role === "host",
+    numOf: (id: string) => (id === "host" ? 1 : (slots.current[id] ?? 2)),
+    onRevived: () => {
+      setHealth((h) => (h > 0 ? h : Math.max(1, Math.round(derive(perksRef.current).maxHp * REVIVE_HP))));
+    },
+    onBleedOut: () => setBledOut(true),
   };
   const handleMsgRef = useRef(handleMsg);
   handleMsgRef.current = handleMsg;
@@ -4175,6 +4269,13 @@ export function Game() {
 
   const multiplayer = !!net;
   const dead = health <= 0;
+  // co-op: out of health but still bleeding out, waiting for a revive
+  const downed = multiplayer && dead && !bledOut;
+  useEffect(() => {
+    if (health > 0) setBledOut(false);
+  }, [health]);
+  const selfRef = useRef({ hp: 1, bledOut: false, playing: false });
+  selfRef.current = { hp: health, bledOut, playing: started && locked && !(multiplayer ? allDown : dead) };
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
@@ -4216,6 +4317,7 @@ export function Game() {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
+    if (!resuming) beginMatchTime();
     setStarted(true);
     if (ended && !fromNet) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
@@ -4340,6 +4442,9 @@ export function Game() {
   useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
+  // the time of day runs with the match; a new arena opens straight onto its wave-1 sunset
+  useEffect(() => { tod.playing = started; }, [started]);
+  useEffect(() => { resetMatchTime(); tod.snap = true; resetSquad(); setBledOut(false); }, [seed]);
 
   // HUD status lists
   const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
@@ -4426,6 +4531,8 @@ export function Game() {
           }}
           onEvent={setEventMsg}
           mapFeed={mapFeed}
+          downed={downed}
+          pingWorld={pingWorld}
 
 
 
@@ -4436,8 +4543,18 @@ export function Game() {
           onInv={setInv}
 
         />
+        <SquadDriver
+          net={net}
+          remotes={remotes}
+          self={selfRef}
+          world={pingWorld}
+          myNum={myNum}
+          onRevived={squadCb.onRevived}
+          onBleedOut={squadCb.onBleedOut}
+        />
         <AmbienceListener />
       </Canvas>
+      <HudOverlay remotes={remotes} active={started && locked && !ended} coop={multiplayer} numOf={squadCb.numOf} />
 
       {hurtFlash > 0 && (
         <div
@@ -4620,7 +4737,7 @@ export function Game() {
           +3 HEALTH
         </div>
       )}
-      {multiplayer && dead && !ended && locked && (
+      {multiplayer && dead && !downed && !ended && locked && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
@@ -4647,7 +4764,7 @@ export function Game() {
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your
-                ability · 1-0 / Q E swap guns · N night/sunset · Esc to pause
+                ability · 1-0 / Q E swap guns · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -4839,13 +4956,21 @@ export function Game() {
             {(
               <div>
                 <button
-                  onClick={toggleTime}
-                  aria-pressed={time === "sunset"}
-                  title="Switch between night and sunset (N)"
+                  onClick={() => { pinTime(null); cycleTimeMode(); }}
+                  title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
                   className="pointer-events-auto mt-4 block w-full rounded-md border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]"
                 >
-                  {time === "night" ? "☾ NIGHT · PRESS N FOR SUNSET" : "SUNSET · PRESS N FOR NIGHT"}
+                  {timeMode === "auto"
+                    ? "TIME · AUTO (SUNSET INTO NIGHT)"
+                    : timeMode === "night"
+                      ? "TIME · ☾ NIGHT (LOCKED)"
+                      : "TIME · SUNSET (LOCKED)"}
                 </button>
+                {started && !ended && (
+                  <div className="mt-1 text-[10px] tracking-wider opacity-50">
+                    {timeMode === "auto" ? "N LOCKS YOUR LOOK FOR THIS MATCH (AUTO OFF)" : "LOCKED FOR THIS MATCH · CLICK FOR AUTO"}
+                  </div>
+                )}
                 <button
                   onClick={() => setShowSettings((v) => !v)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"

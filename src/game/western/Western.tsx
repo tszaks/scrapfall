@@ -6,6 +6,11 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 
 import type { TimeOfDay } from "../lighting";
+import { blendTable } from "../lookBlend";
+import { liveLook, todSmooth, useTodK } from "../timeOfDay";
+import { SkyDome } from "../TimeScene";
+import { provideEventHooks } from "../events/mapHooks";
+import { trainRobbery } from "./robbery";
 import { addSkyFogUniforms, skyFog } from "../skyFog";
 import {
   RIVER_EDGE,
@@ -17,7 +22,7 @@ import {
   sampleTerrain,
   type WesternLayout,
 } from "./layout";
-import { WESTERN_LOOK } from "./look";
+import { WESTERN_LOOK, type WesternLook } from "./look";
 import { facadeMaterial, westernBackground, westernEnv } from "./materials";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
 import {
@@ -191,16 +196,49 @@ function riverbedMesh(L: WesternLayout) {
   return g;
 }
 
+/** the look part-way from sunset (0) to night (1): the waves carry the match into night */
+const blended = new Map<number, WesternLook>();
+function westernLookAt(k: number): WesternLook {
+  if (k <= 0) return WESTERN_LOOK.sunset;
+  if (k >= 1) return WESTERN_LOOK.night;
+  const key = Math.round(k * 256);
+  let l = blended.get(key);
+  if (!l) {
+    if (blended.size > 300) blended.clear();
+    l = blendTable(WESTERN_LOOK.sunset, WESTERN_LOOK.night, key / 256);
+    blended.set(key, l);
+  }
+  return l;
+}
+/** a smaller copy of a sky canvas, so both reflection maps come out the same PMREM size */
+function resized(src: THREE.Texture, w: number, h: number) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d")!.drawImage(src.image as CanvasImageSource, 0, 0, w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = src.colorSpace;
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  return t;
+}
+
 export const WesternScene = memo(function WesternScene({
   layout,
-  time,
 }: {
   layout: WesternLayout;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts */
+  time?: TimeOfDay;
 }) {
-  const { gl, scene } = useThree();
-  const mode: WMode = time;
-  const look = WESTERN_LOOK[mode];
+  const { gl } = useThree();
+  // the time of day in 1/64 steps; the reflections and the sky disc swap at the midpoint
+  const nk = useTodK();
+  const mode: WMode = nk >= 0.5 ? "night" : "sunset";
+  // the train is the TRAIN ROBBERY map event's set piece while this map is up
+  useEffect(() => {
+    provideEventHooks("train-robbery", trainRobbery);
+    return () => provideEventHooks("train-robbery", null);
+  }, []);
+  const look = westernLookAt(nk);
   const built = useMemo(() => {
     const t0 = performance.now();
     const m = buildWesternMeshes(layout);
@@ -262,8 +300,12 @@ export const WesternScene = memo(function WesternScene({
   // reflection env maps: a small PMREM of each sky
   const env = useMemo(() => {
     const pm = new THREE.PMREMGenerator(gl);
-    const sunset = pm.fromEquirectangular(westernBackground("sunset"));
-    const nightRT = pm.fromEquirectangular(westernSky("night"));
+    const sunsetSrc = westernBackground("sunset");
+    const sunset = pm.fromEquirectangular(sunsetSrc);
+    // same width as the sunset so both PMREMs share one size (no shader change at the swap)
+    const nightSrc = resized(westernSky("night"), (sunsetSrc.image as { width: number }).width, (sunsetSrc.image as { height: number }).height);
+    const nightRT = pm.fromEquirectangular(nightSrc);
+    nightSrc.dispose();
     pm.dispose();
     return { sunset, night: nightRT };
   }, [gl]);
@@ -275,28 +317,31 @@ export const WesternScene = memo(function WesternScene({
     [env],
   );
 
+  // reflections: the sunset or the night map, swapped at the midpoint while they are faded
+  // right down (so the swap never shows)
   useEffect(() => {
     const e = mode === "night" ? env.night.texture : env.sunset.texture;
     mats.facade.envMap = e;
-    mats.facade.envMapIntensity = look.env;
     westernEnv.map = e;
-    westernEnv.intensity = look.env;
     mats.facade.needsUpdate = true;
     ground.mat.envMap = e;
-    ground.mat.envMapIntensity = 0.35;
     ground.mat.needsUpdate = true;
+  }, [mode, env, mats, ground]);
+  useEffect(() => {
+    const dip = Math.min(1, Math.abs(nk - 0.5) / 0.12);
+    mats.facade.envMapIntensity = look.env * dip;
+    westernEnv.intensity = look.env * dip;
+    ground.mat.envMapIntensity = 0.35 * dip;
     nightK.value = look.windows;
     mats.glow.color.setScalar(look.flames);
     mats.flame.color.set("#ffa040").multiplyScalar(look.flames);
-    // the directional haze warms toward our sun, not the city's
-    const d = SKY_DIR[mode];
-    skyFog.fogSunDir.value.set(d[0], d[1], d[2]).normalize();
-    const prev = scene.background;
-    scene.background = westernBackground(mode);
-    return () => {
-      scene.background = prev;
-    };
-  }, [mode, env, mats, nightK, scene, look, ground]);
+    // lantern light pools fade in with the dark
+    mats.pools.opacity = 0.85 * todSmooth(0.3, 0.8, nk);
+    // the sun sinks and fades, then the moon rises
+    const disc = mode === "night" ? mats.moon : mats.disc;
+    disc.opacity = mode === "night" ? todSmooth(0.5, 0.75, nk) : 1 - todSmooth(0.25, 0.5, nk);
+  }, [nk, mode, mats, nightK, look, ground]);
+  const skies = useMemo(() => ({ sunset: westernBackground("sunset"), night: westernBackground("night") }), []);
 
   useEffect(
     () => () => {
@@ -349,8 +394,8 @@ export const WesternScene = memo(function WesternScene({
   const detailRefs = useRef<(THREE.Mesh | null)[]>([]);
   const poolRefs = useRef<(THREE.Mesh | null)[]>([]);
   const lodTick = useRef(0);
-  const poolsOn = useRef(look.pools);
-  poolsOn.current = look.pools;
+  const poolsOn = useRef(nk > 0.3);
+  poolsOn.current = nk > 0.3;
   useEffect(() => {
     lodTick.current = 0; // re-evaluate pools right away after a mode switch
   }, [mode]);
@@ -426,6 +471,7 @@ export const WesternScene = memo(function WesternScene({
   const ext = layout.extent;
   return (
     <group>
+      <SkyDome sunset={skies.sunset} night={skies.night} />
       {/* the desert floor, out to the horizon */}
       <mesh rotation-x={-Math.PI / 2} position-y={0} material={ground.mat} receiveShadow>
         <planeGeometry args={[ext * 2, ext * 2]} />
@@ -454,7 +500,7 @@ export const WesternScene = memo(function WesternScene({
               }}
               geometry={c.pools}
               material={mats.pools}
-              visible={look.pools}
+              visible={nk > 0.3}
               renderOrder={2}
             />
           )}
@@ -541,18 +587,20 @@ const SUN_DIST = 900;
  * snapped to shadow texels so edges don't shimmer. The low sunset sun throws shadows the
  * length of a building lot down Main Street. Slow frames switch shadows off automatically.
  */
-export function WesternSun({ time }: { time: TimeOfDay }) {
+export function WesternSun(_props: { time?: TimeOfDay }) {
   const ref = useRef<THREE.DirectionalLight>(null);
-  const mode = time;
-  const look = WESTERN_LOOK[mode];
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const dir = SKY_DIR[mode];
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;
+    // the blended sun (sinking at dusk) or moon for the current time of day
+    const d = liveLook.sunDir;
+    const dir = [d.x, d.y, d.z] as const;
+    l.color.copy(liveLook.sunColor);
+    l.intensity = liveLook.sunI;
     const texel = (SUN_RANGE * 2) / SUN_MAP;
     const cx = Math.round(state.camera.position.x / texel) * texel;
     const cz = Math.round(state.camera.position.z / texel) * texel;
@@ -574,8 +622,6 @@ export function WesternSun({ time }: { time: TimeOfDay }) {
   return (
     <directionalLight
       ref={ref}
-      color={look.sun.color}
-      intensity={look.sun.intensity}
       castShadow={!low}
       shadow-mapSize-width={SUN_MAP}
       shadow-mapSize-height={SUN_MAP}

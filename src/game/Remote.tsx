@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 import type { RemoteState } from "./net";
 import { REMOTE_SHOT } from "./projectiles";
+import { DOWN, squad } from "./revive";
 
 const MAX_REMOTE = 3;
 const PIPS = 10;
@@ -25,9 +26,11 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       const g = groups.current[i];
       if (!g) continue;
       const p = list[i];
-      // downed teammates are spectating: invisible to everyone
-      g.visible = !!p && p.hp > 0;
-      if (!p || p.hp <= 0) continue;
+      // a DOWN teammate lies on the ground waiting for a revive; a dead one is spectating
+      // (invisible to everyone) until the next wave
+      const down = !!p && p.hp <= 0 && squad.get(p.id)?.st === DOWN;
+      g.visible = !!p && (p.hp > 0 || down);
+      if (!p || (p.hp <= 0 && !down)) continue;
 
       const k = Math.min(1, delta * 12);
       p.rx += (p.x - p.rx) * k;
@@ -38,14 +41,15 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       p.ry += dy * k;
       // a teammate riding the chairlift sits on their chair (its position is the shared lift clock)
       const lift = alpine.active ? alpine.lift : null;
-      if (lift && (p.rc ?? -1) >= 0) {
+      if (lift && (p.rc ?? -1) >= 0 && !down) {
         const e = riderEye(lift, p.rc!);
         p.rx = e.x;
         p.rz = e.z;
         g.position.set(e.x, e.y - 1.25, e.z);
-      } else g.position.set(p.rx, groundY(p.rx, p.rz), p.rz);
+      } else g.position.set(p.rx, groundY(p.rx, p.rz) + (down ? 0.3 : 0), p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
-      g.rotation.set(0, p.ry + Math.PI, 0);
+      g.rotation.order = "YXZ";
+      g.rotation.set(down ? -Math.PI / 2 : 0, p.ry + Math.PI, down ? Math.sin(performance.now() / 400) * 0.08 : 0);
       // their gun kicks back when they fire (projectiles.tsx replays the shot itself)
       const gun = guns.current[i];
       if (gun) {
