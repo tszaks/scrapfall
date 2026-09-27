@@ -22,6 +22,7 @@ import {
   type SimEnemy,
 } from "./trafficSim";
 import { newDirector, stepDirector } from "./pursuit";
+import { setAmbienceTraffic } from "./ambience";
 import { playSfx, setSiren } from "./audio";
 import { glowTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
@@ -428,6 +429,9 @@ export function CityTraffic({
     // camera right vector, for panning the sirens
     _right.set(1, 0, 0).applyQuaternion(cam.quaternion);
     sirens.length = 0;
+    // the car whose tyres you'd hear most (fast and close): the rain's tyre hiss follows it
+    let tyreBest = 0;
+    let tyre = { x: 0, z: 0, speed: 0 };
 
     for (let ci = 0; ci < cars.length; ci++) {
       const c = cars[ci]!;
@@ -540,6 +544,14 @@ export function CityTraffic({
           haloRef.current.setMatrixAt(ci, _car);
         }
       }
+      {
+        const td = Math.hypot(np.x - cam.position.x, np.z - cam.position.z);
+        const w = c.speed / (1 + (td / 12) * (td / 12));
+        if (w > tyreBest) {
+          tyreBest = w;
+          tyre = { x: np.x, z: np.z, speed: c.speed };
+        }
+      }
       if (siren || flags & F_SUSPECT)
         pursuitDots.push({ x: np.x, z: np.z, kind: siren ? 1 : 2, i: ci });
       if (siren) {
@@ -580,6 +592,7 @@ export function CityTraffic({
         }
       }
     }
+    setAmbienceTraffic(L.active ? tyre.speed : 0, tyre.x, tyre.z);
     // ---- sirens: the nearest cruisers, louder when close, pitch bent by their motion ----
     sirens.sort((p, q) => p.d - q.d);
     for (let k = 0; k < SIREN_VOICES; k++) {

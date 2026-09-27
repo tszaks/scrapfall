@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import type { AlpineLayout } from "../alpine/layout";
-import { setAmbiencePower } from "../ambience";
+import { setAmbienceBlackout, setAmbiencePower } from "../ambience";
 import type { CityLayout } from "../cityLayout";
 import { glowTexture } from "../cityTextures";
 import { hitBand } from "../enemyKinds";
@@ -28,16 +28,17 @@ import {
   type EventEnemy,
 } from "./mapEvents";
 import { power, powerAt, restorePower } from "./power";
-import { playAirRaid, playHorn, playRumble } from "./sfx";
+import { playAvalanche, playTrainRobbery } from "./eventAudio";
+import { playAirRaid, playHorn } from "./sfx";
 
 // every map's events (explicit: the bundle drops side-effect-only imports)
 for (const def of [BLACKOUT_EVENT, AVALANCHE_EVENT, TRAIN_ROBBERY_EVENT, WAVE_SURGE_EVENT]) registerMapEvent(def);
 
 function alarm(kind: string | undefined) {
   if (kind === "siren") playAirRaid(10);
-  else if (kind === "rumble") playRumble(14, 0.6);
+  else if (kind === "rumble") playAvalanche();
   else if (kind === "horn") playHorn(0.22, true);
-  else if (kind === "whistle") playHorn(0.2);
+  else if (kind === "whistle") playTrainRobbery();
 }
 
 export function MapEvents({
@@ -125,6 +126,8 @@ export function MapEvents({
       ambPower.current = pw;
       setAmbiencePower(pw);
     }
+    // car alarms and an alarmed crowd while any district is dark
+    setAmbienceBlackout(power.out);
     if (!c.playing) return;
     const n = c.net;
     // host / solo: roll for events as waves start, and honour test requests

@@ -7,6 +7,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { setIndoor } from "../ambience";
 import { sfxBus } from "../audio";
 import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
@@ -419,6 +420,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
     Object.values(mats).forEach((m) => m.dispose());
     beaconGeo.dispose();
     sound.ride(0);
+    setIndoor(0);
   }, [mats, beaconGeo, sound]);
 
   const cityRoot = useRef<THREE.Object3D | null>(null);
@@ -428,6 +430,12 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
   const BEACON = useMemo(() => new THREE.Color("#ff2a1a"), []);
   useFrame((state) => {
     const cam = state.camera.position;
+    // inside, the city is heard through the walls: the ambience goes muffled (ambience.ts).
+    // A sealed car is the most enclosed; open doors (car or street door) let the city in.
+    if (player.zone === 1) {
+      const c = player.inCar ? carOf(player.b) : undefined;
+      setIndoor(c ? 1 - 0.35 * carOpen(c) : 0.75 - 0.3 * portalDoor(player.b, player.level));
+    } else setIndoor(0);
     {
       const v = view.current;
       const pc = state.camera as THREE.PerspectiveCamera;
