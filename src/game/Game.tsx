@@ -3912,8 +3912,9 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-20 flex items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
-          <div className="my-auto max-h-full w-full max-w-sm overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+        <div className="fixed inset-0 z-20 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
+          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+
 
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
