@@ -701,6 +701,8 @@ function building(b: WBld, r: () => number): BGeo {
   if (b.mat === "clap" || b.mat === "white") {
     G.col(trimC).mat(WL.PAINT, 0, 0);
     const cb = (H > 5 ? 0.27 : 0.21) + ((b.seed >> 2) & 1) * 0.02;
+    // how far the boards stand proud of the walls: varied per building so neighbours differ
+    const dz = 0.1 + (b.seed % 7) * 0.007;
     for (const [cx, cz] of [
       [x0, 0],
       [x1, 0],
@@ -709,7 +711,9 @@ function building(b: WBld, r: () => number): BGeo {
     ] as const)
       // sized by height and seed so the boards of two buildings that share a wall never
       // land on exactly the same faces (identical boxes flicker against each other)
-      boxC(G, WL.PAINT, cx, 0, cz, cb, H, cb, false);
+      // each board stays on its own side of the corner, so two buildings sharing a wall never
+      // put boards in the same place
+      boxP(G, WL.PAINT, cx === x0 ? x0 - 0.03 : x1 - cb, 0, cz - dz, cx === x0 ? x0 + cb : x1 + 0.03, H, cz + dz, false);
   }
   if (b.mat === "brick" || b.mat === "stone") {
     G.col(b.mat === "brick" ? "#d8ccb4" : "#b8ac94");
@@ -739,9 +743,12 @@ function building(b: WBld, r: () => number): BGeo {
       beam(G, x0 - eave, H - eave * pitch, fz, 0, ridgeY + 0.05, fz, 0.16);
     }
   } else if (b.roof === "shed") {
-    ridgeY = H + 0.9;
+    // lifted a little per building: two shed roofs side by side would otherwise lie in one
+    // plane and their overhanging eaves would flicker against each other
+    const lift = ((b.seed >> 4) % 5) * 0.05;
+    ridgeY = H + 0.9 + lift;
     G.col(roofL === WL.TIN ? "#c8c2b8" : "#ffffff", 1);
-    slope(G, roofL, x1 + eave, 0.2, x0 - eave, 0.2, ridgeY, 0, z0 - eave - 0.2, H - 0.2);
+    slope(G, roofL, x1 + eave, 0.2, x0 - eave, 0.2, ridgeY, 0, z0 - eave - 0.2, H - 0.2 + lift);
     G.col(paint, 1).mat(plainL, seed, AO);
     // side triangles
     G.mat(plainL);
@@ -1136,6 +1143,37 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   G.col("#f6f2ea").mat(WL.P_CLAP, seed, AO);
   gable(G, WL.P_CLAP, x0, 0, x1, 0, H, ridge);
   gable(G, WL.P_CLAP, x1, z0, x0, z0, H, ridge);
+  // the back (the side players reach from the yard): two tall windows, a rose window in the
+  // gable, a vestry door, corner boards and a stone sill, so it is not a blank slab
+  G.col("#ffffff").mat(WL.F_CHURCH, seed, LIT);
+  const win = (cx: number, y0: number, y1: number, hw: number) =>
+    G.quad(cx + hw, y0, z0 - 0.03, cx - hw, y0, z0 - 0.03, cx - hw, y1, z0 - 0.03, cx + hw, y1, z0 - 0.03, [
+      0.33 / 4,
+      0.3 / 4,
+      0.67 / 4,
+      1.7 / 4,
+    ]);
+  win(-3.2, 1.4, 4.6, 0.7);
+  win(3.2, 1.4, 4.6, 0.7);
+  win(0, H + 1.2, H + 3.4, 0.9);
+  G.col("#f4efe4");
+  for (const cx of [-3.2, 3.2]) boxP(G, WL.PAINT, cx - 0.95, 1.2, z0 - 0.14, cx + 0.95, 1.4, z0);
+  boxP(G, WL.PAINT, -1.15, H + 1.0, z0 - 0.14, 1.15, H + 1.2, z0);
+  G.col("#5a2e1c").mat(WL.PAINT, 0, 0);
+  G.quad(0.7, 0, z0 - 0.03, -0.7, 0, z0 - 0.03, -0.7, 2.4, z0 - 0.03, 0.7, 2.4, z0 - 0.03, [0, 0, 1, 1]);
+  G.col("#f4efe4");
+  boxP(G, WL.PAINT, -0.95, 2.4, z0 - 0.14, 0.95, 2.62, z0);
+  for (const [cx, cz] of [
+    [x0, 0],
+    [x1, 0],
+    [x0, z0],
+    [x1, z0],
+  ] as const)
+    boxC(G, WL.PAINT, cx, 0, cz, 0.3, H, 0.3, false);
+  G.col("#b8ac94");
+  boxP(G, WL.P_STONE, x0 - 0.2, 0, z0 - 0.2, x1 + 0.2, 0.45, z0 + 0.1);
+  boxP(G, WL.P_STONE, x0 - 0.2, 0, z0 + 0.1, x0 + 0.1, 0.45, 0);
+  boxP(G, WL.P_STONE, x1 - 0.1, 0, z0 + 0.1, x1 + 0.2, 0.45, 0);
   // the bell tower: square shaft, open belfry with the bell, a tall spire and a cross
   const tw = 4.6;
   const tz0 = -0.6;
