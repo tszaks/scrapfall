@@ -1970,7 +1970,7 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if (trigger.current && !spectating && fireCd.current <= 0) {
+    } else if ((trigger.current || touchInput.fire) && !spectating && fireCd.current <= 0) {
       const w = weapon.current;
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
