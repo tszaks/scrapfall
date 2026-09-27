@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
-  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
+  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
   setArenaSize, SOLO_ARENA, COOP_ARENA,
 } from "./level";
@@ -2561,9 +2561,16 @@ function World({
         const r = Math.min(st.radius, 0.8);
         if (ghost) { e.x = nx; e.z = nz; }
         else {
+          // if anything ever ends up wedged inside cover, slide it back out
+          if (blocked(blocks, e.x, e.z, r)) {
+            const out = pushOut(blocks, e.x, e.z, r);
+            e.x = out.x;
+            e.z = out.z;
+          }
           if (!blocked(blocks, nx, e.z, r)) e.x = nx;
           if (!blocked(blocks, e.x, nz, r)) e.z = nz;
         }
+
 
         if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
