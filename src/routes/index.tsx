@@ -5,13 +5,13 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Dustfield — Procedural FPS" },
+      { title: "Scrapfall — Procedural FPS" },
       {
         name: "description",
         content:
           "A tiny first-person shooter with a procedurally generated arena. Move, look, shoot the drifters.",
       },
-      { property: "og:title", content: "Dustfield — Procedural FPS" },
+      { property: "og:title", content: "Scrapfall — Procedural FPS" },
       {
         property: "og:description",
         content: "A tiny browser first-person shooter with a new procedural arena every round.",

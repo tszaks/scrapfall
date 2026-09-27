@@ -3251,7 +3251,7 @@ export function Game() {
 
   useEffect(() => {
     try {
-      const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
+      const v = JSON.parse(localStorage.getItem("scrapfall-settings") ?? "{}");
       if (typeof v.fov === "number") setFov(v.fov);
       if (typeof v.sensX === "number") setSensX(v.sensX);
       else if (typeof v.sens === "number") setSensX(v.sens);
@@ -3262,7 +3262,7 @@ export function Game() {
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
+    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
   }, [fov, sensX, sensY, musicVol, sfxVol]);
   useEffect(() => {
     if (!healMsg) return;
@@ -3905,7 +3905,7 @@ export function Game() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
           <div>
             <div className="text-2xl font-bold tracking-[0.2em]">ROTATE YOUR DEVICE</div>
-            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">DUSTFIELD PLAYS IN LANDSCAPE</div>
+            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">SCRAPFALL PLAYS IN LANDSCAPE</div>
           </div>
         </div>
       )}
@@ -4019,6 +4019,9 @@ export function Game() {
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
 
 
+            {!started && !ended && !paused && (
+              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+            )}
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
@@ -4273,7 +4276,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    DUSTFIELD · v1.0.2
+                    SCRAPFALL · v1.0.2
                   </div>
                 </div>
               </div>
