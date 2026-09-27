@@ -3690,8 +3690,10 @@ export function Game() {
             <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
               <span className="font-bold tracking-widest">REROLL</span>
-              <span className="opacity-60">{rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}</span>
-              <span className="font-bold">◆ {rerollCost}</span>
+              <span className="opacity-60">
+                {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
+              </span>
+              <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
             </div>
           </div>
           <div className="flex justify-center gap-3">
@@ -3700,7 +3702,7 @@ export function Game() {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
               if (bought.includes(i)) return null;
-              const sold = false;
+              const isMod = PISTOL_MODS.includes(id);
               return (
                 <div
                   key={i}
@@ -3709,11 +3711,24 @@ export function Game() {
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
                   </span>
+                  {isMod && <PistolBadge />}
                   <div className="text-xs font-bold tracking-widest">{info.name}</div>
-                  <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  {info.pros ? (
+                    <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
+                      {info.pros.map((t) => (
+                        <div key={t} className="font-bold text-[#1d7a37]">▲ {t}</div>
+                      ))}
+                      {info.cons?.map((t) => (
+                        <div key={t} className="font-bold text-[#b3261e]">▼ {t}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  )}
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
-                  <div className="mt-2 text-sm font-bold">{sold ? "BOUGHT" : `◆ ${cost}`}</div>
+                  <div className="mt-2 text-sm font-bold">◆ {cost}</div>
                 </div>
+
               );
             })}
           </div>
