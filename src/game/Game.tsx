@@ -3774,7 +3774,7 @@ export function Game() {
                   )}
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
                   <div className="mt-2 text-sm font-bold">◆ {cost}</div>
-                </div>
+                </button>
 
               );
             })}
