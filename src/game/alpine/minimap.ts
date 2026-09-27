@@ -69,9 +69,18 @@ export function paintAlpine(city: AlpineLayout) {
       img.data[o + 3] = 255;
     }
   g.putImageData(img, 0, 0);
+  // lift terminals and the lodge deck (walkable timber), then the chairlift line
+  g.fillStyle = "rgb(150,112,76)";
+  for (const r of [...a.terminals, a.lodgeDeck])
+    g.fillRect(
+      (r.x0 + city.half) / 2,
+      (r.z0 + city.half) / 2,
+      (r.x1 - r.x0) / 2,
+      (r.z1 - r.z0) / 2,
+    );
   // the chairlift line
-  g.strokeStyle = "rgba(43,33,24,0.85)";
-  g.lineWidth = 1.2;
+  g.strokeStyle = "rgba(200,38,42,0.95)";
+  g.lineWidth = 1.6;
   g.setLineDash([2, 1.5]);
   const lf = a.lift;
   const p0 = lf.supports[0]!;

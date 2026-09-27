@@ -103,8 +103,8 @@ function lightMap(lights: [number, number, number, string][], half: number) {
     const cc = new THREE.Color(col);
     const rgb = (a: number) =>
       `rgba(${Math.round(cc.r * 255)},${Math.round(cc.g * 255)},${Math.round(cc.b * 255)},${a})`;
-    gr.addColorStop(0, rgb(0.75));
-    gr.addColorStop(0.35, rgb(0.4));
+    gr.addColorStop(0, rgb(0.8));
+    gr.addColorStop(0.45, rgb(0.45));
     gr.addColorStop(1, rgb(0));
     g.fillStyle = gr;
     g.fillRect(px - pr, pz - pr, pr * 2, pr * 2);

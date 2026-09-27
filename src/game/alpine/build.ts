@@ -1182,7 +1182,14 @@ function terminal(k: Kit, a: AlpineData, t: AlpineData["terminals"][number]) {
     k.glow.col("#ffe2b0").box(lx, roofY - 0.2, cz, 1.2, 0.08, 0.3);
     k.lamps.push([lx, roofY - 0.5, cz, 0]);
   }
-  k.lights.push([cx, cz, 16, "#ffd8a8"], [cx - 6, cz, 9, "#ffd8a8"], [cx + 6, cz, 9, "#ffd8a8"]);
+  // warm fixture light over the whole platform and its approach (it's where you board)
+  for (let lx = t.x0 + 2; lx <= t.x1 - 2; lx += 4)
+    for (let lz = t.z0 + 2; lz <= t.z1 + 4; lz += 4) k.lights.push([lx, lz, 7, "#ffd49a"]);
+  // strip lights along both sides of the canopy
+  for (const lz of [t.z0 + 1.5, t.z1 - 1.5]) {
+    k.glow.col("#ffe8c0").box(cx, roofY - 0.18, lz, t.x1 - t.x0 - 3, 0.08, 0.25);
+    k.lamps.push([t.x0 + 3, roofY - 0.4, lz, 0], [t.x1 - 3, roofY - 0.4, lz, 0]);
+  }
 }
 
 /** the summit lodge: a big timber A-frame with a glass gable to the valley, a stone base,
@@ -1346,7 +1353,7 @@ function coveredBridge(k: Kit, a: AlpineData) {
   const z1 = br.z + br.w / 2;
   const len = br.x1 - br.x0;
   // the deck (a thick timber floor on beams), clear above the gully
-  g.mat(T.board, 0, 0).col("#8a6a4a");
+  g.mat(T.board, 0, 0).col("#c8a078");
   g.flat(br.x0, z0, br.x1, z1, y, [0, 0, len / 2, br.w / 2]);
   g.mat(T.board, 0, 0).col("#5a3e28");
   tbox(g, (br.x0 + br.x1) / 2, y - 0.6, br.z, len, 0.6, br.w + 0.2, 0, false, true);
@@ -1363,12 +1370,12 @@ function coveredBridge(k: Kit, a: AlpineData) {
     [z0, -1],
     [z1, 1],
   ] as const) {
-    g.mat(T.board, 0, 0).col("#9a4a2a");
+    g.mat(T.board, 0, 0).col("#c06a40");
     if (out < 0) face(g, br.x1, zA, br.x0, zA, y, y + 1.3);
     else face(g, br.x0, zA, br.x1, zA, y, y + 1.3);
     if (out < 0) face(g, br.x0, zA + 0.08, br.x1, zA + 0.08, y, y + 1.3);
     else face(g, br.x1, zA - 0.08, br.x0, zA - 0.08, y, y + 1.3);
-    g.mat(T.board, 0, 0).col("#7a3a20");
+    g.mat(T.board, 0, 0).col("#9a5030");
     tbox(g, (br.x0 + br.x1) / 2, y + 3.2, zA, len, 0.35, 0.3);
     for (let x = br.x0; x < br.x1 - 0.1; x += 2.2) {
       tube(g, [x, y + 1.3, zA], [x + 2.2, y + 3.2, zA], 0.09, 4);
@@ -1394,7 +1401,7 @@ function coveredBridge(k: Kit, a: AlpineData) {
   }
   // gable portals with a name board
   for (const x of [br.x0 - 0.2, br.x1 + 0.2]) {
-    g.mat(T.board, 0, 0).col("#9a4a2a");
+    g.mat(T.board, 0, 0).col("#c06a40");
     t3(
       g,
       [x, eave, z0 - 0.4],
@@ -1402,7 +1409,7 @@ function coveredBridge(k: Kit, a: AlpineData) {
       [x, ridge - 0.1, br.z],
       [x < br.x0 ? -1 : 1, 0, 0],
     );
-    g.mat(T.board, 0, 0).col("#7a3a20");
+    g.mat(T.board, 0, 0).col("#9a5030");
     tbox(g, x, eave - 0.4, br.z, 0.3, 0.5, br.w + 0.6);
   }
   k.signs.mat(0, 0, 0).col("#ffffff");
@@ -1417,10 +1424,10 @@ function coveredBridge(k: Kit, a: AlpineData) {
     signUV(W_PASS),
   );
   // lanterns hanging inside the covered span
-  for (let x = br.x0 + 3; x < br.x1 - 2; x += 5) {
+  for (let x = br.x0 + 2.5; x < br.x1 - 1.5; x += 4) {
     k.glow.col("#ffcf8a").box(x, y + 2.9, br.z, 0.3, 0.4, 0.3);
     k.lamps.push([x, y + 2.9, br.z, 0]);
-    k.lights.push([x, br.z, 5, "#ffc98a"]);
+    k.lights.push([x, br.z, 6.5, "#ffd49a"]);
   }
   // lanterns at both portals
   for (const x of [br.x0 - 0.5, br.x1 + 0.5])
