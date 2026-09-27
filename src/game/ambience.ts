@@ -1097,14 +1097,13 @@ function calliope(R: Runtime) {
     const bar = Math.floor(step / 3) % prog.length;
     const i = step % 3;
     const root = prog[bar]!;
-    const organ = (f: number, g: number, d: number) => {
-      blip(R, o, at, { type: "square", f0: f, dur: d, gain: g, attack: 0.02, vib: [6.5, 0.006], cut: 2600 });
-      blip(R, o, at, { type: "triangle", f0: f * 2, dur: d, gain: g * 0.5, attack: 0.02, cut: 4000 });
-    };
-    if (i === 0) organ(midi(root - 12), 0.03, 0.35);
-    else [4, 7].forEach((iv) => organ(midi(root + iv), 0.014, 0.2));
-    const n = tune[step % tune.length]!;
-    organ(midi(n), 0.02, beat * 0.9);
+    // accompaniment: one plain reed each; only the tune gets the wobble and the octave pipe
+    const reed = (f: number, g: number, d: number) => blip(R, o, at, { type: "square", f0: f, dur: d, gain: g, attack: 0.02, cut: 2600 });
+    if (i === 0) reed(midi(root - 12), 0.03, 0.35);
+    else [4, 7].forEach((iv) => reed(midi(root + iv), 0.014, 0.2));
+    const f = midi(tune[step % tune.length]!);
+    blip(R, o, at, { type: "square", f0: f, dur: beat * 0.9, gain: 0.02, attack: 0.02, vib: [6.5, 0.006], cut: 2600 });
+    blip(R, o, at, { type: "triangle", f0: f * 2, dur: beat * 0.9, gain: 0.01, attack: 0.02 });
     step++;
     return beat;
   };
@@ -1146,8 +1145,8 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
     windBed(R, "desert wind", 0.28, 1, (e) => 1 - e.hazard * 0.4);
     bed(R, { name: "wind whistle", src: "white", filters: [{ type: "bandpass", f: 1700, q: 9 }], gain: 0.02, level: always, sweep: { spread: 0.3, every: [2, 6] }, swell: [0, 1, 2, 7] });
     crickets(R, "desert crickets", 0.008, undefined, 1, 1, nightOnly);
-    tuneLayer(R, "saloon piano", "saloon", 0.9, 5, 70, (e) => 1 - e.hazard * 0.6, honkyTonk(R));
-    crowdBed(R, "saloon chatter", 0.1, "saloon", 5, 45, (e) => 1 - e.hazard * 0.6);
+    tuneLayer(R, "saloon piano", "saloon", 1.6, 5, 70, (e) => 1 - e.hazard * 0.6, honkyTonk(R));
+    crowdBed(R, "saloon chatter", 0.14, "saloon", 5, 45, (e) => 1 - e.hazard * 0.6);
     ev(R, "saloon laugh", [4, 11], "saloon", always, (o, t) => {
       for (let k = 0; k < Math.floor(rnd(3, 6)); k++) burst(R, o, t + k * 0.13, { buf: "pink", f: rnd(600, 900), q: 4, dur: 0.1, gain: 0.07, attack: 0.02 });
       if (Math.random() < 0.5) bell(R, o, t + rnd(0.5, 1.5), rnd(2400, 3200), 0.015, 0.5); // glasses
