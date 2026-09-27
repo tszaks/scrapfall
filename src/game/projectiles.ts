@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { groundY } from "./terrain";
+import { groundY, shotHits } from "./terrain";
 
 import { playGun } from "./audio";
 import { DecalPool, MeshPool, RingPool, SegPool, spec } from "./fxCore";
@@ -517,7 +517,7 @@ function rayHit(origin: THREE.Vector3, dir: THREE.Vector3, range: number) {
   const h = env.half();
   for (let s = 0.3; s < range; s += 0.35) {
     const x = origin.x + dir.x * s, y = origin.y + dir.y * s, z = origin.z + dir.z * s;
-    if (y < 0 || Math.abs(x) > h || Math.abs(z) > h || env.solid(x, z) || env.car(x, y, z)) { t = s; break; }
+    if (y < groundY(x, z) || Math.abs(x) > h || Math.abs(z) > h || (shotHits(x, y, z) ?? env.solid(x, z)) || env.car(x, y, z)) { t = s; break; }
   }
   // robots: closest approach on the ground plane
   const fl = Math.hypot(dir.x, dir.z) || 1;
@@ -866,7 +866,7 @@ function ghostStep(P: Proj, dt: number) {
   P.life -= dt;
   const p = P.pos;
   const h = env ? env.half() : 1e9;
-  const wall = !!env && (p.y < groundY(p.x, p.z) || Math.abs(p.x) > h || Math.abs(p.z) > h || env.solid(p.x, p.z) || env.car(p.x, p.y, p.z));
+  const wall = !!env && (p.y < groundY(p.x, p.z) || Math.abs(p.x) > h || Math.abs(p.z) > h || (shotHits(p.x, p.y, p.z) ?? env.solid(p.x, p.z)) || env.car(p.x, p.y, p.z));
   if (wall && P.bounce > 0 && env) {
     P.bounce--;
     if (env.solid(p.x, pz) || Math.abs(p.x) > h) P.vel.x *= -1;

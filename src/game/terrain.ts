@@ -17,6 +17,10 @@ export type Terrain = {
   h: Float32Array;
   /** optional walking-speed multiplier (deep snow off the paths) */
   speed?: (x: number, z: number) => number;
+  /** walkable decks above the ground (a bridge over a gully): these win over the heightfield */
+  platforms?: { x0: number; z0: number; x1: number; z1: number; y: number }[];
+  /** does a shot at (x, y, z) hit something solid standing there (below its top)? */
+  shot?: (x: number, y: number, z: number) => boolean;
 };
 
 /**
@@ -32,6 +36,8 @@ export type Ground = {
 };
 
 let G: Ground | null = null;
+/** the installed heightfield (alpine), for the bare-terrain and shot lookups */
+let HF: { height: (x: number, z: number) => number; shot?: Terrain["shot"] } | null = null;
 
 /** Live weather push (metres per second) applied to walking players; the alpine blizzard drives it. */
 export const wind = { x: 0, z: 0 };
@@ -64,11 +70,19 @@ function sampler(t: Terrain) {
 
 /** Install a map's ground (a heightfield or an analytic ground), or null for flat maps. */
 export function setTerrain(t: Terrain | Ground | null) {
-  G = !t
-    ? null
-    : "height" in t
-      ? t
-      : { height: sampler(t), ...(t.speed ? { speed: t.speed } : {}) };
+  HF = null;
+  if (t && !("height" in t)) {
+    const bare = sampler(t);
+    const decks = t.platforms ?? [];
+    HF = { height: bare, ...(t.shot ? { shot: t.shot } : {}) };
+    const height = decks.length
+      ? (x: number, z: number) => {
+          for (const p of decks) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.y;
+          return bare(x, z);
+        }
+      : bare;
+    G = { height, ...(t.speed ? { speed: t.speed } : {}) };
+  } else G = t;
   wind.x = 0;
   wind.z = 0;
   worldFx.hazard = false;
@@ -102,4 +116,18 @@ export function groundOwnsHits() {
 /** True when the map's ground asks for strict nav cells (see Ground.strictNav). */
 export function strictNav() {
   return !!G?.strictNav;
+}
+
+/** The bare heightfield (what the terrain mesh draws), ignoring decks; groundY elsewhere. */
+export function terrainY(x: number, z: number) {
+  return HF ? HF.height(x, z) : groundY(x, z);
+}
+
+/**
+ * Height-aware shot collision on heightfield maps: true when (x, y, z) is under the snow or
+ * inside something solid. Returns null elsewhere so callers fall back to their own tests.
+ */
+export function shotHits(x: number, y: number, z: number): boolean | null {
+  if (!HF || !HF.shot) return null;
+  return y < HF.height(x, z) || HF.shot(x, y, z);
 }

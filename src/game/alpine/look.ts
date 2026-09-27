@@ -65,9 +65,10 @@ export const ALPINE_LOOKS: Record<AlpineMode, AlpineLook> = {
     fogColor: "#141c36",
     fogSun: { color: "#2a3558", k: 0.3 },
     ambientColor: "#8fa4e0",
-    hemi: ["#6f88c8", "#1a2138", 0.8],
-    sun: { color: "#aebfff", intensity: 0.62, pos: [40, 60, -50] },
-    ambient: 0.18,
+    // strong cold moonlight for crisp highlights and real shadows; a dim sky fill
+    hemi: ["#93a8dc", "#2a3452", 0.9],
+    sun: { color: "#d4deff", intensity: 2.2, pos: [40, 60, -50] },
+    ambient: 0.07,
     camFar: 12000,
     sunDir: [0.42, 0.58, -0.7],
     skyTop: "#050a1c",

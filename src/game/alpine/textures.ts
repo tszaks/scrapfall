@@ -260,18 +260,21 @@ const PAINT: Record<number, (p: P) => void> = {
     speckle(d, r, 200, "#ffd0a0", 0.3);
   },
   [T.glasswall]: ({ d, m }) => {
-    rect(d, "#3a3e44", 0, 0, S, S);
+    // a shop / station window bay: two panes over two, heavy mullions and a transom
+    rect(d, "#3a2e26", 0, 0, S, S);
     rect(m, "#000", 0, 0, S, S);
-    const n = 4;
-    const w = S / n;
-    for (let i = 0; i < n; i++) {
-      const g = d.createLinearGradient(0, 0, 0, S);
-      g.addColorStop(0, "#8aa4c0");
-      g.addColorStop(1, "#2c3a4c");
-      d.fillStyle = g;
-      d.fillRect(i * w + 6, 8, w - 12, S - 16);
-      rect(m, "#fff", i * w + 6, 8, w - 12, S - 16);
-    }
+    for (let i = 0; i < 2; i++)
+      for (let j = 0; j < 2; j++) {
+        const x = 14 + i * (S / 2 - 8);
+        const y = j === 0 ? 14 : S * 0.34;
+        const h = j === 0 ? S * 0.34 - 26 : S - y - 14;
+        const g = d.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, "#7a92ae");
+        g.addColorStop(1, "#2a3646");
+        d.fillStyle = g;
+        d.fillRect(x, y, S / 2 - 22, h);
+        rect(m, "#fff", x, y, S / 2 - 22, h);
+      }
   },
   [T.clock]: ({ d }) => {
     rect(d, "#e8dcc0", 0, 0, S, S);
@@ -427,9 +430,9 @@ export function alpineArray() {
 }
 
 // ---- sign atlas: one word per row, carved-wood and enamel styles ----
-export const SIGN_ROWS = 17;
+export const SIGN_ROWS = 20;
 /** a plain white texel in the sign atlas (unlit glow geometry shares the sign material) */
-export const WHITE_UV = [0.5, 1 - 16.5 / 17] as const;
+export const WHITE_UV = [0.5, 1 - 19.5 / 20] as const;
 let signs: THREE.CanvasTexture | null = null;
 export function signTexture() {
   if (signs) return signs;
@@ -439,6 +442,17 @@ export function signTexture() {
   SIGN_WORDS.forEach((word, i) => {
     const y = i * RH;
     const warn = i >= 8 && i <= 10;
+    if (i === 16) {
+      // the lift sign: white on blue enamel
+      g.fillStyle = "#1c4aa0";
+      g.fillRect(0, y, W, RH);
+      g.fillStyle = "#ffffff";
+      g.font = "bold 46px Georgia, serif";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText("LIFT", W / 2, y + RH / 2 + 2);
+      return;
+    }
     g.fillStyle = warn ? (i === 9 ? "#f2c418" : "#d8261e") : i === 0 ? "#1c2a4a" : "#4a2a14";
     g.fillRect(0, y, W, RH);
     g.strokeStyle = warn ? "#1a1a1a" : "#d8b060";
@@ -451,7 +465,7 @@ export function signTexture() {
     g.fillText(word, W / 2, y + RH / 2 + 2);
   });
   g.fillStyle = "#ffffff";
-  g.fillRect(0, 16 * RH, W, RH);
+  g.fillRect(0, 19 * RH, W, RH);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
