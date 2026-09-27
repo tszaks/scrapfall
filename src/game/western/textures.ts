@@ -628,7 +628,7 @@ const PAINT: Record<number, (P: Painter) => void> = {
         for (let k = 0; k < 400; k++) picks.push(Math.floor(P.r() * jewels.length));
         for (const [c, lum] of [
           [P.n, 0.62],
-          [d, 0.3],
+          [d, 0.6],
         ] as const) {
           c.save();
           arch(c);
