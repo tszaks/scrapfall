@@ -391,6 +391,7 @@ const MAP_STYLE: Record<string, string> = {
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
+  "Pacific Pier": "surf",
   "Whiteout Pass": "alpine",
 };
 let style: Style = STYLES['desert']!;

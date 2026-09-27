@@ -4,6 +4,7 @@ import { CITY_SUNSET, arenaPalette, horizonHex } from "./sky";
 import { installSkyFog } from "./skyFog";
 import { layoutOf, type Theme } from "./themes";
 import { alpineLook } from "./alpine/look";
+import { beachLook } from "./beach/beachLook";
 
 /** The game has two looks: night (the default) and a golden-hour sunset. */
 export type TimeOfDay = "night" | "sunset";
@@ -99,8 +100,9 @@ const haze = (away: string, toward: string, k: number) => ({
 
 export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
   installSkyFog();
-  // the alpine map keeps its night / sunset looks in its own table
+  // the big maps keep their night / sunset looks in their own tables
   if (layoutOf(theme) === "alpine") return alpineLook(time);
+  if (layoutOf(theme) === "beach") return beachLook(time).look;
   const city = theme.blockShape === "city";
   if (city) {
     // real-scale downtown: a long view with aerial haze so the skyline reads

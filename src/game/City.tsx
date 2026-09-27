@@ -24,7 +24,8 @@ const _e = new THREE.Euler();
 
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
  * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
-function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
   const arr = facadeArrays();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -100,7 +101,8 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
 
 /** a tileable ripple normal map (value-noise height field, several octaves) */
 let rippleTex: THREE.DataTexture | null = null;
-function rippleNormals() {
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function rippleNormals() {
   if (rippleTex) return rippleTex;
   const N = 256;
   const h = new Float32Array(N * N);
@@ -498,17 +500,20 @@ export function CitySun({
   time,
   color,
   intensity,
+  dir: dirProp,
 }: {
   time: TimeOfDay;
   color: string;
   intensity: number;
+  /** direction toward the sun (default: the city's) */
+  dir?: [number, number, number];
 }) {
   const ref = useRef<THREE.DirectionalLight>(null);
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const dir = SUN_DIR[time];
+  const dir = dirProp ?? SUN_DIR[time];
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;

@@ -48,8 +48,19 @@ const KIND_COL: Record<number, [number, number, number]> = {
   [K_OPEN]: [206, 198, 182],
 };
 
+/** optional per-map minimap extras (the beach map sets these) */
+type MapExtras = {
+  /** colours per cell kind, over the city's defaults */
+  palette?: Record<number, [number, number, number]>;
+  /** everything west of this x is sea */
+  seaX?: number;
+  /** solo play: the playable square's half-size (the rest is dimmed) */
+  soloHalf?: number | null;
+};
+
 function paintBase(city: CityLayout, blocks: Block[]) {
   const n = city.cells;
+  const pal = (city as CityLayout & MapExtras).palette;
   const c = document.createElement("canvas");
   c.width = n;
   c.height = n;
@@ -65,7 +76,7 @@ function paintBase(city: CityLayout, blocks: Block[]) {
     for (let j = 0; j < n; j++) {
       const k = city.kind[i * n + j]!;
       const h = heights[i * n + j]!;
-      let col = KIND_COL[k] ?? [150, 144, 132];
+      let col = pal?.[k] ?? KIND_COL[k] ?? [150, 144, 132];
       if (h > 0 && k !== K_PARKLANE && k !== K_ROAD) {
         // buildings: darker the taller, in the HUD's ink colour
         const t = Math.min(1, Math.log2(1 + h / 6) / 5.5);
@@ -138,8 +149,22 @@ export function Minimap({
         g.fillStyle = "#4f8fb0";
         g.fillRect(-R * 3, wz(city.waterZ), R * 6, R * 6);
       }
+      const ex = city as CityLayout & MapExtras;
+      if (ex.seaX !== undefined) g.fillRect(wx(ex.seaX) - R * 6, -R * 3, R * 6, R * 6);
       g.imageSmoothingEnabled = false;
       g.drawImage(base, wx(-city.half), wz(-city.half), city.cells * 2 * s, city.cells * 2 * s);
+      if (ex.soloHalf && !alpine) {
+        // solo: dim everything past the blockades
+        const h = ex.soloHalf;
+        g.fillStyle = "rgba(20,16,12,0.5)";
+        g.beginPath();
+        g.rect(-R * 4, -R * 4, R * 8, R * 8);
+        g.rect(wx(-h), wz(h), h * 2 * s, -h * 2 * s);
+        g.fill("evenodd");
+        g.strokeStyle = "#e8322a";
+        g.lineWidth = 1.5 * dpr;
+        g.strokeRect(wx(-h), wz(-h), h * 2 * s, h * 2 * s);
+      }
       if (city.landmark) {
         g.fillStyle = "#2b2118";
         g.beginPath();
