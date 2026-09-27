@@ -52,6 +52,7 @@ export function MapEvents({
   hurtPlayer,
   movePlayer,
   hurtEnemy,
+  spawnEnemies,
   alive,
 }: {
   theme: Theme;
@@ -65,11 +66,12 @@ export function MapEvents({
   hurtPlayer: EventCtx["hurtPlayer"];
   movePlayer: EventCtx["movePlayer"];
   hurtEnemy: EventCtx["hurtEnemy"];
+  spawnEnemies: EventCtx["spawnEnemies"];
   alive: React.MutableRefObject<boolean>;
 }) {
   const { camera } = useThree();
-  const cb = useRef({ hurtPlayer, movePlayer, hurtEnemy, net, isHost, playing });
-  cb.current = { hurtPlayer, movePlayer, hurtEnemy, net, isHost, playing };
+  const cb = useRef({ hurtPlayer, movePlayer, hurtEnemy, spawnEnemies, net, isHost, playing });
+  cb.current = { hurtPlayer, movePlayer, hurtEnemy, spawnEnemies, net, isHost, playing };
   const ctx = useMemo<EventCtx>(
     () => ({
       t: 0,
@@ -82,6 +84,7 @@ export function MapEvents({
       hurtPlayer: (...a) => cb.current.hurtPlayer(...a),
       movePlayer: (...a) => cb.current.movePlayer(...a),
       hurtEnemy: (...a) => cb.current.hurtEnemy(...a),
+      spawnEnemies: (...a) => (cb.current.isHost ? cb.current.spawnEnemies(...a) : 0),
       enemies,
       banner: (title, sub = "", color = "#b3261e") => {
         mapEvent.banner = { title, sub, color, at: performance.now() };

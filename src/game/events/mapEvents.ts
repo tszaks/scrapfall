@@ -33,6 +33,9 @@ export type EventCtx = {
   movePlayer: (dx: number, dz: number) => void;
   /** host only: damage an enemy through the normal hit path */
   hurtEnemy: (i: number, dmg: number, kx: number, kz: number) => void;
+  /** host only: bring `n` extra enemies of a kind in around (x, z) (red X first, like a wave);
+   * returns how many were placed */
+  spawnEnemies: (kind: string, n: number, x: number, z: number) => number;
   enemies: EventEnemy[];
   /** show a banner (title, subtitle) */
   banner: (title: string, sub?: string, color?: string) => void;

@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { ARENA_SUN, worldLook, type Look, type TimeOfDay } from "./lighting";
 import { SUN_DIR } from "./sky";
 import { beachLook } from "./beach/beachLook";
+import { SKY_DIR as WESTERN_SKY_DIR } from "./western/textures";
 import { layoutOf, type Theme } from "./themes";
 
 export type TimeMode = "auto" | "night" | "sunset";
@@ -210,10 +211,13 @@ const col = (h: string) => new THREE.Color(h);
 
 /** direction toward the light for a look (the city and the arenas keep theirs elsewhere) */
 function lightDir(theme: Theme, look: Look, time: TimeOfDay) {
+  const layout = layoutOf(theme);
   const custom =
-    layoutOf(theme) === "beach"
+    layout === "beach"
       ? beachLook(time).lightDir
-      : (look as Look & { sunDir?: [number, number, number] }).sunDir;
+      : layout === "western"
+        ? WESTERN_SKY_DIR[time]
+        : (look as Look & { sunDir?: [number, number, number] }).sunDir;
   const d = custom ?? (theme.blockShape === "city" ? SUN_DIR[time] : layoutOf(theme) === "scatter" ? ARENA_SUN[time] : look.sun.pos);
   const v = new THREE.Vector3(d[0], d[1], d[2]);
   return v.lengthSq() > 1e-6 ? v.normalize() : new THREE.Vector3(0, 1, 0);
