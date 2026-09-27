@@ -3774,7 +3774,7 @@ export function Game() {
                 <button
                   key={i}
                   onClick={() => buyRef.current(i)}
-                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
+                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
                   
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
