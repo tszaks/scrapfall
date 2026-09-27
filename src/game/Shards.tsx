@@ -2,8 +2,10 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
+import { NEW_VALUE } from "./enemyKinds";
+
 type E = { kind: string; x: number; z: number; alive: boolean };
-const VALUE: Record<string, number> = { drifter: 1, runner: 1, shooter: 2, specter: 2, bomber: 3, brute: 3, vanguard: 4, special: 4, boss: 25 };
+const VALUE: Record<string, number> = { drifter: 1, runner: 1, shooter: 2, specter: 2, bomber: 3, brute: 3, vanguard: 4, special: 4, boss: 25, ...NEW_VALUE };
 const N = 90;
 
 /** Every client drops its own shards when an enemy dies, so each player earns currency. */
