@@ -3463,7 +3463,9 @@ function initialMapChoice(): number | null {
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
  * guests (who derive the map from the shared seed) land on the same one. */
 function newSeed(choice: number | null) {
-  const s = Math.floor(Math.random() * 1e9);
+  let s = Math.floor(Math.random() * 1e9);
+  // Random never lands on a work-in-progress map
+  while (choice === null && THEMES[s % THEMES.length]!.wip) s = Math.floor(Math.random() * 1e9);
   return choice === null ? s : s - (s % THEMES.length) + choice;
 }
 
@@ -4359,7 +4361,7 @@ export function Game() {
                   {isHost ? "MAP" : "MAP · THE HOST PICKS"}
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-1">
-                  {([null, ...THEMES.map((_, i) => i)] as (number | null)[]).map((i) => {
+                  {([null, ...THEMES.flatMap((t, i) => (t.wip && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
                     const on = isHost ? mapChoice === i : i === seed % THEMES.length;
                     return (
                       <button

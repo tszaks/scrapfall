@@ -18,6 +18,8 @@ export type Theme = {
     | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "alpine";
   /** big real-scale maps: which generator builds the world (default: scatter, or city for blockShape "city") */
   layout?: "scatter" | "city" | "alpine";
+  /** Work in progress: kept out of the map picker and the random roll; still reachable with ?map= */
+  wip?: boolean;
   boss: {
     name: string;
     shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "plough";
@@ -272,6 +274,7 @@ export const THEMES: Theme[] = [
   },
   {
     name: "Whiteout Pass",
+    wip: true,
     sky: "#9fb4d6",
     ground: "#eef3fa",
     grid: ["#dfe8f3", "#e8eef6"],
