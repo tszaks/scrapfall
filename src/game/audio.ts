@@ -216,7 +216,7 @@ function scheduleMenuStep(s: number, t: number, stepDur: number) {
   if (i === 0) {
     tone({ wave: "sine", f0: midi(root), f1: midi(root), dur: barLen, gain: 0.4, noise: 0, cut: 400 }, musicGain, t);
     const third = bar === 3 ? 16 : 15;
-    [12, 12 + third - 12 + 12, 19].forEach((iv) =>
+    [12, third, 19].forEach((iv) =>
       tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: barLen, gain: 0.06, noise: 0, cut: 1100, q: 2 }, musicGain, t));
   }
   // war-drum pulse
