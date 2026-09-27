@@ -75,7 +75,12 @@ export function chairAt(lift: Lift, i: number) {
 /** eye position of someone sitting on chair i (used for teammates too) */
 export function riderEye(lift: Lift, i: number) {
   const p = chairAt(lift, i);
-  return { x: p.x + Math.sin(p.yaw) * 0.12, y: p.y + SEAT_EYE, z: p.z + Math.cos(p.yaw) * 0.12, yaw: p.yaw };
+  return {
+    x: p.x + Math.sin(p.yaw) * 0.12,
+    y: p.y + SEAT_EYE,
+    z: p.z + Math.cos(p.yaw) * 0.12,
+    yaw: p.yaw,
+  };
 }
 
 /** this client's ride: chair index (-1 on foot) and direction (1 up, -1 down) */
@@ -93,7 +98,14 @@ export function resetRide() {
  * round the bullwheel. Dismounting at the far end puts you on that terminal's platform.
  */
 export function stepRide(
-  cam: { position: { x: number; y: number; z: number; set: (x: number, y: number, z: number) => unknown } },
+  cam: {
+    position: {
+      x: number;
+      y: number;
+      z: number;
+      set: (x: number, y: number, z: number) => unknown;
+    };
+  },
   a: AlpineData,
   delta: number,
   look: { yaw: number; pitch: number },
@@ -142,6 +154,10 @@ export function stepRide(
   const e = riderEye(lift, ride.chair);
   // a gentle sway on the hanger
   const sway = Math.sin(alpine.t * 1.3 + ride.chair) * 0.05;
-  cam.position.set(e.x + Math.cos(e.yaw) * sway, e.y + Math.abs(sway) * 0.2, e.z - Math.sin(e.yaw) * sway);
+  cam.position.set(
+    e.x + Math.cos(e.yaw) * sway,
+    e.y + Math.abs(sway) * 0.2,
+    e.z - Math.sin(e.yaw) * sway,
+  );
   return true;
 }

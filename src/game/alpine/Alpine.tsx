@@ -544,7 +544,13 @@ void main() {
 // falling snow (points) and blizzard streaks (lines), both wrapped around the camera
 
 /** soft round camera-facing points, drawn procedurally (no sprite texture, any browser) */
-function roundPoints(size: number, additive: boolean, vertexColors: boolean, color: string, opacity: number) {
+function roundPoints(
+  size: number,
+  additive: boolean,
+  vertexColors: boolean,
+  color: string,
+  opacity: number,
+) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -884,7 +890,10 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => {
     // test handle (?debug=1): the shared weather / lift clock
     if (new URLSearchParams(window.location.search).get("debug") === "1")
-      Object.assign(window as unknown as Record<string, unknown>, { __alpine: alpine, __ride: ride });
+      Object.assign(window as unknown as Record<string, unknown>, {
+        __alpine: alpine,
+        __ride: ride,
+      });
   }, []);
 
   const mats = useMemo(

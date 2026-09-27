@@ -717,7 +717,17 @@ function gableHouse(
     if (y - dg0 > 0.45) {
       g.mat(T.stone, 0, 0).col("#d8d4cc");
       const n = Math.min(4, Math.ceil((y - dg0) / 0.2));
-      for (let st = 0; st < n; st++) lbox(g, F, doorAt, -0.35 - (n - st) * 0.3, dg0 - 0.3, 1.5, 0.3 + ((st + 1) * (y - dg0)) / n, 0.32);
+      for (let st = 0; st < n; st++)
+        lbox(
+          g,
+          F,
+          doorAt,
+          -0.35 - (n - st) * 0.3,
+          dg0 - 0.3,
+          1.5,
+          0.3 + ((st + 1) * (y - dg0)) / n,
+          0.32,
+        );
     }
     // warm light over the door
     const lp = L3(F, doorAt + 0.9, y + 2.1, -0.15);
@@ -762,7 +772,6 @@ function gableHouse(
     dg.mat(T.board, 0, 0).col("#5a3a1e");
     for (const x of [0.8, W / 2, W - 0.8]) lbox(dg, F, x, -dp / 2, by - 0.9, 0.18, 0.7, dp - 0.2);
   }
-
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1127,7 +1136,8 @@ function terminal(k: Kit, a: AlpineData, t: AlpineData["terminals"][number]) {
   g.flat(bx - 1.2, bz - 0.12, bx + 1.2, bz + 0.12, y + 0.08);
   // posts, roof, fascia and a thick snow load
   g.mat(T.metal, 0, 0).col("#d8dade");
-  for (const px of [t.x0 + 1, t.x1 - 1]) for (const pz of [t.z0 + 1, t.z1 - 1]) tube(g, [px, y - 0.5, pz], [px, roofY, pz], 0.3, 8);
+  for (const px of [t.x0 + 1, t.x1 - 1])
+    for (const pz of [t.z0 + 1, t.z1 - 1]) tube(g, [px, y - 0.5, pz], [px, roofY, pz], 0.3, 8);
   g.mat(T.metal, 0, 0).col("#c8262a");
   tbox(g, cx, roofY, cz, t.x1 - t.x0 + 2, 0.6, t.z1 - t.z0 + 2);
   g.mat(T.metal, 0, 0).col("#5a5e66");
@@ -1155,7 +1165,16 @@ function terminal(k: Kit, a: AlpineData, t: AlpineData["terminals"][number]) {
   // the LIFT sign hangs from the roof edge towards the approach
   const fz = t.kind === "base" ? t.z1 + 1 : t.z1 + 1;
   k.signs.mat(0, 0, 0).col("#ffffff");
-  face(k.signs, cx - 3, fz + 0.02, cx + 3, fz + 0.02, roofY - 1.1, roofY - 0.1, signUV(t.kind === "base" ? W_LIFT : W_BERGBAHN));
+  face(
+    k.signs,
+    cx - 3,
+    fz + 0.02,
+    cx + 3,
+    fz + 0.02,
+    roofY - 1.1,
+    roofY - 0.1,
+    signUV(t.kind === "base" ? W_LIFT : W_BERGBAHN),
+  );
   g.mat(T.plain, 0, 0).col("#2a2c30");
   face(g, cx + 3, fz - 0.02, cx - 3, fz - 0.02, roofY - 1.1, roofY - 0.1, [0, 0, 1, 1]);
   // warm lights under the canopy
@@ -1163,7 +1182,7 @@ function terminal(k: Kit, a: AlpineData, t: AlpineData["terminals"][number]) {
     k.glow.col("#ffe2b0").box(lx, roofY - 0.2, cz, 1.2, 0.08, 0.3);
     k.lamps.push([lx, roofY - 0.5, cz, 0]);
   }
-  k.lights.push([cx, cz, 13, "#ffc890"]);
+  k.lights.push([cx, cz, 16, "#ffd8a8"], [cx - 6, cz, 9, "#ffd8a8"], [cx + 6, cz, 9, "#ffd8a8"]);
 }
 
 /** the summit lodge: a big timber A-frame with a glass gable to the valley, a stone base,
@@ -1188,14 +1207,28 @@ function summitLodge(k: Kit, b: ABld, a: AlpineData) {
     lface(g, F, ax, az, bx, bz, b.ymin, eave);
   // the front gable: a wall of glass in a heavy timber frame; the back gable in logs
   g.mat(T.glasswall, r(), 0).col("#ffffff");
-  t3(g, L3(F, 0.6, eave, -0.05), L3(F, W - 0.6, eave, -0.05), L3(F, W / 2, ridge - 1.4, -0.05), F.out(0, -1));
+  t3(
+    g,
+    L3(F, 0.6, eave, -0.05),
+    L3(F, W - 0.6, eave, -0.05),
+    L3(F, W / 2, ridge - 1.4, -0.05),
+    F.out(0, -1),
+  );
   // the triangle is drawn as quads so the panes tile: horizontal bands
   for (let bnd = 0; bnd < 4; bnd++) {
     const y0 = eave + ((ridge - 1.4 - eave) * bnd) / 4;
     const y1 = eave + ((ridge - 1.4 - eave) * (bnd + 1)) / 4;
     const w0 = (W / 2 - 0.6) * (1 - bnd / 4);
     const w1 = (W / 2 - 0.6) * (1 - (bnd + 1) / 4);
-    q4(g, L3(F, W / 2 - w0, y0, -0.07), L3(F, W / 2 + w0, y0, -0.07), L3(F, W / 2 + w1, y1, -0.07), L3(F, W / 2 - w1, y1, -0.07), F.out(0, -1), [0, 0, Math.max(1, Math.round(w0 / 1.2)), 1]);
+    q4(
+      g,
+      L3(F, W / 2 - w0, y0, -0.07),
+      L3(F, W / 2 + w0, y0, -0.07),
+      L3(F, W / 2 + w1, y1, -0.07),
+      L3(F, W / 2 - w1, y1, -0.07),
+      F.out(0, -1),
+      [0, 0, Math.max(1, Math.round(w0 / 1.2)), 1],
+    );
   }
   g.mat(T.board, 0, 0).col("#5a3a22");
   for (let bnd = 1; bnd < 4; bnd++) {
@@ -1242,7 +1275,12 @@ function summitLodge(k: Kit, b: ABld, a: AlpineData) {
   const dk = a.lodgeDeck;
   const dy = dk.y + 0.06;
   g.mat(T.board, 0, 0).col("#f0d8b0");
-  g.flat(dk.x0 - 1.8, dk.z0, dk.x1, dk.z1 + 1.9, dy, [0, 0, (dk.x1 - dk.x0) / 2, (dk.z1 - dk.z0) / 2]);
+  g.flat(dk.x0 - 1.8, dk.z0, dk.x1, dk.z1 + 1.9, dy, [
+    0,
+    0,
+    (dk.x1 - dk.x0) / 2,
+    (dk.z1 - dk.z0) / 2,
+  ]);
   g.mat(T.rail, 0, 0).col("#ffffff");
   const rail = (ax: number, az: number, bx: number, bz: number) => {
     const len = Math.hypot(bx - ax, bz - az);
@@ -1312,7 +1350,8 @@ function coveredBridge(k: Kit, a: AlpineData) {
   g.flat(br.x0, z0, br.x1, z1, y, [0, 0, len / 2, br.w / 2]);
   g.mat(T.board, 0, 0).col("#5a3e28");
   tbox(g, (br.x0 + br.x1) / 2, y - 0.6, br.z, len, 0.6, br.w + 0.2, 0, false, true);
-  for (const zz of [z0 + 0.4, br.z, z1 - 0.4]) tbox(g, (br.x0 + br.x1) / 2, y - 1.1, zz, len + 1, 0.5, 0.4, 0, true, true);
+  for (const zz of [z0 + 0.4, br.z, z1 - 0.4])
+    tbox(g, (br.x0 + br.x1) / 2, y - 1.1, zz, len + 1, 0.5, 0.4, 0, true, true);
   // stone abutments, down to the gully floor at each bank
   g.mat(T.stone, 0, 0).col("#ffffff");
   for (const x of [br.x0 + 0.5, br.x1 - 0.5]) {
@@ -2215,10 +2254,32 @@ export function buildInto(
         church(k, b);
         break;
       case "station":
-        gableHouse(k, b, { floors: 1, style: 1, pitch: 0.55, balconies: [], cafe: false, shop: true, barn: false, sign: b.sign, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: 1,
+          style: 1,
+          pitch: 0.55,
+          balconies: [],
+          cafe: false,
+          shop: true,
+          barn: false,
+          sign: b.sign,
+          chimneys: 1,
+          door: true,
+        });
         break;
       case "topstation":
-        gableHouse(k, b, { floors: 1, style: 0, pitch: 0.6, balconies: [], cafe: false, shop: false, barn: false, sign: b.sign, chimneys: 0, door: false });
+        gableHouse(k, b, {
+          floors: 1,
+          style: 0,
+          pitch: 0.6,
+          balconies: [],
+          cafe: false,
+          shop: false,
+          barn: false,
+          sign: b.sign,
+          chimneys: 0,
+          door: false,
+        });
         break;
       case "summit":
         summitLodge(k, b, a);

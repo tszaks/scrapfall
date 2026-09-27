@@ -166,7 +166,12 @@ export type AlpineData = {
   /** the summit lodge's big deck */
   lodgeDeck: { x0: number; z0: number; x1: number; z1: number; y: number };
   /** where riders board and step off: [x, z, yaw] */
-  ride: { boardUp: P2; boardDown: P2; offTop: [number, number, number]; offBase: [number, number, number] };
+  ride: {
+    boardUp: P2;
+    boardDown: P2;
+    offTop: [number, number, number];
+    offBase: [number, number, number];
+  };
   /** top of whatever solid thing stands in each 2 m cell (shots fly over walk-only cells) */
   tops: Float32Array;
 };
@@ -688,7 +693,8 @@ export function generateAlpine(seed: number, solo: boolean) {
       floor.push(Math.max(lo, lakeY0 - 0.05));
     }
     // level reaches: quantise into steps (small frozen falls between them)
-    for (let k = 0; k <= n; k++) floor[k] = Math.max(lakeY0 - 0.05, Math.floor(floor[k]! / 1.5) * 1.5);
+    for (let k = 0; k <= n; k++)
+      floor[k] = Math.max(lakeY0 - 0.05, Math.floor(floor[k]! / 1.5) * 1.5);
     for (let k = 1; k <= n; k++) floor[k] = Math.min(floor[k]!, floor[k - 1]!);
     creekFloor = (sv: number) => floor[clamp(Math.round((sv / len) * n), 0, n)]!;
     const b = bbox(creek.pts, creek.w / 2 + 10);
@@ -841,7 +847,8 @@ export function generateAlpine(seed: number, solo: boolean) {
         const gz = Math.max(z0 - o.z1, o.z0 - z1);
         const oz = Math.min(z1, o.z1) - Math.max(z0, o.z0);
         const ox = Math.min(x1, o.x1) - Math.max(x0, o.x0);
-        if ((gx < 5 && gz < 0 && oz > 0) || (gz < 5 && gx < 0 && ox > 0) || (gx < 0 && gz < 0)) return null;
+        if ((gx < 5 && gz < 0 && oz > 0) || (gz < 5 && gx < 0 && ox > 0) || (gx < 0 && gz < 0))
+          return null;
       }
     const f0 = footprintY(x0, z0, x1, z1);
     // level a pad under and around the house (flat, walkable ground at the door), easing
@@ -1038,12 +1045,15 @@ export function generateAlpine(seed: number, solo: boolean) {
   // nothing ever fills its gully ----
   for (const b of buildings) {
     shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) =>
-      x > b.x0 - 0.01 && x < b.x1 + 0.01 && z > b.z0 - 0.01 && z < b.z1 + 0.01 ? Math.min(h, b.y - 0.08) : h,
+      x > b.x0 - 0.01 && x < b.x1 + 0.01 && z > b.z0 - 0.01 && z < b.z1 + 0.01
+        ? Math.min(h, b.y - 0.08)
+        : h,
     );
     let lo = Infinity;
     for (let x = b.x0 - 1; x <= b.x1 + 1.01; x += 1)
       for (const z of [b.z0 - 1, b.z1 + 1]) lo = Math.min(lo, hAt(x, z));
-    for (let z = b.z0 - 1; z <= b.z1 + 1.01; z += 1) for (const x of [b.x0 - 1, b.x1 + 1]) lo = Math.min(lo, hAt(x, z));
+    for (let z = b.z0 - 1; z <= b.z1 + 1.01; z += 1)
+      for (const x of [b.x0 - 1, b.x1 + 1]) lo = Math.min(lo, hAt(x, z));
     b.ymin = Math.min(lo, b.y) - 0.4;
   }
   for (const [t, ty] of [
@@ -1087,14 +1097,18 @@ export function generateAlpine(seed: number, solo: boolean) {
   block(JUMP.x - 3, JUMP.z0 - 2, JUMP.x + 3, JUMP.z1, S_BLD, jumpTopG + 25);
   // deck railing (front and east edges)
   for (let x = DECK.x0; x < DECK.x1; x += 2) block(x, DECK.z1, x + 2, DECK.z1 + 2, -1, deckY + 1.3);
-  for (let z = DECK.z0; z < DECK.z1 + 2; z += 2) block(DECK.x1, z, DECK.x1 + 2, z + 2, -1, deckY + 1.3);
+  for (let z = DECK.z0; z < DECK.z1 + 2; z += 2)
+    block(DECK.x1, z, DECK.x1 + 2, z + 2, -1, deckY + 1.3);
   // summit lodge deck: railing along its downhill (south) and west edges
-  for (let x = LODGE_DECK.x0; x < LODGE_DECK.x1; x += 2) block(x, LODGE_DECK.z1, x + 2, LODGE_DECK.z1 + 2, -1, plateauY + 1.3);
-  for (let z = LODGE_DECK.z0; z < LODGE_DECK.z1 + 2; z += 2) block(LODGE_DECK.x0 - 2, z, LODGE_DECK.x0, z + 2, -1, plateauY + 1.3);
+  for (let x = LODGE_DECK.x0; x < LODGE_DECK.x1; x += 2)
+    block(x, LODGE_DECK.z1, x + 2, LODGE_DECK.z1 + 2, -1, plateauY + 1.3);
+  for (let z = LODGE_DECK.z0; z < LODGE_DECK.z1 + 2; z += 2)
+    block(LODGE_DECK.x0 - 2, z, LODGE_DECK.x0, z + 2, -1, plateauY + 1.3);
   // terminal canopy posts
   for (const t of [BASE_TERM, TOP_TERM]) {
     const gy = hAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
-    for (const px of [t.x0, t.x1 - 2]) for (const pz of [t.z0, t.z1 - 2]) block(px, pz, px + 2, pz + 2, -1, gy + 6);
+    for (const px of [t.x0, t.x1 - 2])
+      for (const pz of [t.z0, t.z1 - 2]) block(px, pz, px + 2, pz + 2, -1, gy + 6);
   }
 
   // chairlift supports: the two stations (seat ~0.6 m above each loading platform) and a
@@ -1181,7 +1195,13 @@ export function generateAlpine(seed: number, solo: boolean) {
   for (let k = 0; k < 4; k++) {
     prop("table", 20 + (k % 2) * 4, 60 + Math.floor(k / 2) * 4, rand() * 3, 1);
     prop("heater", 22 + (k % 2) * 4, 62 + Math.floor(k / 2) * 4, 0, 1);
-    block(19 + (k % 2) * 4, 59 + Math.floor(k / 2) * 4, 23 + (k % 2) * 4, 63 + Math.floor(k / 2) * 4, -1);
+    block(
+      19 + (k % 2) * 4,
+      59 + Math.floor(k / 2) * 4,
+      23 + (k % 2) * 4,
+      63 + Math.floor(k / 2) * 4,
+      -1,
+    );
   }
   prop("snowman", 30, 76, 2.4, 1);
   block(29, 75, 31, 77, -1);
@@ -1257,7 +1277,11 @@ export function generateAlpine(seed: number, solo: boolean) {
     const oz = back === 2 ? 1 : back === 0 ? -1 : 0;
     let room = true;
     for (let d = 1; d <= 6 && room; d += 1)
-      if (solid[S(ci(x + ox * d * 1.0), ci(z + oz * d * 1.0))] || surf[S(ci(x + ox * d), ci(z + oz * d))] === S_PATH) room = false;
+      if (
+        solid[S(ci(x + ox * d * 1.0), ci(z + oz * d * 1.0))] ||
+        surf[S(ci(x + ox * d), ci(z + oz * d))] === S_PATH
+      )
+        room = false;
     if (!room) continue;
     const kinds: PropKind[] = ["woodpile", "woodpile", "sled", "barrel", "woodpile"];
     prop(kinds[Math.floor(r() * kinds.length)]!, x, z, back * (Math.PI / 2), 1);
@@ -1312,7 +1336,10 @@ export function generateAlpine(seed: number, solo: boolean) {
         for (let j = ci(z - br); j <= ci(z + br); j++)
           if (Math.hypot(cc(i) - x, cc(j) - z) < br && !clear[S(i, j)]) {
             solid[S(i, j)] = 1;
-            tops[S(i, j)] = Math.max(tops[S(i, j)]!, y + h * (Math.hypot(cc(i) - x, cc(j) - z) < 1.2 ? 1 : 0.5));
+            tops[S(i, j)] = Math.max(
+              tops[S(i, j)]!,
+              y + h * (Math.hypot(cc(i) - x, cc(j) - z) < 1.2 ? 1 : 0.5),
+            );
           }
       solid[k] = 1;
       tops[k] = Math.max(tops[k]!, y + h);
@@ -1357,7 +1384,10 @@ export function generateAlpine(seed: number, solo: boolean) {
       // gradient across the cell; tan(32 deg) = 0.62
       const grad = Math.hypot((b - a + d - c) / 2, (c - a + d - b) / 2) / CELL;
       const k = S(i, j);
-      const onBridge = cc(i) > BRIDGE.x0 - 1 && cc(i) < BRIDGE.x1 + 1 && Math.abs(cc(j) - BRIDGE.z) < BRIDGE.w / 2 + 1;
+      const onBridge =
+        cc(i) > BRIDGE.x0 - 1 &&
+        cc(i) < BRIDGE.x1 + 1 &&
+        Math.abs(cc(j) - BRIDGE.z) < BRIDGE.w / 2 + 1;
       if (grad > 0.62 && surf[k] !== S_DECK && !onBridge) {
         solid[k] = 1;
         if (surf[k] !== S_BLD) surf[k] = S_ROCK;
@@ -1375,8 +1405,15 @@ export function generateAlpine(seed: number, solo: boolean) {
       const onIsland = x > SUMMIT.x0 && x < SUMMIT.x1 && z > SUMMIT.z0 && z < SUMMIT.z1;
       if (north > 30 && !onIsland) solid[k] = 1;
       // the creek gully floor is off limits except under the bridge deck
-      const onBridge = x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1;
-      if (surf[k] === S_ICE && !onBridge && lakeE(x, z) > 1.02 && !(x > RINK.x0 - 1 && x < RINK.x1 + 1 && z > RINK.z0 - 1 && z < RINK.z1 + 1)) solid[k] = 1;
+      const onBridge =
+        x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1;
+      if (
+        surf[k] === S_ICE &&
+        !onBridge &&
+        lakeE(x, z) > 1.02 &&
+        !(x > RINK.x0 - 1 && x < RINK.x1 + 1 && z > RINK.z0 - 1 && z < RINK.z1 + 1)
+      )
+        solid[k] = 1;
     }
   // the island's own edge: a solid ring (railings, fences) so nobody steps off
   for (let x = SUMMIT.x0 - 2; x <= SUMMIT.x1; x += 2) {
@@ -1548,7 +1585,13 @@ export function generateAlpine(seed: number, solo: boolean) {
     n: N,
     h: H,
     platforms: [
-      { x0: BRIDGE.x0 - 1, z0: BRIDGE.z - BRIDGE.w / 2 - 0.5, x1: BRIDGE.x1 + 1, z1: BRIDGE.z + BRIDGE.w / 2 + 0.5, y: bridgeY + 0.1 },
+      {
+        x0: BRIDGE.x0 - 1,
+        z0: BRIDGE.z - BRIDGE.w / 2 - 0.5,
+        x1: BRIDGE.x1 + 1,
+        z1: BRIDGE.z + BRIDGE.w / 2 + 0.5,
+        y: bridgeY + 0.1,
+      },
     ],
     shot: (x: number, y: number, z: number) => {
       const i = Math.floor((x + HALF) / CELL);
