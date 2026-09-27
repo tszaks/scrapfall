@@ -2960,8 +2960,6 @@ export function Game() {
   statsRef.current = derive(perks, clsMods);
 
   const maxHp = statsRef.current.maxHp;
-  /** health a fresh run starts on for this class */
-  const startHp = derive(NO_PERKS, clsMods).maxHp;
 
 
   // ---------- co-op room ----------
