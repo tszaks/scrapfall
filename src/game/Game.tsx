@@ -15,7 +15,7 @@ import { MobileControls } from "./MobileControls";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
@@ -3529,16 +3529,17 @@ export function Game() {
   }, [regenRate, started, locked, ended, dead, maxHp]);
 
 
-  // soundtrack
+  // soundtrack: plays on the menu too (muffled, drumless) and opens up in combat
   useEffect(() => { hookAudioUnlock(); }, []);
+  const inCombat = started && locked && !ended;
   useEffect(() => {
-    if (started && locked && !ended) startMusic();
-    else stopMusic();
-  }, [started, locked, ended]);
-  // if the browser blocked sound until now, the next click/keypress restarts it
+    setMusicMenu(!inCombat);
+    startMusic();
+  }, [inCombat]);
+  // if the browser blocked sound until now, the next click/keypress starts it
   useEffect(() => {
-    if (!(started && locked && !ended)) return;
     const retry = () => { initAudio(); startMusic(); };
+    retry();
     window.addEventListener("pointerdown", retry);
     window.addEventListener("keydown", retry);
     document.addEventListener("visibilitychange", retry);
@@ -3547,7 +3548,7 @@ export function Game() {
       window.removeEventListener("keydown", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [started, locked, ended]);
+  }, []);
 
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);

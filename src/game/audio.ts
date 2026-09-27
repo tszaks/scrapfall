@@ -1,9 +1,12 @@
 // Procedural Web Audio: per-gun shot sounds, little UI blips and a synthwave loop.
 let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
+let musicFilter: BiquadFilterNode | null = null;
 let sfxGain: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 let vol = { music: 0.5, sfx: 0.7 };
+/** menu/lounge mode: muffled, drumless version of the arena track */
+let menuMode = false;
 
 export function initAudio() {
   if (typeof window === "undefined") return;
@@ -15,8 +18,11 @@ export function initAudio() {
     master.gain.value = 0.8;
     master.connect(ctx.destination);
     musicGain = ctx.createGain();
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = "lowpass";
+    musicFilter.frequency.value = menuMode ? 620 : 18000;
     sfxGain = ctx.createGain();
-    musicGain.connect(master);
+    musicGain.connect(musicFilter).connect(master);
     sfxGain.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -49,8 +55,19 @@ export function hookAudioUnlock() {
 
 
 function applyVol() {
-  if (musicGain) musicGain.gain.value = vol.music * 0.35;
+  if (musicGain) musicGain.gain.value = vol.music * (menuMode ? 0.26 : 0.35);
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
+}
+/** Menu screens hear the arena track through "blast doors": muffled, no drums. */
+export function setMusicMenu(on: boolean) {
+  if (menuMode === on) return;
+  menuMode = on;
+  applyVol();
+  if (musicFilter && ctx) {
+    musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
+    musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, ctx.currentTime);
+    musicFilter.frequency.exponentialRampToValueAtTime(on ? 620 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
+  }
 }
 export function setVolumes(music: number, sfx: number) {
   vol = { music, sfx };
@@ -192,21 +209,26 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   const i = s % 16;
   const t = t0 + (i % 2 === 1 ? (S.swing ?? 0) * stepDur : 0);
   const root = S.roots[bar]!;
-  if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
-  if (S.snare.includes(i)) {
-    if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
-    else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+  if (!menuMode) {
+    if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
+    if (S.snare.includes(i)) {
+      if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
+      else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+    }
+    const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2) || intense;
+    if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
+  } else if (i === 0 || i === 8) {
+    // soft heartbeat pulse keeps the menu loop grounded without a drum kit
+    tone({ wave: "sine", f0: 110, f1: 45, dur: 0.5, gain: 0.5, noise: 0, cut: 420 }, musicGain, t);
   }
-  const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2) || intense;
-  if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
     const bassNote = bRate === 1 ? (i % 2 ? root + 12 : root) : i % 4 === 2 ? root + 12 : root;
     const bDur = S.bassRate ? Math.min(2.5, stepDur * bRate * 0.9) : 0.14;
     tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: bDur, gain: 0.35, noise: 0, cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700, q: bRate === 1 ? 10 : 6 }, musicGain, t);
   }
-  if (S.pad && i === 0) {
-    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t));
+  if ((S.pad || menuMode) && i === 0) {
+    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: stepDur * 16, gain: menuMode ? 0.13 : 0.08, noise: 0, cut: 3000 }, musicGain, t));
   }
   const rate = S.arpRate ?? 2;
   if (intense || i % rate === 0) {
@@ -227,7 +249,8 @@ export function startMusic() {
   timer = window.setInterval(() => {
     if (!ctx) return;
     if (ctx.state === "suspended") { void ctx.resume(); return; }
-    const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+    const bpm = (style.bpm + (intense ? 20 : 0)) * (menuMode ? 0.82 : 1);
+    const stepDur = 60 / bpm / 4;
     // after a tab switch or a late unlock the clock jumps; never replay the backlog
     if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
     while (nextT < ctx.currentTime + 0.12) {
