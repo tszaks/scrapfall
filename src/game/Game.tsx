@@ -1709,7 +1709,7 @@ function World({
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
       const fx: Fx = {
         bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
-        pierce: g.pierce ?? 0,
+        pierce: (g.pierce ?? 0) + s2.pierce,
         slow: g.slow ?? 0,
         cluster: g.cluster ?? 0,
         chain: g.chain ?? 0,
