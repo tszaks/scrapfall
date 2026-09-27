@@ -3870,7 +3870,7 @@ export function Game() {
                   onClick={() => { initAudio(); setPicking(true); }}
                   className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
                 >
-                  CHOOSE ABILITY
+                  CHOOSE LOADOUT
                 </button>
               </div>
             ) : (
