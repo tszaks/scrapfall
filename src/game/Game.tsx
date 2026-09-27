@@ -24,6 +24,7 @@ import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
 import { resetRide, ride, riderEye, stepRide } from "./alpine/ride";
 import { Stars } from "@react-three/drei";
@@ -1762,6 +1763,7 @@ function World({
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
     if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
+    if (typeof m.rn === "number") decodeWeather(m.rn);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -3464,12 +3466,14 @@ function World({
           });
           const tr = traffic.current.encode?.();
           const al = encodeAlpine();
+          const rn = encodeWeather();
           const od = packOrds(ords.current);
           n.broadcast({
             type: "snap", e, b, mk,
             ...(od.length ? { od } : {}),
             ...(tr ? { tr } : {}),
             ...(al ? { al } : {}),
+            ...(rn !== null ? { rn } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -3555,7 +3559,7 @@ function World({
         <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
       ) : city ? (
         <>
-          <CityScene city={city} time={time} />
+          <CityScene city={city} time={time} isHost={isHost} />
           <CityTraffic city={city} seed={seed} time={time} link={traffic} />
         </>
       ) : (
