@@ -2,7 +2,9 @@
 // and the beach pier WAVE SURGE. The event framework (mapEvents.ts) does the scheduling,
 // the banner, the siren, the co-op sync and the timing; the map fills in what happens.
 //
-// TODO(map-western): Dry Gulch calls, once its scene mounts,
+// TODO(map-western): Dry Gulch's train (western/trainSim.ts) is the natural host: the same
+//   pattern as callBossTrain (a special run that rolls in and stops at the platform) with
+//   bandits on the roof and an armoured car to defend. Dry Gulch calls, once its scene mounts,
 //   provideEventHooks("train-robbery", {
 //     start(ctx) { ... },  // e.g. the train rolls in on the trestle with bandits aboard
 //     step(ctx)  { ... },  // move the train from ctx.t; ctx.host spawns / moves enemies,

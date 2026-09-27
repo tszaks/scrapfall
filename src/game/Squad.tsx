@@ -22,7 +22,7 @@ import {
   type Player,
 } from "./revive";
 
-import { hostWants, hudView, resetSquad } from "./squadState";
+import { hostWants, hudToast, hudView, resetSquad } from "./squadState";
 
 /**
  * Inside the canvas: reads the ping and revive keys, runs the host's revive table and
@@ -218,6 +218,7 @@ export function HudOverlay({
   const promptEl = useRef<HTMLDivElement>(null);
   const selfEl = useRef<HTMLDivElement>(null);
   const bannerEl = useRef<HTMLDivElement>(null);
+  const toastEl = useRef<HTMLDivElement>(null);
   const ringEl = useRef<SVGCircleElement>(null);
   const selfRingEl = useRef<SVGCircleElement>(null);
   const state = useRef({ active, coop, numOf });
@@ -331,6 +332,17 @@ export function HudOverlay({
           if (selfRingEl.current) selfRingEl.current.style.strokeDashoffset = String(113 * (1 - mine.prog));
         }
       }
+      // ---- toast ----
+      const te = toastEl.current;
+      if (te) {
+        const age = (now - hudToast.at) / 1000;
+        const show = age < 2.8;
+        te.style.display = show ? "block" : "none";
+        if (show) {
+          te.style.opacity = String(Math.min(1, (2.8 - age) / 0.5));
+          if (te.textContent !== hudToast.text) te.textContent = hudToast.text;
+        }
+      }
       // ---- map event banner ----
       const be = bannerEl.current;
       const bn = mapEvent.banner;
@@ -396,6 +408,7 @@ export function HudOverlay({
         </div>
         <div data-s className="mt-2 text-[11px] tracking-[0.2em] opacity-80" />
       </div>
+      <div ref={toastEl} className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]" style={{ display: "none" }} />
       <div ref={bannerEl} className="absolute left-1/2 top-[14%] -translate-x-1/2 rounded-lg px-7 py-2.5 text-center text-[#f7eeda] shadow-lg" style={{ display: "none" }}>
         <div data-t className="text-xl font-bold tracking-[0.35em]" />
         <div data-s className="mt-0.5 text-[11px] tracking-[0.25em] opacity-85" />

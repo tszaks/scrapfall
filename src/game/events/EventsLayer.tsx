@@ -104,7 +104,7 @@ export function MapEvents({
   useEffect(() => {
     // test handle (?debug=1)
     if (new URLSearchParams(window.location.search).get("debug") === "1")
-      (window as unknown as { __events?: unknown }).__events = { avState, power, mapEvent, avalanchePlan };
+      (window as unknown as { __events?: unknown }).__events = { avState, power, mapEvent, avalanchePlan, runAt };
   }, []);
   const announce = useRef(0);
   const ambPower = useRef(1);

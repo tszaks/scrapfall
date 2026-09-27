@@ -72,7 +72,7 @@ export function runLocal(p: AvPlan, x: number, z: number) {
   return { s: bs, lat, d: best };
 }
 
-const RUNOUT = 30; // metres the snow runs on past the foot of the piste
+const RUNOUT = 44; // metres the snow runs on past the foot of the piste
 function solidAt(layout: AlpineLayout, x: number, z: number) {
   const n = layout.cells;
   const i = Math.floor((x + layout.half) / 2);

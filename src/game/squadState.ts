@@ -6,6 +6,12 @@ import type { NetMsg } from "./net";
 import { pingFromMsg, pings } from "./ping";
 import { applySquadMsg, myRevive, squad } from "./revive";
 
+/** a short HUD notice (e.g. "NIGHT LOCKED FOR THIS MATCH") */
+export const hudToast = { text: "", at: -1e9 };
+export function showToast(text: string) {
+  hudToast.text = text;
+  hudToast.at = performance.now();
+}
 /** the camera the HUD projects through (set from inside the canvas) */
 export const hudView = { camera: null as THREE.Camera | null };
 /** host: who each player is holding R on (reviver id -> target id) */
