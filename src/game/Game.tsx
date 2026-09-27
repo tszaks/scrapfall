@@ -3850,7 +3850,7 @@ export function Game() {
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
-          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · ESC TO PAUSE</div>
+          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · P TO PAUSE</div>
         </div>
       )}
 
