@@ -34,6 +34,10 @@ type Env = {
   power: number;
   /** 0..1, eased: the boss round's hazard, or the map's live weather */
   hazard: number;
+  /** 0..1, eased: Vice Heights rain (its own soundscape, separate from the hazard) */
+  rain: number;
+  /** 0..1, eased: a blackout is on somewhere in the city */
+  blackout: number;
   /** seconds since the scene started */
   t: number;
 };
@@ -47,6 +51,11 @@ const scene = {
   active: false,
   hazardTarget: 0,
   weather: 0,
+  rain: 0,
+  blackout: false,
+  indoor: 0,
+  /** a moving emitter: the loudest nearby car (tyres on wet road), and its speed */
+  tyre: { x: 0, z: 0, speed: 0 },
   /** positions registered by map code (setAmbienceSpots), merged over the derived ones */
   extraSpots: {} as Record<string, AmbSpot[]>,
   dirty: true,
@@ -82,6 +91,28 @@ export function setAmbienceHazard(on: boolean) {
   scene.hazardTarget = on ? 1 : 0;
 }
 /** Live weather strength 0..1 from map code (a dust storm), on top of the boss-round hazard. */
+/** Rain strength 0..1 (Vice Heights: cityWeather's rainIntensity()). Its own layers, not the hazard. */
+export function setAmbienceRain(k: number) {
+  scene.rain = Math.max(0, Math.min(1, k));
+}
+/** A blackout is on (Vice Heights): car alarms and an alarmed crowd in the dark. */
+export function setAmbienceBlackout(on: boolean) {
+  scene.blackout = on;
+}
+/**
+ * How enclosed the listener is, 0 (outside) .. 1 (sealed in an elevator car). The whole
+ * ambience goes through a low-pass and loses some level, so the city and the rain sound
+ * muffled through walls, not just quieter.
+ */
+export function setIndoor(amount: number) {
+  scene.indoor = Math.max(0, Math.min(1, amount));
+}
+/** The nearest moving car (Traffic.tsx): its tyres hiss on wet roads. */
+export function setAmbienceTraffic(speed: number, x: number, z: number) {
+  scene.tyre.speed = speed;
+  scene.tyre.x = x;
+  scene.tyre.z = z;
+}
 export function setAmbienceWeather(k: number) {
   scene.weather = Math.max(0, Math.min(1, k));
 }
@@ -102,6 +133,9 @@ export function ambienceStats() {
     persistent: rt?.persistent ?? 0,
     live: rt ? liveNodes(rt) : 0,
     fired: rt?.fired ?? 0,
+    rain: rt?.rain ?? 0,
+    blackout: rt?.blackout ?? 0,
+    indoor: rt?.indoor ?? 0,
     layers: rt ? rt.layers.map((l) => ({ name: l.name, gain: Math.round(l.lastGain * 1000) / 1000 })) : [],
   };
 }
@@ -164,6 +198,16 @@ type Runtime = {
   t0: number;
   lastUpdate: number;
   hazard: number;
+  rain: number;
+  blackout: number;
+  indoor: number;
+  /** the enclosure filter: every layer -> pause -> occlusion lowpass + level -> bus */
+  occl: BiquadFilterNode;
+  occlGain: GainNode;
+  /** partly covered spots on this map (the alpine covered bridge): rect + how enclosed */
+  cover: (Rect & { k: number })[];
+  drops: AudioBuffer;
+  patter: AudioBuffer;
 };
 
 let rt: Runtime | null = null;
@@ -173,7 +217,7 @@ function liveNodes(R: Runtime) {
   return n;
 }
 let bufCtx: BaseAudioContext | null = null;
-let bufs: { white: AudioBuffer; pink: AudioBuffer; brown: AudioBuffer } | null = null;
+let bufs: { white: AudioBuffer; pink: AudioBuffer; brown: AudioBuffer; drops: AudioBuffer; patter: AudioBuffer } | null = null;
 
 /** three 5 s noise colours, generated once per audio context */
 function noiseBuffers(ctx: BaseAudioContext) {
@@ -210,7 +254,20 @@ function noiseBuffers(ctx: BaseAudioContext) {
       d[len - fade + i] = d[len - fade + i]! * (1 - k) + d[i]! * k;
     }
   }
-  bufs = { white, pink, brown };
+  // rain: sparse heavy drops and a dense patter, as trains of tiny decaying clicks
+  const clicks = (perSec: number, decay: number) => {
+    const buf = mk();
+    const d = buf.getChannelData(0);
+    const n = Math.floor(perSec * 5);
+    const tail = Math.floor(ctx.sampleRate * decay);
+    for (let k = 0; k < n; k++) {
+      const at = Math.floor(Math.random() * (len - tail));
+      const a = 0.3 + Math.random() * 0.7;
+      for (let i = 0; i < tail; i++) d[at + i] = d[at + i]! + (Math.random() * 2 - 1) * a * Math.exp((-6 * i) / tail);
+    }
+    return buf;
+  };
+  bufs = { white, pink, brown, drops: clicks(22, 0.012), patter: clicks(260, 0.004) };
   bufCtx = ctx;
   return bufs;
 }
@@ -252,7 +309,7 @@ function stepDrift(d: Drift, t: number, dt: number) {
 type FilterSpec = { type: BiquadFilterType; f: number; q?: number };
 type BedSpec = {
   name: string;
-  src: "white" | "pink" | "brown" | { osc: OscillatorType; f: number[] };
+  src: "white" | "pink" | "brown" | "drops" | "patter" | { osc: OscillatorType; f: number[] };
   filters: FilterSpec[];
   gain: number;
   level: Layer["level"];
@@ -286,7 +343,7 @@ function bed(R: Runtime, b: BedSpec): Layer {
   const srcs: AudioScheduledSourceNode[] = [];
   if (typeof b.src === "string") {
     const s = ctx.createBufferSource();
-    s.buffer = b.src === "white" ? R.white : b.src === "pink" ? R.pink : R.brown;
+    s.buffer = R[b.src];
     s.loop = true;
     s.playbackRate.value = b.rate ?? 1;
     s.connect(head);
@@ -528,7 +585,20 @@ export function updateAmbience(x: number, y: number, z: number, fx: number, fz: 
   const fl = Math.hypot(fx, fz) || 1;
   const hzTarget = Math.max(scene.hazardTarget, scene.weather, weatherLevel());
   R.hazard += (hzTarget - R.hazard) * (1 - Math.exp(-Math.min(dt, 0.5) / 3));
-  const e: Env = { x, y, z, fx: fx / fl, fz: fz / fl, night: scene.night, power: scene.power, hazard: R.hazard, t: now - R.t0 };
+  const ease = (v: number, target: number, tau: number) => v + (target - v) * (1 - Math.exp(-Math.min(dt, 0.5) / tau));
+  R.rain = ease(R.rain, scene.rain, 1.5);
+  R.blackout = ease(R.blackout, scene.blackout ? 1 : 0, 2);
+  // enclosure: the access code's value, or a covered spot of this map (the covered bridge)
+  let enc = scene.indoor;
+  for (const c of R.cover) if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1) enc = Math.max(enc, c.k);
+  if (Math.abs(enc - R.indoor) > 0.005) {
+    R.indoor = enc;
+    // 20 kHz outside, ~320 Hz sealed in; the walls also take ~9 dB off
+    R.occl.frequency.setTargetAtTime(Math.min(R.ctx.sampleRate * 0.45, 20000 * Math.pow(320 / 20000, enc)), now, 0.18);
+    R.occlGain.gain.setTargetAtTime(1 - 0.65 * enc, now, 0.18);
+  }
+  R.spots["tyre"] = [{ x: scene.tyre.x, z: scene.tyre.z }];
+  const e: Env = { x, y, z, fx: fx / fl, fz: fz / fl, night: scene.night, power: scene.power, hazard: R.hazard, rain: R.rain, blackout: R.blackout, t: now - R.t0 };
   lastEnv = e;
   // while paused the beds are faded out by the pause gain; skip the work too
   if (!scene.active) return;
@@ -626,6 +696,8 @@ function teardown() {
     L.chan.pan?.disconnect();
   }
   rt.pause.disconnect();
+  rt.occl.disconnect();
+  rt.occlGain.disconnect();
   rt = null;
 }
 
@@ -635,7 +707,12 @@ function build(ctx: BaseAudioContext, bus: AudioNode, noise: AudioBuffer) {
   const b = noiseBuffers(ctx);
   const pause = ctx.createGain();
   pause.gain.value = scene.active ? 1 : 0;
-  pause.connect(bus);
+  const occl = ctx.createBiquadFilter();
+  occl.type = "lowpass";
+  occl.frequency.value = 20000;
+  occl.Q.value = 0.4;
+  const occlGain = ctx.createGain();
+  pause.connect(occl).connect(occlGain).connect(bus);
   const R: Runtime = {
     ctx,
     bus,
@@ -653,6 +730,12 @@ function build(ctx: BaseAudioContext, bus: AudioNode, noise: AudioBuffer) {
     t0: ctx.currentTime,
     lastUpdate: -1,
     hazard: 0,
+    rain: 0,
+    blackout: 0,
+    indoor: -1,
+    occl,
+    occlGain,
+    cover: [],
   };
   rt = R;
   const key = profileFor(scene.map, scene.layout, scene.world);
@@ -774,6 +857,7 @@ function viceSpots(R: Runtime, w: Record<string, unknown>) {
     if (["diner", "hotel", "gas", "mall", "corner", "low", "convention"].includes(b.t)) signs.push(frontOf(b));
   }
   R.spots["sign"] = signs;
+  R.spots["awning"] = arr<AnyBld>(w["buildings"]).filter((b) => !b.backdrop).map(frontOf);
 }
 
 function alpineSpots(R: Runtime, w: Record<string, unknown>) {
@@ -790,6 +874,10 @@ function alpineSpots(R: Runtime, w: Record<string, unknown>) {
     R.spots["tower"] = lift.supports.map((s) => ({ x: lift.x, z: s.z }));
     R.spots["station"] = lift.supports.filter((s) => s.kind !== "tower").map((s) => ({ x: lift.x, z: s.z }));
   }
+  const br = a["bridge"] as { x0: number; x1: number; z: number; w: number } | undefined;
+  // under the covered bridge's roof: half enclosed (open ends, the creek below)
+  if (br) R.cover.push({ x0: br.x0, x1: br.x1, z0: br.z - br.w / 2, z1: br.z + br.w / 2, k: 0.45 });
+  if (br) R.spots["bridge"] = [{ x: (br.x0 + br.x1) / 2, z: br.z }];
   const trees = arr<{ x: number; z: number }>(a["trees"]);
   // every 25th tree is enough to place "snow sliding off a branch" near the forest edge
   R.spots["trees"] = trees.filter((_, i) => i % 25 === 0).map((t) => ({ x: t.x, z: t.z }));
@@ -1129,11 +1217,11 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
     bed(R, { name: "far traffic", src: "pink", filters: [{ type: "bandpass", f: 420, q: 0.5 }], gain: 0.035, level: always, swell: [0.6, 1, 3, 8] });
     // wind between towers: more of it the higher you climb
     windBed(R, "tower wind", 0.09, 1.3, (e) => 0.3 + clamp01(e.y / 50) * 0.9);
-    crowdBed(R, "street crowd", 0.1, "street", 10, 70, (e) => (e.night ? 0.6 : 1) * (1 - e.hazard * 0.5));
+    crowdBed(R, "street crowd", 0.1, "street", 10, 70, (e) => (e.night ? 0.6 : 1) * (1 - e.hazard * 0.5) * (1 - e.rain * 0.6));
     bed(R, { name: "neon buzz", src: { osc: "sawtooth", f: [120, 240.6] }, filters: [{ type: "bandpass", f: 1900, q: 1.8 }], gain: 0.05, spot: "sign", ref: 4, range: 20, level: (e) => (e.night ? 1 : 0.5) * e.power });
     bed(R, { name: "ocean", src: "brown", filters: [{ type: "lowpass", f: 650, q: 0.5 }], gain: 0.3, spot: "water", ref: 18, range: 260, level: always, swell: [0.35, 1, 3, 7] });
     bed(R, { name: "ocean hiss", src: "white", filters: [{ type: "bandpass", f: 2400, q: 0.5 }], gain: 0.035, spot: "water", ref: 10, range: 120, level: always, swell: [0.2, 1, 3, 7] });
-    crickets(R, "park crickets", 0.016, "park", 25, 110, nightOnly);
+    crickets(R, "park crickets", 0.016, "park", 25, 110, (e) => nightOnly(e) * (1 - e.rain));
     ev(R, "wave", [4, 9], "water", always, (o, t) => waveCrash(R, o, t, 0.28), 140);
     ev(R, "horn", [5, 16], "road", (e) => (e.night ? 0.6 : 1), (o, t) => horn(R, o, t), 160);
     ev(R, "far siren", [30, 75], "far", always, (o, t) => farSiren(R, o, t));
@@ -1143,6 +1231,8 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
       return 0.6;
     }, 14);
     ev(R, "gull", [18, 40], "water", dayOnly, (o, t) => gull(R, o, t), 120);
+    rainLayers(R);
+    blackoutLayers(R);
     // OIL SLICK boss round: the city goes on edge, more sirens
     ev(R, "hazard siren", [8, 16], "far", hz, (o, t) => farSiren(R, o, t));
   },
@@ -1350,6 +1440,68 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
     stormBeds(R, "bog", 0.12, 160, 1600);
   },
 };
+
+/**
+ * Vice Heights rain, driven by setAmbienceRain (cityWeather's rainIntensity()). Its own layers:
+ * the boss-round hazard is separate.
+ */
+function rainLayers(R: Runtime) {
+  const rain = (e: Env) => e.rain;
+  const heavy = (e: Env) => clamp01((e.rain - 0.25) / 0.75);
+  // broadband hiss and the body of the downpour
+  bed(R, { name: "rain hiss", src: "white", filters: [{ type: "highpass", f: 1300 }, { type: "lowpass", f: 9000 }], gain: 0.11, level: (e) => Math.pow(e.rain, 0.8), swell: [0.75, 1, 1, 4] });
+  bed(R, { name: "rain body", src: "pink", filters: [{ type: "bandpass", f: 750, q: 0.5 }], gain: 0.14, level: rain, swell: [0.7, 1, 2, 6] });
+  // heavier individual drops on the pavement and cars
+  bed(R, { name: "heavy drops", src: "drops", filters: [{ type: "bandpass", f: 2600, q: 0.7 }], gain: 0.45, level: heavy });
+  // drumming on awnings and canopies, and gutters trickling, near the buildings
+  bed(R, { name: "awning drum", src: "patter", filters: [{ type: "bandpass", f: 520, q: 2.2 }, { type: "lowpass", f: 1600 }], gain: 0.9, spot: "awning", ref: 4, range: 26, level: rain });
+  bed(R, { name: "gutter trickle", src: "white", filters: [{ type: "bandpass", f: 1500, q: 5 }], gain: 0.045, spot: "awning", ref: 3, range: 15, level: rain, sweep: { spread: 0.35, every: [0.2, 0.7] }, swell: [0.4, 1, 0.3, 1.2] });
+  // tyres hissing through the wet, following the loudest nearby car and its speed
+  bed(R, { name: "tyre hiss", src: "white", filters: [{ type: "bandpass", f: 3200, q: 0.6 }, { type: "highpass", f: 1200 }], gain: 0.22, spot: "tyre", ref: 6, range: 60, level: (e) => e.rain * clamp01(scene.tyre.speed / 12) });
+  ev(R, "gutter gurgle", [1.5, 4], "awning", (e) => (e.rain > 0.3 ? 1 : 0), (o, t) => bubbles(R, o, t), 14);
+  // thunder in heavy rain: a crack (sometimes), then a long rolling rumble
+  ev(R, "thunder", [18, 50], "far", (e) => clamp01((e.rain - 0.65) * 3), (o, t) => {
+    const near = Math.random() < 0.3;
+    if (near) burst(R, o, t, { buf: "white", type: "lowpass", f: 5000, f1: 700, dur: 0.5, gain: 0.35, attack: 0.005 });
+    const dur = rnd(4, 8);
+    burst(R, o, t + (near ? 0.15 : rnd(0.2, 1)), { buf: "brown", type: "lowpass", f: 320, f1: 90, dur, gain: 0.5, attack: rnd(0.2, 0.8) });
+    for (let k = 0; k < Math.floor(rnd(2, 5)); k++) burst(R, o, t + rnd(0.5, dur * 0.7), { buf: "brown", type: "lowpass", f: 220, dur: rnd(0.8, 1.8), gain: 0.35, attack: 0.15 });
+    return dur + 1.5;
+  });
+}
+
+/** car alarm patterns: a whooping sweep, a two-tone beeper, or a fast warble */
+function carAlarm(R: Runtime, o: AudioNode, t: number) {
+  const kind = Math.floor(Math.random() * 3);
+  const dur = rnd(4, 8);
+  if (kind === 0) {
+    for (let k = 0; k < dur; k += 0.55) blip(R, o, t + k, { type: "sawtooth", f0: 700, f1: 1500, dur: 0.5, gain: 0.03, attack: 0.02, cut: 2600 });
+  } else if (kind === 1) {
+    for (let k = 0; k < dur; k += 0.6) blip(R, o, t + k, { type: "square", f0: k % 1.2 < 0.6 ? 1050 : 820, dur: 0.28, gain: 0.025, attack: 0.01, cut: 2400 });
+  } else {
+    for (let k = 0; k < dur; k += 0.14) blip(R, o, t + k, { type: "square", f0: (k / 0.14) % 2 < 1 ? 1400 : 1100, dur: 0.12, gain: 0.02, attack: 0.005, cut: 2800 });
+  }
+  return dur;
+}
+
+/** Vice Heights blackout: an alarmed murmur rolling across the dark city, car alarms, dogs. */
+function blackoutLayers(R: Runtime) {
+  const bo = (e: Env) => e.blackout;
+  bed(R, { name: "alarmed crowd", src: "pink", filters: [{ type: "bandpass", f: 900, q: 1.3 }, { type: "lowpass", f: 2200 }], gain: 0.13, level: bo, sweep: { spread: 0.45, every: [0.25, 0.9] }, swell: [0.3, 1, 0.5, 1.8] });
+  ev(R, "car alarm", [3, 8], "road", bo, (o, t) => carAlarm(R, o, t), 220);
+  ev(R, "far car alarm", [5, 12], "far", bo, (o, t) => carAlarm(R, o, t));
+  ev(R, "shout", [4, 10], "far", bo, (o, t) => {
+    for (let k = 0; k < Math.floor(rnd(1, 3)); k++) blip(R, o, t + k * rnd(0.3, 0.6), { type: "sawtooth", f0: rnd(260, 420), f1: rnd(200, 300), dur: rnd(0.3, 0.6), gain: 0.02, attack: 0.04, vib: [6, 0.03], cut: 1600, q: 2 });
+    return 1.5;
+  });
+  ev(R, "dog", [6, 15], "far", bo, (o, t) => {
+    for (let k = 0; k < Math.floor(rnd(2, 5)); k++) {
+      burst(R, o, t + k * rnd(0.3, 0.5), { buf: "pink", f: 700, q: 2, dur: 0.12, gain: 0.12, attack: 0.01 });
+      blip(R, o, t + k * rnd(0.3, 0.5), { type: "sawtooth", f0: 480, f1: 300, dur: 0.12, gain: 0.02, cut: 1400 });
+    }
+    return 2;
+  });
+}
 
 /**
  * A distant freight passing somewhere off in the desert: a rumble and a steam whistle. For map
