@@ -89,7 +89,7 @@ type Bullet = {
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
 
-const BOSS_HP = 300;
+const BOSS_HP = 450; // 1.5x tougher arena boss
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
   brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
