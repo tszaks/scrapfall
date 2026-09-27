@@ -18,3 +18,7 @@
 - [ ] Visible effects for every ability (storm lightning arcs, orbital beam + ground marker, etc.)
 - [ ] Burning enemies show flames only while the burn lasts
 - [ ] Rework "happy" biome music into battle-intensity versions, keeping each theme
+- [ ] Mobile: remove weapon arrow buttons
+- [ ] Mobile: remove duplicate square ability badge in bottom corner
+- [ ] Mobile: pause button must not overlap other HUD blocks
+- [ ] Pause screen scrolls up and down on small screens
