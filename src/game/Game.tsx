@@ -3262,11 +3262,15 @@ export function Game() {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape") {
+      // P is the pause key on desktop; Escape still works since the browser
+      // drops pointer lock on it anyway
+      if (e.code === "Escape" || e.code === "KeyP") {
         setLocked(false);
+        if (document.pointerLockElement) document.exitPointerLock();
         pauseAll();
       }
     };
+
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
     return () => {
