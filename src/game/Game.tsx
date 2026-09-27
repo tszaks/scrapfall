@@ -3935,23 +3935,29 @@ export function Game() {
             })()}
 
 
-            {paused && (activeMods.length > 0 || activePerks.length > 0) && (
-              <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  {activeMods.map((id) => (
-                    <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                      {perkBadge(id, 1)}
-                    </span>
-                  ))}
-                  {activePerks.map(({ id, label }) => (
-                    <span key={id} className="text-[10px] tracking-wider text-black">
-                      {label}
-                    </span>
-                  ))}
-                </div>
+            {paused && (
+              <div className="w-full max-w-sm px-4">
+                <StatSheet d={statsRef.current} cls={cls} />
+                {(activeMods.length > 0 || activePerks.length > 0) && (
+                  <div className="mt-3 text-left text-black">
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                      {activeMods.map((id) => (
+                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
+                          {perkBadge(id, 1)}
+                        </span>
+                      ))}
+                      {activePerks.map(({ id, label }) => (
+                        <span key={id} className="text-[10px] tracking-wider text-black">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
 
 
             {paused || (multiplayer && ended) ? (
