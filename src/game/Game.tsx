@@ -4098,7 +4098,9 @@ export function Game() {
     // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, or flat
     setTerrain(alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : null);
     // building access (elevators, stairwells, walkable roofs): Vice Heights today
-    installAccess(mode === "city" && level.city ? cityAccess(level.city as CityLayout) : null);
+    // (`?access=0` turns it off, for A/B testing)
+    const accessOn = typeof window === "undefined" || new URLSearchParams(window.location.search).get("access") !== "0";
+    installAccess(mode === "city" && level.city && accessOn ? cityAccess(level.city as CityLayout) : null);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
     // the city generator keeps its own spawn plaza clear and every cell reachable;

@@ -125,6 +125,8 @@ function Panel({
 }
 
 type Refs = {
+  /** door leaves at the street and on the roof (hidden far away: small, and one draw each) */
+  doors: THREE.Group | null;
   low: THREE.Group | null;
   high: THREE.Group | null;
   car: THREE.Group | null;
@@ -171,6 +173,7 @@ function Building({
     );
   return (
     <group position={[b.ox, 0, b.oz]} rotation-y={g.theta}>
+      <group ref={(o) => (refs.doors = o)}>
       {/* street door leaves: glass for the elevator lobby, steel for the stairwell */}
       {elev ? (
         <>
@@ -188,12 +191,13 @@ function Building({
           <Panel refFn={() => {}} a0={q1.a - 0.13} a1={q1.a - 0.08} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d - q1.half} d1={q1.d + q1.half} mat={m.doorPaint} />
         </group>
       )}
+      </group>
       <group ref={(o) => (refs.low = o)} visible={false}>
         <InteriorMeshes g={g.low} m={m} />
         {E && (
           <>
-            <Panel refFn={(o) => (refs.landing[0]![0] = o)} a0={-0.7} a1={-0.006} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.02} d1={E.coreFront + 0.06} mat={m.innerSteel} />
-            <Panel refFn={(o) => (refs.landing[0]![1] = o)} a0={0.006} a1={0.7} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.02} d1={E.coreFront + 0.06} mat={m.innerSteel} />
+            <Panel refFn={(o) => (refs.landing[0]![0] = o)} a0={-0.7} a1={0} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
+            <Panel refFn={(o) => (refs.landing[0]![1] = o)} a0={-0.008} a1={0.7} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
           </>
         )}
         {g.displays.filter((s) => s.level === 0).map(disp)}
@@ -201,16 +205,16 @@ function Building({
       {g.high && E && (
         <group ref={(o) => (refs.high = o)} visible={false}>
           <InteriorMeshes g={g.high} m={m} />
-          <Panel refFn={(o) => (refs.landing[1]![0] = o)} a0={-0.7} a1={-0.006} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.02} d1={E.coreFront + 0.06} mat={m.innerSteel} />
-          <Panel refFn={(o) => (refs.landing[1]![1] = o)} a0={0.006} a1={0.7} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.02} d1={E.coreFront + 0.06} mat={m.innerSteel} />
+          <Panel refFn={(o) => (refs.landing[1]![0] = o)} a0={-0.7} a1={0} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
+          <Panel refFn={(o) => (refs.landing[1]![1] = o)} a0={-0.008} a1={0.7} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
           {g.displays.filter((s) => s.level === 1).map(disp)}
         </group>
       )}
       {g.car && E && (
         <group ref={(o) => (refs.car = o)} visible={false}>
           <InteriorMeshes g={g.car} m={m} />
-          <Panel refFn={(o) => (refs.carDoor[0] = o)} a0={-0.7} a1={-0.006} y0={0.03} y1={2.25} d0={E.car.d0 - 0.045} d1={E.car.d0 - 0.012} mat={m.innerSteel} />
-          <Panel refFn={(o) => (refs.carDoor[1] = o)} a0={0.006} a1={0.7} y0={0.03} y1={2.25} d0={E.car.d0 - 0.045} d1={E.car.d0 - 0.012} mat={m.innerSteel} />
+          <Panel refFn={(o) => (refs.carDoor[0] = o)} a0={-0.7} a1={0} y0={0.03} y1={2.25} d0={E.car.d0 - 0.045} d1={E.car.d0 - 0.012} mat={m.innerSteel} />
+          <Panel refFn={(o) => (refs.carDoor[1] = o)} a0={-0.008} a1={0.7} y0={0.03} y1={2.25} d0={E.car.d0 - 0.051} d1={E.car.d0 - 0.018} mat={m.innerSteel} />
           {/* the car's outside shell (seen only if something looks down the shaft) */}
           <mesh material={m.frameDark} position={[0, CAR_H + 0.08, (E.car.d0 + E.car.d1) / 2]}>
             <boxGeometry args={[E.car.a1 - E.car.a0 + 0.1, 0.12, E.car.d1 - E.car.d0 + 0.1]} />
@@ -331,6 +335,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
   const refs = useMemo<Refs[]>(
     () =>
       list.map(() => ({
+        doors: null,
         low: null,
         high: null,
         car: null,
@@ -426,6 +431,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       const dz = Math.max(b.interior.z0 - cam.z, 0, cam.z - b.interior.z1);
       const dh = Math.hypot(dx, dz);
       // the ground floor reads through the glass doors from across the street
+      if (r.doors) r.doors.visible = mine || dh < 150;
       if (r.low) r.low.visible = (mine && player.zone === 1) || (dh < 130 && cam.y < b.groundY + 70);
       if (r.high) r.high.visible = mine || (dh < 45 && Math.abs(cam.y - b.top) < 30);
       // doors
@@ -448,13 +454,13 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
         // the lobby floor is drawn 0.17 m up (over the lot paving), the vestibule 0.03 m
         r.car.position.y = y + 0.14 * (1 - (y - b.groundY) / Math.max(1, b.top - b.groundY));
         r.car.visible = (r.low?.visible && c.level === 0 && c.phase !== MOVING) || (r.high?.visible && c.level === 1 && c.phase !== MOVING) || (mine && player.inCar) || false;
-        r.carDoor[0]?.position.setX(-0.353 - open * 0.69);
-        r.carDoor[1]?.position.setX(0.353 + open * 0.69);
+        r.carDoor[0]?.position.setX(-0.35 - open * 0.69);
+        r.carDoor[1]?.position.setX(0.346 + open * 0.69);
       }
       for (const L of [0, 1] as const) {
         const o = c.level === L && c.phase !== MOVING ? open : 0;
-        r.landing[L]![0]?.position.setX(-0.353 - o * 0.69);
-        r.landing[L]![1]?.position.setX(0.353 + o * 0.69);
+        r.landing[L]![0]?.position.setX(-0.35 - o * 0.69);
+        r.landing[L]![1]?.position.setX(0.346 + o * 0.69);
       }
       const disp = displays[k];
       if (disp) {
