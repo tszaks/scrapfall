@@ -32,12 +32,12 @@ function Btn({
       onPointerCancel={() => onUp?.()}
       onContextMenu={(e) => e.preventDefault()}
       style={{ width: size, height: size }}
-      className={`pointer-events-auto flex flex-col items-center justify-center rounded-full border-2 border-[#2b2118] font-mono text-[10px] font-bold tracking-widest text-[#2b2118] ${
-        dim ? "bg-[#f3e6cf]/40" : "bg-[#f3e6cf]/85"
-      } active:bg-[#e8c98f]`}
+      className={`pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 ${
+        dim ? "border-[#f3e6cf]/40 bg-[#2b2118]/35 text-[#f3e6cf]/60" : "border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70"
+      }`}
     >
       <span>{label}</span>
-      {sub && <span className="text-[8px] opacity-60">{sub}</span>}
+      {sub && <span className="mt-0.5 text-[8px] opacity-70">{sub}</span>}
     </button>
   );
 }
@@ -123,7 +123,7 @@ export function MobileControls({
       )}
 
       {/* action buttons */}
-      <div className="absolute bottom-6 right-5 flex items-end gap-4">
+      <div className="absolute flex items-end gap-4" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
         <Btn
           label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
           sub="ABILITY"
@@ -138,11 +138,6 @@ export function MobileControls({
           onUp={() => (touchInput.fire = false)}
         />
       </div>
-
-      <div className="absolute right-4 top-3">
-        <Btn label="II" size={40} onTap={onPause} />
-      </div>
-
 
     </div>
   );

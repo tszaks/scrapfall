@@ -3619,7 +3619,7 @@ export function Game() {
 
 
           </div>
-          <div className={`flex flex-col items-end gap-2 ${touchUi ? "mt-12" : ""}`}>
+          <div className={`flex flex-col items-end gap-2`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {"♦".repeat(Math.max(0, health))}
               <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
