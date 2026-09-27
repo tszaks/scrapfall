@@ -11,7 +11,7 @@ import { buildCityMeshes, DETAIL_RANGE } from "./cityMesh";
 import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture, signTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
 import { CityPalms } from "./Palms";
-import { SUN_DIR, skyEnvSource, skyTexture } from "./sky";
+import { SUN_DIR, prewarmSunset, skyEnvSource, skyTexture } from "./sky";
 import { addSkyFogUniforms } from "./skyFog";
 import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
 
@@ -98,8 +98,64 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
   return mat;
 }
 
-/** The sea: a PBR mirror of the sky broken up by a few travelling swells (normal only, no
- * geometry), which spreads the sun into a glitter path. Lighter fog so it keeps its colour. */
+/** a tileable ripple normal map (value-noise height field, several octaves) */
+let rippleTex: THREE.DataTexture | null = null;
+function rippleNormals() {
+  if (rippleTex) return rippleTex;
+  const N = 256;
+  const h = new Float32Array(N * N);
+  const hash = (x: number, y: number) => {
+    let v = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+    v = Math.imul(v ^ (v >>> 13), 1274126177);
+    return ((v ^ (v >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let o = 0, cell = 64, amp = 1; o < 5; o++, cell /= 2, amp *= 0.55) {
+    const cells = N / cell;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const gx = x / cell;
+        const gy = y / cell;
+        const x0 = Math.floor(gx);
+        const y0 = Math.floor(gy);
+        let fx = gx - x0;
+        let fy = gy - y0;
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        const H = (i: number, j: number) =>
+          hash(((i % cells) + cells) % cells, (((j % cells) + cells) % cells) + o * 977);
+        const a = H(x0, y0);
+        const b = H(x0 + 1, y0);
+        const c = H(x0, y0 + 1);
+        const d = H(x0 + 1, y0 + 1);
+        h[y * N + x]! += (a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy) * amp;
+      }
+  }
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = h[y * N + ((x + 1) % N)]! - h[y * N + ((x + N - 1) % N)]!;
+      const dy = h[((y + 1) % N) * N + x]! - h[((y + N - 1) % N) * N + x]!;
+      const n = new THREE.Vector3(-dx * 6, -dy * 6, 1).normalize();
+      const o = (y * N + x) * 4;
+      data[o] = Math.round((n.x * 0.5 + 0.5) * 255);
+      data[o + 1] = Math.round((n.y * 0.5 + 0.5) * 255);
+      data[o + 2] = Math.round((n.z * 0.5 + 0.5) * 255);
+      data[o + 3] = 255;
+    }
+  const t = new THREE.DataTexture(data, N, N);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  rippleTex = t;
+  return t;
+}
+
+/** The sea: a PBR mirror of the sky broken up by two drifting layers of ripples (a normal
+ * map, mipmapped so it calms down with distance instead of shimmering), with roughness
+ * rising far out so the sun spreads into a glitter path. Lighter fog so it keeps its colour. */
 function waterMaterial(time: { value: number }) {
   const mat = new THREE.MeshStandardMaterial({
     color: "#174560",
@@ -109,6 +165,7 @@ function waterMaterial(time: { value: number }) {
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
     sh.uniforms["uTime"] = time;
+    sh.uniforms["uRipple"] = { value: rippleNormals() };
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
       .replace(
@@ -118,33 +175,28 @@ function waterMaterial(time: { value: number }) {
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\n#define WATER_FOG\nuniform float uTime;\nvarying vec3 vWPos;",
+        "#include <common>\n#define WATER_FOG\nuniform float uTime;\nuniform sampler2D uRipple;\nvarying vec3 vWPos;",
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+float wDist = length(vWPos - cameraPosition);
+roughnessFactor = mix(roughnessFactor, 0.34, smoothstep(40.0, 700.0, wDist));`,
       )
       .replace(
         "#include <normal_fragment_begin>",
         `#include <normal_fragment_begin>
 {
   vec2 p = vWPos.xz;
-  vec2 g = vec2(0.0);
-  // a handful of swells, each (direction, wavelength, speed); summed slopes tilt the normal
-  const vec4 W[8] = vec4[8](
-    vec4(0.96, 0.28, 0.41, 1.1), vec4(-0.6, 0.8, 0.67, 1.5), vec4(0.2, -0.98, 1.13, 2.1),
-    vec4(-0.9, -0.43, 1.9, 2.6), vec4(0.7, 0.71, 3.1, 3.3), vec4(-0.24, 0.97, 4.3, 3.9),
-    vec4(0.86, -0.51, 5.9, 4.6), vec4(-0.99, 0.12, 7.7, 5.2));
-  float d = length(vWPos - cameraPosition);
-  for (int i = 0; i < 8; i++) {
-    float f = W[i].z;
-    // each swell fades out before it gets smaller than a few pixels (no moire far out)
-    float fade = 1.0 - smoothstep(0.25, 1.0, d * f / 260.0);
-    g += W[i].xy * cos(dot(p, W[i].xy) * f + uTime * W[i].w) / f * fade;
-  }
-  float k = 0.26;
-  vec3 wn = normalize(vec3(-g.x * k, 1.0, -g.y * k));
+  vec3 a = texture2D(uRipple, p / 31.0 + uTime * vec2(0.011, 0.004)).xyz * 2.0 - 1.0;
+  vec3 b = texture2D(uRipple, p / 11.0 + uTime * vec2(-0.017, 0.013)).xyz * 2.0 - 1.0;
+  vec2 g = (a.xy + b.xy * 0.6) * 0.55;
+  vec3 wn = normalize(vec3(g.x, 1.0, g.y));
   normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
 }`,
       );
   };
-  mat.customProgramCacheKey = () => "city-water-v1";
+  mat.customProgramCacheKey = () => "city-water-v2";
   return mat;
 }
 
@@ -217,14 +269,34 @@ export const CityScene = memo(function CityScene({
     [envs],
   );
 
+  const envFor = useMemo(
+    () => (t: TimeOfDay) => {
+      let rt = envs.get(t);
+      if (!rt) {
+        const pm = new THREE.PMREMGenerator(gl);
+        rt = pm.fromEquirectangular(skyEnvSource(t));
+        pm.dispose();
+        envs.set(t, rt);
+      }
+      return rt;
+    },
+    [gl, envs],
+  );
+  // paint the sunset sky in idle moments and upload it, ready for the first press of N
   useEffect(() => {
-    let rt = envs.get(time);
-    if (!rt) {
-      const pm = new THREE.PMREMGenerator(gl);
-      rt = pm.fromEquirectangular(skyEnvSource(time));
-      pm.dispose();
-      envs.set(time, rt);
-    }
+    let live = true;
+    prewarmSunset(() => {
+      if (!live) return;
+      envFor("sunset");
+      gl.initTexture(skyTexture("sunset"));
+    });
+    return () => {
+      live = false;
+    };
+  }, [gl, envFor]);
+
+  useEffect(() => {
+    const rt = envFor(time);
     const L = CITY_LIGHTS[time];
     mats.facade.envMap = rt.texture;
     mats.facade.envMapIntensity = L.env;
@@ -245,7 +317,7 @@ export const CityScene = memo(function CityScene({
     return () => {
       scene.background = prev;
     };
-  }, [time, gl, envs, mats, nightK, darkK, scene]);
+  }, [time, envFor, mats, nightK, darkK, scene]);
 
   useEffect(
     () => () => {

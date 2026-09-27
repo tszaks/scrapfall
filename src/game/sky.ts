@@ -162,8 +162,15 @@ const RAD = 180 / Math.PI;
  * Paint a sunset sky: `hdr` returns linear radiance (sun and glow above 1), otherwise the
  * values are rolled off into a display-ready range for the background.
  */
-function paintSunset(P: SunsetPalette, W: number, H: number, hdr: boolean) {
-  const out = new Float32Array(W * H * 4);
+function paintRows(
+  P: SunsetPalette,
+  W: number,
+  H: number,
+  hdr: boolean,
+  out: Float32Array,
+  rowA: number,
+  rowB: number,
+) {
   const [sx, sy, sz] = P.sun;
   const sh = Math.hypot(sx, sz) || 1;
   const shx = sx / sh;
@@ -173,7 +180,7 @@ function paintSunset(P: SunsetPalette, W: number, H: number, hdr: boolean) {
   const cc: RGB = [0, 0, 0];
   const discR = 0.95 / RAD;
   const seedOff = P.seed * 37.1;
-  for (let py = 0; py < H; py++) {
+  for (let py = rowA; py < rowB; py++) {
     // row 0 = top of the image = straight up
     const el = (0.5 - (py + 0.5) / H) * Math.PI;
     const elD = el * RAD;
@@ -195,7 +202,9 @@ function paintSunset(P: SunsetPalette, W: number, H: number, hdr: boolean) {
       const cosG = Math.min(1, dx * sx + dy * sy + dz * sz);
       const gam = Math.acos(cosG);
       const below = elD < 0 ? Math.max(0, 1 + elD / 3) : 1;
-      const glow = 1.1 * Math.exp(-gam / 0.11) + 0.35 * Math.exp(-gam / 0.03);
+      // wide gold glow, a tighter corona and a hot rim right round the disc
+      const glow =
+        1.1 * Math.exp(-gam / 0.11) + 0.45 * Math.exp(-gam / 0.03) + 0.35 * Math.exp(-gam / 0.012);
       const halo = 0.55 * Math.exp(-gam / 0.5);
       r += (P.glow[0] * glow + P.halo[0] * halo) * below;
       g += (P.glow[1] * glow + P.halo[1] * halo) * below;
@@ -240,10 +249,18 @@ function paintSunset(P: SunsetPalette, W: number, H: number, hdr: boolean) {
         const t = gam / discR;
         const edge = t < 1 ? 1 : Math.max(0, 1 - (t - 1) / 0.25);
         const limb = 1 - 0.35 * t * t;
-        const k = edge * (hdr ? 14 : 3) * Math.max(limb, 0.3);
-        r += P.disc[0] * k;
-        g += P.disc[1] * k * 0.96;
-        b += P.disc[2] * k * 0.82;
+        if (hdr) {
+          const k = edge * 14 * Math.max(limb, 0.3);
+          r += P.disc[0] * k;
+          g += P.disc[1] * k * 0.96;
+          b += P.disc[2] * k * 0.82;
+        } else {
+          // on screen: a warm white disc (the corona round it is already blown out gold)
+          const k = edge * 2.2 * Math.max(limb, 0.4);
+          r += k;
+          g += k * 0.92;
+          b += k * 0.62;
+        }
       }
       if (elD < 0) {
         // under the horizon: the haze just continues and darkens slightly
@@ -266,17 +283,75 @@ function paintSunset(P: SunsetPalette, W: number, H: number, hdr: boolean) {
       out[o + 3] = 1;
     }
   }
-  return out;
 }
 
-const toSrgb8 = (v: number) => {
+/** Sky paintings in progress: painted a few rows at a time in idle moments after load, so
+ * the first press of N doesn't freeze the game while ~2 million pixels get painted. */
+type Job = { P: SunsetPalette; W: number; H: number; hdr: boolean; out: Float32Array; row: number };
+const jobs = new Map<string, Job>();
+function job(key: string, P: SunsetPalette, W: number, H: number, hdr: boolean) {
+  let j = jobs.get(key);
+  if (!j) jobs.set(key, (j = { P, W, H, hdr, out: new Float32Array(W * H * 4), row: 0 }));
+  return j;
+}
+/** the finished painting (paints whatever is left right now) */
+function paintSunset(key: string, P: SunsetPalette, W: number, H: number, hdr: boolean) {
+  const j = job(key, P, W, H, hdr);
+  if (j.row < H) paintRows(P, W, H, hdr, j.out, j.row, H);
+  j.row = H;
+  return j.out;
+}
+let slicing = false;
+/** run in idle time where the browser offers it (Safari doesn't: short timeouts there) */
+const later = (fn: (budget: number) => void, delay = 16) => {
+  const ric = (
+    window as { requestIdleCallback?: (cb: (d: IdleDeadline) => void, o?: object) => number }
+  ).requestIdleCallback;
+  if (ric) ric((d) => fn(Math.max(1, Math.min(8, d.timeRemaining() - 1))), { timeout: 400 });
+  else setTimeout(() => fn(3), delay);
+};
+function slice(budget: number) {
+  const t0 = performance.now();
+  for (const j of jobs.values()) {
+    while (j.row < j.H && performance.now() - t0 < budget) {
+      const n = Math.min(j.H, j.row + 4);
+      paintRows(j.P, j.W, j.H, j.hdr, j.out, j.row, n);
+      j.row = n;
+    }
+  }
+  if ([...jobs.values()].some((j) => j.row < j.H)) later(slice);
+  else {
+    slicing = false;
+    const fns = whenDone;
+    whenDone = [];
+    fns.forEach((f) => later(f));
+  }
+}
+let whenDone: (() => void)[] = [];
+/** start painting the city sunset in the background; `done` runs once it's all painted */
+export function prewarmSunset(done?: () => void) {
+  if (typeof window === "undefined") return;
+  job("sunset", CITY_SUNSET, 2048, 1024, false);
+  job("sunset-env", CITY_SUNSET, 1024, 512, true);
+  if (done) whenDone.push(done);
+  if (!slicing) {
+    slicing = true;
+    later(slice, 500);
+  }
+}
+
+const toSrgb8Exact = (v: number) => {
   const c = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
   return Math.max(0, Math.min(255, Math.round(c * 255)));
 };
+/** linear 0..1 -> sRGB byte through a lookup table (millions of pixels per sky) */
+const SRGB_LUT = new Uint8Array(4097);
+for (let i = 0; i <= 4096; i++) SRGB_LUT[i] = toSrgb8Exact(i / 4096);
+const toSrgb8 = (v: number) => SRGB_LUT[Math.max(0, Math.min(4096, Math.round(v * 4096)))]!;
 
 /** display copy of a sunset: sRGB canvas texture (background) */
-function sunsetBackground(P: SunsetPalette, W: number, H: number) {
-  const f = paintSunset(P, W, H, false);
+function sunsetBackground(key: string, P: SunsetPalette, W: number, H: number) {
+  const f = paintSunset(key, P, W, H, false);
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
@@ -299,8 +374,8 @@ function sunsetBackground(P: SunsetPalette, W: number, H: number) {
 }
 
 /** HDR copy of a sunset for PMREM (reflections) */
-function sunsetEnv(P: SunsetPalette, W: number, H: number) {
-  const f = paintSunset(P, W, H, true);
+function sunsetEnv(key: string, P: SunsetPalette, W: number, H: number) {
+  const f = paintSunset(key, P, W, H, true);
   // DataTexture rows run bottom-up
   const flipped = new Float32Array(f.length);
   for (let y = 0; y < H; y++)
@@ -368,19 +443,18 @@ const cached = <T extends THREE.Texture>(key: string, make: () => T) => {
 export function skyTexture(time: TimeOfDay) {
   return time === "night"
     ? cached("night", nightSky)
-    : cached("sunset", () => sunsetBackground(CITY_SUNSET, 2048, 1024));
+    : cached("sunset", () => sunsetBackground("sunset", CITY_SUNSET, 2048, 1024));
 }
 /** the equirect source of the city's reflection env map */
 export function skyEnvSource(time: TimeOfDay) {
   return time === "night"
     ? skyTexture("night")
-    : cached("sunset-env", () => sunsetEnv(CITY_SUNSET, 512, 256));
+    : cached("sunset-env", () => sunsetEnv("sunset-env", CITY_SUNSET, 1024, 512));
 }
 /** an arena map's sunset sky: background, and the env source for its (few) shiny bits */
 export function arenaSunsetSky(themeName: string, themeSky: string, sun: [number, number, number]) {
-  return cached(`arena-${themeName}`, () =>
-    sunsetBackground(arenaPalette(themeSky, sun), 1024, 512),
-  );
+  const key = `arena-${themeName}`;
+  return cached(key, () => sunsetBackground(key, arenaPalette(themeSky, sun), 1024, 512));
 }
 
 /**
