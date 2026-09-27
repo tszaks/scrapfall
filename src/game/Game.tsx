@@ -3403,6 +3403,8 @@ export function Game() {
       setWeapon("pistol");
       setBossHp(0);
     }
+    // fresh run: start at the class's full max HP (e.g. Vanguard 16)
+    if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
     setLocked(true);
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
