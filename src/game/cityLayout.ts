@@ -654,13 +654,19 @@ export function generateCity(rand: () => number, cells: number, half: number) {
               : "stone";
       const kindRoll = r();
       if (resid && wx > 34 && wz > 34 && kindRoll < 0.45) {
-        // L or U shaped courtyard block, open toward the back
+        // L or U shaped courtyard block, open toward the back. The side legs start behind
+        // the front leg: overlapping legs would put two differently-tiled facades (and two
+        // sets of balconies) in the same plane, which z-fights.
         const d = 12;
+        const fz0 = front === 0 ? z0 + d : z0;
+        const fz1 = front === 2 ? z1 - d : z1;
+        const fx0 = front === 3 ? x0 + d : x0;
+        const fx1 = front === 1 ? x1 - d : x1;
         const opts = [
-          box(x0, z0, x1, z0 + d, h),
-          box(x0, z0, x0 + d, z1, h),
-          box(x1 - d, z0, x1, z1, h),
-          box(x0, z1 - d, x1, z1, h),
+          box(fx0, z0, fx1, z0 + d, h),
+          box(x0, fz0, x0 + d, fz1, h),
+          box(x1 - d, fz0, x1, fz1, h),
+          box(fx0, z1 - d, fx1, z1, h),
         ];
         const frontIdx = front === 0 ? 0 : front === 2 ? 3 : front === 1 ? 2 : 1;
         const sides = front === 0 || front === 2 ? [1, 2] : [0, 3];
@@ -749,17 +755,19 @@ export function generateCity(rand: () => number, cells: number, half: number) {
     const deep = front === 1 || front === 3 ? wx : wz;
     const lr = r();
     if (!corner && floors >= 4 && deep > 26 && lr < 0.2) {
-      // stepped terrace: low along the street, each tier higher and further back
+      // stepped terrace: low along the street, each tier higher and further back. The tiers
+      // are side-by-side bands (not nested boxes) so no two facades share a plane.
       const t1 = 4.5 + fh * 2;
-      const backStrip = (d: number, hh: number): Part =>
+      /** the band between a and b metres back from the front */
+      const band = (a: number, b: number, hh: number): Part =>
         front === 0
-          ? box(x0, z1 - d, x1, z1, hh)
+          ? box(x0, z0 + a, x1, z0 + b, hh)
           : front === 2
-            ? box(x0, z0, x1, z0 + d, hh)
+            ? box(x0, z1 - b, x1, z1 - a, hh)
             : front === 1
-              ? box(x0, z0, x0 + d, z1, hh)
-              : box(x1 - d, z0, x1, z1, hh);
-      const parts = [full(t1), backStrip(deep - 6, t1 + fh * 2), backStrip(deep - 12, t1 + fh * 4)];
+              ? box(x1 - b, z0, x1 - a, z1, hh)
+              : box(x0 + a, z0, x0 + b, z1, hh);
+      const parts = [band(0, 6, t1), band(6, 12, t1 + fh * 2), band(12, deep, t1 + fh * 4)];
       return {
         ...base,
         t: "terrace",
