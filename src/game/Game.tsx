@@ -2354,7 +2354,7 @@ function World({
     cdReport.current -= delta;
     if (cdReport.current <= 0) {
       cdReport.current = 0.2;
-      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd);
+      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd * (1 - stats.current.haste));
     }
 
     // cryo mines freeze and hurt whatever walks onto them
