@@ -3822,7 +3822,7 @@ export function Game() {
 
       {(!locked || ended) && picking && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-md touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
             <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
 
