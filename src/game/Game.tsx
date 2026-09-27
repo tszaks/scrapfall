@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
-  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
+  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
   setArenaSize, SOLO_ARENA, COOP_ARENA,
 } from "./level";
@@ -2193,9 +2193,22 @@ function World({
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
-        e.x += (kx / len) * push;
-        e.z += (kz / len) * push;
+        // walk the push in small steps so a shove never drives anyone into cover
+        const er = Math.min(STATS[e.kind].radius, 0.8);
+        const steps = Math.max(1, Math.ceil(push / 0.35));
+        const sx = (kx / len) * (push / steps);
+        const sz = (kz / len) * (push / steps);
+        for (let s = 0; s < steps; s++) {
+          const nx = e.x + sx;
+          const nz = e.z + sz;
+          const okX = !blocked(blocks, nx, e.z, er);
+          const okZ = !blocked(blocks, e.x, nz, er);
+          if (!okX && !okZ) break;
+          if (okX) e.x = nx;
+          if (okZ) e.z = nz;
+        }
       }
+
       if (!isH) {
         n?.broadcast({ type: "hit", i: idx, dmg, slow });
         e.flash = 0.1;
@@ -2548,9 +2561,16 @@ function World({
         const r = Math.min(st.radius, 0.8);
         if (ghost) { e.x = nx; e.z = nz; }
         else {
+          // if anything ever ends up wedged inside cover, slide it back out
+          if (blocked(blocks, e.x, e.z, r)) {
+            const out = pushOut(blocks, e.x, e.z, r);
+            e.x = out.x;
+            e.z = out.z;
+          }
           if (!blocked(blocks, nx, e.z, r)) e.x = nx;
           if (!blocked(blocks, e.x, nz, r)) e.z = nz;
         }
+
 
         if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
@@ -3610,7 +3630,7 @@ export function Game() {
 
       <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className="flex flex-col items-start gap-2">
+          <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
@@ -3653,7 +3673,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center gap-2 ${touchUi ? "top-16 max-w-[calc(100vw-2rem)]" : "top-5 max-w-[calc(100vw-26rem)]"}`}>
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -3661,17 +3681,18 @@ export function Game() {
               <div
                 key={slot.w}
                 onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
-                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${touchUi ? "pointer-events-auto" : ""} ${
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
                     : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[10px] font-bold text-[#f7eeda]"
+                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "h-3 w-3 text-[7px]" : "h-4 w-4 text-[10px]"}`}
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
+
 
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
@@ -3828,10 +3849,15 @@ export function Game() {
             setLocked(false);
             if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
           }}
-          className="fixed left-1/2 top-2 z-40 flex h-10 w-10 -translate-x-1/2 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 font-mono text-sm font-bold text-[#f3e6cf] active:bg-[#2b2118]"
+          style={{ left: "max(0.75rem, env(safe-area-inset-left))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+          className="fixed z-40 flex h-10 w-10 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 text-[#f3e6cf] shadow-lg backdrop-blur-sm active:scale-95 active:bg-[#2b2118]"
         >
-          II
+          <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true">
+            <rect x="1" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+            <rect x="9" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+          </svg>
         </button>
+
       )}
       {touchUi && portrait && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
@@ -4205,7 +4231,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    DUSTFIELD · v1.0.0
+                    DUSTFIELD · v1.0.1
                   </div>
                 </div>
               </div>
