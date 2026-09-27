@@ -3,6 +3,7 @@
 // written to `e.vis` so co-op guests draw exactly the same telegraph (see enemyKinds.ts).
 
 import { HALF, NAV_SCALE, blocked, clearLine, toNav, type Block, type NavGrid } from "./level";
+import { groundY } from "./terrain";
 import {
   NEW_STATS, FLYERS, PH_ACT, PH_AFTER, PH_IDLE, PH_WIND, packVis, type NewKind,
 } from "./enemyKinds";
@@ -195,7 +196,7 @@ function spawnOrd(ctx: AICtx): Ord | null {
   return null;
 }
 
-export function blast(ords: Ord[], x: number, z: number, r: number, y = 0.6) {
+export function blast(ords: Ord[], x: number, z: number, r: number, y = groundY(x, z) + 0.6) {
   const o = ords.find((q) => !q.on);
   if (!o) return;
   Object.assign(o, { on: true, tp: ORD_BLAST, x, y, z, vx: 0, vy: 0, vz: 0, t: 0, T: 0.4, lx: x, lz: z, r, tgt: null });
@@ -207,6 +208,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
   const dx = target.x - e.x;
   const dz = target.z - e.z;
   const face = Math.atan2(dx, dz);
+  const g = groundY(e.x, e.z); // 0 on flat maps; shots and ordnance start from the enemy's ground
   const spd = speedOf(e);
   const st = e.st ?? 0;
   e.t1 = (e.t1 ?? 0) - dt;
@@ -341,9 +343,9 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           e.t1 = 0.12;
           e.shots = e.shots! - 1;
           const a = face + (ctx.rand() - 0.5) * 0.08;
-          const vy = (target.y - 0.2 - 1.1) / d;
+          const vy = (target.y - 0.2 - 1.1 - g) / d;
           const len = Math.hypot(1, vy);
-          ctx.shoot(e.x + Math.sin(a) * 0.7, 1.1, e.z + Math.cos(a) * 0.7, (Math.sin(a) / len) * 15, (vy / len) * 15, (Math.cos(a) / len) * 15, 1.4, stats.dmg, 0.13);
+          ctx.shoot(e.x + Math.sin(a) * 0.7, g + 1.1, e.z + Math.cos(a) * 0.7, (Math.sin(a) / len) * 15, (vy / len) * 15, (Math.cos(a) / len) * 15, 1.4, stats.dmg, 0.13);
         }
         if ((e.shots ?? 0) <= 0) {
           e.st = 0;
@@ -372,11 +374,11 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           if (Math.abs(lx) > HALF - 1 || Math.abs(lz) > HALF - 1) { lx = target.x; lz = target.z; }
           const sx = e.x + Math.sin(face) * 0.5;
           const sz = e.z + Math.cos(face) * 0.5;
-          const y0 = 2.1;
+          const y0 = g + 2.1;
           const T = Math.max(0.8, Math.min(1.7, Math.hypot(lx - sx, lz - sz) / 11));
           Object.assign(o, {
             on: true, tp: ORD_GRENADE, x: sx, y: y0, z: sz,
-            vx: (lx - sx) / T, vz: (lz - sz) / T, vy: (0.25 - y0) / T + 0.5 * GRAVITY * T,
+            vx: (lx - sx) / T, vz: (lz - sz) / T, vy: (groundY(lx, lz) + 0.25 - y0) / T + 0.5 * GRAVITY * T,
             t: 0, T, lx, lz, r: GRENADE_RADIUS, tgt: null,
           });
         }
@@ -587,9 +589,9 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       } else if (e.cooldown <= 0 && !ally && d < 16 && los(ctx, e.x, e.z, target.x, target.z)) {
         // alone: a slow, easy-to-dodge zap orb
         e.cooldown = 2.8;
-        const vy = (target.y - 2.6) / d;
+        const vy = (target.y - 2.6 - g) / d;
         const len = Math.hypot(1, vy);
-        ctx.shoot(e.x, 2.6, e.z, (dx / d / len) * 9, (vy / len) * 9, (dz / d / len) * 9, 2.5, 1, 0.22);
+        ctx.shoot(e.x, g + 2.6, e.z, (dx / d / len) * 9, (vy / len) * 9, (dz / d / len) * 9, 2.5, 1, 0.22);
       }
       e.vis = packVis(e.st === 2 ? PH_ACT : PH_IDLE, 0, beam);
       break;
@@ -616,9 +618,9 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const mx = e.x + Math.sin(y0) * 1.1 + Math.cos(y0) * 0.45;
           const mz = e.z + Math.cos(y0) * 1.1 - Math.sin(y0) * 0.45;
           const a = Math.atan2(e.x + Math.sin(y0) * d - mx, e.z + Math.cos(y0) * d - mz) + (Math.random() - 0.5) * 0.2;
-          const vy = (target.y - 0.2 - 1.3) / Math.max(2, d);
+          const vy = (target.y - 0.2 - 1.3 - g) / Math.max(2, d);
           const len = Math.hypot(1, vy);
-          ctx.shoot(mx, 1.3, mz, (Math.sin(a) / len) * 14, (vy / len) * 14, (Math.cos(a) / len) * 14, 1.6, stats.dmg, 0.12);
+          ctx.shoot(mx, g + 1.3, mz, (Math.sin(a) / len) * 14, (vy / len) * 14, (Math.cos(a) / len) * 14, 1.6, stats.dmg, 0.12);
         }
         if (e.t1 <= 0) { e.st = 3; e.t1 = 1.2; }
       } else {
@@ -641,7 +643,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         if (o) {
           const sx = e.x + Math.cos(face) * 0.45 + Math.sin(face) * 0.6;
           const sz = e.z - Math.sin(face) * 0.45 + Math.cos(face) * 0.6;
-          Object.assign(o, { on: true, tp: ORD_ROCKET, x: sx, y: 2.2, z: sz, vx: 0, vy: 0, vz: 0, t: 0, T: ROCKET_LIFE, lx: 0, lz: 0, yaw: face, r: ROCKET_RADIUS, tgt: target.id });
+          Object.assign(o, { on: true, tp: ORD_ROCKET, x: sx, y: g + 2.2, z: sz, vx: 0, vy: 0, vz: 0, t: 0, T: ROCKET_LIFE, lx: 0, lz: 0, yaw: face, r: ROCKET_RADIUS, tgt: target.id });
         }
         e.st = 0;
         e.cooldown = 5 + ctx.rand() * 1.5;
@@ -716,11 +718,11 @@ export function stepOrds(ctx: AICtx) {
         o.x += o.vx * dt;
         o.z += o.vz * dt;
         o.vy -= GRAVITY * dt;
-        o.y = Math.max(0.25, o.y + o.vy * dt);
+        o.y = Math.max(groundY(o.x, o.z) + 0.25, o.y + o.vy * dt);
       } else {
         o.x = o.lx;
         o.z = o.lz;
-        o.y = 0.25;
+        o.y = groundY(o.x, o.z) + 0.25;
       }
       if (o.t >= o.T + GRENADE_FUSE) {
         o.on = false;
@@ -744,7 +746,7 @@ export function stepOrds(ctx: AICtx) {
     if (t) turnOrd(o, Math.atan2(t.x - o.x, t.z - o.z), dt);
     o.x += Math.sin(o.yaw) * ROCKET_SPEED * dt;
     o.z += Math.cos(o.yaw) * ROCKET_SPEED * dt;
-    o.y += Math.max(-1, Math.min(1, 1.35 - o.y)) * dt;
+    o.y += Math.max(-1, Math.min(1, groundY(o.x, o.z) + 1.35 - o.y)) * dt;
     let boom = o.t >= o.T || blocked(ctx.blocks, o.x, o.z, 0.1);
     for (const q of ctx.targets) if (Math.hypot(q.x - o.x, q.z - o.z) < 1.0) boom = true;
     if (boom) {

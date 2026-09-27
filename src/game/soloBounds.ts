@@ -1,28 +1,25 @@
-// Solo play on the big maps: the same full map is generated for solo and co-op, but solo
-// seals a smaller playable square (70% of the arena) with in-world blockades. This module
-// finds every place where walkable ground crosses that square's edge and turns each opening
-// into solid 2 m collision cells; the map decides how to dress them (barriers, trucks, fences).
-import type { Block } from "./level";
+// Solo play on the big maps: the full co-op map is generated and drawn, but a solo player
+// is kept inside a square ~70% of its size by in-world blockades. This module finds every
+// place where walkable ground crosses that square's edge and turns each opening into solid
+// collision blocks; each map dresses the openings in its own theme.
+import { BLOCK, type Block } from "./level";
 
-/** An opening in the ring: centre (x, z), width w in metres, running along `axis`. */
 export type Gap = { x: number; z: number; w: number; axis: "x" | "z" };
 
-const CELL = 2;
-
-/** Half-size of the solo playable square: 70% of the arena's, snapped to the 2 m grid. */
+/** Half-size of the solo square: 70% of the arena, snapped to the 2 m grid. */
 export function soloHalf(arenaHalf: number): number {
-  return Math.round((arenaHalf * 0.7) / CELL) * CELL;
+  return Math.round((arenaHalf * 0.7) / BLOCK) * BLOCK;
 }
 
-/** True when (x, z) lies inside the solo square of half-size `half`. */
 export function inSolo(x: number, z: number, half: number): boolean {
   return Math.abs(x) < half && Math.abs(z) < half;
 }
 
 /**
- * Every opening where walkable ground crosses the ring of half-size `half`, merged into runs.
- * The ring is sampled on the cells just outside the square (centres at +-(half + cell / 2)),
- * one sample per `cell` metres; consecutive walkable samples along one side form one gap.
+ * Every opening where walkable ground crosses the solo ring, merged into runs. The ring is
+ * the line of cells just inside the square's edge; a gap is a run of walkable cells along
+ * one side. `axis` is the direction the gap runs along ("x" for the north and south sides),
+ * (x, z) its centre and `w` its length in metres.
  */
 export function findGaps(
   isWalkable: (x: number, z: number) => boolean,
@@ -30,54 +27,51 @@ export function findGaps(
   cell: number,
 ): Gap[] {
   const gaps: Gap[] = [];
-  const edge = half + cell / 2;
-  // the four sides; each runs along one axis at a fixed perpendicular coordinate
-  const sides: { axis: "x" | "z"; at: number }[] = [
-    { axis: "x", at: -edge },
-    { axis: "x", at: edge },
-    { axis: "z", at: -edge },
-    { axis: "z", at: edge },
+  const edge = half - cell / 2; // centre line of the ring cells
+  const n = Math.round((half * 2) / cell);
+  const sides: { axis: "x" | "z"; at: (t: number) => [number, number] }[] = [
+    { axis: "x", at: (t) => [t, -edge] },
+    { axis: "x", at: (t) => [t, edge] },
+    { axis: "z", at: (t) => [-edge, t] },
+    { axis: "z", at: (t) => [edge, t] },
   ];
   for (const s of sides) {
-    let run: number[] = [];
-    const flush = () => {
-      if (!run.length) return;
-      const a = run[0]!;
-      const b = run[run.length - 1]!;
-      const mid = (a + b) / 2;
-      const w = b - a + cell;
-      gaps.push(
-        s.axis === "x" ? { x: mid, z: s.at, w, axis: "x" } : { x: s.at, z: mid, w, axis: "z" },
-      );
-      run = [];
-    };
-    // include the corner cells so diagonal leaks round the corners are sealed too
-    for (let t = -edge; t <= edge + 1e-6; t += cell) {
-      const x = s.axis === "x" ? t : s.at;
-      const z = s.axis === "x" ? s.at : t;
-      if (isWalkable(x, z)) run.push(t);
-      else flush();
+    let start = -1;
+    for (let k = 0; k <= n; k++) {
+      const t = -half + cell / 2 + k * cell;
+      const open = k < n && isWalkable(...s.at(t));
+      if (open && start < 0) start = k;
+      if (!open && start >= 0) {
+        const t0 = -half + cell / 2 + start * cell;
+        const t1 = -half + cell / 2 + (k - 1) * cell;
+        const mid = (t0 + t1) / 2;
+        const [x, z] = s.at(mid);
+        gaps.push({ x, z, w: t1 - t0 + cell, axis: s.axis });
+        start = -1;
+      }
     }
-    flush();
   }
   return gaps;
 }
 
-/** Solid 2 m collision blocks (cell-centred) filling every gap. */
+/** Solid 2 m collision blocks that seal each gap (two cells deep so nothing squeezes past). */
 export function sealGaps(gaps: Gap[]): Block[] {
   const out: Block[] = [];
-  const seen = new Set<string>();
   for (const g of gaps) {
-    const n = Math.max(1, Math.round(g.w / CELL));
-    const start = (g.axis === "x" ? g.x : g.z) - ((n - 1) * CELL) / 2;
-    for (let k = 0; k < n; k++) {
-      const t = start + k * CELL;
-      const x = g.axis === "x" ? t : g.x;
-      const z = g.axis === "x" ? g.z : t;
-      const key = `${x},${z}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ x, z, h: 2.4, tone: 0 });
+    const cells = Math.round(g.w / BLOCK);
+    for (let k = 0; k < cells; k++) {
+      const t = -g.w / 2 + BLOCK / 2 + k * BLOCK;
+      for (const depth of [0, 1]) {
+        // the second row sits one cell further out, past the ring
+        const out1 = depth * BLOCK;
+        if (g.axis === "x") {
+          const dz = Math.sign(g.z) * out1;
+          out.push({ x: g.x + t, z: g.z + dz, h: 3, tone: 0 });
+        } else {
+          const dx = Math.sign(g.x) * out1;
+          out.push({ x: g.x + dx, z: g.z + t, h: 3, tone: 0 });
+        }
+      }
     }
   }
   return out;

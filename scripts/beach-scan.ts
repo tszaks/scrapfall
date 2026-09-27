@@ -1,7 +1,9 @@
 // Geometry scans for Pacific Pier: coplanar overlapping triangles (z-fighting), floating or
 // buried things, and moving-part clearance. Run: npx jiti scripts/beach-scan.ts
 import type * as THREE from "three";
-import { setArenaSize, generateLevel, groundAt, BEACH_SIZE } from "../src/game/level";
+import { setArenaSize, generateLevel, BEACH_SIZE } from "../src/game/level";
+import { groundY as groundAt, setTerrain } from "../src/game/terrain";
+import { beachTerrain } from "../src/game/beach/terrain";
 import { isBeach, DECK } from "../src/game/beach/beachLayout";
 import { buildBeachMeshes } from "../src/game/beach/beachMesh";
 
@@ -109,6 +111,7 @@ const ccw = (p: P[]) => (area(p) < 0 ? [...p].reverse() : p);
 
 setArenaSize(BEACH_SIZE, 2);
 const lv = generateLevel(1000, "beach", true);
+if (isBeach(lv.city)) setTerrain(beachTerrain(lv.city));
 const city = lv.city!;
 if (!isBeach(city)) throw new Error("not beach");
 const m = buildBeachMeshes(city);

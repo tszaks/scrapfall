@@ -6,6 +6,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
+import { groundY } from "./terrain";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { playEnemySfx, type EnemySfx } from "./audio";
@@ -378,7 +379,7 @@ export function NewEnemyModel({ kind, data, all }: { kind: NewKind; data: Data; 
             // stretch a box from the drone's emitter to the patient, in the drone's local space
             beam.parent!.getWorldPosition(_v);
             _v.y -= 0.35;
-            _w.set(pat.x, 1.2, pat.z);
+            _w.set(pat.x, groundY(pat.x, pat.z) + 1.2, pat.z);
             const mid = _v.clone().add(_w).multiplyScalar(0.5);
             beam.parent!.worldToLocal(mid);
             beam.position.copy(mid);
@@ -553,9 +554,9 @@ export function OrdnancePool({ ords, guestTx, guest }: { ords: Ord[]; guestTx: F
       if (o.tp === ORD_GRENADE) {
         shell.position.set(o.x, o.y, o.z);
         const p = Math.min(1, o.t / (o.T + GRENADE_FUSE));
-        ring.position.set(o.lx, 0.21, o.lz); // above the city's 0.15 m pavements
+        ring.position.set(o.lx, groundY(o.lx, o.lz) + 0.21, o.lz); // above the city's 0.15 m pavements
         ring.scale.setScalar(o.r);
-        fill.position.set(o.lx, 0.2, o.lz);
+        fill.position.set(o.lx, groundY(o.lx, o.lz) + 0.2, o.lz);
         fill.scale.setScalar(Math.max(0.05, o.r * p));
         const m = fill as THREE.Mesh;
         m.material = p > 0.8 && Math.floor(t * 16) % 2 ? mat("#ffffff", 0.5) : mat("#ff2a1a", 0.28);

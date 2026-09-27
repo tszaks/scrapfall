@@ -3,6 +3,9 @@ let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
 let sfxGain: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
+let muffle: BiquadFilterNode | null = null;
+let windGain: GainNode | null = null;
+let windFilter: BiquadFilterNode | null = null;
 let vol = { music: 0.5, sfx: 0.7 };
 
 export function initAudio() {
@@ -13,7 +16,11 @@ export function initAudio() {
     ctx = new AC();
     const master = ctx.createGain();
     master.gain.value = 0.8;
-    master.connect(ctx.destination);
+    // weather muffling (the alpine blizzard): a lowpass that is wide open by default
+    muffle = ctx.createBiquadFilter();
+    muffle.type = "lowpass";
+    muffle.frequency.value = 20000;
+    master.connect(muffle).connect(ctx.destination);
     musicGain = ctx.createGain();
     sfxGain = ctx.createGain();
     musicGain.connect(master);
@@ -136,6 +143,36 @@ export function playSfx(kind: Sfx) {
     tone({ wave: "square", f0: 660, f1: 660, dur: 0.1, gain: 0.25, noise: 0, cut: 5000 });
     if (ctx) tone({ wave: "square", f0: 990, f1: 990, dur: 0.18, gain: 0.25, noise: 0, cut: 5000 }, sfxGain, ctx.currentTime + 0.09);
   }
+}
+
+/** Blizzard muffling, 0 (clear) .. 1 (everything sounds far away through driving snow). */
+export function setMuffle(k: number) {
+  if (!ctx || !muffle) return;
+  const f = 20000 * Math.pow(900 / 20000, Math.max(0, Math.min(1, k)));
+  muffle.frequency.setTargetAtTime(f, ctx.currentTime, 0.2);
+}
+
+/** Howling wind bed for the blizzard, 0 (silent) .. 1. Started lazily on first use. */
+export function setWindNoise(k: number) {
+  if (!ctx || !noiseBuf) return;
+  if (!windGain) {
+    if (k <= 0.001) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    windFilter = ctx.createBiquadFilter();
+    windFilter.type = "bandpass";
+    windFilter.Q.value = 0.8;
+    windFilter.frequency.value = 500;
+    windGain = ctx.createGain();
+    windGain.gain.value = 0;
+    // the wind bypasses the muffle filter (it is the thing doing the muffling)
+    src.connect(windFilter).connect(windGain).connect(ctx.destination);
+    src.start();
+  }
+  const g = Math.max(0, Math.min(1, k)) * 0.22 * vol.sfx;
+  windGain.gain.setTargetAtTime(g, ctx.currentTime, 0.3);
+  windFilter?.frequency.setTargetAtTime(380 + k * 520, ctx.currentTime, 0.4);
 }
 
 // ---- police sirens: a couple of persistent voices steered every frame by the traffic ----
@@ -265,6 +302,25 @@ const STYLES: Record<string, Style> = {
   },
   // surf: bright major-pentatonic twang with spring-reverb echo, a driving beach-party beat
   surf: { roots: [52, 57, 59, 57], bpm: 132, arp: [0, 4, 7, 9, 12, 9, 7, 4], lead: "square", leadCut: 2600, bass: "triangle", kick: [0, 6, 8], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.6, echo: true, swing: 0.08 },
+  // alpine: an oompah-less mountain waltz: bells and a warm pad, wood clicks, soft bass
+  alpine: {
+    roots: [50, 55, 57, 52],
+    bpm: 96,
+    arp: [0, 4, 7, 12, 7, 4, 9, 7],
+    lead: "triangle",
+    leadCut: 5200,
+    bass: "sine",
+    kick: [0, 12],
+    snare: [8],
+    hat: "none",
+    pad: true,
+    arpRate: 2,
+    oct: 12,
+    bassRate: 8,
+    leadLen: 1.8,
+    echo: true,
+    wood: true,
+  },
   toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
 };
 const MAP_STYLE: Record<string, string> = {
@@ -273,6 +329,7 @@ const MAP_STYLE: Record<string, string> = {
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
   "Pacific Pier": "surf",
+  "Whiteout Pass": "alpine",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {

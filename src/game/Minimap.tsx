@@ -18,6 +18,8 @@ import {
   type CityLayout,
 } from "./cityLayout";
 import type { Block } from "./level";
+import type { AlpineLayout } from "./alpine/layout";
+import { paintAlpine } from "./alpine/minimap";
 import { pursuitDots } from "./trafficCore";
 
 export type MapItem = {
@@ -106,7 +108,11 @@ export function Minimap({
   myColor: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const base = useMemo(() => paintBase(city, blocks), [city, blocks]);
+  const alpine = "alpine" in city;
+  const base = useMemo(
+    () => ("alpine" in city ? paintAlpine(city as AlpineLayout) : paintBase(city, blocks)),
+    [city, blocks],
+  );
   const colorRef = useRef(myColor);
   colorRef.current = myColor;
 
@@ -137,15 +143,17 @@ export function Minimap({
       const wx = (x: number) => (x - f.x) * s;
       const wz = (z: number) => (z - f.z) * s;
       // backdrop land, the sea, then the street map
-      g.fillStyle = "#a8a397";
+      g.fillStyle = alpine ? "#8a9098" : "#a8a397";
       g.fillRect(-R * 2, -R * 2, R * 4, R * 4);
-      g.fillStyle = "#4f8fb0";
-      g.fillRect(-R * 3, wz(city.waterZ), R * 6, R * 6);
+      if (!alpine) {
+        g.fillStyle = "#4f8fb0";
+        g.fillRect(-R * 3, wz(city.waterZ), R * 6, R * 6);
+      }
       const ex = city as CityLayout & MapExtras;
       if (ex.seaX !== undefined) g.fillRect(wx(ex.seaX) - R * 6, -R * 3, R * 6, R * 6);
       g.imageSmoothingEnabled = false;
       g.drawImage(base, wx(-city.half), wz(-city.half), city.cells * 2 * s, city.cells * 2 * s);
-      if (ex.soloHalf) {
+      if (ex.soloHalf && !alpine) {
         // solo: dim everything past the blockades
         const h = ex.soloHalf;
         g.fillStyle = "rgba(20,16,12,0.5)";
@@ -278,7 +286,7 @@ export function Minimap({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [base, city, enemies, feed, remotes]);
+  }, [alpine, base, city, enemies, feed, remotes]);
 
   return (
     <div className="rounded-full bg-[#f3e6cf]/80 p-1 shadow-md">

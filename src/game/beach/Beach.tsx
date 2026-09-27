@@ -10,7 +10,7 @@ import * as THREE from "three";
 
 import { CitySun, facadeMaterial, rippleNormals } from "../City";
 import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture } from "../cityTextures";
-import { worldFx } from "../level";
+import { worldFx } from "../terrain";
 import type { Look, TimeOfDay } from "../lighting";
 import { PalmTrees, type PalmInst, type PalmSpecies } from "../Palms";
 import { paletteSkyTextures, prewarmPalette, skyEnvSource, skyTexture } from "../sky";

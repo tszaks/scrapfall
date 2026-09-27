@@ -1,6 +1,8 @@
 // Collision audit for Pacific Pier: points sampled inside every rendered solid thing must be
 // blocked for the player. Run: npx jiti scripts/beach-collision.ts [seeds]
-import { setArenaSize, generateLevel, blocked, groundAt, BEACH_SIZE } from "../src/game/level";
+import { setArenaSize, generateLevel, blocked, BEACH_SIZE } from "../src/game/level";
+import { groundY as groundAt, setTerrain } from "../src/game/terrain";
+import { beachTerrain } from "../src/game/beach/terrain";
 import { isBeach, DECK } from "../src/game/beach/beachLayout";
 
 const seeds = Number(process.argv[2] ?? 3);
@@ -14,6 +16,7 @@ for (const solo of [true, false])
   for (let s = 0; s < seeds; s++) {
     setArenaSize(BEACH_SIZE, 2);
     const lv = generateLevel(1000 + s * 7919, "beach", solo);
+    if (isBeach(lv.city)) setTerrain(beachTerrain(lv.city));
     const c = lv.city!;
     if (!isBeach(c)) throw new Error("not beach");
     const B = c.beach;

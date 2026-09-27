@@ -6,11 +6,11 @@ import {
   flowField,
   toNav,
   NAV_CELLS,
-  groundAt,
-  terrain,
   BEACH_SIZE,
   blocked,
 } from "../src/game/level";
+import { groundY as groundAt, setTerrain } from "../src/game/terrain";
+import { beachTerrain } from "../src/game/beach/terrain";
 import { isBeach } from "../src/game/beach/beachLayout";
 
 const seeds = Number(process.argv[2] ?? 6);
@@ -20,6 +20,7 @@ for (const solo of [true, false]) {
     setArenaSize(BEACH_SIZE, 2);
     const t0 = performance.now();
     const lv = generateLevel(seed, "beach", solo);
+    if (isBeach(lv.city)) setTerrain(beachTerrain(lv.city));
     const ms = performance.now() - t0;
     const city = lv.city!;
     if (!isBeach(city)) throw new Error("not beach");
@@ -129,7 +130,6 @@ for (const solo of [true, false]) {
       }),
     );
     console.log("  nav", navRes.join(" "));
-    void terrain;
     void NAV_CELLS;
     void blocked;
   }

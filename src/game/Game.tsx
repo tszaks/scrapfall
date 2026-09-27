@@ -6,7 +6,7 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
   setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_SOLO, CITY_COOP,
-  BEACH_SIZE, groundAt, speedAt, terrain, worldFx,
+  BEACH_SIZE,
 } from "./level";
 
 import { THEMES, layoutOf, type Theme } from "./themes";
@@ -19,6 +19,12 @@ import { Minimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { Atmosphere } from "./Atmosphere";
 import { worldLook, type TimeOfDay } from "./lighting";
+import { groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, wind, worldFx } from "./terrain";
+import { beachTerrain } from "./beach/terrain";
+import { AlpineScene, AlpineSun } from "./alpine/Alpine";
+import { PloughBody, SkierModel } from "./alpine/enemies";
+import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
@@ -515,6 +521,7 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
+  if (b.shape === "plough") return <PloughBody theme={theme} />;
   const skin = <meshLambertMaterial color={b.body} flatShading />;
   const limb = <meshLambertMaterial color={b.limb} flatShading />;
   const glow = <meshBasicMaterial color={b.glow} fog={false} />;
@@ -860,7 +867,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard" || isNewKind(k); // newer types animate themselves
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
-    g.position.set(data.x, bob + groundAt(data.x, data.z), data.z);
+    g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : k === "hornet" ? 1.3 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
@@ -1131,7 +1138,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && <SpecialModel theme={theme} data={data} />}
+      {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
       {(kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
@@ -1544,12 +1551,13 @@ function World({
     c.updateProjectionMatrix();
   }, [fov, camera]);
   const look3 = worldLook(theme, time, ARENA);
+  const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt });
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
       Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
@@ -1574,7 +1582,6 @@ function World({
       radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
       height: (k) => hitBand(k)[1], // fliers hover: their band tops out higher (enemyKinds.ts)
       dust: Number.isFinite(dust) ? dust : 0x9a9080,
-      ...(terrain ? { ground: groundAt } : {}),
     });
   }, [blocks, city, enemies, theme]);
   useEffect(() => {
@@ -1668,8 +1675,6 @@ function World({
   const fields = useRef(new Map<number, Float32Array>());
   const recycleT = useRef(1);
   const krakenT = useRef(4);
-  /** ground under the newer-type enemy being stepped (its shots start from it) */
-  const aiGround = useRef({ v: 0 }).current;
   const dropGunRef = useRef<Weapon>("scatter");
 
   const upsertRemote = (m: NetMsg) => {
@@ -1752,6 +1757,7 @@ function World({
     crate.current.active = c[2] === 1;
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
+    if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -1841,9 +1847,8 @@ function World({
 
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
-    camera.position.set(city ? city.spawn.x : 0, EYE, city ? city.spawn.z : 0);
-    camGround.current = groundAt(camera.position.x, camera.position.z);
-    camera.position.y += camGround.current;
+    camera.position.set(city ? city.spawn.x : 0, EYE + (city ? groundY(city.spawn.x, city.spawn.z) : 0), city ? city.spawn.z : 0);
+    camGround.current = camera.position.y - EYE;
     look.current = { yaw: isBeach(city) ? city.spawnYaw : 0, pitch: city ? 0.12 : 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
@@ -1976,7 +1981,7 @@ function World({
       for (let s = 0; s < 8; s++) {
         const a = (s / 8) * Math.PI * 2;
         const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-        fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2 + groundAt(e.x, e.z), e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+        fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
       }
     }
     const elite = !!e.elite;
@@ -2311,7 +2316,9 @@ function World({
 
 
   const outOfBounds = (p: THREE.Vector3) =>
-    (terrain ? terrain.hits(p.x, p.y, p.z) : p.y < 0 || blocked(blocks, p.x, p.z, 0.05)) ||
+    // the beach's ground decides shots itself (they fly over railings, stop on decks and the
+    // sea); every other map: under the ground or into a solid cell
+    (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05)) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     (city !== null && hitsTraffic(p.x, p.y, p.z));
@@ -2384,12 +2391,13 @@ function World({
     const moving = MOVE.lengthSq() > 0;
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
-    worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss");
+    alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
+    worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1)
-      * speedAt(cam.position.x, cam.position.z);
+      * groundSpeed(cam.position.x, cam.position.z); // deep snow off the paths
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -2397,6 +2405,13 @@ function World({
       const nz = cam.position.z + slide.current.z * delta;
       if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
       if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+    }
+    // weather: blizzard gusts shove you downwind
+    if (wind.x !== 0 || wind.z !== 0) {
+      const wx = cam.position.x + wind.x * delta;
+      const wz = cam.position.z + wind.z * delta;
+      if (!blocked(blocks, wx, cam.position.z, 0.4)) cam.position.x = wx;
+      if (!blocked(blocks, cam.position.x, wz, 0.4)) cam.position.z = wz;
     }
 
     // car bumps: velocity that decays quickly, sliding along walls instead of through them
@@ -2450,11 +2465,12 @@ function World({
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
-    if (terrain) {
-      // follow decks, stairs and bowls; snap on big jumps (respawn, a teleport)
-      const gy = groundAt(cam.position.x, cam.position.z);
+    {
+      // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
+      // jumps: respawn, a teleport), other maps follow it directly
+      const gy = groundY(cam.position.x, cam.position.z);
       const dg = gy - camGround.current;
-      camGround.current = Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+      camGround.current = !groundOwnsHits() || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
     }
     cam.position.y = camGround.current + EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
@@ -2499,7 +2515,7 @@ function World({
     if (pickupMesh.current) {
       pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
-        pickupMesh.current.position.set(pk.x, groundAt(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.position.set(pk.x, groundY(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
@@ -2520,7 +2536,7 @@ function World({
     if (healMesh.current) {
       healMesh.current.visible = hp.active;
       if (hp.active) {
-        healMesh.current.position.set(hp.x, groundAt(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.position.set(hp.x, groundY(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
@@ -2539,7 +2555,7 @@ function World({
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
-        crateMesh.current.position.set(ck.x, groundAt(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.position.set(ck.x, groundY(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
         crateMesh.current.rotation.y += delta * 1.2;
       }
     }
@@ -2569,7 +2585,7 @@ function World({
       const mesh = turretMeshes.current[ti];
       if (mesh) {
         mesh.visible = t.t > 0;
-        mesh.position.set(t.x, groundAt(t.x, t.z), t.z);
+        mesh.position.set(t.x, groundY(t.x, t.z), t.z);
       }
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
@@ -2584,9 +2600,8 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        const tg = groundAt(t.x, t.z);
-        const from = new THREE.Vector3(t.x, 1.1 + tg, t.z);
-        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(0.9 + tg);
+        const from = new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z);
+        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(from.y - 0.2);
         const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
         if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
         fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
@@ -2755,7 +2770,7 @@ function World({
     for (let mi = mines.current.length - 1; mi >= 0; mi--) {
       const mn = mines.current[mi]!;
       const mesh = mineMeshes.current[mi];
-      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2 + groundAt(mn.x, mn.z), mn.z); }
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, groundY(mn.x, mn.z) + 0.2, mn.z); }
       let hit = false;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
@@ -2831,7 +2846,7 @@ function World({
       const targets: Target[] = [];
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundAt(r.x, r.z), fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
+        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundY(r.x, r.z), fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
 
@@ -2852,7 +2867,7 @@ function World({
         fieldFor: (t) => fields.current.get(toNav(t.x) * 1000 + toNav(t.z)),
         hurtTarget,
         shoot: (x, y, z, vx, vy, vz, life, dmg, size) =>
-          fireInto(enemyBullets.current, TMP_A.set(x, y + aiGround.v, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
+          fireInto(enemyBullets.current, TMP_A.set(x, y, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
         ords: ords.current,
         hornetCd: hornetCd.current,
         navOpen,
@@ -2933,23 +2948,21 @@ function World({
         const dx = target.x - e.x;
         const dz = target.z - e.z;
         if (isNewKind(e.kind)) {
-          if (terrain) {
-            // relief: the AI works in the enemy's own ground frame (its shots rise from its
-            // ground, aimed at the target's height above it), and a deck above is out of reach
-            aiGround.v = groundAt(e.x, e.z);
-            const rel = { ...target, y: target.y - aiGround.v };
-            const reach = Math.abs(target.y - EYE - aiGround.v) < 2.2 ? d : Math.max(d, 3.5);
-            stepNewKind(e, ei, rel, reach, aiCtx);
-            aiGround.v = 0;
+          if (groundOwnsHits()) {
+            // the beach: a player up on a deck is out of melee reach from the sand below
+            // (enemyAI.ts already fires shots and ordnance from the enemy's own ground)
+            const reach = Math.abs(target.y - EYE - groundY(e.x, e.z)) < 2.2 ? d : Math.max(d, 3.5);
+            stepNewKind(e, ei, target, reach, aiCtx);
             continue;
           }
           stepNewKind(e, ei, target, d, aiCtx); // enemyAI.ts: its own movement, telegraphs, attacks
           continue;
         }
         e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
-        // relief maps: shots leave from the enemy's own ground, and melee can't reach a deck above
-        const ey = groundAt(e.x, e.z);
-        const dm = Math.abs(target.y - EYE - ey) < 2.2 ? d : Infinity;
+        // the beach: melee can't reach a player up on a deck (shots already leave from each
+        // enemy's own ground); every other map measures melee on the ground plane as before
+        const ey = groundY(e.x, e.z);
+        const dm = groundOwnsHits() && Math.abs(target.y - EYE - ey) > 2.2 ? Infinity : d;
 
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
@@ -2984,14 +2997,16 @@ function World({
           if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
           if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
           if (spType === "bile") dir = d > 5 ? 1 : 0;
+          // RIDGE RAIDER: carves in fast on skis, quicker still in a whiteout
+          if (spType === "skier") { dir = d > 6 ? 1 : 0; spMul = 1.5 + alpine.blizzard * 0.5; }
           if (spType === "crawler") { dir = d > 1.3 ? 1 : 0; spMul = 1.45; }
         }
         if (e.swing > 0) dir = 0;
         const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir
-          * (terrain ? 0.5 + 0.5 * speedAt(e.x, e.z) : 1); // sand drags a little
+          * (groundOwnsHits() ? 0.5 + 0.5 * groundSpeed(e.x, e.z) : 1); // beach sand drags a little
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
-        if (spType === "stalker" || spType === "shinobi" || spType === "crawler") {
+        if (spType === "stalker" || spType === "shinobi" || spType === "skier" || spType === "crawler") {
           // flanking arcs / zig-zag dash-steps / a crab's sideways scuttle
           const now = performance.now() / 1000;
           const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2
@@ -3039,7 +3054,7 @@ function World({
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
           e.cooldown = 1.5 + rand() * 0.6;
-          const from = new THREE.Vector3(e.x, 1.5 + ey, e.z);
+          const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 1.5, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
           fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
@@ -3049,20 +3064,21 @@ function World({
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
-            const from = new THREE.Vector3(e.x, 3.2 + ey, e.z);
-            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2 - ey, target.z - e.z).normalize();
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 3.2, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - from.y, target.z - e.z).normalize();
             from.addScaledVector(vel, 1.2);
             fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
           }
         }
         if (spType) {
           e.shot -= delta;
-          const aim = (y: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
-            const from = new THREE.Vector3(e.x, y + ey, e.z);
+          const aim = (y0: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+            const y = y0 + groundY(e.x, e.z);
+            const from = new THREE.Vector3(e.x, y, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = 0; s < n; s++) {
               const a = base + (n > 1 ? (s - (n - 1) / 2) * spread : 0);
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - y - ey) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
               fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 0.8), vel.multiplyScalar(spd), life, dmg, "", size);
             }
           };
@@ -3099,6 +3115,11 @@ function World({
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
           if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          if (spType === "skier") {
+            // a fan of thrown ice picks at mid range, a pole jab up close
+            if (ready && d < 20 && d > 4) { e.shot = 2.3; aim(1.3, 17, 0.12, 3, 1, 2, 0.12); }
+            if (d < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
+          }
           // TIDE CRAWLER: pincer snaps up close, a fan of sea-foam bubbles from mid range
           if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 2); }
           if (spType === "crawler" && ready && d > 5 && d < 14) { e.shot = 3.4; aim(0.6, 11, 0.22, 5, 1, 1.3, 0.18); }
@@ -3107,14 +3128,25 @@ function World({
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
-            const from = new THREE.Vector3(e.x, 2.6 + ey, e.z);
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 2.6, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = -3; s <= 3; s++) {
               const a = base + s * 0.16;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6 - ey) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - from.y) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
               fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
             }
+          }
+          // THE AVALANCHE ENGINE: every few seconds it drops the blade and ploughs straight at you
+          if (theme.boss.shape === "plough") {
+            e.aux = (e.aux ?? 5) - delta;
+            if (e.aux < 0 && e.aux > -1.4) {
+              const cx = e.x + (dx / d) * 10 * delta;
+              const cz = e.z + (dz / d) * 10 * delta;
+              if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
+              if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
+              if (d < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
+            } else if (e.aux <= -1.4) e.aux = d > 5 && d < 28 ? 5 + rand() * 3 : 1;
           }
           // THE KRAKEN RIG: every few seconds its tentacles sweep a ring of shots all round
           if (theme.boss.shape === "kraken") {
@@ -3270,7 +3302,7 @@ function World({
               const rz = b.pos.z - e.z;
               const fwd = rx * fx + rz * fz;
               const lat = rx * fz - rz * fx;
-              if (fwd > 0.2 && fwd < 1.6 && Math.abs(lat) < 1.15 && b.pos.y < 2.5 + groundAt(e.x, e.z) && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
+              if (fwd > 0.2 && fwd < 1.6 && Math.abs(lat) < 1.15 && b.pos.y - groundY(e.x, e.z) < 2.5 && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
                 if (isH) drainShield(e, b.damage);
                 else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
                 burst(b);
@@ -3280,8 +3312,8 @@ function World({
               }
             }
             const [lo, hi] = hitBand(e.kind);
-            const gy = groundAt(e.x, e.z); // relief maps: the enemy stands on its own ground
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < hi + gy && b.pos.y > lo + gy) {
+            const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
               // executioner / shredder / bounty are judged on the host (it has the true health)
@@ -3369,11 +3401,13 @@ function World({
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
           const tr = traffic.current.encode?.();
+          const al = encodeAlpine();
           const od = packOrds(ords.current);
           n.broadcast({
             type: "snap", e, b, mk,
             ...(od.length ? { od } : {}),
             ...(tr ? { tr } : {}),
+            ...(al ? { al } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -3394,7 +3428,7 @@ function World({
       const pd = pending.current[i];
       const show = !!pd && pd.t <= MARK_TIME && Math.floor(state.clock.elapsedTime * 6) % 2 === 0;
       g.visible = show;
-      if (pd) g.position.set(pd.x, groundAt(pd.x, pd.z), pd.z);
+      if (pd) g.position.set(pd.x, groundY(pd.x, pd.z), pd.z);
     });
     const v = viewModel.current;
     if (!v) return;
@@ -3422,7 +3456,7 @@ function World({
       <fog attach="fog" args={[look3.fogColor, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
       {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color={look3.ambientColor} />}
-      {time === "night" && (
+      {time === "night" && !alpineMap && (
         <Stars
           radius={city ? 900 : 90}
           depth={city ? 200 : 20}
@@ -3432,7 +3466,9 @@ function World({
           speed={0.3}
         />
       )}
-      {isBeach(city) ? null : city ? (
+      {alpineMap ? (
+        <AlpineSun key="sun-alpine" time={time} />
+      ) : isBeach(city) ? null : city ? (
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
@@ -3451,7 +3487,9 @@ function World({
           shadow-mapSize-height={1024}
         />
       )}
-      {isBeach(city) ? (
+      {alpineMap ? (
+        <AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
+      ) : isBeach(city) ? (
         <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
       ) : city ? (
         <>
@@ -3581,7 +3619,9 @@ function initialMapChoice(): number | null {
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
  * guests (who derive the map from the shared seed) land on the same one. */
 function newSeed(choice: number | null) {
-  const s = Math.floor(Math.random() * 1e9);
+  let s = Math.floor(Math.random() * 1e9);
+  // Random never lands on a work-in-progress map
+  while (choice === null && THEMES[s % THEMES.length]!.wip) s = Math.floor(Math.random() * 1e9);
   return choice === null ? s : s - (s % THEMES.length) + choice;
 }
 
@@ -3870,12 +3910,17 @@ export function Game() {
     const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
     // co-op gets a bigger field; the real-scale maps are far bigger and route on 4 m nav cells
-    // (the beach is always its full 800 m; solo seals a smaller square with blockades)
-    const layout = layoutOf(theme);
-    if (layout === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
-    else if (layout === "beach") setArenaSize(BEACH_SIZE, 2);
+    const mode = layoutOf(theme);
+    if (mode === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    // the alpine and beach maps are always the full co-op size; solo seals a smaller square
+    else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
+    else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    const level = generateLevel(seed, layout, !coop);
+    const level = generateLevel(seed, mode, !coop);
+    const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
+    // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, or flat
+    setTerrain(alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : null);
+    resetAlpine(alp !== null);
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
     if (!level.city) {
@@ -4474,7 +4519,7 @@ export function Game() {
                   {isHost ? "MAP" : "MAP · THE HOST PICKS"}
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-1">
-                  {([null, ...THEMES.map((_, i) => i)] as (number | null)[]).map((i) => {
+                  {([null, ...THEMES.flatMap((t, i) => (t.wip && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
                     const on = isHost ? mapChoice === i : i === seed % THEMES.length;
                     return (
                       <button

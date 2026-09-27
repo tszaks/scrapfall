@@ -1,5 +1,3 @@
-import type { LayoutMode } from "./level";
-
 export type Theme = {
   name: string;
   sky: string;
@@ -18,10 +16,14 @@ export type Theme = {
    * "beach" builds the Pacific Pier beach town (see beach/beachLayout.ts). */
   blockShape:
     | "monument" | "crystal" | "tree" | "basalt" | "butte"
-    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "beach";
+    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "alpine" | "beach";
+  /** big real-scale maps: which generator builds the world (default: scatter, or city for blockShape "city") */
+  layout?: "scatter" | "city" | "alpine" | "beach";
+  /** Work in progress: kept out of the map picker and the random roll; still reachable with ?map= */
+  wip?: boolean;
   boss: {
     name: string;
-    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "kraken";
+    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "plough" | "kraken";
     body: string;
     limb: string;
     eye: string;
@@ -33,17 +35,12 @@ export type Theme = {
   /** Map-exclusive bonus enemy that joins waves on top of the regular roster. */
   special: {
     name: string;
-    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "crawler";
+    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "skier" | "crawler";
     body: string;
     accent: string;
     glow: string;
   };
 };
-
-/** Which generator builds a map: the classic scatter arena or one of the real-scale big maps. */
-export function layoutOf(t: Theme): LayoutMode {
-  return t.blockShape === "city" ? "city" : t.blockShape === "beach" ? "beach" : "scatter";
-}
 
 
 export const THEMES: Theme[] = [
@@ -277,6 +274,47 @@ export const THEMES: Theme[] = [
     },
   },
   {
+    name: "Whiteout Pass",
+    wip: true,
+    sky: "#9fb4d6",
+    ground: "#eef3fa",
+    grid: ["#dfe8f3", "#e8eef6"],
+    blocks: ["#7a5236", "#9aa4ae", "#f4f7fb"],
+    wall: "#5a4030",
+    hemi: ["#dfe9ff", "#7d8fb0"],
+    enemy: {
+      drifter: { body: "#e8452a", emissive: "#3a0c04", eye: "#e6fbff" },
+      brute: {
+        body: "#2e3a52",
+        head: "#223047",
+        eye: "#ffb13a",
+        club: "#5a4030",
+        clubHead: "#c8d8e8",
+      },
+      shooter: { body: "#f0f4fa", barrel: "#1a2230", eye: "#ff3a4a" },
+    },
+    enemyBullet: "#ff6a2a",
+    blockShape: "alpine",
+    layout: "alpine",
+    boss: {
+      name: "THE AVALANCHE ENGINE",
+      shape: "plough",
+      body: "#e8a21a",
+      limb: "#2a2e36",
+      eye: "#ff4a2a",
+      weapon: "#c8ccd4",
+      glow: "#ffb13a",
+    },
+    hazard: { name: "BLIZZARD", slip: 0.3 },
+    special: {
+      name: "RIDGE RAIDER",
+      type: "skier",
+      body: "#f2f5fa",
+      accent: "#2a6fd6",
+      glow: "#ff6a2a",
+    },
+  },
+  {
     // a real-scale Santa Monica-style beach town: pier, Ferris wheel, boardwalk, bluffs
     name: "Pacific Pier",
     sky: "#f2a27e",
@@ -298,6 +336,7 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#3af0ff",
     blockShape: "beach",
+    layout: "beach",
     boss: {
       name: "THE KRAKEN RIG",
       shape: "kraken",
@@ -317,3 +356,8 @@ export const THEMES: Theme[] = [
     },
   },
 ];
+
+/** Which generator builds this theme's world. */
+export function layoutOf(t: Theme): "scatter" | "city" | "alpine" | "beach" {
+  return t.layout ?? (t.blockShape === "city" ? "city" : "scatter");
+}

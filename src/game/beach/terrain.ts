@@ -1,7 +1,7 @@
 // Runtime ground for Pacific Pier: walkable height, movement speed and projectile collision,
 // all answered from the layout's cell grids plus a few analytic shapes (ramps, bowls).
 // Cheap enough to call per enemy and per bullet every frame.
-import type { Terrain } from "../level";
+import type { Ground } from "../terrain";
 import {
   K_SAND,
   K_SURF,
@@ -15,7 +15,7 @@ import {
   type BeachLayout,
 } from "./beachLayout";
 
-export function beachTerrain(city: BeachLayout): Terrain {
+export function beachTerrain(city: BeachLayout): Ground {
   const { cells: n, half, kind, beach } = city;
   const { regionOf, regions, mods, pads, pBot, pTop, deep } = beach;
   // bowls only matter inside their own box: bucket them so plain sand skips the maths
@@ -57,6 +57,7 @@ export function beachTerrain(city: BeachLayout): Terrain {
   };
   return {
     height,
+    strictNav: true,
     speed: (x, z) => {
       const c = cellOf(x, z);
       if (c < 0 || regionOf[c]! >= 0) return 1;

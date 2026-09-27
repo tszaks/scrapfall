@@ -1,27 +1,10 @@
 import { generateCity, type CityLayout } from "./cityLayout";
+import { generateAlpine } from "./alpine/layout";
 import { generateBeach } from "./beach/beachLayout";
-import { beachTerrain } from "./beach/terrain";
+import { strictNav } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number };
-export type LayoutMode = "scatter" | "city" | "beach";
-
-/**
- * Ground relief for maps that have it (the beach pier's decks, stairs and bowls). null on the
- * flat maps, where everything behaves exactly as before.
- */
-export type Terrain = {
-  /** walkable ground height at (x, z) */
-  height: (x: number, z: number) => number;
-  /** movement speed multiplier there (sand, surf) */
-  speed: (x: number, z: number) => number;
-  /** true when a projectile at (x, y, z) hits the ground, the sea or a solid thing */
-  hits: (x: number, y: number, z: number) => boolean;
-};
-export let terrain: Terrain | null = null;
-export const groundAt = (x: number, z: number) => (terrain ? terrain.height(x, z) : 0);
-export const speedAt = (x: number, z: number) => (terrain ? terrain.speed(x, z) : 1);
-/** Live world effects the map's renderer can react to (set by the game loop every frame). */
-export const worldFx = { hazard: false };
+export type LayoutMode = "scatter" | "city" | "alpine" | "beach";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
@@ -50,21 +33,27 @@ function mulberry32(seed: number) {
  * sparse block maze; "city" is a street grid of multi-cell buildings (one Block
  * per occupied cell, so collision and pathfinding work unchanged).
  */
-export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo = true) {
+export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo = false) {
   const rand = mulberry32(seed);
   const blocks: Block[] = [];
   const cells = Math.floor(ARENA / BLOCK);
   let city: CityLayout | null = null;
-  terrain = null;
 
   if (mode === "beach") {
+    // the full map in solo and co-op; solo seals a smaller square with blockades. The caller
+    // installs its ground (beachTerrain) through terrain.ts, like the alpine heightfield.
     const out = generateBeach(rand, cells, HALF, solo);
-    terrain = beachTerrain(out.layout);
     return { blocks: out.blocks, seed, rand, city: out.layout as CityLayout };
   }
 
   if (mode === "city") {
     const out = generateCity(rand, cells, HALF);
+    city = out.layout;
+    return { blocks: out.blocks, seed, rand, city };
+  }
+  if (mode === "alpine") {
+    // the full map in solo and co-op; solo seals a smaller square with blockades
+    const out = generateAlpine(seed, solo);
     city = out.layout;
     return { blocks: out.blocks, seed, rand, city };
   }
@@ -243,10 +232,10 @@ export function solidGrid(blocks: Block[]): NavGrid {
         }
       }
       const k = i * n + j;
-      // solid unless at least half of the sub-cells are open. With ground relief a single
-      // solid sub-cell (a railing between a deck and the sand) must cut the route, so any
-      // solid sub-cell makes the nav cell solid.
-      g[k] = (terrain ? open < total : open * 2 < total) || open === 0 ? 1 : 0;
+      // solid unless at least half of the sub-cells are open. On a ground that asks for strict
+      // nav (the beach: a railing between a deck and the sand must cut the route) any solid
+      // sub-cell makes the nav cell solid.
+      g[k] = (strictNav() ? open < total : open * 2 < total) || open === 0 ? 1 : 0;
       px[k] = open ? sx / open : 0;
       pz[k] = open ? sz / open : 0;
     }
