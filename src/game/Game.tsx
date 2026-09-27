@@ -1449,11 +1449,13 @@ function World({
   const takeHit = (dmg: number) => {
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     const s2 = stats.current;
+    if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
   };
+
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     c.fov = fov;
