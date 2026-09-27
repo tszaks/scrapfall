@@ -29,3 +29,5 @@
 - [x] Pause icon is two clean bars, moved to the top-left corner on mobile
 - [x] Smaller weapon chips on mobile
 - [x] Version 1.0.1
+- [x] Bigger waves (1.25x on wave 1, +0.10x each wave), shuffled spawn order, tougher boss round
+- [x] Version 1.0.2

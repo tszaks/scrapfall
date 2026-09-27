@@ -89,7 +89,7 @@ type Bullet = {
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
 
-const BOSS_HP = 300;
+const BOSS_HP = 450; // 1.5x tougher arena boss
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
   brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
@@ -105,7 +105,7 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
 // 12 rounds, ramping; the last one is the map boss
 type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
-  { drifter: 5 },
+  { drifter: 5, brute: 1 },
   { drifter: 6, shooter: 1, runner: 1 },
   { drifter: 6, brute: 1, shooter: 2, specter: 1, special: 1 },
   { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1, special: 1 },
@@ -116,7 +116,7 @@ const WAVES: WaveSpec[] = [
   { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2, special: 3 },
   { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3, special: 3 },
   { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3, special: 4 },
-  { boss: 1, drifter: 6, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 1 },
+  { boss: 1, drifter: 10, brute: 6, shooter: 6, runner: 6, specter: 4, bomber: 3, vanguard: 3, special: 3 },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
@@ -1823,17 +1823,31 @@ function World({
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    const enemyMul = 1 + 0.6 * extra;
+    // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
+    const waveMul = 1.25 + 0.1 * (n - 1);
+    const enemyMul = waveMul * (1 + 0.6 * extra);
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
-    const scale = (v: number) => Math.round(v * enemyMul);
+    const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
-    const kinds: Kind[] = ([] as Kind[])
+    // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
+    const surprisePool: Kind[] = n >= 5 ? ["brute", "specter", "bomber", "vanguard", "special"] : n >= 3 ? ["brute", "shooter", "specter", "special"] : ["brute", "shooter", "runner"];
+    const surprises = Array<Kind>(1 + Math.floor(rand() * 2)).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
+    const roster: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
-      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : [])
-      .sort((a) => (a === "boss" ? -1 : 0))
-      .slice(0, MAX_ENEMIES);
+      .concat(surprises)
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
+    // shuffle arrivals so enemy types come mixed instead of type-by-type
+    const boss: Kind[] = roster.filter((k) => k === "boss");
+    const rest: Kind[] = roster.filter((k) => k !== "boss");
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const tmp = rest[i]!;
+      rest[i] = rest[j]!;
+      rest[j] = tmp;
+    }
+    const kinds: Kind[] = boss.concat(rest).slice(0, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
 
     // spread arrivals across the wave: a few right away, the rest trickle in
@@ -4259,7 +4273,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    DUSTFIELD · v1.0.1
+                    DUSTFIELD · v1.0.2
                   </div>
                 </div>
               </div>
