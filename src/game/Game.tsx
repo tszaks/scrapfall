@@ -3715,25 +3715,31 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 font-mono text-[#2b2118]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30 font-mono text-[#2b2118]">
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
-          <div className="mb-2 flex justify-center gap-2">
-            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+          <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
+            <button
+              onClick={() => patchRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
               <span className="font-bold tracking-widest">FIELD DRESSING</span>
               <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
               <span className="font-bold">◆ {PATCH_COST}</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
+            </button>
+            <button
+              onClick={() => rerollRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
               <span className="font-bold tracking-widest">REROLL</span>
               <span className="opacity-60">
                 {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
               </span>
               <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
-            </div>
+            </button>
           </div>
           <div className="flex justify-center gap-3">
 
