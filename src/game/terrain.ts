@@ -14,6 +14,9 @@ export type Terrain = {
   h: Float32Array;
   /** optional walking-speed multiplier per 2 m cell (deep snow off the paths), same layout as h */
   speed?: (x: number, z: number) => number;
+  /** optional climbing limit (rise per metre walked): steeper steps, up or down, are walls
+   * (a balcony edge, the belfry parapet) */
+  maxSlope?: number;
 };
 
 let T: Terrain | null = null;
@@ -58,4 +61,14 @@ export function groundY(x: number, z: number) {
 /** Walking-speed multiplier at (x, z): 1 on flat maps and on paths, lower in deep snow. */
 export function groundSpeed(x: number, z: number) {
   return T?.speed ? T.speed(x, z) : 1;
+}
+
+/** Can a walker step from (x0, z0) to (x1, z1)? Only terrains with `maxSlope` refuse steep
+ * steps: up a wall, or off a ledge (take the stairs down). */
+export function climbable(x0: number, z0: number, x1: number, z1: number) {
+  const t = T;
+  if (!t || t.maxSlope === undefined) return true;
+  const rise = Math.abs(groundY(x1, z1) - groundY(x0, z0));
+  if (rise <= 0.05) return true;
+  return rise <= Math.hypot(x1 - x0, z1 - z0) * t.maxSlope + 0.02;
 }

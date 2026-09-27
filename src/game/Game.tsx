@@ -29,7 +29,7 @@ import { alpineMinimap, cityMinimap } from "./cityMinimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { Atmosphere } from "./Atmosphere";
 import { worldLook, type TimeOfDay } from "./lighting";
-import { groundY, groundSpeed, setTerrain, wind } from "./terrain";
+import { climbable, groundY, groundSpeed, setTerrain, wind } from "./terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
@@ -185,6 +185,8 @@ const TURN_SPEED = 2.4;
 const MAX_BULLETS = 90;
 const SPEED = 7;
 const EYE = 1.6;
+/** first-person gun: scale and distance factor (see the view-model pose) */
+const VIEW_K = 0.5;
 
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
@@ -2311,6 +2313,9 @@ function World({
         * (overdrive.current > 0 ? 0.5 : 1);
     }
 
+    // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
+    const walkTo = (x: number, z: number) =>
+      !blocked(blocks, x, z, 0.4) && climbable(cam.position.x, cam.position.z, x, z);
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
@@ -2333,15 +2338,15 @@ function World({
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+      if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
+      if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
     // weather: blizzard gusts shove you downwind
     if (wind.x !== 0 || wind.z !== 0) {
       const wx = cam.position.x + wind.x * delta;
       const wz = cam.position.z + wind.z * delta;
-      if (!blocked(blocks, wx, cam.position.z, 0.4)) cam.position.x = wx;
-      if (!blocked(blocks, cam.position.x, wz, 0.4)) cam.position.z = wz;
+      if (walkTo(wx, cam.position.z)) cam.position.x = wx;
+      if (walkTo(cam.position.x, wz)) cam.position.z = wz;
     }
 
     // car bumps: velocity that decays quickly, sliding along walls instead of through them
@@ -2350,9 +2355,9 @@ function World({
       for (let st = 0; st < steps; st++) {
         const nx = cam.position.x + (kn.x * delta) / steps;
         const nz = cam.position.z + (kn.z * delta) / steps;
-        if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx;
+        if (walkTo(nx, cam.position.z)) cam.position.x = nx;
         else kn.x *= -0.2;
-        if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz;
+        if (walkTo(cam.position.x, nz)) cam.position.z = nz;
         else kn.z *= -0.2;
       }
       const decay = Math.exp(-delta * 6);
@@ -3345,9 +3350,12 @@ function World({
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
     const sway = bobAmt.current;
-    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
-    v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
-    v.translateZ(-0.75 + recoil.current * 0.08);
+    // the gun is drawn at half size, half as far away: it looks identical on screen but sits
+    // inside the player's collision radius, so walls and slopes never cut through it
+    const gk = VIEW_K;
+    v.translateX((0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway) * gk);
+    v.translateY((-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03) * gk);
+    v.translateZ((-0.75 + recoil.current * 0.08) * gk);
     v.rotateX(recoil.current * 0.15);
     fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
@@ -3462,7 +3470,7 @@ function World({
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
       </mesh>
-      <group ref={viewModel} scale={0.7}>
+      <group ref={viewModel} scale={0.7 * VIEW_K}>
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
@@ -3823,7 +3831,7 @@ export function Game() {
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
     const level = generateLevel(seed, mode, !coop);
     const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
-    setTerrain(alp ? alp.terrain : null);
+    setTerrain(alp ? alp.terrain : level.western ? level.western.terrain : null);
     resetAlpine(alp !== null);
     let gaps: Gap[] = [];
     if (sealed && !coop) {

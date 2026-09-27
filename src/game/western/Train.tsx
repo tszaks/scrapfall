@@ -773,7 +773,15 @@ export function WesternTrain({
             hw: car.w / 2,
             h: y0 + car.h,
           });
-        if (onTrestle || sp < 0.05) return;
+        if (onTrestle) return;
+        if (sp < 0.05) {
+          // standing still (the boss train at the platform): a wall, not a ghost
+          if (L.active && hitCd.current <= 0 && Math.abs(pz - zc) < car.len / 2 + 0.45 && Math.abs(px - RAIL_X) < car.w / 2 + 0.45) {
+            L.hitPlayer(0, (px >= RAIL_X ? 1 : -1) * 7, 0, 0);
+            hitCd.current = 0.15;
+          }
+          return;
+        }
         // ---- bumping the local player: hard, and it never stops ----
         const hl = car.len / 2 + 0.55;
         const hw = car.w / 2 + 0.5;
@@ -849,7 +857,7 @@ export function WesternTrain({
         pf.z += pf.vz * dt;
         pf.vy *= 1 - dt * 0.35;
         const k = pf.age / pf.life;
-        const size = pf.s * (1 + k * 4.5);
+        const size = pf.s * (1 + k * 2.4);
         _m.compose(_p.set(pf.x, pf.y, pf.z), camera.quaternion, _s.set(size, size, size));
         pm.setMatrixAt(i, _m);
         alpha.setX(i, 0.7 * (1 - k) * Math.min(1, pf.age * 6));

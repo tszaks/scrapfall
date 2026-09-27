@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Geo } from "../cityGeo";
 import type { TimeOfDay } from "../lighting";
 import type { Gap } from "../soloBounds";
-import { W, WK, type WesternLayout } from "./layout";
+import { W, WK, sampleTerrain, type WesternLayout } from "./layout";
 import { WESTERN_LOOK } from "./look";
 import { geoKit, propTemplate } from "./mesh";
 import { WL, softGlow } from "./textures";
@@ -173,8 +173,9 @@ function buildBlockades(L: WesternLayout, gaps: Gap[]) {
       G2.mat(WL.TIMBER, 0.5, 0);
       build(G2, E2);
       const p = at(t, o);
-      if (G2.n) G.stamp(G2.freeze(), p.x, 0, p.z, rot + yaw);
-      if (E2.n) E.stamp(E2.freeze(), p.x, 0, p.z, rot + yaw);
+      const y0 = sampleTerrain(L.terrain, p.x, p.z);
+      if (G2.n) G.stamp(G2.freeze(), p.x, y0, p.z, rot + yaw);
+      if (E2.n) E.stamp(E2.freeze(), p.x, y0, p.z, rot + yaw);
     };
     const mid = at(0, 0);
     const kind = groundAt(
@@ -188,12 +189,13 @@ function buildBlockades(L: WesternLayout, gaps: Gap[]) {
       // a rockslide: a heap of boulders, the big ones behind, smaller ones spilling forward
       while (t < w / 2 + 0.6) {
         const sc = 1.3 + r() * 1.3;
-        const p = at(t + sc * 0.6, 1.6 + r() * 1.2);
+        // big stones sit back so their near faces stay on the sealed ring, not in play
+        const p = at(t + sc * 0.6, 0.3 + sc * 1.2 + r() * 0.5);
         if (boulder)
           G.stamp(
             boulder.d,
             p.x,
-            -0.1,
+            sampleTerrain(L.terrain, p.x, p.z) - 0.1,
             p.z,
             r() * 6.28,
             sc * 1.25,
@@ -209,7 +211,7 @@ function buildBlockades(L: WesternLayout, gaps: Gap[]) {
           G.stamp(
             boulder.d,
             p.x,
-            -0.15,
+            sampleTerrain(L.terrain, p.x, p.z) - 0.15,
             p.z,
             r() * 6.28,
             0.6 + r() * 0.5,

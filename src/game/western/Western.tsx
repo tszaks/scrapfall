@@ -7,7 +7,16 @@ import * as THREE from "three";
 
 import type { TimeOfDay } from "../lighting";
 import { addSkyFogUniforms, skyFog } from "../skyFog";
-import { WK, WORDS, type WesternLayout } from "./layout";
+import {
+  RIVER_EDGE,
+  RIVER_END,
+  WK,
+  WORDS,
+  riverW,
+  riverZ,
+  sampleTerrain,
+  type WesternLayout,
+} from "./layout";
 import { WESTERN_LOOK } from "./look";
 import { facadeMaterial, westernBackground, westernEnv } from "./materials";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
@@ -31,7 +40,7 @@ const _e = new THREE.Euler();
 
 /** The ground: desert sand everywhere, blended with street dirt, riverbed mud, packed yards
  * and ballast from a per-cell splat map, with large-scale colour drift so it never tiles. */
-function groundMaterial(L: WesternLayout) {
+function groundMaterial(L: WesternLayout, cutRiver: boolean) {
   const arr = westernArrays(WORDS);
   const n = L.cells;
   const raw = new Float32Array(n * n * 4);
@@ -105,6 +114,12 @@ float gNoise(vec2 p) {
       .replace(
         "#include <map_fragment>",
         `vec2 wp = vGxz;
+${cutRiver ? `// the riverbed corridor is drawn by its own carved mesh
+if (abs(wp.x) < uHalf - ${RIVER_END.toFixed(1)}) {
+  float rz = 172.0 + 24.0 * sin(wp.x / 88.0) + 9.0 * sin(wp.x / 37.0 + 1.3);
+  float rw = 21.0 + 5.0 * sin(wp.x / 61.0 + 0.4);
+  if (abs(wp.y - rz) < rw * 0.5 + ${(RIVER_EDGE - 0.3).toFixed(2)}) discard;
+}` : ""}
 float n1 = gNoise(wp * 0.02) * 0.6 + gNoise(wp * 0.09) * 0.4;
 vec2 jitter = vec2(gNoise(wp * 0.35), gNoise(wp * 0.35 + 17.0)) - 0.5;
 vec4 w = texture2D(uSplat, (wp + jitter * 2.2 + uHalf) / (2.0 * uHalf));
@@ -126,8 +141,54 @@ col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
 diffuseColor.rgb *= col;`,
       );
   };
-  mat.customProgramCacheKey = () => "western-ground-v1";
+  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v1" : "western-ground-v1");
   return { mat, splat };
+}
+
+/** the dry riverbed: a strip of ground carved below grade along the wash, following the
+ * layout's terrain (so you walk exactly on what you see); its edge tucks just under the plain */
+function riverbedMesh(L: WesternLayout) {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const x0 = -L.half + RIVER_END;
+  const x1 = L.half - RIVER_END;
+  const cols: [number, number, number][][] = [];
+  const Y = (x: number, z: number) => sampleTerrain(L.terrain, x, z);
+  for (let x = x0; x <= x1 + 1e-6; x += 2) {
+    const rz = riverZ(x);
+    const hw = riverW(x) / 2 + RIVER_EDGE;
+    const col: [number, number, number][] = [];
+    const steps = Math.ceil((hw * 2) / 1);
+    for (let k = 0; k <= steps; k++) {
+      const z = rz - hw + (hw * 2 * k) / steps;
+      const edge = k === 0 || k === steps;
+      col.push([x, edge ? -0.03 : Math.min(Y(x, z), -0.01), z]);
+    }
+    cols.push(col);
+  }
+  const nrm = (x: number, z: number) => {
+    const dx = Y(x - 0.5, z) - Y(x + 0.5, z);
+    const dz = Y(x, z - 0.5) - Y(x, z + 0.5);
+    const l = Math.hypot(dx, 1, dz);
+    return [dx / l, 1 / l, dz / l];
+  };
+  for (let c = 0; c + 1 < cols.length; c++) {
+    const a = cols[c]!;
+    const b = cols[c + 1]!;
+    const n = Math.min(a.length, b.length);
+    for (let k = 0; k + 1 < n; k++) {
+      const q = [a[k]!, a[k + 1]!, b[k + 1]!, a[k]!, b[k + 1]!, b[k]!];
+      for (const v of q) {
+        pos.push(v[0], v[1], v[2]);
+        nor.push(...nrm(v[0], v[2]));
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.computeBoundingSphere();
+  return g;
 }
 
 export const WesternScene = memo(function WesternScene({
@@ -184,13 +245,18 @@ export const WesternScene = memo(function WesternScene({
     }),
     [nightK],
   );
-  const ground = useMemo(() => groundMaterial(layout), [layout]);
+  const ground = useMemo(() => groundMaterial(layout, true), [layout]);
+  const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
+  const riverGeo = useMemo(() => riverbedMesh(layout), [layout]);
   useEffect(
     () => () => {
       ground.mat.dispose();
       ground.splat.dispose();
+      riverMat.mat.dispose();
+      riverMat.splat.dispose();
+      riverGeo.dispose();
     },
-    [ground],
+    [ground, riverMat, riverGeo],
   );
 
   // reflection env maps: a small PMREM of each sky
@@ -364,6 +430,7 @@ export const WesternScene = memo(function WesternScene({
       <mesh rotation-x={-Math.PI / 2} position-y={0} material={ground.mat} receiveShadow>
         <planeGeometry args={[ext * 2, ext * 2]} />
       </mesh>
+      <mesh geometry={riverGeo} material={riverMat.mat} receiveShadow />
       <mesh geometry={built.far} material={mats.facade} receiveShadow />
       {built.chunks.map((c, i) => (
         <group key={i}>

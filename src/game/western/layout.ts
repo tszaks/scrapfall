@@ -13,6 +13,7 @@
 //   north-south past the station, out of a tunnel in the north canyon wall (next to the
 //   mine), over a trestle across the dry riverbed, and into a tunnel in the south ridge.
 import type { Block } from "../level";
+import type { Terrain } from "../terrain";
 import { soloHalf } from "../soloBounds";
 
 // ---- cell kinds (minimap, ground splat, collision) ----
@@ -32,10 +33,39 @@ export const WK = {
 export const RAIL_X = 150;
 /** Main Street: dirt carriageway z in [-12, 12], boardwalks 3 m deep either side */
 export const STREET_HALF = 12;
-export const BOARD_D = 3;
+export const BOARD_D = 4;
 export const DECK_Y = 0.28; // boardwalk deck height
 export const STOREY = 3.5;
 export const TRESTLE_Y = 6.5;
+/** the saloon balcony floor and the church belfry floor: high ground you can climb to */
+export const BALCONY_Y = 3.5;
+export const BELFRY_Y = 9.5;
+/** the dry riverbed is carved this far below grade, its banks sloping out over RIVER_BANK m */
+export const RIVER_D = 1.3;
+export const RIVER_BANK = 3.5;
+/** half-width of the carved corridor beyond the riverbed's own half-width */
+export const RIVER_EDGE = 2.5;
+/** the carved riverbed ends this far inside the map edge (the rim) */
+export const RIVER_END = 44;
+
+/** Height of a layout terrain at (x, z): bilinear, exactly like the game's groundY(). */
+export function sampleTerrain(t: Terrain, x: number, z: number) {
+  const n = t.n;
+  let fx = (x + t.half) / t.cell;
+  let fz = (z + t.half) / t.cell;
+  fx = Math.max(0, Math.min(n - 1e-4, fx));
+  fz = Math.max(0, Math.min(n - 1e-4, fz));
+  const i = Math.floor(fx);
+  const j = Math.floor(fz);
+  const u = fx - i;
+  const v = fz - j;
+  const s = n + 1;
+  const a = t.h[i * s + j]!;
+  const b = t.h[(i + 1) * s + j]!;
+  const c = t.h[i * s + j + 1]!;
+  const d = t.h[(i + 1) * s + j + 1]!;
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
 
 export type WMat = "clap" | "board" | "adobe" | "brick" | "stone" | "white" | "barn" | "log";
 export type WType =
@@ -158,6 +188,11 @@ export type WesternLayout = {
   spawnYaw: number;
   /** where the ranch campfire burns (night) */
   campfire: { x: number; z: number };
+  /** walkable height (boardwalks, the saloon balcony and its stairs, the church stairs and
+   * belfry): installed as the game's terrain, climb-limited so walls stay walls */
+  terrain: Terrain;
+  /** the saloon's outside staircase: the alley strip it climbs, bottom to top */
+  saloonStairs: { x0: number; x1: number; zBottom: number; zTop: number; zEdge: number } | null;
   extent: number;
 };
 
@@ -568,6 +603,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     buildings.push(full);
     markSolid(b.x0, b.z0, b.x1, b.z1, b.storeys * STOREY + 2);
     setGround(b.x0, b.z0, b.x1, b.z1, WK.LOT);
+    // a house's front porch (deck, posts, a little roof) blocks too
+    if (b.porch > 0 && (b.t === "house" || b.t === "ranch")) {
+      const d = 2.2;
+      if (b.front === 0) markSolid(b.x0 + 0.5, b.z0 - d, b.x1 - 0.5, b.z0, 3);
+      else if (b.front === 2) markSolid(b.x0 + 0.5, b.z1, b.x1 - 0.5, b.z1 + d, 3);
+      else if (b.front === 1) markSolid(b.x1, b.z0 + 0.5, b.x1 + d, b.z1 - 0.5, 3);
+      else markSolid(b.x0 - d, b.z0 + 0.5, b.x0, b.z1 - 0.5, 3);
+    }
     return full;
   };
   const prop = (k: WPropKind, x: number, z: number, rot = 0, s = 1, a?: number) => {
@@ -624,6 +667,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     ff?: 0 | 1 | 2 | 3;
     d?: number;
   };
+  // (held in an object: TypeScript does not track assignments made inside closures)
+  const sal: {
+    stairs: WesternLayout["saloonStairs"];
+    lot: { x0: number; x1: number; zf: number; north: boolean } | null;
+  } = { stairs: null, lot: null };
   const row = (north: boolean, x0: number, x1: number, fixed: Plan[]) => {
     const zf = north ? -STREET_HALF - BOARD_D : STREET_HALF + BOARD_D; // building front line
     const front = north ? 2 : 0;
@@ -650,7 +698,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     while (fi < fillers.length) order.push(fillers[fi++]!);
     // alleys between buildings (flanking routes); drop fillers until everything fits, so
     // every landmark is always built
-    const gaps = order.map(() => (rand() < 0.35 ? 4 : 2));
+    // buildings stand shoulder to shoulder, broken by real alleys (6 m: room to fight in);
+    // the saloon always has one, for its outside stair
+    const gaps = order.map((p) => (p.t === "saloon" ? 6 : rand() < 0.3 ? 6 : 0));
     const need = () => order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - 2;
     while (need() > x1 - x0) {
       const k = order.map((p) => fixed.includes(p)).lastIndexOf(false);
@@ -682,13 +732,34 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       });
       // boardwalk in front (walkable deck), hitching rail + trough on the street edge
       setGround(
-        x - (gap > 2 ? 0 : 1),
+        x,
         north ? zf : zf - BOARD_D,
-        x + p.w + 1,
+        x + p.w,
         north ? zf + BOARD_D : zf,
         WK.BOARD,
       );
       const edge = north ? -STREET_HALF + 0.6 : STREET_HALF - 0.6;
+      // the porch row (between the street and the walkway along the shopfronts): posts and
+      // clutter stand here, so the walkway behind them stays clear
+      const postZ = north ? zf + BOARD_D - 0.15 : zf - BOARD_D + 0.15;
+      const clutterZ = north ? zf + BOARD_D - 1 : zf - BOARD_D + 1;
+      if (porch > 0) {
+        const n = Math.max(2, Math.round(p.w / 3.2));
+        for (let i = 0; i <= n; i++) {
+          const px = x + 0.15 + ((p.w - 0.3) * i) / n;
+          markSolid(px - 0.09, postZ - 0.09, px + 0.09, postZ + 0.09, 3.3);
+        }
+      }
+      if (p.t === "saloon") {
+        sal.stairs = {
+          x0: x + p.w,
+          x1: x + p.w + 2,
+          zBottom: north ? zf - 14 : zf + 14,
+          zTop: zf,
+          zEdge: north ? zf + BOARD_D : zf - BOARD_D,
+        };
+        sal.lot = { x0: x, x1: x + p.w, zf, north };
+      }
       if (p.t !== "smithy" && rand() < 0.75) {
         const hx = x + p.w * (0.3 + rand() * 0.4);
         prop("hitch", hx, edge, 0, Math.min(4, p.w * 0.4));
@@ -712,7 +783,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         prop(
           rand() < 0.5 ? "barrels" : "crates",
           x + 1 + rand() * (p.w - 2),
-          north ? zf + 0.8 : zf - 0.8,
+          clutterZ,
           rand() * 6.28,
           0.8 + rand() * 0.4,
         );
@@ -720,11 +791,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         prop(
           "bench",
           x + p.w / 2 + (rand() - 0.5) * 3,
-          north ? zf + 0.6 : zf - 0.6,
-          north ? 0 : Math.PI,
+          clutterZ,
+          north ? Math.PI : 0,
         );
       if (rand() < 0.3)
-        prop("sacks", x + 1 + rand() * (p.w - 2), north ? zf + 0.7 : zf - 0.7, rand() * 6.28, 1);
+        prop("sacks", x + 1 + rand() * (p.w - 2), clutterZ, rand() * 6.28, 1);
       // porch lanterns
       if (porch > 0)
         prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
@@ -786,7 +857,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     roof: "gable",
     tone: 0.5,
   });
-  markSolid(-132, -3, -127, 3, 26); // the bell tower on the front
+  // the bell tower is climbable: an outside stair runs up the nave's north side to a landing
+  // and into the belfry (heights in the terrain below); a boarded wall keeps you on the stair
+  markSolid(-150, -10, -134, -8, 4); // the stair's outer wall
   setGround(-162, -20, -128, 20, WK.YARD);
   for (let z = -20; z <= 20; z += 2.5) {
     if (Math.abs(z) < 5) continue; // the gate
@@ -911,9 +984,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     );
   // the blacksmith's yard: anvil, wagon wheels, a quench barrel
   const smithy = buildings.find((b) => b.t === "smithy")!;
-  prop("anvil", (smithy.x0 + smithy.x1) / 2, smithy.z0 - 2.2, 0.3, 1);
-  prop("wheel", smithy.x0 + 1.2, smithy.z0 - 1.2, 0, 1);
-  prop("wheel", smithy.x1 - 1.4, smithy.z0 - 1.1, 0.3, 1);
+  prop("anvil", (smithy.x0 + smithy.x1) / 2, smithy.z0 - BOARD_D + 1, 0.3, 1);
+  prop("wheel", smithy.x0 + 1.2, smithy.z0 - BOARD_D + 1, 0, 1);
+  prop("wheel", smithy.x1 - 1.4, smithy.z0 - BOARD_D + 1.1, 0.3, 1);
 
   // wagons and clutter out on Main Street (cover down the middle)
   const wagonSpots: [number, number, number][] = [
@@ -1312,6 +1385,64 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   }
 
   // ======================================================================
+  // 7b. every prop that looks solid is solid: cactus, posts, horses, benches, barrels...
+  //     (footprints in metres, width across x and depth along z before rotation)
+  // ======================================================================
+  const FOOT: Partial<Record<WPropKind, [number, number]>> = {
+    saguaro: [0.8, 0.8],
+    pear: [1.2, 1.2],
+    barrelcactus: [0.7, 0.7],
+    deadtree: [0.7, 0.7],
+    pole: [0.3, 0.3],
+    streetlamp: [0.3, 0.3],
+    crossbuck: [0.3, 0.3],
+    horse: [0.7, 2.3],
+    bench: [1.7, 0.5],
+    barrels: [1.3, 1.3],
+    crates: [1.5, 1.5],
+    sacks: [1.1, 1.1],
+    woodpile: [2.2, 1.1],
+    hay: [1.2, 0.8],
+    cart: [1.3, 2.5],
+    anvil: [0.6, 0.7],
+    wheel: [1.3, 0.3],
+    campfire: [1.6, 1.6],
+    grave: [0.6, 0.3],
+    cross: [0.6, 0.2],
+    orecart: [1.3, 2.0],
+    trough: [2.4, 0.8],
+  };
+  for (const pr of props) {
+    if (pr.k === "fence") {
+      markSolid(pr.x - (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 - 0.1, pr.z - (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 - 0.1, pr.x + (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 + 0.1, pr.z + (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 + 0.1, 1.3);
+      continue;
+    }
+    if (pr.k === "hitch") {
+      markSolid(pr.x - pr.s / 2, pr.z - 0.1, pr.x + pr.s / 2, pr.z + 0.1, 1.1);
+      continue;
+    }
+    if (pr.k === "arch") {
+      for (const lx of [-9, 9]) {
+        const ax = pr.x + Math.cos(pr.rot) * lx * pr.s;
+        const az = pr.z - Math.sin(pr.rot) * lx * pr.s;
+        markSolid(ax - 3, az - 3, ax + 3, az + 3, 6);
+      }
+      continue;
+    }
+    const f = FOOT[pr.k];
+    if (!f) continue;
+    const w = f[0] * pr.s;
+    const d = f[1] * pr.s;
+    const c = Math.abs(Math.cos(pr.rot));
+    const sn = Math.abs(Math.sin(pr.rot));
+    const hw = (w * c + d * sn) / 2;
+    const hd = (w * sn + d * c) / 2;
+    markSolid(pr.x - hw, pr.z - hd, pr.x + hw, pr.z + hd, 1.5);
+  }
+  // the station's bay window pokes out onto the platform
+  markSolid(138, -29, 139.2, -25, 3);
+
+  // ======================================================================
   // 8. collision for the rock, then connectivity from the spawn
   // ======================================================================
   for (let i = 0; i < cells; i++)
@@ -1354,6 +1485,56 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       blocks.push({ x: cc(i), z: cc(j), h: 1, tone: 0 });
     }
 
+  // ======================================================================
+  // 9. walkable height: boardwalks, the platform, the saloon balcony and its stair, the
+  //    church stair, landing and belfry. 1 m samples; climbs steeper than 1:1 are walls.
+  // ======================================================================
+  const tn = half * 2;
+  const th = new Float32Array((tn + 1) * (tn + 1));
+  const tset = (x: number, z: number, h: number) => {
+    const i = Math.round(x + half);
+    const j = Math.round(z + half);
+    if (i >= 0 && j >= 0 && i <= tn && j <= tn) th[i * (tn + 1) + j] = Math.max(th[i * (tn + 1) + j]!, h);
+  };
+  for (let i = 0; i <= tn; i++)
+    for (let j = 0; j <= tn; j++) {
+      const x = -half + i;
+      const z = -half + j;
+      const k = at(x + 0.01, z + 0.01);
+      if (k < 0) continue;
+      const g = ground[k]!;
+      if (g === WK.BOARD) th[i * (tn + 1) + j] = DECK_Y;
+      else if (g === WK.PLATFORM) th[i * (tn + 1) + j] = 0.34;
+      else if (rock[k]! === 0 && Math.abs(x) < half - RIVER_END) {
+        // the dry wash, carved below grade with gentle banks you can walk down
+        const hw = riverW(x) / 2;
+        const d = Math.abs(z - riverZ(x));
+        if (d < hw + RIVER_BANK - 2) th[i * (tn + 1) + j] = -RIVER_D * smooth(hw + RIVER_BANK - 2, hw - 2, d);
+      }
+    }
+  const tbox = (x0: number, z0: number, x1: number, z1: number, h: (x: number, z: number) => number) => {
+    for (let x = Math.ceil(x0); x <= Math.floor(x1); x++)
+      for (let z = Math.ceil(z0); z <= Math.floor(z1); z++) tset(x, z, h(x, z));
+  };
+  if (sal.stairs && sal.lot) {
+    const st = sal.stairs;
+    const sl = sal.lot;
+    const dir = sl.north ? 1 : -1; // toward the street
+    // the balcony over the saloon's porch (the stair's landing at its east end)
+    const za = sl.zf;
+    const zb = sl.zf + dir * (BOARD_D - 0.1);
+    tbox(sl.x0, Math.min(za, zb), st.x1, Math.max(za, zb), () => BALCONY_Y);
+    // the stair up the alley, from the back lot to the balcony
+    tbox(st.x0, Math.min(st.zBottom, st.zTop), st.x1, Math.max(st.zBottom, st.zTop), (_x, z) =>
+      BALCONY_Y * Math.min(1, Math.max(0, (z - st.zBottom) / (st.zTop - st.zBottom))),
+    );
+  }
+  // church: stair (west end at the bottom), landing beside the tower, the belfry floor
+  tbox(-151, -8, -134, -6.3, (x) => BELFRY_Y * Math.min(1, Math.max(0, (x + 151) / 17)));
+  tbox(-134, -8, -128.5, -2, () => BELFRY_Y);
+  tbox(-132.5, -2, -128.5, 2, () => BELFRY_Y);
+  const terrain: Terrain = { half, cell: 1, n: tn, h: th, maxSlope: 1.0 };
+
   const layout: WesternLayout = {
     kind: "western",
     cells,
@@ -1374,6 +1555,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     spawn,
     spawnYaw: Math.PI / 2, // looking west, down Main Street at the church and the sunset
     campfire,
+    terrain,
+    saloonStairs: sal.stairs,
     extent: half + 3000,
   };
   return { blocks, layout, sealed };

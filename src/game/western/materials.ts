@@ -64,6 +64,11 @@ float wHash(vec2 p) {
         "#include <map_fragment>",
         `vec4 facT = texture(uDay, vec3(vFuv, vFac.x));
 diffuseColor.rgb *= facT.rgb;
+// close-up grit on the red rock: a fine second sample so cliffs stay crisp at arm's length
+if (abs(vFac.x - 17.0) < 0.5) {
+  vec3 grit = texture(uDay, vec3(vFuv * 11.0, 22.0)).rgb;
+  diffuseColor.rgb *= mix(vec3(0.82), vec3(1.12), dot(grit, vec3(0.333)));
+}
 float glassK = facT.a;
 float aoK = step(5.0, vFac.z);
 float litMode = mod(vFac.z, 10.0);
@@ -88,7 +93,7 @@ diffuseColor.rgb *= mix(1.0, mix(0.62, 1.0, smoothstep(0.0, 2.6, vWy)), aoK);`,
 }`,
       );
   };
-  mat.customProgramCacheKey = () => "western-facade-v1";
+  mat.customProgramCacheKey = () => "western-facade-v2";
   return mat;
 }
 

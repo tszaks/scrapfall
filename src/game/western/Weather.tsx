@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { blocked, type Block } from "../level";
+import { groundY, wind } from "../terrain";
 import type { TimeOfDay } from "../lighting";
 import { skyFog } from "../skyFog";
 import type { TrafficLink } from "../trafficCore";
@@ -18,7 +19,7 @@ import { trainClock } from "./trainSim";
 import { stormAt } from "./storm";
 
 const MOTES = 700;
-const DUST = 160;
+const DUST = 280;
 const WEEDS = 16;
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -105,7 +106,7 @@ export function WesternWeather({
       x: (Math.random() - 0.5) * 70,
       y: Math.random() * 7,
       z: (Math.random() - 0.5) * 70,
-      s: 4 + Math.random() * 7,
+      s: 1.1 + Math.random() * 2.2,
       a: Math.random(),
     })),
   );
@@ -264,9 +265,12 @@ export function WesternWeather({
           if (rx < -35) d.x += 70;
           if (rz > 35) d.z -= 70;
           if (rz < -35) d.z += 70;
-          _m.compose(_p.set(d.x, d.y + 1, d.z), camera.quaternion, _s.set(d.s, d.s, d.s));
+          // soft, fist-to-person sized wisps, never right in the player's face (or over the gun)
+          const near = Math.hypot(d.x - cam.x, d.z - cam.z);
+          const fade = Math.min(1, Math.max(0, (near - 2.5) / 3));
+          _m.compose(_p.set(d.x, groundY(d.x, d.z) + d.y * 0.5 + 0.4, d.z), camera.quaternion, _s.set(d.s, d.s, d.s));
           dm.setMatrixAt(i, _m);
-          alpha.setX(i, (0.22 + 0.2 * d.a) * k);
+          alpha.setX(i, (0.28 + 0.2 * d.a) * k * fade);
         }
         dm.instanceMatrix.needsUpdate = true;
         alpha.needsUpdate = true;
@@ -303,9 +307,10 @@ export function WesternWeather({
         w.ph += dt * speed * 1.4;
         const hop = Math.abs(Math.sin(w.ph * 0.5)) * (0.4 + k * 1.1);
         _q.setFromEuler(_e.set(w.ph, 0, w.ph * 0.4));
-        _m.compose(_p.set(w.x, 0.45 * w.s + hop, w.z), _q, _s.set(w.s, w.s, w.s));
+        const gy = groundY(w.x, w.z);
+        _m.compose(_p.set(w.x, gy + 0.45 * w.s + hop, w.z), _q, _s.set(w.s, w.s, w.s));
         wm.setMatrixAt(n, _m);
-        _m.compose(_p.set(w.x, 0.45 * w.s + hop, w.z), _q, _s.set(w.s * 0.8, w.s * 0.8, w.s * 0.8));
+        _m.compose(_p.set(w.x, gy + 0.45 * w.s + hop, w.z), _q, _s.set(w.s * 0.8, w.s * 0.8, w.s * 0.8));
         cm.setMatrixAt(n, _m);
         n++;
       });
@@ -315,15 +320,11 @@ export function WesternWeather({
       cm.instanceMatrix.needsUpdate = true;
     }
 
-    // ---- the wind shoves you downwind ----
+    // ---- the wind shoves you downwind (the game applies it, with collision) ----
     const L = link.current;
-    if (L.active && k > 0.2) {
-      const push = 1.5 * k;
-      const nx = cam.x + st.wx * push * dt;
-      const nz = cam.z + st.wz * push * dt;
-      if (!blocked(blocks, nx, cam.z, 0.4)) cam.x = nx;
-      if (!blocked(blocks, cam.x, nz, 0.4)) cam.z = nz;
-    }
+    const push = L.active && k > 0.2 ? 1.5 * k : 0;
+    wind.x = st.wx * push;
+    wind.z = st.wz * push;
     void layout;
   });
 

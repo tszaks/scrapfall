@@ -944,7 +944,7 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
 
   if (vm && vm.visible) {
     const lk = LOOKS[viewKind];
-    MUZZLE.set(0, lk.muzzle[0], lk.muzzle[1]).multiplyScalar(0.7).applyQuaternion(vm.quaternion).add(vm.position);
+    MUZZLE.set(0, lk.muzzle[0], lk.muzzle[1]).multiplyScalar(vm.scale.x).applyQuaternion(vm.quaternion).add(vm.position);
   }
 
   // local rounds

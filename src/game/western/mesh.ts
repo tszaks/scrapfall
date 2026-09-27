@@ -12,6 +12,8 @@ import * as THREE from "three";
 
 import { Geo, type Tmpl } from "../cityGeo";
 import {
+  BALCONY_Y,
+  BELFRY_Y,
   BOARD_D,
   DECK_Y,
   RAIL_X,
@@ -19,6 +21,7 @@ import {
   TRESTLE_Y,
   WK,
   fbm,
+  sampleTerrain,
   type WBld,
   type WesternLayout,
   type WProp,
@@ -496,7 +499,7 @@ function signBoard(
       z - 0.02,
       x + w / 2 + 0.08,
       y + h + 0.08,
-      z + 0.05,
+      z + 0.02, // 4 cm behind the painted face, so the two never fight
     );
   }
 }
@@ -590,8 +593,8 @@ function falseFront(
   wallP(G, plainL, x1, 0, x1, -t, yTop, pts[pts.length - 1]![1]);
   // cornice: a projecting moulding and brackets under it
   G.col(trimC);
-  const cy = style === 1 ? ffTop - 0.35 : Math.min(...pts.map((p) => p[1])) - 0.3;
-  boxP(G, WL.TIMBER, x0 - 0.15, cy, -0.05, x1 + 0.15, cy + 0.3, 0.32);
+  const cy = style === 1 ? ffTop - 0.35 : Math.min(...pts.map((p) => p[1])) - 0.38; // below the cap, not flush with it
+  boxP(G, WL.TIMBER, x0 + 0.02, cy, -0.05, x1 - 0.02, cy + 0.3, 0.32);
   for (let x = x0 + 0.4; x < x1; x += Math.max(1.1, W / 9))
     boxP(G, WL.TIMBER, x - 0.07, cy - 0.35, 0, x + 0.07, cy, 0.26);
   // back bracing struts (seen from behind)
@@ -697,19 +700,22 @@ function building(b: WBld, r: () => number): BGeo {
   // corner boards and a sill plate
   if (b.mat === "clap" || b.mat === "white") {
     G.col(trimC).mat(WL.PAINT, 0, 0);
+    const cb = (H > 5 ? 0.27 : 0.21) + ((b.seed >> 2) & 1) * 0.02;
     for (const [cx, cz] of [
       [x0, 0],
       [x1, 0],
       [x0, z0],
       [x1, z0],
     ] as const)
-      boxC(G, WL.PAINT, cx, 0, cz, 0.24, H, 0.24, false);
+      // sized by height and seed so the boards of two buildings that share a wall never
+      // land on exactly the same faces (identical boxes flicker against each other)
+      boxC(G, WL.PAINT, cx, 0, cz, cb, H, cb, false);
   }
   if (b.mat === "brick" || b.mat === "stone") {
     G.col(b.mat === "brick" ? "#d8ccb4" : "#b8ac94");
     for (const cx of [x0 + 0.25, x1 - 0.25])
       boxP(G, WL.P_STONE, cx - 0.35, 0, -0.1, cx + 0.35, H, 0.22); // pilasters
-    boxP(G, WL.P_STONE, x0 - 0.1, 0, -0.1, x1 + 0.1, 0.5, 0.18); // plinth
+    boxP(G, WL.P_STONE, x0 - 0.13, 0, -0.13, x1 + 0.13, 0.5, 0.25); // plinth, proud of the pilasters
   }
 
   // ---- the roof ----
@@ -746,7 +752,7 @@ function building(b: WBld, r: () => number): BGeo {
     G.v(x0, H, 0, -1, 0, 0, 0, H / 4);
     G.v(x0, ridgeY, 0, -1, 0, 0, 0, ridgeY / 4);
     G.mat(plainL);
-    wallq(G, x0, 0, x1, 0, H, ridgeY, [0, H / 4, W / 4, ridgeY / 4]);
+    if (!b.ff) wallq(G, x0, 0, x1, 0, H, ridgeY, [0, H / 4, W / 4, ridgeY / 4]);
   } else if (b.roof === "hip") {
     ridgeY = H + Math.min(W, D) * 0.32;
     const e = b.t === "station" ? 2.6 : 0.6;
@@ -842,19 +848,19 @@ function building(b: WBld, r: () => number): BGeo {
     if (b.porch === 1) {
       const roofL2 = r() < 0.6 ? WL.TIN : WL.SHINGLE;
       G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff");
-      slope(G, roofL2, x0 - 0.1, 0, x1 + 0.1, 0, py + 0.55, 0, pz + 0.35, py);
+      slope(G, roofL2, x0 + 0.01, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py);
       G.col("#ffffff", 0.55).mat(WL.DECK);
       G.quad(
-        x1 + 0.1,
+        x1 - 0.01,
         py - 0.02,
         pz + 0.35,
-        x0 - 0.1,
+        x0 + 0.01,
         py - 0.02,
         pz + 0.35,
-        x0 - 0.1,
+        x0 + 0.01,
         py + 0.53,
         0,
-        x1 + 0.1,
+        x1 - 0.01,
         py + 0.53,
         0,
         [0, 0, W / 4, 1],
@@ -864,18 +870,20 @@ function building(b: WBld, r: () => number): BGeo {
     } else {
       // balcony: a floor on the porch beams with a railing
       G.col("#ffffff", 0.9);
-      boxP(G, WL.DECK, x0 - 0.1, py, -0.1, x1 + 0.1, py + 0.18, pz + 0.3);
+      boxP(G, WL.DECK, x0 + 0.01, py, -0.1, x1 - 0.01, py + 0.18, pz + 0.3);
       const ry = py + 0.18;
       D2.col(postC);
       boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, pz + 0.12, x1 + 0.1, ry + 1.05, pz + 0.26);
       boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.1, pz + 0.14, x1 + 0.1, ry + 0.16, pz + 0.24);
       for (let x = x0; x <= x1; x += 0.42)
         boxP(D2, WL.TIMBER, x - 0.03, ry, pz + 0.16, x + 0.03, ry + 0.96, pz + 0.22, false);
-      for (const sx of [x0, x1])
+      // (the saloon's east end stays open: its outside stair lands there)
+      const sides = b.t === "saloon" ? [x0] : [x0, x1];
+      for (const sx of sides)
         for (let z = 0.3; z < pz; z += 0.42)
           boxP(D2, WL.TIMBER, sx - 0.03, ry, z - 0.03, sx + 0.03, ry + 0.96, z + 0.03, false);
       boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, 0, x0 + 0.04, ry + 1.05, pz + 0.26);
-      boxP(D2, WL.TIMBER, x1 - 0.04, ry + 0.95, 0, x1 + 0.1, ry + 1.05, pz + 0.26);
+      if (b.t !== "saloon") boxP(D2, WL.TIMBER, x1 - 0.04, ry + 0.95, 0, x1 + 0.1, ry + 1.05, pz + 0.26);
       lantern(B, x0 + W * 0.25, py - 0.6, pz - 0.3);
       lantern(B, x1 - W * 0.25, py - 0.6, pz - 0.3);
       lantern(B, 0, ry + 1.6, 0.35, 3);
@@ -892,10 +900,12 @@ function building(b: WBld, r: () => number): BGeo {
     b.t !== "adobe" &&
     b.t !== "ranch" &&
     b.t !== "barn" &&
-    b.t !== "shed"
+    b.t !== "shed" &&
+    b.t !== "station"
   ) {
-    const dx0 = x0 - 1;
-    const dx1 = x1 + 1;
+    // exactly the lot's frontage: neighbours' decks meet edge to edge, never overlap
+    const dx0 = x0;
+    const dx1 = x1;
     G.col("#ffffff", 0.95);
     G.mat(WL.DECK);
     G.quad(dx0, DECK_Y, BOARD_D, dx1, DECK_Y, BOARD_D, dx1, DECK_Y, 0, dx0, DECK_Y, 0, [
@@ -940,6 +950,13 @@ function building(b: WBld, r: () => number): BGeo {
   }
   // ---- per-type extras ----
   if (b.t === "saloon") {
+    // the porch under the balcony is railed off at street level (the balcony is up the stair)
+    B.detail.col("#e8dcc0");
+    const pzr = BOARD_D - 0.15;
+    for (const y of [0.75, 1.15]) boxP(B.detail, WL.TIMBER, x0, DECK_Y + y, pzr - 0.05, x1, DECK_Y + y + 0.08, pzr + 0.05);
+    for (const sx of [x0 + 0.05, x1 - 0.05])
+      for (const y of [0.75, 1.15]) boxP(B.detail, WL.TIMBER, sx - 0.05, DECK_Y + y, 0, sx + 0.05, DECK_Y + y + 0.08, pzr);
+    for (let x = x0 + 0.4; x < x1; x += 0.5) boxP(B.detail, WL.TIMBER, x - 0.03, DECK_Y, pzr - 0.03, x + 0.03, DECK_Y + 1.2, pzr + 0.03, false);
     // batwing doors in the middle bay, a big lit glow spilling out at night
     B.detail.col("#7a3a22");
     boxP(B.detail, WL.TIMBER, -0.75, 0.9, 0.06, -0.04, 2.0, 0.12);
@@ -961,7 +978,7 @@ function building(b: WBld, r: () => number): BGeo {
       [0, 0, 0.1, 0.1],
     );
     B.glow.col("#ff9a40", 0.55);
-    B.glow.quad(-0.8, DECK_Y, 0.035, 0.8, DECK_Y, 0.035, 0.8, 2.45, 0.035, -0.8, 2.45, 0.035);
+    B.glow.quad(-0.8, DECK_Y, 0.08, 0.8, DECK_Y, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
     B.pools.col("#ffa050").mat(0, 0, 0);
     B.pools.flat(-4, 0.2, 4, 9, 0.07);
   }
@@ -1047,7 +1064,7 @@ function tent(B: BGeo, W: number, D: number, r: () => number): BGeo {
   }
   // a lamp glowing through the canvas at night
   B.glow.col("#ffb060", 0.25);
-  B.glow.quad(-0.45, 0.02, 0.01, 0.45, 0.02, 0.01, 0, h - 0.45, 0.01, 0, h - 0.45, 0.01);
+  B.glow.quad(-0.45, 0.02, 0.05, 0.45, 0.02, 0.05, 0, h - 0.45, 0.05, 0, h - 0.45, 0.05);
   return B;
 }
 
@@ -1125,7 +1142,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   const tz1 = tz0 + tw;
   const tx0 = -tw / 2;
   const tx1 = tw / 2;
-  const shaft = 14.5;
+  const shaft = BELFRY_Y;
   G.col("#f6f2ea").mat(WL.P_CLAP, seed, AO);
   wallP(G, WL.P_CLAP, tx0, tz1, tx1, tz1, 0, shaft);
   wallP(G, WL.P_CLAP, tx1, tz1, tx1, tz0, 0, shaft);
@@ -1172,7 +1189,8 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
     [tx1 - 0.25, tz1 - 0.25],
   ] as const)
     boxC(G, WL.P_CLAP, cx, by0, cz, 0.5, by1 - by0, 0.5);
-  for (const side of [0, 1, 2, 3]) {
+  // side 1 faces north, where the landing from the outside stair comes in: no rail there
+  for (const side of [0, 2, 3]) {
     const along = side % 2 === 0;
     const zz = side === 0 ? tz0 + 0.1 : tz1 - 0.1;
     const xx = side === 1 ? tx1 - 0.1 : tx0 + 0.1;
@@ -1181,12 +1199,13 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   }
   boxP(G, WL.P_CLAP, tx0 - 0.25, by1, tz0 - 0.25, tx1 + 0.25, by1 + 0.5, tz1 + 0.25);
   B.detail.col("#8a6a2a").mat(WL.IRON, 0, 0);
-  cylP(B.detail, WL.IRON, 0, by0 + 1.3, (tz0 + tz1) / 2, 0.75, 1.3, 10, 0.35);
-  beam(B.detail, -1.6, by0 + 2.75, (tz0 + tz1) / 2, 1.6, by0 + 2.75, (tz0 + tz1) / 2, 0.2);
+  // the bell hangs above head height, so you can stand under it
+  cylP(B.detail, WL.IRON, 0, by0 + 2.05, (tz0 + tz1) / 2, 0.7, 1.0, 10, 0.32);
+  beam(B.detail, -1.6, by0 + 3.2, (tz0 + tz1) / 2, 1.6, by0 + 3.2, (tz0 + tz1) / 2, 0.2);
   // spire
   G.col("#5e5048").mat(WL.SHINGLE, 0, 0);
   const sy = by1 + 0.5;
-  const spireH = 7.2;
+  const spireH = 9;
   const cx = 0;
   const cz = (tz0 + tz1) / 2;
   const rr = tw / 2 + 0.1;
@@ -1224,9 +1243,10 @@ function smithy(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   wallP(G, WL.P_BOARD, x1, 0, x1, z0, 0, H);
   wallP(G, WL.P_BOARD, x1, z0, x0, z0, 0, H);
   wallP(G, WL.P_BOARD, x0, z0, x0, 0, 0, H);
-  wallP(G, WL.P_BOARD, x0, -0.2, x0, z0, 0, H); // inner faces
-  wallP(G, WL.P_BOARD, x0, z0 + 0.2, x1, z0 + 0.2, 0, H);
-  wallP(G, WL.P_BOARD, x1, z0, x1, -0.2, 0, H);
+  // inner faces, a board's thickness inside (a neighbour's wall may share the outer plane)
+  wallP(G, WL.P_BOARD, x0 + 0.2, -0.2, x0 + 0.2, z0 + 0.2, 0, H);
+  wallP(G, WL.P_BOARD, x0 + 0.2, z0 + 0.2, x1 - 0.2, z0 + 0.2, 0, H);
+  wallP(G, WL.P_BOARD, x1 - 0.2, z0 + 0.2, x1 - 0.2, -0.2, 0, H);
   G.col("#6a5a4a").mat(WL.YARD);
   G.flat(x0, z0, x1, 0, 0.03, [0, 0, W / 8, D / 8]);
   const ridge = H + 1.8;
@@ -1518,8 +1538,8 @@ function templates() {
       pos.setXYZ(i, x * k * 1.05, Math.max(-0.2, y) * k * 0.8, z * k);
     }
     ico.computeVertexNormals();
-    d.col("#b08a78");
-    addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0), WL.ROCK);
+    d.col("#c8a080");
+    addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0), WL.SAND);
     ico.dispose();
   });
   make("deadtree", (d) => {
@@ -2359,13 +2379,15 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     const G = chunkAt(RAIL_X, z).detail;
     G.col("#6e5a48");
     const top = TRESTLE_Y;
+    // the bents stand on the riverbed floor (carved below grade)
+    const gy = (x: number) => sampleTerrain(L.terrain, x, z) - 0.2;
     for (const [bx, tx] of [
       [-3.0, -1.2],
       [-1.2, -0.5],
       [1.2, 0.5],
       [3.0, 1.2],
     ] as const)
-      beam(G, RAIL_X + bx, 0, z, RAIL_X + tx, top, z, 0.3);
+      beam(G, RAIL_X + bx, gy(RAIL_X + bx), z, RAIL_X + tx, top, z, 0.3);
     beam(G, RAIL_X - 2.9, 0.4, z, RAIL_X + 1.4, top - 0.4, z, 0.14);
     beam(G, RAIL_X + 2.9, 0.4, z, RAIL_X - 1.4, top - 0.4, z, 0.14);
     beam(G, RAIL_X - 2.4, top * 0.5, z, RAIL_X + 2.4, top * 0.5, z, 0.14);
@@ -2490,7 +2512,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       0,
       face + o - 0.7,
       RAIL_X - w / 2,
-      h + 1.4,
+      h,
       face + o + 0.7,
     );
     boxP(
@@ -2500,7 +2522,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       0,
       face + o - 0.7,
       RAIL_X + w / 2 + 1.8,
-      h + 1.4,
+      h,
       face + o + 0.7,
     );
     boxP(
@@ -2538,6 +2560,88 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       h,
       tz + 0.25,
     );
+  }
+}
+
+/** Outside stairs (their heights live in the layout's terrain, so what you see is what you
+ * walk on): the saloon's alley stair to its balcony, and the church's stair, landing and belfry. */
+function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+  const st = L.saloonStairs;
+  if (st) {
+    const G = chunkAt((st.x0 + st.x1) / 2, st.zTop).main;
+    const dir = Math.sign(st.zTop - st.zBottom); // toward the street
+    const run = Math.abs(st.zTop - st.zBottom);
+    const n = Math.round(run);
+    const xa = st.x0 + 0.25;
+    const xb = st.x1 - 0.3;
+    for (let i = 0; i < n; i++) {
+      const za = st.zBottom + dir * i;
+      const h = (BALCONY_Y * (i + 1)) / n;
+      G.col("#a88660");
+      boxP(G, WL.DECK, xa, h - 0.08, Math.min(za, za + dir), xb, h, Math.max(za, za + dir));
+      // risers
+      G.col("#7a5e44");
+      boxP(G, WL.TIMBER, xa, 0, Math.min(za, za + dir * 0.06), xb, h - 0.08, Math.max(za, za + dir * 0.06), false);
+    }
+    // the boarded side toward the open half of the alley, and a handrail
+    G.col("#8a7258");
+    for (let i = 0; i < n; i++) {
+      const za = st.zBottom + dir * i;
+      const h = (BALCONY_Y * (i + 1)) / n;
+      boxP(G, WL.P_BOARD, xb, 0, Math.min(za, za + dir), xb + 0.1, h, Math.max(za, za + dir));
+    }
+    G.col("#6a4a30");
+    beam(G, xb + 0.05, 1.0, st.zBottom, xb + 0.05, BALCONY_Y + 1.0, st.zTop, 0.08);
+    for (let i = 0; i <= n; i += 2) {
+      const z = st.zBottom + dir * i;
+      const h = (BALCONY_Y * i) / n;
+      boxP(G, WL.TIMBER, xb, h, z - 0.05, xb + 0.1, h + 1.0, z + 0.05);
+    }
+    // the landing: a deck at balcony height on posts, railed on its open sides
+    const zl0 = Math.min(st.zTop, st.zEdge);
+    const zl1 = Math.max(st.zTop, st.zEdge);
+    G.col("#b89a78");
+    boxP(G, WL.DECK, st.x0 - 0.1, BALCONY_Y - 0.18, zl0, xb + 0.1, BALCONY_Y, zl1);
+    G.col("#6a4a30");
+    boxP(G, WL.TIMBER, xb - 0.1, 0, st.zEdge - 0.1, xb + 0.1, BALCONY_Y, st.zEdge + 0.1);
+    G.col("#e8dcc0");
+    boxP(G, WL.TIMBER, st.x0 - 0.1, BALCONY_Y + 0.95, st.zEdge - 0.06, xb + 0.1, BALCONY_Y + 1.05, st.zEdge + 0.06);
+    boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
+    for (let x = st.x0; x <= xb; x += 0.42) boxP(G, WL.TIMBER, x - 0.03, BALCONY_Y, st.zEdge - 0.03, x + 0.03, BALCONY_Y + 0.96, st.zEdge + 0.03, false);
+  }
+  // the church: a stair along the nave's north wall up to a landing beside the tower
+  {
+    const G = chunkAt(-140, -7).main;
+    const x0 = -151;
+    const x1 = -134;
+    const n = 34;
+    for (let i = 0; i < n; i++) {
+      const xa = x0 + ((x1 - x0) * i) / n;
+      const xb = x0 + ((x1 - x0) * (i + 1)) / n;
+      const h = (BELFRY_Y * (i + 1)) / n;
+      G.col("#a88660");
+      boxP(G, WL.DECK, xa, h - 0.08, -7.95, xb, h, -6.1);
+      G.col("#d8c8b0");
+      // the outer wall is boarded all the way down (you walk inside it, like a covered stair)
+      boxP(G, WL.P_BOARD, xa, 0, -8.2, xb, h + 1.0, -7.95);
+    }
+    G.col("#6a4a30");
+    beam(G, x0, 1.0, -7.9, x1, BELFRY_Y + 1.0, -7.9, 0.1);
+    // landing: a timber tower from the ground up to belfry height, boarded on its faces
+    G.col("#d8c8b0");
+    boxP(G, WL.P_BOARD, -134, 0, -8.2, -128.5, BELFRY_Y - 0.2, -2.35);
+    G.col("#b89a78");
+    boxP(G, WL.DECK, -134.2, BELFRY_Y - 0.2, -8.3, -128.3, BELFRY_Y, -2.3);
+    G.col("#d8c8b0");
+    boxP(G, WL.P_BOARD, -134.2, BELFRY_Y, -8.3, -128.3, BELFRY_Y + 1.0, -8.15);
+    boxP(G, WL.P_BOARD, -128.45, BELFRY_Y, -8.3, -128.3, BELFRY_Y + 1.0, -2.3);
+    G.col("#8a7a66");
+    boxP(G, WL.SHINGLE, -134.4, BELFRY_Y + 2.6, -8.5, -128.1, BELFRY_Y + 2.72, -2.3);
+    for (const [px, pz] of [
+      [-134, -8.2],
+      [-128.5, -8.2],
+    ] as const)
+      boxP(G, WL.TIMBER, px - 0.08, BELFRY_Y, pz - 0.08, px + 0.08, BELFRY_Y + 2.6, pz + 0.08);
   }
 }
 
@@ -2632,6 +2736,9 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     }
   }
 
+  // ---- the climbable high ground: the saloon's outside stair, the church stair and landing ----
+  stairs(L, chunkAt);
+
   // ---- props ----
   const T = templates();
   const tint = new THREE.Color();
@@ -2639,7 +2746,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     const t = T[p.k];
     if (!t) continue;
     const ch = chunkAt(p.x, p.z);
-    const y = p.k === "lantern" ? (p.a ?? 2.8) : 0;
+    // props stand on the walkable surface (boardwalk decks, the carved riverbed)
+    const y = p.k === "lantern" ? (p.a ?? 2.8) : sampleTerrain(L.terrain, p.x, p.z);
     if (p.k === "horse" || p.k === "stagecoach") void 0;
     // a light per-instance tint so repeated props don't read as clones
     const k = 0.9 + ((((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453) % 1) + 1) % 1) * 0.2;
