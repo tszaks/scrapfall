@@ -531,7 +531,11 @@ function speciesAt(city: CityLayout, x: number, z: number): Species {
   return k === K_BOARD ? "coconut" : k === K_MEDIAN ? "washingtonia" : "royal";
 }
 
-type Inst = { x: number; z: number; rot: number; s: number; lean: number; tint: number };
+/** one palm: position (y = the ground under it, default the city sidewalk), heading, scale
+ * of the modelled height, lean and a brightness tint */
+export type PalmInst = { x: number; y?: number; z: number; rot: number; s: number; lean: number; tint: number };
+export type PalmSpecies = Species;
+type Inst = PalmInst;
 
 export function CityPalms({ city }: { city: CityLayout }) {
   const groups = useMemo(() => {
@@ -554,7 +558,11 @@ export function CityPalms({ city }: { city: CityLayout }) {
     }
     return out;
   }, [city]);
+  return <PalmTrees groups={groups} />;
+}
 
+/** Instanced palms from explicit lists per species (any map can plant its own). */
+export function PalmTrees({ groups }: { groups: Record<Species, Inst[]> }) {
   const res = useMemo(() => {
     const map = atlas();
     const make = (sp: Species) => {
@@ -611,7 +619,7 @@ export function CityPalms({ city }: { city: CityLayout }) {
       const lean = new Float32Array(list.length);
       list.forEach((p, i) => {
         q.setFromAxisAngle(up, p.rot);
-        m4.compose(new THREE.Vector3(p.x, 0.15, p.z), q, new THREE.Vector3(p.s, p.s, p.s));
+        m4.compose(new THREE.Vector3(p.x, p.y ?? 0.15, p.z), q, new THREE.Vector3(p.s, p.s, p.s));
         mesh.setMatrixAt(i, m4);
         mesh.setColorAt(i, col.setScalar(p.tint));
         lean[i] = p.lean;
