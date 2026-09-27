@@ -1979,8 +1979,8 @@ function World({
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
+    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
+    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
