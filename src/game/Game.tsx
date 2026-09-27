@@ -1925,6 +1925,13 @@ function World({
         -1.2,
         Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sensY * 0.7 * delta),
       );
+      // touch drag look (right thumb)
+      if (touchInput.lookX || touchInput.lookY) {
+        look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current;
+        look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current));
+        touchInput.lookX = 0;
+        touchInput.lookY = 0;
+      }
     }
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
