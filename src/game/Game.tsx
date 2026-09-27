@@ -2934,17 +2934,27 @@ function nightOverride(): boolean | null {
   return raw === "1" ? true : raw === "0" ? false : null;
 }
 
-/** New arena seed. With `?map=` the seed is nudged onto that map, so a co-op host's
- * guests (who derive the map from the shared seed) land on the same one. */
-function newSeed() {
-  const s = Math.floor(Math.random() * 1e9);
+const MAP_KEY = "df-map";
+/** Map picked in the start menu: `?map=` wins, then the saved pick; null = random. */
+function initialMapChoice(): number | null {
   const f = forcedMapIndex();
-  return f === null ? s : s - (s % THEMES.length) + f;
+  if (f !== null || typeof window === "undefined") return f;
+  const n = Number(window.localStorage.getItem(MAP_KEY));
+  return window.localStorage.getItem(MAP_KEY) !== null && Number.isInteger(n) && n >= 0 && n < THEMES.length ? n : null;
+}
+
+/** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
+ * guests (who derive the map from the shared seed) land on the same one. */
+function newSeed(choice: number | null) {
+  const s = Math.floor(Math.random() * 1e9);
+  return choice === null ? s : s - (s % THEMES.length) + choice;
 }
 
 export function Game() {
-  const [seed, setSeed] = useState(newSeed);
-  const [forcedMap] = useState(forcedMapIndex);
+  const [mapChoice, setMapChoice] = useState(initialMapChoice);
+  const mapChoiceRef = useRef(mapChoice);
+  mapChoiceRef.current = mapChoice;
+  const [seed, setSeed] = useState(() => newSeed(mapChoice));
   const [night, setNight] = useState(false);
   useEffect(() => {
     const o = nightOverride();
@@ -3167,7 +3177,7 @@ export function Game() {
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
-    setSeed(newSeed());
+    setSeed(newSeed(mapChoiceRef.current));
     if (document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -3230,7 +3240,7 @@ export function Game() {
   });
   const { blocks, enemies, rand, theme, city } = useMemo(() => {
     // the map decides the layout, so pick the theme first (still purely from the shared seed)
-    const forced = !coop && forcedMap !== null ? THEMES[forcedMap] : undefined;
+    const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
     // co-op gets a bigger field; the real-scale city is far bigger and routes on 4 m nav cells
     if (theme.blockShape === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
@@ -3258,7 +3268,7 @@ export function Game() {
       burnTick: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city };
-  }, [seed, coop, forcedMap]);
+  }, [seed, coop, mapChoice]);
 
 
   useEffect(() => {
@@ -3308,6 +3318,16 @@ export function Game() {
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
+  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
+  const pickMap = (choice: number | null) => {
+    if (!isHost) return;
+    setMapChoice(choice);
+    if (choice === null) window.localStorage.removeItem(MAP_KEY);
+    else window.localStorage.setItem(MAP_KEY, String(choice));
+    const s = newSeed(choice);
+    setSeed(s);
+    net?.broadcast({ type: "seed", seed: s });
+  };
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
@@ -3343,7 +3363,7 @@ export function Game() {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
-        const s = newSeed();
+        const s = newSeed(mapChoiceRef.current);
         setSeed(s);
         net?.broadcast({ type: "seed", seed: s });
       }
@@ -3726,7 +3746,7 @@ export function Game() {
 
       {(!locked || ended) && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
-          <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+          <div className="max-h-full max-w-sm overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
@@ -3807,7 +3827,27 @@ export function Game() {
 
             {(!started || ended) && !paused && (
               <div className="mt-5 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
+                <div className="text-[9px] tracking-[0.25em] opacity-50">
+                  {isHost ? "MAP" : "MAP · THE HOST PICKS"}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  {([null, ...THEMES.map((_, i) => i)] as (number | null)[]).map((i) => {
+                    const on = isHost ? mapChoice === i : i === seed % THEMES.length;
+                    return (
+                      <button
+                        key={i ?? "random"}
+                        onClick={() => pickMap(i)}
+                        disabled={!isHost}
+                        className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
+                          on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                        } ${isHost ? "" : "cursor-default"}`}
+                      >
+                        {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
                 <div className="mt-2 grid grid-cols-2 gap-1">
                   {ABILITY_IDS.map((id) => (
                     <button
