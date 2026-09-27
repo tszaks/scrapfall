@@ -105,7 +105,7 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
 // 12 rounds, ramping; the last one is the map boss
 type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
-  { drifter: 5 },
+  { drifter: 5, brute: 1 },
   { drifter: 6, shooter: 1, runner: 1 },
   { drifter: 6, brute: 1, shooter: 2, specter: 1, special: 1 },
   { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1, special: 1 },
@@ -116,7 +116,7 @@ const WAVES: WaveSpec[] = [
   { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2, special: 3 },
   { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3, special: 3 },
   { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3, special: 4 },
-  { boss: 1, drifter: 6, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 1 },
+  { boss: 1, drifter: 10, brute: 6, shooter: 6, runner: 6, specter: 4, bomber: 3, vanguard: 3, special: 3 },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
