@@ -76,3 +76,24 @@ export function sealGaps(gaps: Gap[]): Block[] {
   }
   return out;
 }
+
+/**
+ * Convenience for callers that only have a Block list: the walkable test is "no block on
+ * this 2 m cell". `arenaHalf` is the arena's half-size (cells are centred on -half + 1 + 2i).
+ */
+export function walkableFromBlocks(blocks: Block[], arenaHalf: number) {
+  const cells = Math.round((arenaHalf * 2) / BLOCK);
+  const g = new Uint8Array(cells * cells);
+  const at = (v: number) => Math.floor((v + arenaHalf) / BLOCK);
+  for (const b of blocks) {
+    const i = at(b.x);
+    const j = at(b.z);
+    if (i >= 0 && j >= 0 && i < cells && j < cells) g[i * cells + j] = 1;
+  }
+  return (x: number, z: number) => {
+    const i = at(x);
+    const j = at(z);
+    if (i < 0 || j < 0 || i >= cells || j >= cells) return false;
+    return !g[i * cells + j];
+  };
+}

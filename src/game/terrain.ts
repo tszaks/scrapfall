@@ -17,6 +17,9 @@ export type Terrain = {
   h: Float32Array;
   /** optional walking-speed multiplier (deep snow off the paths) */
   speed?: (x: number, z: number) => number;
+  /** optional climbing limit (rise per metre walked): steeper steps, up or down, are walls
+   * (a balcony edge, the belfry parapet) */
+  maxSlope?: number;
   /** walkable decks above the ground (a bridge over a gully): these win over the heightfield */
   platforms?: { x0: number; z0: number; x1: number; z1: number; y: number }[];
   /** does a shot at (x, y, z) hit something solid standing there (below its top)? */
@@ -33,6 +36,8 @@ export type Ground = {
   speed?: (x: number, z: number) => number;
   hits?: (x: number, y: number, z: number) => boolean;
   strictNav?: boolean;
+  /** optional climbing limit (see Terrain.maxSlope) */
+  maxSlope?: number;
 };
 
 let G: Ground | null = null;
@@ -81,7 +86,11 @@ export function setTerrain(t: Terrain | Ground | null) {
           return bare(x, z);
         }
       : bare;
-    G = { height, ...(t.speed ? { speed: t.speed } : {}) };
+    G = {
+      height,
+      ...(t.speed ? { speed: t.speed } : {}),
+      ...(t.maxSlope !== undefined ? { maxSlope: t.maxSlope } : {}),
+    };
   } else G = t;
   wind.x = 0;
   wind.z = 0;
@@ -116,6 +125,16 @@ export function groundOwnsHits() {
 /** True when the map's ground asks for strict nav cells (see Ground.strictNav). */
 export function strictNav() {
   return !!G?.strictNav;
+}
+
+/** Can a walker step from (x0, z0) to (x1, z1)? Only terrains with `maxSlope` refuse steep
+ * steps: up a wall, or off a ledge (take the stairs down). */
+export function climbable(x0: number, z0: number, x1: number, z1: number) {
+  const g = G;
+  if (!g || g.maxSlope === undefined) return true;
+  const rise = Math.abs(g.height(x1, z1) - g.height(x0, z0));
+  if (rise <= 0.05) return true;
+  return rise <= Math.hypot(x1 - x0, z1 - z0) * g.maxSlope + 0.02;
 }
 
 /** The bare heightfield (what the terrain mesh draws), ignoring decks; groundY elsewhere. */
