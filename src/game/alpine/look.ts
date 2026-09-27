@@ -1,9 +1,9 @@
-// Whiteout Pass lighting and atmosphere, one entry per time of day. The game still has a
-// boolean `night`; night = true maps to "night", night = false to "sunset" (the alpenglow
-// hero look). Everything the alpine scene needs to change between the two lives here.
-import type { Look } from "../lighting";
+// Whiteout Pass lighting and atmosphere, one entry per time of day (night is the default,
+// sunset is the alpenglow hero look). Everything the alpine scene needs to change between
+// the two lives here.
+import type { Look, TimeOfDay } from "../lighting";
 
-export type AlpineMode = "night" | "sunset";
+export type AlpineMode = TimeOfDay;
 
 export type AlpineLook = Look & {
   /** direction towards the sun (or moon), normalised later */
@@ -36,6 +36,9 @@ export const ALPINE_LOOKS: Record<AlpineMode, AlpineLook> = {
     // the high snow burns pink and orange, windows are starting to glow
     sky: "#e7a58e",
     fog: [160, 2400],
+    fogColor: "#b99aac",
+    fogSun: { color: "#e8a07a", k: 0.6 },
+    ambientColor: "#9fb0e0",
     hemi: ["#9fb4e6", "#6a6c8c", 0.95],
     sun: { color: "#ffb27a", intensity: 1.55, pos: [-60, 22, -30] },
     ambient: 0.08,
@@ -58,6 +61,9 @@ export const ALPINE_LOOKS: Record<AlpineMode, AlpineLook> = {
     // moonlit blue snow, stars, warm amber windows and lamps, the lit run and a faint aurora
     sky: "#0d1630",
     fog: [120, 2200],
+    fogColor: "#141c36",
+    fogSun: { color: "#2a3558", k: 0.3 },
+    ambientColor: "#8fa4e0",
     hemi: ["#6f88c8", "#1a2138", 0.8],
     sun: { color: "#aebfff", intensity: 0.62, pos: [40, 60, -50] },
     ambient: 0.18,
@@ -78,6 +84,6 @@ export const ALPINE_LOOKS: Record<AlpineMode, AlpineLook> = {
   },
 };
 
-export function alpineLook(night: boolean): AlpineLook {
-  return ALPINE_LOOKS[night ? "night" : "sunset"];
+export function alpineLook(time: TimeOfDay): AlpineLook {
+  return ALPINE_LOOKS[time];
 }

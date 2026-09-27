@@ -11,6 +11,7 @@ import { groundY } from "../terrain";
 import { buildInto, cableY, type Kit } from "./build";
 import { farSpruceGeo, spruceGeo } from "./forest";
 import type { AlpineLayout, Lift } from "./layout";
+import type { TimeOfDay } from "../lighting";
 import { alpineLook, type AlpineLook } from "./look";
 import { mulberry } from "./noise";
 import { alpineArray, glowTexture, signTexture, T } from "./textures";
@@ -631,15 +632,16 @@ function build(layout: AlpineLayout): Built {
 
 export const AlpineScene = memo(function AlpineScene({
   layout,
-  night,
+  time,
   isHost,
   playing,
 }: {
   layout: AlpineLayout;
-  night: boolean;
+  time: TimeOfDay;
   isHost: boolean;
   playing: boolean;
 }) {
+  const night = time === "night";
   const { scene, camera } = useThree();
   const built = useMemo(() => {
     const t0 = performance.now();
@@ -647,7 +649,7 @@ export const AlpineScene = memo(function AlpineScene({
     console.info(`[alpine] built ${b.chunks.length} chunks, ${b.stats.verts} verts, ${b.stats.trees} trees + ${b.stats.far} far in ${Math.round(performance.now() - t0)} ms`);
     return b;
   }, [layout]);
-  const look: AlpineLook = alpineLook(night);
+  const look: AlpineLook = alpineLook(time);
 
   const mats = useMemo(
     () => ({
@@ -881,7 +883,7 @@ export const AlpineScene = memo(function AlpineScene({
     mats.sky.uniforms["uBlizz"]!.value = Math.min(1, bb * 1.15);
     const f = scene.fog as THREE.Fog | null;
     if (f && "near" in f) {
-      skyCol.set(look.sky);
+      skyCol.set(look.fogColor);
       f.color.copy(skyCol).lerp(blizCol, bb);
       f.near = THREE.MathUtils.lerp(look.fog[0], 1.5, Math.pow(bb, 0.35));
       f.far = THREE.MathUtils.lerp(look.fog[1], 24, Math.pow(bb, 0.35));
@@ -1033,13 +1035,13 @@ const SUN_MAP = 2048;
 const SUN_DIST = 700;
 
 /** Low sun (or moon) whose shadow frustum follows the player; auto-off on slow devices. */
-export function AlpineSun({ night }: { night: boolean }) {
+export function AlpineSun({ time }: { time: TimeOfDay }) {
   const ref = useRef<THREE.DirectionalLight>(null);
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const look = alpineLook(night);
+  const look = alpineLook(time);
   const dir = useMemo(() => new THREE.Vector3(...look.sunDir).normalize(), [look]);
   useFrame((state, raw) => {
     const l = ref.current;
