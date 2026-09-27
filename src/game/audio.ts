@@ -20,7 +20,7 @@ export function initAudio() {
     musicGain = ctx.createGain();
     musicFilter = ctx.createBiquadFilter();
     musicFilter.type = "lowpass";
-    musicFilter.frequency.value = menuMode ? 620 : 18000;
+    musicFilter.frequency.value = menuMode ? 5000 : 18000;
     sfxGain = ctx.createGain();
     musicGain.connect(musicFilter).connect(master);
     sfxGain.connect(master);
@@ -66,7 +66,7 @@ export function setMusicMenu(on: boolean) {
   if (musicFilter && ctx) {
     musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
     musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, ctx.currentTime);
-    musicFilter.frequency.exponentialRampToValueAtTime(on ? 620 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
+    musicFilter.frequency.exponentialRampToValueAtTime(on ? 5000 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
   }
 }
 export function setVolumes(music: number, sfx: number) {
@@ -202,8 +202,39 @@ export function setMusicIntensity(boss: boolean) {
   intense = boss;
 }
 
+// Dedicated menu theme: slow, dark D-minor march — its own piece, not a map track.
+const MENU_BPM = 72;
+const MENU_ROOTS = [38, 34, 36, 33]; // D, Bb, C, A
+const MENU_MOTIF = [[12, 10, 7, 5], [10, 7, 5, 3], [7, 10, 12, 15], [12, 13, 12, 7]];
+function scheduleMenuStep(s: number, t: number, stepDur: number) {
+  if (!musicGain) return;
+  const bar = Math.floor(s / 16) % 4;
+  const phrase = Math.floor(s / 64) % 2;
+  const i = s % 16;
+  const root = MENU_ROOTS[bar]!;
+  const barLen = stepDur * 16;
+  if (i === 0) {
+    tone({ wave: "sine", f0: midi(root), f1: midi(root), dur: barLen, gain: 0.4, noise: 0, cut: 400 }, musicGain, t);
+    const third = bar === 3 ? 16 : 15;
+    [12, third, 19].forEach((iv) =>
+      tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: barLen, gain: 0.06, noise: 0, cut: 1100, q: 2 }, musicGain, t));
+  }
+  // war-drum pulse
+  if (i === 0 || i === 3 || i === 8 || (bar === 3 && (i === 12 || i === 14))) {
+    tone({ wave: "sine", f0: 95, f1: 38, dur: 0.45, gain: i === 0 ? 0.8 : 0.5, noise: 0.15, cut: 500 }, musicGain, t);
+  }
+  if (i === 8 && phrase === 1) tone({ wave: "triangle", f0: 200, f1: 110, dur: 0.3, gain: 0.25, noise: 0.9, cut: 2200 }, musicGain, t);
+  // solemn horn motif, second phrase only
+  if (phrase === 1 && i % 4 === 0) {
+    const n = root + 24 + MENU_MOTIF[bar]![i / 4]!;
+    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.13, noise: 0, cut: 2400 }, musicGain, t);
+    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.04, noise: 0, cut: 1400 }, musicGain, t + stepDur * 3);
+  }
+}
+
 function scheduleStep(s: number, t0: number, stepDur: number) {
   if (!musicGain) return;
+  if (menuMode) { scheduleMenuStep(s, t0, stepDur); return; }
   const S = style;
   const bar = Math.floor(s / 16) % 4;
   const i = s % 16;
@@ -249,7 +280,7 @@ export function startMusic() {
   timer = window.setInterval(() => {
     if (!ctx) return;
     if (ctx.state === "suspended") { void ctx.resume(); return; }
-    const bpm = (style.bpm + (intense ? 20 : 0)) * (menuMode ? 0.82 : 1);
+    const bpm = menuMode ? MENU_BPM : style.bpm + (intense ? 20 : 0);
     const stepDur = 60 / bpm / 4;
     // after a tab switch or a late unlock the clock jumps; never replay the backlog
     if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
