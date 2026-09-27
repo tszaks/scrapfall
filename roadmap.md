@@ -22,3 +22,5 @@
 - [x] Mobile: remove duplicate square ability badge in bottom corner
 - [x] Mobile: pause button must not overlap other HUD blocks
 - [x] Pause screen scrolls up and down on small screens
+- [x] Mobile: cleaner round buttons, pause always on top (works during shop), co-op teammate list under shards
+- [x] Mobile: full screen on START, page locked (no scroll/zoom/bounce)
