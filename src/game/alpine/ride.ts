@@ -75,10 +75,13 @@ export function chairAt(lift: Lift, i: number) {
 /** eye position of someone sitting on chair i (used for teammates too) */
 export function riderEye(lift: Lift, i: number) {
   const p = chairAt(lift, i);
+  // sat on the left-hand seat, clear of the hanger bar in the middle of the chair
+  const sx = Math.cos(p.yaw) * -0.6;
+  const sz = -Math.sin(p.yaw) * -0.6;
   return {
-    x: p.x + Math.sin(p.yaw) * 0.12,
+    x: p.x + sx + Math.sin(p.yaw) * 0.12,
     y: p.y + SEAT_EYE,
-    z: p.z + Math.cos(p.yaw) * 0.12,
+    z: p.z + sz + Math.cos(p.yaw) * 0.12,
     yaw: p.yaw,
   };
 }
@@ -109,6 +112,8 @@ export function stepRide(
   a: AlpineData,
   delta: number,
   look: { yaw: number; pitch: number },
+  /** chairs a teammate is already riding (one rider per chair) */
+  taken?: Set<number>,
 ): boolean {
   const lift = a.lift;
   const p = pathOf(lift);
@@ -120,6 +125,7 @@ export function stepRide(
     const dd = Math.hypot(cam.position.x - dx, cam.position.z - dz);
     if (du > 2.2 && dd > 2.2) return false;
     for (let i = 0; i < n; i++) {
+      if (taken?.has(i)) continue;
       const s = chairS(lift, i);
       const c = p.at(s);
       if (Math.hypot(c.x - cam.position.x, c.z - cam.position.z) > 1.6) continue;
@@ -160,4 +166,17 @@ export function stepRide(
     e.z - Math.sin(e.yaw) * sway,
   );
   return true;
+}
+
+/** Off the chair right away (death, respawn): back onto the nearer terminal's platform. */
+export function leaveRide(cam: { position: { x: number; z: number } }, a: AlpineData) {
+  if (ride.chair < 0) return;
+  const s = chairS(a.lift, ride.chair);
+  const p = pathOf(a.lift);
+  // first half of the up run or the last half of the down run: nearer the base
+  const nearBase = s < p.run / 2 || s > p.run * 1.5 + p.bull * 2;
+  const [x, z] = nearBase ? a.ride.offBase : a.ride.offTop;
+  cam.position.x = x;
+  cam.position.z = z;
+  resetRide();
 }

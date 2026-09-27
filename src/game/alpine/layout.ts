@@ -129,7 +129,13 @@ export type AProp = {
   v?: number;
 };
 
-export type LiftSupport = { z: number; y: number; ground: number; kind: "base" | "tower" | "top" };
+/** stations, towers, and "hold" sheaves where the cable leaves / enters a station level */
+export type LiftSupport = {
+  z: number;
+  y: number;
+  ground: number;
+  kind: "base" | "tower" | "hold" | "top";
+};
 export type Lift = {
   x: number;
   /** half the distance between the up and down cables */
@@ -237,7 +243,7 @@ const vx = (i: number) => -HALF + i * CELL; // sample position
 
 const STREET_Z = 30;
 const LIFT_X = 40;
-const LIFT_Z0 = -70; // base station's uphill face
+const LIFT_Z0 = -56; // base station's uphill face
 const LIFT_Z1 = -264; // top station's downhill face
 const LAKE = { x: -205, z: 95, rx: 55, rz: 38 };
 const BRIDGE = { x0: -125, x1: -103, z: STREET_Z, w: 7 };
@@ -251,7 +257,7 @@ const JUMP = { x: -205, z0: -180, z1: -126 };
 export const SPAWN = { x: 10, z: 79 };
 const SPAWN_YAW = 0.55;
 const LODGE_DECK = { x0: 4, z0: -262, x1: 30, z1: -250 };
-const BASE_TERM = { x0: 28, z0: -74, x1: 50, z1: -58 };
+const BASE_TERM = { x0: 28, z0: -60, x1: 50, z1: -44 };
 const TOP_TERM = { x0: 30, z0: -268, x1: 50, z1: -258 };
 
 const PATHS: APath[] = [
@@ -652,10 +658,10 @@ export function generateAlpine(seed: number, solo: boolean) {
   }
   // the lift-top plateau (cut into the slope) and the base plaza
   const plateauY = Math.round(hAt((PLATEAU.x0 + PLATEAU.x1) / 2, (PLATEAU.z0 + PLATEAU.z1) / 2));
-  shape(PLATEAU.x0 - 40, PLATEAU.z0 - 40, PLATEAU.x1 + 40, PLATEAU.z1 + 30, (x, z, h) => {
+  shape(PLATEAU.x0 - 50, PLATEAU.z0 - 50, PLATEAU.x1 + 50, PLATEAU.z1 + 50, (x, z, h) => {
     const d = rectDist(x, z, PLATEAU);
-    // the valley side drops away more steeply below the deck: a sharp edge to look out from
-    const k = 1 - smooth(0, z > PLATEAU.z1 ? 22 : 45, d);
+    // the plateau eases back into the mountain over ~45 m (no cliff at the edge of the cut)
+    const k = 1 - smooth(0, 45, d);
     return h + (plateauY - h) * k;
   });
   const deckY = plateauY + 2.4;
@@ -888,7 +894,7 @@ export function generateAlpine(seed: number, solo: boolean) {
   addB("church", -32, 36, -24, 44, 0, 7, -1, 9);
   addB("hotel", 108, -8, 152, 22, 2, 5, W_HOTEL, 0);
   // base terminal: the ticket hall beside the open loading platform (see terminals)
-  addB("station", 52, -64, 64, -48, 3, 1, W_LIFT, 0);
+  addB("station", 52, -58, 64, -42, 3, 1, W_LIFT, 0);
   addB("rental", 10, -48, 26, -32, 1, 2, W_RENTAL, 0);
   addB("ticket", 56, -34, 62, -28, 3, 1, -1, 0);
   // top terminal: the bullwheel house behind the unloading platform; the summit lodge
@@ -1110,34 +1116,49 @@ export function generateAlpine(seed: number, solo: boolean) {
       for (const pz of [t.z0, t.z1 - 2]) block(px, pz, px + 2, pz + 2, -1, gy + 6);
   }
 
-  // chairlift supports: the two stations (seat ~0.6 m above each loading platform) and a
-  // tower every ~35 m, each tall enough that a hanging chair clears the snow by 3.5 m+
+  // chairlift supports. The cable leaves each station LEVEL (seat ~0.1 m above the loading
+  // platform, under the canopy) to a "hold" sheave just outside it, then climbs over towers
+  // spaced ~33 m apart, each raised until a hanging chair clears the snow by 3.6 m+. At the
+  // top a hold sheave at the island edge brings it in level over a roped-off corridor.
   const supports: LiftSupport[] = [];
   const baseZ = LIFT_Z0 + 2;
   const topZ = LIFT_Z1 - 2;
+  const holdB = BASE_TERM.z0 - 1.5;
+  const holdT = SUMMIT.z1 - 0.5;
   supports.push({ z: baseZ, y: plazaY + 3.2, ground: plazaY, kind: "base" });
-  const tz: number[] = [baseZ - 12];
-  const nT = Math.max(2, Math.round((baseZ - 12 - (topZ + 12)) / 35));
-  for (let k = 1; k <= nT; k++) tz.push(baseZ - 12 - ((baseZ - 12 - (topZ + 12)) * k) / nT);
-  for (const z of tz) {
+  supports.push({ z: holdB, y: plazaY + 5.2, ground: plazaY, kind: "hold" });
+  const firstT = holdB - 30;
+  const lastT = holdT + 12;
+  const nT = Math.max(2, Math.round((firstT - lastT) / 33));
+  for (let k = 0; k <= nT; k++) {
+    const z = firstT - ((firstT - lastT) * k) / nT;
     const g = hAt(LIFT_X, z);
-    supports.push({ z, y: g + 10, ground: g, kind: "tower" });
+    supports.push({ z, y: g + 9, ground: g, kind: "tower" });
   }
+  supports.push({ z: holdT, y: plateauY + 5.2, ground: plateauY, kind: "hold" });
   supports.push({ z: topZ, y: plateauY + 3.2, ground: plateauY, kind: "top" });
-  // raise towers until every span clears: chair hangs 3.1 m, then 3.6 m of air (the first
-  // and last 7 m by each station are the loading ramps)
+  // raise towers until every span clears: chair hangs 3.1 m, then 3.6 m of air (between a
+  // station and its hold sheave the chairs run level over the platform / roped corridor)
   const CLEAR = 3.1 + 3.6;
-  for (let it = 0; it < 40; it++) {
+  for (let it = 0; it < 60; it++) {
     let worst = 0;
     for (let i = 0; i + 1 < supports.length; i++) {
       const p0 = supports[i]!;
       const p1 = supports[i + 1]!;
+      if (p0.kind !== "tower" && p1.kind !== "tower") continue;
       const span = Math.abs(p1.z - p0.z);
       for (let t = 0.02; t < 1; t += 0.02) {
         const z = p0.z + (p1.z - p0.z) * t;
-        if (Math.abs(z - baseZ) < 7 || Math.abs(z - topZ) < 7) continue;
         const cy = p0.y + (p1.y - p0.y) * t - span * 0.018 * 4 * t * (1 - t);
-        const need = Math.max(hAt(LIFT_X - 2.6, z), hAt(LIFT_X + 2.6, z)) + CLEAR - cy;
+        // near a hold sheave the chairs may come down to walking height over solid ground
+        const nearHold = Math.min(Math.abs(z - holdB), Math.abs(z - holdT));
+        // (clearance ramps up from 3.4 m at a hold sheave to the full 6.7 m over 30 m, as on
+        // real lifts where chairs skim the slope just outside the stations)
+        const need =
+          Math.max(hAt(LIFT_X - 2.6, z), hAt(LIFT_X + 2.6, z)) +
+          4.6 +
+          (CLEAR - 4.6) * smooth(0, 30, nearHold) -
+          cy;
         if (need > 0.01) {
           worst = Math.max(worst, need);
           if (p0.kind === "tower") p0.y += need * (1 - t) * 1.2 + 0.05;
@@ -1147,12 +1168,21 @@ export function generateAlpine(seed: number, solo: boolean) {
     }
     if (worst < 0.01) break;
   }
+  // the roped corridor under incoming chairs on the summit, and the hold sheave posts
+  block(LIFT_X - 6, TOP_TERM.z1, LIFT_X + 6, SUMMIT.z1, -1, plateauY + 1.2);
+  for (const sx of [LIFT_X - 4, LIFT_X + 4]) {
+    block(sx - 1, holdB - 1, sx + 1, holdB + 1, -1, plazaY + 5);
+    block(sx - 1, holdT - 1, sx + 1, holdT + 1, -1, plateauY + 6);
+  }
   for (const sp of supports) {
     if (sp.kind !== "tower") continue;
     block(LIFT_X - 1, sp.z - 1, LIFT_X + 1, sp.z + 1, -1, sp.y + 1);
     props.push({ k: "tower", x: LIFT_X, z: sp.z, y: sp.ground, rot: 0, s: sp.y - sp.ground });
   }
   const lift: Lift = { x: LIFT_X, gauge: 2.6, supports };
+
+  for (let x = PLAZA.x0; x < PLAZA.x1; x += 2)
+    block(x, BASE_TERM.z0 - 4, x + 2, BASE_TERM.z0 - 2, -1, plazaY + 3);
 
   // ---- 6. props ----
   const prop = (k: PropKind, x: number, z: number, rot = 0, s = 1, v?: number) => {
@@ -1212,8 +1242,6 @@ export function generateAlpine(seed: number, solo: boolean) {
   block(70, -50, 78, -38, -1, plazaY + 4.5);
   for (let k = 0; k < 4; k++) prop("snowmobile", 62 + k * 3.2, -24.5, 0, 1, k);
   block(60, -26, 74, -22, -1);
-  for (let k = 0; k < 3; k++) prop("skirack", 30 + k * 3.6, -52.8, 0, 1);
-  block(28, -54, 40, -52, -1);
   for (let k = 0; k < 3; k++) prop("skirack", 8.2, -30 + k * 3.6, Math.PI / 2, 1);
   block(7, -32, 10, -22, -1);
   prop("signpost", 34, -30, 0.4, 1);
@@ -1402,7 +1430,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       const north = valleyCentre(x) - 90 - z;
       const k = S(i, j);
       const onIsland = x > SUMMIT.x0 && x < SUMMIT.x1 && z > SUMMIT.z0 && z < SUMMIT.z1;
-      if (north > 30 && !onIsland) solid[k] = 1;
+      if (north > 20 && !onIsland) solid[k] = 1;
       // the creek gully floor is off limits except under the bridge deck
       const onBridge =
         x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1;
@@ -1435,11 +1463,17 @@ export function generateAlpine(seed: number, solo: boolean) {
     const walk = (x: number, z: number) => !solidAt(x, z);
     const gaps: Gap[] = findGaps(walk, sHalf, CELL);
     for (const g of gaps) {
+      // the seal, plus two rows inside it: the dressing (signs, mounds, logs) stands in this
+      // band, so the player is always stopped before reaching it
       for (const b of sealGaps([g])) {
-        const k = S(ci(b.x), ci(b.z));
-        solid[k] = 1;
-        surf[k] = S_BLOCKADE;
-        tops[k] = hAt(b.x, b.z) + 4;
+        for (const inward of [0, 2, 4]) {
+          const x = g.axis === "z" ? b.x - Math.sign(g.x) * inward : b.x;
+          const z = g.axis === "x" ? b.z - Math.sign(g.z) * inward : b.z;
+          const k = S(ci(x), ci(z));
+          solid[k] = 1;
+          surf[k] = S_BLOCKADE;
+          tops[k] = hAt(x, z) + 4;
+        }
       }
       // split long gaps into dressed segments that suit the ground they cross
       const segs = Math.max(1, Math.round(g.w / 14));
@@ -1512,7 +1546,7 @@ export function generateAlpine(seed: number, solo: boolean) {
     }
   const seenN = new Uint8Array(NN * NN);
   // two zones: the village (from the spawn) and the summit island (from its platform)
-  const sumI = ci(40);
+  const sumI = ci(18);
   const sumJ = ci(-254);
   const q: number[] = [(spawnI >> 1) * NN + (spawnJ >> 1), (sumI >> 1) * NN + (sumJ >> 1)];
   seenN[q[0]!] = 1;
@@ -1563,6 +1597,21 @@ export function generateAlpine(seed: number, solo: boolean) {
       fq.push(k);
     }
   }
+  // where wall-passing ghosts may go: any reachable cell, or a solid OBJECT (a house, a
+  // tree) in the village or on the summit, never the mountain face, cliffs, the creek gully,
+  // a blockade or anything outside the playable square
+  const ghostOK = new Uint8Array(N * N);
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++) {
+      const k = S(i, j);
+      const x = cc(i);
+      const z = cc(j);
+      const onIsland = x > SUMMIT.x0 && x < SUMMIT.x1 && z > SUMMIT.z0 && z < SUMMIT.z1;
+      const face = valleyCentre(x) - 90 - z > 20 && !onIsland;
+      const inside = sHalf === null || (Math.abs(x) < sHalf - 1 && Math.abs(z) < sHalf - 1);
+      ghostOK[k] =
+        seen[k] || (!face && inside && tops[k]! > -1e8 && surf[k] !== S_BLOCKADE) ? 1 : 0;
+    }
   const blocks: Block[] = [];
   for (let i = 0; i < N; i++)
     for (let j = 0; j < N; j++) {
@@ -1592,6 +1641,11 @@ export function generateAlpine(seed: number, solo: boolean) {
         y: bridgeY + 0.1,
       },
     ],
+    ghost: (x: number, z: number) => {
+      const i = Math.floor((x + HALF) / CELL);
+      const j = Math.floor((z + HALF) / CELL);
+      return i >= 0 && j >= 0 && i < N && j < N && ghostOK[i * N + j] === 1;
+    },
     shot: (x: number, y: number, z: number) => {
       const i = Math.floor((x + HALF) / CELL);
       const j = Math.floor((z + HALF) / CELL);
@@ -1645,8 +1699,8 @@ export function generateAlpine(seed: number, solo: boolean) {
     ride: {
       boardUp: [LIFT_X - 2.6, LIFT_Z0 + 3],
       boardDown: [LIFT_X + 2.6, LIFT_Z1 + 2],
-      offTop: [LIFT_X - 6, LIFT_Z1 + 4, Math.PI * 0.62],
-      offBase: [LIFT_X + 5, LIFT_Z0 + 10, Math.PI * 0.92],
+      offTop: [LIFT_X - 7, TOP_TERM.z1 + 2.5, Math.PI / 2],
+      offBase: [LIFT_X + 6, LIFT_Z0 + 9, Math.PI * 0.92],
     },
     tops,
   };

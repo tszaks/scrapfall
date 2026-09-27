@@ -103,8 +103,9 @@ export function spruceGeo(narrow = false) {
     const a1 = ((i + 1) / 5) * Math.PI * 2;
     const p0 = [Math.cos(a0) * tr, -0.05, Math.sin(a0) * tr];
     const p1 = [Math.cos(a1) * tr, -0.05, Math.sin(a1) * tr];
-    const q0 = [Math.cos(a0) * tr * 0.5, 0.5, Math.sin(a0) * tr * 0.5];
-    const q1 = [Math.cos(a1) * tr * 0.5, 0.5, Math.sin(a1) * tr * 0.5];
+    // the trunk runs right up through every tier to the leader, so no tier floats
+    const q0 = [Math.cos(a0) * tr * 0.25, 0.97, Math.sin(a0) * tr * 0.25];
+    const q1 = [Math.cos(a1) * tr * 0.25, 0.97, Math.sin(a1) * tr * 0.25];
     tri(b, p0, q0, p1, "#4a3526");
     tri(b, p1, q0, q1, "#4a3526");
   }
@@ -155,8 +156,29 @@ export function farSpruceGeo() {
       tri(b, p, q, [p[0]! * 0.2, p[1]! - r * 0.5, p[2]! * 0.2], NEEDLE, 0.9);
     }
   };
-  shelf(0.28, 0.23, 0);
-  shelf(0.55, 0.16, 0.6);
-  shelf(0.8, 0.09, 1.2);
+  // a trunk to the ground, and shelves reaching low (no floating umbrellas at the edge)
+  for (let i = 0; i < 4; i++) {
+    const a0 = (i / 4) * Math.PI * 2;
+    const a1 = ((i + 1) / 4) * Math.PI * 2;
+    const tr = 0.03;
+    tri(
+      b,
+      [Math.cos(a0) * tr, -0.2, Math.sin(a0) * tr],
+      [Math.cos(a0) * tr * 0.5, 0.9, Math.sin(a0) * tr * 0.5],
+      [Math.cos(a1) * tr, -0.2, Math.sin(a1) * tr],
+      "#4a3526",
+    );
+    tri(
+      b,
+      [Math.cos(a1) * tr, -0.2, Math.sin(a1) * tr],
+      [Math.cos(a0) * tr * 0.5, 0.9, Math.sin(a0) * tr * 0.5],
+      [Math.cos(a1) * tr * 0.5, 0.9, Math.sin(a1) * tr * 0.5],
+      "#4a3526",
+    );
+  }
+  shelf(0.16, 0.24, 0);
+  shelf(0.4, 0.19, 0.6);
+  shelf(0.62, 0.13, 1.2);
+  shelf(0.82, 0.07, 1.8);
   return toGeo(b);
 }
