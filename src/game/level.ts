@@ -109,8 +109,18 @@ function gridFor(blocks: Block[]): BlockGrid {
   return grid;
 }
 
+/** Extra collision layered over the block grid: the building-access system (access/world.ts)
+ * answers for points on a walkable roof (its parapet and rooftop props), `undefined` elsewhere. */
+export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | undefined) | null } = {
+  fn: null,
+};
+
 export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
+  if (blockHook.fn) {
+    const h = blockHook.fn(x, z, radius);
+    if (h !== undefined) return h;
+  }
   const half = BLOCK / 2 + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes

@@ -6,6 +6,7 @@
 import { useEffect, useRef } from "react";
 
 import { pursuitDots } from "./trafficCore";
+import { drawAccessIcons } from "./access/minimap";
 import { colorFor } from "./net";
 import { pings } from "./ping";
 import { DOWN, squad } from "./revive";
@@ -119,6 +120,8 @@ export function Minimap({
         g.arc(wx(src.landmark.x), wz(src.landmark.z), 4 * dpr, 0, Math.PI * 2);
         g.fill();
       }
+      // elevator / stairs badges and lobby doors (building access)
+      drawAccessIcons(g, wx, wz, dpr, R, f.yaw); // (only Vice Heights installs any)
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;

@@ -101,9 +101,19 @@ export function hasTerrain() {
   return G !== null;
 }
 
+/** Flat maps can still have raised walkable floors: the building-access system answers with
+ * the roof height for points on a walkable roof, `undefined` elsewhere. */
+export const groundHook: { fn: ((x: number, z: number) => number | undefined) | null } = { fn: null };
+
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
-  return G ? G.height(x, z) : 0;
+  if (G) return G.height(x, z);
+  const g = groundHook.fn;
+  if (g) {
+    const y = g(x, z);
+    if (y !== undefined) return y;
+  }
+  return 0;
 }
 
 /** Walking-speed multiplier at (x, z): 1 on flat maps, lower in deep snow, sand or surf. */
@@ -113,7 +123,7 @@ export function groundSpeed(x: number, z: number) {
 
 /** Does a projectile at (x, y, z) hit the ground (or, where the map says so, a railing or the sea)? */
 export function groundHits(x: number, y: number, z: number) {
-  if (!G) return y < 0;
+  if (!G) return y < groundY(x, z); // 0, or a walkable roof's height
   return G.hits ? G.hits(x, y, z) : y < G.height(x, z);
 }
 

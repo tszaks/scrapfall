@@ -8,6 +8,7 @@
 // Blocks are ~80 x 120 m with a 6 m service alley down the middle and lots along the
 // street frontage. Height follows land value: a tower core, mid-rise rings, low-rise edges.
 import type { Block } from "./level";
+import type { BldAccess } from "./access/types";
 import { makeVehicle, vehicleHeight, type Vehicle } from "./vehicles";
 
 // ---- cell kinds (minimap + collision + rendering) ----
@@ -106,6 +107,8 @@ export type Bld = {
   parts: Part[];
   crown?: Crown;
   backdrop?: boolean;
+  /** set by the building-access system (access/cityAccess.ts): elevator or stairs to the roof */
+  access?: BldAccess;
 };
 export type Spot = { x: number; z: number; rot: number };
 export type ParkedCar = Spot & { v: Vehicle };

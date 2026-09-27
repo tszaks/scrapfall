@@ -628,7 +628,7 @@ export const CityScene = memo(function CityScene({
 
   const ext = city.extent + 2600;
   return (
-    <group>
+    <group name="city-root">
       <SkyDome sunset={skies.sunset} night={skies.night} />
       {/* land beyond the backdrop, and the sea to the south */}
       <mesh
@@ -733,9 +733,12 @@ export function CitySun(_props: {
     const texel = (SUN_RANGE * 2) / SUN_MAP;
     const cx = Math.round(state.camera.position.x / texel) * texel;
     const cz = Math.round(state.camera.position.z / texel) * texel;
-    l.target.position.set(cx, 0, cz);
+    // the frustum follows the player up onto rooftops too (access buildings), so a roof
+    // 300 m up still gets its props' shadows
+    const cy = Math.max(0, state.camera.position.y - 1.6);
+    l.target.position.set(cx, cy, cz);
     l.target.updateMatrixWorld();
-    l.position.set(cx + dir.x * SUN_DIST, dir.y * SUN_DIST, cz + dir.z * SUN_DIST);
+    l.position.set(cx + dir.x * SUN_DIST, cy + dir.y * SUN_DIST, cz + dir.z * SUN_DIST);
     if (forced !== null || low) return;
     ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
     if (ema.current > 0.04) {

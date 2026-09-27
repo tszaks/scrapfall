@@ -26,6 +26,9 @@ export type RemoteState = {
   color: string;
   /** 1 = host, 2-4 = guests */
   num: number;
+  /** building access: zone code (0 street; see access/world.ts) and floor height */
+  az?: number;
+  ay?: number | undefined;
   /** alpine: the chairlift chair this player is riding, -1 on foot */
   rc?: number;
   last: number;

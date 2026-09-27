@@ -22,6 +22,7 @@ import type { CityLayout } from "./cityLayout";
 import type { TimeOfDay } from "./lighting";
 import { liveLook, tod, todSmooth } from "./timeOfDay";
 import { blackTexture, resetWeather, tickWeather, weather, wetUniforms } from "./cityWeather";
+import { player as accessPlayer } from "./access/world";
 
 const BOX = new THREE.Vector3(38, 26, 38);
 const STREAKS = 10000;
@@ -494,7 +495,8 @@ export function CityRain({
     weather.shown = shown;
     const rain = shown ? weather.rain * nightF : 0;
     // the ambience reads the live weather (same value as rainIntensity())
-    setAmbienceWeather(rain);
+    // indoors (lobby, car, stairwell) the rain is heard through the walls: much quieter
+    setAmbienceWeather(accessPlayer.zone === 1 ? rain * 0.3 : rain);
     const wet = shown ? weather.wet * nightF : 0;
     const t = weather.t;
     time0.value = t;
@@ -504,7 +506,8 @@ export function CityRain({
     wetUniforms.uRainT.value = t;
     refl.on = REFL_ALLOWED && wet > 0.02;
     const g0 = group.current;
-    if (g0) g0.visible = rain > 0.001;
+    // (no rain indoors: the lobbies, cars and stairwells of the access buildings)
+    if (g0) g0.visible = rain > 0.001 && accessPlayer.zone !== 1;
     if (skyRef.current) skyRef.current.visible = rain > 0.001;
 
     // fog

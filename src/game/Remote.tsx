@@ -1,5 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
+import { remoteFloorY } from "./access/world";
 import { alpine } from "./alpine/weather";
 import { riderEye } from "./alpine/ride";
 import { useRef } from "react";
@@ -46,7 +47,11 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
         p.rx = e.x;
         p.rz = e.z;
         g.position.set(e.x, e.y - 1.25, e.z);
-      } else g.position.set(p.rx, groundY(p.rx, p.rz) + (down ? 0.3 : 0), p.rz);
+      } else {
+        // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
+        const gy = groundY(p.rx, p.rz);
+        g.position.set(p.rx, (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : 0), p.rz);
+      }
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.order = "YXZ";
       g.rotation.set(down ? -Math.PI / 2 : 0, p.ry + Math.PI, down ? Math.sin(performance.now() / 400) * 0.08 : 0);
