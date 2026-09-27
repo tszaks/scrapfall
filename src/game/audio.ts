@@ -266,3 +266,58 @@ export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
 }
+
+// ---- projectile / impact sounds (combat effects) ----
+export type ImpactSound =
+  | "metal" | "wall" | "boom" | "burst" | "ricochet" | "shatter" | "zap" | "thunk" | "splash" | "crack" | "casing" | "fizz";
+const IMPACTS: Record<ImpactSound, Tone[]> = {
+  // bullet on robot plating: bright clank with a short ring
+  metal: [
+    { wave: "square", f0: 1900, f1: 900, dur: 0.05, gain: 0.12, noise: 0.5, cut: 7000, q: 6 },
+    { wave: "sine", f0: 3100, f1: 2600, dur: 0.09, gain: 0.05, noise: 0, cut: 9000, q: 12 },
+  ],
+  // bullet into concrete: dull chip
+  wall: [{ wave: "triangle", f0: 420, f1: 120, dur: 0.06, gain: 0.12, noise: 0.9, cut: 2200 }],
+  // BOOMER shell: deep thump plus a long gravelly tail
+  boom: [
+    { wave: "sine", f0: 90, f1: 28, dur: 0.9, gain: 0.9, noise: 0, cut: 600 },
+    { wave: "sawtooth", f0: 60, f1: 30, dur: 0.7, gain: 0.35, noise: 1.4, cut: 1400 },
+  ],
+  // FLAK air burst: sharp crack that rolls off
+  burst: [
+    { wave: "square", f0: 260, f1: 70, dur: 0.4, gain: 0.35, noise: 1.3, cut: 2600 },
+    { wave: "sine", f0: 120, f1: 40, dur: 0.45, gain: 0.35, noise: 0, cut: 500 },
+  ],
+  // REBOUNDER bounce: rising zing
+  ricochet: [{ wave: "triangle", f0: 1500, f1: 3800, dur: 0.16, gain: 0.16, noise: 0.15, cut: 9000, q: 8 }],
+  // GLACIER shard shattering: glassy tinkle
+  shatter: [
+    { wave: "sine", f0: 3400, f1: 2200, dur: 0.18, gain: 0.1, noise: 0.35, cut: 11000, q: 14 },
+    { wave: "triangle", f0: 5200, f1: 4100, dur: 0.12, gain: 0.06, noise: 0, cut: 12000, q: 16 },
+  ],
+  // TESLA arc: buzzy crackle
+  zap: [
+    { wave: "sawtooth", f0: 140, f1: 90, dur: 0.18, gain: 0.16, noise: 0.8, cut: 5200, q: 3 },
+    { wave: "square", f0: 2400, f1: 900, dur: 0.1, gain: 0.05, noise: 0.4, cut: 8000, q: 5 },
+  ],
+  // HARPOON sticking: woody thunk
+  thunk: [{ wave: "sine", f0: 260, f1: 90, dur: 0.14, gain: 0.35, noise: 0.35, cut: 1500 }],
+  splash: [{ wave: "sine", f0: 500, f1: 150, dur: 0.3, gain: 0.12, noise: 1.2, cut: 3200 }],
+  // LANCE punching through: high snap
+  crack: [{ wave: "sawtooth", f0: 3200, f1: 500, dur: 0.1, gain: 0.16, noise: 0.6, cut: 9000, q: 4 }],
+  // spent brass hitting the floor
+  casing: [{ wave: "sine", f0: 4200, f1: 3800, dur: 0.05, gain: 0.025, noise: 0, cut: 12000, q: 18 }],
+  fizz: [{ wave: "sine", f0: 900, f1: 300, dur: 0.12, gain: 0.08, noise: 0.5, cut: 5000 }],
+};
+const lastImpact: Partial<Record<ImpactSound, number>> = {};
+/** a positional-ish impact: quieter and duller with distance, throttled so a hose of bullets stays sane */
+export function playImpact(kind: ImpactSound, dist = 0) {
+  if (!ctx || dist > 70) return;
+  const now = ctx.currentTime;
+  const gap = kind === "boom" ? 0.08 : kind === "casing" ? 0.06 : 0.035;
+  if (now - (lastImpact[kind] ?? -1) < gap) return;
+  lastImpact[kind] = now;
+  const k = Math.max(0.12, 1 - dist / 70);
+  const far = dist > 18;
+  IMPACTS[kind].forEach((t) => tone({ ...t, gain: t.gain * k, cut: far ? Math.min(t.cut, 1800) : t.cut }));
+}

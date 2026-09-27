@@ -22,6 +22,9 @@ import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
+import { CombatFx } from "./CombatFx";
+import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import { FX, VF, VK, type VisKind } from "./impacts";
 import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
@@ -1104,14 +1107,18 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
   };
-  const slot = pool.find((b) => !b.active);
+  const i = pool.findIndex((b) => !b.active);
+  const slot = pool[i];
   if (slot) {
     Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
+    return i;
   } else if (pool.length < MAX_BULLETS) {
     pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
+    return pool.length - 1;
   }
+  return -1;
 }
 
 
@@ -1396,9 +1403,30 @@ function World({
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
+      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      const giveAll = () => {
+        for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
+        syncInv();
+      };
+      Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
-  }, [gl, scene, camera, city, remotes, enemies]);
+  }, [gl, scene, camera, city, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps
+  // combat effects need to know the world: what is solid, where the robots are, the gun table
+  useEffect(() => {
+    fxGuns(ORDER.map((w) => GUNS[w]));
+    const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
+    fxEnv({
+      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      car: (x, y, z) => city !== null && hitsTraffic(x, y, z),
+      half: () => HALF,
+      waterZ: city ? city.waterZ : null,
+      enemies,
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      height: (k) => (k === "boss" ? 5 : k === "brute" || k === "vanguard" ? 2.6 : 2),
+      dust: Number.isFinite(dust) ? dust : 0x9a9080,
+    });
+  }, [blocks, city, enemies, theme]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1568,6 +1596,7 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
       if (m.type === "left") {
         remotes.current.delete(String(m.from));
         remoteDeps.current.delete(String(m.from));
@@ -1639,6 +1668,7 @@ function World({
     lastDepKey.current = "";
     lastDeploys.current = { turret: -1, mines: -1 };
     onDeploys({ turret: 0, mines: 0 });
+    fxReset();
 
     syncInv();
 
@@ -1715,6 +1745,7 @@ function World({
   };
 
   const burstQueue = useRef(0);
+  const tracerCount = useRef(0);
   const bountyKills = useRef(0);
   const burstTimer = useRef(0);
 
@@ -1725,10 +1756,14 @@ function World({
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
+    // seeded spread so co-op viewers can replay the exact same pellets
+    const seed = (Math.random() * 1e9) | 0;
+    const spread = rng(seed);
+    const kind = ORDER.indexOf(w) as VisKind;
+    let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
-      const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
-      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
-      dir.y += (Math.random() - 0.5) * g.spread * 0.6;
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, g.spread, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -1742,12 +1777,14 @@ function World({
         burn: isP && s2.incend ? 3 : 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
-      fireInto(
+      const slot = fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
@@ -1966,7 +2003,8 @@ function World({
     const kn = knock.current;
     kn.shake = Math.max(0, kn.shake - delta * 2.2);
     const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
-    cam.rotation.set(look.current.pitch + roll * 0.4, look.current.yaw, roll);
+    const kick = fxKick(); // per-weapon camera kick + explosion shake
+    cam.rotation.set(look.current.pitch + roll * 0.4 + kick.pitch, look.current.yaw + kick.yaw, roll);
 
     if (gameOver || !locked) return;
 
@@ -2166,7 +2204,11 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        const from = new THREE.Vector3(t.x, 1.1, t.z);
+        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(0.9);
+        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
+        fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2354,7 +2396,9 @@ function World({
         } else if (id === "mortar") {
           const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
           pos.y -= 0.2;
-          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          const ms = fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          if (ms >= 0) fxShot(ms, bullets.current[ms]!, VK.MORTAR);
+          fxFired(VK.MORTAR, 0, pos, FORWARD, 0, 18, n);
         } else if (id === "barrier") {
           invuln.current = 6;
         } else if (id === "overdrive") {
@@ -2694,10 +2738,12 @@ function World({
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
+      fxBurst(b);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
-        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        const fs = fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
       }
     };
     bullets.current.forEach((b, i) => {
@@ -2714,8 +2760,10 @@ function World({
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
+          fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
           burst(b);
+          fxDie(i, hitWall);
           b.active = false;
         } else {
           for (let ei = 0; ei < enemies.length; ei++) {
@@ -2728,6 +2776,7 @@ function World({
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
               const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              fxHit(i, b, e);
               onStat("hit", 1);
               onStat("dmg", dmg);
               if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
@@ -2745,6 +2794,7 @@ function World({
                   if (!o.alive || o === e) continue;
                   if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
                     hurtEnemy(o, b.damage, oi);
+                    fxChain(e, o);
                     left--;
                   }
                 }
@@ -2770,6 +2820,7 @@ function World({
             TMP_DIR.copy(b.vel).normalize();
             m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
           }
+          fxStyle(i, m, b); // per-weapon round (projectiles.tsx)
         }
       }
 
@@ -2848,6 +2899,7 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
   return (
@@ -2949,6 +3001,7 @@ function World({
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
+      <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
