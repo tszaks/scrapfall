@@ -98,6 +98,18 @@ export type Mod =
   | { t: "cap"; ax: number; az: number; bx: number; bz: number; r: number; depth: number }
   | { t: "box"; x0: number; z0: number; x1: number; z1: number; h: number; ramp: number };
 
+/** a flat pad the ground eases onto (parking, the skate park, buildings on the sand) */
+export type Pad = Rect & { h: number; ramp: number };
+export function applyPads(pads: Pad[], x: number, z: number, h: number) {
+  for (const p of pads) {
+    const e = Math.max(p.x0 - x, 0, x - p.x1, p.z0 - z, 0, z - p.z1);
+    if (e >= p.ramp) continue;
+    const t = Math.min(1, e / p.ramp);
+    h += (p.h - h) * (1 - t * t * (3 - 2 * t));
+  }
+  return h;
+}
+
 export type BType =
   | "shop"
   | "surf"
@@ -204,6 +216,7 @@ export type Blockade = {
 
 export type BeachData = {
   regions: Region[];
+  pads: Pad[];
   /** region index per cell (-1 = natural ground) */
   regionOf: Int16Array;
   mods: Mod[];
@@ -219,7 +232,8 @@ export type BeachData = {
   gaps: Gap[];
   /** the solo square's half-size (null in co-op) */
   soloHalf: number | null;
-  wheel: { x: number; z: number; y: number; r: number };
+  /** rot: the disc's turn about y (its normal is (sin rot, 0, cos rot)) */
+  wheel: { x: number; z: number; y: number; r: number; rot: number };
   coaster: { pts: [number, number, number][]; station: Rect };
   carousel: { x: number; z: number; r: number };
   drop: { x: number; z: number; h: number };
@@ -335,6 +349,7 @@ export function generateBeach(
   const deep = new Uint8Array(N);
   const regions: Region[] = [];
   const mods: Mod[] = [];
+  const pads: Pad[] = [];
   const buildings: BBld[] = [];
   const props: BProp[] = [];
   const parked: Parked[] = [];
@@ -378,6 +393,7 @@ export function generateBeach(
     const rg = inside(i, j) ? regionOf[i * n + j]! : -1;
     if (rg >= 0) return regionHeight(regions[rg]!, x, z);
     let h = baseProfile(x, z);
+    h = applyPads(pads, x, z, h);
     for (const m of mods) h += modHeight(m, x, z);
     return h;
   };
@@ -498,6 +514,11 @@ export function generateBeach(
 
   // ---- 4. skate park, Muscle Beach, courts, playground (the park strip) ----
   const skate = rect(56, 48, X.bike, 104);
+  // the sand eases onto flat pads under the skate park, the beach lot and the buildings on it
+  pads.push({ ...skate, h: 0, ramp: 6 });
+  pads.push({ ...rect(60, 184, X.bike, 256), h: 0, ramp: 6 });
+  pads.push({ ...rect(64, -168, 88, -148), h: 0, ramp: 5 });
+  for (const z of [-204, 170]) pads.push({ ...rect(80, z, 92, z + 10), h: 0, ramp: 4 });
   paint(skate, K_SKATE);
   mods.push({ t: "ell", x: 82, z: 66, rx: 11, rz: 8, depth: 2.6 });
   mods.push({ t: "ell", x: 70, z: 88, rx: 6.5, rz: 6.5, depth: 2.1 });
@@ -684,7 +705,7 @@ export function generateBeach(
         sign,
       });
       bld({
-        ...rect(X.shops + 16, s.a, X.walkW - 4, s.a + 12),
+        ...rect(X.shops + 16.4, s.a, X.walkW - 4, s.a + 12),
         t: "motel",
         y0: 0,
         h: 7,
@@ -763,8 +784,9 @@ export function generateBeach(
   }
 
   // ---- 6. amusement park and pier buildings ----
-  const wheel = { x: -96, z: -22, y: DECK + 19.5, r: 17 };
-  solidify(rect(-110, -26, -82, -18), DECK - 8, DECK + 3); // wheel base + A-frame feet
+  // the wheel's disc is turned 45 degrees so it reads from the beach, the boardwalk and the pier
+  const wheel = { x: -96, z: -20, y: DECK + 21.6, r: 17, rot: Math.PI / 4 };
+  solidify(rect(-106, -30, -86, -10), DECK - 8, DECK + 3); // wheel base + A-frame feet
   bld({ ...rect(-76, -30, -44, -14), t: "arcade", y0: DECK, h: 8.5, floors: 2, front: 2, sign: 8 });
   const drop = { x: -32, z: -24, h: 38 };
   solidify(rect(-36, -28, -28, -20), DECK - 8, DECK + drop.h);
@@ -818,8 +840,8 @@ export function generateBeach(
         );
     }
   }
-  const carousel = { x: 66, z: -6, r: 7.5 };
-  solidify(rect(58, -14, 74, 2), DECK - 8, DECK + 5.5);
+  const carousel = { x: 66, z: -8, r: 6.5 };
+  solidify(rect(58, -14, 74, -2), DECK - 8, DECK + 5.5);
   bld({
     ...rect(-232, -18, -208, 4),
     t: "restaurant",
@@ -1067,6 +1089,73 @@ export function generateBeach(
   ] as const)
     props.push({ k: "flag", x, z, y: DECK, rot: 0, c: 0 });
 
+  // ---- 9b. anything you would bump into in real life is solid (and it is cover) ----
+  const foot = (
+    x: number,
+    z: number,
+    hx: number,
+    hz: number,
+    rot: number,
+    bot: number,
+    top: number,
+  ) => {
+    const side = Math.abs(Math.sin(rot)) > 0.7;
+    // every 2 m cell the footprint overlaps (cell centres within a cell half-size of it)
+    const ax = (side ? hz : hx) + 0.95;
+    const az = (side ? hx : hz) + 0.95;
+    each(rect(x - ax, z - az, x + ax, z + az), (_i, _j, c) => {
+      if (solid[c]) return;
+      solid[c] = 1;
+      pBot[c] = bot;
+      pTop[c] = top;
+    });
+  };
+  const PROP_FOOT: Partial<Record<PropKind, [number, number, number]>> = {
+    cart: [1.1, 0.55, 2.4],
+    bars: [1.6, 0.15, 2.4],
+    rings: [1.3, 0.15, 3.2],
+    rack: [1.2, 0.9, 1.8],
+    hoop: [0.9, 1.3, 3.4],
+    swing: [1.9, 0.3, 2.8],
+    net: [4.7, 0.1, 2.5],
+    shower: [0.7, 0.7, 2.6],
+    busstop: [2.0, 0.8, 2.6],
+    table: [1.1, 1.1, 0.8],
+    sign66: [0.2, 1.2, 3.0],
+    rail: [3, 0.1, 0.6],
+  };
+  for (const p of props) {
+    const f = PROP_FOOT[p.k];
+    if (!f) continue;
+    const hx = p.k === "rail" ? (p.s ?? 6) / 2 : f[0];
+    foot(p.x, p.z, hx, f[1], p.rot, p.y - 1, p.y + f[2]);
+  }
+  for (const pc of parked)
+    foot(pc.x, pc.z, pc.v.len / 2, pc.v.wid / 2, pc.rot + Math.PI / 2, pc.y - 1, pc.y + 1.6);
+  // coaster columns and the station canopy posts, the carousel pavilion's columns
+  coaster.forEach((a, k) => {
+    if (k % 4 === 0 && a[1] > DECK + 2) foot(a[0], a[2], 0.2, 0.2, 0, DECK - 1, a[1]);
+  });
+  for (const [x, z] of [
+    [station.x0, station.z0],
+    [station.x1, station.z0],
+    [station.x0, station.z1],
+    [station.x1, station.z1],
+  ] as const)
+    foot(x, z, 0.15, 0.15, 0, DECK - 1, DECK + 4.2);
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    foot(
+      carousel.x + Math.cos(a) * (carousel.r + 1.2),
+      carousel.z + Math.sin(a) * (carousel.r + 1.2),
+      0.18,
+      0.18,
+      0,
+      DECK - 1,
+      DECK + 5.2,
+    );
+  }
+
   // ---- 10. seal the deep ocean (a line just past the swim buoys) ----
   each(rect(X.seal, -half, X.surf, half), (_i, _j, c) => {
     if (regionOf[c]! < 0) solid[c] = 1;
@@ -1148,7 +1237,8 @@ export function generateBeach(
   );
 
   // ---- 14. spawn, then flood fill: every open cell the spawn can't reach becomes solid ----
-  const spawn = { x: X.prom + 8, z: 26 };
+  // players start on the promenade at the pier entrance, facing the arch and the sunset
+  const spawn = { x: X.prom + 14, z: 3 };
   const reach = new Uint8Array(N);
   {
     const s0 = ci(spawn.x) * n + ci(spawn.z);
@@ -1258,6 +1348,7 @@ export function generateBeach(
     landmark: { x: wheel.x, z: wheel.z, h: wheel.y + wheel.r },
     beach: {
       regions,
+      pads,
       regionOf,
       mods,
       pBot,
@@ -1285,7 +1376,7 @@ export function generateBeach(
     palette: BEACH_PALETTE,
     seaX: X.surf,
     soloHalf: soloH,
-    spawnYaw: Math.PI * 0.62,
+    spawnYaw: 1.6,
   };
   return { layout, blocks };
 }

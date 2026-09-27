@@ -8,6 +8,7 @@ import {
   K_WET,
   SEA,
   X,
+  applyPads,
   baseProfile,
   modHeight,
   regionHeight,
@@ -16,7 +17,7 @@ import {
 
 export function beachTerrain(city: BeachLayout): Terrain {
   const { cells: n, half, kind, beach } = city;
-  const { regionOf, regions, mods, pBot, pTop, deep } = beach;
+  const { regionOf, regions, mods, pads, pBot, pTop, deep } = beach;
   // bowls only matter inside their own box: bucket them so plain sand skips the maths
   const modBox = mods.map((m) =>
     m.t === "ell"
@@ -37,7 +38,8 @@ export function beachTerrain(city: BeachLayout): Terrain {
     return i * n + j;
   };
   const ground = (x: number, z: number) => {
-    let h = baseProfile(x, z);
+    let h =
+      x > X.dry && x < X.bike + 8 ? applyPads(pads, x, z, baseProfile(x, z)) : baseProfile(x, z);
     for (let k = 0; k < mods.length; k++) {
       const b = modBox[k]!;
       if (x < b[0]! || z < b[1]! || x > b[2]! || z > b[3]!) continue;

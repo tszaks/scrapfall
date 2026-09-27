@@ -17,7 +17,7 @@ const norm = (v: [number, number, number]): [number, number, number] => {
 
 /** the sea is to the west (-x): the sun sets just south of the pier's line */
 export const BEACH_SUN: Record<TimeOfDay, [number, number, number]> = {
-  sunset: dirFrom(-97, 4.5),
+  sunset: dirFrom(-85, 4.5),
   // the city's night sky already hangs its moon over -x/-z: over the ocean here
   night: norm(SUN_DIR.night),
 };
@@ -76,7 +76,7 @@ export function beachLook(time: TimeOfDay): BeachLook {
         camFar: 3400,
       },
       sunDir: BEACH_SUN.sunset,
-      lightDir: dirFrom(-97, 14),
+      lightDir: dirFrom(-85, 14),
       water: { color: "#241c3c", roughness: 0.18, metalness: 0.9, foam: "#ffe6d6", env: 1 },
       glow: 1.1,
       signs: 1.0,
@@ -94,9 +94,9 @@ export function beachLook(time: TimeOfDay): BeachLook {
         sky: "#161a2a",
         fog: [90, 1500],
         ...haze("#1c1f30", "#2a2a48", 0.55),
-        hemi: ["#6070b0", "#3a3040", 0.6],
-        sun: { color: "#a8bcff", intensity: 0.55, pos: [0, 0, 0] },
-        ambient: 0.18,
+        hemi: ["#7084c4", "#4a4050", 0.9],
+        sun: { color: "#b0c4ff", intensity: 0.8, pos: [0, 0, 0] },
+        ambient: 0.26,
         ambientColor: "#a8a8d8",
         camFar: 3400,
       },

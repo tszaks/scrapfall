@@ -815,9 +815,13 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
     for (let i = 0; i < GONDOLAS; i++) {
       const t = a + (i / GONDOLAS) * Math.PI * 2;
       const sway = Math.sin(state.clock.elapsedTime * 0.9 + i) * 0.03;
-      _e.set(0, 0, sway);
+      _e.set(0, w.rot, sway);
       _m4.compose(
-        _v.set(w.x + Math.cos(t) * w.r, w.y + Math.sin(t) * w.r, w.z),
+        _v.set(
+          w.x + Math.cos(t) * w.r * Math.cos(w.rot),
+          w.y + Math.sin(t) * w.r,
+          w.z - Math.cos(t) * w.r * Math.sin(w.rot),
+        ),
         _q.setFromEuler(_e),
         _s.set(1, 1, 1),
       );
@@ -827,7 +831,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
   });
   return (
     <group>
-      <group ref={wheelRef} position={[w.x, w.y, w.z]}>
+      <group ref={wheelRef} position={[w.x, w.y, w.z]} rotation={[0, w.rot, 0, "YXZ"]}>
         <mesh geometry={geo.frame} material={mats.lambert} castShadow />
         <mesh geometry={geo.leds} material={mats.led} />
         <mesh geometry={geo.halos} material={mats.halo} renderOrder={3} />

@@ -21,6 +21,7 @@ import {
   SEA,
   TUNNEL_Z,
   X,
+  applyPads,
   baseProfile,
   modHeight,
   type BBld,
@@ -114,7 +115,7 @@ const pick = <T>(a: readonly T[], r: () => number) => a[Math.floor(r() * a.lengt
 
 /** ground height used for drawing (natural ground, bowls included; the pier deck is separate) */
 function groundVis(city: BeachLayout, x: number, z: number) {
-  let h = baseProfile(x, z);
+  let h = applyPads(city.beach.pads, x, z, baseProfile(x, z));
   for (const m of city.beach.mods) h += modHeight(m, x, z);
   return h;
 }
@@ -584,16 +585,15 @@ function templates(): Tmpls {
     }),
     fence: t((g) => {
       // construction fence panel: two posts on feet and a green windscreen, 2.2 m tall
+      // one post and foot per panel (the next panel's post closes the run: nothing doubles up)
       g.col("#8a9096");
-      g.box(-1.2, 0, 0, 0.06, 2.3, 0.06);
-      g.box(1.2, 0, 0, 0.06, 2.3, 0.06);
+      g.box(-1.17, 0, 0, 0.06, 2.3, 0.06);
       g.col("#3a3e44");
-      g.box(-1.2, 0, 0, 0.25, 0.12, 0.6);
-      g.box(1.2, 0, 0, 0.25, 0.12, 0.6);
+      g.box(-1.17, 0, 0, 0.25, 0.12, 0.6);
       g.col("#1e4a34");
-      g.box(0, 0.25, 0, 2.4, 1.95, 0.03);
+      g.box(0.015, 0.25, 0, 2.33, 1.95, 0.03);
       g.col("#8a9096");
-      g.box(0, 2.22, 0, 2.4, 0.05, 0.05);
+      g.box(0.015, 2.22, 0, 2.33, 0.05, 0.05);
     }),
     sandbag: t((g) => {
       for (let row = 0; row < 3; row++)
@@ -737,7 +737,7 @@ function building(b: BBld, C: Ctx) {
         : b.t === "house"
           ? pick(["#f4ead8", "#efe2cc", "#f6f0e4", "#e8d8c0"], r)
           : tone;
-  const groundH = b.t === "house" ? 3.2 : 4.2;
+  const groundH = Math.min(b.h, b.t === "house" ? 3.2 : 4.2);
   const fh = 3.3;
   const storeFront =
     b.t !== "house" &&
@@ -810,6 +810,11 @@ function building(b: BBld, C: Ctx) {
     return;
   }
 
+  // a plinth down into the ground, so a building never floats over sand or a slope
+  if (y0 < 3) {
+    G.mat(L.plain, b.seed, 0).col(wallCol, 0.8);
+    for (let i = 0; i < 4; i++) G.wall(poly[i]!, poly[(i + 1) % 4]!, y0 - 1.5, y0 + 0.01);
+  }
   // ---- walls ----
   for (let i = 0; i < 4; i++) {
     const p = poly[i]!;
@@ -930,11 +935,12 @@ function building(b: BBld, C: Ctx) {
     const q = poly[(i + 1) % 4]!;
     const dx = q[0] - p[0];
     const dz = q[1] - p[1];
+    // caps along x run past the corners, caps along z stop short: no overlapping lids
     G.obox(
       (p[0] + q[0]) / 2,
       top + 0.6,
       (p[1] + q[1]) / 2,
-      Math.hypot(dx, dz) + 0.3,
+      Math.hypot(dx, dz) + (Math.abs(dx) > Math.abs(dz) ? 0.3 : -0.3),
       0.12,
       0.3,
       Math.atan2(dx, dz) + Math.PI / 2,
@@ -998,8 +1004,10 @@ function building(b: BBld, C: Ctx) {
     const fr = frontLine(b, b.front, out / 2);
     const along = b.front === 0 || b.front === 2;
     const len = fr.half * 2;
-    if (along) D.box(fr.x, y0 + 3.3, fr.z, len, 0.18, out);
-    else D.box(fr.x, y0 + 3.3, fr.z, out, 0.18, len);
+    // the second wing's walkway sits a hair higher, so the two never share a lid at the corner
+    const wy = y0 + 3.3 + (along ? 0.03 : 0);
+    if (along) D.box(fr.x, wy, fr.z, len, 0.18, out);
+    else D.box(fr.x, wy, fr.z, out, 0.18, len);
     D.col("#2a6a8a");
     const rl = frontLine(b, b.front, out - 0.05);
     if (along) D.box(rl.x, y0 + 3.5, rl.z, len, 0.9, 0.05);
@@ -1215,19 +1223,33 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     return [c, 1];
   };
   const skate = beach.skate;
+  const lot = beach.lot;
+  const lotAt = (x: number, z: number): [THREE.Color, number] => {
+    void x;
+    void z;
+    return [new THREE.Color("#4a4c50"), 0.9];
+  };
   const skateAt = (x: number, z: number, h: number): [THREE.Color, number] => {
-    const c = new THREE.Color(h < -0.05 ? "#b8b6b0" : "#c9c7c0");
-    return [c, 0.7];
+    // poured concrete: slab-to-slab tone, darker and smoother down in the bowls
+    const slab = ((Math.floor(x / 4) * 7 + Math.floor(z / 4) * 13) % 5) * 0.012;
+    const c = new THREE.Color(h < -0.05 ? "#a9a7a2" : "#c7c5be").offsetHSL(
+      0,
+      0,
+      slab - 0.02 + Math.max(-0.08, h * 0.02),
+    );
+    return [c, h < -0.05 ? 0.45 : 0.75];
   };
   for (let i = 0; i < n; i++) {
     const x = cx(i) - 1;
     for (let j = 0; j < n; j++) {
       const z = cx(j) - 1;
       const G = chunkAt(x + 1, z + 1).ground;
-      if (x < X.strip) gridCell(G, x, z, x + 2, z + 2, beachAt);
-      else if (x >= X.bluff && x < X.top) gridCell(G, x, z, x + 2, z + 2, bluffAt);
-      else if (x >= skate.x0 && x < skate.x1 && z >= skate.z0 && z < skate.z1)
+      if (x >= skate.x0 && x < skate.x1 && z >= skate.z0 && z < skate.z1)
         gridCell(G, x, z, x + 2, z + 2, skateAt);
+      else if (x >= lot.x0 && x < lot.x1 && z >= lot.z0 && z < lot.z1)
+        gridCell(G, x, z, x + 2, z + 2, lotAt);
+      else if (x < X.strip) gridCell(G, x, z, x + 2, z + 2, beachAt);
+      else if (x >= X.bluff && x < X.top) gridCell(G, x, z, x + 2, z + 2, bluffAt);
     }
   }
   // flat town ground in runs along z
@@ -1304,13 +1326,13 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   for (let z = -half; z < half; z += 6) {
     const D = chunkAt(ROAD_C, z + 1).detail;
     D.mat(L.plain, 0.5, 0).col("#f2c21f");
-    D.flat(ROAD_C - 0.25, z, ROAD_C - 0.1, z + 6, 0.012);
-    D.flat(ROAD_C + 0.1, z, ROAD_C + 0.25, z + 6, 0.012);
+    D.flat(ROAD_C - 0.25, z, ROAD_C - 0.1, z + 6, 0.045);
+    D.flat(ROAD_C + 0.1, z, ROAD_C + 0.25, z + 6, 0.045);
     D.col("#e8e6e0");
-    for (const x of [ROAD_C - 4, ROAD_C + 4]) D.flat(x - 0.08, z, x + 0.08, z + 3, 0.012);
+    for (const x of [ROAD_C - 4, ROAD_C + 4]) D.flat(x - 0.08, z, x + 0.08, z + 3, 0.045);
     // bike path centre stripe
     D.col("#f2c21f");
-    D.flat(X.bike + 3.95, z, X.bike + 4.05, z + 3, 0.1);
+    D.flat(X.bike + 3.95, z, X.bike + 4.05, z + 3, 0.12);
   }
   // crosswalks by the pier plaza
   for (const zc of [0, -100, 100]) {
@@ -1328,10 +1350,10 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       [c.z0 + 2, c.z0 + 22],
       [c.z1 - 22, c.z1 - 2],
     ] as const) {
-      D.flat(c.x0 + 3, z0, c.x1 - 3, z0 + 0.1, 0.11);
-      D.flat(c.x0 + 3, z1 - 0.1, c.x1 - 3, z1, 0.11);
-      D.flat(c.x0 + 3, z0, c.x0 + 3.1, z1, 0.11);
-      D.flat(c.x1 - 3.1, z0, c.x1 - 3, z1, 0.11);
+      D.flat(c.x0 + 3, z0, c.x1 - 3, z0 + 0.1, 0.14);
+      D.flat(c.x0 + 3, z1 - 0.1, c.x1 - 3, z1, 0.14);
+      D.flat(c.x0 + 3, z0, c.x0 + 3.1, z1, 0.14);
+      D.flat(c.x1 - 3.1, z0, c.x1 - 3, z1, 0.14);
     }
   }
 
@@ -1358,11 +1380,30 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           );
         }
         G.col("#b8b0a2");
-        for (const x of [rg.x0 + 0.25, rg.x1 - 0.25])
-          for (let k = 0; k < steps; k += 4) {
-            const y = rg.h0 + ((k + 1) * (rg.h1 - rg.h0)) / steps;
-            G.box(x, y - 1.5, rg.z0 + (k + 2) * run, 0.5, 2.4, run * 4 + 0.02);
+        // one sloped cheek wall per side (inner face, outer face, a coping on top)
+        for (const [xa, xb] of [
+          [rg.x0, rg.x0 + 0.5],
+          [rg.x1 - 0.5, rg.x1],
+        ] as const) {
+          const b0 = rg.h0 - 1.5,
+            b1 = rg.h1 - 1.5,
+            t0 = rg.h0 + 0.9,
+            t1 = rg.h1 + 0.9;
+          G.quad(xb, b0, rg.z0, xb, b1, rg.z1, xb, t1, rg.z1, xb, t0, rg.z0);
+          G.quad(xa, b1, rg.z1, xa, b0, rg.z0, xa, t0, rg.z0, xa, t1, rg.z1);
+          G.quad(xa, t0, rg.z0, xb, t0, rg.z0, xb, t1, rg.z1, xa, t1, rg.z1);
+        }
+        // wall lamps up both sides of the flight, with warm pools on the steps
+        const Cb = ctx((rg.x0 + rg.x1) / 2, (rg.z0 + rg.z1) / 2);
+        for (let z = rg.z0 + 4; z < rg.z1; z += 8) {
+          const y = rg.h0 + ((z - rg.z0) / (rg.z1 - rg.z0)) * (rg.h1 - rg.h0);
+          for (const x of [rg.x0 + 0.15, rg.x1 - 0.15]) {
+            Cb.glow.col("#ffd49a").mat(0);
+            Cb.glow.box(x, y + 1.6, z, 0.12, 0.3, 0.3);
           }
+          Cb.pools.col("#c07a40").mat(0);
+          Cb.pools.flat(rg.x0, z - 5, rg.x1, z + 5, y + 0.3, [0, 0, 1, 1]);
+        }
         // handrails
         G.col("#3a3e44");
         for (const x of [rg.x0 + 0.6, rg.x1 - 0.6]) {
@@ -1842,25 +1883,29 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   {
     const w = beach.wheel;
     const G = ctx(w.x, w.z).main;
+    // the wheel's own frame: u along the disc, n its normal (the axle)
+    const wc = Math.cos(w.rot);
+    const ws = Math.sin(w.rot);
+    const WP = (u: number, y: number, v: number): [number, number, number] => [
+      w.x + u * wc + v * ws,
+      y,
+      w.z - u * ws + v * wc,
+    ];
     G.mat(L.plain, 0.5, 0).col("#e8e4dc");
     // two A-frames (one each side of the wheel), legs from the deck to the axle
     for (const s of [-1, 1]) {
-      const zz = w.z + s * 3.2;
-      for (const dx of [-9, 9]) {
-        const bx = w.x + dx;
-        const a: [number, number, number] = [bx, DECK, zz + s * 1.2];
-        const b: [number, number, number] = [w.x, w.y, zz];
-        legQuad(G, a, b, 0.55);
-      }
-      G.cyl(w.x, w.y - 0.8, zz, 0.9, 1.6, 10);
+      for (const du of [-9, 9]) legQuad(G, WP(du, DECK, s * 4.4), WP(0, w.y, s * 3.2), 0.55);
+      const hub = WP(0, w.y - 0.8, s * 3.2);
+      G.cyl(hub[0], hub[1], hub[2], 0.9, 1.6, 10);
     }
     G.col("#c8c4bc");
-    G.box(w.x, DECK, w.z, 20, 1.2, 9);
+    G.obox(w.x, DECK, w.z, 20, 1.2, 9, w.rot);
     G.col("#2f5f8a");
-    G.box(w.x, DECK + 1.2, w.z + 4.6, 8, 2.6, 1.2);
+    const booth = WP(0, DECK + 1.2, 4.6);
+    G.obox(booth[0], booth[1], booth[2], 8, 2.6, 1.2, w.rot);
     // axle
     G.col("#8a8e94");
-    G.box(w.x, w.y - 0.35, w.z, 0.7, 0.7, 7.2);
+    G.obox(w.x, w.y - 0.35, w.z, 0.7, 0.7, 7.2, w.rot);
 
     const d = beach.drop;
     const D = ctx(d.x, d.z).main;
@@ -1997,22 +2042,11 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     G.box(t.x - 1.02, y + 3.2, t.z, 0.05, 1.0, 2.6);
     G.col("#f4f0e6");
     G.box(t.x + 0.4, y + 4.8, t.z, 3.3, 0.18, 3.7);
-    // ramp down the back (landward)
-    G.col("#d8d2c6");
-    G.quad(
-      t.x + 2.2,
-      y + 2.35,
-      t.z - 0.6,
-      t.x + 2.2,
-      y + 2.35,
-      t.z + 0.6,
-      t.x + 7,
-      y,
-      t.z + 0.6,
-      t.x + 7,
-      y,
-      t.z - 0.6,
-    );
+    // a steel ladder up the back (the tower is cover, not a perch)
+    G.col("#b8bcc0");
+    G.box(t.x + 2.25, y, t.z - 0.35, 0.06, 2.4, 0.06);
+    G.box(t.x + 2.25, y, t.z + 0.35, 0.06, 2.4, 0.06);
+    for (let k = 1; k < 8; k++) G.box(t.x + 2.25, y + k * 0.3, t.z, 0.05, 0.04, 0.7);
     G.col("#e8e4dc");
     G.cyl(t.x - 1.8, y + 2.4, t.z + 1.8, 0.04, 3.2, 4);
     Cx.glow.col("#e8322a").mat(0);
@@ -2296,7 +2330,18 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       break;
     case "towel":
       tint.set(UMB[((p.c ?? 0) + 3) % UMB.length]!);
-      D.stamp(T.towel, p.x, gv(p.x, p.z) + 0.01, p.z, p.rot, 1, 1, 1, tint);
+      // a per-towel lift of up to 3 cm so overlapping towels never z-fight
+      D.stamp(
+        T.towel,
+        p.x,
+        gv(p.x, p.z) + 0.01 + (Math.abs(Math.sin(p.x * 12.9 + p.z * 7.3)) % 1) * 0.03,
+        p.z,
+        p.rot,
+        1,
+        1,
+        1,
+        tint,
+      );
       break;
     case "board":
       tint.set(UMB[((p.c ?? 0) + 5) % UMB.length]!);
@@ -2394,8 +2439,8 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       D.box(p.x, y, p.z + 1, 0.1, 3, 0.1);
       D.col("#f4f2ea");
       D.box(p.x, y + 2.2, p.z, 0.08, 1.3, 2.4);
-      signQuad(C.signs, W["END OF THE TRAIL"], p.x - 0.06, y + 2.85, p.z, 2.3, 1.15, 3);
-      signQuad(C.signs, W["END OF THE TRAIL"], p.x + 0.06, y + 2.85, p.z, 2.3, 1.15, 1);
+      signQuad(C.signs, W["END OF THE TRAIL"], p.x - 0.08, y + 2.85, p.z, 2.3, 1.15, 3);
+      signQuad(C.signs, W["END OF THE TRAIL"], p.x + 0.08, y + 2.85, p.z, 2.3, 1.15, 1);
       break;
     }
     default:
@@ -2573,7 +2618,7 @@ function backdrop(
         G.mat(L.ground, rough, 0).col(col);
         const oa = curve(za);
         const ob = curve(zb);
-        G.quad(x0 + oa, h0, za, x1 + oa, h1, za, x1 + ob, h1, zb, x0 + ob, h0, zb, [
+        G.quad(x0 + ob, h0, zb, x1 + ob, h1, zb, x1 + oa, h1, za, x0 + oa, h0, za, [
           x0 / 3,
           -zb / 3,
           x1 / 3,
@@ -2642,6 +2687,42 @@ function backdrop(
       }
     }
   }
+  // hillside neighbourhoods: streets of stucco houses with red roofs and trees, climbing east
+  {
+    const hillY = (x: number, z: number) =>
+      x < 700
+        ? BLUFF_H + ((x - 260) / 440) * 30
+        : BLUFF_H + 30 + ((x - 700) / 1700) * (150 + Math.sin(z * 0.002) * 60);
+    const R = mulberry(8080);
+    for (let z = -1300; z < 1300; z += 30) {
+      const off = curve(z);
+      for (let x = 420; x < 1250; x += 34) {
+        if (Math.abs(z) < half && x < half + 10) continue;
+        if (R() < 0.42) continue;
+        const hx = x + (R() - 0.5) * 14 + off;
+        const hz = z + (R() - 0.5) * 12;
+        const hy = hillY(x, z);
+        const M = farAt(hx, hz).main;
+        M.mat(L.resid, R(), 1).col(
+          pick(["#f4ead8", "#efe2cc", "#f6f0e4", "#e8d8c0", "#f0dcc8"], R),
+        );
+        const w = 10 + R() * 6;
+        const d = 9 + R() * 4;
+        M.box(hx, hy - 1.2, hz, w, 7.4, d);
+        M.mat(L.plain, 0.5, 0).col(R() < 0.8 ? "#b8583a" : "#8a6a5a");
+        M.box(hx, hy + 6.2, hz, w + 1, 1.3, d + 1);
+        const T2 = templates().tree;
+        for (let k = 0; k < 2; k++) {
+          const tx = hx + (R() - 0.5) * 22;
+          const tz = hz + (R() - 0.5) * 18;
+          const sc = 1.2 + R() * 0.8;
+          M.stamp(T2, tx, hillY(tx - off, tz) - 0.6, tz, R() * 6, sc, sc, sc);
+        }
+        if (R() < 0.35) lights.push([hx + (R() - 0.5) * 8, hy + 3 + R() * 2, hz + (R() - 0.5) * 8]);
+      }
+    }
+  }
+
   // the hills behind the arena (east), with houses and lights
   for (let z = -half; z < half; z += 40) {
     const G = farAt(1000, z).ground;
@@ -2649,31 +2730,31 @@ function backdrop(
     G.quad(
       half,
       BLUFF_H,
-      z,
-      700,
-      BLUFF_H + 30,
-      z,
+      z + 40,
       700,
       BLUFF_H + 30,
       z + 40,
+      700,
+      BLUFF_H + 30,
+      z,
       half,
       BLUFF_H,
-      z + 40,
+      z,
     );
     G.col("#5a6a48");
     G.quad(
       700,
       BLUFF_H + 30,
-      z,
-      2400,
-      180 + Math.sin(z * 0.002) * 60,
-      z,
+      z + 40,
       2400,
       180 + Math.sin((z + 40) * 0.002) * 60,
       z + 40,
+      2400,
+      180 + Math.sin(z * 0.002) * 60,
+      z,
       700,
       BLUFF_H + 30,
-      z + 40,
+      z,
     );
     for (let k = 0; k < 8; k++) {
       const lx = half + r() * 1900;

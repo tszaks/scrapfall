@@ -3407,6 +3407,12 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    // the gun joins the transparent queue at the very end, after a depth clear (see below)
+    v.traverse((o) => {
+      if (o.renderOrder < 999) o.renderOrder = 1000;
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
+    });
     fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
@@ -3509,6 +3515,12 @@ function World({
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
       </mesh>
       <group ref={viewModel} scale={0.7}>
+        {/* the gun draws last (end of the transparent queue) over a cleared depth buffer, so
+            walls and railings never cut into it and the world's own effects still sort normally */}
+        <mesh renderOrder={999} frustumCulled={false} onBeforeRender={(r) => r.clearDepth()}>
+          <planeGeometry args={[0.001, 0.001]} />
+          <meshBasicMaterial colorWrite={false} depthWrite={false} transparent />
+        </mesh>
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
