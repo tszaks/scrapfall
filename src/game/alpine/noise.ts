@@ -97,7 +97,9 @@ function sideValley(x: number, z: number) {
   const px = VIEW.x + dx * t - x;
   const pz = VIEW.z + dz * t - z;
   const w = 260 + 900 * t;
-  return Math.exp(-(px * px + pz * pz) / (w * w)) * smooth(0.02, 0.12, t) * (1 - smooth(0.82, 0.97, t));
+  return (
+    Math.exp(-(px * px + pz * pz) / (w * w)) * smooth(0.02, 0.12, t) * (1 - smooth(0.82, 0.97, t))
+  );
 }
 
 function heroPeak(x: number, z: number) {

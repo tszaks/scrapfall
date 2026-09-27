@@ -59,7 +59,9 @@ export function tickAlpine(delta: number, isHost: boolean, playing: boolean) {
     if (FORCED !== null) alpine.target = FORCED;
   }
   const rate = alpine.target > alpine.blizzard ? 0.16 : 0.11;
-  alpine.blizzard += Math.sign(alpine.target - alpine.blizzard) * Math.min(Math.abs(alpine.target - alpine.blizzard), rate * delta);
+  alpine.blizzard +=
+    Math.sign(alpine.target - alpine.blizzard) *
+    Math.min(Math.abs(alpine.target - alpine.blizzard), rate * delta);
   if (FORCED !== null && alpine.t < 1) alpine.blizzard = FORCED;
   // gusty wind that shoves walkers downwind during a blizzard
   const b = alpine.blizzard;

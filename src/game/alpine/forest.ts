@@ -32,7 +32,15 @@ function tri(b: Build, a: number[], c: number[], d: number[], col: string, k = 1
  * One tier of a snow-laden spruce: a white snow shelf sloping up from a jagged rim, a band
  * of dark drooping branch tips below the rim, and (low tiers) a dark underside.
  */
-function tier(b: Build, y: number, r: number, pts: number, rot: number, under: boolean, shelf: number) {
+function tier(
+  b: Build,
+  y: number,
+  r: number,
+  pts: number,
+  rot: number,
+  under: boolean,
+  shelf: number,
+) {
   const rim: number[][] = [];
   for (let i = 0; i < pts * 2; i++) {
     const a = rot + (i / (pts * 2)) * Math.PI * 2;
@@ -115,7 +123,13 @@ export function spruceGeo(narrow = false) {
   for (let i = 0; i < 4; i++) {
     const a0 = (i / 4) * Math.PI * 2;
     const a1 = ((i + 1) / 4) * Math.PI * 2;
-    tri(b, [Math.cos(a0) * 0.02, base, Math.sin(a0) * 0.02], tip, [Math.cos(a1) * 0.02, base, Math.sin(a1) * 0.02], SNOWC);
+    tri(
+      b,
+      [Math.cos(a0) * 0.02, base, Math.sin(a0) * 0.02],
+      tip,
+      [Math.cos(a1) * 0.02, base, Math.sin(a1) * 0.02],
+      SNOWC,
+    );
   }
   return toGeo(b);
 }

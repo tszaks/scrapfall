@@ -78,7 +78,15 @@ export type ABld = {
 };
 
 export type TreeKind = 0 | 1 | 2; // 0 spruce, 1 tall fir, 2 young spruce (thicket)
-export type ATree = { x: number; z: number; y: number; h: number; w: number; rot: number; k: TreeKind };
+export type ATree = {
+  x: number;
+  z: number;
+  y: number;
+  h: number;
+  w: number;
+  rot: number;
+  k: TreeKind;
+};
 
 export type PropKind =
   | "lamp"
@@ -109,7 +117,15 @@ export type PropKind =
   | "gate"
   | "deadfall"
   | "rockfall";
-export type AProp = { k: PropKind; x: number; z: number; y: number; rot: number; s: number; v?: number };
+export type AProp = {
+  k: PropKind;
+  x: number;
+  z: number;
+  y: number;
+  rot: number;
+  s: number;
+  v?: number;
+};
 
 export type LiftSupport = { z: number; y: number; ground: number; kind: "base" | "tower" | "top" };
 export type Lift = {
@@ -209,53 +225,229 @@ const JUMP = { x: -205, z0: -180, z1: -126 };
 export const SPAWN = { x: 2, z: STREET_Z };
 
 const PATHS: APath[] = [
-  { pts: [[-162, STREET_Z], [152, STREET_Z]], w: 12, kind: "street", name: "Dorfstrasse" },
-  { pts: [[LIFT_X, 24], [LIFT_X, -24]], w: 10, kind: "street" },
-  { pts: [[-102, -22], [8, -22]], w: 6, kind: "lane" },
-  { pts: [[80, -22], [146, -22]], w: 6, kind: "lane" },
-  { pts: [[-60, 24], [-60, -22]], w: 5, kind: "lane" },
-  { pts: [[104, 24], [104, -22]], w: 5, kind: "lane" },
-  { pts: [[-104, 99], [-42, 99]], w: 5, kind: "lane" },
-  { pts: [[42, 99], [146, 99]], w: 5, kind: "lane" },
-  { pts: [[-70, 36], [-70, 99]], w: 5, kind: "lane" },
-  { pts: [[90, 36], [90, 99]], w: 5, kind: "lane" },
-  { pts: [[0, 84], [0, 99], [42, 99]], w: 5, kind: "lane" },
-  { pts: [[0, 99], [-42, 99]], w: 5, kind: "lane" },
-  { pts: [[90, 99], [98, 150], [118, 190]], w: 4, kind: "trail" },
-  { pts: [[-40, 99], [-30, 140], [-10, 180]], w: 4, kind: "trail" },
+  {
+    pts: [
+      [-162, STREET_Z],
+      [152, STREET_Z],
+    ],
+    w: 12,
+    kind: "street",
+    name: "Dorfstrasse",
+  },
+  {
+    pts: [
+      [LIFT_X, 24],
+      [LIFT_X, -24],
+    ],
+    w: 10,
+    kind: "street",
+  },
+  {
+    pts: [
+      [-102, -22],
+      [8, -22],
+    ],
+    w: 6,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [80, -22],
+      [146, -22],
+    ],
+    w: 6,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [-60, 24],
+      [-60, -22],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [104, 24],
+      [104, -22],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [-104, 99],
+      [-42, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [42, 99],
+      [146, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [-70, 36],
+      [-70, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [90, 36],
+      [90, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [0, 84],
+      [0, 99],
+      [42, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [0, 99],
+      [-42, 99],
+    ],
+    w: 5,
+    kind: "lane",
+  },
+  {
+    pts: [
+      [90, 99],
+      [98, 150],
+      [118, 190],
+    ],
+    w: 4,
+    kind: "trail",
+  },
+  {
+    pts: [
+      [-40, 99],
+      [-30, 140],
+      [-10, 180],
+    ],
+    w: 4,
+    kind: "trail",
+  },
   // lakeside promenade and the road out west / east (the roads leave the map in co-op)
-  { pts: [[-162, STREET_Z], [-150, 52], [-146, 96], [-160, 140], [-205, 150]], w: 5, kind: "trail" },
-  { pts: [[-162, STREET_Z], [-230, 22], [-320, 12], [-396, 6]], w: 8, kind: "road" },
-  { pts: [[152, STREET_Z], [220, 36], [300, 46], [396, 52]], w: 8, kind: "road" },
+  {
+    pts: [
+      [-162, STREET_Z],
+      [-150, 52],
+      [-146, 96],
+      [-160, 140],
+      [-205, 150],
+    ],
+    w: 5,
+    kind: "trail",
+  },
+  {
+    pts: [
+      [-162, STREET_Z],
+      [-230, 22],
+      [-320, 12],
+      [-396, 6],
+    ],
+    w: 8,
+    kind: "road",
+  },
+  {
+    pts: [
+      [152, STREET_Z],
+      [220, 36],
+      [300, 46],
+      [396, 52],
+    ],
+    w: 8,
+    kind: "road",
+  },
   // winter hiking trail up to the top station (switchbacks east of the lift)
   {
-    pts: [[82, -40], [100, -72], [78, -110], [104, -150], [80, -190], [100, -228], [80, -262]],
+    pts: [
+      [82, -40],
+      [100, -72],
+      [78, -110],
+      [104, -150],
+      [80, -190],
+      [100, -228],
+      [80, -262],
+    ],
     w: 4,
     kind: "trail",
   },
   // co-op: the summit trail behind the top station, and the hamlet track
-  { pts: [[LIFT_X, -278], [36, -330], [46, -396]], w: 5, kind: "trail", coop: true },
+  {
+    pts: [
+      [LIFT_X, -278],
+      [36, -330],
+      [46, -396],
+    ],
+    w: 5,
+    kind: "trail",
+    coop: true,
+  },
   // pistes
   {
-    pts: [[20, -250], [-10, -215], [-45, -180], [-55, -140], [-35, -100], [-5, -72], [14, -52]],
+    pts: [
+      [20, -250],
+      [-10, -215],
+      [-45, -180],
+      [-55, -140],
+      [-35, -100],
+      [-5, -72],
+      [14, -52],
+    ],
     w: 30,
     kind: "piste",
     name: "blue",
   },
   {
-    pts: [[66, -246], [64, -210], [68, -170], [76, -130], [80, -95], [70, -52]],
+    pts: [
+      [66, -246],
+      [64, -210],
+      [68, -170],
+      [76, -130],
+      [80, -95],
+      [70, -52],
+    ],
     w: 26,
     kind: "piste",
     name: "red",
   },
   {
-    pts: [[-118, -396], [-130, -300], [-152, -220], [-146, -150], [-120, -95], [-80, -60]],
+    pts: [
+      [-118, -396],
+      [-130, -300],
+      [-152, -220],
+      [-146, -150],
+      [-120, -95],
+      [-80, -60],
+    ],
     w: 26,
     kind: "piste",
     name: "black",
   },
   {
-    pts: [[330, -396], [300, -300], [320, -200], [300, -110], [262, -64], [200, -40]],
+    pts: [
+      [330, -396],
+      [300, -300],
+      [320, -200],
+      [300, -110],
+      [262, -64],
+      [200, -40],
+    ],
     w: 28,
     kind: "piste",
     name: "east",
@@ -373,12 +565,18 @@ export function generateAlpine(seed: number, solo: boolean) {
   });
   // the lake: flat ice with a soft shore
   const lakeY = -0.9;
-  shape(LAKE.x - LAKE.rx * 1.5, LAKE.z - LAKE.rz * 1.5, LAKE.x + LAKE.rx * 1.5, LAKE.z + LAKE.rz * 1.5, (x, z, h) => {
-    const e = Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
-    if (e < 1) return lakeY;
-    const k = smooth(1, 1.35, e);
-    return lakeY + (Math.max(h, lakeY + 0.3) - lakeY) * k;
-  });
+  shape(
+    LAKE.x - LAKE.rx * 1.5,
+    LAKE.z - LAKE.rz * 1.5,
+    LAKE.x + LAKE.rx * 1.5,
+    LAKE.z + LAKE.rz * 1.5,
+    (x, z, h) => {
+      const e = Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
+      if (e < 1) return lakeY;
+      const k = smooth(1, 1.35, e);
+      return lakeY + (Math.max(h, lakeY + 0.3) - lakeY) * k;
+    },
+  );
   // streets, lanes, trails and roads: a smoothed profile along each, blended into the banks
   const profile = (p: APath) => {
     const len = polyDist(p.pts[0]![0], p.pts[0]![1], p.pts).len;
@@ -453,7 +651,8 @@ export function generateAlpine(seed: number, solo: boolean) {
   shape(DECK.x0 - 4, DECK.z0 - 2, DECK.x1 + 2, DECK.z1 + 2, (x, z, h) => {
     if (x >= DECK.x0 && x <= DECK.x1 + 1 && z >= DECK.z0 && z <= DECK.z1 + 1) return deckY;
     // the stair ramp on the plateau side
-    if (x < DECK.x0 && x >= DECK.x0 - 4 && z >= DECK.z0 && z <= DECK.z0 + 6) return plateauY + ((x - (DECK.x0 - 4)) / 4) * 2.4;
+    if (x < DECK.x0 && x >= DECK.x0 - 4 && z >= DECK.z0 && z <= DECK.z0 + 6)
+      return plateauY + ((x - (DECK.x0 - 4)) / 4) * 2.4;
     return h;
   });
   const plazaY = hAt((PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2);
@@ -467,7 +666,8 @@ export function generateAlpine(seed: number, solo: boolean) {
     const prof = profile(creek);
     const b = bbox(creek.pts, creek.w / 2 + 5);
     shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) => {
-      if (x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1) return h;
+      if (x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1)
+        return h;
       const r = polyDist(x, z, creek.pts);
       const half = creek.w / 2;
       if (r.d > half + 5) return h;
@@ -531,7 +731,12 @@ export function generateAlpine(seed: number, solo: boolean) {
     surf[k] = S_ICE;
   });
   paint(
-    { x0: LAKE.x - LAKE.rx - 6, z0: LAKE.z - LAKE.rz - 6, x1: LAKE.x + LAKE.rx + 6, z1: LAKE.z + LAKE.rz + 6 },
+    {
+      x0: LAKE.x - LAKE.rx - 6,
+      z0: LAKE.z - LAKE.rz - 6,
+      x1: LAKE.x + LAKE.rx + 6,
+      z1: LAKE.z + LAKE.rz + 6,
+    },
     (x, z, k) => {
       const e = Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
       if (e < 1) surf[k] = S_ICE;
@@ -621,9 +826,10 @@ export function generateAlpine(seed: number, solo: boolean) {
   };
 
   // set pieces
-  addB("church", -36, 44, -20, 70, 1, 2, -1, 0);
-  // clock tower (its own massing, drawn by the church builder)
-  addB("church", -32, 36, -24, 44, 1, 7, -1, 9);
+  // the nave runs north-south with its arched windows to the square; the clock tower
+  // stands at its north end, its door on the main street
+  addB("church", -36, 44, -20, 70, 0, 2, -1, 0);
+  addB("church", -32, 36, -24, 44, 0, 7, -1, 9);
   addB("hotel", 108, -8, 152, 22, 2, 5, W_HOTEL, 0);
   addB("station", 28, -70, 52, -52, 0, 1, W_BERGBAHN, 0);
   addB("rental", 10, -48, 26, -32, 1, 2, W_RENTAL, 0);
@@ -644,8 +850,19 @@ export function generateAlpine(seed: number, solo: boolean) {
       }
       const d = depth[0] + Math.floor(rand() * ((depth[1] - depth[0]) / 2 + 1)) * 2;
       const big = w >= 18 && rand() < 0.5;
-      const t: BldType = big ? "lodge" : rand() < 0.28 ? (rand() < 0.5 ? "cafe" : "shop") : "chalet";
-      const sign = t === "cafe" ? W_CAFE : t === "shop" ? SHOP_WORDS[Math.floor(rand() * SHOP_WORDS.length)]! : -1;
+      const t: BldType = big
+        ? "lodge"
+        : rand() < 0.28
+          ? rand() < 0.5
+            ? "cafe"
+            : "shop"
+          : "chalet";
+      const sign =
+        t === "cafe"
+          ? W_CAFE
+          : t === "shop"
+            ? SHOP_WORDS[Math.floor(rand() * SHOP_WORDS.length)]!
+            : -1;
       const floors = big ? 4 : 2 + Math.floor(rand() * 2);
       if (side === 2) addB(t, x, STREET_Z - 6 - 1 - d, x + w, STREET_Z - 6 - 1, 2, floors, sign);
       else addB(t, x, STREET_Z + 6 + 1, x + w, STREET_Z + 6 + 1 + d, 0, floors, sign);
@@ -667,7 +884,15 @@ export function generateAlpine(seed: number, solo: boolean) {
       const d = Math.min(z1 - z0, 10 + Math.floor(rand() * 3) * 2);
       const zz0 = front === 0 ? z0 : z1 - d;
       if (x + w <= xb && !overlaps(x, zz0, x + w, zz0 + d, 2) && rand() < 0.85)
-        addB(rand() < 0.15 ? "barn" : "chalet", x, zz0, x + w, zz0 + d, front, 2 + (rand() < 0.4 ? 1 : 0));
+        addB(
+          rand() < 0.15 ? "barn" : "chalet",
+          x,
+          zz0,
+          x + w,
+          zz0 + d,
+          front,
+          2 + (rand() < 0.4 ? 1 : 0),
+        );
       x += w + 4 + Math.floor(rand() * 3) * 2;
     }
   };
@@ -866,17 +1091,16 @@ export function generateAlpine(seed: number, solo: boolean) {
     for (let k = 0; k < n; k++) {
       const side = (b.front + 1 + Math.floor(r() * 2) * 2) % 4;
       const t = 0.2 + r() * 0.6;
-      const x =
-        side === 1 ? b.x1 + 0.9 : side === 3 ? b.x0 - 0.9 : b.x0 + (b.x1 - b.x0) * t;
-      const z =
-        side === 2 ? b.z1 + 0.9 : side === 0 ? b.z0 - 0.9 : b.z0 + (b.z1 - b.z0) * t;
+      const x = side === 1 ? b.x1 + 0.9 : side === 3 ? b.x0 - 0.9 : b.x0 + (b.x1 - b.x0) * t;
+      const z = side === 2 ? b.z1 + 0.9 : side === 0 ? b.z0 - 0.9 : b.z0 + (b.z1 - b.z0) * t;
       const kinds: PropKind[] = ["woodpile", "woodpile", "sled", "barrel", "trash", "skirack"];
       prop(kinds[Math.floor(r() * kinds.length)]!, x, z, side * (Math.PI / 2), 1);
     }
   }
 
   // ---- 7. forest and rocks ----
-  const lakeE = (x: number, z: number) => Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
+  const lakeE = (x: number, z: number) =>
+    Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
   const density = (x: number, z: number, h: number) => {
     const zc = STREET_Z + 10;
     const north = Math.max(0, zc - 90 - z);
@@ -905,7 +1129,15 @@ export function generateAlpine(seed: number, solo: boolean) {
       // stunted near the tree line, tallest down in the valley
       const alt = 1 - 0.45 * smooth(50, 150, y);
       const h = (tall ? 17 + rand() * 7 : 8 + rand() * 9) * alt;
-      trees.push({ x, z, y, h, w: 0.26 + rand() * 0.1, rot: rand() * Math.PI * 2, k: tall ? 1 : 0 });
+      trees.push({
+        x,
+        z,
+        y,
+        h,
+        w: 0.26 + rand() * 0.1,
+        rot: rand() * Math.PI * 2,
+        k: tall ? 1 : 0,
+      });
       solid[k] = 1;
       if (d > 0.35 && surf[k] === S_SNOW) surf[k] = S_FOREST;
     }
@@ -970,7 +1202,13 @@ export function generateAlpine(seed: number, solo: boolean) {
         const t = -g.w / 2 + w / 2 + s * w;
         const x = g.axis === "x" ? g.x + t : g.x;
         const z = g.axis === "z" ? g.z + t : g.z;
-        const kind = surf[S(ci(x - Math.sign(x) * 4 * (g.axis === "z" ? 1 : 0)), ci(z - Math.sign(z) * 4 * (g.axis === "x" ? 1 : 0)))];
+        const kind =
+          surf[
+            S(
+              ci(x - Math.sign(x) * 4 * (g.axis === "z" ? 1 : 0)),
+              ci(z - Math.sign(z) * 4 * (g.axis === "x" ? 1 : 0)),
+            )
+          ];
         let style: PropKind = "deadfall";
         if (kind === S_ROAD || kind === S_PATH) style = "gate";
         else if (kind === S_PISTE) style = "closed";
@@ -983,6 +1221,26 @@ export function generateAlpine(seed: number, solo: boolean) {
     for (let k = trees.length - 1; k >= 0; k--) {
       const t = trees[k]!;
       if (Math.abs(Math.max(Math.abs(t.x), Math.abs(t.z)) - sHalf) < 2.2) trees.splice(k, 1);
+    }
+    // a thicket of young spruce just behind the deadfall and debris
+    for (const bl of blockades) {
+      if (bl.style !== "deadfall" && bl.style !== "debris") continue;
+      const n = Math.round(bl.w / 3);
+      for (let k = 0; k < n; k++) {
+        const t = (k + rand()) / n - 0.5;
+        const o = 3 + rand() * 4;
+        const x = bl.axis === "x" ? bl.x + t * bl.w : bl.x + Math.sign(bl.x) * o;
+        const z = bl.axis === "z" ? bl.z + t * bl.w : bl.z + Math.sign(bl.z) * o;
+        trees.push({
+          x,
+          z,
+          y: 0,
+          h: 3.5 + rand() * 3.5,
+          w: 0.3 + rand() * 0.08,
+          rot: rand() * 6.28,
+          k: 2,
+        });
+      }
     }
   }
 
@@ -1058,7 +1316,8 @@ export function generateAlpine(seed: number, solo: boolean) {
     for (let j = 0; j < N; j++) {
       const k = S(i, j);
       if (!solid[k] && !seen[k]) solid[k] = 1;
-      if (solid[k]) blocks.push({ x: cc(i), z: cc(j), h: surf[k] === S_BLD ? 8 : 2, tone: surf[k]! / 16 });
+      if (solid[k])
+        blocks.push({ x: cc(i), z: cc(j), h: surf[k] === S_BLD ? 8 : 2, tone: surf[k]! / 16 });
     }
 
   // ---- 10. walking speed: deep snow off the paths slows you down ----
@@ -1096,7 +1355,15 @@ export function generateAlpine(seed: number, solo: boolean) {
     lake: { ...LAKE, y: lakeY },
     rink: { ...RINK, y: rinkY },
     bridge: { ...BRIDGE, y: bridgeY },
-    jump: { x: JUMP.x, z0: JUMP.z0, z1: JUMP.z1, top: jumpTopG + 20, lip: jumpLipG + 3, y0: jumpTopG, y1: jumpLipG },
+    jump: {
+      x: JUMP.x,
+      z0: JUMP.z0,
+      z1: JUMP.z1,
+      top: jumpTopG + 20,
+      lip: jumpLipG + 3,
+      y0: jumpTopG,
+      y1: jumpLipG,
+    },
     deck: { ...DECK, y: deckY },
     plateau: plateauY,
     blockades,

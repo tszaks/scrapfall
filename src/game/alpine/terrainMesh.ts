@@ -4,12 +4,30 @@
 // far terrain and the far trees share.
 import * as THREE from "three";
 
-import { S_BLD, S_BLOCKADE, S_DECK, S_FOREST, S_ICE, S_PATH, S_PISTE, S_PLAZA, S_ROAD, S_ROCK, type AlpineData } from "./layout";
+import {
+  S_BLD,
+  S_BLOCKADE,
+  S_DECK,
+  S_FOREST,
+  S_ICE,
+  S_PATH,
+  S_PISTE,
+  S_PLAZA,
+  S_ROAD,
+  S_ROCK,
+  type AlpineData,
+} from "./layout";
 import { fbm, hash2, naturalHeight, smooth } from "./noise";
 
 export const TCHUNK = 400;
 
-export type TerrainChunk = { x0: number; z0: number; x1: number; z1: number; geo: THREE.BufferGeometry };
+export type TerrainChunk = {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  geo: THREE.BufferGeometry;
+};
 
 /** the playable terrain, from the layout's heightfield (the same surface players walk on) */
 export function playTerrain(a: AlpineData): TerrainChunk[] {
@@ -67,7 +85,13 @@ export function playTerrain(a: AlpineData): TerrainChunk[] {
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.computeBoundingBox();
       geo.computeBoundingSphere();
-      out.push({ x0: -t.half + i0 * t.cell, z0: -t.half + j0 * t.cell, x1: -t.half + (i0 + per) * t.cell, z1: -t.half + (j0 + per) * t.cell, geo });
+      out.push({
+        x0: -t.half + i0 * t.cell,
+        z0: -t.half + j0 * t.cell,
+        x1: -t.half + (i0 + per) * t.cell,
+        z1: -t.half + (j0 + per) * t.cell,
+        geo,
+      });
     }
   return out;
 }
@@ -89,7 +113,8 @@ export function outerTerrain(half: number) {
     const H = new Float32Array((N + 3) * (N + 3));
     const at = (i: number, j: number) => H[(i + 1) * (N + 3) + (j + 1)]!;
     for (let i = -1; i <= N + 1; i++)
-      for (let j = -1; j <= N + 1; j++) H[(i + 1) * (N + 3) + (j + 1)] = naturalHeight(-outer + i * step, -outer + j * step);
+      for (let j = -1; j <= N + 1; j++)
+        H[(i + 1) * (N + 3) + (j + 1)] = naturalHeight(-outer + i * step, -outer + j * step);
     const vid = new Int32Array((N + 1) * (N + 1)).fill(-1);
     const lo = Math.round((outer - inner) / step);
     const hi = N - lo;
@@ -159,7 +184,8 @@ export function surfTexture(a: AlpineData) {
     for (let j = 0; j < n; j++) {
       const k = a.surf[i * n + j]!;
       const o = (j * n + i) * 4; // texture x = world x, texture y = world z
-      data[o] = k === S_PATH || k === S_PLAZA || k === S_ROAD || k === S_DECK || k === S_BLD ? 255 : 0;
+      data[o] =
+        k === S_PATH || k === S_PLAZA || k === S_ROAD || k === S_DECK || k === S_BLD ? 255 : 0;
       data[o + 1] = k === S_PISTE ? 255 : 0;
       data[o + 2] = k === S_ICE ? 255 : k === S_ROCK ? 90 : 0;
       data[o + 3] = k === S_FOREST ? 255 : k === S_BLOCKADE ? 160 : 0;
@@ -194,7 +220,10 @@ export function forestTexture() {
       const x = -FOREST_EXTENT + (i + 0.5) * step;
       const z = -FOREST_EXTENT + (j + 0.5) * step;
       const h = naturalHeight(x, z);
-      const s = (Math.abs(naturalHeight(x + 12, z) - naturalHeight(x - 12, z)) + Math.abs(naturalHeight(x, z + 12) - naturalHeight(x, z - 12))) / 24;
+      const s =
+        (Math.abs(naturalHeight(x + 12, z) - naturalHeight(x - 12, z)) +
+          Math.abs(naturalHeight(x, z + 12) - naturalHeight(x, z - 12))) /
+        24;
       const o = (j * n + i) * 4;
       data[o] = Math.round(forestDensity(x, z, h, s) * 255);
       data[o + 3] = 255;
@@ -209,7 +238,7 @@ export function forestTexture() {
 /** far-LOD trees on the land just beyond the play area (visual only) */
 export function farTrees(half: number, reach: number) {
   const out: number[] = []; // x, y, z, h, rot
-  const G = 9;
+  const G = 7.5;
   for (let x = -reach; x < reach; x += G)
     for (let z = -reach; z < reach; z += G) {
       if (Math.abs(x) < half + 2 && Math.abs(z) < half + 2) continue;
@@ -217,10 +246,19 @@ export function farTrees(half: number, reach: number) {
       const jz = z + (hash2(Math.round(x), Math.round(z), 6) - 0.5) * G * 0.9;
       if (Math.abs(jx) < half + 1 && Math.abs(jz) < half + 1) continue;
       const h = naturalHeight(jx, jz);
-      const s = (Math.abs(naturalHeight(jx + 6, jz) - naturalHeight(jx - 6, jz)) + Math.abs(naturalHeight(jx, jz + 6) - naturalHeight(jx, jz - 6))) / 12;
+      const s =
+        (Math.abs(naturalHeight(jx + 6, jz) - naturalHeight(jx - 6, jz)) +
+          Math.abs(naturalHeight(jx, jz + 6) - naturalHeight(jx, jz - 6))) /
+        12;
       const d = forestDensity(jx, jz, h, s);
-      if (hash2(Math.round(jx * 3), Math.round(jz * 3), 9) > d) continue;
-      out.push(jx, h, jz, 9 + hash2(Math.round(jx), Math.round(jz), 11) * 11, hash2(Math.round(jx), Math.round(jz), 12) * 6.28);
+      if (hash2(Math.round(jx * 3), Math.round(jz * 3), 9) > d * 1.25) continue;
+      out.push(
+        jx,
+        h,
+        jz,
+        9 + hash2(Math.round(jx), Math.round(jz), 11) * 11,
+        hash2(Math.round(jx), Math.round(jz), 12) * 6.28,
+      );
     }
   return out;
 }

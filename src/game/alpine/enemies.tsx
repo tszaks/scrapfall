@@ -9,7 +9,13 @@ import type * as THREE from "three";
 
 import type { Theme } from "../themes";
 
-export function SkierModel({ theme, data }: { theme: Theme; data: { x: number; z: number; aux?: number } }) {
+export function SkierModel({
+  theme,
+  data,
+}: {
+  theme: Theme;
+  data: { x: number; z: number; aux?: number };
+}) {
   const sp = theme.special;
   const body = useRef<THREE.Group>(null);
   const poles = useRef<THREE.Group>(null);

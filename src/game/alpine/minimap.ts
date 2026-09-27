@@ -1,7 +1,19 @@
 // The Whiteout Pass radar base: one pixel per 2 m cell, coloured by surface (snow, forest,
 // pistes, streets, ice, rock, buildings) with a soft hillshade so the slopes read. In solo
 // everything beyond the blockades is dimmed and hatched.
-import { S_BLD, S_BLOCKADE, S_DECK, S_FOREST, S_ICE, S_PATH, S_PISTE, S_PLAZA, S_ROAD, S_ROCK, type AlpineLayout } from "./layout";
+import {
+  S_BLD,
+  S_BLOCKADE,
+  S_DECK,
+  S_FOREST,
+  S_ICE,
+  S_PATH,
+  S_PISTE,
+  S_PLAZA,
+  S_ROAD,
+  S_ROCK,
+  type AlpineLayout,
+} from "./layout";
 
 const COL: Record<number, [number, number, number]> = {
   0: [226, 232, 240],

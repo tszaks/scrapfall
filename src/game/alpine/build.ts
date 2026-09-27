@@ -46,8 +46,31 @@ type V3 = [number, number, number];
 // primitive helpers (all write into a Geo)
 
 /** vertical face from A (left) to B (right) as seen from the side it faces */
-function face(g: Geo, ax: number, az: number, bx: number, bz: number, y0: number, y1: number, uv?: readonly number[]) {
-  g.quad(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y1, az, uv ?? [0, y0 / 2, Math.hypot(bx - ax, bz - az) / 2, y1 / 2]);
+function face(
+  g: Geo,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  y0: number,
+  y1: number,
+  uv?: readonly number[],
+) {
+  g.quad(
+    ax,
+    y0,
+    az,
+    bx,
+    y0,
+    bz,
+    bx,
+    y1,
+    bz,
+    ax,
+    y1,
+    az,
+    uv ?? [0, y0 / 2, Math.hypot(bx - ax, bz - az) / 2, y1 / 2],
+  );
 }
 /** quad A B C D (A=u0v0, B=u1v0, C=u1v1, D=u0v1), flipped if needed so it faces `out` */
 function q4(g: Geo, A: V3, B: V3, C: V3, D: V3, out: V3, uv: readonly number[] = [0, 0, 1, 1]) {
@@ -77,10 +100,24 @@ function t3(g: Geo, A: V3, B: V3, C: V3, out: V3) {
   else g.tri(...A, ...C, ...B);
 }
 /** textured box: each side gets world-scaled uvs (tile = 2 m) */
-function tbox(g: Geo, x: number, y0: number, z: number, w: number, h: number, d: number, rot = 0, top = true, bottom = false) {
+function tbox(
+  g: Geo,
+  x: number,
+  y0: number,
+  z: number,
+  w: number,
+  h: number,
+  d: number,
+  rot = 0,
+  top = true,
+  bottom = false,
+) {
   const s = Math.sin(rot);
   const c = Math.cos(rot);
-  const P = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const P = (lx: number, lz: number): [number, number] => [
+    x + lx * c + lz * s,
+    z - lx * s + lz * c,
+  ];
   const a = P(-w / 2, -d / 2);
   const b = P(w / 2, -d / 2);
   const cc = P(w / 2, d / 2);
@@ -92,8 +129,20 @@ function tbox(g: Geo, x: number, y0: number, z: number, w: number, h: number, d:
   face(g, cc[0], cc[1], b[0], b[1], y0, y1, [0, v0, d / 2, v1]);
   face(g, dd[0], dd[1], cc[0], cc[1], y0, y1, [0, v0, w / 2, v1]);
   face(g, a[0], a[1], dd[0], dd[1], y0, y1, [0, v0, d / 2, v1]);
-  if (top) g.quad(dd[0], y1, dd[1], cc[0], y1, cc[1], b[0], y1, b[1], a[0], y1, a[1], [0, 0, w / 2, d / 2]);
-  if (bottom) g.quad(a[0], y0, a[1], b[0], y0, b[1], cc[0], y0, cc[1], dd[0], y0, dd[1], [0, 0, w / 2, d / 2]);
+  if (top)
+    g.quad(dd[0], y1, dd[1], cc[0], y1, cc[1], b[0], y1, b[1], a[0], y1, a[1], [
+      0,
+      0,
+      w / 2,
+      d / 2,
+    ]);
+  if (bottom)
+    g.quad(a[0], y0, a[1], b[0], y0, b[1], cc[0], y0, cc[1], dd[0], y0, dd[1], [
+      0,
+      0,
+      w / 2,
+      d / 2,
+    ]);
 }
 /** a cylinder along an arbitrary axis from p to q */
 function tube(g: Geo, p: V3, q: V3, r: number, seg = 6, r1 = r) {
@@ -118,7 +167,18 @@ function tube(g: Geo, p: V3, q: V3, r: number, seg = 6, r1 = r) {
   }
 }
 /** lumpy low-poly blob (snow heaps, boulders): a squashed, jittered octahedron-ish dome */
-function blob(g: Geo, x: number, y: number, z: number, rx: number, ry: number, rz: number, r: () => number, seg = 7, rot = 0) {
+function blob(
+  g: Geo,
+  x: number,
+  y: number,
+  z: number,
+  rx: number,
+  ry: number,
+  rz: number,
+  r: () => number,
+  seg = 7,
+  rot = 0,
+) {
   const ring: V3[] = [];
   const mid: V3[] = [];
   const s = Math.sin(rot);
@@ -130,7 +190,11 @@ function blob(g: Geo, x: number, y: number, z: number, rx: number, ry: number, r
     const lz = Math.sin(t) * rz * j;
     ring.push([x + lx * c + lz * s, y - ry * 0.25, z - lx * s + lz * c]);
     const k = 0.6 + r() * 0.2;
-    mid.push([x + lx * c * k + lz * s * k, y + ry * (0.45 + r() * 0.25), z - lx * s * k + lz * c * k]);
+    mid.push([
+      x + lx * c * k + lz * s * k,
+      y + ry * (0.45 + r() * 0.25),
+      z - lx * s * k + lz * c * k,
+    ]);
   }
   const top: V3 = [x + (r() - 0.5) * rx * 0.3, y + ry, z + (r() - 0.5) * rz * 0.3];
   for (let i = 0; i < seg; i++) {
@@ -142,7 +206,16 @@ function blob(g: Geo, x: number, y: number, z: number, rx: number, ry: number, r
 }
 
 /** smooth elongated snow mound (soft normals, tapered ends), `rot` turns its long axis */
-function mound(g: Geo, x: number, y: number, z: number, len: number, h: number, w: number, rot: number) {
+function mound(
+  g: Geo,
+  x: number,
+  y: number,
+  z: number,
+  len: number,
+  h: number,
+  w: number,
+  rot: number,
+) {
   const NL = 6;
   const NA = 6;
   const s = Math.sin(rot);
@@ -153,7 +226,7 @@ function mound(g: Geo, x: number, y: number, z: number, len: number, h: number, 
     const ly = Math.sin(t) * h * taper;
     const lz = Math.cos(t) * (w / 2) * (0.3 + 0.7 * taper);
     // ellipsoid-ish normal
-    let nx = lx / ((len / 2) * (len / 2)) * 0.6;
+    let nx = (lx / ((len / 2) * (len / 2))) * 0.6;
     let ny = ly / (h * h + 1e-3);
     let nz = lz / ((w / 2) * (w / 2));
     const l = Math.hypot(nx, ny, nz) || 1;
@@ -162,7 +235,16 @@ function mound(g: Geo, x: number, y: number, z: number, len: number, h: number, 
     nz /= l;
     const wx = x + lx * c + lz * s;
     const wz = z - lx * s + lz * c;
-    return [wx, y + ly - 0.15, wz, nx * c + nz * s, ny, -nx * s + nz * c, wx / 2, wz / 2 + ly / 2] as const;
+    return [
+      wx,
+      y + ly - 0.15,
+      wz,
+      nx * c + nz * s,
+      ny,
+      -nx * s + nz * c,
+      wx / 2,
+      wz / 2 + ly / 2,
+    ] as const;
   };
   for (let i = 0; i < NL; i++)
     for (let j = 0; j < NA; j++) {
@@ -183,18 +265,49 @@ function mound(g: Geo, x: number, y: number, z: number, len: number, h: number, 
 // local frames: a building's street-facing side decides its local axes. lx runs along the
 // front (left to right seen from the street), lz runs from the front face into the house.
 
-type Frame = { W: number; D: number; P: (lx: number, lz: number) => [number, number]; out: (ox: number, oz: number) => V3 };
-function frameOf(b: { x0: number; z0: number; x1: number; z1: number; front: 0 | 1 | 2 | 3 }): Frame {
+type Frame = {
+  W: number;
+  D: number;
+  P: (lx: number, lz: number) => [number, number];
+  out: (ox: number, oz: number) => V3;
+};
+function frameOf(b: {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  front: 0 | 1 | 2 | 3;
+}): Frame {
   const { x0, z0, x1, z1 } = b;
   switch (b.front) {
     case 2:
-      return { W: x1 - x0, D: z1 - z0, P: (lx, lz) => [x0 + lx, z1 - lz], out: (ox, oz) => [ox, 0, -oz] };
+      return {
+        W: x1 - x0,
+        D: z1 - z0,
+        P: (lx, lz) => [x0 + lx, z1 - lz],
+        out: (ox, oz) => [ox, 0, -oz],
+      };
     case 0:
-      return { W: x1 - x0, D: z1 - z0, P: (lx, lz) => [x1 - lx, z0 + lz], out: (ox, oz) => [-ox, 0, oz] };
+      return {
+        W: x1 - x0,
+        D: z1 - z0,
+        P: (lx, lz) => [x1 - lx, z0 + lz],
+        out: (ox, oz) => [-ox, 0, oz],
+      };
     case 1:
-      return { W: z1 - z0, D: x1 - x0, P: (lx, lz) => [x1 - lz, z1 - lx], out: (ox, oz) => [-oz, 0, -ox] };
+      return {
+        W: z1 - z0,
+        D: x1 - x0,
+        P: (lx, lz) => [x1 - lz, z1 - lx],
+        out: (ox, oz) => [-oz, 0, -ox],
+      };
     default:
-      return { W: z1 - z0, D: x1 - x0, P: (lx, lz) => [x0 + lz, z0 + lx], out: (ox, oz) => [oz, 0, ox] };
+      return {
+        W: z1 - z0,
+        D: x1 - x0,
+        P: (lx, lz) => [x0 + lz, z0 + lx],
+        out: (ox, oz) => [oz, 0, ox],
+      };
   }
 }
 const L3 = (F: Frame, lx: number, y: number, lz: number): V3 => {
@@ -202,14 +315,34 @@ const L3 = (F: Frame, lx: number, y: number, lz: number): V3 => {
   return [x, y, z];
 };
 /** local vertical face from (lxA,lzA) to (lxB,lzB) */
-function lface(g: Geo, F: Frame, lxA: number, lzA: number, lxB: number, lzB: number, y0: number, y1: number, uv?: readonly number[]) {
+function lface(
+  g: Geo,
+  F: Frame,
+  lxA: number,
+  lzA: number,
+  lxB: number,
+  lzB: number,
+  y0: number,
+  y1: number,
+  uv?: readonly number[],
+) {
   const [ax, az] = F.P(lxA, lzA);
   const [bx, bz] = F.P(lxB, lzB);
   const len = Math.hypot(bx - ax, bz - az);
   face(g, ax, az, bx, bz, y0, y1, uv ?? [0, y0 / 2, len / 2, y1 / 2]);
 }
 /** local box */
-function lbox(g: Geo, F: Frame, lx: number, lz: number, y0: number, w: number, h: number, d: number, top = true) {
+function lbox(
+  g: Geo,
+  F: Frame,
+  lx: number,
+  lz: number,
+  y0: number,
+  w: number,
+  h: number,
+  d: number,
+  top = true,
+) {
   const [x, z] = F.P(lx, lz);
   // the local frame is a rotation (plus a mirror); boxes are symmetric so only the yaw matters
   const [ax, az] = F.P(lx + 1, lz);
@@ -229,7 +362,19 @@ const ROOF_T = ["#5a3a26", "#3a2a22", "#4a4a4e", "#6a4a2e"];
 // ---------------------------------------------------------------------------------------
 // windows, shutters, doors
 
-function windowAt(k: Kit, F: Frame, lx: number, lz: number, faceDir: 0 | 1 | 2 | 3, y: number, w: number, h: number, r: () => number, flowers: boolean, shutter: string) {
+function windowAt(
+  k: Kit,
+  F: Frame,
+  lx: number,
+  lz: number,
+  faceDir: 0 | 1 | 2 | 3,
+  y: number,
+  w: number,
+  h: number,
+  r: () => number,
+  flowers: boolean,
+  shutter: string,
+) {
   // faceDir: 0 front (lz=0, facing -lz), 1 right (lx=W), 2 back (lz=D), 3 left (lx=0)
   const o = 0.05;
   const g = k.main;
@@ -248,16 +393,37 @@ function windowAt(k: Kit, F: Frame, lx: number, lz: number, faceDir: 0 | 1 | 2 |
   dg.mat(T.plain, 0, 0).col(shutter);
   for (const side of [-1, 1]) {
     const c = side * (w / 2 + 0.26);
-    const [sx, sz] = faceDir === 0 ? [lx + c, lz - 0.08] : faceDir === 2 ? [lx - c, lz + 0.08] : faceDir === 1 ? [lx + 0.08, lz + c] : [lx - 0.08, lz - c];
+    const [sx, sz] =
+      faceDir === 0
+        ? [lx + c, lz - 0.08]
+        : faceDir === 2
+          ? [lx - c, lz + 0.08]
+          : faceDir === 1
+            ? [lx + 0.08, lz + c]
+            : [lx - 0.08, lz - c];
     const along2 = faceDir === 0 || faceDir === 2;
     lbox(dg, F, sx, sz, y - 0.02, along2 ? 0.5 : 0.06, h + 0.04, along2 ? 0.06 : 0.5);
   }
   dg.mat(T.plain, 0, 0).col(SNOW);
-  const [cx, cz] = faceDir === 0 ? [lx, lz - 0.14] : faceDir === 2 ? [lx, lz + 0.14] : faceDir === 1 ? [lx + 0.14, lz] : [lx - 0.14, lz];
+  const [cx, cz] =
+    faceDir === 0
+      ? [lx, lz - 0.14]
+      : faceDir === 2
+        ? [lx, lz + 0.14]
+        : faceDir === 1
+          ? [lx + 0.14, lz]
+          : [lx - 0.14, lz];
   const along3 = faceDir === 0 || faceDir === 2;
   lbox(dg, F, cx, cz, y - 0.12, along3 ? w + 0.2 : 0.28, 0.12, along3 ? 0.28 : w + 0.2);
   if (flowers) {
-    const [fx, fz] = faceDir === 0 ? [lx, lz - 0.28] : faceDir === 2 ? [lx, lz + 0.28] : faceDir === 1 ? [lx + 0.28, lz] : [lx - 0.28, lz];
+    const [fx, fz] =
+      faceDir === 0
+        ? [lx, lz - 0.28]
+        : faceDir === 2
+          ? [lx, lz + 0.28]
+          : faceDir === 1
+            ? [lx + 0.28, lz]
+            : [lx - 0.28, lz];
     dg.mat(T.board, 0, 0).col("#8a5a32");
     lbox(dg, F, fx, fz, y - 0.42, along3 ? w + 0.1 : 0.3, 0.28, along3 ? 0.3 : w + 0.1);
     dg.mat(T.plain, 0, 0).col(FLOWER_T[Math.floor(r() * FLOWER_T.length)]!);
@@ -284,7 +450,20 @@ type ChaletOpts = {
   door: boolean;
 };
 
-function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number; y: number; ymin: number; front: 0 | 1 | 2 | 3; seed: number }, o: ChaletOpts) {
+function gableHouse(
+  k: Kit,
+  b: {
+    x0: number;
+    z0: number;
+    x1: number;
+    z1: number;
+    y: number;
+    ymin: number;
+    front: 0 | 1 | 2 | 3;
+    seed: number;
+  },
+  o: ChaletOpts,
+) {
   const r = mulberry(Math.floor(b.seed * 4294967295));
   const F = frameOf(b);
   const { W, D } = F;
@@ -371,7 +550,11 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
     q4(g, dn(B), dn(C), C, B, F.out(0, 1));
     // the snow blanket: thick, slightly overhanging the eave, with a rounded lip
     const sn = 0.5;
-    const lift = (p: V3, h: number, spill = 0): V3 => [p[0] + out[0] * spill, p[1] + h, p[2] + out[2] * spill];
+    const lift = (p: V3, h: number, spill = 0): V3 => [
+      p[0] + out[0] * spill,
+      p[1] + h,
+      p[2] + out[2] * spill,
+    ];
     g.mat(T.snow, 0, 0).col(SNOW);
     const sA = lift(A, sn, 0.22);
     const sB = lift(B, sn, 0.22);
@@ -433,7 +616,12 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
   for (let f = 0; f < o.floors; f++) {
     const fl = f >= 1 && !o.barn;
     if (!(f === 0 && bigFront) && !(o.barn && f === 0))
-      place(W, f, (c) => windowAt(k, F, c, 0, 0, wy(f), 1.05, 1.3, r, fl, shutter), f === 0 ? doorAt : undefined);
+      place(
+        W,
+        f,
+        (c) => windowAt(k, F, c, 0, 0, wy(f), 1.05, 1.3, r, fl, shutter),
+        f === 0 ? doorAt : undefined,
+      );
     if (!o.barn || f > 0) {
       place(D, f, (c) => windowAt(k, F, W, c, 1, wy(f), 1.05, 1.3, r, false, shutter));
       place(D, f, (c) => windowAt(k, F, 0, c, 3, wy(f), 1.05, 1.3, r, false, shutter));
@@ -455,7 +643,12 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
     g.mat(T.glasswall, r(), 0).col("#ffffff");
     const gw = W - 3.2;
     const x0 = doorAt > W / 2 ? 0.8 : 2.4;
-    lface(g, F, x0, -0.05, x0 + gw - 1.6, -0.05, y + 0.35, y + 2.45, [0, 0, Math.max(1, Math.round((gw - 1.6) / 1.6)), 1]);
+    lface(g, F, x0, -0.05, x0 + gw - 1.6, -0.05, y + 0.35, y + 2.45, [
+      0,
+      0,
+      Math.max(1, Math.round((gw - 1.6) / 1.6)),
+      1,
+    ]);
     if (o.cafe) {
       g.mat(T.stripes, 0, 0).col("#ffffff");
       const A = L3(F, x0 - 0.3, y + 2.95, -0.05);
@@ -465,7 +658,14 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
       q4(g, A, B, C, Dd, [F.out(0, -1)[0], 1, F.out(0, -1)[2]], [0, 0, gw / 1.5, 1]);
       q4(g, A, B, C, Dd, [-F.out(0, -1)[0], -1, -F.out(0, -1)[2]], [0, 0, gw / 1.5, 1]);
       g.mat(T.snow, 0, 0).col(SNOW);
-      q4(g, [A[0], A[1] + 0.12, A[2]], [B[0], B[1] + 0.12, B[2]], [C[0], C[1] + 0.12, C[2]], [Dd[0], Dd[1] + 0.12, Dd[2]], [0, 1, 0]);
+      q4(
+        g,
+        [A[0], A[1] + 0.12, A[2]],
+        [B[0], B[1] + 0.12, B[2]],
+        [C[0], C[1] + 0.12, C[2]],
+        [Dd[0], Dd[1] + 0.12, Dd[2]],
+        [0, 1, 0],
+      );
     }
   }
   if (o.sign >= 0) {
@@ -493,7 +693,14 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
     q4(dg, A, B, C, Dd, [0, 1, 0]);
     q4(dg, A, B, C, Dd, [0, -1, 0]);
     dg.mat(T.snow, 0, 0).col(SNOW);
-    q4(dg, [A[0], A[1] + 0.16, A[2]], [B[0], B[1] + 0.16, B[2]], [C[0], C[1] + 0.16, C[2]], [Dd[0], Dd[1] + 0.16, Dd[2]], [0, 1, 0]);
+    q4(
+      dg,
+      [A[0], A[1] + 0.16, A[2]],
+      [B[0], B[1] + 0.16, B[2]],
+      [C[0], C[1] + 0.16, C[2]],
+      [Dd[0], Dd[1] + 0.16, Dd[2]],
+      [0, 1, 0],
+    );
     // steps up to the floor when the ground falls away
     if (y - b.ymin > 0.6) {
       g.mat(T.stone, 0, 0).col("#e0d8cc");
@@ -648,7 +855,12 @@ function hotel(k: Kit, b: ABld) {
   const ins = 2.6;
   const r1 = top + 4.4;
   const r2 = r1 + 2.2;
-  const ring = (d: number, yy: number): V3[] => [L3(F, -d, yy, -d), L3(F, W + d, yy, -d), L3(F, W + d, yy, D + d), L3(F, -d, yy, D + d)];
+  const ring = (d: number, yy: number): V3[] => [
+    L3(F, -d, yy, -d),
+    L3(F, W + d, yy, -d),
+    L3(F, W + d, yy, D + d),
+    L3(F, -d, yy, D + d),
+  ];
   const lo = ring(0.4, top + 0.3);
   const hi = ring(-ins, r1);
   const sides: V3[] = [F.out(0, -1), F.out(1, 0), F.out(0, 1), F.out(-1, 0)];
@@ -678,10 +890,21 @@ function hotel(k: Kit, b: ABld) {
   for (let s = 0; s < 4; s++) {
     const a = lo[s]!;
     const bb = lo[(s + 1) % 4]!;
-    const mid = (p: V3, q: V3, t: number): V3 => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+    const mid = (p: V3, q: V3, t: number): V3 => [
+      p[0] + (q[0] - p[0]) * t,
+      p[1] + (q[1] - p[1]) * t,
+      p[2] + (q[2] - p[2]) * t,
+    ];
     const c = mid(bb, hi[(s + 1) % 4]!, 0.25);
     const d = mid(a, hi[s]!, 0.25);
-    q4(g, [a[0], a[1] + 0.1, a[2]], [bb[0], bb[1] + 0.1, bb[2]], [c[0], c[1] + 0.1, c[2]], [d[0], d[1] + 0.1, d[2]], [sides[s]![0], 1, sides[s]![2]]);
+    q4(
+      g,
+      [a[0], a[1] + 0.1, a[2]],
+      [bb[0], bb[1] + 0.1, bb[2]],
+      [c[0], c[1] + 0.1, c[2]],
+      [d[0], d[1] + 0.1, d[2]],
+      [sides[s]![0], 1, sides[s]![2]],
+    );
   }
   // dormers on the front and back slopes
   for (let i = 0; i < bays; i += 2) {
@@ -691,7 +914,19 @@ function hotel(k: Kit, b: ABld) {
       const dir = back ? 2 : 0;
       g.mat(T.plaster, 0, 0).col("#f4e6cc");
       lbox(g, F, c, lz, top + 0.9, 1.8, 2.2, 1.6, false);
-      windowAt(k, F, c, back ? lz + 0.8 : lz - 0.8, dir as 0 | 2, top + 1.2, 0.9, 1.2, r, false, "#2a5a3a");
+      windowAt(
+        k,
+        F,
+        c,
+        back ? lz + 0.8 : lz - 0.8,
+        dir as 0 | 2,
+        top + 1.2,
+        0.9,
+        1.2,
+        r,
+        false,
+        "#2a5a3a",
+      );
       g.mat(T.snow, 0, 0).col(SNOW);
       lbox(g, F, c, lz, top + 3.1, 2.2, 0.35, 2.0);
     }
@@ -769,9 +1004,29 @@ function church(k: Kit, b: ABld) {
       const mz = (az + bz) / 2;
       const ux = (bx - ax) / Math.hypot(bx - ax, bz - az);
       const uz = (bz - az) / Math.hypot(bx - ax, bz - az);
-      lface(g, F, mx - ux * 1.3, mz - uz * 1.3, mx + ux * 1.3, mz + uz * 1.3, y + h - 5.4, y + h - 1.2, [0, 0, 1, 1]);
+      lface(
+        g,
+        F,
+        mx - ux * 1.3,
+        mz - uz * 1.3,
+        mx + ux * 1.3,
+        mz + uz * 1.3,
+        y + h - 5.4,
+        y + h - 1.2,
+        [0, 0, 1, 1],
+      );
       g.mat(T.clock, 0, 0).col("#ffffff");
-      lface(g, F, mx - ux * 1.4, mz - uz * 1.4, mx + ux * 1.4, mz + uz * 1.4, y + h - 9.6, y + h - 6.8, [0, 0, 1, 1]);
+      lface(
+        g,
+        F,
+        mx - ux * 1.4,
+        mz - uz * 1.4,
+        mx + ux * 1.4,
+        mz + uz * 1.4,
+        y + h - 9.6,
+        y + h - 6.8,
+        [0, 0, 1, 1],
+      );
     }
     // entrance door (faces the street)
     g.mat(T.door, r(), 0).col("#ffffff");
@@ -825,7 +1080,17 @@ function church(k: Kit, b: ABld) {
   t3(g, L3(F, 0, wallTop, D), L3(F, W, wallTop, D), L3(F, W / 2, ridge, D), F.out(0, 1));
   t3(g, L3(F, 0, wallTop, 0), L3(F, W, wallTop, 0), L3(F, W / 2, ridge, 0), F.out(0, -1));
   g.mat(T.arched, r(), 0).col("#ffffff");
-  lface(g, F, W / 2 + 1.1, D + 0.06, W / 2 - 1.1, D + 0.06, wallTop + 0.8, wallTop + 4.2, [0, 0, 1, 1]);
+  lface(
+    g,
+    F,
+    W / 2 + 1.1,
+    D + 0.06,
+    W / 2 - 1.1,
+    D + 0.06,
+    wallTop + 0.8,
+    wallTop + 4.2,
+    [0, 0, 1, 1],
+  );
   for (const side of [-1, 1]) {
     const ex = side < 0 ? -0.8 : W + 0.8;
     const out = F.out(side, 0);
@@ -837,7 +1102,14 @@ function church(k: Kit, b: ABld) {
     g.mat(T.shingle, 0, 0).col("#5a5e66");
     q4(g, A, B, C, Dd, up, [0, 0, D / 2, 6]);
     g.mat(T.board, 0, 0).col("#6a5a4a");
-    q4(g, [A[0], A[1] - 0.2, A[2]], [B[0], B[1] - 0.2, B[2]], [C[0], C[1] - 0.2, C[2]], [Dd[0], Dd[1] - 0.2, Dd[2]], [-up[0], -1, -up[2]]);
+    q4(
+      g,
+      [A[0], A[1] - 0.2, A[2]],
+      [B[0], B[1] - 0.2, B[2]],
+      [C[0], C[1] - 0.2, C[2]],
+      [Dd[0], Dd[1] - 0.2, Dd[2]],
+      [-up[0], -1, -up[2]],
+    );
     g.mat(T.snow, 0, 0).col(SNOW);
     const L = (p: V3, h: number): V3 => [p[0] + out[0] * 0.1, p[1] + h, p[2] + out[2] * 0.1];
     q4(g, L(A, 0.4), L(B, 0.4), L(C, 0.45), L(Dd, 0.45), up, [0, 0, D / 2, 6]);
@@ -857,7 +1129,16 @@ function station(k: Kit, b: ABld, lift: Lift) {
   const liftZ = top ? b.z1 : b.z0; // the face the cable leaves from
   const hallZ0 = top ? b.z0 : b.z0 + 8;
   const hallZ1 = top ? b.z1 - 8 : b.z1;
-  const hall = { x0: b.x0, z0: hallZ0, x1: b.x1, z1: hallZ1, y, ymin: b.ymin, front: (top ? 0 : 2) as 0 | 2, seed: b.seed };
+  const hall = {
+    x0: b.x0,
+    z0: hallZ0,
+    x1: b.x1,
+    z1: hallZ1,
+    y,
+    ymin: b.ymin,
+    front: (top ? 0 : 2) as 0 | 2,
+    seed: b.seed,
+  };
   const F = frameOf(hall);
   const { W, D } = F;
   g.mat(T.stone, 0, 1).col("#d8d4cc");
@@ -958,8 +1239,20 @@ function panorama(k: Kit, b: ABld) {
   q4(g, u(A), u(B), u(C), u(Dd), [F.out(0, -1)[0], 1, F.out(0, -1)[2]]);
   q4(g, u(A2), u(B2), u(C), u(Dd), [F.out(0, 1)[0], 1, F.out(0, 1)[2]]);
   q4(g, A, B, u(B), u(A), F.out(0, -1));
-  t3(g, L3(F, -1.2, y + 6.3, -2.2), L3(F, -1.2, y + 6.3, D + 1.2), L3(F, -1.2, y + 9.2, D / 2), F.out(-1, 0));
-  t3(g, L3(F, W + 1.2, y + 6.3, -2.2), L3(F, W + 1.2, y + 6.3, D + 1.2), L3(F, W + 1.2, y + 9.2, D / 2), F.out(1, 0));
+  t3(
+    g,
+    L3(F, -1.2, y + 6.3, -2.2),
+    L3(F, -1.2, y + 6.3, D + 1.2),
+    L3(F, -1.2, y + 9.2, D / 2),
+    F.out(-1, 0),
+  );
+  t3(
+    g,
+    L3(F, W + 1.2, y + 6.3, -2.2),
+    L3(F, W + 1.2, y + 6.3, D + 1.2),
+    L3(F, W + 1.2, y + 9.2, D / 2),
+    F.out(1, 0),
+  );
   k.signs.mat(0, 0, 0).col("#ffffff");
   const [sx0, sz0] = F.P(W / 2 - 4, -2.3);
   const [sx1, sz1] = F.P(W / 2 + 4, -2.3);
@@ -1022,12 +1315,27 @@ function coveredBridge(k: Kit, a: AlpineData) {
   // gable portals with a name board
   for (const x of [br.x0 - 0.2, br.x1 + 0.2]) {
     g.mat(T.board, 0, 0).col("#9a4a2a");
-    t3(g, [x, eave, z0 - 0.4], [x, eave, z1 + 0.4], [x, ridge - 0.1, br.z], [x < br.x0 ? -1 : 1, 0, 0]);
+    t3(
+      g,
+      [x, eave, z0 - 0.4],
+      [x, eave, z1 + 0.4],
+      [x, ridge - 0.1, br.z],
+      [x < br.x0 ? -1 : 1, 0, 0],
+    );
     g.mat(T.board, 0, 0).col("#7a3a20");
     tbox(g, x, eave - 0.4, br.z, 0.3, 0.5, br.w + 0.6);
   }
   k.signs.mat(0, 0, 0).col("#ffffff");
-  face(k.signs, br.x0 - 0.4, br.z - 2.2, br.x0 - 0.4, br.z + 2.2, eave + 0.1, eave + 0.7, signUV(W_PASS));
+  face(
+    k.signs,
+    br.x0 - 0.4,
+    br.z - 2.2,
+    br.x0 - 0.4,
+    br.z + 2.2,
+    eave + 0.1,
+    eave + 0.7,
+    signUV(W_PASS),
+  );
   // lanterns at both portals
   for (const x of [br.x0 - 0.5, br.x1 + 0.5])
     for (const z of [z0 - 0.3, z1 + 0.3]) {
@@ -1101,19 +1409,47 @@ function skiJump(k: Kit, a: AlpineData) {
     const p = pts[i]!;
     const q = pts[i + 1]!;
     g.mat(T.snow, 0, 0).col("#f4f8ff");
-    q4(g, [p[0] - w / 2, p[1], p[2]], [p[0] + w / 2, p[1], p[2]], [q[0] + w / 2, q[1], q[2]], [q[0] - w / 2, q[1], q[2]], [0, 1, 0]);
+    q4(
+      g,
+      [p[0] - w / 2, p[1], p[2]],
+      [p[0] + w / 2, p[1], p[2]],
+      [q[0] + w / 2, q[1], q[2]],
+      [q[0] - w / 2, q[1], q[2]],
+      [0, 1, 0],
+    );
     g.mat(T.board, 0, 0).col("#8a6a4a");
-    q4(g, [p[0] - w / 2, p[1] - 0.5, p[2]], [p[0] + w / 2, p[1] - 0.5, p[2]], [q[0] + w / 2, q[1] - 0.5, q[2]], [q[0] - w / 2, q[1] - 0.5, q[2]], [0, -1, 0]);
+    q4(
+      g,
+      [p[0] - w / 2, p[1] - 0.5, p[2]],
+      [p[0] + w / 2, p[1] - 0.5, p[2]],
+      [q[0] + w / 2, q[1] - 0.5, q[2]],
+      [q[0] - w / 2, q[1] - 0.5, q[2]],
+      [0, -1, 0],
+    );
     for (const s of [-1, 1]) {
       const x = p[0] + (s * w) / 2;
       g.mat(T.board, 0, 0).col("#a0784a");
-      q4(g, [x, p[1] - 0.5, p[2]], [x, q[1] - 0.5, q[2]], [x, q[1] + 0.9, q[2]], [x, p[1] + 0.9, p[2]], [s, 0, 0]);
+      q4(
+        g,
+        [x, p[1] - 0.5, p[2]],
+        [x, q[1] - 0.5, q[2]],
+        [x, q[1] + 0.9, q[2]],
+        [x, p[1] + 0.9, p[2]],
+        [s, 0, 0],
+      );
     }
     // trestle legs
     const gy = Math.min(a.jump.y0, a.jump.y1) - 30;
     void gy;
     g.mat(T.metal, 0, 0).col("#b8bcc4");
-    for (const s of [-1, 1]) tube(g, [p[0] + s * (w / 2 + 0.3), p[1] - 0.5, p[2]], [p[0] + s * (w / 2 + 1.2), groundUnder(a, p[0], p[2]) - 0.3, p[2]], 0.18, 5);
+    for (const s of [-1, 1])
+      tube(
+        g,
+        [p[0] + s * (w / 2 + 0.3), p[1] - 0.5, p[2]],
+        [p[0] + s * (w / 2 + 1.2), groundUnder(a, p[0], p[2]) - 0.3, p[2]],
+        0.18,
+        5,
+      );
     if (i % 2 === 0) {
       const lamp: V3 = [p[0] + w / 2 + 0.2, p[1] + 1.1, p[2]];
       k.glow.col("#eaf2ff").box(lamp[0], lamp[1], lamp[2], 0.2, 0.2, 0.2);
@@ -1126,7 +1462,16 @@ function skiJump(k: Kit, a: AlpineData) {
   g.mat(T.snow, 0, 0).col(SNOW);
   tbox(g, t0[0], t0[1] + 3.2, t0[2] - 2.2, 5.6, 0.45, 5);
   k.signs.mat(0, 0, 0).col("#ffffff");
-  face(k.signs, t0[0] - 2.4, t0[2] - 0.2 + 0.05, t0[0] + 2.4, t0[2] - 0.2 + 0.05, t0[1] + 2.2, t0[1] + 2.8, signUV(W_PASS));
+  face(
+    k.signs,
+    t0[0] - 2.4,
+    t0[2] - 0.2 + 0.05,
+    t0[0] + 2.4,
+    t0[2] - 0.2 + 0.05,
+    t0[1] + 2.2,
+    t0[1] + 2.8,
+    signUV(W_PASS),
+  );
   k.lamps.push([t0[0], t0[1] + 3, t0[2], 1]);
 }
 
@@ -1143,7 +1488,7 @@ function deck(k: Kit, a: AlpineData) {
   // the railing sits right at the edge of the walkable boards so you can lean over it
   const ez = d.z1 + 0.5;
   const ex = d.x1 + 0.5;
-  g.mat(T.board, 0, 0).col("#b08a60");
+  g.mat(T.board, 0, 0).col("#f0d8b0");
   g.flat(d.x0, d.z0, ex, ez, y, [0, 0, (ex - d.x0) / 2, (ez - d.z0) / 2]);
   g.mat(T.board, 0, 0).col("#6a4a2e");
   face(g, ex, d.z0, d.x0, d.z0, base - 0.5, y);
@@ -1152,7 +1497,8 @@ function deck(k: Kit, a: AlpineData) {
   face(g, ex, ez, ex, d.z0, d.y - 9, y);
   // stairs up from the plateau
   g.mat(T.board, 0, 0).col("#a07a50");
-  for (let st = 0; st < 6; st++) tbox(g, d.x0 - 4 + st * 0.67 + 0.33, base - 0.3, d.z0 + 3, 0.67, 0.3 + (st + 1) * 0.4, 6);
+  for (let st = 0; st < 6; st++)
+    tbox(g, d.x0 - 4 + st * 0.67 + 0.33, base - 0.3, d.z0 + 3, 0.67, 0.3 + (st + 1) * 0.4, 6);
   // stilts and cross braces down the drop
   g.mat(T.board, 0, 0).col("#5a3a22");
   for (let x = d.x0 + 1; x <= ex; x += 4) {
@@ -1168,6 +1514,9 @@ function deck(k: Kit, a: AlpineData) {
   };
   railA(d.x0, ez - 0.1, ex - 0.1, ez - 0.1);
   railA(ex - 0.1, ez - 0.1, ex - 0.1, d.z0);
+  // the plateau sides: along the north edge and down the west edge to the stairs
+  railA(ex - 0.1, d.z0 + 0.1, d.x0 + 0.1, d.z0 + 0.1);
+  railA(d.x0 + 0.1, ez - 0.1, d.x0 + 0.1, d.z0 + 6);
   k.detail.mat(T.snow, 0, 0).col(SNOW);
   tbox(k.detail, (d.x0 + ex) / 2, y + 1.05, ez - 0.1, ex - d.x0 + 0.2, 0.12, 0.2);
   tbox(k.detail, ex - 0.1, y + 1.05, (d.z0 + ez) / 2, 0.2, 0.12, ez - d.z0 + 0.2);
@@ -1243,7 +1592,10 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
   const dg = k.detail;
   const S = Math.sin(rot);
   const C = Math.cos(rot);
-  const W = (lx: number, lz: number): [number, number] => [x + lx * C + lz * S, z - lx * S + lz * C];
+  const W = (lx: number, lz: number): [number, number] => [
+    x + lx * C + lz * S,
+    z - lx * S + lz * C,
+  ];
   switch (p.k) {
     case "lamp": {
       g.mat(T.plain, 0, 0).col("#1e2024");
@@ -1398,7 +1750,9 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
         const t = i / 80;
         const a = t * Math.PI * 14;
         const rr = (3.4 * (1 - t) + 0.5) * 0.85;
-        k.glow.col(bulbs[i % 4]!).box(x + Math.cos(a) * rr, y + 1.6 + t * 9, z + Math.sin(a) * rr, 0.16, 0.16, 0.16);
+        k.glow
+          .col(bulbs[i % 4]!)
+          .box(x + Math.cos(a) * rr, y + 1.6 + t * 9, z + Math.sin(a) * rr, 0.16, 0.16, 0.16);
       }
       k.glow.col("#ffe27a");
       k.glow.cone(x, y + 11.6, z, 0.5, 0.8, 5);
@@ -1506,18 +1860,12 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
 // ---------------------------------------------------------------------------------------
 // solo blockades: themed barriers that seal the playable square
 
-function young(g: Geo, x: number, y: number, z: number, h: number, r: () => number) {
-  g.mat(T.needles, 0, 0).col(r() < 0.5 ? "#ffffff" : "#d8e0d8");
-  for (let i = 0; i < 3; i++) g.cone(x, y + 0.3 + i * h * 0.26, z, (h * 0.32) * (1 - i * 0.26), h * 0.45, 6, r());
-  g.mat(T.snow, 0, 0).col(SNOW);
-  for (let i = 0; i < 3; i++) g.cone(x, y + 0.5 + i * h * 0.26 + h * 0.12, z, (h * 0.2) * (1 - i * 0.26), h * 0.26, 6, r());
-}
-
 function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
   const g = k.main;
   const alongX = bl.axis === "x";
   const n = Math.max(2, Math.round(bl.w / 3));
-  const at = (t: number): [number, number] => (alongX ? [bl.x - bl.w / 2 + t * bl.w, bl.z] : [bl.x, bl.z - bl.w / 2 + t * bl.w]);
+  const at = (t: number): [number, number] =>
+    alongX ? [bl.x - bl.w / 2 + t * bl.w, bl.z] : [bl.x, bl.z - bl.w / 2 + t * bl.w];
   const out = alongX ? [0, Math.sign(bl.z)] : [Math.sign(bl.x), 0]; // outward from the square
   const rot = alongX ? 0 : Math.PI / 2;
   const gy = (x: number, z: number) => groundFn(x, z);
@@ -1530,7 +1878,16 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
         const px = x + out[0]! * o;
         const pz = z + out[1]! * o;
         g.mat(T.snow, 0, 0).col(r() < 0.5 ? SNOW : SNOW_SHADE);
-        mound(g, px, gy(px, pz), pz, 7 + r() * 3, 2.4 + r() * 1.2, 5 + r() * 2, rot + (r() - 0.5) * 0.6);
+        mound(
+          g,
+          px,
+          gy(px, pz),
+          pz,
+          7 + r() * 3,
+          2.4 + r() * 1.2,
+          5 + r() * 2,
+          rot + (r() - 0.5) * 0.6,
+        );
       }
       // broken slabs of snow crust tumbled on top
       for (let i = 0; i < n; i++) {
@@ -1547,7 +1904,14 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
         const [x, z] = at(0.15 + r() * 0.7);
         const a = r() * 6.28;
         const L = 3 + r() * 4;
-        tube(g, [x, gy(x, z) + 1.2, z], [x + Math.cos(a) * L, gy(x, z) + 2.2 + r() * 2.2, z + Math.sin(a) * L], 0.22, 5, 0.12);
+        tube(
+          g,
+          [x, gy(x, z) + 1.2, z],
+          [x + Math.cos(a) * L, gy(x, z) + 2.2 + r() * 2.2, z + Math.sin(a) * L],
+          0.22,
+          5,
+          0.12,
+        );
       }
       const [sx, sz] = at(0.5);
       signBoard(k, sx - out[0]! * 3.2, gy(sx, sz), sz - out[1]! * 3.2, rot, W_AVALANCHE, out);
@@ -1564,8 +1928,24 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
         g.mat(T.mesh, 0, 0).col("#ffffff");
         const ya = gy(x0, z0);
         const yb = gy(x1, z1);
-        q4(g, [x0, ya + 0.15, z0], [x1, yb + 0.15, z1], [x1, yb + 1.7, z1], [x0, ya + 1.7, z0], [-out[0]!, 0, -out[1]!], [0, 0, 1.25, 0.8]);
-        q4(g, [x0, ya + 0.15, z0], [x1, yb + 0.15, z1], [x1, yb + 1.7, z1], [x0, ya + 1.7, z0], [out[0]!, 0, out[1]!], [0, 0, 1.25, 0.8]);
+        q4(
+          g,
+          [x0, ya + 0.15, z0],
+          [x1, yb + 0.15, z1],
+          [x1, yb + 1.7, z1],
+          [x0, ya + 1.7, z0],
+          [-out[0]!, 0, -out[1]!],
+          [0, 0, 1.25, 0.8],
+        );
+        q4(
+          g,
+          [x0, ya + 0.15, z0],
+          [x1, yb + 0.15, z1],
+          [x1, yb + 1.7, z1],
+          [x0, ya + 1.7, z0],
+          [out[0]!, 0, out[1]!],
+          [0, 0, 1.25, 0.8],
+        );
       }
       for (let t = 0; t <= 1.001; t += 4 / bl.w) {
         const [x, z] = at(Math.min(1, t));
@@ -1583,7 +1963,19 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
       // a groomer parked across the wider runs
       if (bl.w > 16) {
         const [cx, cz] = at(0.72);
-        propGeo(k, { k: "snowcat", x: cx + out[0]! * 1.2, z: cz + out[1]! * 1.2, y: gy(cx, cz), rot: rot + Math.PI / 2, s: 1, v: 1 }, r);
+        propGeo(
+          k,
+          {
+            k: "snowcat",
+            x: cx + out[0]! * 1.2,
+            z: cz + out[1]! * 1.2,
+            y: gy(cx, cz),
+            rot: rot + Math.PI / 2,
+            s: 1,
+            v: 1,
+          },
+          r,
+        );
       }
       break;
     }
@@ -1600,8 +1992,24 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
       g.mat(T.hazard, 0, 0).col("#ffffff");
       const ya = gy(x0, z0) + 1.0;
       const yb = gy(x1, z1) + 1.0;
-      q4(g, [x0, ya, z0], [x1, yb, z1], [x1, yb + 0.3, z1], [x0, ya + 0.3, z0], [-out[0]!, 0, -out[1]!], [0, 0, bl.w / 2, 0.15]);
-      q4(g, [x0, ya, z0], [x1, yb, z1], [x1, yb + 0.3, z1], [x0, ya + 0.3, z0], [out[0]!, 0, out[1]!], [0, 0, bl.w / 2, 0.15]);
+      q4(
+        g,
+        [x0, ya, z0],
+        [x1, yb, z1],
+        [x1, yb + 0.3, z1],
+        [x0, ya + 0.3, z0],
+        [-out[0]!, 0, -out[1]!],
+        [0, 0, bl.w / 2, 0.15],
+      );
+      q4(
+        g,
+        [x0, ya, z0],
+        [x1, yb, z1],
+        [x1, yb + 0.3, z1],
+        [x0, ya + 0.3, z0],
+        [out[0]!, 0, out[1]!],
+        [0, 0, bl.w / 2, 0.15],
+      );
       // the plough ridge: the road's snow bulldozed into a wall behind the gate
       for (let t = 0; t <= 1.001; t += 3.5 / bl.w) {
         const [x, z] = at(Math.min(1, t));
@@ -1652,24 +2060,40 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
         g.mat(T.needles, 0, 0).col("#8a8a7a");
         for (let bI = 0; bI < 3; bI++) {
           const t = r();
-          const p: V3 = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t];
-          tube(g, p, [p[0] + (r() - 0.5) * 2, p[1] + 0.6 + r(), p[2] + (r() - 0.5) * 2], 0.06, 3, 0.02);
+          const p: V3 = [
+            A[0] + (B[0] - A[0]) * t,
+            A[1] + (B[1] - A[1]) * t,
+            A[2] + (B[2] - A[2]) * t,
+          ];
+          tube(
+            g,
+            p,
+            [p[0] + (r() - 0.5) * 2, p[1] + 0.6 + r(), p[2] + (r() - 0.5) * 2],
+            0.06,
+            3,
+            0.02,
+          );
         }
       }
       for (let i = 0; i <= n; i++) {
         const [x, z] = at(i / n);
         g.mat(T.snow, 0, 0).col(SNOW_SHADE);
         mound(g, x, gy(x, z), z, 4.5, 1.4, 3, rot + (r() - 0.5) * 0.5);
-        const px = x + out[0]! * (2 + r() * 2);
-        const pz = z + out[1]! * (2 + r() * 2);
-        young(g, px, gy(px, pz), pz, 3.5 + r() * 3, r);
       }
       break;
     }
   }
 }
 
-function signBoard(k: Kit, x: number, y: number, z: number, rot: number, word: number, out: number[]) {
+function signBoard(
+  k: Kit,
+  x: number,
+  y: number,
+  z: number,
+  rot: number,
+  word: number,
+  out: number[],
+) {
   const g = k.main;
   const alongX = Math.abs(Math.cos(rot)) > 0.5;
   g.mat(T.metal, 0, 0).col("#8a8e96");
@@ -1686,16 +2110,28 @@ function signBoard(k: Kit, x: number, y: number, z: number, rot: number, word: n
   const rx = fz;
   const rz = -fx;
   const hw = 1.6;
-  face(k.signs, x - rx * hw + fx * 0.05, z - rz * hw + fz * 0.05, x + rx * hw + fx * 0.05, z + rz * hw + fz * 0.05, y + 2.0, y + 2.75, signUV(word));
+  face(
+    k.signs,
+    x - rx * hw + fx * 0.05,
+    z - rz * hw + fz * 0.05,
+    x + rx * hw + fx * 0.05,
+    z + rz * hw + fz * 0.05,
+    y + 2.0,
+    y + 2.75,
+    signUV(word),
+  );
   g.mat(T.plain, 0, 0).col("#2a2c30");
   face(g, x + rx * hw, z + rz * hw, x - rx * hw, z - rz * hw, y + 2.0, y + 2.75, [0, 0, 1, 1]);
 }
 
 // ---------------------------------------------------------------------------------------
 
-export function buildInto(kitAt: (x: number, z: number) => Kit, a: AlpineData, ground: (x: number, z: number) => number) {
+export function buildInto(
+  kitAt: (x: number, z: number) => Kit,
+  a: AlpineData,
+  ground: (x: number, z: number) => number,
+) {
   groundFn = ground;
-  let verts = 0;
   for (const b of a.buildings) {
     const k = kitAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const r = mulberry(Math.floor(b.seed * 1e9) + 7);
@@ -1715,31 +2151,130 @@ export function buildInto(kitAt: (x: number, z: number) => Kit, a: AlpineData, g
         panorama(k, b);
         break;
       case "barn":
-        gableHouse(k, b, { floors: 2, style: 2, pitch: 0.55, balconies: [], cafe: false, shop: false, barn: true, sign: -1, chimneys: 0, door: true });
+        gableHouse(k, b, {
+          floors: 2,
+          style: 2,
+          pitch: 0.55,
+          balconies: [],
+          cafe: false,
+          shop: false,
+          barn: true,
+          sign: -1,
+          chimneys: 0,
+          door: true,
+        });
         break;
       case "hut":
-        gableHouse(k, b, { floors: 1, style: 2, pitch: 0.7, balconies: [], cafe: false, shop: false, barn: false, sign: -1, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: 1,
+          style: 2,
+          pitch: 0.7,
+          balconies: [],
+          cafe: false,
+          shop: false,
+          barn: false,
+          sign: -1,
+          chimneys: 1,
+          door: true,
+        });
         break;
       case "ticket":
-        gableHouse(k, b, { floors: 1, style: 1, pitch: 0.7, balconies: [], cafe: false, shop: true, barn: false, sign: -1, chimneys: 0, door: false });
+        gableHouse(k, b, {
+          floors: 1,
+          style: 1,
+          pitch: 0.7,
+          balconies: [],
+          cafe: false,
+          shop: true,
+          barn: false,
+          sign: -1,
+          chimneys: 0,
+          door: false,
+        });
         break;
       case "boathouse":
-        gableHouse(k, b, { floors: 1, style: 2, pitch: 0.6, balconies: [], cafe: false, shop: false, barn: true, sign: -1, chimneys: 0, door: true });
+        gableHouse(k, b, {
+          floors: 1,
+          style: 2,
+          pitch: 0.6,
+          balconies: [],
+          cafe: false,
+          shop: false,
+          barn: true,
+          sign: -1,
+          chimneys: 0,
+          door: true,
+        });
         break;
       case "lodge":
-        gableHouse(k, b, { floors: b.floors, style: b.style === 3 ? 1 : b.style, pitch: pitch - 0.05, balconies: [1, 2], cafe: false, shop: b.sign >= 0, barn: false, sign: b.sign, chimneys: 2, door: true });
+        gableHouse(k, b, {
+          floors: b.floors,
+          style: b.style === 3 ? 1 : b.style,
+          pitch: pitch - 0.05,
+          balconies: [1, 2],
+          cafe: false,
+          shop: b.sign >= 0,
+          barn: false,
+          sign: b.sign,
+          chimneys: 2,
+          door: true,
+        });
         break;
       case "rental":
-        gableHouse(k, b, { floors: 2, style: 1, pitch, balconies: [1], cafe: false, shop: true, barn: false, sign: b.sign, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: 2,
+          style: 1,
+          pitch,
+          balconies: [1],
+          cafe: false,
+          shop: true,
+          barn: false,
+          sign: b.sign,
+          chimneys: 1,
+          door: true,
+        });
         break;
       case "cafe":
-        gableHouse(k, b, { floors: b.floors, style: b.style, pitch, balconies: [1], cafe: true, shop: false, barn: false, sign: b.sign, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: b.floors,
+          style: b.style,
+          pitch,
+          balconies: [1],
+          cafe: true,
+          shop: false,
+          barn: false,
+          sign: b.sign,
+          chimneys: 1,
+          door: true,
+        });
         break;
       case "shop":
-        gableHouse(k, b, { floors: b.floors, style: b.style, pitch, balconies: [1], cafe: false, shop: true, barn: false, sign: b.sign, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: b.floors,
+          style: b.style,
+          pitch,
+          balconies: [1],
+          cafe: false,
+          shop: true,
+          barn: false,
+          sign: b.sign,
+          chimneys: 1,
+          door: true,
+        });
         break;
       default:
-        gableHouse(k, b, { floors: b.floors, style: b.style, pitch, balconies: b.floors >= 2 ? [1] : [], cafe: false, shop: false, barn: false, sign: -1, chimneys: 1, door: true });
+        gableHouse(k, b, {
+          floors: b.floors,
+          style: b.style,
+          pitch,
+          balconies: b.floors >= 2 ? [1] : [],
+          cafe: false,
+          shop: false,
+          barn: false,
+          sign: -1,
+          chimneys: 1,
+          door: true,
+        });
     }
   }
   const r = mulberry(99173);
@@ -1747,11 +2282,13 @@ export function buildInto(kitAt: (x: number, z: number) => Kit, a: AlpineData, g
   rink(kitAt(a.rink.x0, a.rink.z0), a);
   skiJump(kitAt(a.jump.x, a.jump.z1), a);
   deck(kitAt(a.deck.x0, a.deck.z0), a);
-  liftGeo(kitAt(a.lift.x, (a.lift.supports[0]!.z + a.lift.supports[a.lift.supports.length - 1]!.z) / 2), a);
+  liftGeo(
+    kitAt(a.lift.x, (a.lift.supports[0]!.z + a.lift.supports[a.lift.supports.length - 1]!.z) / 2),
+    a,
+  );
   for (const p of a.props) {
     if (p.k === "tower") continue;
     propGeo(kitAt(p.x, p.z), p, r);
   }
   for (const bl of a.blockades) blockadeGeo(kitAt(bl.x, bl.z), bl, r);
-  return verts;
 }

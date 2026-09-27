@@ -82,7 +82,8 @@ function lightMap(lights: [number, number, number, string][], half: number) {
     const pr = r * k;
     const gr = g.createRadialGradient(px, pz, 0, px, pz, pr);
     const cc = new THREE.Color(col);
-    const rgb = (a: number) => `rgba(${Math.round(cc.r * 255)},${Math.round(cc.g * 255)},${Math.round(cc.b * 255)},${a})`;
+    const rgb = (a: number) =>
+      `rgba(${Math.round(cc.r * 255)},${Math.round(cc.g * 255)},${Math.round(cc.b * 255)},${a})`;
     gr.addColorStop(0, rgb(0.75));
     gr.addColorStop(0.35, rgb(0.4));
     gr.addColorStop(1, rgb(0));
@@ -106,7 +107,8 @@ function toScreen(c: THREE.Color, out: THREE.Color, exposure = 1) {
   let x = 0.59719 * r + 0.35458 * g + 0.04823 * b;
   let y = 0.076 * r + 0.90834 * g + 0.01566 * b;
   let z = 0.0284 * r + 0.13383 * g + 0.83777 * b;
-  const fit = (v: number) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
+  const fit = (v: number) =>
+    (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
   x = fit(x);
   y = fit(y);
   z = fit(z);
@@ -181,7 +183,10 @@ const FOG_FRAG_BODY = /* glsl */ `
   float aerial = (1.0 - exp(-fd / uHazeDist)) * uHazeMax;
   // aerial perspective is stronger low in the valley, thinner up on the peaks
   aerial *= mix(1.0, 0.7, smoothstep(300.0, 2500.0, vAWorld.y));
-  float mist = smoothstep(uMist.x, uMist.y, fd) * 0.35 * (1.0 - smoothstep(150.0, 900.0, vAWorld.y));
+  // valley mist is seen edge-on; looking steeply down from high up it all but vanishes
+  float steep = smoothstep(0.25, 0.75, abs(vAWorld.y - cameraPosition.y) / max(fd, 1.0));
+  float mist = smoothstep(uMist.x, uMist.y, fd) * 0.35 * (1.0 - smoothstep(150.0, 900.0, vAWorld.y)) * (1.0 - steep);
+  aerial *= 1.0 - 0.6 * steep;
   gl_FragColor.rgb = mix(gl_FragColor.rgb, mistC, mist);
   gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeC, aerial);
   float bl = smoothstep(uFogNear, uFogFar, fd);
@@ -189,7 +194,11 @@ const FOG_FRAG_BODY = /* glsl */ `
 }
 `;
 
-type Shader = { vertexShader: string; fragmentShader: string; uniforms: Record<string, { value: unknown }> };
+type Shader = {
+  vertexShader: string;
+  fragmentShader: string;
+  uniforms: Record<string, { value: unknown }>;
+};
 function withFog(sh: Shader) {
   Object.assign(sh.uniforms, U);
   sh.vertexShader = sh.vertexShader
@@ -208,7 +217,10 @@ function facadeMaterial() {
     withFog(sh as unknown as Shader);
     sh.uniforms["uArr"] = { value: alpineArray() };
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;",
+      )
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;");
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -268,7 +280,10 @@ function terrainMaterial(surf: THREE.Texture, forest: THREE.Texture) {
     sh.uniforms["uSurf"] = { value: surf };
     sh.uniforms["uForest"] = { value: forest };
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", `#include <common>\nuniform sampler2D uSurf;\nuniform sampler2D uForest;\nfloat aSparkle;\nfloat aIce;`)
+      .replace(
+        "#include <common>",
+        `#include <common>\nuniform sampler2D uSurf;\nuniform sampler2D uForest;\nfloat aSparkle;\nfloat aIce;`,
+      )
       .replace(
         "#include <map_fragment>",
         `vec3 wN = normalize((vec4(normalize(vNormal), 0.0) * viewMatrix).xyz);
@@ -302,7 +317,9 @@ col = mix(col, ice, aIce);
 // forest floor: shaded snow with needle litter
 col = mix(col, vec3(0.74, 0.78, 0.82) * (0.9 + 0.15 * n3), sf.a * 0.45);
 // far forest seen from above: dark canopy flecked with snow
-float canopy = smoothstep(0.15, 0.7, farForest) * (0.55 + 0.45 * aNoise(wp * 0.08));
+// (near the map the instanced far trees stand on white snow; the painted canopy takes over
+// where they stop)
+float canopy = smoothstep(0.15, 0.7, farForest) * (0.55 + 0.45 * aNoise(wp * 0.08)) * smoothstep(650.0, 900.0, max(abs(wp.x), abs(wp.y)));
 col = mix(col, mix(vec3(0.13, 0.18, 0.17), vec3(0.7, 0.75, 0.8), step(0.72, n2) * 0.6), canopy * 0.85);
 // rock on steep faces and outcrops, snow held in the ledges
 float rock = smoothstep(0.42, 0.62, slope + (n2 - 0.5) * 0.25) + smoothstep(0.3, 0.4, sf.b) * (1.0 - aIce);
@@ -362,7 +379,10 @@ function treeMaterial() {
   return mat;
 }
 
-function basicFog<M extends THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(mat: M, key: string): M {
+function basicFog<M extends THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(
+  mat: M,
+  key: string,
+): M {
   mat.fog = false;
   mat.onBeforeCompile = (sh) => withFog(sh as unknown as Shader);
   mat.customProgramCacheKey = () => key;
@@ -636,7 +656,17 @@ function chairGeo() {
 // ---------------------------------------------------------------------------------------
 
 type Built = {
-  chunks: { x0: number; z0: number; x1: number; z1: number; main: THREE.BufferGeometry | null; detail: THREE.BufferGeometry | null; glow: THREE.BufferGeometry | null; signs: THREE.BufferGeometry | null; pools: THREE.BufferGeometry | null }[];
+  chunks: {
+    x0: number;
+    z0: number;
+    x1: number;
+    z1: number;
+    main: THREE.BufferGeometry | null;
+    detail: THREE.BufferGeometry | null;
+    glow: THREE.BufferGeometry | null;
+    signs: THREE.BufferGeometry | null;
+    pools: THREE.BufferGeometry | null;
+  }[];
   terrain: ReturnType<typeof playTerrain>;
   outer: THREE.BufferGeometry;
   /** every tree's instance matrix and tint; split into near / mid LOD at run time */
@@ -657,7 +687,16 @@ function build(layout: AlpineLayout): Built {
   const nc = Math.ceil((half * 2) / CHUNK);
   const kits: Kit[] = [];
   for (let i = 0; i < nc * nc; i++)
-    kits.push({ main: new Geo(), detail: new Geo(), glow: new Geo(), signs: new Geo(), pools: new Geo(), lights: [], smoke: [], lamps: [] });
+    kits.push({
+      main: new Geo(),
+      detail: new Geo(),
+      glow: new Geo(),
+      signs: new Geo(),
+      pools: new Geo(),
+      lights: [],
+      smoke: [],
+      lamps: [],
+    });
   const kitAt = (x: number, z: number) => {
     const i = Math.max(0, Math.min(nc - 1, Math.floor((x + half) / CHUNK)));
     const j = Math.max(0, Math.min(nc - 1, Math.floor((z + half) / CHUNK)));
@@ -697,7 +736,13 @@ function build(layout: AlpineLayout): Built {
   });
   // trees: matrices and tints, bucketed by distance every few metres of travel
   const n = a.trees.length;
-  const trees: Built["trees"] = { n, mats: new Float32Array(n * 16), cols: new Float32Array(n * 3), x: new Float32Array(n), z: new Float32Array(n) };
+  const trees: Built["trees"] = {
+    n,
+    mats: new Float32Array(n * 16),
+    cols: new Float32Array(n * 3),
+    x: new Float32Array(n),
+    z: new Float32Array(n),
+  };
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -765,7 +810,9 @@ export const AlpineScene = memo(function AlpineScene({
   const built = useMemo(() => {
     const t0 = performance.now();
     const b = build(layout);
-    console.info(`[alpine] built ${b.chunks.length} chunks, ${b.stats.verts} verts, ${b.stats.trees} trees + ${b.stats.far} far in ${Math.round(performance.now() - t0)} ms`);
+    console.info(
+      `[alpine] built ${b.chunks.length} chunks, ${b.stats.verts} verts, ${b.stats.trees} trees + ${b.stats.far} far in ${Math.round(performance.now() - t0)} ms`,
+    );
     return b;
   }, [layout]);
   const look: AlpineLook = alpineLook(time);
@@ -780,7 +827,10 @@ export const AlpineScene = memo(function AlpineScene({
   const mats = useMemo(
     () => ({
       facade: facadeMaterial(),
-      signs: basicFog(new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }), "alpine-signs"),
+      signs: basicFog(
+        new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }),
+        "alpine-signs",
+      ),
       pools: new THREE.MeshBasicMaterial({
         vertexColors: true,
         map: glowTexture(),
@@ -797,7 +847,10 @@ export const AlpineScene = memo(function AlpineScene({
       sky: skyMaterial(),
       snow: snowMaterial(),
       streak: streakMaterial(),
-      chair: basicFog(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }), "alpine-chair"),
+      chair: basicFog(
+        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
+        "alpine-chair",
+      ),
       halo: new THREE.PointsMaterial({
         map: glowTexture(),
         size: 3,
@@ -825,7 +878,8 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
   useEffect(
     () => () => {
-      for (const c of built.chunks) [c.main, c.detail, c.glow, c.signs, c.pools].forEach((g) => g?.dispose());
+      for (const c of built.chunks)
+        [c.main, c.detail, c.glow, c.signs, c.pools].forEach((g) => g?.dispose());
       for (const t of built.terrain) t.geo.dispose();
       built.outer.dispose();
       built.surf.dispose();
@@ -961,7 +1015,9 @@ export const AlpineScene = memo(function AlpineScene({
 
   const detailRefs = useRef<(THREE.Mesh | null)[]>([]);
   const lodTick = useRef(0);
-  const [px] = useState(() => (typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1));
+  const [px] = useState(() =>
+    typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1,
+  );
   const skyCol = useMemo(() => new THREE.Color(), []);
   const blizCol = useMemo(() => new THREE.Color(), []);
   const m4 = useMemo(() => new THREE.Matrix4(), []);
@@ -1079,7 +1135,10 @@ export const AlpineScene = memo(function AlpineScene({
     if (lodTick.current <= 0) {
       lodTick.current = 8;
       built.chunks.forEach((c, i) => {
-        const d = Math.hypot(Math.max(c.x0 - cam.x, 0, cam.x - c.x1), Math.max(c.z0 - cam.z, 0, cam.z - c.z1));
+        const d = Math.hypot(
+          Math.max(c.x0 - cam.x, 0, cam.x - c.x1),
+          Math.max(c.z0 - cam.z, 0, cam.z - c.z1),
+        );
         const det = detailRefs.current[i];
         if (det) det.visible = d < DETAIL_RANGE;
       });
@@ -1088,7 +1147,13 @@ export const AlpineScene = memo(function AlpineScene({
 
   return (
     <group>
-      <mesh ref={skyRef} geometry={geos.sky} material={mats.sky} renderOrder={-10} frustumCulled={false} />
+      <mesh
+        ref={skyRef}
+        geometry={geos.sky}
+        material={mats.sky}
+        renderOrder={-10}
+        frustumCulled={false}
+      />
       {built.terrain.map((t, i) => (
         <mesh key={`t${i}`} geometry={t.geo} material={mats.terrain} receiveShadow />
       ))}
@@ -1109,18 +1174,39 @@ export const AlpineScene = memo(function AlpineScene({
           {c.signs && <mesh geometry={c.signs} material={mats.signs} />}
         </group>
       ))}
-      <instancedMesh ref={nearRef} args={[geos.spruce, mats.tree, MAX_NEAR]} castShadow frustumCulled={false}>
+      <instancedMesh
+        ref={nearRef}
+        args={[geos.spruce, mats.tree, MAX_NEAR]}
+        castShadow
+        frustumCulled={false}
+      >
         <instancedBufferAttribute attach="instanceColor" args={[treeCols.near, 3]} />
       </instancedMesh>
-      <instancedMesh ref={midRef} args={[geos.farSpruce, mats.tree, built.trees.n]} frustumCulled={false}>
+      <instancedMesh
+        ref={midRef}
+        args={[geos.farSpruce, mats.tree, built.trees.n]}
+        frustumCulled={false}
+      >
         <instancedBufferAttribute attach="instanceColor" args={[treeCols.mid, 3]} />
       </instancedMesh>
-      {built.far.length > 0 && <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />}
-      <instancedMesh ref={chairRef} args={[geos.chair, mats.chair, chairCount]} castShadow frustumCulled={false} />
+      {built.far.length > 0 && (
+        <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />
+      )}
+      <instancedMesh
+        ref={chairRef}
+        args={[geos.chair, mats.chair, chairCount]}
+        castShadow
+        frustumCulled={false}
+      />
       <points geometry={geos.halo} material={mats.halo} renderOrder={3} />
       <points geometry={geos.smoke} material={mats.smoke} renderOrder={3} frustumCulled={false} />
       <points geometry={geos.snow} material={mats.snow} renderOrder={4} frustumCulled={false} />
-      <lineSegments geometry={geos.streak} material={mats.streak} renderOrder={4} frustumCulled={false} />
+      <lineSegments
+        geometry={geos.streak}
+        material={mats.streak}
+        renderOrder={4}
+        frustumCulled={false}
+      />
     </group>
   );
 });
@@ -1163,7 +1249,9 @@ export function AlpineSun({ time }: { time: TimeOfDay }) {
     if (ema.current > 0.04) {
       slowFor.current += raw;
       if (slowFor.current > 3) {
-        console.info("[alpine] frames are slow: switching shadows off (use ?shadows=1 to keep them)");
+        console.info(
+          "[alpine] frames are slow: switching shadows off (use ?shadows=1 to keep them)",
+        );
         setLow(true);
       }
     } else slowFor.current = 0;
