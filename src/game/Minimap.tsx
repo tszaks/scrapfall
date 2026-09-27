@@ -3,7 +3,7 @@
 // around the player, turned so "up" is where you are looking, plus teammates (in their
 // player colours), enemies, the boss and pickups. Off-map teammates and pickups stick to
 // the rim so you can always find them.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   K_ALLEY,
@@ -27,6 +27,20 @@ export type MapItem = {
   active: boolean;
 };
 export type MapFeed = { x: number; z: number; yaw: number; items: MapItem[] };
+/** What a big map hands the radar: its painted base map and a few landmarks. */
+export type MinimapSource = {
+  cells: number;
+  half: number;
+  /** one pixel per 2 m cell, canvas x = world x, canvas y = world z */
+  base: HTMLCanvasElement;
+  /** colour of the land beyond the map */
+  land: string;
+  /** the sea south of this z (the city's waterfront) */
+  sea: { z: number; color: string } | null;
+  landmark: { x: number; z: number } | null;
+  /** half-size of the playable square (solo); the area beyond it is dimmed */
+  playHalf: number;
+};
 type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number };
 type MapRemote = { x: number; z: number; color: string; hp: number; last: number };
 
@@ -44,6 +58,19 @@ const KIND_COL: Record<number, [number, number, number]> = {
   [K_BOARD]: [176, 138, 96],
   [K_OPEN]: [206, 198, 182],
 };
+
+/** the city's radar source */
+export function cityMinimap(city: CityLayout, blocks: Block[], playHalf: number): MinimapSource {
+  return {
+    cells: city.cells,
+    half: city.half,
+    base: paintBase(city, blocks),
+    land: "#a8a397",
+    sea: { z: city.waterZ, color: "#4f8fb0" },
+    landmark: city.landmark,
+    playHalf,
+  };
+}
 
 function paintBase(city: CityLayout, blocks: Block[]) {
   const n = city.cells;
@@ -79,22 +106,20 @@ function paintBase(city: CityLayout, blocks: Block[]) {
 }
 
 export function Minimap({
-  city,
-  blocks,
+  src,
   feed,
   enemies,
   remotes,
   myColor,
 }: {
-  city: CityLayout;
-  blocks: Block[];
+  src: MinimapSource;
   feed: React.MutableRefObject<MapFeed>;
   enemies: MapEnemy[];
   remotes: React.MutableRefObject<Map<string, MapRemote>>;
   myColor: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const base = useMemo(() => paintBase(city, blocks), [city, blocks]);
+  const base = src.base;
   const colorRef = useRef(myColor);
   colorRef.current = myColor;
 
@@ -125,16 +150,34 @@ export function Minimap({
       const wx = (x: number) => (x - f.x) * s;
       const wz = (z: number) => (z - f.z) * s;
       // backdrop land, the sea, then the street map
-      g.fillStyle = "#a8a397";
+      g.fillStyle = src.land;
       g.fillRect(-R * 2, -R * 2, R * 4, R * 4);
-      g.fillStyle = "#4f8fb0";
-      g.fillRect(-R * 3, wz(city.waterZ), R * 6, R * 6);
+      if (src.sea) {
+        g.fillStyle = src.sea.color;
+        g.fillRect(-R * 3, wz(src.sea.z), R * 6, R * 6);
+      }
       g.imageSmoothingEnabled = false;
-      g.drawImage(base, wx(-city.half), wz(-city.half), city.cells * 2 * s, city.cells * 2 * s);
-      if (city.landmark) {
+      g.drawImage(base, wx(-src.half), wz(-src.half), src.cells * 2 * s, src.cells * 2 * s);
+      // solo: everything beyond the blockades is dimmed, the edge drawn as a dashed line
+      if (src.playHalf < src.half - 1) {
+        const p0 = -src.playHalf;
+        const p1 = src.playHalf;
+        const far = src.half * 3;
+        g.fillStyle = "rgba(30,24,18,0.5)";
+        g.fillRect(wx(-far), wz(-far), (far * 2) * s, (far - p1) * s); // north
+        g.fillRect(wx(-far), wz(p1), (far * 2) * s, (far - p1) * s); // south
+        g.fillRect(wx(-far), wz(p0), (far - p1) * s, (p1 - p0) * s); // west
+        g.fillRect(wx(p1), wz(p0), (far - p1) * s, (p1 - p0) * s); // east
+        g.setLineDash([5 * dpr, 4 * dpr]);
+        g.strokeStyle = "rgba(160,30,20,0.85)";
+        g.lineWidth = 1.6 * dpr;
+        g.strokeRect(wx(p0), wz(p0), (p1 - p0) * s, (p1 - p0) * s);
+        g.setLineDash([]);
+      }
+      if (src.landmark) {
         g.fillStyle = "#2b2118";
         g.beginPath();
-        g.arc(wx(city.landmark.x), wz(city.landmark.z), 4 * dpr, 0, Math.PI * 2);
+        g.arc(wx(src.landmark.x), wz(src.landmark.z), 4 * dpr, 0, Math.PI * 2);
         g.fill();
       }
       // enemies
@@ -222,7 +265,7 @@ export function Minimap({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [base, city, enemies, feed, remotes]);
+  }, [base, src, enemies, feed, remotes]);
 
   return (
     <div className="rounded-full bg-[#f3e6cf]/80 p-1 shadow-md">

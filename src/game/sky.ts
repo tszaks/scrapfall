@@ -21,14 +21,14 @@ function dirFrom(azDeg: number, elDeg: number): [number, number, number] {
   return [Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)];
 }
 
-const lin = (hex: string): RGB => {
+export const lin = (hex: string): RGB => {
   const c = new THREE.Color(hex);
   return [c.r, c.g, c.b];
 };
 
 /** a colour ramp over elevation (degrees) */
 type Ramp = { e: number; c: RGB }[];
-const ramp = (stops: [number, string][]): Ramp => stops.map(([e, h]) => ({ e, c: lin(h) }));
+export const ramp = (stops: [number, string][]): Ramp => stops.map(([e, h]) => ({ e, c: lin(h) }));
 function sampleRamp(r: Ramp, e: number, out: RGB) {
   if (e <= r[0]!.e) return copy(out, r[0]!.c);
   for (let i = 1; i < r.length; i++) {
@@ -350,7 +350,7 @@ for (let i = 0; i <= 4096; i++) SRGB_LUT[i] = toSrgb8Exact(i / 4096);
 const toSrgb8 = (v: number) => SRGB_LUT[Math.max(0, Math.min(4096, Math.round(v * 4096)))]!;
 
 /** display copy of a sunset: sRGB canvas texture (background) */
-function sunsetBackground(key: string, P: SunsetPalette, W: number, H: number) {
+export function sunsetBackground(key: string, P: SunsetPalette, W: number, H: number) {
   const f = paintSunset(key, P, W, H, false);
   const c = document.createElement("canvas");
   c.width = W;

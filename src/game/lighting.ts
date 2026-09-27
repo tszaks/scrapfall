@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { CITY_SUNSET, arenaPalette, horizonHex } from "./sky";
 import { installSkyFog } from "./skyFog";
 import type { Theme } from "./themes";
+import { WESTERN_LOOK, WESTERN_SUNSET } from "./western/look";
 
 /** The game has two looks: night (the default) and a golden-hour sunset. */
 export type TimeOfDay = "night" | "sunset";
@@ -98,6 +99,23 @@ const haze = (away: string, toward: string, k: number) => ({
 
 export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
   installSkyFog();
+  if (theme.blockShape === "western") {
+    // Dry Gulch: its own look table (western/look.ts); the sunset sky leans desert orange
+    const w = WESTERN_LOOK[time];
+    const P = WESTERN_SUNSET;
+    const away = time === "sunset" ? horizonHex(P, false) : w.fog;
+    const toward = time === "sunset" ? horizonHex(P, true) : mix(w.fog, "#3a4070", 0.5);
+    return {
+      sky: away,
+      fog: w.fogRange,
+      ...haze(away, toward, time === "sunset" ? 0.95 : 0.4),
+      hemi: w.hemi,
+      sun: { ...w.sun, pos: [0, 0, 0] },
+      ambient: w.ambient,
+      ambientColor: w.ambientColor,
+      camFar: w.camFar,
+    };
+  }
   const city = theme.blockShape === "city";
   if (city) {
     // real-scale downtown: a long view with aerial haze so the skyline reads

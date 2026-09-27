@@ -1,7 +1,8 @@
-// Dry Gulch's light and atmosphere, one entry per time of day. The game is moving to two
-// modes, NIGHT (default) and SUNSET; until the day/night toggle is replaced, `night = true`
-// maps to "night" and `night = false` to "sunset" (see westernMode()).
-import { SKY_DIR, type WMode } from "./textures";
+// Dry Gulch's light and atmosphere, one entry per time of day (NIGHT, the default, and
+// SUNSET, the map's hero shot). lighting.ts turns an entry into the game's Look.
+import type { TimeOfDay } from "../lighting";
+import { lin, ramp, type SunsetPalette } from "../sky";
+import { SKY_DIR } from "./textures";
 
 export type WesternLook = {
   /** fog colour (the horizon haze) */
@@ -10,6 +11,7 @@ export type WesternLook = {
   hemi: [string, string, number];
   sun: { color: string; intensity: number };
   ambient: number;
+  ambientColor: string;
   camFar: number;
   /** how strongly lamp-lit windows glow (0..1) */
   windows: number;
@@ -27,7 +29,7 @@ export type WesternLook = {
   storm: string;
 };
 
-export const WESTERN_LOOK: Record<WMode, WesternLook> = {
+export const WESTERN_LOOK: Record<TimeOfDay, WesternLook> = {
   // the hero shot: a huge orange sun low over the mesas at the end of Main Street,
   // long shadows down the street, gold dust hanging in the air
   sunset: {
@@ -36,13 +38,14 @@ export const WESTERN_LOOK: Record<WMode, WesternLook> = {
     hemi: ["#ffcf9e", "#7a4a34", 0.8],
     sun: { color: "#ffa45c", intensity: 3.1 },
     ambient: 0.06,
+    ambientColor: "#d8a8a0",
     camFar: 5200,
     windows: 0.22,
     flames: 0.7,
     pools: false,
     motes: "#ffd28a",
     env: 1.0,
-    disc: { color: "#ffb45a", size: 330 },
+    disc: { color: "#ffffff", size: 400 },
     storm: "#b8763e",
   },
   // lanterns in the windows, the moon over the buttes, stars, a glowing saloon, a campfire
@@ -52,6 +55,7 @@ export const WESTERN_LOOK: Record<WMode, WesternLook> = {
     hemi: ["#6c80c8", "#2a2030", 0.62],
     sun: { color: "#9fb4ff", intensity: 0.55 },
     ambient: 0.16,
+    ambientColor: "#9fb0e0",
     camFar: 5200,
     windows: 1,
     flames: 1.45,
@@ -63,10 +67,44 @@ export const WESTERN_LOOK: Record<WMode, WesternLook> = {
   },
 };
 
-export const westernMode = (night: boolean): WMode => (night ? "night" : "sunset");
+/** the sky colour the palette leans toward at sunset (a desert orange, less city pink) */
+export const WESTERN_SUNSET_SKY = "#ff7410";
 
-/** sun (or moon) position for a directional light, `dist` metres from the target */
-export const lightPos = (mode: WMode, dist: number): [number, number, number] => {
-  const d = SKY_DIR[mode];
-  return [d[0] * dist, d[1] * dist, d[2] * dist];
+/** A desert sunset: molten gold and tangerine along the western horizon, salmon and dusty
+ * rose above, violet to a deep blue zenith; a dusky rose belt opposite the sun. */
+const n = Math.hypot(...SKY_DIR.sunset);
+export const WESTERN_SUNSET: SunsetPalette = {
+  sun: [SKY_DIR.sunset[0] / n, SKY_DIR.sunset[1] / n, SKY_DIR.sunset[2] / n],
+  toward: ramp([
+    [-6, "#d88a52"],
+    [0, "#ffc070"],
+    [2.5, "#ffa84e"],
+    [6, "#ff8c40"],
+    [11, "#f27448"],
+    [19, "#d8645a"],
+    [30, "#a85a78"],
+    [46, "#6c5290"],
+    [66, "#3c3c7c"],
+    [90, "#20285e"],
+  ]),
+  away: ramp([
+    [-6, "#8a6468"],
+    [0, "#c48a86"],
+    [3, "#b08a92"],
+    [9, "#d8948e"],
+    [17, "#b88aa4"],
+    [30, "#8074a8"],
+    [50, "#4c4e92"],
+    [90, "#20285e"],
+  ]),
+  glow: lin("#ffae4a"),
+  halo: lin("#ff6a3a"),
+  disc: lin("#ffe2a0"),
+  cloudGold: lin("#ffb058"),
+  cloudPink: lin("#ec7a70"),
+  cloudCore: lin("#7a4a6a"),
+  cloudAmount: 0.46,
+  seed: 29,
 };
+/** direction toward the sun (sunset) or the moon (night) */
+export const WESTERN_SUN = SKY_DIR;

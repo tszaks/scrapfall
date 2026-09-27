@@ -184,6 +184,10 @@ export const WORDS = [
   "JAIL",
   "MINE CO.",
   "POST OFFICE",
+  "ROAD CLOSED",
+  "BRIDGE OUT",
+  "WANTED",
+  "KEEP OUT",
 ] as const;
 export const W = Object.fromEntries(WORDS.map((w, i) => [w, i])) as Record<
   (typeof WORDS)[number],
@@ -227,11 +231,13 @@ const smooth = (a: number, b: number, v: number) => {
   const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+/** stretch value noise (which hugs 0.5) out toward the full 0..1 range */
+const spread = (v: number) => Math.max(0, Math.min(1, (v - 0.5) * 2.7 + 0.5));
 /** sandstone benches: heights settle onto strata ledges */
 const terrace = (h: number, step: number) => {
   const k = h / step;
   const f = k - Math.floor(k);
-  return (Math.floor(k) + smooth(0.55, 0.95, f)) * step;
+  return (Math.floor(k) + smooth(0.72, 0.97, f)) * step;
 };
 
 /** The dry riverbed: meanders west to east south of town. */
@@ -284,7 +290,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     for (let x = x0 + 1; x < x1; x += 2)
       for (let z = z0 + 1; z < z1; z += 2) {
         const k = at(x, z);
-        if (k < 0 || solid[k] || rock[k] > 0) return false;
+        if (k < 0 || solid[k] || rock[k]! > 0) return false;
         if (ground[k] !== WK.DESERT) return false;
       }
     return true;
@@ -328,6 +334,20 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     { x: 120, z: 336, r: 18, h: 28, ex: 1.8, rot: 0.2 },
     { x: -150, z: -334, r: 20, h: 36, ex: 1.6, rot: -0.2 },
   ];
+  // buttresses and spurs along the ring ridge, so it never reads as a wall
+  {
+    const hr = (n: number) => hash2(n, 77, seedN);
+    const per = RING * 8;
+    for (let n = 0; n < 18; n++) {
+      const p = hr(n) * per;
+      const side = Math.floor(p / (RING * 2));
+      const along = (p % (RING * 2)) - RING;
+      const off = (hr(n + 100) - 0.45) * 50; // mostly inward
+      const bx = side === 0 ? along : side === 1 ? RING - off : side === 2 ? -along : -RING + off;
+      const bz = side === 0 ? -RING + off : side === 1 ? along : side === 2 ? RING - off : -along;
+      blobs.push({ x: bx, z: bz, r: 10 + hr(n + 200) * 16, h: 14 + hr(n + 300) * 30, ex: 1 + hr(n + 400) * 1.4, rot: hr(n + 500) * 3 });
+    }
+  }
   const openings: { side: 0 | 1 | 2 | 3; c: number; hw: number }[] = [
     { side: 3, c: -14, hw: 9 }, // west road
     { side: 1, c: 2, hw: 8 }, // east road
@@ -344,29 +364,34 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       let h = 0;
       const e = Math.max(Math.abs(x), Math.abs(z));
       // outer rim: the hard edge of the co-op map, mesas you can't climb
-      const rimStart = half - 30 - 14 * fbm(x * 0.012, z * 0.012, seedN + 1);
+      const rimStart = half - 16 - 52 * spread(fbm(x * 0.011, z * 0.011, seedN + 1));
       if (e > rimStart) {
-        const t = smooth(rimStart, rimStart + 10, e);
-        h = Math.max(h, t * (28 + 44 * fbm(x * 0.01, z * 0.01, seedN + 2)));
+        const t = smooth(rimStart, rimStart + 12, e);
+        h = Math.max(h, t * (24 + 50 * spread(fbm(x * 0.01, z * 0.01, seedN + 2))));
       }
-      // the ring ridge along the solo square
+      // the ring ridge along the solo square: ragged, bulging, broken into buttresses. The
+      // ring line itself (|d| < 3) always stays rock, except where the passes are cut.
       const d = e - RING;
-      const lo = -5 - 9 * fbm(x * 0.021, z * 0.021, seedN + 3);
-      const hi = 7 + 24 * fbm(x * 0.017, z * 0.017, seedN + 4);
-      if (d > lo && d < hi) {
-        const t = Math.min(d - lo, hi - d);
-        const peak = 11 + 26 * fbm(x * 0.024, z * 0.024, seedN + 5, 5);
-        h = Math.max(h, peak * smooth(0, 7, t));
+      const dw = d + (fbm(x * 0.07, z * 0.07, seedN + 10) - 0.5) * 12;
+      const lo = -4 - 30 * spread(fbm(x * 0.011, z * 0.011, seedN + 3));
+      const hi = 5 + 42 * spread(fbm(x * 0.009, z * 0.009, seedN + 4));
+      if ((dw > lo && dw < hi) || Math.abs(d) < 3) {
+        const t = Math.max(Math.min(dw - lo, hi - dw), Math.abs(d) < 3 ? 6 : 0);
+        const peak = 8 + 42 * spread(fbm(x * 0.013, z * 0.013, seedN + 5, 3));
+        h = Math.max(h, peak * smooth(0, 5, t));
       }
       // the north canyon: tall cliffs behind town, the mine and the rail tunnel in its face
-      const face = -205 + 22 * (fbm(x * 0.018, 0.5, seedN + 6) - 0.5) + 8 * Math.sin(x / 23);
-      if (z < face && Math.abs(x) < RING + 20) {
+      const face =
+        -208 + 44 * (spread(fbm(x * 0.012, 0.5, seedN + 6)) - 0.5) + 9 * Math.sin(x / 31) + 5 * Math.sin(x / 13 + 2);
+      if (z < face && Math.abs(x) < RING + 30) {
         const t = smooth(0, 10, face - z);
-        h = Math.max(h, t * (26 + 30 * fbm(x * 0.015, z * 0.015, seedN + 7, 5)));
+        h = Math.max(h, t * (24 + 36 * spread(fbm(x * 0.015, z * 0.015, seedN + 7, 5))));
       }
       for (const b of blobs) {
         const dx = x - b.x;
         const dz = z - b.z;
+        const reach = b.r * b.ex * 1.3 + 8;
+        if (dx > reach || dx < -reach || dz > reach || dz < -reach) continue;
         const c = Math.cos(b.rot);
         const s = Math.sin(b.rot);
         const u = (dx * c - dz * s) / b.ex;
@@ -385,7 +410,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       }
       if (inClear(x, z) || (inRiver(x, z, 1) && e < half - 44)) h = 0;
       if (h < 1.2) continue;
-      rock[k] = terrace(h, 5.5);
+      rock[k] = terrace(h, 8);
     }
   }
   // the rail runs through the rock in tunnels: find the portal faces on the line

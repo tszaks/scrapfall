@@ -5,15 +5,18 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+import type { TimeOfDay } from "../lighting";
+import { sunsetBackground } from "../sky";
+import { addSkyFogUniforms, skyFog } from "../skyFog";
 import { WK, WORDS, type WesternLayout } from "./layout";
-import { WESTERN_LOOK, westernMode } from "./look";
+import { WESTERN_LOOK, WESTERN_SUNSET } from "./look";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
   TILE_M,
   WL,
-  discTexture,
   moonTexture,
+  sunTexture,
   softGlow,
   westernArrays,
   westernSky,
@@ -28,7 +31,7 @@ const _e = new THREE.Euler();
 
 /** The western facade material: MeshStandard + the texture array, lamp-lit windows at night,
  * reflective window glass, and a little ground-level darkening on walls. */
-function facadeMaterial(nightK: { value: number }) {
+export function facadeMaterial(nightK: { value: number }) {
   const arr = westernArrays(WORDS);
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -37,6 +40,7 @@ function facadeMaterial(nightK: { value: number }) {
     envMapIntensity: 1,
   });
   mat.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
     sh.uniforms["uDay"] = { value: arr.day };
     sh.uniforms["uNight"] = { value: arr.night };
     sh.uniforms["uNightK"] = nightK;
@@ -140,6 +144,7 @@ function groundMaterial(L: WesternLayout) {
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   const tl = (l: number) => (TILE_M[l] ?? [8, 8])[0].toFixed(1);
   mat.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
     sh.uniforms["uArr"] = { value: arr.day };
     sh.uniforms["uSplat"] = { value: splat };
     sh.uniforms["uHalf"] = { value: L.half };
@@ -189,15 +194,23 @@ diffuseColor.rgb *= col;`,
   return { mat, splat };
 }
 
+/** the sky behind Dry Gulch: the painted sunset (sun low in the west) or the starry night */
+let sunsetSky: THREE.Texture | null = null;
+export function westernBackground(mode: WMode) {
+  if (mode === "night") return westernSky("night");
+  sunsetSky ??= sunsetBackground("western-sunset", WESTERN_SUNSET, 1536, 768);
+  return sunsetSky;
+}
+
 export const WesternScene = memo(function WesternScene({
   layout,
-  night,
+  time,
 }: {
   layout: WesternLayout;
-  night: boolean;
+  time: TimeOfDay;
 }) {
   const { gl, scene } = useThree();
-  const mode: WMode = westernMode(night);
+  const mode: WMode = time;
   const look = WESTERN_LOOK[mode];
   const built = useMemo(() => {
     const t0 = performance.now();
@@ -223,7 +236,7 @@ export const WesternScene = memo(function WesternScene({
         polygonOffsetFactor: -2,
       }),
       disc: new THREE.MeshBasicMaterial({
-        map: discTexture(),
+        map: sunTexture(),
         transparent: true,
         depthWrite: false,
         fog: false,
@@ -253,7 +266,7 @@ export const WesternScene = memo(function WesternScene({
   // reflection env maps: a small PMREM of each sky
   const env = useMemo(() => {
     const pm = new THREE.PMREMGenerator(gl);
-    const sunset = pm.fromEquirectangular(westernSky("sunset"));
+    const sunset = pm.fromEquirectangular(westernBackground("sunset"));
     const nightRT = pm.fromEquirectangular(westernSky("night"));
     pm.dispose();
     return { sunset, night: nightRT };
@@ -277,8 +290,11 @@ export const WesternScene = memo(function WesternScene({
     nightK.value = look.windows;
     mats.glow.color.setScalar(look.flames);
     mats.flame.color.set("#ffa040").multiplyScalar(look.flames);
+    // the directional haze warms toward our sun, not the city's
+    const d = SKY_DIR[mode];
+    skyFog.fogSunDir.value.set(d[0], d[1], d[2]).normalize();
     const prev = scene.background;
-    scene.background = westernSky(mode);
+    scene.background = westernBackground(mode);
     return () => {
       scene.background = prev;
     };
@@ -449,7 +465,8 @@ export const WesternScene = memo(function WesternScene({
 
 function DiscTint({ mat, color }: { mat: THREE.MeshBasicMaterial; color: string }) {
   useEffect(() => {
-    mat.color.set(color);
+    // unlit and past 1.0: the core burns brighter than the glowing sky around it
+    mat.color.set(color).multiplyScalar(1.35);
   }, [mat, color]);
   return null;
 }
@@ -500,9 +517,9 @@ const SUN_DIST = 900;
  * snapped to shadow texels so edges don't shimmer. The low sunset sun throws shadows the
  * length of a building lot down Main Street. Slow frames switch shadows off automatically.
  */
-export function WesternSun({ night }: { night: boolean }) {
+export function WesternSun({ time }: { time: TimeOfDay }) {
   const ref = useRef<THREE.DirectionalLight>(null);
-  const mode = westernMode(night);
+  const mode = time;
   const look = WESTERN_LOOK[mode];
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);

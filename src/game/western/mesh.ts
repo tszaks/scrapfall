@@ -223,6 +223,26 @@ function gable(G: Geo, layer: number, ax: number, az: number, bx: number, bz: nu
   G.v(mx, apex, mz, nx, 0, nz, len / 2 / tu, apex / tv);
 }
 
+/** append a three.js geometry through a matrix, with planar UVs (metres / tile) from the
+ * transformed position, so rocks and boulders pick up the layer's texture detail */
+export function addUV(G: Geo, g: THREE.BufferGeometry, m: THREE.Matrix4, layer: number) {
+  const [tu, tv] = TILE_M[layer] ?? [4, 4];
+  const src = g.index ? g.toNonIndexed() : g;
+  const pos = src.getAttribute("position");
+  const nor = src.getAttribute("normal");
+  const nm = new THREE.Matrix3().getNormalMatrix(m);
+  const p = new THREE.Vector3();
+  const q = new THREE.Vector3();
+  G.mat(layer);
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i).applyMatrix4(m);
+    q.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
+    const flat = Math.abs(q.y) > 0.8;
+    G.v(p.x, p.y, p.z, q.x, q.y, q.z, flat ? p.x / tu : (p.x + p.z) / tu, flat ? p.z / tu : p.y / tv);
+  }
+  if (src !== g) src.dispose();
+}
+
 // ---------------------------------------------------------------------------------------
 // buildings
 
@@ -394,17 +414,43 @@ function building(b: WBld, r: () => number): BGeo {
   wallP(G, plainL, x1, 0, x1, z0, 0, H); // right side
   wallP(G, plainL, x1, z0, x0, z0, 0, H); // back
   wallP(G, plainL, x0, z0, x0, 0, 0, H); // left side
-  // a few side windows on houses and the back of stores (facade strip on the side walls)
-  if (b.t === "house" || b.t === "ranch" || b.t === "adobe" || b.t === "hotel" || b.t === "station") {
-    G.mat(facL, seed, lit + AO);
-    const inset = 0.02;
-    const segW = Math.min(D - 2, (MODULE_W[facL] ?? 3) * 2);
-    wallF(G, facL, x1 + inset, -1 - (D - 2 - segW) / 2, x1 + inset, -1 - (D - 2 - segW) / 2 - segW, STOREY, H, 1);
-    wallF(G, facL, x0 - inset, -1 - (D - 2 - segW) / 2 - segW, x0 - inset, -1 - (D - 2 - segW) / 2, STOREY, H, 1);
-    if (b.storeys === 1) {
-      // single storey: use the upper-window row mapped onto the ground floor
-      G.quad(x1 + inset, 0.9, -D / 2 + 1.2, x1 + inset, 0.9, -D / 2 - 1.2, x1 + inset, 2.6, -D / 2 - 1.2, x1 + inset, 2.6, -D / 2 + 1.2, [0.25 + 0.03, 0.25 + 0.05, 0.5 - 0.03, 0.5 - 0.02]);
-      G.quad(x0 - inset, 0.9, -D / 2 - 1.2, x0 - inset, 0.9, -D / 2 + 1.2, x0 - inset, 2.6, -D / 2 + 1.2, x0 - inset, 2.6, -D / 2 - 1.2, [0.25 + 0.03, 0.25 + 0.05, 0.5 - 0.03, 0.5 - 0.02]);
+  // windows on the side and back walls, one per bay and storey, cut from the facade tile's
+  // upper-storey row (so they match the front)
+  {
+    const winCol = (k: number) => (b.mat === "barn" ? (k % 2 ? 3 : 0) : (k + uOff) % FAC_COLS);
+    const wallWindows = (ax: number, az: number, bx: number, bz: number) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      const nWin = Math.floor((len - 1.2) / 3.6);
+      if (nWin < 1) return;
+      const ux = (bx - ax) / len;
+      const uz = (bz - az) / len;
+      const nx = -uz * 0.03;
+      const nz = ux * 0.03;
+      G.col(paint, 1).mat(facL, seed, lit + AO);
+      for (let st = 0; st < b.storeys; st++) {
+        const y0 = st * STOREY + 0.8;
+        const y1 = y0 + 2.0;
+        for (let k = 0; k < nWin; k++) {
+          const tc = ((k + 0.5) / nWin) * len;
+          const c = winCol(k + st);
+          const uv = [c * 0.25 + 0.05, 0.295, c * 0.25 + 0.2, 0.465] as const;
+          const pa = [ax + ux * (tc - 0.75) + nx, az + uz * (tc - 0.75) + nz] as const;
+          const pb = [ax + ux * (tc + 0.75) + nx, az + uz * (tc + 0.75) + nz] as const;
+          wallq(G, pa[0], pa[1], pb[0], pb[1], y0, y1, uv);
+        }
+      }
+    };
+    wallWindows(x1, 0, x1, z0);
+    wallWindows(x1, z0, x0, z0);
+    wallWindows(x0, z0, x0, 0);
+    // a painted advertisement on one tall side wall of the bigger stores
+    if (b.storeys >= 2 && D >= 14 && b.sign >= 0 && b.mat !== "adobe") {
+      const onRight = (b.seed & 1) === 0;
+      const xw = onRight ? x1 + 0.05 : x0 - 0.05;
+      const za = onRight ? -1.2 : -D + 1.2;
+      const zb = onRight ? -D + 1.2 : -1.2;
+      G.col("#ffffff", 0.92).mat(WL.SIGNS, 0, 0);
+      wallq(G, xw, za, xw, zb, H - 2.3, H - 0.5, signUV(b.sign));
     }
   }
   // corner boards and a sill plate
@@ -438,10 +484,12 @@ function building(b: WBld, r: () => number): BGeo {
     G.col(paint, 1).mat(plainL, seed, AO);
     gable(G, plainL, x1, z0, x0, z0, H, ridgeY); // back gable
     if (!b.ff) gable(G, plainL, x0, 0, x1, 0, H, ridgeY); // front gable when there is no false front
-    // fascia
+    // fascia boards on the gable ends (the front one hides behind a false front)
     G.col(DARK_WOOD);
-    beam(G, x1 + eave, H - eave * pitch, 0.3, 0, ridgeY + 0.05, 0.3, 0.16);
-    beam(G, x0 - eave, H - eave * pitch, 0.3, 0, ridgeY + 0.05, 0.3, 0.16);
+    for (const fz of b.ff ? [z0 - eave] : [0.3, z0 - eave]) {
+      beam(G, x1 + eave, H - eave * pitch, fz, 0, ridgeY + 0.05, fz, 0.16);
+      beam(G, x0 - eave, H - eave * pitch, fz, 0, ridgeY + 0.05, fz, 0.16);
+    }
   } else if (b.roof === "shed") {
     ridgeY = H + 0.9;
     G.col(roofL === WL.TIN ? "#c8c2b8" : "#ffffff", 1);
@@ -1084,8 +1132,8 @@ function templates() {
       pos.setXYZ(i, x * k * 1.05, Math.max(-0.2, y) * k * 0.8, z * k);
     }
     ico.computeVertexNormals();
-    d.col("#c88a64").mat(WL.ROCK);
-    d.add(ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0));
+    d.col("#e0b090");
+    addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0), WL.ROCK);
     ico.dispose();
   });
   make("deadtree", (d) => {
@@ -1348,13 +1396,13 @@ function templates() {
   make("arch", (d) => {
     // a natural sandstone arch: two legs and a curved span
     const ico = new THREE.IcosahedronGeometry(1, 1);
-    d.col("#c46a3e").mat(WL.ROCK);
+    d.col("#f0b890");
     for (let i = 0; i <= 12; i++) {
       const a = (i / 12) * Math.PI;
       const x = Math.cos(a) * 9;
       const y = Math.sin(a) * 11;
       const s = i === 0 || i === 12 ? 3.2 : 2.2 - Math.sin(a) * 0.6;
-      d.add(ico, new THREE.Matrix4().makeTranslation(x, y + 1, 0).multiply(new THREE.Matrix4().makeScale(s, s * 0.9, s * 1.1)));
+      addUV(d, ico, new THREE.Matrix4().makeTranslation(x, y + 1, 0).multiply(new THREE.Matrix4().makeScale(s, s * 0.9, s * 1.1)), WL.ROCK);
     }
     ico.dispose();
   });
@@ -1380,12 +1428,20 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     return rock[ci * cells + cj]!;
   };
   for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      hv[i * n + j] = Math.min(cellH(i - 1, j - 1), cellH(i, j - 1), cellH(i - 1, j), cellH(i, j));
+  // crumbly faces: noise on the steep parts only, so mesa tops and ledges stay flat
+  const raw = hv.slice();
+  const R = (i: number, j: number) => raw[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
+  for (let i = 0; i < n; i++)
     for (let j = 0; j < n; j++) {
-      const h = Math.min(cellH(i - 1, j - 1), cellH(i, j - 1), cellH(i - 1, j), cellH(i, j));
+      const h = raw[i * n + j]!;
+      if (h <= 0) continue;
+      const steep = Math.max(Math.abs(R(i + 1, j) - h), Math.abs(R(i - 1, j) - h), Math.abs(R(i, j + 1) - h), Math.abs(R(i, j - 1) - h));
+      const k = Math.min(1, steep / 5);
       const x = -half + i * 2;
       const z = -half + j * 2;
-      // crumbly ledges: small noise on everything above the foot
-      hv[i * n + j] = h > 0 ? h + (fbm(x * 0.21, z * 0.21, 91) - 0.5) * Math.min(3, h * 0.25) : 0;
+      hv[i * n + j] = h + (fbm(x * 0.21, z * 0.21, 91) - 0.5) * Math.min(3.5, h * 0.25) * k;
     }
   const H = (i: number, j: number) => hv[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
   const _n = new THREE.Vector3();
@@ -1405,30 +1461,45 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       const z0 = -half + j * 2;
       const G = chunkAt(x0 + 1, z0 + 1).main;
       G.mat(WL.ROCK, 0.5, 0);
-      const vtx = (ii: number, jj: number, h: number) => {
+      const vtx = (ii: number, jj: number, h: number, top: boolean) => {
         const x = -half + ii * 2;
         const z = -half + jj * 2;
         const nn = norm(ii, jj);
-        // darker at the foot and in the clefts, sun-bleached on the tops
+        if (top) {
+          // flat mesa tops and ledges: red-brown grit, not strata
+          const k = 0.55 + Math.min(0.2, h / 90);
+          G.colLinear(k * 1.05, k * 0.62, k * 0.46);
+          G.v(x, h, z, nn.x, nn.y, nn.z, x / 9, z / 9);
+          return;
+        }
+        // darker at the foot and in the clefts, sun-bleached higher up
         const k = 0.72 + Math.min(0.32, h / 60) + nn.y * 0.1;
         G.colLinear(k * 1.0, k * 0.93, k * 0.88);
         G.v(x, h, z, nn.x, nn.y, nn.z, (x + z * 0.7) / tu, h / tv);
       };
+      const tri = (a: [number, number, number], b: [number, number, number], c: [number, number, number]) => {
+        // face normal decides the material for the whole triangle (layers can't blend)
+        const ux = (b[0] - a[0]) * 2;
+        const uy = b[2] - a[2];
+        const uz = (b[1] - a[1]) * 2;
+        const wx = (c[0] - a[0]) * 2;
+        const wy = c[2] - a[2];
+        const wz = (c[1] - a[1]) * 2;
+        const ny = uz * wx - ux * wz;
+        const nl = Math.hypot(uy * wz - uz * wy, ny, ux * wy - uy * wx) || 1;
+        const top = Math.abs(ny) / nl > 0.72 && Math.min(a[2], b[2], c[2]) > 1.2;
+        G.mat(top ? WL.SAND : WL.ROCK, 0.5, 0);
+        vtx(a[0], a[1], a[2], top);
+        vtx(b[0], b[1], b[2], top);
+        vtx(c[0], c[1], c[2], top);
+      };
       // split along the flatter diagonal
       if (Math.abs(h00 - h11) < Math.abs(h10 - h01)) {
-        vtx(i, j, h00);
-        vtx(i, j + 1, h01);
-        vtx(i + 1, j + 1, h11);
-        vtx(i, j, h00);
-        vtx(i + 1, j + 1, h11);
-        vtx(i + 1, j, h10);
+        tri([i, j, h00], [i, j + 1, h01], [i + 1, j + 1, h11]);
+        tri([i, j, h00], [i + 1, j + 1, h11], [i + 1, j, h10]);
       } else {
-        vtx(i, j, h00);
-        vtx(i, j + 1, h01);
-        vtx(i + 1, j, h10);
-        vtx(i + 1, j, h10);
-        vtx(i, j + 1, h01);
-        vtx(i + 1, j + 1, h11);
+        tri([i, j, h00], [i, j + 1, h01], [i + 1, j, h10]);
+        tri([i + 1, j, h10], [i, j + 1, h01], [i + 1, j + 1, h11]);
       }
     }
   return hv;
@@ -1468,15 +1539,17 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
       const x0 = -R + a * S;
       const z0 = -R + b * S;
       if (x0 >= -half && x0 + S <= half && z0 >= -half && z0 + S <= half) continue;
+      const rockTri = Math.max(Hs(a, b), Hs(a + 1, b), Hs(a, b + 1), Hs(a + 1, b + 1)) > 6;
+      G.mat(rockTri ? WL.ROCK : WL.SAND, 0.3, 0);
       const v = (aa: number, bb: number) => {
         const x = -R + aa * S;
         const z = -R + bb * S;
         const h = Hs(aa, bb);
         _n.set(Hs(aa - 1, bb) - Hs(aa + 1, bb), S * 2, Hs(aa, bb - 1) - Hs(aa, bb + 1)).normalize();
-        const k = h > 6 ? 0.85 + Math.min(0.2, h / 200) : 0.95;
-        if (h > 6) G.mat(WL.ROCK, 0.3, 0).colLinear(k, k * 0.92, k * 0.86);
-        else G.mat(WL.SAND, 0.3, 0).colLinear(k, k * 0.97, k * 0.94);
-        G.v(x, h, z, _n.x, _n.y, _n.z, h > 6 ? (x + z * 0.7) / tu : x / 9, h > 6 ? h / tv : z / 9);
+        const k = rockTri ? 0.85 + Math.min(0.2, h / 200) : 0.95;
+        if (rockTri) G.colLinear(k, k * 0.92, k * 0.86);
+        else G.colLinear(k, k * 0.97, k * 0.94);
+        G.v(x, h, z, _n.x, _n.y, _n.z, rockTri ? (x + z * 0.7) / tu : x / 9, rockTri ? h / tv : z / 9);
       };
       v(a, b);
       v(a, b + 1);
@@ -1696,6 +1769,13 @@ function minePortal(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGe
 
 // ---------------------------------------------------------------------------------------
 
+/** helpers the blockade builder shares */
+export const geoKit = { boxP, boxC, oboxP, beam, cylP, slope, signBoard };
+/** a prop template (local space, base centre at the origin, +z front) */
+export function propTemplate(k: PKey) {
+  return templates()[k] ?? null;
+}
+
 export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   const { half } = L;
   const E = half;
@@ -1752,7 +1832,11 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     tint.setRGB(k, k, k);
     const big = p.k === "watertower" || p.k === "windmill" || p.k === "arch" || p.k === "covered" || p.k === "wagon" || p.k === "well" || p.k === "tank" || p.k === "pole" || p.k === "saguaro" || p.k === "outhouse";
     const target = big ? ch.main : ch.detail;
-    target.stamp(t.d, p.x, y, p.z, p.rot, p.s, p.s, p.s, tint);
+    // fences and hitching rails stretch along their length; everything else scales evenly
+    const stretch = p.k === "fence" ? 2.5 : p.k === "hitch" ? 1.1 : 0;
+    const sx = stretch ? p.s / stretch : p.s;
+    const sy = stretch ? 1 : p.s;
+    target.stamp(t.d, p.x, y, p.z, p.rot, sx, sy, sy, tint);
     if (t.g) ch.glow.stamp(t.g, p.x, y, p.z, p.rot, p.s, p.s, p.s);
     if (p.k === "lantern" || p.k === "streetlamp") {
       ch.pools.col("#ffb060").mat(0, 0, 0);

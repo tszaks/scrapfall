@@ -5,14 +5,25 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
-  setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_SOLO, CITY_COOP,
+  setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
 } from "./level";
 
 import { THEMES, type Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
-import { Minimap, type MapFeed } from "./Minimap";
+import { CURB } from "./cityLayout";
+import { CityBlockades } from "./cityBlockades";
+import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./soloBounds";
+import type { WesternLayout } from "./western/layout";
+import { WesternScene, WesternSun } from "./western/Western";
+import { WesternTrain } from "./western/Train";
+import { WesternWeather } from "./western/Weather";
+import { WesternBlockades } from "./western/Blockades";
+import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
+import { DesperadoModel, IronMarshalParts, desperadoDir, desperadoTick, marshalTick } from "./western/enemies";
+import { westernMinimap } from "./western/minimap";
+import { Minimap, cityMinimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { Atmosphere } from "./Atmosphere";
 import { worldLook, type TimeOfDay } from "./lighting";
@@ -522,6 +533,7 @@ function BossBody({ theme }: { theme: Theme }) {
         <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
         <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
       </>)}
+      {b.shape === "marshal" && <IronMarshalParts b={b} />}
       {b.shape === "drake" && (<>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
@@ -683,6 +695,7 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
         <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
       </group>)}
+      {sp.type === "desperado" && <DesperadoModel sp={sp} data={data} />}
       {sp.type === "bile" && (<group>
         <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
         <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
@@ -1250,6 +1263,8 @@ function World({
   onCrate,
   onDeploys,
   city,
+  western,
+  gaps,
   seed,
   time,
   ability,
@@ -1288,6 +1303,10 @@ function World({
   onCrate: (kind: CrateKind) => void;
   onDeploys: (d: { turret: number; mines: number }) => void;
   city: CityLayout | null;
+  /** Dry Gulch, the western big map */
+  western: WesternLayout | null;
+  /** solo blockade openings on a big map (empty in co-op) */
+  gaps: Gap[];
   seed: number;
   time: TimeOfDay;
   ability: AbilityId;
@@ -1369,15 +1388,24 @@ function World({
     c.updateProjectionMatrix();
   }, [fov, camera]);
   const look3 = worldLook(theme, time, ARENA);
+  /** the big real-scale maps (the city, Dry Gulch) share spawning, recycling and the minimap */
+  const big = city ?? western;
+  // solo on the city: traffic keeps to the streets inside the blockades (it turns back at
+  // the last crossing instead of driving into the barricades)
+  const trafficCity = useMemo(() => {
+    if (!city || gaps.length === 0) return null;
+    const inside = (r: CityLayout["roadX"][number]) => Math.abs(r.c) + CURB[r.cls] + 6 < PLAY_HALF;
+    return { ...city, roadX: city.roadX.filter(inside), roadZ: city.roadZ.filter(inside) };
+  }, [city, gaps]);
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
-      const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
+      const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
-  }, [gl, scene, camera, city, remotes, enemies]);
+  }, [gl, scene, camera, city, western, gaps, remotes, enemies]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1591,6 +1619,7 @@ function World({
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
         else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
+        else if (m.type === "pull") knock.current = { x: Number(m.kx) || 0, z: Number(m.kz) || 0, shake: 0.5 };
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1600,8 +1629,8 @@ function World({
 
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
-    camera.position.set(city ? city.spawn.x : 0, EYE, city ? city.spawn.z : 0);
-    look.current = { yaw: 0, pitch: city ? 0.12 : 0 };
+    camera.position.set(big ? big.spawn.x : 0, EYE, big ? big.spawn.z : 0);
+    look.current = { yaw: western ? western.spawnYaw : 0, pitch: city ? 0.12 : 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -1672,9 +1701,12 @@ function World({
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
   const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)];
   const spot = (rMin: number, rMax: number, hidden: boolean) =>
-    city
+    big
       ? spawnNear(blocks, rand, livePlayers(), rMin, rMax, hidden, 1, navOpen)
       : randomSpawn(blocks, rand);
+
+  /** where the boss appears: Dry Gulch's Iron Marshal steps off his train at the platform */
+  const bossSpot = () => (western ? trainBossSpot() : spot(25, 40, false));
 
   const placePickup = (gun: Weapon) => {
     const p = spot(8, 26, false);
@@ -1816,7 +1848,7 @@ function World({
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
     // the real-scale city hides enemies behind blocks and streets, so it sends a bigger crowd
-    const enemyMul = (1 + 0.6 * extra) * (city ? 1.75 : 1);
+    const enemyMul = (1 + 0.6 * extra) * (big ? 1.75 : 1);
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
@@ -1828,6 +1860,8 @@ function World({
       .sort((a) => (a === "boss" ? -1 : 0))
       .slice(0, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+    // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
+    const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
 
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
@@ -1838,7 +1872,7 @@ function World({
         e.alive = false;
         return;
       }
-      const p = kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+      const p = kind === "boss" ? bossSpot() : spot(25, 45, true);
       Object.assign(e, {
         kind,
         x: p.x,
@@ -1857,9 +1891,9 @@ function World({
         burnTick: 0,
       });
       e.elite = 0;
-      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
+      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay + (kind === "boss" ? bossTrain : 0) };
       // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag
-      delay += i < 2 ? 0.4 : city ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
+      delay += i < 2 ? 0.4 : big ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
 
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
@@ -1917,7 +1951,7 @@ function World({
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     blocked(blocks, p.x, p.z, 0.05) ||
-    (city !== null && hitsTraffic(p.x, p.y, p.z));
+    (big !== null && hitsTraffic(p.x, p.y, p.z));
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -2020,7 +2054,7 @@ function World({
     cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
     // minimap feed (the HUD reads it)
-    if (city) {
+    if (big) {
       const mf = mapFeed.current;
       mf.x = cam.position.x;
       mf.z = cam.position.z;
@@ -2372,10 +2406,10 @@ function World({
       pending.current.forEach((pd, i) => {
         if (!pd) return;
         pd.t -= delta;
-        if (city && !pd.placed && pd.t <= MARK_TIME) {
+        if (big && !pd.placed && pd.t <= MARK_TIME) {
           // late arrivals appear near wherever the squad is now, not where it was
           pd.placed = true;
-          const q = enemies[i]!.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+          const q = enemies[i]!.kind === "boss" ? bossSpot() : spot(25, 45, true);
           pd.x = q.x;
           pd.z = q.z;
         }
@@ -2437,14 +2471,14 @@ function World({
         const key = toNav(t.x) * 1000 + toNav(t.z);
         used.add(key);
         if (!fields.current.has(key))
-          fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z), city ? 70 : Infinity));
+          fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z), big ? 70 : Infinity));
       }
       if (fields.current.size > 12) {
         fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
       }
 
       // the city is huge: enemies stranded far from every player get recycled nearby
-      if (city) {
+      if (big) {
         recycleT.current -= delta;
         if (recycleT.current <= 0) {
           recycleT.current = 1;
@@ -2452,7 +2486,8 @@ function World({
             if (!e.alive) continue;
             let dmin = Infinity;
             for (const t of targets) dmin = Math.min(dmin, Math.hypot(t.x - e.x, t.z - e.z));
-            if (dmin > (e.kind === "boss" ? 70 : 80)) {
+            // (the Iron Marshal gets a head start from the station before he's brought closer)
+            if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
               const q = e.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
               e.x = q.x;
               e.z = q.z;
@@ -2538,6 +2573,7 @@ function World({
           if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
           if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
           if (spType === "bile") dir = d > 5 ? 1 : 0;
+          if (spType === "desperado") dir = desperadoDir(e, d);
         }
         if (e.swing > 0) dir = 0;
         const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
@@ -2649,8 +2685,24 @@ function World({
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
           if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          if (spType === "desperado") desperadoTick(e, d, delta, ready, aim);
         }
-        if (e.kind === "boss") {
+        if (e.kind === "boss" && theme.boss.shape === "marshal") {
+          // THE IRON MARSHAL: Gatling bursts and a lasso that drags you in
+          const aimB = (y: number, spd: number, spread: number, nb: number, dmg: number, life = 3.5, size = 0.2) => {
+            const from = new THREE.Vector3(e.x + (dz / d) * 1.4, y, e.z - (dx / d) * 1.4);
+            for (let s = 0; s < nb; s++) {
+              const a = Math.atan2(dx, dz) + (Math.random() - 0.5) * spread * 2;
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
+              fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 1.8), vel.multiplyScalar(spd), life, dmg, "", size);
+            }
+          };
+          marshalTick(e, d, dx, dz, delta, aimB, (kx, kz) => {
+            if (target.id === null) knock.current = { x: kx, z: kz, shake: 0.6 };
+            else n?.sendTo(target.id, { type: "pull", kx, kz });
+            hurtTarget(target, 1);
+          });
+        } else if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
@@ -2825,21 +2877,23 @@ function World({
 
   return (
     <>
-      <Atmosphere theme={theme} time={time} look={look3} city={!!city} />
+      <Atmosphere theme={theme} time={time} look={look3} city={!!big} />
       <fog attach="fog" args={[look3.fogColor, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
       {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color={look3.ambientColor} />}
       {time === "night" && (
         <Stars
-          radius={city ? 900 : 90}
-          depth={city ? 200 : 20}
-          count={city ? 3000 : 1500}
-          factor={city ? 26 : 4}
+          radius={big ? 900 : 90}
+          depth={big ? 200 : 20}
+          count={big ? 3000 : 1500}
+          factor={big ? 26 : 4}
           fade
           speed={0.3}
         />
       )}
-      {city ? (
+      {western ? (
+        <WesternSun key="sun-western" time={time} />
+      ) : city ? (
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
@@ -2861,7 +2915,15 @@ function World({
       {city ? (
         <>
           <CityScene city={city} time={time} />
-          <CityTraffic city={city} seed={seed} time={time} link={traffic} />
+          <CityTraffic city={trafficCity ?? city} seed={seed} time={time} link={traffic} />
+          {gaps.length > 0 && <CityBlockades city={city} gaps={gaps} time={time} />}
+        </>
+      ) : western ? (
+        <>
+          <WesternScene layout={western} time={time} />
+          <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
+          <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
+          {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
       ) : (
         <Level blocks={blocks} theme={theme} />
@@ -3261,17 +3323,28 @@ export function Game() {
       { x: 0, z: 0, kind: "crate", color: "#9fe8ff", active: false },
     ],
   });
-  const { blocks, enemies, rand, theme, city } = useMemo(() => {
+  const { blocks, enemies, rand, theme, city, western, gaps } = useMemo(() => {
     // the map decides the layout, so pick the theme first (still purely from the shared seed)
     const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
-    // co-op gets a bigger field; the real-scale city is far bigger and routes on 4 m nav cells
-    if (theme.blockShape === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    // co-op gets a bigger field. The big real-scale maps (the city, Dry Gulch) always build
+    // the full co-op map and route on 4 m nav cells; solo fences play into the middle 70%
+    // with in-world blockades (soloBounds.ts), and the rest stays on screen as backdrop.
+    const bigMap = theme.blockShape === "city" || theme.blockShape === "western";
+    if (bigMap) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    const level = generateLevel(seed, theme.blockShape === "city" ? "city" : "scatter");
+    const level = generateLevel(
+      seed,
+      theme.blockShape === "city" ? "city" : theme.blockShape === "western" ? "western" : "scatter",
+    );
+    let gaps: Gap[] = [];
+    if (bigMap && !coop) {
+      gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
+      level.blocks = level.blocks.concat(sealGaps(gaps));
+    }
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
-    if (!level.city) {
+    if (!level.city && !level.western) {
       level.blocks = level.blocks.filter(
         (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
       );
@@ -3290,8 +3363,14 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city };
+    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city, western: level.western, gaps };
   }, [seed, coop, mapChoice]);
+  // the HUD radar for the big maps (solo dims everything beyond the blockades)
+  const miniSrc = useMemo(
+    () =>
+      city ? cityMinimap(city, blocks, PLAY_HALF) : western ? westernMinimap(western, blocks, PLAY_HALF) : null,
+    [city, western, blocks],
+  );
 
 
   useEffect(() => {
@@ -3549,6 +3628,8 @@ export function Game() {
           }}
           onDeploys={setDeploys}
           city={city}
+          western={western}
+          gaps={gaps}
           seed={seed}
           time={time}
           ability={ability}
@@ -3689,11 +3770,10 @@ export function Game() {
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
           </div>
         )}
-        {city && started && !ended && (
+        {miniSrc && started && !ended && (
           <div className="absolute bottom-5 right-5">
             <Minimap
-              city={city}
-              blocks={blocks}
+              src={miniSrc}
               feed={mapFeed}
               enemies={enemies}
               remotes={remotes}

@@ -15,10 +15,10 @@ export type Theme = {
   /** "city" swaps the random scatter for a street grid with skyscrapers (see cityLayout.ts). */
   blockShape:
     | "monument" | "crystal" | "tree" | "basalt" | "butte"
-    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city";
+    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "western";
   boss: {
     name: string;
-    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
+    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "marshal";
     body: string;
     limb: string;
     eye: string;
@@ -30,7 +30,7 @@ export type Theme = {
   /** Map-exclusive bonus enemy that joins waves on top of the regular roster. */
   special: {
     name: string;
-    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile";
+    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "desperado";
     body: string;
     accent: string;
     glow: string;
@@ -267,5 +267,33 @@ export const THEMES: Theme[] = [
       accent: "#ff4fa0",
       glow: "#3affd8",
     },
+  },
+  {
+    // a real-scale 1880s railroad boomtown (western/layout.ts)
+    name: "Dry Gulch",
+    sky: "#f08a4a",
+    ground: "#c9a070",
+    grid: ["#b8905e", "#c49a68"],
+    blocks: ["#b8563f", "#a8845a", "#8a6a48"],
+    wall: "#6a3a20",
+    hemi: ["#ffe0b8", "#7a4a34"],
+    enemy: {
+      drifter: { body: "#c8452a", emissive: "#3a0e06", eye: "#ffe0a0" },
+      brute: { body: "#4a3a2e", head: "#3a2c22", eye: "#ffb03a", club: "#2a1e16", clubHead: "#8a8a86" },
+      shooter: { body: "#e8dcc4", barrel: "#2a2420", eye: "#e0462a" },
+    },
+    enemyBullet: "#ffcf4a",
+    blockShape: "western",
+    boss: {
+      name: "THE IRON MARSHAL",
+      shape: "marshal",
+      body: "#5a5c62",
+      limb: "#2a2826",
+      eye: "#ff5a2a",
+      weapon: "#1a1a1c",
+      glow: "#ffc840",
+    },
+    hazard: { name: "DUST STORM", slip: 0.3 },
+    special: { name: "DESPERADO", type: "desperado", body: "#b8452a", accent: "#4a3a2e", glow: "#ffd24a" },
   },
 ];

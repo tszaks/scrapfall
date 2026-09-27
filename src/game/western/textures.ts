@@ -12,6 +12,8 @@
 //   night RGB = lamp-lit window colour,                                  A = window mask
 import * as THREE from "three";
 
+import type { TimeOfDay } from "../lighting";
+
 export const TEX = 512;
 export const FAC_COLS = 4;
 export const FAC_ROWS = 4;
@@ -84,9 +86,9 @@ export const TILE_M: Record<number, [number, number]> = {
   [WL.IRON]: [2, 2],
   [WL.PAINT]: [2, 2],
 };
-/** sign atlas: 2 columns x 12 rows of painted boards */
+/** sign atlas: 2 columns x 14 rows of painted boards */
 export const SIGN_COLS = 2;
-export const SIGN_ROWS = 12;
+export const SIGN_ROWS = 14;
 
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -308,7 +310,7 @@ function trim(c: Ctx, x: number, y: number, w: number, h: number, t: number, col
   rect(c, col, x + w, y, t, h);
   rect(c, "rgba(0,0,0,0.25)", x - t, y + h + t * 1.4, w + t * 2, 2);
 }
-function sash(P: Painter, col: number, row: number, opts: { shutters?: string; trimCol?: string; lit?: number } = {}) {
+function sash(P: Painter, col: number, row: number, opts: { shutters?: string | undefined; trimCol?: string; lit?: number } = {}) {
   const x = col * MW + MW * 0.28;
   const w = MW * 0.44;
   const y = (FAC_ROWS - 1 - row) * SH + SH * 0.18;
@@ -716,7 +718,13 @@ const PAINT: Record<number, (P: Painter) => void> = {
     words.forEach((word, i) => {
       const x = (i % SIGN_COLS) * cw;
       const y = Math.floor(i / SIGN_COLS) * ch;
-      const [bg, fg, sh] = palettes[(i * 5 + 1) % palettes.length]!;
+      const warn = word === "ROAD CLOSED" || word === "BRIDGE OUT" || word === "KEEP OUT";
+      const [bg, fg, sh] =
+        word === "WANTED"
+          ? (["#e8dcb8", "#2a1a10", "#a89878"] as const)
+          : warn
+            ? (["#a82418", "#f6ecd8", "#3a0a06"] as const)
+            : palettes[(i * 5 + 1) % palettes.length]!;
       rect(d, bg, x, y, cw, ch);
       // board grain and a painted border
       for (let g = 0; g < 14; g++) rect(d, "rgba(0,0,0,0.12)", x, y + r() * ch, cw, 1);
@@ -821,10 +829,10 @@ const PAINT: Record<number, (P: Painter) => void> = {
   },
   [WL.MUD]: (P) => {
     const { d, r } = P;
-    rect(d, "#c9a680", 0, 0, TEX, TEX);
+    rect(d, "#dcc4a0", 0, 0, TEX, TEX);
     // cracked mud polygons
     const pts: [number, number][] = [];
-    for (let i = 0; i < 80; i++) pts.push([r() * TEX, r() * TEX]);
+    for (let i = 0; i < 60; i++) pts.push([r() * TEX, r() * TEX]);
     const img = d.getImageData(0, 0, TEX, TEX);
     const data = img.data;
     for (let y = 0; y < TEX; y += 1)
@@ -844,7 +852,7 @@ const PAINT: Record<number, (P: Painter) => void> = {
         }
         const edge = Math.sqrt(b2) - Math.sqrt(b1);
         const o = (y * TEX + x) * 4;
-        const k = edge < 2 ? 0.55 : edge < 4 ? 0.85 : 1 - Math.min(0.12, Math.sqrt(b1) / 400);
+        const k = edge < 1.5 ? 0.72 : edge < 3 ? 0.9 : 1 - Math.min(0.08, Math.sqrt(b1) / 500);
         data[o] = data[o]! * k;
         data[o + 1] = data[o + 1]! * k;
         data[o + 2] = data[o + 2]! * k;
@@ -976,7 +984,7 @@ export function signUV(i: number) {
 // ---------------------------------------------------------------------------------------
 // Sky: sunset (the hero) and night, as equirectangular canvases.
 // ---------------------------------------------------------------------------------------
-export type WMode = "sunset" | "night";
+export type WMode = TimeOfDay;
 /** direction TOWARD the sun (sunset) or the moon (night) */
 export const SKY_DIR: Record<WMode, [number, number, number]> = {
   // low in the west, a touch south: it hangs just beside the church's bell tower
@@ -994,7 +1002,8 @@ export function westernSky(mode: WMode) {
   const [c, g] = canvas(W, H);
   const r = rng(mode === "sunset" ? 17 : 23);
   const [sx, sy, sz] = SKY_DIR[mode];
-  const su = (Math.atan2(sx, -sz) / (Math.PI * 2) + 0.5) * W;
+  // three.js equirect convention: u = atan2(z, x)
+  const su = (Math.atan2(sz, sx) / (Math.PI * 2) + 0.5) * W;
   const sv = (0.5 - Math.asin(sy) / Math.PI) * H;
   const horizon = H * 0.5;
   if (mode === "sunset") {
@@ -1127,6 +1136,26 @@ export function discTexture() {
   discTex = new THREE.CanvasTexture(c);
   discTex.colorSpace = THREE.SRGBColorSpace;
   return discTex;
+}
+
+let sunTex: THREE.CanvasTexture | null = null;
+/** the big setting sun: a hot pale-gold core, a limb-darkened orange rim, a red halo */
+export function sunTexture() {
+  if (sunTex) return sunTex;
+  const [c, g] = canvas(256, 256);
+  const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, "rgba(255,252,232,1)");
+  gr.addColorStop(0.2, "rgba(255,236,178,1)");
+  gr.addColorStop(0.3, "rgba(255,190,100,1)");
+  gr.addColorStop(0.32, "rgba(255,150,70,0.75)");
+  gr.addColorStop(0.45, "rgba(255,120,60,0.28)");
+  gr.addColorStop(0.7, "rgba(255,100,60,0.08)");
+  gr.addColorStop(1, "rgba(255,90,60,0)");
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 256, 256);
+  sunTex = new THREE.CanvasTexture(c);
+  sunTex.colorSpace = THREE.SRGBColorSpace;
+  return sunTex;
 }
 
 let moonTex: THREE.CanvasTexture | null = null;
