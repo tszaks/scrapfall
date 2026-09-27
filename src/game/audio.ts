@@ -209,13 +209,18 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   const i = s % 16;
   const t = t0 + (i % 2 === 1 ? (S.swing ?? 0) * stepDur : 0);
   const root = S.roots[bar]!;
-  if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
-  if (S.snare.includes(i)) {
-    if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
-    else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+  if (!menuMode) {
+    if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
+    if (S.snare.includes(i)) {
+      if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
+      else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+    }
+    const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2) || intense;
+    if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
+  } else if (i === 0 || i === 8) {
+    // soft heartbeat pulse keeps the menu loop grounded without a drum kit
+    tone({ wave: "sine", f0: 110, f1: 45, dur: 0.5, gain: 0.5, noise: 0, cut: 420 }, musicGain, t);
   }
-  const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2) || intense;
-  if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
     const bassNote = bRate === 1 ? (i % 2 ? root + 12 : root) : i % 4 === 2 ? root + 12 : root;
