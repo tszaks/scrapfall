@@ -24,3 +24,8 @@
 - [x] Pause screen scrolls up and down on small screens
 - [x] Mobile: cleaner round buttons, pause always on top (works during shop), co-op teammate list under shards
 - [x] Mobile: full screen on START, page locked (no scroll/zoom/bounce)
+
+- [x] Enemies never spawn inside rocks/props; knockback and Gravity Well stop at cover; stuck enemies get pushed out
+- [x] Pause icon is two clean bars, moved to the top-left corner on mobile
+- [x] Smaller weapon chips on mobile
+- [x] Version 1.0.1
