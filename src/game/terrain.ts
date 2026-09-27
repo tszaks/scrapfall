@@ -31,10 +31,21 @@ export function hasTerrain() {
   return T !== null;
 }
 
+/** Flat maps can still have raised walkable floors: the building-access system answers with
+ * the roof height for points on a walkable roof, `undefined` elsewhere. */
+export const groundHook: { fn: ((x: number, z: number) => number | undefined) | null } = { fn: null };
+
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
   const t = T;
-  if (!t) return 0;
+  if (!t) {
+    const g = groundHook.fn;
+    if (g) {
+      const y = g(x, z);
+      if (y !== undefined) return y;
+    }
+    return 0;
+  }
   const n = t.n;
   let fx = (x + t.half) / t.cell;
   let fz = (z + t.half) / t.cell;

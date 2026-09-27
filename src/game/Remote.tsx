@@ -1,5 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
+import { remoteFloorY } from "./access/world";
 import { useRef } from "react";
 import * as THREE from "three";
 
@@ -34,7 +35,8 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       p.ry += dy * k;
-      g.position.set(p.rx, groundY(p.rx, p.rz), p.rz);
+      // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
+      g.position.set(p.rx, p.az ? remoteFloorY(p.az, p.ay, groundY(p.rx, p.rz)) : groundY(p.rx, p.rz), p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
       // their gun kicks back when they fire (projectiles.tsx replays the shot itself)

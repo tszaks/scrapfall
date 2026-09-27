@@ -21,6 +21,7 @@ import type { Block } from "./level";
 import type { AlpineLayout } from "./alpine/layout";
 import { paintAlpine } from "./alpine/minimap";
 import { pursuitDots } from "./trafficCore";
+import { drawAccessIcons } from "./access/minimap";
 
 export type MapItem = {
   x: number;
@@ -146,6 +147,8 @@ export function Minimap({
         g.arc(wx(city.landmark.x), wz(city.landmark.z), 4 * dpr, 0, Math.PI * 2);
         g.fill();
       }
+      // elevator / stairs badges and lobby doors (building access)
+      if (!alpine) drawAccessIcons(g, wx, wz, dpr, R, f.yaw);
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;

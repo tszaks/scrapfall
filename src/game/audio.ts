@@ -59,6 +59,10 @@ function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * 0.35;
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
 }
+/** the sfx bus for systems that synthesise their own sounds (elevator hum and chime) */
+export function sfxBus(): { ctx: AudioContext; out: GainNode } | null {
+  return ctx && sfxGain ? { ctx, out: sfxGain } : null;
+}
 export function setVolumes(music: number, sfx: number) {
   vol = { music, sfx };
   applyVol();

@@ -444,6 +444,7 @@ function walls(
   layer = st.layer,
   tint = st.tint,
   fh = st.fh,
+  cut?: DoorCut,
 ) {
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i]!;
@@ -452,15 +453,42 @@ function walls(
     if (fw < 0.05) continue;
     if (store && y0 < 0.1 && y1 > 6 && fw > 3 && isStreetEdge(p, q, mask)) {
       G.mat(L.store, st.seed, 1).col(hex("#f4f2ee"));
-      G.wall(p, q, 0, 4.5, facadeUV(L.store, fw, 0, 4.5, 4.5, st.uOff, 0));
+      cutWall(G, p, q, 0, 4.5, facadeUV(L.store, fw, 0, 4.5, 4.5, st.uOff, 0), cut);
       G.mat(layer, st.seed, 1).col(tint);
       const mods = Math.max(1, Math.round(fw / (MODULE_W[layer] ?? 3)));
-      G.wall(p, q, 4.5, y1, [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh]);
+      cutWall(G, p, q, 4.5, y1, [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh], cut);
     } else {
       G.mat(layer, st.seed, 1).col(tint);
-      G.wall(p, q, y0, y1, facadeUV(layer, fw, y0, y1, fh, st.uOff, st.vOff));
+      cutWall(G, p, q, y0, y1, facadeUV(layer, fw, y0, y1, fh, st.uOff, st.vOff), cut);
     }
   }
+}
+
+/** a building-access doorway to leave open in a facade (access/cityAccess.ts) */
+type DoorCut = { x: number; z: number; facing: number; w: number; h: number };
+/**
+ * G.wall(p, q, ...) with a rectangular doorway left open where `cut` sits on this edge. The
+ * pieces keep the whole wall's texture mapping (u runs q -> p across the full edge), so the
+ * facade pattern doesn't shift around the opening.
+ */
+function cutWall(G: Geo, p: P2, q: P2, y0: number, y1: number, uv: readonly number[], cut?: DoorCut) {
+  if (!cut || cut.h <= y0 || sideOf(p, q) !== cut.facing) return G.wall(p, q, y0, y1, uv);
+  const fw = Math.hypot(q[0] - p[0], q[1] - p[1]);
+  const ux = (q[0] - p[0]) / fw;
+  const uz = (q[1] - p[1]) / fw;
+  // the doorway centre must lie on this edge
+  const off = Math.abs((cut.x - p[0]) * uz - (cut.z - p[1]) * ux);
+  const t = (cut.x - p[0]) * ux + (cut.z - p[1]) * uz;
+  if (off > 0.05 || t - cut.w / 2 < 0.01 || t + cut.w / 2 > fw - 0.01) return G.wall(p, q, y0, y1, uv);
+  const [u0, v0, u1, v1] = uv as [number, number, number, number];
+  const U = (s: number) => u1 + (u0 - u1) * (s / fw); // u at distance s from p
+  const V = (y: number) => v0 + ((v1 - v0) * (y - y0)) / (y1 - y0);
+  const at = (s: number): P2 => [p[0] + ux * s, p[1] + uz * s];
+  const s0 = t - cut.w / 2;
+  const s1 = t + cut.w / 2;
+  G.wall(p, at(s0), y0, y1, [U(s0), v0, U(0), v1]);
+  G.wall(at(s1), q, y0, y1, [U(fw), v0, U(s1), v1]);
+  if (cut.h < y1) G.wall(at(s0), at(s1), cut.h, y1, [U(s1), V(cut.h), U(s0), v1]);
 }
 
 /** sloped facade between two outlines (tapering towers) */
@@ -508,6 +536,7 @@ function roof(
   rim = 0.35,
   roofCol = st.roof,
   open?: (p: P2, q: P2, ya: number, yb: number) => [number, number][],
+  hole?: { x0: number; z0: number; x1: number; z1: number },
 ) {
   const inner = insetPoly(poly, rim);
   G.mat(L.plain, st.seed, 1).col(st.tint, 0.9);
@@ -532,7 +561,18 @@ function roof(
   G.col(st.tint, 0.95);
   ring(G, poly, inner, y + para);
   G.mat(L.plain, st.seed, 0).col(roofCol);
-  G.cap(inner, y + 0.02);
+  if (hole) {
+    // an access building's shaft / stairwell comes up through the roof: cap round it
+    const b = bbox(inner);
+    const hx0 = Math.max(b.x0, hole.x0);
+    const hx1 = Math.min(b.x1, hole.x1);
+    const hz0 = Math.max(b.z0, hole.z0);
+    const hz1 = Math.min(b.z1, hole.z1);
+    if (hz0 > b.z0) G.flat(b.x0, b.z0, b.x1, hz0, y + 0.02);
+    if (hz1 < b.z1) G.flat(b.x0, hz1, b.x1, b.z1, y + 0.02);
+    if (hx0 > b.x0) G.flat(b.x0, hz0, hx0, hz1, y + 0.02);
+    if (hx1 < b.x1) G.flat(hx1, hz0, b.x1, hz1, y + 0.02);
+  } else G.cap(inner, y + 0.02);
   return inner;
 }
 
@@ -1044,7 +1084,8 @@ function massPart(C: Ctx, p: Part, st: Style, b: Bld, store: boolean): { poly: P
     }
     return { poly, y: y1 };
   }
-  walls(G, base, y0, y1, st, b.street, store && y0 < 0.1);
+  const cut = b.access && y0 < 0.1 ? b.access.door : undefined;
+  walls(G, base, y0, y1, st, b.street, store && y0 < 0.1, st.layer, st.tint, st.fh, cut);
   if (y0 > 0.1 && p.role !== "tower") {
     // overhanging upper block (cantilever): close its underside
     G.mat(L.plain, st.seed, 0).col(st.tint, 0.6);
@@ -1121,7 +1162,8 @@ function building(b: Bld, C: Ctx) {
         : st;
     const top = massPart(C, p, pst, b, store);
     tops.push({ ...top, p, i: pi });
-    if (store && p.shape !== "cyl") shopfronts(C, outline(p), st, b, vols, pi);
+    if (store && p.shape !== "cyl" && !b.access) shopfronts(C, outline(p), st, b, vols, pi);
+    if (b.access) continue; // the access system dresses the entrance and the roof
     if (
       st.balcony &&
       st.layer === L.resid &&
@@ -1149,6 +1191,12 @@ function building(b: Bld, C: Ctx) {
   });
   const T = tops[hi];
   if (!T) return;
+  if (b.access) {
+    // a walkable roof: parapet and a cap with the shaft opening; the access system adds the
+    // penthouse, the rooftop props and (on the landmark) the spire
+    roof(G, T.poly, T.y, st, b.access.parapet, 0.35, st.roof, undefined, b.access.hole);
+    return;
+  }
   const kind: Crown = b.crown ?? "flat";
   crown(C, T.poly, T.y, st, b, kind);
   if (b.t === "hotel") hotelExtras(b, st, C, T);
@@ -1732,12 +1780,13 @@ function garage(b: Bld, st: Style, C: Ctx) {
   const G = C.main;
   const p = b.parts[0]!;
   const poly = rectPoly(p.x0, p.z0, p.x1, p.z1);
-  walls(G, poly, 0, p.h, st, 0, false, L.garage, st.tint, 3.1);
-  roof(G, poly, p.h, st, 1.1, 0.3, "#8e8c86");
+  walls(G, poly, 0, p.h, st, 0, false, L.garage, st.tint, 3.1, b.access?.door);
+  roof(G, poly, p.h, st, b.access ? b.access.parapet : 1.1, b.access ? 0.35 : 0.3, "#8e8c86", undefined, b.access?.hole);
   // parked cars and light poles on the top deck, a blue P sign, an entry ramp opening
   const r = st.r;
   const D = C.detail;
-  for (let k = 0; k < 10; k++) {
+  // (a walkable deck gets its parked cars from the access system, with collision)
+  for (let k = 0; k < (b.access ? 0 : 10); k++) {
     if (r() < 0.4) continue;
     const x = p.x0 + 4 + ((k % 5) / 4) * (p.x1 - p.x0 - 8);
     const z = k < 5 ? p.z0 + 5 : p.z1 - 5;
@@ -1753,10 +1802,12 @@ function garage(b: Bld, st: Style, C: Ctx) {
     car(D, v, x, p.h + 0.02, z, 0);
   }
   G.mat(L.plain, st.seed, 0).col("#4a4f55");
-  for (const [x, z] of [
-    [p.x0 + 3, (p.z0 + p.z1) / 2],
-    [p.x1 - 3, (p.z0 + p.z1) / 2],
-  ] as const) {
+  for (const [x, z] of b.access
+    ? []
+    : ([
+        [p.x0 + 3, (p.z0 + p.z1) / 2],
+        [p.x1 - 3, (p.z0 + p.z1) / 2],
+      ] as const)) {
     G.cyl(x, p.h, z, 0.12, 6, 6);
     C.glow.col("#ffd9a0").mat(0);
     C.glow.box(x, p.h + 5.9, z, 0.8, 0.12, 0.4);
