@@ -82,6 +82,8 @@ export type CityMeshes = {
   chunks: ChunkMesh[];
   beacons: [number, number, number][];
   lamps: Lamp[];
+  /** awning front edges (x0, z0, x1, z1) at the valance bottom (2.85 m): rain drips off them */
+  drips: [number, number, number, number][];
   stats: { verts: number; buildings: number };
 };
 
@@ -343,6 +345,7 @@ type Ctx = {
   glow: Geo;
   signs: Geo;
   beacons: [number, number, number][];
+  drips: [number, number, number, number][];
   /** a night light pool over a rectangle (gas station canopy) */
   pools: (p: { x0: number; z0: number; x1: number; z1: number }) => void;
 };
@@ -780,6 +783,7 @@ function shopfronts(C: Ctx, poly: P2[], st: Style, b: Bld, vols: Vol[], self: nu
       const p1x = ax + ux * hw,
         p1z = az + uz * hw;
       const out = 1.6;
+      C.drips.push([p0x + nx * out, p0z + nz * out, p1x + nx * out, p1z + nz * out]);
       // sloped top (wall edge at 3.9 m, outer edge at 3.2 m), front valance, two ends
       D.quad(
         p0x + nx * out,
@@ -2020,6 +2024,14 @@ function openStyleOf(t: Bld["t"]) {
   }
 }
 
+/** street-level height of every 2 m ground cell (roads 0, kerbs and paving 0.15 ...) */
+export function groundHeights(city: CityLayout) {
+  const g = groundGrid(city);
+  const h = new Float32Array(g.length);
+  for (let c = 0; c < g.length; c++) h[c] = GROUND[g[c]!]?.h ?? 0;
+  return h;
+}
+
 function groundGrid(city: CityLayout) {
   const { cells, kind, half } = city;
   const g = new Uint8Array(cells * cells);
@@ -2102,6 +2114,7 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
   const chunks = [...near.list, ...far.list];
   const chunkAt = near.at;
   const beacons: [number, number, number][] = [];
+  const drips: [number, number, number, number][] = [];
   const ctxAt = (x: number, z: number, backdrop = false): Ctx => {
     const ch = backdrop ? far.at(x, z) : chunkAt(x, z);
     return {
@@ -2110,6 +2123,7 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
       glow: ch.glow,
       signs: ch.signs,
       beacons,
+      drips,
       pools: (p) => {
         ch.pools.col("#fff4e0").mat(0);
         ch.pools.flat(p.x0 - 3, p.z0 - 3, p.x1 + 3, p.z1 + 3, 0.2);
@@ -2246,6 +2260,7 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
     chunks: out.filter((c) => c.main || c.detail || c.glow || c.signs || c.pools),
     beacons,
     lamps,
+    drips,
     stats: { verts, buildings: city.buildings.length },
   };
 }
