@@ -1176,6 +1176,53 @@ export function generateBeach(
       }
     }
   }
+  // enemies route on 4 m nav cells (open only when all four 2 m cells are): any pocket the
+  // nav grid can't reach (a sand corner boxed in by stairs, joined by a 2 m slot) is sealed too,
+  // so nothing spawns where it could never walk out
+  {
+    const m = n >> 1;
+    const navOpen = new Uint8Array(m * m);
+    for (let a = 0; a < m; a++)
+      for (let b = 0; b < m; b++) {
+        const i = a * 2;
+        const j = b * 2;
+        navOpen[a * m + b] =
+          reach[i * n + j] &&
+          reach[(i + 1) * n + j] &&
+          reach[i * n + j + 1] &&
+          reach[(i + 1) * n + j + 1]
+            ? 1
+            : 0;
+      }
+    const seen = new Uint8Array(m * m);
+    const s0 = (ci(spawn.x) >> 1) * m + (ci(spawn.z) >> 1);
+    const q = [s0];
+    seen[s0] = 1;
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h]!;
+      const a = Math.floor(c / m);
+      const b = c - a * m;
+      for (let da = -1; da <= 1; da++)
+        for (let db = -1; db <= 1; db++) {
+          if (!da && !db) continue;
+          const na = a + da;
+          const nb = b + db;
+          if (na < 0 || nb < 0 || na >= m || nb >= m) continue;
+          const k = na * m + nb;
+          if (seen[k] || !navOpen[k]) continue;
+          if (da && db && (!navOpen[(a + da) * m + b] || !navOpen[a * m + b + db])) continue;
+          seen[k] = 1;
+          q.push(k);
+        }
+    }
+    for (let k = 0; k < m * m; k++) {
+      if (!navOpen[k] || seen[k]) continue;
+      const i = Math.floor(k / m) * 2;
+      const j = (k % m) * 2;
+      for (const c of [i * n + j, (i + 1) * n + j, i * n + j + 1, (i + 1) * n + j + 1])
+        reach[c] = 0;
+    }
+  }
   const blocks: Block[] = [];
   for (let i = 0; i < n; i++)
     for (let j = 0; j < n; j++) {

@@ -9,6 +9,7 @@ export function initAudio() {
   if (typeof window === "undefined") return;
   if (!ctx) {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
     ctx = new AC();
     const master = ctx.createGain();
     master.gain.value = 0.8;
@@ -23,7 +24,29 @@ export function initAudio() {
     applyVol();
   }
   if (ctx.state === "suspended") void ctx.resume();
+  // iOS/Safari: a zero-length buffer on a real gesture clears the hardware mute flag
+  try {
+    const s = ctx.createBufferSource();
+    s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    s.connect(ctx.destination);
+    s.start(0);
+  } catch { /* already unlocked */ }
 }
+
+// Browsers block audio until the visitor interacts with the page. Any click,
+// tap or key press anywhere wakes the sound up, not just the START button.
+let unlockHooked = false;
+export function hookAudioUnlock() {
+  if (unlockHooked || typeof window === "undefined") return;
+  unlockHooked = true;
+  const wake = () => initAudio();
+  ["pointerdown", "touchstart", "keydown", "mousedown"].forEach((ev) =>
+    window.addEventListener(ev, wake, { passive: true }));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && ctx && ctx.state === "suspended") void ctx.resume();
+  });
+}
+
 
 function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * 0.35;
@@ -115,6 +138,84 @@ export function playSfx(kind: Sfx) {
   }
 }
 
+// ---- police sirens: a couple of persistent voices steered every frame by the traffic ----
+type SirenVoice = { osc: OscillatorNode; osc2: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; pan: StereoPannerNode | null };
+const sirenVoices: SirenVoice[] = [];
+/**
+ * Drive siren voice `slot`: pitch in Hz, gain 0..~0.2 (0 = silent), stereo pan -1..1 and
+ * brightness 0..1 (distant sirens sound muffled). Each call also schedules a fade to
+ * silence, so if the frames stop (tab hidden, game closed) the siren dies out by itself.
+ */
+export function setSiren(slot: number, freq: number, gain: number, pan: number, bright = 1) {
+  if (!ctx || !sfxGain) return;
+  let v = sirenVoices[slot];
+  if (!v) {
+    if (gain <= 0) return;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    const osc2 = ctx.createOscillator();
+    osc2.type = "square";
+    const mix2 = ctx.createGain();
+    mix2.gain.value = 0.3;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    osc.connect(filter);
+    osc2.connect(mix2).connect(filter);
+    filter.connect(g);
+    const p = typeof ctx.createStereoPanner === "function" ? ctx.createStereoPanner() : null;
+    if (p) g.connect(p).connect(sfxGain);
+    else g.connect(sfxGain);
+    osc.start();
+    osc2.start();
+    v = { osc, osc2, filter, gain: g, pan: p };
+    sirenVoices[slot] = v;
+  }
+  const now = ctx.currentTime;
+  v.osc.frequency.setTargetAtTime(freq, now, 0.012);
+  v.osc2.frequency.setTargetAtTime(freq * 1.006, now, 0.012);
+  v.filter.frequency.setTargetAtTime(700 + 2600 * Math.max(0, Math.min(1, bright)), now, 0.05);
+  const g = v.gain.gain;
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(Math.max(0, Math.min(0.22, gain)), now + 0.05);
+  g.linearRampToValueAtTime(0, now + 0.6);
+  if (v.pan) v.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), now, 0.03);
+}
+
+/** Enemy telegraph cues (newer enemy types). `vol` fades them with distance. */
+export type EnemySfx = "aim" | "lock" | "snipe" | "click" | "throw" | "charge" | "spin" | "launch" | "boom" | "heal" | "cloak" | "buzz" | "block";
+export function playEnemySfx(kind: EnemySfx, vol = 1) {
+  if (!ctx || vol <= 0.02) return;
+  const v = Math.min(1, vol);
+  const at = ctx.currentTime;
+  const t = (x: Tone, delay = 0) => tone({ ...x, gain: x.gain * v }, sfxGain, delay ? at + delay : 0);
+  if (kind === "aim") t({ wave: "sine", f0: 880, f1: 900, dur: 0.12, gain: 0.12, noise: 0, cut: 6000 });
+  if (kind === "lock") {
+    t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 });
+    t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 }, 0.12);
+  }
+  if (kind === "snipe") t({ wave: "sawtooth", f0: 1800, f1: 90, dur: 0.5, gain: 0.4, noise: 0.8, cut: 7000, q: 4 });
+  if (kind === "click") {
+    t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 });
+    t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 }, 0.14);
+  }
+  if (kind === "throw") t({ wave: "triangle", f0: 300, f1: 700, dur: 0.18, gain: 0.18, noise: 0.4, cut: 3000 });
+  if (kind === "charge") t({ wave: "sawtooth", f0: 70, f1: 240, dur: 0.95, gain: 0.3, noise: 0.5, cut: 1200, q: 3 });
+  if (kind === "spin") t({ wave: "sawtooth", f0: 60, f1: 420, dur: 1.1, gain: 0.2, noise: 0.2, cut: 2000, q: 6 });
+  if (kind === "launch") t({ wave: "sawtooth", f0: 200, f1: 60, dur: 0.5, gain: 0.3, noise: 1.2, cut: 2500 });
+  if (kind === "boom") {
+    t({ wave: "sine", f0: 90, f1: 30, dur: 0.7, gain: 0.8, noise: 1.3, cut: 1100 });
+    t({ wave: "square", f0: 55, f1: 35, dur: 0.3, gain: 0.3, noise: 0, cut: 500 });
+  }
+  if (kind === "heal") t({ wave: "sine", f0: 660, f1: 1320, dur: 0.35, gain: 0.14, noise: 0, cut: 7000 });
+  if (kind === "cloak") t({ wave: "sine", f0: 2400, f1: 600, dur: 0.5, gain: 0.12, noise: 0.15, cut: 9000, q: 12 });
+  if (kind === "buzz") t({ wave: "sawtooth", f0: 190, f1: 230, dur: 0.35, gain: 0.12, noise: 0.1, cut: 2400, q: 5 });
+  if (kind === "block") t({ wave: "triangle", f0: 1500, f1: 700, dur: 0.08, gain: 0.12, noise: 0.2, cut: 7000, q: 6 });
+}
+
 // ---- music: tiny lookahead step sequencer, one style per map ----
 type Style = {
   roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;
@@ -130,14 +231,15 @@ type Style = {
 const STYLES: Record<string, Style> = {
   // desert: swung, twangy minor groove with a walking bass
   desert: { roots: [45, 41, 48, 43], bpm: 116, arp: [0, 3, 5, 6, 7, 10, 7, 3], lead: "sawtooth", leadCut: 1800, bass: "triangle", kick: [0, 7, 10], snare: [4, 12], hat: "off", arpRate: 3, oct: 12, bassRate: 4, swing: 0.28, leadLen: 1.6 },
-  // ice: sparse, slow music-box bells with long echoes, no drums to speak of
-  ice: { roots: [62, 57, 59, 55], bpm: 76, arp: [0, 7, 12, 16, 19, 16, 12, 7], lead: "sine", leadCut: 9000, bass: "sine", kick: [0], snare: [], hat: "none", pad: true, arpRate: 4, oct: 12, bassRate: 16, leadLen: 3, echo: true },
-  // forest: bouncy major pentatonic plucks, woodblock clicks, fast tempo
-  forest: { roots: [55, 60, 57, 62], bpm: 132, arp: [0, 4, 7, 12, 9, 7, 4, 2], lead: "triangle", leadCut: 5000, bass: "square", kick: [0, 8], snare: [4, 10, 12], hat: "none", arpRate: 1, oct: 12, bassRate: 8, leadLen: 0.6, wood: true },
+  // ice: cold bells over a relentless sub pulse — freezing, not restful
+  ice: { roots: [50, 48, 45, 46], bpm: 104, arp: [0, 7, 12, 15, 19, 15, 12, 7], lead: "sine", leadCut: 9000, bass: "sine", kick: [0, 6, 8], snare: [4, 12], hat: "off", pad: true, arpRate: 2, oct: 12, bassRate: 2, leadLen: 1.2, echo: true },
+  // forest: primal war drums and a tense minor pluck line
+  forest: { roots: [45, 43, 41, 45], bpm: 128, arp: [0, 3, 7, 10, 12, 10, 7, 3], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 3, 6, 8, 11], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, wood: true },
   // magma: heavy, fast, distorted (kept as-is)
   magma: { roots: [40, 40, 41, 38], bpm: 136, arp: [0, 1, 7, 6, 0, 12, 1, 7], lead: "sawtooth", leadCut: 1800, bass: "sawtooth", kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: "all" },
-  // blossom: gentle waltz-like koto plucks over pads (Japanese in-scale)
-  blossom: { roots: [57, 52, 53, 50], bpm: 90, arp: [0, 1, 5, 7, 8, 12, 8, 5], lead: "triangle", leadCut: 3500, bass: "sine", kick: [0], snare: [12], hat: "none", pad: true, arpRate: 3, oct: 12, bassRate: 16, leadLen: 2.2, echo: true },
+  // blossom: driving ronin duel — sharp koto accents over taiko hits
+  blossom: { roots: [45, 41, 40, 43], bpm: 124, arp: [0, 1, 5, 7, 8, 7, 5, 1], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 4, 6, 10, 12], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, swing: 0.1 },
+
   // abyss: very slow, deep sub drones and a lonely sonar ping
   abyss: { roots: [33, 36, 31, 34], bpm: 64, arp: [24, 19, 24, 31], lead: "sine", leadCut: 2500, bass: "sine", kick: [0, 10], snare: [], hat: "none", pad: true, arpRate: 8, oct: 12, bassRate: 16, leadLen: 5, echo: true },
   // cyber: four-on-the-floor electro, octave-jumping saw bass, off-beat hats
@@ -161,6 +263,8 @@ const STYLES: Record<string, Style> = {
     leadLen: 1.2,
     echo: true,
   },
+  // surf: bright major-pentatonic twang with spring-reverb echo, a driving beach-party beat
+  surf: { roots: [52, 57, 59, 57], bpm: 132, arp: [0, 4, 7, 9, 12, 9, 7, 4], lead: "square", leadCut: 2600, bass: "triangle", kick: [0, 6, 8], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.6, echo: true, swing: 0.08 },
   toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
 };
 const MAP_STYLE: Record<string, string> = {
@@ -168,6 +272,7 @@ const MAP_STYLE: Record<string, string> = {
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
+  "Pacific Pier": "surf",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {
@@ -220,11 +325,15 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
 }
 
 export function startMusic() {
+  initAudio(); // safe if already running; also resumes a suspended context
   if (!ctx || timer !== null) return;
   nextT = ctx.currentTime + 0.05;
   timer = window.setInterval(() => {
     if (!ctx) return;
+    if (ctx.state === "suspended") { void ctx.resume(); return; }
     const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+    // after a tab switch or a late unlock the clock jumps; never replay the backlog
+    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
     while (nextT < ctx.currentTime + 0.12) {
       scheduleStep(step, nextT, stepDur);
       step++;
@@ -233,7 +342,63 @@ export function startMusic() {
   }, 25);
 }
 
+
 export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
+}
+
+// ---- projectile / impact sounds (combat effects) ----
+export type ImpactSound =
+  | "metal" | "wall" | "boom" | "burst" | "ricochet" | "shatter" | "zap" | "thunk" | "splash" | "crack" | "casing" | "fizz";
+const IMPACTS: Record<ImpactSound, Tone[]> = {
+  // bullet on robot plating: bright clank with a short ring
+  metal: [
+    { wave: "square", f0: 1900, f1: 900, dur: 0.05, gain: 0.12, noise: 0.5, cut: 7000, q: 6 },
+    { wave: "sine", f0: 3100, f1: 2600, dur: 0.09, gain: 0.05, noise: 0, cut: 9000, q: 12 },
+  ],
+  // bullet into concrete: dull chip
+  wall: [{ wave: "triangle", f0: 420, f1: 120, dur: 0.06, gain: 0.12, noise: 0.9, cut: 2200 }],
+  // BOOMER shell: deep thump plus a long gravelly tail
+  boom: [
+    { wave: "sine", f0: 90, f1: 28, dur: 0.9, gain: 0.9, noise: 0, cut: 600 },
+    { wave: "sawtooth", f0: 60, f1: 30, dur: 0.7, gain: 0.35, noise: 1.4, cut: 1400 },
+  ],
+  // FLAK air burst: sharp crack that rolls off
+  burst: [
+    { wave: "square", f0: 260, f1: 70, dur: 0.4, gain: 0.35, noise: 1.3, cut: 2600 },
+    { wave: "sine", f0: 120, f1: 40, dur: 0.45, gain: 0.35, noise: 0, cut: 500 },
+  ],
+  // REBOUNDER bounce: rising zing
+  ricochet: [{ wave: "triangle", f0: 1500, f1: 3800, dur: 0.16, gain: 0.16, noise: 0.15, cut: 9000, q: 8 }],
+  // GLACIER shard shattering: glassy tinkle
+  shatter: [
+    { wave: "sine", f0: 3400, f1: 2200, dur: 0.18, gain: 0.1, noise: 0.35, cut: 11000, q: 14 },
+    { wave: "triangle", f0: 5200, f1: 4100, dur: 0.12, gain: 0.06, noise: 0, cut: 12000, q: 16 },
+  ],
+  // TESLA arc: buzzy crackle
+  zap: [
+    { wave: "sawtooth", f0: 140, f1: 90, dur: 0.18, gain: 0.16, noise: 0.8, cut: 5200, q: 3 },
+    { wave: "square", f0: 2400, f1: 900, dur: 0.1, gain: 0.05, noise: 0.4, cut: 8000, q: 5 },
+  ],
+  // HARPOON sticking: woody thunk
+  thunk: [{ wave: "sine", f0: 260, f1: 90, dur: 0.14, gain: 0.35, noise: 0.35, cut: 1500 }],
+  splash: [{ wave: "sine", f0: 500, f1: 150, dur: 0.3, gain: 0.12, noise: 1.2, cut: 3200 }],
+  // LANCE punching through: high snap
+  crack: [{ wave: "sawtooth", f0: 3200, f1: 500, dur: 0.1, gain: 0.16, noise: 0.6, cut: 9000, q: 4 }],
+  // spent brass hitting the floor
+  casing: [{ wave: "sine", f0: 4200, f1: 3800, dur: 0.05, gain: 0.025, noise: 0, cut: 12000, q: 18 }],
+  fizz: [{ wave: "sine", f0: 900, f1: 300, dur: 0.12, gain: 0.08, noise: 0.5, cut: 5000 }],
+};
+const lastImpact: Partial<Record<ImpactSound, number>> = {};
+/** a positional-ish impact: quieter and duller with distance, throttled so a hose of bullets stays sane */
+export function playImpact(kind: ImpactSound, dist = 0) {
+  if (!ctx || dist > 70) return;
+  const now = ctx.currentTime;
+  const gap = kind === "boom" ? 0.08 : kind === "casing" ? 0.06 : 0.035;
+  if (now - (lastImpact[kind] ?? -1) < gap) return;
+  lastImpact[kind] = now;
+  const k = Math.max(0.12, 1 - dist / 70);
+  const far = dist > 18;
+  IMPACTS[kind].forEach((t) => tone({ ...t, gain: t.gain * k, cut: far ? Math.min(t.cut, 1800) : t.cut }));
 }

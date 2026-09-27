@@ -326,8 +326,10 @@ function templates(): Tmpls {
       g.col("#e8e4dc");
       g.box(-4.6, 0, 0, 0.08, 2.5, 0.08);
       g.box(4.6, 0, 0, 0.08, 2.5, 0.08);
-      g.col("#1e1e20");
-      g.box(0, 1.55, 0, 9.2, 0.9, 0.02);
+      // the net: a grid of cords under a white top band
+      g.col("#2a2a2c");
+      for (let k = 0; k < 4; k++) g.box(0, 1.55 + k * 0.28, 0, 9.2, 0.02, 0.02);
+      for (let x = -4.5; x <= 4.5; x += 0.3) g.box(x, 1.55, 0, 0.015, 0.87, 0.015);
       g.col("#f4f2ea");
       g.box(0, 2.42, 0, 9.2, 0.07, 0.03);
     }),
@@ -1141,7 +1143,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   const beachColor = (x: number, z: number, h: number) => {
     // dry sand -> damp -> wet (shiny) -> sea floor; a little noise so it never looks flat
     const nse = Math.sin(x * 0.37 + z * 0.11) * 0.5 + Math.sin(x * 0.05 - z * 0.23) * 0.5;
-    const dry = new THREE.Color("#f0d29c").offsetHSL(0, 0, nse * 0.025);
+    const dry = new THREE.Color("#f4d690").offsetHSL(0, 0, nse * 0.025);
     const damp = tmpA.set("#d2b284");
     const wet = new THREE.Color("#9e8462");
     const floor = new THREE.Color("#7a6a52");

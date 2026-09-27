@@ -5,24 +5,39 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { CURB, LANES, type CityLayout } from "./cityLayout";
-import { makeVehicle, vehicleHeight, vehicleParts, type Part, type Vehicle } from "./vehicles";
-import { liveCars, trafficClock, type TrafficLink } from "./trafficCore";
+import { type CityLayout } from "./cityLayout";
+import { vehicleParts, type Part, type Vehicle } from "./vehicles";
+import { liveCars, pursuitDots, trafficClock, type TrafficLink } from "./trafficCore";
 import {
+  ROLE_COP,
+  ROLE_NORMAL,
+  ROLE_SUSPECT,
   SIM_DT,
   headingOf,
-  laneOffset,
+  spawnTraffic,
   posOf as simPos,
   stepCars,
+  trafficStats,
   type Car,
   type SimEnemy,
 } from "./trafficSim";
-import { playSfx } from "./audio";
+import { newDirector, stepDirector } from "./pursuit";
+import { playSfx, setSiren } from "./audio";
 import { glowTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
 
-/** Numbers per car in the network snapshot: index, x, z, heading, speed. */
+/**
+ * Numbers per car in the network snapshot: index, x, z, heading, speed + flags.
+ * The last one is round(speed * 10) + 1000 * flags (siren / suspect / parked), which
+ * stays a 3-byte uint16 on the wire, so pursuits cost no extra bytes per car.
+ */
 const CAR_FIELDS = 5;
+const F_SIREN = 1;
+const F_SUSPECT = 2;
+const F_PARKED = 4;
+/** siren voices (nearest cruisers) and how far a siren carries */
+const SIREN_VOICES = 2;
+const SIREN_RANGE = 280;
 /** cars farther than this from every player are simulated at a quarter of the rate */
 const FAR_SIM = 220;
 /** cars within this of any player go in every snapshot; the rest take turns */
@@ -49,6 +64,18 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 const _c = new THREE.Color();
+const _right = new THREE.Vector3();
+type SirenSrc = { ci: number; d: number; x: number; z: number; yaw: number; speed: number };
+const sirens: SirenSrc[] = [];
+/** what each siren voice is doing (debug handle only) */
+const sirenDebug: ({
+  car: number;
+  d: number;
+  gain: number;
+  doppler: number;
+  pan: number;
+  yelp: boolean;
+} | null)[] = [];
 
 function partMatrix(p: Part) {
   const m = new THREE.Matrix4();
@@ -59,6 +86,28 @@ function partMatrix(p: Part) {
 }
 
 type Slot = { mesh: "paint" | "wheel" | "lamp"; index: number; local: THREE.Matrix4; part: Part };
+/** lightbar state: 0 off, 1 red lit, 2 blue lit */
+type Bar = 0 | 1 | 2;
+/** flasher phase for car `i` at traffic time `t`: each cruiser flashes out of step with the others */
+const barAt = (t: number, i: number): Bar => {
+  const ph = (t * 2.6 + i * 0.37) % 1;
+  // red half, blue half, each with a quick double-flash flicker: R R . B B .
+  if (ph < 0.5) return ph > 0.2 && ph < 0.26 ? 0 : 1;
+  return ph > 0.7 && ph < 0.76 ? 0 : 2;
+};
+/** siren tone: a slow wail far away, the fast yelp up close */
+const sirenPitch = (t: number, i: number, yelp: boolean) => {
+  if (yelp) {
+    const p = (t * 3.1 + i * 0.29) % 1;
+    return 720 + 820 * (p < 0.5 ? p * 2 : 2 - p * 2);
+  }
+  const p = (t / 4.4 + i * 0.23) % 1;
+  return (
+    640 +
+    700 *
+      (p < 0.6 ? Math.sin((p / 0.6) * Math.PI * 0.5) : Math.cos(((p - 0.6) / 0.4) * Math.PI * 0.5))
+  );
+};
 
 export function CityTraffic({
   city,
@@ -75,79 +124,14 @@ export function CityTraffic({
   cars?: number;
 }) {
   const { roadX, roadZ } = city;
+  const timeRef = useRef(time);
+  timeRef.current = time;
 
   // ---- moving cars, deterministic start from the seed ----
-  const cars = useMemo(() => {
-    const rand = mulberry(seed ^ 0x51f15e);
-    const list: Car[] = [];
-    if (roadX.length < 2 || roadZ.length < 2) return list;
-    // about one car per 45 m of street, 40-60 in all
-    const len =
-      (roadX.length * (roadZ[roadZ.length - 1]!.c - roadZ[0]!.c) +
-        roadZ.length * (roadX[roadX.length - 1]!.c - roadX[0]!.c)) *
-      2;
-    const want = carCount ?? Math.max(40, Math.min(60, Math.round(len / 45)));
-    for (let tries = 0; list.length < want && tries < 2000; tries++) {
-      const axis = (rand() < 0.5 ? 0 : 1) as 0 | 1;
-      const dir = (rand() < 0.5 ? 1 : -1) as 1 | -1;
-      const line = Math.floor(rand() * (axis === 0 ? roadZ.length : roadX.length));
-      const road = (axis === 0 ? roadZ : roadX)[line]!;
-      const lane = Math.floor(rand() * LANES[road.cls].length);
-      const cross = axis === 0 ? roadX : roadZ;
-      const lo = cross[0]!.c;
-      const hi = cross[cross.length - 1]!.c;
-      const s = lo + 5 + rand() * (hi - lo - 10);
-      // never start inside an intersection
-      if (cross.some((c) => Math.abs(c.c - s) < CURB[c.cls] + 3)) continue;
-      const perp = road.c + laneOffset(road, axis, dir, lane);
-      const x = axis === 0 ? s : perp;
-      const z = axis === 0 ? perp : s;
-      if (Math.hypot(x - city.spawn.x, z - city.spawn.z) < 12) continue;
-      const v = makeVehicle(rand, Infinity)!;
-      if (
-        list.some(
-          (o) =>
-            o.axis === axis &&
-            o.dir === dir &&
-            o.line === line &&
-            o.lane === lane &&
-            Math.abs(o.s - s) < (o.v.len + v.len) / 2 + 5,
-        )
-      )
-        continue;
-      let next = dir > 0 ? cross.findIndex((c) => c.c > s) : -1;
-      if (dir < 0)
-        for (let k = cross.length - 1; k >= 0; k--)
-          if (cross[k]!.c < s) {
-            next = k;
-            break;
-          }
-      if (next < 0) continue;
-      // real city speeds: ~40-50 km/h
-      const vmax = v.type === "bus" ? 9 : v.type === "van" ? 10.5 : v.type === "sports" ? 14 : 12.5;
-      list.push({
-        v,
-        h: vehicleHeight(v),
-        axis,
-        dir,
-        line,
-        lane,
-        s,
-        speed: vmax * 0.6,
-        vmax,
-        next,
-        turn: null,
-        yawVis: Math.atan2(axis === 0 ? dir : 0, axis === 1 ? dir : 0),
-        honk: 0,
-        hitCd: 0,
-        px: x,
-        pz: z,
-        x,
-        z,
-      });
-    }
-    return list;
-  }, [seed, roadX, roadZ, city.spawn.x, city.spawn.z, carCount]);
+  const cars = useMemo(
+    () => spawnTraffic(roadX, roadZ, city.spawn, seed, carCount),
+    [seed, roadX, roadZ, city.spawn, carCount],
+  );
 
   // ---- instance slots for every part of every vehicle (parked first, then moving) ----
   const { slots, counts, parkedCount } = useMemo(() => {
@@ -174,7 +158,11 @@ export function CityTraffic({
     const pool = new THREE.PlaneGeometry(3.2, 6.5);
     pool.rotateX(-Math.PI / 2);
     pool.translate(0, 0, 3.6);
-    return { box: new THREE.BoxGeometry(1, 1, 1), wheel, cone, pool };
+    // police light spill on the road (flat) and the lightbar's glow (camera-facing)
+    const spill = new THREE.PlaneGeometry(1, 1);
+    spill.rotateX(-Math.PI / 2);
+    const halo = new THREE.PlaneGeometry(1, 1);
+    return { box: new THREE.BoxGeometry(1, 1, 1), wheel, cone, pool, spill, halo };
   }, []);
   const mats = useMemo(
     () => ({
@@ -196,6 +184,24 @@ export function CityTraffic({
         opacity: 0.5,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+      }),
+      spill: new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        map: glowTexture(),
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+      halo: new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        map: glowTexture(),
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
       }),
     }),
     [],
@@ -219,36 +225,31 @@ export function CityTraffic({
   const lampRef = useRef<THREE.InstancedMesh>(null);
   const coneRef = useRef<THREE.InstancedMesh>(null);
   const poolRef = useRef<THREE.InstancedMesh>(null);
+  const spillRef = useRef<THREE.InstancedMesh>(null);
+  const haloRef = useRef<THREE.InstancedMesh>(null);
 
   const meshOf = (k: Slot["mesh"]) =>
     k === "paint" ? paintRef.current : k === "wheel" ? wheelRef.current : lampRef.current;
 
   /** lamp colours (lights are on at night and at dusk) depend on whether the car is moving,
-   * and the police flasher */
-  const lampColor = (part: Part, moving: boolean, flash: boolean) => {
+   * and the police lightbar (dark unless the siren is on, then red and blue take turns) */
+  const lampColor = (part: Part, moving: boolean, bar: Bar) => {
     if (part.kind === "head") return _c.set(moving ? 0xfff6d8 : 0x3a3a36);
     if (part.kind === "tail") return _c.set(moving ? 0xff2a1a : 0x3a0a08);
     if (part.kind === "sign") return _c.set(part.color);
-    if (part.kind === "barR") return _c.set(moving && flash ? 0xff2020 : 0x5a1010);
-    if (part.kind === "barB") return _c.set(moving && !flash ? 0x3060ff : 0x10205a);
+    if (part.kind === "barR") return _c.set(bar === 1 ? 0xff2020 : 0x5a1010);
+    if (part.kind === "barB") return _c.set(bar === 2 ? 0x3060ff : 0x10205a);
     return _c.set(part.color);
   };
 
-  const placeCar = (
-    i: number,
-    x: number,
-    z: number,
-    yaw: number,
-    moving: boolean,
-    flash: boolean,
-  ) => {
+  const placeCar = (i: number, x: number, z: number, yaw: number, moving: boolean, bar: Bar) => {
     _car.compose(_p.set(x, 0, z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
     for (const sl of slots[i]!) {
       const mesh = meshOf(sl.mesh);
       if (!mesh) continue;
       _m.multiplyMatrices(_car, sl.local);
       mesh.setMatrixAt(sl.index, _m);
-      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, flash));
+      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, bar));
     }
   };
 
@@ -267,7 +268,11 @@ export function CityTraffic({
 
   const rand = useMemo(() => mulberry(seed ^ 0x7a11c), [seed]);
   // guest: latest host state per car + when it arrived
-  const netCars = useRef<{ x: number; z: number; yaw: number; speed: number; at: number }[]>([]);
+  const netCars = useRef<
+    { x: number; z: number; yaw: number; speed: number; flags: number; at: number }[]
+  >([]);
+  // police pursuits (host / solo decide; guests see the flags in the snapshot)
+  const director = useMemo(() => newDirector(seed), [seed, cars]); // eslint-disable-line react-hooks/exhaustive-deps
   const hostClock = useRef<{ t: number; at: number } | null>(null);
 
   const posOf = (c: Car) => simPos(c, roadX, roadZ);
@@ -283,6 +288,9 @@ export function CityTraffic({
     enemyHit.current.clear();
     acc.current = 0;
     liveCars.length = 0;
+    pursuitDots.length = 0;
+    trafficStats.redRunsNormal = 0;
+    trafficStats.redRunsSpecial = 0;
   }, [cars]);
 
   // network hooks: the host encodes, guests decode (motion only; types come from the seed).
@@ -295,13 +303,16 @@ export function CityTraffic({
       const players = [{ x: L.px, z: L.pz }, ...L.others];
       const slice = netSlice.current++ % FAR_NET_SLICES;
       cars.forEach((c, i) => {
-        const near = players.some(
-          (p) => Math.abs(p.x - c.x) < NEAR_NET && Math.abs(p.z - c.z) < NEAR_NET,
-        );
+        // pursuit cars always go out (at most 9), so guests see chases coming on the minimap
+        const near =
+          c.role !== ROLE_NORMAL ||
+          players.some((p) => Math.abs(p.x - c.x) < NEAR_NET && Math.abs(p.z - c.z) < NEAR_NET);
         if (!near && i % FAR_NET_SLICES !== slice) return;
-        const p = posOf(c);
-        const yaw = Math.atan2(c.axis === 0 ? c.dir : 0, c.axis === 1 ? c.dir : 0);
-        out.push(i, q100(p.x), q100(p.z), q100(yaw), Math.round(c.speed * 10));
+        const flags =
+          (c.role === ROLE_COP ? F_SIREN : 0) |
+          (c.role === ROLE_SUSPECT ? F_SUSPECT : 0) |
+          (c.park ? F_PARKED : 0);
+        out.push(i, q100(c.x), q100(c.z), q100(c.yaw), Math.round(c.speed * 10) + 1000 * flags);
       });
       return out;
     };
@@ -312,11 +323,13 @@ export function CityTraffic({
       for (let o = 1; o + CAR_FIELDS - 1 < a.length; o += CAR_FIELDS) {
         const i = a[o]!;
         if (i < 0 || i >= cars.length) continue;
+        const sf = a[o + 4]!;
         netCars.current[i] = {
           x: a[o + 1]! / 100,
           z: a[o + 2]! / 100,
           yaw: a[o + 3]! / 100,
-          speed: a[o + 4]! / 10,
+          speed: (sf % 1000) / 10,
+          flags: Math.floor(sf / 1000),
           at: now,
         };
       }
@@ -331,14 +344,22 @@ export function CityTraffic({
   useEffect(
     () => () => {
       liveCars.length = 0;
+      pursuitDots.length = 0;
+      for (let k = 0; k < SIREN_VOICES; k++) setSiren(k, 700, 0, 0, 0);
     },
     [],
   );
   useEffect(() => {
     const debug =
       import.meta.env.DEV || new URLSearchParams(window.location.search).get("debug") === "1";
-    if (debug) (window as unknown as { __rsCars?: Car[] }).__rsCars = cars;
-  }, [cars]);
+    if (debug)
+      Object.assign(window, {
+        __rsCars: cars,
+        __rsPursuit: director,
+        __rsTrafficStats: trafficStats,
+        __rsSiren: sirenDebug,
+      });
+  }, [cars, director]);
 
   // a moving car touched an enemy (host only). Small ones get thrown aside and hurt;
   // big ones (brute, vanguard, elites, mini-boss, boss) stop the car and just take a knock.
@@ -357,7 +378,7 @@ export function CityTraffic({
     else L.hurtEnemy(idx, Math.round(2 + c.speed * c.v.mass * 0.35), cos * side, -sin * side);
   };
 
-  useFrame((_, raw) => {
+  useFrame((state, raw) => {
     const dt = Math.min(raw, 0.05);
     const L = link.current;
     const guest = L.role === "guest";
@@ -375,11 +396,12 @@ export function CityTraffic({
       }));
       const players = [{ x: L.px, z: L.pz }, ...L.others];
       const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
-      // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step
+      // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step;
+      // pursuit cars always run at the full rate
       for (const c of cars)
-        c.far = !players.some(
-          (p) => Math.abs(p.x - c.x) < FAR_SIM && Math.abs(p.z - c.z) < FAR_SIM,
-        );
+        c.far =
+          c.role === ROLE_NORMAL &&
+          !players.some((p) => Math.abs(p.x - c.x) < FAR_SIM && Math.abs(p.z - c.z) < FAR_SIM);
       acc.current += dt;
       let steps = 0;
       while (acc.current >= SIM_DT && steps < 6) {
@@ -388,6 +410,7 @@ export function CityTraffic({
         trafficClock.t += SIM_DT;
         tick.current++;
         const env = { roadX, roadZ, rand, players, enemies, onEnemyContact };
+        stepDirector(director, cars, env, trafficClock.t);
         if (tick.current % 4 === 0) stepCars(cars, env, SIM_DT * 4, trafficClock.t, true);
         for (const ci of stepCars(cars, env, SIM_DT, trafficClock.t, false)) {
           const c = cars[ci]!;
@@ -400,8 +423,13 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
-    const flash = Math.floor(t * 4) % 2 === 0;
+    const isNight = timeRef.current === "night";
     liveCars.length = 0;
+    pursuitDots.length = 0;
+    const cam = state.camera;
+    // camera right vector, for panning the sirens
+    _right.set(1, 0, 0).applyQuaternion(cam.quaternion);
+    sirens.length = 0;
 
     for (let ci = 0; ci < cars.length; ci++) {
       const c = cars[ci]!;
@@ -411,6 +439,7 @@ export function CityTraffic({
       const half = c.v.len / 2;
       let np: { x: number; z: number };
       let yaw: number;
+      let flags = 0;
       if (guest) {
         // follow the host: dead-reckon from the last snapshot, then ease toward it
         const ns = netCars.current[ci];
@@ -428,7 +457,8 @@ export function CityTraffic({
           const tz = ns.z + Math.cos(ns.yaw) * ns.speed * ahead;
           c.gx += Math.sin(ns.yaw) * sp * dt;
           c.gz += Math.cos(ns.yaw) * sp * dt;
-          if (Math.hypot(tx - c.gx, tz - c.gz) > 6) {
+          // fast pursuit cars drift further between snapshots before a snap is warranted
+          if (Math.hypot(tx - c.gx, tz - c.gz) > 6 + ns.speed * 0.25) {
             c.gx = tx; // first snapshot or a big correction: snap
             c.gz = tz;
             c.yawVis = ns.yaw;
@@ -439,24 +469,35 @@ export function CityTraffic({
           }
           c.speed = sp;
           yaw = ns.yaw;
+          flags = ns.flags;
+          // mirror the host's pursuit roles (render-only here: guests never simulate)
+          c.role = flags & F_SIREN ? ROLE_COP : flags & F_SUSPECT ? ROLE_SUSPECT : ROLE_NORMAL;
         } else {
           yaw = c.yawVis;
           c.speed = 0;
         }
         np = { x: c.gx, z: c.gz };
+        let dy = yaw - c.yawVis;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        c.yawVis += dy * (1 - Math.exp(-dt * 9)); // same easing at any frame rate
       } else {
         // interpolate between the last two fixed simulation steps (far cars step 4x coarser)
         const a = c.far
           ? Math.min(1, ((tick.current % 4) + acc.current / SIM_DT) / 4)
           : acc.current / SIM_DT;
         np = { x: c.px + (c.x - c.px) * a, z: c.pz + (c.z - c.pz) * a };
-        yaw = headingOf(c);
+        let dy = c.yaw - c.pyaw;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        c.yawVis = c.pyaw + dy * a;
+        flags =
+          (c.role === ROLE_COP ? F_SIREN : 0) |
+          (c.role === ROLE_SUSPECT ? F_SUSPECT : 0) |
+          (c.park ? F_PARKED : 0);
       }
+      const siren = (flags & F_SIREN) !== 0;
+      const bar: Bar = siren ? barAt(t, ci) : 0;
       // ---- draw ----
-      let dy = yaw - c.yawVis;
-      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      c.yawVis += dy * (1 - Math.exp(-dt * 9)); // same easing at any frame rate
-      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, flash);
+      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, bar);
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       liveCars.push({ x: np.x, z: np.z, sin, cos, hl: half, hw: c.v.wid / 2, h: c.h });
@@ -474,6 +515,40 @@ export function CityTraffic({
         );
         poolRef.current.setMatrixAt(ci, _car);
       }
+      // ---- police lights: road spill (night) and the lightbar glow ----
+      if (spillRef.current && haloRef.current) {
+        if (bar) {
+          // the lit side of the bar throws its colour on the road around that side of the car
+          const side = bar === 1 ? -1 : 1;
+          const col = bar === 1 ? 0xff1a14 : 0x2a50ff;
+          _car.compose(
+            _p.set(np.x + cos * side * 1.6, 0.04, np.z - sin * side * 1.6),
+            _q.setFromAxisAngle(_up, c.yawVis),
+            _s.set(11, 1, 13),
+          );
+          spillRef.current.setMatrixAt(ci, _car);
+          spillRef.current.setColorAt(ci, _c.set(col));
+          const hs = isNight ? 3.4 : 2.4;
+          _car.compose(
+            _p.set(np.x + cos * side * 0.35, c.h + 0.3, np.z - sin * side * 0.35),
+            cam.quaternion,
+            _s.set(hs, hs, hs),
+          );
+          haloRef.current.setMatrixAt(ci, _car);
+          haloRef.current.setColorAt(ci, _c.set(col));
+        } else {
+          _car.makeScale(0, 0, 0);
+          spillRef.current.setMatrixAt(ci, _car);
+          haloRef.current.setMatrixAt(ci, _car);
+        }
+      }
+      if (siren || flags & F_SUSPECT)
+        pursuitDots.push({ x: np.x, z: np.z, kind: siren ? 1 : 2, i: ci });
+      if (siren) {
+        const d = Math.hypot(np.x - cam.position.x, np.z - cam.position.z);
+        if (d < SIREN_RANGE)
+          sirens.push({ ci, d, x: np.x, z: np.z, yaw: c.yawVis, speed: c.speed });
+      }
 
       // ---- bumping into the player ----
       const dx = L.px - np.x;
@@ -487,16 +562,19 @@ export function CityTraffic({
         Math.abs(lat) < c.v.wid / 2 + 0.45
       ) {
         const side = lat >= 0 ? 1 : -1;
-        // (cos, -sin) is the car's right-hand side in world space
+        // (cos, -sin) is sideways across the car in world space
+        const pursuit = (flags & (F_SIREN | F_SUSPECT)) !== 0;
         if (c.speed > 1.2) {
-          const force = Math.min(22, (3 + c.speed * 1.25) * Math.sqrt(c.v.mass));
+          // pursuit cars don't stop for you, and they hit a lot harder
+          const cap = pursuit ? 34 : 22;
+          const force = Math.min(cap, (3 + c.speed * 1.25) * Math.sqrt(c.v.mass));
           const kx = sin * force * 0.75 + cos * side * force * 0.65;
           const kz = cos * force * 0.75 - sin * side * force * 0.65;
           const impact = c.speed * c.v.mass;
-          const dmg = impact > 5 ? Math.max(1, Math.round(impact / 5)) : 0;
+          const dmg = impact > 5 ? Math.max(1, Math.round(impact / (pursuit ? 4 : 5))) : 0;
           L.hitPlayer(dmg, kx, kz, Math.min(1, impact / 12));
           c.hitCd = 0.6;
-          c.speed *= 0.5;
+          if (!guest) c.speed *= pursuit ? 0.85 : 0.5;
         } else {
           // crawling: just nudge the player out of the way
           L.hitPlayer(0, cos * side * 2.5, -sin * side * 2.5, 0);
@@ -504,17 +582,50 @@ export function CityTraffic({
         }
       }
     }
+    // ---- sirens: the nearest cruisers, louder when close, pitch bent by their motion ----
+    sirens.sort((p, q) => p.d - q.d);
+    for (let k = 0; k < SIREN_VOICES; k++) {
+      const s = sirens[k];
+      if (!s || !L.active) {
+        setSiren(k, 700, 0, 0, 0);
+        sirenDebug[k] = null;
+        continue;
+      }
+      const lx = cam.position.x - s.x;
+      const lz = cam.position.z - s.z;
+      const dd = Math.max(1, Math.hypot(lx, lz));
+      // speed toward the listener -> simple Doppler, clamped so it never sounds silly
+      const vr = ((Math.sin(s.yaw) * lx + Math.cos(s.yaw) * lz) / dd) * s.speed;
+      const dop = Math.max(0.88, Math.min(1.14, 343 / (343 - vr)));
+      const near = 1 / (1 + Math.pow(s.d / 22, 1.4));
+      const fade = Math.max(0, 1 - s.d / SIREN_RANGE);
+      const pan = Math.max(-0.85, Math.min(0.85, (-lx * _right.x - lz * _right.z) / dd));
+      const base = sirenPitch(t, s.ci, s.d < 50);
+      setSiren(k, base * dop, 0.2 * near * fade, pan, near);
+      sirenDebug[k] = {
+        car: s.ci,
+        d: s.d,
+        gain: 0.2 * near * fade,
+        doppler: dop,
+        pan,
+        yelp: s.d < 50,
+      };
+    }
     for (const m of [
       paintRef.current,
       wheelRef.current,
       lampRef.current,
       coneRef.current,
       poolRef.current,
+      spillRef.current,
+      haloRef.current,
     ]) {
       if (!m) continue;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
+    // police light spill reads on the road at night and (fainter) at dusk
+    if (spillRef.current) mats.spill.opacity = isNight ? 0.75 : 0.4;
   });
 
   return (
@@ -551,6 +662,16 @@ export function CityTraffic({
           <instancedMesh
             ref={poolRef}
             args={[geo.pool, mats.pool, cars.length]}
+            frustumCulled={false}
+          />
+          <instancedMesh
+            ref={spillRef}
+            args={[geo.spill, mats.spill, cars.length]}
+            frustumCulled={false}
+          />
+          <instancedMesh
+            ref={haloRef}
+            args={[geo.halo, mats.halo, cars.length]}
             frustumCulled={false}
           />
         </>
