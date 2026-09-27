@@ -379,7 +379,9 @@ function windowAt(
   shutter: string,
 ) {
   // faceDir: 0 front (lz=0, facing -lz), 1 right (lx=W), 2 back (lz=D), 3 left (lx=0)
-  const o = 0.05;
+  // every decal-like part stands clear of the outermost wall skin (the stone plinth sits
+  // 8 cm proud of the storeys): windows 13 cm, shutters 18, sills 22, flower boxes 34
+  const o = 0.13;
   const g = k.main;
   g.mat(T.window, r(), 0).col("#ffffff");
   const along = (d: number): [number, number, number, number] => {
@@ -398,35 +400,35 @@ function windowAt(
     const c = side * (w / 2 + 0.26);
     const [sx, sz] =
       faceDir === 0
-        ? [lx + c, lz - 0.08]
+        ? [lx + c, lz - 0.18]
         : faceDir === 2
-          ? [lx - c, lz + 0.08]
+          ? [lx - c, lz + 0.18]
           : faceDir === 1
-            ? [lx + 0.08, lz + c]
-            : [lx - 0.08, lz - c];
+            ? [lx + 0.18, lz + c]
+            : [lx - 0.18, lz - c];
     const along2 = faceDir === 0 || faceDir === 2;
     lbox(dg, F, sx, sz, y - 0.02, along2 ? 0.5 : 0.06, h + 0.04, along2 ? 0.06 : 0.5);
   }
   dg.mat(T.plain, 0, 0).col(SNOW);
   const [cx, cz] =
     faceDir === 0
-      ? [lx, lz - 0.14]
+      ? [lx, lz - 0.24]
       : faceDir === 2
-        ? [lx, lz + 0.14]
+        ? [lx, lz + 0.24]
         : faceDir === 1
-          ? [lx + 0.14, lz]
-          : [lx - 0.14, lz];
+          ? [lx + 0.24, lz]
+          : [lx - 0.24, lz];
   const along3 = faceDir === 0 || faceDir === 2;
-  lbox(dg, F, cx, cz, y - 0.12, along3 ? w + 0.2 : 0.28, 0.12, along3 ? 0.28 : w + 0.2);
+  lbox(dg, F, cx, cz, y - 0.12, along3 ? w + 0.2 : 0.38, 0.12, along3 ? 0.38 : w + 0.2);
   if (flowers) {
     const [fx, fz] =
       faceDir === 0
-        ? [lx, lz - 0.28]
+        ? [lx, lz - 0.38]
         : faceDir === 2
-          ? [lx, lz + 0.28]
+          ? [lx, lz + 0.38]
           : faceDir === 1
-            ? [lx + 0.28, lz]
-            : [lx - 0.28, lz];
+            ? [lx + 0.38, lz]
+            : [lx - 0.38, lz];
     dg.mat(T.board, 0, 0).col("#8a5a32");
     lbox(dg, F, fx, fz, y - 0.42, along3 ? w + 0.1 : 0.3, 0.28, along3 ? 0.3 : w + 0.1);
     dg.mat(T.plain, 0, 0).col(FLOWER_T[Math.floor(r() * FLOWER_T.length)]!);
@@ -650,7 +652,7 @@ function gableHouse(
     const gx1 = doorAt > W / 2 ? Math.min(x0 + gw - 1.6, doorAt - 0.9) : x0 + gw - 1.6;
     const gx0 = doorAt > W / 2 ? x0 : Math.max(x0, doorAt + 0.9);
     if (gx1 - gx0 > 1)
-      lface(g, F, gx0, -0.04, gx1, -0.04, y + 0.35, y + 2.45, [
+      lface(g, F, gx0, -0.12, gx1, -0.12, y + 0.35, y + 2.45, [
         0,
         0,
         Math.max(1, Math.round((gx1 - gx0) / 1.6)),
@@ -679,8 +681,8 @@ function gableHouse(
     const sw = Math.min(W - 2, 7);
     const sy = bigFront ? y + 3.05 : y + FH - 0.6;
     k.signs.mat(0, 0, 0).col("#ffffff");
-    const [ax, az] = F.P(W / 2 - sw / 2, -0.16);
-    const [bx, bz] = F.P(W / 2 + sw / 2, -0.16);
+    const [ax, az] = F.P(W / 2 - sw / 2, -0.22);
+    const [bx, bz] = F.P(W / 2 + sw / 2, -0.22);
     face(k.signs, ax, az, bx, bz, sy, sy + 0.62, signUV(o.sign));
     // a lamp over the sign
     const [lx, lz] = F.P(W / 2, -0.5);
@@ -690,7 +692,7 @@ function gableHouse(
   // front door with a little snowy canopy
   if (o.door) {
     g.mat(T.door, r(), 0).col("#ffffff");
-    lface(g, F, doorAt - 0.65, -0.09, doorAt + 0.65, -0.09, y, y + 2.25, [0, 0, 1, 1]);
+    lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
     const dg = k.detail;
     dg.mat(T.board, 0, 0).col("#6a4424");
     const A = L3(F, doorAt - 1.1, y + 2.75, 0);
@@ -941,8 +943,8 @@ function hotel(k: Kit, b: ABld) {
   k.detail.box(tc[0] + 0.9, tc[1] + 9.2, tc[2], 1.7, 1.1, 0.05);
   // the name across the front, lit at night
   k.signs.mat(0, 0, 0).col("#ffffff");
-  const [ax, az] = F.P(W / 2 - 7, -0.2);
-  const [bx, bz] = F.P(W / 2 + 7, -0.2);
+  const [ax, az] = F.P(W / 2 - 7, -0.32);
+  const [bx, bz] = F.P(W / 2 + 7, -0.32);
   face(k.signs, ax, az, bx, bz, top - 1.8, top - 0.5, signUV(b.sign));
   for (const s of [-1, 1]) {
     const lp = L3(F, W / 2 + s * 2.6, y + 2.6, -3.4);

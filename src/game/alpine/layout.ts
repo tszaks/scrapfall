@@ -570,7 +570,7 @@ export function generateAlpine(seed: number, solo: boolean) {
     return h + (floorAt(x, z) + (h - floorAt(x, z)) * 0.15 - h) * k;
   });
   // the lake: flat ice with a soft shore
-  const lakeY = -0.9;
+  const lakeY = -2.6;
   shape(
     LAKE.x - LAKE.rx * 1.5,
     LAKE.z - LAKE.rz * 1.5,
@@ -671,8 +671,9 @@ export function generateAlpine(seed: number, solo: boolean) {
   // reach and only ever steps down towards the lake; it runs on under the covered bridge
   // (whose deck is a walkable platform at street level, see terrain.platforms)
   const creek = PATHS.find((p) => p.kind === "creek")!;
-  const lakeY0 = -0.9;
+  const lakeY0 = -2.6;
   let creekFloor: (s: number) => number;
+  let carveCreek = () => {};
   {
     const len = polyDist(creek.pts[0]![0], creek.pts[0]![1], creek.pts).len;
     const n = Math.ceil(len / 2);
@@ -691,16 +692,18 @@ export function generateAlpine(seed: number, solo: boolean) {
     for (let k = 1; k <= n; k++) floor[k] = Math.min(floor[k]!, floor[k - 1]!);
     creekFloor = (sv: number) => floor[clamp(Math.round((sv / len) * n), 0, n)]!;
     const b = bbox(creek.pts, creek.w / 2 + 10);
-    shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) => {
-      const r = polyDist(x, z, creek.pts);
-      const half = creek.w / 2;
-      if (r.d > half + 8) return h;
-      const bed = creekFloor(r.s);
-      if (r.d < half) return Math.min(h, bed);
-      // banks: steep near the ice, easing out onto the snow
-      const k = Math.pow(smooth(half, half + 8, r.d), 0.7);
-      return Math.min(h, bed + (h - bed) * k);
-    });
+    carveCreek = () =>
+      shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) => {
+        const r = polyDist(x, z, creek.pts);
+        const half = creek.w / 2;
+        if (r.d > half + 8) return h;
+        const bed = creekFloor(r.s);
+        if (r.d < half) return Math.min(h, bed);
+        // banks: steep near the ice, easing out onto the snow
+        const k = Math.pow(smooth(half, half + 8, r.d), 0.7);
+        return Math.min(h, bed + (h - bed) * k);
+      });
+    carveCreek();
   }
   // the village square, rink and plaza stay level
   const squareY = hAt(0, 60);
@@ -768,6 +771,10 @@ export function generateAlpine(seed: number, solo: boolean) {
       if (e < 1.12) clear[k] = 1;
     },
   );
+  for (const t of [BASE_TERM, TOP_TERM])
+    paint({ x0: t.x0 - 4, z0: t.z0 - 4, x1: t.x1 + 4, z1: t.z1 + 8 }, (_x, _z, k) => {
+      clear[k] = 1;
+    });
   // the lift line is cut through the forest
   paint({ x0: LIFT_X - 10, z0: LIFT_Z1 - 4, x1: LIFT_X + 10, z1: LIFT_Z0 + 4 }, (_x, _z, k) => {
     clear[k] = 1;
@@ -828,6 +835,14 @@ export function generateAlpine(seed: number, solo: boolean) {
     x1 = Math.round(x1 / 2) * 2;
     z0 = Math.round(z0 / 2) * 2;
     z1 = Math.round(z1 / 2) * 2;
+    if (t !== "church")
+      for (const o of buildings) {
+        const gx = Math.max(x0 - o.x1, o.x0 - x1);
+        const gz = Math.max(z0 - o.z1, o.z0 - z1);
+        const oz = Math.min(z1, o.z1) - Math.max(z0, o.z0);
+        const ox = Math.min(x1, o.x1) - Math.max(x0, o.x0);
+        if ((gx < 5 && gz < 0 && oz > 0) || (gz < 5 && gx < 0 && ox > 0) || (gx < 0 && gz < 0)) return null;
+      }
     const f0 = footprintY(x0, z0, x1, z1);
     // level a pad under and around the house (flat, walkable ground at the door), easing
     // back into the natural slope over ~14 m so there are no steep banks against the walls
@@ -962,6 +977,7 @@ export function generateAlpine(seed: number, solo: boolean) {
         for (let j = ci(z - 3); ok && j <= ci(z + d + 3); j++) if (clear[S(i, j)]) ok = false;
       if (!ok) continue;
       const b = addB(t, x, z, x + w, z + d, z < 0 ? 2 : 0, 2 + (rand() < 0.5 ? 1 : 0));
+      if (!b) continue;
       if (coop) b.coop = true;
       n--;
     }
@@ -1016,6 +1032,31 @@ export function generateAlpine(seed: number, solo: boolean) {
     });
   }
 
+  // ---- 4c. conform: everything that later shaping touched gets its ground back. Ground under
+  // each house is cut to just below its floor (the plinth runs down to the lowest ground at
+  // its walls); the lift terminals sit on exactly level pads; the creek is carved last so
+  // nothing ever fills its gully ----
+  for (const b of buildings) {
+    shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) =>
+      x > b.x0 - 0.01 && x < b.x1 + 0.01 && z > b.z0 - 0.01 && z < b.z1 + 0.01 ? Math.min(h, b.y - 0.08) : h,
+    );
+    let lo = Infinity;
+    for (let x = b.x0 - 1; x <= b.x1 + 1.01; x += 1)
+      for (const z of [b.z0 - 1, b.z1 + 1]) lo = Math.min(lo, hAt(x, z));
+    for (let z = b.z0 - 1; z <= b.z1 + 1.01; z += 1) for (const x of [b.x0 - 1, b.x1 + 1]) lo = Math.min(lo, hAt(x, z));
+    b.ymin = Math.min(lo, b.y) - 0.4;
+  }
+  for (const [t, ty] of [
+    [BASE_TERM, plazaY],
+    [TOP_TERM, plateauY],
+  ] as const) {
+    shape(t.x0 - 10, t.z0 - 10, t.x1 + 10, t.z1 + 10, (x, z, h) => {
+      const k = 1 - smooth(0, 8, rectDist(x, z, t));
+      return h + (ty - h) * k;
+    });
+  }
+  carveCreek();
+
   // ---- 5. set-piece structures ----
   // covered bridge: the deck is a platform at street level (terrain.platforms), the creek
   // gully runs on beneath it; its side walls and abutments are solid
@@ -1031,6 +1072,13 @@ export function generateAlpine(seed: number, solo: boolean) {
       block(x, RINK.z1, x + 2, RINK.z1 + 2, -1);
     }
   }
+  for (const [cx, cz] of [
+    [RINK.x0 - 2, RINK.z0 - 2],
+    [RINK.x1, RINK.z0 - 2],
+    [RINK.x0 - 2, RINK.z1],
+    [RINK.x1, RINK.z1],
+  ] as const)
+    block(cx, cz, cx + 2, cz + 2, -1);
   for (let z = RINK.z0; z < RINK.z1; z += 2) {
     block(RINK.x0 - 2, z, RINK.x0, z + 2, -1);
     block(RINK.x1, z, RINK.x1 + 2, z + 2, -1);
@@ -1113,7 +1161,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       const dx = b[0] - a[0];
       const dz = b[1] - a[1];
       const l = Math.hypot(dx, dz) || 1;
-      const off = p.w / 2 + 0.8;
+      const off = p.w / 2 - 0.6;
       const x = a[0] + (-dz / l) * off * side;
       const z = a[1] + (dx / l) * off * side;
       if (!solidAt(x, z) && Math.abs(x) < HALF - 4 && Math.abs(z) < HALF - 4)
@@ -1126,13 +1174,14 @@ export function generateAlpine(seed: number, solo: boolean) {
   block(0, 42, 4, 46, -1);
   prop("fountain", -8, 78, 0, 1);
   block(-10, 76, -6, 80, -1);
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 5; k++) {
     prop("bench", -38 + k * 13.5, 83, Math.PI, 1);
     block(-38 + k * 13.5 - 1, 82, -38 + k * 13.5 + 1, 84, -1);
   }
   for (let k = 0; k < 4; k++) {
     prop("table", 20 + (k % 2) * 4, 60 + Math.floor(k / 2) * 4, rand() * 3, 1);
     prop("heater", 22 + (k % 2) * 4, 62 + Math.floor(k / 2) * 4, 0, 1);
+    block(19 + (k % 2) * 4, 59 + Math.floor(k / 2) * 4, 23 + (k % 2) * 4, 63 + Math.floor(k / 2) * 4, -1);
   }
   prop("snowman", 30, 76, 2.4, 1);
   block(29, 75, 31, 77, -1);
@@ -1158,8 +1207,8 @@ export function generateAlpine(seed: number, solo: boolean) {
   // lodge deck
   prop("flag", 54, -252, 0, 1.3);
   for (let k = 0; k < 3; k++) {
-    prop("bench", 60 + k * 6, -252, Math.PI, 1);
-    block(59 + k * 6, -253, 61 + k * 6, -251, -1);
+    prop("bench", 58 + k * 7.5, -256, Math.PI, 1);
+    block(57 + k * 7.5, -257, 59 + k * 7.5, -255, -1);
   }
   for (let k = 0; k < 4; k++) {
     const tx = 9 + k * 5.5;
@@ -1401,6 +1450,7 @@ export function generateAlpine(seed: number, solo: boolean) {
           rot: rand() * 6.28,
           k: 2,
         });
+        solid[S(ci(x), ci(z))] = 1;
       }
     }
   }
@@ -1553,8 +1603,8 @@ export function generateAlpine(seed: number, solo: boolean) {
     ride: {
       boardUp: [LIFT_X - 2.6, LIFT_Z0 + 3],
       boardDown: [LIFT_X + 2.6, LIFT_Z1 + 2],
-      offTop: [LIFT_X - 6, LIFT_Z1 + 4, Math.PI * 0.75],
-      offBase: [LIFT_X + 6, LIFT_Z0 + 8, Math.PI],
+      offTop: [LIFT_X - 6, LIFT_Z1 + 4, Math.PI * 0.62],
+      offBase: [LIFT_X + 5, LIFT_Z0 + 10, Math.PI * 0.92],
     },
     tops,
   };

@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { Geo } from "../cityGeo";
 import { terrainY } from "../terrain";
 import { buildInto, type Kit } from "./build";
-import { chairAt, chairCount } from "./ride";
+import { chairAt, chairCount, ride } from "./ride";
 import { farSpruceGeo, spruceGeo } from "./forest";
 import type { AlpineLayout } from "./layout";
 import type { TimeOfDay } from "../lighting";
@@ -884,7 +884,7 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => {
     // test handle (?debug=1): the shared weather / lift clock
     if (new URLSearchParams(window.location.search).get("debug") === "1")
-      (window as unknown as { __alpine?: unknown }).__alpine = alpine;
+      Object.assign(window as unknown as Record<string, unknown>, { __alpine: alpine, __ride: ride });
   }, []);
 
   const mats = useMemo(
@@ -1070,6 +1070,7 @@ export const AlpineScene = memo(function AlpineScene({
   const q = useMemo(() => new THREE.Quaternion(), []);
   const ax = useMemo(() => new THREE.Vector3(0, 1, 0), []);
   const sc = useMemo(() => new THREE.Vector3(1, 1, 1), []);
+  const zero = useMemo(() => new THREE.Vector3(0.0001, 0.0001, 0.0001), []);
   const pv = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, raw) => {
@@ -1115,7 +1116,8 @@ export const AlpineScene = memo(function AlpineScene({
       for (let i = 0; i < nChairs; i++) {
         const p = chairAt(lift, i);
         q.setFromAxisAngle(ax, p.yaw);
-        m4.compose(pv.set(p.x, p.y, p.z), q, sc);
+        // your own chair is hidden while you ride it (it would fill the view); teammates' show
+        m4.compose(pv.set(p.x, p.y, p.z), q, i === ride.chair ? zero : sc);
         ch.setMatrixAt(i, m4);
       }
       ch.instanceMatrix.needsUpdate = true;
