@@ -1805,7 +1805,6 @@ type TKey =
   | "light"
   | "trunk"
   | "canopy"
-  | "palm"
   | "bench"
   | "hydrant"
   | "news"
@@ -1870,25 +1869,6 @@ function templates(): Tmpls {
         ),
       );
       ico.dispose();
-    }),
-    palm: t((g) => {
-      // 10 m palm: segmented, gently leaning trunk and a crown of drooping fronds
-      for (let k = 0; k < 5; k++) {
-        g.col(k % 2 ? "#8a6a48" : "#7a5a3c");
-        g.cyl(0, k * 2, k * 0.12, 0.26 - k * 0.025, 2, 6, false, 0.24 - k * 0.025);
-      }
-      const leaf = new THREE.BoxGeometry(0.5, 0.06, 3.6).translate(0, 0, 1.8);
-      for (let k = 0; k < 9; k++) {
-        const m = new THREE.Matrix4()
-          .makeTranslation(0, 10, 0.6)
-          .multiply(new THREE.Matrix4().makeRotationY((k / 9) * Math.PI * 2))
-          .multiply(new THREE.Matrix4().makeRotationX(0.35 + (k % 3) * 0.2));
-        g.col(k % 2 ? "#3f8a3a" : "#2f7a36");
-        g.add(leaf, m);
-      }
-      leaf.dispose();
-      g.col("#5a4a2a");
-      g.cyl(0, 9.6, 0.6, 0.35, 0.6, 6);
     }),
     bench: t((g) => {
       g.col("#7a5234");
@@ -2300,11 +2280,8 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
       D.stamp(T.canopy, p.x, y, p.z, p.rot, s, s, s, tint);
       break;
     }
-    case "palm": {
-      const s = (p.s ?? 10) / 10;
-      D.stamp(T.palm, p.x, y, p.z, p.rot, s, s, s);
-      break;
-    }
+    case "palm":
+      break; // instanced by species in Palms.tsx
     case "bench":
       D.stamp(T.bench, p.x, y, p.z, p.rot);
       break;

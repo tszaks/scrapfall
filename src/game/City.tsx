@@ -10,6 +10,7 @@ import type { CityLayout } from "./cityLayout";
 import { buildCityMeshes, DETAIL_RANGE } from "./cityMesh";
 import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture, signTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
+import { CityPalms } from "./Palms";
 import { SUN_DIR, skyEnvSource, skyTexture } from "./sky";
 import { addSkyFogUniforms } from "./skyFog";
 import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
@@ -393,6 +394,7 @@ export const CityScene = memo(function CityScene({
           )}
         </group>
       ))}
+      <CityPalms city={city} />
       {built.beacons.length > 0 && (
         <instancedMesh ref={beaconRef} args={[beaconGeo, mats.beacon, built.beacons.length]} />
       )}
