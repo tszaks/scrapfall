@@ -15,6 +15,9 @@ import {
   W_AVALANCHE,
   W_CLOSED,
   W_PASS,
+  W_LIFT,
+  W_LODGE,
+  W_BERGBAHN,
   W_ROAD,
   type ABld,
   type AlpineData,
@@ -376,7 +379,9 @@ function windowAt(
   shutter: string,
 ) {
   // faceDir: 0 front (lz=0, facing -lz), 1 right (lx=W), 2 back (lz=D), 3 left (lx=0)
-  const o = 0.05;
+  // every decal-like part stands clear of the outermost wall skin (the stone plinth sits
+  // 8 cm proud of the storeys): windows 13 cm, shutters 18, sills 22, flower boxes 34
+  const o = 0.13;
   const g = k.main;
   g.mat(T.window, r(), 0).col("#ffffff");
   const along = (d: number): [number, number, number, number] => {
@@ -395,35 +400,35 @@ function windowAt(
     const c = side * (w / 2 + 0.26);
     const [sx, sz] =
       faceDir === 0
-        ? [lx + c, lz - 0.08]
+        ? [lx + c, lz - 0.18]
         : faceDir === 2
-          ? [lx - c, lz + 0.08]
+          ? [lx - c, lz + 0.18]
           : faceDir === 1
-            ? [lx + 0.08, lz + c]
-            : [lx - 0.08, lz - c];
+            ? [lx + 0.18, lz + c]
+            : [lx - 0.18, lz - c];
     const along2 = faceDir === 0 || faceDir === 2;
     lbox(dg, F, sx, sz, y - 0.02, along2 ? 0.5 : 0.06, h + 0.04, along2 ? 0.06 : 0.5);
   }
   dg.mat(T.plain, 0, 0).col(SNOW);
   const [cx, cz] =
     faceDir === 0
-      ? [lx, lz - 0.14]
+      ? [lx, lz - 0.24]
       : faceDir === 2
-        ? [lx, lz + 0.14]
+        ? [lx, lz + 0.24]
         : faceDir === 1
-          ? [lx + 0.14, lz]
-          : [lx - 0.14, lz];
+          ? [lx + 0.24, lz]
+          : [lx - 0.24, lz];
   const along3 = faceDir === 0 || faceDir === 2;
-  lbox(dg, F, cx, cz, y - 0.12, along3 ? w + 0.2 : 0.28, 0.12, along3 ? 0.28 : w + 0.2);
+  lbox(dg, F, cx, cz, y - 0.12, along3 ? w + 0.2 : 0.38, 0.12, along3 ? 0.38 : w + 0.2);
   if (flowers) {
     const [fx, fz] =
       faceDir === 0
-        ? [lx, lz - 0.28]
+        ? [lx, lz - 0.38]
         : faceDir === 2
-          ? [lx, lz + 0.28]
+          ? [lx, lz + 0.38]
           : faceDir === 1
-            ? [lx + 0.28, lz]
-            : [lx - 0.28, lz];
+            ? [lx + 0.38, lz]
+            : [lx - 0.38, lz];
     dg.mat(T.board, 0, 0).col("#8a5a32");
     lbox(dg, F, fx, fz, y - 0.42, along3 ? w + 0.1 : 0.3, 0.28, along3 ? 0.3 : w + 0.1);
     dg.mat(T.plain, 0, 0).col(FLOWER_T[Math.floor(r() * FLOWER_T.length)]!);
@@ -643,12 +648,16 @@ function gableHouse(
     g.mat(T.glasswall, r(), 0).col("#ffffff");
     const gw = W - 3.2;
     const x0 = doorAt > W / 2 ? 0.8 : 2.4;
-    lface(g, F, x0, -0.05, x0 + gw - 1.6, -0.05, y + 0.35, y + 2.45, [
-      0,
-      0,
-      Math.max(1, Math.round((gw - 1.6) / 1.6)),
-      1,
-    ]);
+    // the glazing stops short of the door (no two faces ever share a plane)
+    const gx1 = doorAt > W / 2 ? Math.min(x0 + gw - 1.6, doorAt - 0.9) : x0 + gw - 1.6;
+    const gx0 = doorAt > W / 2 ? x0 : Math.max(x0, doorAt + 0.9);
+    if (gx1 - gx0 > 1)
+      lface(g, F, gx0, -0.12, gx1, -0.12, y + 0.35, y + 2.45, [
+        0,
+        0,
+        Math.max(1, Math.round((gx1 - gx0) / 1.6)),
+        1,
+      ]);
     if (o.cafe) {
       g.mat(T.stripes, 0, 0).col("#ffffff");
       const A = L3(F, x0 - 0.3, y + 2.95, -0.05);
@@ -672,8 +681,8 @@ function gableHouse(
     const sw = Math.min(W - 2, 7);
     const sy = bigFront ? y + 3.05 : y + FH - 0.6;
     k.signs.mat(0, 0, 0).col("#ffffff");
-    const [ax, az] = F.P(W / 2 - sw / 2, -0.12);
-    const [bx, bz] = F.P(W / 2 + sw / 2, -0.12);
+    const [ax, az] = F.P(W / 2 - sw / 2, -0.22);
+    const [bx, bz] = F.P(W / 2 + sw / 2, -0.22);
     face(k.signs, ax, az, bx, bz, sy, sy + 0.62, signUV(o.sign));
     // a lamp over the sign
     const [lx, lz] = F.P(W / 2, -0.5);
@@ -683,7 +692,7 @@ function gableHouse(
   // front door with a little snowy canopy
   if (o.door) {
     g.mat(T.door, r(), 0).col("#ffffff");
-    lface(g, F, doorAt - 0.65, -0.05, doorAt + 0.65, -0.05, y, y + 2.25, [0, 0, 1, 1]);
+    lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
     const dg = k.detail;
     dg.mat(T.board, 0, 0).col("#6a4424");
     const A = L3(F, doorAt - 1.1, y + 2.75, 0);
@@ -702,16 +711,30 @@ function gableHouse(
       [0, 1, 0],
     );
     // steps up to the floor when the ground falls away
-    if (y - b.ymin > 0.6) {
-      g.mat(T.stone, 0, 0).col("#e0d8cc");
-      lbox(g, F, doorAt, -0.9, b.ymin, 1.6, y - b.ymin, 1.6);
+    // a step only where the ground in front of the door really sits below the floor
+    const dp = L3(F, doorAt, 0, -0.9);
+    const dg0 = groundFn(dp[0], dp[2]);
+    if (y - dg0 > 0.45) {
+      g.mat(T.stone, 0, 0).col("#d8d4cc");
+      const n = Math.min(4, Math.ceil((y - dg0) / 0.2));
+      for (let st = 0; st < n; st++)
+        lbox(
+          g,
+          F,
+          doorAt,
+          -0.35 - (n - st) * 0.3,
+          dg0 - 0.3,
+          1.5,
+          0.3 + ((st + 1) * (y - dg0)) / n,
+          0.32,
+        );
     }
     // warm light over the door
     const lp = L3(F, doorAt + 0.9, y + 2.1, -0.15);
     k.glow.col("#ffd49a").box(lp[0], lp[1], lp[2], 0.16, 0.22, 0.16);
     k.lamps.push([lp[0], lp[1], lp[2], 0]);
     const fp = L3(F, doorAt, 0, -2);
-    k.lights.push([fp[0], fp[2], 4, "#ffb060"]);
+    k.lights.push([fp[0], fp[2], 4, "#ffc98a"]);
   }
 
   // balconies: slab, heart-cut railing, flower boxes, snow on the rail
@@ -749,33 +772,6 @@ function gableHouse(
     dg.mat(T.board, 0, 0).col("#5a3a1e");
     for (const x of [0.8, W / 2, W - 0.8]) lbox(dg, F, x, -dp / 2, by - 0.9, 0.18, 0.7, dp - 0.2);
   }
-
-  // snow drifted against the walls (detail)
-  const dg = k.detail;
-  dg.mat(T.snow, 0, 0).col(SNOW);
-  const drift = (ax: number, az: number, bx: number, bz: number, ox: number, oz: number) => {
-    const len = Math.hypot(bx - ax, bz - az);
-    const n = Math.max(1, Math.round(len / 3));
-    for (let i = 0; i < n; i++) {
-      if (r() < 0.25) continue;
-      const t0 = i / n;
-      const t1 = (i + 1) / n;
-      const h = 0.35 + r() * 0.55;
-      const wd = 0.7 + r() * 0.6;
-      const p0: V3 = L3(F, ax + (bx - ax) * t0, 0, az + (bz - az) * t0);
-      const p1: V3 = L3(F, ax + (bx - ax) * t1, 0, az + (bz - az) * t1);
-      const o3 = F.out(ox, oz);
-      const gy = b.ymin + 0.6;
-      const A: V3 = [p0[0] + o3[0] * wd, gy - 0.1, p0[2] + o3[2] * wd];
-      const B: V3 = [p1[0] + o3[0] * wd, gy - 0.1, p1[2] + o3[2] * wd];
-      const C: V3 = [p1[0], gy + h, p1[2]];
-      const Dd: V3 = [p0[0], gy + h, p0[2]];
-      q4(dg, A, B, C, Dd, [o3[0], 1, o3[2]]);
-    }
-  };
-  drift(W, D, 0, D, 0, 1);
-  drift(0, D, 0, 0, -1, 0);
-  drift(W, 0, W, D, 1, 0);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -956,8 +952,8 @@ function hotel(k: Kit, b: ABld) {
   k.detail.box(tc[0] + 0.9, tc[1] + 9.2, tc[2], 1.7, 1.1, 0.05);
   // the name across the front, lit at night
   k.signs.mat(0, 0, 0).col("#ffffff");
-  const [ax, az] = F.P(W / 2 - 7, -0.2);
-  const [bx, bz] = F.P(W / 2 + 7, -0.2);
+  const [ax, az] = F.P(W / 2 - 7, -0.32);
+  const [bx, bz] = F.P(W / 2 + 7, -0.32);
   face(k.signs, ax, az, bx, bz, top - 1.8, top - 0.5, signUV(b.sign));
   for (const s of [-1, 1]) {
     const lp = L3(F, W / 2 + s * 2.6, y + 2.6, -3.4);
@@ -1119,92 +1115,88 @@ function church(k: Kit, b: ABld) {
   tube(g, L3(F, W / 2, ridge + 0.4, -0.6), L3(F, W / 2, ridge + 0.4, D + 0.6), 0.25, 5);
 }
 
-/** chairlift terminal: a glazed hall and an open canopy over the bullwheel */
-function station(k: Kit, b: ABld, lift: Lift) {
-  const r = mulberry(Math.floor(b.seed * 4294967295));
-  const top = b.t === "topstation";
+/**
+ * A chairlift terminal: a steel canopy on four posts over a boarded loading platform, the
+ * bullwheel and its drive housing under the roof, turnstile lanes on the approach, a
+ * hanging LIFT sign and warm lights. The platform itself is walkable (the boarding zone).
+ */
+function terminal(k: Kit, a: AlpineData, t: AlpineData["terminals"][number]) {
+  const lf = a.lift;
+  const sp = t.kind === "base" ? lf.supports[0]! : lf.supports[lf.supports.length - 1]!;
   const g = k.main;
-  const y = b.y;
-  // hall on the far side from the lift, canopy on the lift side
-  const liftZ = top ? b.z1 : b.z0; // the face the cable leaves from
-  const hallZ0 = top ? b.z0 : b.z0 + 8;
-  const hallZ1 = top ? b.z1 - 8 : b.z1;
-  const hall = {
-    x0: b.x0,
-    z0: hallZ0,
-    x1: b.x1,
-    z1: hallZ1,
-    y,
-    ymin: b.ymin,
-    front: (top ? 0 : 2) as 0 | 2,
-    seed: b.seed,
-  };
-  const F = frameOf(hall);
-  const { W, D } = F;
-  g.mat(T.stone, 0, 1).col("#d8d4cc");
-  for (const [ax, az, bx, bz] of [
-    [0, 0, W, 0],
-    [W, 0, W, D],
-    [W, D, 0, D],
-    [0, D, 0, 0],
-  ] as const)
-    lface(g, F, ax, az, bx, bz, b.ymin, y + 1);
-  g.mat(T.board, 0, 1).col("#c89868");
-  for (const [ax, az, bx, bz] of [
-    [W, 0, W, D],
-    [W, D, 0, D],
-    [0, D, 0, 0],
-  ] as const)
-    lface(g, F, ax, az, bx, bz, y + 1, y + 6);
-  g.mat(T.glasswall, r(), 0).col("#ffffff");
-  lface(g, F, 0, 0, W, 0, y + 1, y + 6, [0, 0, Math.round(W / 2.2), 1]);
-  // monopitch roof sloping away from the view side, thick snow
-  const A = L3(F, -1, y + 7.4, -1.5);
-  const B = L3(F, W + 1, y + 7.4, -1.5);
-  const C = L3(F, W + 1, y + 6, D + 1);
-  const Dd = L3(F, -1, y + 6, D + 1);
-  g.mat(T.metal, 0, 0).col("#4a4e56");
-  q4(g, A, B, C, Dd, [0, -1, 0]);
-  q4(g, [A[0], A[1] - 0.3, A[2]], [B[0], B[1] - 0.3, B[2]], B, A, F.out(0, -1));
-  g.mat(T.snow, 0, 0).col(SNOW);
-  const up = (p: V3): V3 => [p[0], p[1] + 0.45, p[2]];
-  q4(g, up(A), up(B), up(C), up(Dd), [0, 1, 0]);
-  q4(g, A, B, up(B), up(A), F.out(0, -1));
-  // sign
-  k.signs.mat(0, 0, 0).col("#ffffff");
-  const [sx0, sz0] = F.P(W / 2 - 5, -1.6);
-  const [sx1, sz1] = F.P(W / 2 + 5, -1.6);
-  face(k.signs, sx0, sz0, sx1, sz1, y + 6.5, y + 7.3, signUV(b.sign));
-  // the terminal canopy: steel columns, a roof, the bullwheel
-  const cz0 = top ? hallZ1 : b.z0;
-  const cz1 = top ? b.z1 : hallZ0;
-  const sup = top ? lift.supports[lift.supports.length - 1]! : lift.supports[0]!;
-  g.mat(T.metal, 0, 0).col("#e8eaec");
-  for (const x of [b.x0 + 1, b.x1 - 1])
-    for (const z of [cz0 + 0.5, cz1 - 0.5]) tube(g, [x, b.ymin, z], [x, sup.y + 1.8, z], 0.22, 6);
+  const y = t.y;
+  const cx = (t.x0 + t.x1) / 2;
+  const cz = (t.z0 + t.z1) / 2;
+  const roofY = sp.y + 2.6;
+  // platform boards with a painted loading line
+  g.mat(T.board, 0, 0).col("#9a7a56");
+  g.flat(t.x0, t.z0, t.x1, t.z1, y + 0.06, [0, 0, (t.x1 - t.x0) / 2, (t.z1 - t.z0) / 2]);
+  g.mat(T.plain, 0, 0).col("#f2c418");
+  const [bx, bz] = t.kind === "base" ? a.ride.boardUp : a.ride.boardDown;
+  g.flat(bx - 1.2, bz - 0.12, bx + 1.2, bz + 0.12, y + 0.08);
+  // posts, roof, fascia and a thick snow load
+  g.mat(T.metal, 0, 0).col("#d8dade");
+  for (const px of [t.x0 + 1, t.x1 - 1])
+    for (const pz of [t.z0 + 1, t.z1 - 1]) tube(g, [px, y - 0.5, pz], [px, roofY, pz], 0.3, 8);
   g.mat(T.metal, 0, 0).col("#c8262a");
-  tbox(g, (b.x0 + b.x1) / 2, sup.y + 1.8, (cz0 + cz1) / 2, b.x1 - b.x0 + 1, 0.7, cz1 - cz0 + 1.2);
+  tbox(g, cx, roofY, cz, t.x1 - t.x0 + 2, 0.6, t.z1 - t.z0 + 2);
+  g.mat(T.metal, 0, 0).col("#5a5e66");
+  tbox(g, cx, roofY - 0.05, cz, t.x1 - t.x0 + 1.6, 0.05, t.z1 - t.z0 + 1.6, 0, false, true);
   g.mat(T.snow, 0, 0).col(SNOW);
-  tbox(g, (b.x0 + b.x1) / 2, sup.y + 2.5, (cz0 + cz1) / 2, b.x1 - b.x0 + 1.2, 0.4, cz1 - cz0 + 1.4);
+  tbox(g, cx, roofY + 0.6, cz, t.x1 - t.x0 + 2.2, 0.5, t.z1 - t.z0 + 2.2);
+  // bullwheel and drive housing
   g.mat(T.metal, 0, 0).col("#9aa0a8");
-  g.cyl(lift.x, sup.y + 0.15, sup.z, lift.gauge + 0.35, 0.35, 16, true);
-  g.cyl(lift.x, sup.y + 0.5, sup.z, 0.6, 1.3, 8, true);
-  // loading platform
-  g.mat(T.board, 0, 0).col("#8a6a4a");
-  tbox(g, lift.x, b.ymin, (cz0 + cz1) / 2, b.x1 - b.x0 - 2, y - b.ymin + 0.3, cz1 - cz0 - 1);
-  void liftZ;
-  const lp = [(b.x0 + b.x1) / 2, sup.y + 1.6, (cz0 + cz1) / 2] as const;
-  k.glow.col("#fff2d8").box(lp[0], lp[1], lp[2], 2.4, 0.08, 0.3);
-  k.lamps.push([lp[0], lp[1] - 0.5, lp[2], 1]);
-  k.lights.push([lp[0], lp[2], 12, "#dfe6ff"]);
+  g.cyl(lf.x, sp.y + 0.05, sp.z, lf.gauge + 0.35, 0.3, 20, true);
+  g.mat(T.plain, 0, 0).col("#2a2c30");
+  g.cyl(lf.x, sp.y + 0.35, sp.z, 0.5, roofY - sp.y - 0.35, 8, false);
+  g.mat(T.metal, 0, 0).col("#e8eaec");
+  tbox(g, lf.x, roofY - 1.6, sp.z, 3.4, 1.6, 3.4);
+  // turnstile lanes on the approach
+  if (t.kind === "base") {
+    g.mat(T.metal, 0, 0).col("#b8bcc4");
+    for (const lx of [bx - 3, bx - 1, bx + 1, bx + 3]) {
+      tube(g, [lx, y, t.z1 + 0.5], [lx, y + 1.0, t.z1 + 0.5], 0.05, 5);
+      tube(g, [lx, y + 1.0, t.z1 + 0.5], [lx, y + 1.0, t.z1 + 5], 0.04, 4);
+      tube(g, [lx, y, t.z1 + 5], [lx, y + 1.0, t.z1 + 5], 0.05, 5);
+    }
+    g.mat(T.plain, 0, 0).col("#3a3e44");
+    for (const lx of [bx - 2, bx, bx + 2]) tbox(g, lx, y, t.z1 + 0.5, 0.3, 1.0, 0.3);
+  }
+  // the LIFT sign hangs from the roof edge towards the approach
+  const fz = t.kind === "base" ? t.z1 + 1 : t.z1 + 1;
+  k.signs.mat(0, 0, 0).col("#ffffff");
+  face(
+    k.signs,
+    cx - 3,
+    fz + 0.02,
+    cx + 3,
+    fz + 0.02,
+    roofY - 1.1,
+    roofY - 0.1,
+    signUV(t.kind === "base" ? W_LIFT : W_BERGBAHN),
+  );
+  g.mat(T.plain, 0, 0).col("#2a2c30");
+  face(g, cx + 3, fz - 0.02, cx - 3, fz - 0.02, roofY - 1.1, roofY - 0.1, [0, 0, 1, 1]);
+  // warm lights under the canopy
+  for (const lx of [t.x0 + 4, cx, t.x1 - 4]) {
+    k.glow.col("#ffe2b0").box(lx, roofY - 0.2, cz, 1.2, 0.08, 0.3);
+    k.lamps.push([lx, roofY - 0.5, cz, 0]);
+  }
+  k.lights.push([cx, cz, 16, "#ffd8a8"], [cx - 6, cz, 9, "#ffd8a8"], [cx + 6, cz, 9, "#ffd8a8"]);
 }
 
-function panorama(k: Kit, b: ABld) {
+/** the summit lodge: a big timber A-frame with a glass gable to the valley, a stone base,
+ * a chimney, and its deck (tables, umbrellas, railing) running onto the lift platform */
+function summitLodge(k: Kit, b: ABld, a: AlpineData) {
   const r = mulberry(Math.floor(b.seed * 4294967295));
   const F = frameOf(b);
   const { W, D } = F;
   const y = b.y;
   const g = k.main;
+  const tanP = Math.tan(0.98);
+  const eave = y + 1.6;
+  const ridge = eave + (W / 2 + 1) * tanP;
+  // stone base all round
   g.mat(T.stone, 0, 1).col("#ffffff");
   for (const [ax, az, bx, bz] of [
     [0, 0, W, 0],
@@ -1212,54 +1204,138 @@ function panorama(k: Kit, b: ABld) {
     [W, D, 0, D],
     [0, D, 0, 0],
   ] as const)
-    lface(g, F, ax, az, bx, bz, b.ymin, y + 0.8);
-  g.mat(T.log, 0, 1).col("#e8c8a0");
-  for (const [ax, az, bx, bz] of [
-    [W, 0, W, D],
-    [W, D, 0, D],
-    [0, D, 0, 0],
-  ] as const)
-    lface(g, F, ax, az, bx, bz, y + 0.8, y + 6.5);
+    lface(g, F, ax, az, bx, bz, b.ymin, eave);
+  // the front gable: a wall of glass in a heavy timber frame; the back gable in logs
   g.mat(T.glasswall, r(), 0).col("#ffffff");
-  lface(g, F, 0, 0, W, 0, y + 0.8, y + 5.6, [0, 0, Math.round(W / 2), 1]);
-  g.mat(T.log, 0, 1).col("#e8c8a0");
-  lface(g, F, 0, 0, W, 0, y + 5.6, y + 6.5);
-  // low gable roof, ridge along the front, big snow load
-  const A = L3(F, -1.2, y + 6.3, -2.2);
-  const B = L3(F, W + 1.2, y + 6.3, -2.2);
-  const C = L3(F, W + 1.2, y + 9.2, D / 2);
-  const Dd = L3(F, -1.2, y + 9.2, D / 2);
-  const A2 = L3(F, -1.2, y + 6.3, D + 1.2);
-  const B2 = L3(F, W + 1.2, y + 6.3, D + 1.2);
-  g.mat(T.board, 0, 0).col("#6a4a2e");
-  q4(g, A, B, C, Dd, F.out(0, -1));
-  q4(g, A2, B2, C, Dd, F.out(0, 1));
-  g.mat(T.snow, 0, 0).col(SNOW);
-  const u = (p: V3): V3 => [p[0], p[1] + 0.5, p[2]];
-  q4(g, u(A), u(B), u(C), u(Dd), [F.out(0, -1)[0], 1, F.out(0, -1)[2]]);
-  q4(g, u(A2), u(B2), u(C), u(Dd), [F.out(0, 1)[0], 1, F.out(0, 1)[2]]);
-  q4(g, A, B, u(B), u(A), F.out(0, -1));
   t3(
     g,
-    L3(F, -1.2, y + 6.3, -2.2),
-    L3(F, -1.2, y + 6.3, D + 1.2),
-    L3(F, -1.2, y + 9.2, D / 2),
-    F.out(-1, 0),
+    L3(F, 0.6, eave, -0.05),
+    L3(F, W - 0.6, eave, -0.05),
+    L3(F, W / 2, ridge - 1.4, -0.05),
+    F.out(0, -1),
   );
-  t3(
-    g,
-    L3(F, W + 1.2, y + 6.3, -2.2),
-    L3(F, W + 1.2, y + 6.3, D + 1.2),
-    L3(F, W + 1.2, y + 9.2, D / 2),
-    F.out(1, 0),
-  );
-  k.signs.mat(0, 0, 0).col("#ffffff");
-  const [sx0, sz0] = F.P(W / 2 - 4, -2.3);
-  const [sx1, sz1] = F.P(W / 2 + 4, -2.3);
-  face(k.signs, sx0, sz0, sx1, sz1, y + 6.6, y + 7.4, signUV(b.sign));
-  k.smoke.push(L3(F, W * 0.8, y + 10.8, D * 0.7));
+  // the triangle is drawn as quads so the panes tile: horizontal bands
+  for (let bnd = 0; bnd < 4; bnd++) {
+    const y0 = eave + ((ridge - 1.4 - eave) * bnd) / 4;
+    const y1 = eave + ((ridge - 1.4 - eave) * (bnd + 1)) / 4;
+    const w0 = (W / 2 - 0.6) * (1 - bnd / 4);
+    const w1 = (W / 2 - 0.6) * (1 - (bnd + 1) / 4);
+    q4(
+      g,
+      L3(F, W / 2 - w0, y0, -0.07),
+      L3(F, W / 2 + w0, y0, -0.07),
+      L3(F, W / 2 + w1, y1, -0.07),
+      L3(F, W / 2 - w1, y1, -0.07),
+      F.out(0, -1),
+      [0, 0, Math.max(1, Math.round(w0 / 1.2)), 1],
+    );
+  }
+  g.mat(T.board, 0, 0).col("#5a3a22");
+  for (let bnd = 1; bnd < 4; bnd++) {
+    const yb = eave + ((ridge - 1.4 - eave) * bnd) / 4;
+    const wb = (W / 2 - 0.6) * (1 - bnd / 4);
+    lbox(g, F, W / 2, -0.12, yb - 0.1, wb * 2, 0.2, 0.14);
+  }
+  lbox(g, F, W / 2, -0.12, eave, 0.25, ridge - 1.4 - eave, 0.16, false);
+  g.mat(T.log, 0, 1).col("#e0c098");
+  t3(g, L3(F, 0, eave, D), L3(F, W, eave, D), L3(F, W / 2, ridge - 1, D), F.out(0, 1));
+  // the great roof, sweeping nearly to the ground, under deep snow
+  for (const side of [-1, 1]) {
+    const ex = side < 0 ? -1 : W + 1;
+    const out = F.out(side, 0);
+    const up: V3 = [out[0] * tanP, 1, out[2] * tanP];
+    const A = L3(F, ex, eave - tanP * 1, -1.6);
+    const B = L3(F, ex, eave - tanP * 1, D + 1.2);
+    const C = L3(F, W / 2, ridge, D + 1.2);
+    const Dd = L3(F, W / 2, ridge, -1.6);
+    g.mat(T.shingle, 0, 0).col("#4a3426");
+    q4(g, A, B, C, Dd, up, [0, 0, D / 2, 9]);
+    g.mat(T.board, 0, 0).col("#7a5434");
+    const dn = (p: V3): V3 => [p[0], p[1] - 0.3, p[2]];
+    q4(g, dn(A), dn(B), dn(C), dn(Dd), [-up[0], -1, -up[2]], [0, 0, D / 2, 9]);
+    g.mat(T.snow, 0, 0).col(SNOW);
+    const L = (p: V3, h: number): V3 => [p[0] + out[0] * 0.2, p[1] + h, p[2] + out[2] * 0.2];
+    q4(g, L(A, 0.55), L(B, 0.55), L(C, 0.6), L(Dd, 0.6), up, [0, 0, D / 2, 9]);
+    q4(g, dn(A), dn(B), L(B, 0.55), L(A, 0.55), [out[0], 0.3, out[2]]);
+    q4(g, dn(A), L(A, 0.55), L(Dd, 0.6), dn(Dd), F.out(0, -1));
+  }
+  // chimney with smoke
   g.mat(T.stone, 0, 0).col("#d8d0c4");
-  lbox(g, F, W * 0.8, D * 0.7, y + 7, 1, 3.6, 1);
+  const chy = ridge - 3;
+  lbox(g, F, W * 0.72, D * 0.6, eave, 1.3, chy + 3.2 - eave, 1.3, false);
+  g.mat(T.snow, 0, 0).col(SNOW);
+  lbox(g, F, W * 0.72, D * 0.6, chy + 3.2, 1.5, 0.3, 1.5);
+  k.smoke.push(L3(F, W * 0.72, chy + 3.8, D * 0.6));
+  // sign over the glass
+  k.signs.mat(0, 0, 0).col("#ffffff");
+  const [sx0, sz0] = F.P(W / 2 - 4, -0.3);
+  const [sx1, sz1] = F.P(W / 2 + 4, -0.3);
+  face(k.signs, sx0, sz0, sx1, sz1, eave + 0.05, eave + 0.95, signUV(W_LODGE));
+  // the deck: boards, a heart-cut railing on the drop sides, lanterns
+  const dk = a.lodgeDeck;
+  const dy = dk.y + 0.06;
+  g.mat(T.board, 0, 0).col("#f0d8b0");
+  g.flat(dk.x0 - 1.8, dk.z0, dk.x1, dk.z1 + 1.9, dy, [
+    0,
+    0,
+    (dk.x1 - dk.x0) / 2,
+    (dk.z1 - dk.z0) / 2,
+  ]);
+  g.mat(T.rail, 0, 0).col("#ffffff");
+  const rail = (ax: number, az: number, bx: number, bz: number) => {
+    const len = Math.hypot(bx - ax, bz - az);
+    face(g, ax, az, bx, bz, dy, dy + 1.05, [0, 0, len / 1.6, 1]);
+    face(g, bx, bz, ax, az, dy, dy + 1.05, [0, 0, len / 1.6, 1]);
+  };
+  rail(dk.x0 - 1.9, dk.z1 + 1.9, dk.x1, dk.z1 + 1.9);
+  rail(dk.x0 - 1.9, dk.z0, dk.x0 - 1.9, dk.z1 + 1.9);
+  k.detail.mat(T.snow, 0, 0).col(SNOW);
+  tbox(k.detail, (dk.x0 + dk.x1) / 2 - 1, dy + 1.05, dk.z1 + 1.9, dk.x1 - dk.x0 + 2, 0.12, 0.2);
+  for (const lx of [dk.x0 + 2, dk.x0 + 12, dk.x1 - 2]) {
+    g.mat(T.plain, 0, 0).col("#1e2024");
+    tube(g, [lx, dy, dk.z1 + 1.6], [lx, dy + 2.3, dk.z1 + 1.6], 0.05, 4);
+    k.glow.col("#ffcf88").box(lx, dy + 2.4, dk.z1 + 1.6, 0.25, 0.35, 0.25);
+    k.lamps.push([lx, dy + 2.4, dk.z1 + 1.6, 0]);
+    k.lights.push([lx, dk.z1, 6, "#ffc98a"]);
+  }
+}
+
+/** stone retaining wall along a pad's uphill edge, from the pad up to the cut slope */
+function retaining(k: Kit, ax: number, bx: number, z: number, base: number, face_: 1 | -1) {
+  const g = k.main;
+  for (let x = ax; x < bx; x += 2) {
+    const top = Math.max(groundFn(x + 1, z + face_ * -2.5), base) + 0.4;
+    if (top - base < 0.8) continue;
+    g.mat(T.stone, 0, 0).col("#e6e0d6");
+    tbox(g, x + 1, base - 0.6, z, 2.02, top - base + 0.6, 1.2);
+    g.mat(T.snow, 0, 0).col(SNOW);
+    tbox(g, x + 1, top, z, 2.1, 0.22, 1.35);
+  }
+}
+
+/** post-and-rail timber fence (the summit island's edges) */
+function fence(k: Kit, ax: number, az: number, bx: number, bz: number) {
+  const g = k.main;
+  const len = Math.hypot(bx - ax, bz - az);
+  const n = Math.max(1, Math.round(len / 2.4));
+  for (let i = 0; i <= n; i++) {
+    const x = ax + ((bx - ax) * i) / n;
+    const z = az + ((bz - az) * i) / n;
+    const y = groundFn(x, z);
+    g.mat(T.bark, 0, 0).col("#c8a888");
+    tube(g, [x, y - 0.3, z], [x, y + 1.25, z], 0.09, 5);
+    g.mat(T.snow, 0, 0).col(SNOW);
+    g.cyl(x, y + 1.25, z, 0.12, 0.12, 5, true, 0.05);
+    if (i < n) {
+      const x2 = ax + ((bx - ax) * (i + 1)) / n;
+      const z2 = az + ((bz - az) * (i + 1)) / n;
+      const y2 = groundFn(x2, z2);
+      g.mat(T.bark, 0, 0).col("#b89878");
+      for (const h of [0.55, 1.05]) tube(g, [x, y + h, z], [x2, y2 + h, z2], 0.06, 4);
+      g.mat(T.snow, 0, 0).col(SNOW);
+      tube(g, [x, y + 1.13, z], [x2, y2 + 1.13, z2], 0.05, 4);
+    }
+  }
 }
 
 function coveredBridge(k: Kit, a: AlpineData) {
@@ -1269,15 +1345,19 @@ function coveredBridge(k: Kit, a: AlpineData) {
   const z0 = br.z - br.w / 2;
   const z1 = br.z + br.w / 2;
   const len = br.x1 - br.x0;
-  // deck and dark underside down to the creek
+  // the deck (a thick timber floor on beams), clear above the gully
   g.mat(T.board, 0, 0).col("#8a6a4a");
   g.flat(br.x0, z0, br.x1, z1, y, [0, 0, len / 2, br.w / 2]);
-  g.mat(T.plain, 0, 0).col("#2a241e");
-  face(g, br.x1, z0, br.x0, z0, y - 2.6, y, [0, 0, 1, 1]);
-  face(g, br.x0, z1, br.x1, z1, y - 2.6, y, [0, 0, 1, 1]);
-  // stone abutments
+  g.mat(T.board, 0, 0).col("#5a3e28");
+  tbox(g, (br.x0 + br.x1) / 2, y - 0.6, br.z, len, 0.6, br.w + 0.2, 0, false, true);
+  for (const zz of [z0 + 0.4, br.z, z1 - 0.4])
+    tbox(g, (br.x0 + br.x1) / 2, y - 1.1, zz, len + 1, 0.5, 0.4, 0, true, true);
+  // stone abutments, down to the gully floor at each bank
   g.mat(T.stone, 0, 0).col("#ffffff");
-  for (const x of [br.x0 - 1, br.x1 + 1]) tbox(g, x, y - 3, br.z, 2.4, 3.1, br.w + 1.2);
+  for (const x of [br.x0 + 0.5, br.x1 - 0.5]) {
+    const fy = Math.min(groundFn(x, br.z), y - 1) - 1;
+    tbox(g, x, fy, br.z, 3, y - fy - 0.05, br.w + 1.6);
+  }
   // side walls: solid lower boards, an open lattice, a top beam
   for (const [zA, out] of [
     [z0, -1],
@@ -1336,12 +1416,18 @@ function coveredBridge(k: Kit, a: AlpineData) {
     eave + 0.7,
     signUV(W_PASS),
   );
+  // lanterns hanging inside the covered span
+  for (let x = br.x0 + 3; x < br.x1 - 2; x += 5) {
+    k.glow.col("#ffcf8a").box(x, y + 2.9, br.z, 0.3, 0.4, 0.3);
+    k.lamps.push([x, y + 2.9, br.z, 0]);
+    k.lights.push([x, br.z, 5, "#ffc98a"]);
+  }
   // lanterns at both portals
   for (const x of [br.x0 - 0.5, br.x1 + 0.5])
     for (const z of [z0 - 0.3, z1 + 0.3]) {
       k.glow.col("#ffcf8a").box(x, y + 2.6, z, 0.25, 0.35, 0.25);
       k.lamps.push([x, y + 2.6, z, 0]);
-      k.lights.push([x, z, 5, "#ffb060"]);
+      k.lights.push([x, z, 5, "#ffc98a"]);
     }
 }
 
@@ -1527,7 +1613,7 @@ function deck(k: Kit, a: AlpineData) {
     tbox(g, x, y + 1.1, ez - 1.0, 0.5, 0.35, 0.7, 0.3);
   }
   k.lamps.push([d.x0 + 2, y + 2.4, d.z0 + 2, 0]);
-  k.lights.push([d.x0 + 2, d.z0 + 2, 6, "#ffb060"]);
+  k.lights.push([d.x0 + 2, d.z0 + 2, 6, "#ffc98a"]);
   k.glow.col("#ffcf88").box(d.x0 + 2, y + 2.4, d.z0 + 2, 0.3, 0.4, 0.3);
   g.mat(T.plain, 0, 0).col("#1e2024");
   tube(g, [d.x0 + 2, y, d.z0 + 2], [d.x0 + 2, y + 2.2, d.z0 + 2], 0.06, 4);
@@ -1609,7 +1695,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       dg.mat(T.snow, 0, 0).col(SNOW);
       dg.cone(ax, y + 3.62, az, 0.22, 0.14, 4);
       k.lamps.push([ax, y + 3.3, az, 0]);
-      k.lights.push([ax, az, 7, "#ffb060"]);
+      k.lights.push([ax, az, 7, "#ffc98a"]);
       break;
     }
     case "flood": {
@@ -1644,8 +1730,21 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       break;
     }
     case "woodpile": {
-      g.mat(T.log, 0, 0).col("#c8a078");
-      tbox(g, x, y, z, 2.4, 1.3, 0.8, rot);
+      // split logs stacked end-out: rows of round ends under a little roof
+      const Cc = Math.cos(rot);
+      const Ss = Math.sin(rot);
+      for (let row = 0; row < 4; row++)
+        for (let c = 0; c < 7; c++) {
+          const lx = -1.05 + c * 0.35 + (row % 2) * 0.17;
+          if (lx > 1.1) continue;
+          const px = x + lx * Cc;
+          const pz = z - lx * Ss;
+          const py = y + 0.16 + row * 0.3;
+          g.mat(T.bark, 0, 0).col("#8a6a4a");
+          tube(g, [px - Ss * 0.4, py, pz - Cc * 0.4], [px + Ss * 0.4, py, pz + Cc * 0.4], 0.15, 6);
+          g.mat(T.plain, 0, 0).col("#d8b888");
+          g.cyl(px + Ss * 0.41, py - 0.13, pz + Cc * 0.41, 0.001, 0.001, 3, false);
+        }
       g.mat(T.board, 0, 0).col("#5a3a22");
       tbox(g, x, y + 1.35, z, 2.7, 0.08, 1.1, rot);
       g.mat(T.snow, 0, 0).col(SNOW);
@@ -1843,6 +1942,17 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
         const [ax, az] = [x + Math.cos(a) * 0.55, z - Math.sin(a) * 0.55];
         tbox(dg, ax, y + 1.8 + i * 0.32, az, 1.1, 0.24, 0.05, a);
       }
+      break;
+    }
+    case "umbrella": {
+      // café parasol over a deck table, closed-up canvas with snow on top
+      const col = ["#b8252a", "#f4efe6", "#2a5a3a", "#1c4aa0"][(p.v ?? 0) % 4]!;
+      dg.mat(T.plain, 0, 0).col("#3a2e24");
+      tube(dg, [x, y, z], [x, y + 2.5, z], 0.04, 4);
+      dg.mat(T.plain, 0, 0).col(col);
+      dg.cone(x, y + 2.0, z, 1.5, 0.7, 8, 0);
+      dg.mat(T.snow, 0, 0).col(SNOW);
+      dg.cone(x, y + 2.25, z, 1.0, 0.5, 8, 0);
       break;
     }
     case "barrel": {
@@ -2144,11 +2254,35 @@ export function buildInto(
         church(k, b);
         break;
       case "station":
-      case "topstation":
-        station(k, b, a.lift);
+        gableHouse(k, b, {
+          floors: 1,
+          style: 1,
+          pitch: 0.55,
+          balconies: [],
+          cafe: false,
+          shop: true,
+          barn: false,
+          sign: b.sign,
+          chimneys: 1,
+          door: true,
+        });
         break;
-      case "panorama":
-        panorama(k, b);
+      case "topstation":
+        gableHouse(k, b, {
+          floors: 1,
+          style: 0,
+          pitch: 0.6,
+          balconies: [],
+          cafe: false,
+          shop: false,
+          barn: false,
+          sign: b.sign,
+          chimneys: 0,
+          door: false,
+        });
+        break;
+      case "summit":
+        summitLodge(k, b, a);
         break;
       case "barn":
         gableHouse(k, b, {
@@ -2279,6 +2413,17 @@ export function buildInto(
   }
   const r = mulberry(99173);
   coveredBridge(kitAt(a.bridge.x0, a.bridge.z), a);
+  for (const t of a.terminals) terminal(kitAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2), a, t);
+  // retaining walls where the pads cut into the mountain
+  const bt = a.terminals[0]!;
+  retaining(kitAt(40, bt.z0), 6, 84, bt.z0 - 2.6, bt.y, 1);
+  const isl = a.island;
+  retaining(kitAt(40, isl.z0), isl.x0 - 2, isl.x1 + 2, isl.z0 - 2.6, a.plateau, 1);
+  // the summit island's fence (the lodge deck and the observation deck have railings)
+  const kIsl = kitAt(40, isl.z0);
+  fence(kIsl, isl.x0 - 1, isl.z0 - 1, isl.x0 - 1, a.lodgeDeck.z0);
+  fence(kIsl, isl.x1 + 1, isl.z0 - 1, isl.x1 + 1, a.deck.z0);
+  fence(kIsl, a.lodgeDeck.x1 + 2, isl.z1 + 1, a.deck.x0 - 1, isl.z1 + 1);
   rink(kitAt(a.rink.x0, a.rink.z0), a);
   skiJump(kitAt(a.jump.x, a.jump.z1), a);
   deck(kitAt(a.deck.x0, a.deck.z0), a);

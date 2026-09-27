@@ -28,8 +28,20 @@ const _e = new THREE.Euler();
 /** Reflections cross-fade between the sunset and night env maps (both PMREMs are the same
  * size, so one set of cube-UV defines serves both): `envMap` is the sunset, `envMap2` the
  * night, `uEnvMix` = k. No recompiles and no PMREM regeneration as the time moves. */
-const envMix = { envMap2: { value: null as THREE.Texture | null }, uEnvMix: { value: 0 } };
-function addEnvMix(sh: THREE.WebGLProgramParametersWithUniforms) {
+type EnvMix = { envMap2: { value: THREE.Texture | null }; uEnvMix: { value: number } };
+function envMixOf(mat: THREE.Material): EnvMix {
+  const u = mat.userData as { envMix?: EnvMix };
+  return (u.envMix ??= { envMap2: { value: null }, uEnvMix: { value: 0 } });
+}
+/** point a city-style material's night env map and the sunset/night mix (0 = sunset) */
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function setEnvMix(mat: THREE.Material, night: THREE.Texture | null, k: number) {
+  const e = envMixOf(mat);
+  e.envMap2.value = night;
+  e.uEnvMix.value = night ? k : 0;
+}
+function addEnvMix(sh: THREE.WebGLProgramParametersWithUniforms, mat: THREE.Material) {
+  const envMix = envMixOf(mat);
   sh.uniforms["envMap2"] = envMix.envMap2;
   sh.uniforms["uEnvMix"] = envMix.uEnvMix;
   sh.fragmentShader = sh.fragmentShader.replace(
@@ -46,6 +58,19 @@ vec4 textureCubeUVMix( vec3 d, float r ) {
 #endif
 ` + THREE.ShaderChunk.envmap_physical_pars_fragment.replaceAll("textureCubeUV( envMap,", "textureCubeUVMix("),
   );
+}
+
+/** give an existing standard material (own onBeforeCompile) the sunset/night env cross-fade */
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function withEnvMix<M extends THREE.MeshStandardMaterial>(mat: M): M {
+  const prev = mat.onBeforeCompile.bind(mat);
+  const key = mat.customProgramCacheKey.bind(mat);
+  mat.onBeforeCompile = (sh, r) => {
+    prev(sh, r);
+    addEnvMix(sh, mat);
+  };
+  mat.customProgramCacheKey = () => key() + "-envmix";
+  return mat;
 }
 
 /** Street lights, neon, bulbs and signs go dark with their district's power (blackout). */
@@ -72,10 +97,12 @@ function poweredBasic(mat: THREE.MeshBasicMaterial, key: string) {
 
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
  * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
-function facadeMaterial(
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function facadeMaterial(
   nightK: { value: number },
   darkK: { value: number },
-  lightH: { value: number },
+  /** dusk: windows above this height (m) are still dark (default: all floors lit) */
+  lightH: { value: number } = { value: 1e5 },
 ) {
   const arr = facadeArrays();
   const mat = new THREE.MeshStandardMaterial({
@@ -92,7 +119,7 @@ function facadeMaterial(
     sh.uniforms["uDarkK"] = darkK;
     sh.uniforms["uLightH"] = lightH;
     Object.assign(sh.uniforms, powerUniforms);
-    addEnvMix(sh);
+    addEnvMix(sh, mat);
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
@@ -160,7 +187,8 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
 
 /** a tileable ripple normal map (value-noise height field, several octaves) */
 let rippleTex: THREE.DataTexture | null = null;
-function rippleNormals() {
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
+export function rippleNormals() {
   if (rippleTex) return rippleTex;
   const N = 256;
   const h = new Float32Array(N * N);
@@ -224,7 +252,7 @@ function waterMaterial(time: { value: number }) {
   });
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
-    addEnvMix(sh);
+    addEnvMix(sh, mat);
     sh.uniforms["uTime"] = time;
     sh.uniforms["uRipple"] = { value: rippleNormals() };
     sh.vertexShader = sh.vertexShader
@@ -355,7 +383,7 @@ export const CityScene = memo(function CityScene({
     const night = envFor("night");
     mats.facade.envMap = sun.texture;
     mats.water.envMap = sun.texture;
-    envMix.envMap2.value = night.texture;
+    envTex.current = night.texture;
     mats.facade.needsUpdate = true;
     mats.water.needsUpdate = true;
     setPowerArea(city.half + 40);
@@ -366,6 +394,7 @@ export const CityScene = memo(function CityScene({
 
   // the time of day, only on frames it moved: uniforms and colours, never a recompile
   const seenTod = useRef(-1);
+  const envTex = useRef<THREE.Texture | null>(null);
   const waterA = useMemo(() => new THREE.Color("#241c3c"), []);
   const waterB = useMemo(() => new THREE.Color("#174560"), []);
   useFrame(() => {
@@ -373,7 +402,8 @@ export const CityScene = memo(function CityScene({
     seenTod.current = todFrame.version;
     const k = tod.v;
     const L = liveCity;
-    envMix.uEnvMix.value = k;
+    setEnvMix(mats.facade, envTex.current, k);
+    setEnvMix(mats.water, envTex.current, k);
     mats.facade.envMapIntensity = L.env;
     // at dusk the sea is a mirror of the sky; at night it turns deep blue
     mats.water.color.lerpColors(waterA, waterB, k);
@@ -565,7 +595,13 @@ const SUN_DIST = 900;
  * from the player still throw their shadows across the street. If frames stay slow for a
  * few seconds, shadows switch off automatically (weak GPUs / laptops on battery).
  */
-export function CitySun(_props: { time?: TimeOfDay; color?: string; intensity?: number }) {
+export function CitySun(_props: {
+  time?: TimeOfDay;
+  color?: string;
+  intensity?: number;
+  /** legacy: the direction now comes from the blended look (timeOfDay.ts) */
+  dir?: [number, number, number];
+}) {
   const ref = useRef<THREE.DirectionalLight>(null);
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);

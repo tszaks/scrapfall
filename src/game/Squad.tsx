@@ -82,7 +82,8 @@ export function SquadDriver({
   const sendT = useRef(0);
   const lastSelf = useRef(UP);
   useFrame((_, raw) => {
-    const dt = Math.min(raw, 0.05);
+    // real seconds (bleed-outs and revives shouldn't stretch when the host's frames dip)
+    const dt = Math.min(raw, 0.25);
     hudView.camera = camera;
     me.x = camera.position.x;
     me.z = camera.position.z;
@@ -249,7 +250,9 @@ export function HudOverlay({
         const fade = Math.min(1, (p.life - age) / 0.8);
         el.style.display = "block";
         el.style.opacity = String(Math.max(0, fade));
-        el.style.transform = `translate(${P.x}px, ${P.y}px) translate(-50%, -100%) scale(${age < 0.25 ? 1.6 - age * 2.4 : 1})`;
+        const px = P.on ? P.x : Math.min(W - 70, Math.max(70, P.x));
+        const py = P.on ? P.y : Math.min(H - 20, Math.max(40, P.y));
+        el.style.transform = `translate(${px}px, ${py}px) translate(-50%, -100%) scale(${age < 0.25 ? 1.6 - age * 2.4 : 1})`;
         el.style.setProperty("--pc", col);
         const label = p.kind === "loc" ? "" : p.label;
         el.dataset["kind"] = p.kind;
@@ -284,7 +287,10 @@ export function HudOverlay({
           if (!el) return;
           project(cam, r.x, 0.9 + (cam.position.y - 1.6) * 0, r.z, W, H, P);
           el.style.display = "flex";
-          el.style.transform = `translate(${P.x}px, ${P.y}px) translate(-50%, -50%)`;
+          // off screen: pinned to the edge, kept whole
+          const px = P.on ? P.x : Math.min(W - 130, Math.max(130, P.x));
+          const py = P.on ? P.y : Math.min(H - 24, Math.max(24, P.y));
+          el.style.transform = `translate(${px}px, ${py}px) translate(-50%, -50%)`;
           el.style.setProperty("--pc", colorFor(num(r.id)));
           const who = num(r.id) === 1 ? "HOST" : `P${num(r.id)}`;
           const txt = `✚ ${who} DOWN · ${Math.round(P.dist)}m · ${Math.ceil(s.bleed)}s${s.by ? " · REVIVING" : ""}`;
@@ -352,7 +358,7 @@ export function HudOverlay({
         .hud-ping { position:absolute; left:0; top:0; white-space:nowrap; font-size:12px; font-weight:700;
           letter-spacing:0.12em; color:#f7eeda; padding:2px 7px; border-radius:4px;
           background:rgba(20,16,12,0.72); border:2px solid var(--pc); box-shadow:0 0 10px var(--pc); }
-        .hud-ping[data-kind="enemy"] { color:#ffd9d4; border-color:#ff3a2a; box-shadow:0 0 12px #ff3a2a; }
+        .hud-ping[data-kind="enemy"] { color:#ffd9d4; border-color:#ff3a2a; border-left:7px solid var(--pc); box-shadow:0 0 12px #ff3a2a; }
         .hud-box { position:absolute; left:0; top:0; }
         .hud-box::before, .hud-box::after { content:""; position:absolute; inset:0; border:3px solid #ff3a2a;
           filter: drop-shadow(0 0 4px #ff3a2a); }

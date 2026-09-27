@@ -1,5 +1,7 @@
 import { useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
+import { alpine } from "./alpine/weather";
+import { riderEye } from "./alpine/ride";
 import { useRef } from "react";
 import * as THREE from "three";
 
@@ -37,7 +39,14 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       p.ry += dy * k;
-      g.position.set(p.rx, groundY(p.rx, p.rz) + (down ? 0.3 : 0), p.rz);
+      // a teammate riding the chairlift sits on their chair (its position is the shared lift clock)
+      const lift = alpine.active ? alpine.lift : null;
+      if (lift && (p.rc ?? -1) >= 0 && !down) {
+        const e = riderEye(lift, p.rc!);
+        p.rx = e.x;
+        p.rz = e.z;
+        g.position.set(e.x, e.y - 1.25, e.z);
+      } else g.position.set(p.rx, groundY(p.rx, p.rz) + (down ? 0.3 : 0), p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.order = "YXZ";
       g.rotation.set(down ? -Math.PI / 2 : 0, p.ry + Math.PI, down ? Math.sin(performance.now() / 400) * 0.08 : 0);

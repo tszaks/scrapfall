@@ -115,19 +115,22 @@ export function CityTraffic({
   seed,
   time,
   link,
+  cars: carCount,
 }: {
   city: CityLayout;
   seed: number;
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
   link: React.MutableRefObject<TrafficLink>;
+  /** fixed number of moving cars (default: about one per 45 m of street, 40-60) */
+  cars?: number;
 }) {
   const { roadX, roadZ } = city;
 
   // ---- moving cars, deterministic start from the seed ----
   const cars = useMemo(
-    () => spawnTraffic(roadX, roadZ, city.spawn, seed),
-    [seed, roadX, roadZ, city.spawn],
+    () => spawnTraffic(roadX, roadZ, city.spawn, seed, carCount),
+    [seed, roadX, roadZ, city.spawn, carCount],
   );
 
   // ---- instance slots for every part of every vehicle (parked first, then moving) ----

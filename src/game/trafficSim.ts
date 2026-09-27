@@ -1203,6 +1203,8 @@ export function spawnTraffic(
   roadZ: Road[],
   spawn: { x: number; z: number },
   seed: number,
+  /** fixed number of cars (a quiet coast road wants fewer than a downtown grid) */
+  count?: number,
 ) {
   const rand = mulberry(seed ^ 0x51f15e);
   const list: Car[] = [];
@@ -1212,7 +1214,7 @@ export function spawnTraffic(
     (roadX.length * (roadZ[roadZ.length - 1]!.c - roadZ[0]!.c) +
       roadZ.length * (roadX[roadX.length - 1]!.c - roadX[0]!.c)) *
     2;
-  const want = Math.max(40, Math.min(60, Math.round(len / 45)));
+  const want = count ?? Math.max(40, Math.min(60, Math.round(len / 45)));
   for (let tries = 0; list.length < want && tries < 2000; tries++) {
     const axis = (rand() < 0.5 ? 0 : 1) as 0 | 1;
     const dir = (rand() < 0.5 ? 1 : -1) as 1 | -1;

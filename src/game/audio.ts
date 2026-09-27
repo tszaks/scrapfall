@@ -300,6 +300,8 @@ const STYLES: Record<string, Style> = {
     leadLen: 1.2,
     echo: true,
   },
+  // surf: bright major-pentatonic twang with spring-reverb echo, a driving beach-party beat
+  surf: { roots: [52, 57, 59, 57], bpm: 132, arp: [0, 4, 7, 9, 12, 9, 7, 4], lead: "square", leadCut: 2600, bass: "triangle", kick: [0, 6, 8], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.6, echo: true, swing: 0.08 },
   // alpine: an oompah-less mountain waltz: bells and a warm pad, wood clicks, soft bass
   alpine: {
     roots: [50, 55, 57, 52],
@@ -326,6 +328,7 @@ const MAP_STYLE: Record<string, string> = {
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
+  "Pacific Pier": "surf",
   "Whiteout Pass": "alpine",
 };
 let style: Style = STYLES['desert']!;
