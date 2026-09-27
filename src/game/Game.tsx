@@ -44,11 +44,15 @@ import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
 import { leaveRide, resetRide, ride, riderEye, stepRide } from "./alpine/ride";
 import { cityAccess } from "./access/cityAccess";
+import { beachAccess } from "./access/beachAccess";
+import { alpineAccessFull } from "./access/alpineAccess";
+import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
+import { postsClearOfDoors } from "./access/layout";
 import {
-  accessActive, accessList, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
+  accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
   encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
-  roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz,
+  roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz, ROOF_KEY,
 } from "./access/world";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
@@ -1658,7 +1662,7 @@ function World({
       };
       Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
       // building access: the buildings, the local player's zone state, cars and doors
-      Object.assign(handle, { access: { list: accessList, state: accessDebug, player: accPlayer, zoneAt, solid, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1) } });
+      Object.assign(handle, { access: { list: accessList, markers: accessMarkers, state: accessDebug, player: accPlayer, zoneAt, solid, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1), blocked: (x: number, z: number, r: number) => blocked(blocks, x, z, r) } });
       // gameplay testing: the time of day, map events, the power grid, pings and revives
       Object.assign(handle, { tod, mapEvent, forceMapEvent, power, pings, squad, waveTotal, healthRef, owned, downedRef });
       (window as unknown as { __rs?: unknown }).__rs = handle;
@@ -2069,17 +2073,33 @@ function World({
     for (const p of livePlayers()) z.add(alpineZone(p.x, p.z));
     return z;
   };
-  /** building access: every live player with their zone (0 street, 1 + b roof b, -1 inside) */
+  // building access zones: roofs are 100 + b, inside a building (or on the alpine lift) -1,
+  // the street is the map's own zone (0; the alpine village 0 / summit 1)
+  const baseZone = (x: number, z: number) => (alpineMap ? alpineZone(x, z) : 0);
+  const zoneOf = (x: number, z: number) => zoneAt(x, z) || baseZone(x, z);
+  const myZone = () => {
+    const k = playerZoneKey();
+    if (k !== 0) return k;
+    if (alpineMap && ride.chair >= 0) return -1;
+    return baseZone(camera.position.x, camera.position.z);
+  };
+  const remoteZone = (r: RemoteState) => {
+    const k = zoneKeyOfAz(r.az);
+    if (k !== 0) return k;
+    if (alpineMap && (r.rc ?? -1) >= 0) return -1;
+    return baseZone(r.x, r.z);
+  };
+  /** building access: every live player with their zone */
   const zonePlayers = () => {
     const out: { x: number; z: number; zn: number; b: number }[] = [];
-    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z, zn: playerZoneKey(), b: accPlayer.b });
+    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z, zn: myZone(), b: accPlayer.b });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z, zn: zoneKeyOfAz(r.az), b: r.az ? azBuilding(r.az) : -1 });
+      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z, zn: remoteZone(r), b: r.az ? azBuilding(r.az) : -1 });
     });
     return out;
   };
-  const streetOnly = (x: number, z: number) => navOpen(x, z) && zoneAt(x, z) === 0;
+  const streetIn = (zn: number) => (x: number, z: number) => navOpen(x, z) && zoneOf(x, z) === zn;
   /**
    * A spawn spot. Big city: near a living player, out of sight. With building access the spot
    * is in a zone that has players standing in it (`zone` forces one): on a roof it is behind
@@ -2114,25 +2134,26 @@ function World({
     }
     const zp = zonePlayers();
     const standing = zp.filter((p) => p.zn >= 0);
-    const zn = zone ?? (standing.length ? standing[Math.floor(rand() * standing.length)]!.zn : 0);
-    if (zn > 0) {
-      const b = zn - 1;
+    const zn = zone ?? (standing.length ? standing[Math.floor(rand() * standing.length)]!.zn : baseZone(camera.position.x, camera.position.z));
+    if (zn >= ROOF_KEY) {
+      const b = zn - ROOF_KEY;
       // (`already`: the caller is an enemy on that roof, re-placing itself: it has a place)
       if (already || roofCount(b, enemies, pending.current) < (accessList()[b]?.cap ?? 0))
         return roofSpot(b, blocks, standing.filter((p) => p.zn === zn), rand, hidden);
-      return spawnNear(blocks, rand, [doorstep(b)], rMin, rMax, hidden, 1, streetOnly);
+      const ds = doorstep(b);
+      return spawnNear(blocks, rand, [ds], rMin, rMax, hidden, 1, streetIn(baseZone(ds.x, ds.z)));
     }
-    let anchors: { x: number; z: number }[] = standing.filter((p) => p.zn === 0);
+    let anchors: { x: number; z: number }[] = standing.filter((p) => p.zn === zn);
     // nobody on the street: gather round the buildings the squad went into
     if (!anchors.length) anchors = zp.filter((p) => p.b >= 0).map((p) => doorstep(p.b));
     if (!anchors.length) anchors = livePlayers();
-    return spawnNear(blocks, rand, anchors, rMin, rMax, hidden, 1, streetOnly);
+    return spawnNear(blocks, rand, anchors, rMin, rMax, hidden, 1, streetIn(zn));
   };
   /** snipers take to the rooftops: a roof with a player on it (and room), if there is one */
   const sniperZone = () => {
     if (!accessActive()) return undefined;
-    const roofs = zonePlayers().filter((p) => p.zn > 0).map((p) => p.zn);
-    const ok = roofs.filter((z) => roofCount(z - 1, enemies, pending.current) < (accessList()[z - 1]?.cap ?? 0));
+    const roofs = zonePlayers().filter((p) => p.zn >= ROOF_KEY).map((p) => p.zn);
+    const ok = roofs.filter((z) => roofCount(z - ROOF_KEY, enemies, pending.current) < (accessList()[z - ROOF_KEY]?.cap ?? 0));
     return ok.length ? ok[Math.floor(rand() * ok.length)] : undefined;
   };
 
@@ -2605,7 +2626,7 @@ function World({
     // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
     // (building access: interiors have their own walls, see pBlocked)
     const walkTo = (x: number, z: number) =>
-      !pBlocked(x, z, 0.4) && climbable(cam.position.x, cam.position.z, x, z);
+      !pBlocked(x, z, 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
@@ -2702,10 +2723,11 @@ function World({
       // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
       // stairs, the car and the roof decide the floor under you
       const gy = accessActive()
-        ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r))
+        ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
         : groundY(cam.position.x, cam.position.z);
       const dg = gy - camGround.current;
-      camGround.current = !groundOwnsHits() || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+      camGround.current =
+        !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
     cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
@@ -3103,14 +3125,14 @@ function World({
       type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; zn?: number; air?: boolean };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: playerZoneKey(), air: ride.chair >= 0 });
+      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone(), air: ride.chair >= 0 });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
           const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z));
-          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: zoneKeyOfAz(r.az), air: (r.rc ?? -1) >= 0 });
+          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: remoteZone(r), air: (r.rc ?? -1) >= 0 });
         }
       });
-      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: playerZoneKey() });
+      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone() });
       const accOn = accessActive();
 
       const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0) => {
@@ -3165,11 +3187,11 @@ function World({
             const list = [...aZones];
             for (const e of enemies) {
               if (!e.alive) continue;
-              const ez = zoneAt(e.x, e.z);
+              const ez = zoneOf(e.x, e.z);
               if (aZones.has(ez)) continue;
               const pick = list[Math.floor(rand() * list.length)]!;
               const q = e.kind === "boss" ? spot(25, 40, false, pick) : spot(25, 45, true, pick);
-              if (zoneAt(q.x, q.z) === ez) continue; // no room up there: it waits where it is
+              if (zoneOf(q.x, q.z) === ez) continue; // no room up there: it waits where it is
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -3179,7 +3201,8 @@ function World({
           // alpine zones: when the last player has left a zone (and nobody is on the lift),
           // its enemies re-enter out of sight in a zone that has players; otherwise every
           // enemy stays in its own zone
-          const zones = alpineMap ? liveZones() : null;
+          // (with building access on, its zone rule above covers the alpine zones too)
+          const zones = alpineMap && !accOn ? liveZones() : null;
           const anyRiding = !!alpineMap && (ride.chair >= 0 || [...remotes.current.values()].some((r) => (r.rc ?? -1) >= 0 && r.hp > 0));
           const zoneFor = (x: number, z: number) => {
             if (!zones || zones.size === 0) return undefined;
@@ -3205,7 +3228,7 @@ function World({
           }
           for (const e of enemies) {
             if (!e.alive) continue;
-            if (accOn && !aZones.has(zoneAt(e.x, e.z))) {
+            if (accOn && !aZones.has(zoneOf(e.x, e.z))) {
               e.stuckFor = 0; // parked in an empty zone (someone is riding): not stuck
               continue;
             }
@@ -3215,8 +3238,9 @@ function World({
             if (zones && (anyRiding || !zones.has(alpineZone(e.x, e.z)))) {
               // nobody in its zone yet (or someone mid-ride): it stays put
             } else if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
-              const home = accOn ? zoneAt(e.x, e.z) : zoneFor(e.x, e.z); // stays in its own zone
-              const q = e.kind === "boss" ? spot(25, 40, false, home, accOn && !!home) : spot(25, 45, true, home, accOn && !!home);
+              const home = accOn ? zoneOf(e.x, e.z) : zoneFor(e.x, e.z); // stays in its own zone
+              const onRoof = accOn && (home ?? 0) >= ROOF_KEY;
+              const q = e.kind === "boss" ? spot(25, 40, false, home, onRoof) : spot(25, 45, true, home, onRoof);
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -3228,7 +3252,7 @@ function World({
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if (e.stuckFor >= 3 && !seen) {
                 const q = accOn
-                  ? spot(25, 45, true, zoneAt(e.x, e.z), zoneAt(e.x, e.z) > 0)
+                  ? spot(25, 45, true, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
                   : spot(25, 45, true, zoneFor(e.x, e.z));
                 e.x = q.x;
                 e.z = q.z;
@@ -3265,11 +3289,11 @@ function World({
         // inside a building can't be reached from the street, so it holds)
         let target: Target | null = null;
         let d = Infinity;
-        const ez = accOn ? zoneAt(e.x, e.z) : alpineMap ? alpineZone(e.x, e.z) : 0;
-        const same = alpineMap ? targets.some((t) => alpineZone(t.x, t.z) === ez) : true;
+        const ez = accOn ? zoneOf(e.x, e.z) : alpineMap ? alpineZone(e.x, e.z) : 0;
+        const same = alpineMap && !accOn ? targets.some((t) => alpineZone(t.x, t.z) === ez) : true;
         for (const t of targets) {
           if (accOn && (t.zn ?? 0) !== ez) continue;
-          if (alpineMap && same && alpineZone(t.x, t.z) !== ez) continue;
+          if (alpineMap && !accOn && same && alpineZone(t.x, t.z) !== ez) continue;
           const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
           if (dd < d) { d = dd; target = t; }
         }
@@ -3828,7 +3852,6 @@ function World({
       ) : city ? (
         <>
           <CityScene city={city} time={time} isHost={isHost} />
-          <AccessScene time={time} cityKey={city} />
           <CityTraffic city={trafficCity ?? city} seed={seed} time={time} link={traffic} />
           {gaps.length > 0 && <CityBlockades city={city} gaps={gaps} time={time} />}
         </>
@@ -3842,6 +3865,7 @@ function World({
       ) : (
         <Level blocks={blocks} theme={theme} />
       )}
+      {big && <AccessScene time={time} cityKey={big} />}
       <MapEvents
         theme={theme}
         city={city}
@@ -4336,13 +4360,29 @@ export function Game() {
     // building access (elevators, stairwells, walkable roofs): Vice Heights today. Solo only
     // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
     const accessOn = typeof window === "undefined" || new URLSearchParams(window.location.search).get("access") !== "0";
-    installAccess(
-      mode === "city" && level.city && accessOn ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF) : null,
-    );
+    installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
+    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
+    // the access adapters keep their doors clear of them
+    const posts0 = mapPosts(level.city, level.western ?? null);
+    const accessList0 = !accessOn
+      ? null
+      : mode === "city" && level.city
+        ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
+        : isBeach(level.city)
+          ? beachAccess(level.city, !coop, posts0)
+          : alp && level.city
+            ? (() => {
+                // (chalet balconies wall off the ground under them: extra collision)
+                const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
+                level.blocks = level.blocks.concat(aa.blocks);
+                return aa.list;
+              })()
+            : null;
+    installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
-    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map
-    setPosts(mapPosts(level.city, level.western ?? null));
+    // (a door no adapter could keep clear, e.g. a city hydrant: that prop loses its collision)
+    setPosts(postsClearOfDoors(posts0, accessList0 ?? []));
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);

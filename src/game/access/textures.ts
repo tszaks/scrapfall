@@ -95,7 +95,7 @@ export function signTexture() {
   // LOBBY directory
   g.fillStyle = "#2b2622";
   g.fillRect(0, row(6), 1024, 128);
-  text("VICE HEIGHTS", 512, row(6) + 66, 76, "#d9c9a8");
+  text("LOBBY", 512, row(6) + 66, 84, "#d9c9a8");
   // stairwell: "ROOF ▲"
   g.fillStyle = "#f2c230";
   g.fillRect(0, row(7), 1024, 128);
@@ -193,12 +193,12 @@ export function woodTexture() {
       g.stroke();
     }
     // a few knots
-    for (let k = 0; k < 5; k++) {
+    for (let k = 0; k < 3; k++) {
       const x = rnd() * 512;
       const y = rnd() * 256;
-      const grd = g.createRadialGradient(x, y, 1, x, y, 14 + rnd() * 10);
-      grd.addColorStop(0, "rgba(70,70,70,0.7)");
-      grd.addColorStop(1, "rgba(70,70,70,0)");
+      const grd = g.createRadialGradient(x, y, 1, x, y, 6 + rnd() * 5);
+      grd.addColorStop(0, "rgba(90,90,90,0.35)");
+      grd.addColorStop(1, "rgba(90,90,90,0)");
       g.fillStyle = grd;
       g.fillRect(x - 30, y - 30, 60, 60);
     }

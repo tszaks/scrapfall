@@ -16,7 +16,7 @@
 // Players carry an explicit state (zone, floor, stair lap) because inside a building the same
 // (x, z) can be the lobby, the car at any height or the vestibule on the roof.
 import { blockHook, clearLine, type Block, type NavGrid, NAV_SCALE, BLOCK, HALF } from "../level";
-import { groundHook } from "../terrain";
+import { groundHook, groundY } from "../terrain";
 import {
   BODY_R,
   CAR_D,
@@ -62,6 +62,8 @@ export type PlayerAcc = {
   /** stairs: storey index and region (0 landing, 1 flight up, 2 half landing, 3 flight down) */
   lap: number;
   region: number;
+  /** ladders: how far along the climb (metres up, then forward onto the deck) */
+  climb: number;
   /** floor height under the player */
   y: number;
 };
@@ -80,7 +82,7 @@ type AccWorld = {
 };
 
 let W: AccWorld | null = null;
-export const player: PlayerAcc = { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, y: 0 };
+export const player: PlayerAcc = { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0 };
 
 export function accessList(): AccessBuilding[] {
   return W ? W.list : [];
@@ -99,11 +101,56 @@ function newCar(): Car {
   return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, departs: 0, arrivals: 0 };
 }
 
-/** Install the access buildings for a new map (null / [] uninstalls every hook). */
-export function installAccess(list: AccessBuilding[] | null) {
-  resetPlayer();
+/** A way up a map built by hand (Dry Gulch's saloon and belfry stairs): pingable and on the
+ * minimap, but not run by this system. */
+export type AccessMarker = { x: number; z: number; y: number; kind: AccessBuilding["kind"]; label: string };
+let markers: AccessMarker[] = [];
+export function accessMarkers() {
+  return markers;
+}
+
+/** every access door and marker can be pinged (co-op: "up here", "elevator") */
+function registerPings(targets: { x: number; y: number; z: number; label: string }[]) {
   unping?.();
   unping = null;
+  if (!targets.length) return;
+  unping = registerPingTarget((o, dir, maxDist) => {
+    let best: { x: number; y: number; z: number; kind: "elev"; label: string; dist: number } | null = null;
+    for (const t of targets) {
+      const vx = t.x - o.x;
+      const vy = t.y - o.y;
+      const vz = t.z - o.z;
+      const along = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (along < 0.5 || along > maxDist) continue;
+      const perp = Math.hypot(vx - dir.x * along, vy - dir.y * along, vz - dir.z * along);
+      if (perp > Math.max(1.3, along * Math.tan((4 * Math.PI) / 180))) continue;
+      if (!best || along < best.dist) best = { x: t.x, y: t.y, z: t.z, kind: "elev", label: t.label, dist: along };
+    }
+    return best;
+  });
+}
+
+const LABEL: Record<AccessBuilding["kind"], [string, string]> = {
+  elevator: ["ELEVATOR", "ELEVATOR · ROOF"],
+  stairs: ["STAIRS", "STAIRS · ROOF"],
+  ladder: ["LADDER", "LADDER · DECK"],
+};
+
+/** Install the access buildings for a new map (null / [] uninstalls every hook). */
+export function installAccess(list: AccessBuilding[] | null, extra: AccessMarker[] = []) {
+  resetPlayer();
+  markers = extra;
+  registerPings(
+    [
+      ...(list ?? []).flatMap((b) =>
+        b.portals.map((q, i) => {
+          const [x, z] = toWorld(b, q.a + q.na * 0.3, q.d + q.nd * 0.3);
+          return { x, y: (i ? b.top : b.groundY) + 1.3, z, label: LABEL[b.kind][i]! };
+        }),
+      ),
+      ...extra.map((m) => ({ x: m.x, y: m.y + 1.3, z: m.z, label: m.label })),
+    ],
+  );
   if (!list || list.length === 0) {
     W = null;
     blockHook.fn = null;
@@ -137,35 +184,10 @@ export function installAccess(list: AccessBuilding[] | null) {
     const k = roofAt(x, z);
     return k < 0 ? undefined : list[k]!.top;
   };
-  // every entrance and roof door can be pinged (co-op: "up here", "elevator")
-  const doors = list.flatMap((b) =>
-    b.portals.map((q, i) => {
-      const [x, z] = toWorld(b, q.a + q.na * 0.3, q.d + q.nd * 0.3);
-      const label = b.kind === "elevator" ? (i ? "ELEVATOR · ROOF" : "ELEVATOR") : i ? "STAIRS · ROOF" : "STAIRS";
-      return { x, y: (i ? b.top : b.groundY) + 1.3, z, label };
-    }),
-  );
-  unping = registerPingTarget((o, dir, maxDist) => {
-    let best: { x: number; y: number; z: number; kind: "elev"; label: string; dist: number } | null = null;
-    for (const t of doors) {
-      const vx = t.x - o.x;
-      const vy = t.y - o.y;
-      const vz = t.z - o.z;
-      const along = vx * dir.x + vy * dir.y + vz * dir.z;
-      if (along < 0.5 || along > maxDist) continue;
-      const px = vx - dir.x * along;
-      const py = vy - dir.y * along;
-      const pz = vz - dir.z * along;
-      const perp = Math.hypot(px, py, pz);
-      if (perp > Math.max(1.3, along * Math.tan((4 * Math.PI) / 180))) continue;
-      if (!best || along < best.dist) best = { x: t.x, y: t.y, z: t.z, kind: "elev", label: t.label, dist: along };
-    }
-    return best;
-  });
 }
 
 export function resetPlayer() {
-  Object.assign(player, { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, y: 0 });
+  Object.assign(player, { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0 });
 }
 
 /** index of the roof whose walkable rectangle contains (x, z), or -1 */
@@ -182,7 +204,13 @@ export function roofAt(x: number, z: number) {
 }
 
 /** zone key of a point for enemies / pickups: 0 street, 1 + b on roof b */
-export const zoneAt = (x: number, z: number) => roofAt(x, z) + 1;
+/** roof zones are keyed 100 + building (street zones belong to the map: 0, or the alpine
+ * village / summit), inside a building is -1 */
+export const ROOF_KEY = 100;
+export const zoneAt = (x: number, z: number) => {
+  const k = roofAt(x, z);
+  return k < 0 ? 0 : ROOF_KEY + k;
+};
 
 function roofBlocked(b: AccessBuilding, x: number, z: number, r: number) {
   const R = b.spec.roof;
@@ -235,7 +263,9 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number 
     const here: Who[] = [];
     for (const p of people) {
       if (p.az <= 0 || azBuilding(p.az) !== k) continue;
-      const code = azCode(p.az);
+      let code = azCode(p.az);
+      // a car that opens straight into a lookout room is called from the room floor
+      if (code === AZ_ROOF && E.direct) code = AZ_UP;
       if (code < 2) continue;
       const [a, d] = toLocal(b, p.x, p.z);
       here.push({ a, d, code });
@@ -333,6 +363,7 @@ export function playerAz(): number {
   if (p.zone === 2) return mkAz(p.b, AZ_ROOF);
   if (p.inCar) return mkAz(p.b, AZ_CAR);
   const b = W?.list[p.b];
+  if (b?.ladder) return mkAz(p.b, p.level ? AZ_UP : AZ_DOWN);
   if (b?.stair) return mkAz(p.b, p.lap === 0 && p.region === 0 ? AZ_DOWN : AZ_UP);
   return mkAz(p.b, p.level ? AZ_UP : AZ_DOWN);
 }
@@ -340,10 +371,10 @@ export function playerAz(): number {
 export function zoneKeyOfAz(az: number | undefined) {
   if (!az) return 0;
   const code = azCode(az);
-  return code === AZ_ROOF ? 1 + azBuilding(az) : -1;
+  return code === AZ_ROOF ? ROOF_KEY + azBuilding(az) : -1;
 }
 export function playerZoneKey() {
-  return player.zone === 0 ? 0 : player.zone === 2 ? 1 + player.b : -1;
+  return player.zone === 0 ? 0 : player.zone === 2 ? ROOF_KEY + player.b : -1;
 }
 
 /** height a teammate's avatar stands at: riding teammates follow this client's car clock */
@@ -369,7 +400,7 @@ const inRects = (rects: LRect[], a: number, d: number, r: number) => {
 const JOIN = 1.0;
 
 /** a doorway: from `out` metres outside the wall to `inn` metres past its inner face */
-function portalRect(p: Portal, out = 1.45, inn = JOIN): LRect {
+function portalRect(p: Portal, out = 1.45, inn = p.inn ?? JOIN): LRect {
   if (p.nd !== 0) {
     const s = p.nd; // -1: outside is -d
     const d0 = s < 0 ? p.d - out : p.d - p.wall - inn;
@@ -445,10 +476,14 @@ export function playerBlocked(x: number, z: number, r: number): boolean | undefi
   const p = player;
   if (!w || p.zone !== 1) return undefined;
   const b = w.list[p.b]!;
+  if (b.ladder) return true; // on a ladder the climb moves you (stepPlayer)
   const [a, d] = toLocal(b, x, z);
   const rects = b.elev ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!) : stairRects(b, p, w.doors[p.b]!);
   return !inRects(rects, a, d, r);
 }
+
+const CLIMB = 2.4; // m/s up or down a ladder
+const ladderLen = (L: NonNullable<AccessBuilding["ladder"]>) => L.rise + (L.land + 0.7 - L.base);
 
 /**
  * After the local player moved: take doorways (street <-> interior <-> roof), follow the
@@ -461,13 +496,14 @@ export function stepPlayer(
   vx: number,
   vz: number,
   streetBlocked: (x: number, z: number, r: number) => boolean,
+  dt = 1 / 60,
 ): number {
   const w = W;
   const p = player;
   if (!w) {
     p.zone = 0;
-    p.y = 0;
-    return 0;
+    p.y = groundY(pos.x, pos.z);
+    return p.y;
   }
   if (p.zone === 0) {
     // walking into a street door?
@@ -478,16 +514,17 @@ export function stepPlayer(
       const q = b.portals[0];
       const { out, lat } = portalOffset(q, a, d);
       const inward = -(vx * b.tx + vz * b.tz) * q.na - (vx * b.ix + vz * b.iz) * q.nd;
-      if (out > 0 && out < 0.68 && Math.abs(lat) < q.half - BODY_R - 0.02 && inward > 0.55) {
-        Object.assign(p, { zone: 1, b: k, level: 0, inCar: false, lap: 0, region: 0 });
+      const latOk = b.ladder ? Math.abs(lat) < 0.5 : Math.abs(lat) < q.half - BODY_R - 0.02;
+      if (out > 0 && out < 0.68 && latOk && inward > 0.55) {
+        Object.assign(p, { zone: 1, b: k, level: 0, inCar: false, lap: 0, region: 0, climb: 0 });
         w.doors[k]![0] = Math.max(w.doors[k]![0], 0.61);
         break;
       }
     }
     if (p.zone === 0) {
-      p.y = 0;
       p.b = -1;
-      return 0;
+      p.y = groundY(pos.x, pos.z);
+      return p.y;
     }
   }
   if (p.zone === 2) {
@@ -496,16 +533,19 @@ export function stepPlayer(
       // shouldn't happen (the parapet stops you); fall back to the street state
       p.zone = 0;
       p.b = -1;
-      p.y = 0;
-      return 0;
+      p.y = groundY(pos.x, pos.z);
+      return p.y;
     }
     const [a, d] = toLocal(b, pos.x, pos.z);
     const q = b.portals[1];
     const { out, lat } = portalOffset(q, a, d);
     const inward = -(vx * b.tx + vz * b.tz) * q.na - (vx * b.ix + vz * b.iz) * q.nd;
-    if (out > 0 && out < 0.68 && Math.abs(lat) < q.half - BODY_R - 0.02 && inward > 0.55) {
+    const latOk = b.ladder ? Math.abs(lat) < 0.5 : Math.abs(lat) < q.half - BODY_R - 0.02;
+    if (out > 0 && out < 0.68 && latOk && inward > 0.55) {
       const s = b.stair;
-      Object.assign(p, { zone: 1, level: 1, inCar: false, lap: s ? s.laps : 0, region: 0 });
+      // (a ladder picks up where you stand: the forward part of the climb, heading down)
+      const climb = b.ladder ? b.ladder.rise + (d - b.ladder.base) : 0;
+      Object.assign(p, { zone: 1, level: 1, inCar: false, lap: s ? s.laps : 0, region: 0, climb });
       w.doors[p.b]![1] = Math.max(w.doors[p.b]![1], 0.61);
     } else {
       p.y = b.top;
@@ -515,6 +555,32 @@ export function stepPlayer(
   // ---- interior ----
   const k = p.b;
   const b = w.list[k]!;
+  if (b.ladder) {
+    // hold forward (toward the wall / the deck) to climb, back to go down; the camera rides
+    // the climb smoothly, then steps forward over the edge onto the deck
+    const L = b.ladder;
+    const push = vx * b.ix + vz * b.iz;
+    const total = ladderLen(L);
+    p.climb += push * (p.climb > L.rise ? 3.2 : CLIMB) * dt;
+    if (p.climb <= 0 && push < -0.3) {
+      [pos.x, pos.z] = toWorld(b, 0, L.base - 0.45);
+      Object.assign(p, { zone: 0, b: -1, climb: 0 });
+      p.y = groundY(pos.x, pos.z);
+      return p.y;
+    }
+    p.climb = Math.max(0, p.climb);
+    if (p.climb >= total) {
+      [pos.x, pos.z] = toWorld(b, 0, L.land + 0.72);
+      Object.assign(p, { zone: 2, climb: 0 });
+      p.y = b.top;
+      return p.y;
+    }
+    const dd = p.climb <= L.rise ? L.base : L.base + (p.climb - L.rise);
+    [pos.x, pos.z] = toWorld(b, 0, dd);
+    p.level = p.climb > L.rise * 0.5 ? 1 : 0;
+    p.y = b.groundY + Math.min(p.climb, L.rise);
+    return p.y;
+  }
   let [a, d] = toLocal(b, pos.x, pos.z);
   {
     // safety net: if the body ever ends up outside the walkable space (a door shut on it, a
@@ -561,8 +627,9 @@ export function stepPlayer(
     const q = b.portals[p.level];
     if (!p.inCar && portalOffset(q, a, d).out > 0.72) {
       if (p.level === 0 && !streetBlocked(pos.x, pos.z, BODY_R)) {
-        Object.assign(p, { zone: 0, b: -1, y: 0 });
-        return 0;
+        Object.assign(p, { zone: 0, b: -1 });
+        p.y = groundY(pos.x, pos.z);
+        return p.y;
       }
       if (p.level === 1 && roofAt(pos.x, pos.z) === k && !roofBlocked(b, pos.x, pos.z, BODY_R)) {
         p.zone = 2;
@@ -582,8 +649,9 @@ export function stepPlayer(
   p.level = p.lap >= s.laps ? 1 : 0;
   if (reg === 0) {
     if (p.lap === 0 && portalOffset(b.portals[0], a, d).out > 0.72 && !streetBlocked(pos.x, pos.z, BODY_R)) {
-      Object.assign(p, { zone: 0, b: -1, y: 0 });
-      return 0;
+      Object.assign(p, { zone: 0, b: -1 });
+      p.y = groundY(pos.x, pos.z);
+      return p.y;
     }
     if (p.lap >= s.laps && portalOffset(b.portals[1], a, d).out > 0.72 && roofAt(pos.x, pos.z) === k && !roofBlocked(b, pos.x, pos.z, BODY_R)) {
       p.zone = 2;
@@ -608,6 +676,10 @@ export function stepDoors(dt: number, people: { x: number; z: number; y: number 
       for (const o of people) {
         if (Math.abs(o.y - py) > 2.5) continue;
         if (Math.hypot(o.x - px, o.z - pz) < 3.4) near = true;
+      }
+      if (q.open) {
+        w.doors[k]![which] = 1;
+        continue;
       }
       const cur = w.doors[k]![which]!;
       w.doors[k]![which] = near ? Math.min(1, cur + dt * 2.6) : Math.max(0, cur - dt * 1.6);
@@ -742,7 +814,14 @@ export { CAR_D };
 export function bulletBlocked(x: number, y: number, z: number): boolean | undefined {
   const w = W;
   const p = player;
-  if (!w || p.zone !== 1) return undefined;
+  if (!w) return undefined;
+  // on a roof (or in a lookout room): its parapet / walls, props and floor stop shots
+  const rk = roofAt(x, z);
+  if (rk >= 0) {
+    const rb = w.list[rk]!;
+    if (y >= rb.top - 0.05 && y <= rb.top + rb.roomH) return y < rb.top || roofBlocked(rb, x, z, 0.02) || (rb.room && y > rb.top + rb.roomH - 0.08);
+  }
+  if (p.zone !== 1 || w.list[p.b]!.ladder) return undefined;
   const I = w.list[p.b]!.interior;
   if (x < I.x0 || x > I.x1 || z < I.z0 || z > I.z1) return undefined;
   if (Math.abs(y - (p.y + 1.3)) > 3) return undefined;

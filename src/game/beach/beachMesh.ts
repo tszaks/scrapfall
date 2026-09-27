@@ -946,8 +946,8 @@ function building(b: BBld, C: Ctx) {
       Math.atan2(dx, dz) + Math.PI / 2,
     );
   }
-  // rooftop clutter: AC units
-  if (b.t !== "restroom" && b.t !== "harbor" && b.t !== "camera") {
+  // rooftop clutter: AC units (an access roof gets its own, with collision)
+  if (b.t !== "restroom" && b.t !== "harbor" && b.t !== "camera" && !b.access) {
     G.col("#b8b4ac");
     const n = 1 + Math.floor(r() * 3);
     for (let k = 0; k < n; k++)
@@ -2036,12 +2036,14 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     G.col("#d8d2c6");
     G.box(t.x, y + 2.3, t.z, 4.4, 0.2, 4.4);
     // hut (pastel, rounded-ish with a big window facing the sea)
+    // (the hut sits to the sea side, leaving a deck walkway behind it and along its sides for
+    // whoever climbs the ladder: building access, access/beachAccess.ts)
     G.col(col);
-    G.box(t.x + 0.4, y + 2.5, t.z, 2.8, 2.3, 3.2);
+    G.box(t.x - 0.6, y + 2.5, t.z, 2.0, 2.3, 2.0);
     G.col("#1e2a34");
-    G.box(t.x - 1.02, y + 3.2, t.z, 0.05, 1.0, 2.6);
+    G.box(t.x - 1.62, y + 3.2, t.z, 0.05, 1.0, 1.6);
     G.col("#f4f0e6");
-    G.box(t.x + 0.4, y + 4.8, t.z, 3.3, 0.18, 3.7);
+    G.box(t.x - 0.6, y + 4.8, t.z, 2.5, 0.18, 2.5);
     // a steel ladder up the back (the tower is cover, not a perch)
     G.col("#b8bcc0");
     G.box(t.x + 2.25, y, t.z - 0.35, 0.06, 2.4, 0.06);

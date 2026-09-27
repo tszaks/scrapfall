@@ -35,6 +35,38 @@ export type AccessSpec = {
   name?: string | undefined;
   /** seed for the rooftop dressing */
   seed: number;
+  /** "open": a flat roof in the weather (default); "room": an enclosed lookout (a belfry, a
+   * loft, a top-floor lounge) the access system builds inside the host's walls */
+  roofKind?: "open" | "room" | undefined;
+  /** room: clear height and the openings cut in its walls */
+  roomH?: number | undefined;
+  windows?: "belfry" | "square" | "tall" | undefined;
+  /** host things standing on the roof (a lifeguard hut): solid */
+  hostObstacles?: Rect[] | undefined;
+  /** rooftop props (default: open roofs yes, rooms and small decks no) */
+  dressing?: boolean | undefined;
+  /** the host can't cut a doorway in its facade (or a hole in its roof): the access system
+   * opens them with a depth punch instead */
+  punch?: boolean | undefined;
+  /** height of the host's roof cap (the roof-hole punch); default roofY */
+  capY?: number | undefined;
+  /** the host parapet is low: add a guard rail round the roof edge */
+  rail?: boolean | undefined;
+  /** ladders: draw the ladder (false when the host model already has one) */
+  drawLadder?: boolean | undefined;
+  /** door leaf material for punch maps (opaque): wood or steel. Wood also means a plain
+   * timber door frame (no canopy / backlit sign): chalets, a church */
+  doorStyle?: "wood" | "steel" | undefined;
+  /** punch hosts: how far the host's base sticks out in front of the footprint edge (a stone
+   * plinth); the doorway punch and the door frame sit in front of it */
+  plinth?: number | undefined;
+  /** street doorway height (default 2.9 elevator lobby, 2.45 stairwell) */
+  doorH?: number | undefined;
+  /** a room: its own rectangle when the roof zone is bigger (a terrace outside one wall) */
+  roomRect?: Rect | undefined;
+  /** a room: a terrace outside one of its walls (a chalet balcony), through a door in that
+   * wall. `wall` is the room wall's line (thin, world), `door` the opening along it */
+  terrace?: { rect: Rect; wall: Rect; door: [number, number] } | undefined;
 };
 
 /** a rectangle in a building's local frame: a along the facade, d depth from the facade plane */
@@ -66,6 +98,10 @@ export type Portal = {
   half: number;
   /** wall thickness (outer face to inner face) */
   wall: number;
+  /** how far the walkable doorway reaches past the inner face (default: into the room) */
+  inn?: number;
+  /** an open doorway (no door leaf): always passable */
+  open?: boolean;
 };
 
 /** what the city renderer needs to know about an access building (set on its `Bld`) */

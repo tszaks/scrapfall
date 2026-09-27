@@ -139,6 +139,9 @@ export type BBld = Rect & {
   /** sign word index into the beach sign atlas (-1 = none) */
   sign: number;
   backdrop?: boolean;
+  /** set by the building-access system (access/beachAccess.ts): the renderer leaves its roof
+   * clear (no loose AC boxes) and skips the storefront dressing on the door side */
+  access?: boolean;
 };
 
 export type PropKind =
@@ -781,6 +784,23 @@ export function generateBeach(
         sign: SIGNS.shop![Math.floor(r() * 5)]!,
       });
     else paint(rect(X.shops + 24, s.a, X.walkW, s.b), K_OPEN);
+  }
+
+  // one beachfront condo tower (building access: 10 storeys, an elevator and a roof deck): the
+  // hotel nearest the pier inside the solo square is built taller; failing that, a shop there
+  {
+    const sq = soloHalf(half) - 24;
+    const inSq = (b: BBld) => Math.max(Math.abs(b.z0), Math.abs(b.z1)) < sq && b.y0 === 0;
+    const byPier = (a: BBld, b: BBld) => Math.abs((a.z0 + a.z1) / 2) - Math.abs((b.z0 + b.z1) / 2);
+    const pick =
+      buildings.filter((b) => b.t === "hotel" && inSq(b)).sort(byPier)[0] ??
+      buildings.filter((b) => b.t === "shop" && b.front === 3 && inSq(b) && b.z1 - b.z0 >= 20).sort(byPier)[0];
+    if (pick) {
+      pick.t = "hotel";
+      pick.floors = 10;
+      pick.h = 4.2 + 9 * 3.3;
+      solidify(pick, pick.y0 - 6, pick.y0 + pick.h);
+    }
   }
 
   // ---- 6. amusement park and pier buildings ----

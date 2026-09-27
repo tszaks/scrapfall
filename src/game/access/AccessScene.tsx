@@ -11,7 +11,7 @@ import { setIndoor } from "../ambience";
 import { sfxBus } from "../audio";
 import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
-import { buildAccess, STREET_DOOR_H, type DisplaySpot, type Interior } from "./build";
+import { buildAccess, doorHeight, type DisplaySpot, type Interior } from "./build";
 import { CAR_H, type AccessBuilding } from "./layout";
 import { concreteTexture, CopPanel, Display, signTexture, steelTexture, woodTexture } from "./textures";
 import { POWER_GLSL, powerAt, powerUniforms } from "../events/power";
@@ -91,6 +91,9 @@ function makeMats() {
     frameDark: new THREE.MeshStandardMaterial({ color: "#2b2d31", roughness: 0.6 }),
     doorPaint: new THREE.MeshStandardMaterial({ color: "#6a737c", roughness: 0.55, metalness: 0.2, emissive: "#2a2c30", emissiveIntensity: 1 }),
     window: new THREE.MeshBasicMaterial({ color: "#2a3a48" }),
+    doorWood: new THREE.MeshStandardMaterial({ color: "#6a4228", roughness: 0.7, map: woodTexture() }),
+    // depth-only, drawn over whatever is there: opens a doorway / roof hole in a host we can't cut
+    punch: new THREE.MeshBasicMaterial({ colorWrite: false, depthFunc: THREE.AlwaysDepth }),
   };
 }
 
@@ -151,7 +154,23 @@ function Panel({
   );
 }
 
+/** the core's roof opening as a local-frame quad facing up (the hole punch) */
+function holeGeo(b: AccessBuilding) {
+  const E = b.elev;
+  const S = b.stair;
+  const r = E
+    ? { a0: E.shaft.a0, a1: E.shaft.a1, d0: E.direct ? E.shaft.d0 : E.vest.d0, d1: E.shaft.d1 }
+    : S
+      ? { a0: -S.W / 2, a1: S.W / 2, d0: S.v0, d1: S.v0 + S.Ls + S.Lr + S.Ln }
+      : { a0: 0, a1: 0, d0: 0, d1: 0 };
+  const g = new THREE.PlaneGeometry(r.a1 - r.a0, r.d1 - r.d0);
+  g.rotateX(-Math.PI / 2);
+  g.translate((r.a0 + r.a1) / 2, 0, (r.d0 + r.d1) / 2);
+  return g;
+}
+
 type Refs = {
+  hole?: THREE.Object3D | null;
   /** door leaves at the street and on the roof (hidden far away: small, and one draw each) */
   doors: THREE.Group | null;
   low: THREE.Group | null;
@@ -181,7 +200,7 @@ function Building({
   const elev = b.kind === "elevator";
   const q0 = b.portals[0];
   const q1 = b.portals[1];
-  const hh = elev ? STREET_DOOR_H.elevator : STREET_DOOR_H.stairs;
+  const hh = doorHeight(b);
   const gy = b.groundY + 0.17;
   const E = b.elev;
   const dispMat = useMemo(
@@ -205,26 +224,47 @@ function Building({
         <planeGeometry args={[s.w, s.h]} />
       </mesh>
     );
+  const punch = !!b.spec.punch;
+  const wood = b.spec.doorStyle === "wood";
+  // punch hosts: everything behind the doorway draws first (renderOrder -2), then the punch
+  // (-1) opens the doorway in the depth buffer, then the host's wall (0) fails behind it
+  const root = useRef<THREE.Group>(null);
+  useEffect(() => {
+    if (!punch) return;
+    root.current?.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && o.renderOrder === 0) o.renderOrder = -2;
+    });
+  });
+  const hw = q0.half + 0.15;
+  const holeL = b.hole;
+  const holeG = useMemo(() => holeGeo(b), [b]);
+  useEffect(() => () => holeG.dispose(), [holeG]);
+  const capY = (b.spec.capY ?? b.spec.roofY) + 0.012;
   return (
-    <group position={[b.ox, 0, b.oz]} rotation-y={g.theta}>
+    <group position={[b.ox, 0, b.oz]} rotation-y={g.theta} ref={root}>
       <group ref={(o) => (refs.doors = o)}>
-      {/* street door leaves: glass for the elevator lobby, steel for the stairwell */}
-      {elev ? (
-        <>
-          <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={0} y0={gy} y1={b.groundY + hh - 0.02} d0={0.09} d1={0.13} mat={m.glass} />
-          <Panel refFn={(o) => (refs.street[1] = o)} a0={0} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.14} d1={0.18} mat={m.glass} />
-        </>
-      ) : (
-        <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.1} d1={0.15} mat={m.doorPaint} window={m.window} />
-      )}
-      {/* roof door leaf */}
-      {q1.nd !== 0 ? (
-        <Panel refFn={(o) => (refs.roof = o)} a0={q1.a - q1.half} a1={q1.a + q1.half} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d + 0.07} d1={q1.d + 0.12} mat={m.doorPaint} window={m.window} />
-      ) : (
-        <group ref={(o) => (refs.roof = o)}>
-          <Panel refFn={() => {}} a0={q1.a - 0.13} a1={q1.a - 0.08} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d - q1.half} d1={q1.d + q1.half} mat={m.doorPaint} />
-        </group>
-      )}
+        {/* street door leaves: glass for the city lobby, wood / steel where the host can't be cut */}
+        {b.ladder ? null : elev && !punch ? (
+          <>
+            <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={0} y0={gy} y1={b.groundY + hh - 0.02} d0={0.09} d1={0.13} mat={m.glass} />
+            <Panel refFn={(o) => (refs.street[1] = o)} a0={0} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.14} d1={0.18} mat={m.glass} />
+          </>
+        ) : elev ? (
+          <>
+            <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={0} y0={gy} y1={b.groundY + hh - 0.02} d0={0.09} d1={0.13} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
+            <Panel refFn={(o) => (refs.street[1] = o)} a0={0} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.14} d1={0.18} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
+          </>
+        ) : (
+          <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.1} d1={0.15} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
+        )}
+        {/* roof door leaf (an open doorway in lookout rooms and on ladders has none) */}
+        {q1.open ? null : q1.nd !== 0 ? (
+          <Panel refFn={(o) => (refs.roof = o)} a0={q1.a - q1.half} a1={q1.a + q1.half} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d + 0.07} d1={q1.d + 0.12} mat={m.doorPaint} window={m.window} />
+        ) : (
+          <group ref={(o) => (refs.roof = o)}>
+            <Panel refFn={() => {}} a0={q1.a - 0.13} a1={q1.a - 0.08} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d - q1.half} d1={q1.d + q1.half} mat={m.doorPaint} />
+          </group>
+        )}
       </group>
       <group ref={(o) => (refs.low = o)} visible={false}>
         <InteriorMeshes g={g.low} m={m} />
@@ -235,14 +275,34 @@ function Building({
           </>
         )}
         {g.displays.filter((s) => s.level === 0).map(disp)}
+        {punch && !b.ladder && (
+          <mesh material={m.punch} renderOrder={-1} position={[0, b.groundY + hh / 2, -0.012 - (b.spec.plinth ?? 0)]} rotation-y={Math.PI}>
+            <planeGeometry args={[hw * 2, hh]} />
+          </mesh>
+        )}
       </group>
-      {g.high && E && (
+      {g.high && (
         <group ref={(o) => (refs.high = o)} visible={false}>
           <InteriorMeshes g={g.high} m={m} />
-          <Panel refFn={(o) => (refs.landing[1]![0] = o)} a0={-0.7} a1={0} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
-          <Panel refFn={(o) => (refs.landing[1]![1] = o)} a0={-0.008} a1={0.7} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
+          {E && (
+            <>
+              <Panel refFn={(o) => (refs.landing[1]![0] = o)} a0={-0.7} a1={0} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
+              <Panel refFn={(o) => (refs.landing[1]![1] = o)} a0={-0.008} a1={0.7} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
+            </>
+          )}
           {g.displays.filter((s) => s.level === 1).map(disp)}
         </group>
+      )}
+      {/* punch hosts: the roof cap over the shaft / stairwell, opened while you're inside */}
+      {punch && !b.room && holeL.x1 > holeL.x0 && (
+        <mesh
+          ref={(o) => (refs.hole = o)}
+          material={m.punch}
+          renderOrder={-1}
+          visible={false}
+          position={[0, capY, 0]}
+          geometry={holeG}
+        />
       )}
       {g.car && E && (
         <group ref={(o) => (refs.car = o)} visible={false}>
@@ -411,6 +471,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       for (const p of built.per)
         for (const g of [p.low, p.high, p.car])
           if (g) [g.base, g.glow, g.sign, g.steel, g.wood, g.conc].forEach((x) => x.dispose());
+      for (const p of built.per) p.pre?.dispose();
     },
     [built],
   );
@@ -424,6 +485,8 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
   }, [mats, beaconGeo, sound]);
 
   const cityRoot = useRef<THREE.Object3D | null>(null);
+  const preRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const terraceRefs = useRef<(THREE.Mesh | null)[]>([]);
   // high on a roof the city is hundreds of metres below: stretch the view distance and the
   // haze with height so the skyline and the streets still read (back to normal at street level)
   const view = useRef({ far: 0, near: 0, fogFar: 0, k: 0 });
@@ -496,6 +559,11 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       if (r.doors) r.doors.visible = mine || dh < 150;
       if (r.low) r.low.visible = (mine && player.zone === 1) || (dh < 130 && cam.y < b.groundY + 70);
       if (r.high) r.high.visible = mine || (dh < 45 && Math.abs(cam.y - b.top) < 30);
+      if (r.hole) r.hole.visible = mine && player.zone === 1;
+      const pre = preRefs.current[k];
+      if (pre) pre.visible = !!r.low?.visible;
+      const tp = terraceRefs.current[k];
+      if (tp) tp.visible = !!r.high?.visible;
       // doors
       const sd = portalDoor(k, 0);
       if (b.elev) {
@@ -527,7 +595,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       const disp = displays[k];
       if (disp) {
         const dir = c.phase === MOVING ? (c.level > c.from ? 1 : -1) : 0;
-        const cap = c.phase === MOVING ? "" : c.level ? "ROOF" : "LOBBY";
+        const cap = c.phase === MOVING ? "" : c.level ? (b.room ? "TOP" : "ROOF") : "LOBBY";
         disp.show(carFloor(b, c), dir, emergency && k === near ? (c.phase === MOVING ? "" : "BATTERY") : cap, emergency && k === near);
       }
       cops[k]?.show(carFloor(b, c), b.elev.floors, c.phase === MOVING ? c.level : c.level ? 0 : 1, emergency && k === near);
@@ -568,6 +636,49 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       {built.beacons.length > 0 && (
         <instancedMesh ref={beaconRef} args={[beaconGeo, mats.beacon, built.beacons.length]} />
       )}
+      {built.per.map((p, k) =>
+        p.pre ? (
+          <mesh
+            key={`pre${k}`}
+            ref={(o) => {
+              preRefs.current[k] = o;
+            }}
+            geometry={p.pre}
+            material={mats.ext}
+            renderOrder={-2}
+            visible={false}
+          />
+        ) : null,
+      )}
+      {list.map((b, k) => {
+        // a room's terrace door: opened in the host's facade with a depth punch
+        const tr = b.spec.terrace;
+        if (!tr) return null;
+        const alongX = tr.wall.x1 - tr.wall.x0 > tr.wall.z1 - tr.wall.z0;
+        const tc = { x: (tr.rect.x0 + tr.rect.x1) / 2, z: (tr.rect.z0 + tr.rect.z1) / 2 };
+        const wc = { x: (tr.wall.x0 + tr.wall.x1) / 2, z: (tr.wall.z0 + tr.wall.z1) / 2 };
+        const sgn = alongX ? Math.sign(tc.z - wc.z) : Math.sign(tc.x - wc.x);
+        const mid = (tr.door[0] + tr.door[1]) / 2;
+        const w = tr.door[1] - tr.door[0];
+        const x = alongX ? mid : wc.x + sgn * 0.02;
+        const z = alongX ? wc.z + sgn * 0.02 : mid;
+        const rot = alongX ? (sgn > 0 ? 0 : Math.PI) : sgn > 0 ? Math.PI / 2 : -Math.PI / 2;
+        return (
+          <mesh
+            key={`tp${k}`}
+            ref={(o) => {
+              terraceRefs.current[k] = o;
+            }}
+            material={mats.punch}
+            renderOrder={-1}
+            position={[x, b.top + 0.03 + 1.075, z]}
+            rotation-y={rot}
+            visible={false}
+          >
+            <planeGeometry args={[w, 2.15]} />
+          </mesh>
+        );
+      })}
       {list.map((b, k) => (
         <Building key={k} b={b} m={mats} g={built.per[k]!} refs={refs[k]!} display={displays[k] ?? null} cop={cops[k] ?? null} />
       ))}

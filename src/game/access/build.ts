@@ -9,6 +9,8 @@
 import * as THREE from "three";
 
 import {
+  localRect,
+  toLocal,
   BULKHEAD_H,
   CAR_D,
   CAR_H,
@@ -20,9 +22,12 @@ import {
 } from "./layout";
 import { IGeo, IDENTITY, type BakeLight } from "./geo";
 import { SIGN, signUV } from "./textures";
+import type { LRect } from "./types";
 
 const FLOOR_Y = 0.17; // lobby floors sit just over the city's lot paving (0.15)
 export const STREET_DOOR_H = { elevator: 2.9, stairs: 2.45 } as const;
+/** a building's street doorway height */
+export const doorHeight = (b: AccessBuilding) => b.spec.doorH ?? (b.kind === "elevator" ? STREET_DOOR_H.elevator : STREET_DOOR_H.stairs);
 
 export type Interior = {
   /** baked, local frame */
@@ -44,6 +49,8 @@ export type BuiltBuilding = {
   car: CarGeo | null;
   displays: DisplaySpot[];
   theta: number;
+  /** punch hosts: entrance reveals drawn with the interior (world space) */
+  pre: THREE.BufferGeometry | null;
 };
 
 export type BuiltAccess = {
@@ -118,11 +125,11 @@ function rail(G: IGeo, a: number, y0: number, d0: number, y1: number, d1: number
 
 // ------------------------------------------------------------------ exterior
 
-function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding) {
+function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding, pre: IGeo | null = null) {
   const elev = b.kind === "elevator";
   const q = b.portals[0];
   const hw = q.half + 0.15;
-  const hh = elev ? STREET_DOOR_H.elevator : STREET_DOOR_H.stairs;
+  const hh = doorHeight(b);
   const wall = q.wall;
   const y0 = b.groundY;
   E.frame(b);
@@ -130,13 +137,34 @@ function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding) {
   SG.frame(b);
   PL.frame(b);
   // reveals lining the hole cut in the facade (city walls are zero-thickness at d = 0)
-  E.color(elev ? "#3a3634" : "#4a4f55");
-  E.wallA(0, wall, y0, y0 + hh, -hw, true);
-  E.wallA(0, wall, y0, y0 + hh, hw, false);
-  E.flat(-hw, hw, 0, wall, y0 + hh, false);
+  const RV = pre ?? E;
+  RV.frame(b);
+  RV.color(elev ? "#3a3634" : "#4a4f55");
+  RV.wallA(0, wall, y0, y0 + hh, -hw, true);
+  RV.wallA(0, wall, y0, y0 + hh, hw, false);
+  RV.flat(-hw, hw, 0, wall, y0 + hh, false);
   // stone threshold
   E.color("#8d877c");
-  E.box(-hw, hw, y0, y0 + FLOOR_Y + 0.015, -0.3, wall, "b");
+  E.box(-hw, hw, y0, y0 + FLOOR_Y + 0.015, -0.3, 0, "b+d");
+  RV.color("#8d877c");
+  RV.flat(-hw, hw, 0, wall, y0 + FLOOR_Y + 0.015, true);
+  if (b.spec.doorStyle === "wood") {
+    // a plain timber door frame in front of the host's plinth, and a lantern beside it
+    const pd = (b.spec.plinth ?? 0) + 0.14;
+    E.color("#4a3020");
+    E.box(-hw - 0.22, -hw, y0, y0 + hh + 0.22, -pd, 0, "b+d");
+    E.box(hw, hw + 0.22, y0, y0 + hh + 0.22, -pd, 0, "b+d");
+    E.box(-hw, hw, y0 + hh, y0 + hh + 0.22, -pd, 0, "b+d");
+    E.color("#6a4a30");
+    E.box(-hw - 0.32, hw + 0.32, y0 + hh + 0.22, y0 + hh + 0.34, -pd - 0.1, 0, "b+d");
+    E.color("#2a2a2c");
+    E.box(hw + 0.4, hw + 0.56, y0 + hh - 0.5, y0 + hh - 0.06, -pd - 0.16, -pd, "+d");
+    GL.color("#ffd49a");
+    GL.box(hw + 0.42, hw + 0.54, y0 + hh - 0.44, y0 + hh - 0.12, -pd - 0.14, -pd - 0.02);
+    PL.color("#ffc98a", 0.6);
+    PL.quad([-2, y0 + 0.05, -pd - 0.05], [2, y0 + 0.05, -pd - 0.05], [2, y0 + 0.05, -2.8], [-2, y0 + 0.05, -2.8], 1, 1, [0, 0, 1, 1]);
+    return;
+  }
   // pilasters and a head, proud of the facade (back faces omitted: never coplanar)
   const pw = elev ? 0.38 : 0.2;
   const pd = elev ? 0.16 : 0.1;
@@ -443,7 +471,7 @@ function buildLobby(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   const cf = E.coreFront;
   const q = b.portals[0];
   const hw = q.half + 0.15;
-  const hh = STREET_DOOR_H.elevator;
+  const hh = doorHeight(b);
   const first = G.count;
   // floor: 0.6 m stone tiles with a dark border
   for (let a = L.a0; a < L.a1 - 1e-6; a += 0.6) {
@@ -702,7 +730,8 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   const gy = b.groundY;
   const y0 = gy + FLOOR_Y;
   const topY = b.top;
-  const ceil = topY + BULKHEAD_H;
+  // (a lookout room at the top: the stairwell is open to it, walls stop at the room floor)
+  const ceil = b.room ? topY : topY + BULKHEAD_H;
   const dS1 = s.v0 + s.Ls; // end of the storey landing / start of the flights
   const dN0 = dS1 + s.Lr; // start of the half landing
   const dEnd = dN0 + s.Ln;
@@ -711,7 +740,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   const q0 = b.portals[0];
   const q1 = b.portals[1];
   const hw = q0.half + 0.15;
-  const hh = STREET_DOOR_H.stairs;
+  const hh = doorHeight(b);
   const lights: BakeLight[] = [];
   const wallC = "#bdb9b1";
   const bandC = "#3f7f5a";
@@ -894,18 +923,50 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   P.color("#c23a2a");
   P.quad([-W2, topY + 1.02, dS1 + 0.03], [-g, topY + 1.02, dS1 + 0.03], [-g, topY + 1.08, dS1 + 0.03], [-W2, topY + 1.08, dS1 + 0.03]);
   for (const a of [-W2 + 0.1, (-W2 - g) / 2, -g - 0.05]) P.box(a - 0.02, a + 0.02, topY + 0.03, topY + 1.05, dS1, dS1 + 0.06);
-  G.color("#c2bdb3");
-  G.flat(-W2, W2, s.v0, dEnd, ceil, false, 0.8);
-  S.glow.color("#ffe6c0");
-  S.glow.box(-0.3, 0.3, ceil - 0.1, ceil - 0.02, (s.v0 + dEnd) / 2 - 0.3, (s.v0 + dEnd) / 2 + 0.3, "t");
-  lights.push({ a: 0, y: ceil - 0.3, d: (s.v0 + dEnd) / 2, r: 2.2, k: 1.0, col: "#ffd9a8" });
-  // EXIT over the roof door (inside)
-  P.color("#0a6b35");
-  P.box(W2 - 0.04, W2, topY + 2.4, topY + 2.68, q1.d - 0.34, q1.d + 0.34, "b+a");
-  signA(S.sign, SIGN.EXIT, q1.d, topY + 2.42, topY + 2.66, W2 - 0.06, 0.62, -1);
-  // roof door reveal floor
-  G.color("#7c776e");
-  G.flat(W2, W2 + q1.wall, q1.d - q1.half, q1.d + q1.half, topY + 0.03, true);
+  if (b.room) {
+    // the stairwell opens into the lookout room: a railing round the opening, open on the
+    // top landing's +a side (where you step off)
+    const rt = topY + 1.05;
+    P.color("#c23a2a");
+    const posts = new Set<string>(); // a corner post is shared by two runs: draw it once
+    const railRun = (a0: number, d0: number, a1: number, d1: number) => {
+      const len = Math.hypot(a1 - a0, d1 - d0);
+      const n = Math.max(1, Math.round(len / 1.1));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const a = a0 + (a1 - a0) * t;
+        const d = d0 + (d1 - d0) * t;
+        const key = `${a.toFixed(3)},${d.toFixed(3)}`;
+        if (posts.has(key)) continue;
+        posts.add(key);
+        P.box(a - 0.025, a + 0.025, topY + 0.03, rt, d - 0.025, d + 0.025);
+      }
+      if (a0 === a1) {
+        P.box(a0 - 0.03, a0 + 0.03, rt - 0.03, rt + 0.03, Math.min(d0, d1), Math.max(d0, d1));
+        P.box(a0 - 0.015, a0 + 0.015, topY + 0.5, topY + 0.53, Math.min(d0, d1), Math.max(d0, d1));
+      } else {
+        P.box(Math.min(a0, a1), Math.max(a0, a1), rt - 0.03, rt + 0.03, d0 - 0.03, d0 + 0.03);
+        P.box(Math.min(a0, a1), Math.max(a0, a1), topY + 0.5, topY + 0.53, d0 - 0.015, d0 + 0.015);
+      }
+    };
+    railRun(-W2, s.v0, -W2, dEnd);
+    railRun(-W2, s.v0, W2, s.v0);
+    railRun(-W2, dEnd, W2, dEnd);
+    railRun(W2, dS1, W2, dEnd);
+  } else {
+    G.color("#c2bdb3");
+    G.flat(-W2, W2, s.v0, dEnd, ceil, false, 0.8);
+    S.glow.color("#ffe6c0");
+    S.glow.box(-0.3, 0.3, ceil - 0.1, ceil - 0.02, (s.v0 + dEnd) / 2 - 0.3, (s.v0 + dEnd) / 2 + 0.3, "t");
+    lights.push({ a: 0, y: ceil - 0.3, d: (s.v0 + dEnd) / 2, r: 2.2, k: 1.0, col: "#ffd9a8" });
+    // EXIT over the roof door (inside)
+    P.color("#0a6b35");
+    P.box(W2 - 0.04, W2, topY + 2.4, topY + 2.68, q1.d - 0.34, q1.d + 0.34, "b+a");
+    signA(S.sign, SIGN.EXIT, q1.d, topY + 2.42, topY + 2.66, W2 - 0.06, 0.62, -1);
+    // roof door reveal floor
+    G.color("#7c776e");
+    G.flat(W2, W2 + q1.wall, q1.d - q1.half, q1.d + q1.half, topY + 0.03, true);
+  }
   // hall lamp
   S.glow.color("#ffe2b4");
   S.glow.box(-0.3, 0.3, hallH - 0.06, hallH, (0.25 + s.v0) / 2 - 0.2, (0.25 + s.v0) / 2 + 0.2, "t");
@@ -920,6 +981,256 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   P.bake(lights, 0.16);
 }
 
+// ------------------------------------------------------------------ lookout rooms, ladders
+
+/** a wall in plane d (facing +d if face) from a0 to a1 with rectangular openings [t0 t1 ya yb] */
+function wallHolesD(G: IGeo, d: number, a0: number, a1: number, y0: number, y1: number, face: boolean, holes: number[][], tile = 0.7) {
+  let t = a0;
+  for (const [h0, h1, ya, yb] of [...holes].sort((p, q) => p[0]! - q[0]!)) {
+    if (h0! > t) G.wallD(t, h0!, y0, y1, d, face, tile);
+    if (ya! > y0) G.wallD(h0!, h1!, y0, ya!, d, face, tile);
+    if (yb! < y1) G.wallD(h0!, h1!, yb!, y1, d, face, tile);
+    t = h1!;
+  }
+  if (t < a1) G.wallD(t, a1, y0, y1, d, face, tile);
+}
+function wallHolesA(G: IGeo, a: number, d0: number, d1: number, y0: number, y1: number, face: boolean, holes: number[][], tile = 0.7) {
+  let t = d0;
+  for (const [h0, h1, ya, yb] of [...holes].sort((p, q) => p[0]! - q[0]!)) {
+    if (h0! > t) G.wallA(t, h0!, y0, y1, a, face, tile);
+    if (ya! > y0) G.wallA(h0!, h1!, y0, ya!, a, face, tile);
+    if (yb! < y1) G.wallA(h0!, h1!, yb!, y1, a, face, tile);
+    t = h1!;
+  }
+  if (t < d1) G.wallA(t, d1, y0, y1, a, face, tile);
+}
+
+/**
+ * An enclosed lookout (a belfry, a loft, a top-floor lounge) built inside the host's walls:
+ * floor round the stairwell / shaft, walls with openings you look out through (the host's
+ * walls are one-sided, invisible from inside), reveals out to the host wall, a ceiling, a lamp.
+ */
+function buildRoom(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
+  const R = b.roomL;
+  const F = b.footL;
+  // only walls on the host's facade get openings (inside walls would look into the empty
+  // shell of the building, which is invisible from within)
+  const onFacade = { d0: R.d0 - F.d0 < 0.8, d1: F.d1 - R.d1 < 0.8, a0: R.a0 - F.a0 < 0.8, a1: F.a1 - R.a1 < 0.8 };
+  // the terrace door: which wall, and the opening along it (local)
+  const tr = b.spec.terrace;
+  type Side = "d0" | "d1" | "a0" | "a1";
+  let tSide: Side | null = null;
+  let tSpan: [number, number] = [0, 0];
+  if (tr) {
+    const wl = localRect(b, tr.wall);
+    const cA = (wl.a0 + wl.a1) / 2;
+    const cD = (wl.d0 + wl.d1) / 2;
+    const cand: [Side, number][] = [
+      ["d0", Math.abs(cD - R.d0)],
+      ["d1", Math.abs(cD - R.d1)],
+      ["a0", Math.abs(cA - R.a0)],
+      ["a1", Math.abs(cA - R.a1)],
+    ];
+    tSide = cand.sort((p, q) => p[1] - q[1])[0]![0];
+    const alongX = tr.wall.x1 - tr.wall.x0 > tr.wall.z1 - tr.wall.z0;
+    const p0 = alongX ? toLocal(b, tr.door[0], (tr.wall.z0 + tr.wall.z1) / 2) : toLocal(b, (tr.wall.x0 + tr.wall.x1) / 2, tr.door[0]);
+    const p1 = alongX ? toLocal(b, tr.door[1], (tr.wall.z0 + tr.wall.z1) / 2) : toLocal(b, (tr.wall.x0 + tr.wall.x1) / 2, tr.door[1]);
+    const along = tSide === "d0" || tSide === "d1" ? 0 : 1;
+    tSpan = [Math.min(p0[along]!, p1[along]!), Math.max(p0[along]!, p1[along]!)];
+  }
+  const H = b.roomH;
+  const y0 = b.top + 0.03;
+  const yc = b.top + H;
+  const style = b.spec.windows ?? "square";
+  // walls and floor: stone in a belfry, timber in a loft, plaster (and a timber floor) in a lounge
+  const G = style === "belfry" ? S.conc : style === "tall" ? S.base : S.wood;
+  const P = S.base;
+  const firstG = G.count;
+  const firstP = P.count;
+  const s = b.stair;
+  const hole: LRect = s
+    ? { a0: -s.W / 2, a1: s.W / 2, d0: s.v0, d1: s.v0 + s.Ls + s.Lr + s.Ln }
+    : b.pent;
+  // floor (planks in lofts and lounges, worn stone in a belfry) round the opening
+  G.color(style === "belfry" ? "#9a958c" : style === "tall" ? "#7a5238" : "#8a6444");
+  if (hole.d0 > R.d0) G.flat(R.a0, R.a1, R.d0, hole.d0, y0, true, 0.6);
+  if (hole.d1 < R.d1) G.flat(R.a0, R.a1, hole.d1, R.d1, y0, true, 0.6);
+  if (hole.a0 > R.a0) G.flat(R.a0, hole.a0, hole.d0, hole.d1, y0, true, 0.6);
+  if (hole.a1 < R.a1) G.flat(hole.a1, R.a1, hole.d0, hole.d1, y0, true, 0.6);
+  // openings per wall: [t0, t1, sill, head]
+  const openings = (len: number, t0: number): number[][] => {
+    if (style === "belfry") {
+      const w = Math.min(2.6, len - 1.4);
+      const c = t0 + len / 2;
+      return [[c - w / 2, c + w / 2, y0 + 0.2, Math.min(yc - 0.4, y0 + 4.2)]];
+    }
+    const w = style === "tall" ? 1.4 : 1.1;
+    const pitch = style === "tall" ? 2.8 : 2.4;
+    const n = Math.max(1, Math.floor((len - 0.8) / pitch));
+    const out: number[][] = [];
+    for (let k = 0; k < n; k++) {
+      const c = t0 + (len * (k + 0.5)) / n;
+      out.push(style === "tall" ? [c - w / 2, c + w / 2, y0 + 0.45, yc - 0.45] : [c - w / 2, c + w / 2, y0 + 0.9, Math.min(yc - 0.35, y0 + 2.1)]);
+    }
+    return out;
+  };
+  const wallCol = style === "belfry" ? "#c9c3b6" : style === "tall" ? "#e8dcc4" : "#b98f62";
+  const rev = 0.34; // out to the host's wall
+  const sides: { holes: number[][]; build: () => void; reveal: (h: number[]) => void }[] = [];
+  const pick = (side: "d0" | "d1" | "a0" | "a1", len: number, t0: number): number[][] =>
+    side === tSide ? [[tSpan[0], tSpan[1], y0, y0 + 2.15]] : onFacade[side] ? openings(len, t0) : [];
+  const hd0 = pick("d0", R.a1 - R.a0, R.a0);
+  const hd1 = pick("d1", R.a1 - R.a0, R.a0);
+  const ha0 = pick("a0", R.d1 - R.d0, R.d0);
+  const ha1 = pick("a1", R.d1 - R.d0, R.d0);
+  G.color(wallCol);
+  wallHolesD(G, R.d0, R.a0, R.a1, y0, yc, true, hd0);
+  wallHolesD(G, R.d1, R.a0, R.a1, y0, yc, false, hd1);
+  wallHolesA(G, R.a0, R.d0, R.d1, y0, yc, true, ha0);
+  wallHolesA(G, R.a1, R.d0, R.d1, y0, yc, false, ha1);
+  void sides;
+  // reveals round every opening, and a guard rail across the tall ones
+  G.color(wallCol, 0.85);
+  const railC = style === "belfry" ? "#3a2e24" : "#2a2a2e";
+  for (const [h0, h1, ya, yb] of hd0) {
+    G.wallA(R.d0 - rev, R.d0, ya!, yb!, h0!, true);
+    G.wallA(R.d0 - rev, R.d0, ya!, yb!, h1!, false);
+    G.flat(h0!, h1!, R.d0 - rev, R.d0, ya!, true);
+    G.flat(h0!, h1!, R.d0 - rev, R.d0, yb!, false);
+    if (yb! - ya! > 2 && ya! > y0 + 0.1) {
+      P.color(railC);
+      P.box(h0!, h1!, y0 + 1.0, y0 + 1.06, R.d0 - 0.08, R.d0 - 0.02);
+    }
+  }
+  for (const [h0, h1, ya, yb] of hd1) {
+    G.wallA(R.d1, R.d1 + rev, ya!, yb!, h0!, true);
+    G.wallA(R.d1, R.d1 + rev, ya!, yb!, h1!, false);
+    G.flat(h0!, h1!, R.d1, R.d1 + rev, ya!, true);
+    G.flat(h0!, h1!, R.d1, R.d1 + rev, yb!, false);
+    if (yb! - ya! > 2 && ya! > y0 + 0.1) {
+      P.color(railC);
+      P.box(h0!, h1!, y0 + 1.0, y0 + 1.06, R.d1 + 0.02, R.d1 + 0.08);
+    }
+  }
+  for (const [h0, h1, ya, yb] of ha0) {
+    G.wallD(R.a0 - rev, R.a0, ya!, yb!, h0!, true);
+    G.wallD(R.a0 - rev, R.a0, ya!, yb!, h1!, false);
+    G.flat(R.a0 - rev, R.a0, h0!, h1!, ya!, true);
+    G.flat(R.a0 - rev, R.a0, h0!, h1!, yb!, false);
+    if (yb! - ya! > 2 && ya! > y0 + 0.1) {
+      P.color(railC);
+      P.box(R.a0 - 0.08, R.a0 - 0.02, y0 + 1.0, y0 + 1.06, h0!, h1!);
+    }
+  }
+  for (const [h0, h1, ya, yb] of ha1) {
+    G.wallD(R.a1, R.a1 + rev, ya!, yb!, h0!, true);
+    G.wallD(R.a1, R.a1 + rev, ya!, yb!, h1!, false);
+    G.flat(R.a1, R.a1 + rev, h0!, h1!, ya!, true);
+    G.flat(R.a1, R.a1 + rev, h0!, h1!, yb!, false);
+    if (yb! - ya! > 2 && ya! > y0 + 0.1) {
+      P.color(railC);
+      P.box(R.a1 + 0.02, R.a1 + 0.08, y0 + 1.0, y0 + 1.06, h0!, h1!);
+    }
+  }
+  // ceiling: timber beams in the belfry and the loft, plaster in the lounge
+  G.color(style === "tall" ? "#efe6d6" : "#6a4a32");
+  G.flat(R.a0, R.a1, R.d0, R.d1, yc, false, 0.7);
+  const lights: BakeLight[] = [];
+  const cx = (R.a0 + R.a1) / 2;
+  const cz = (R.d0 + R.d1) / 2;
+  if (style !== "tall") {
+    P.color("#4a3424");
+    for (let d = R.d0 + 0.9; d < R.d1 - 0.5; d += 1.4) P.box(R.a0, R.a1, yc - 0.22, yc, d - 0.1, d + 0.1, "t-a+a");
+  }
+  if (style === "belfry") {
+    // the bell, hung over the stairwell
+    const bc = s ? [0, s.v0 + (s.Ls + s.Lr + s.Ln) / 2] : [cx, cz];
+    P.color("#8a6a2a");
+    P.cyl(bc[0]!, bc[1]!, yc - 1.25, 0.9, 0.45, 12, true, 0.3);
+    P.color("#3a2e24");
+    P.box(bc[0]! - 0.06, bc[0]! + 0.06, yc - 0.35, yc - 0.22, bc[1]! - 1.2, bc[1]! + 1.2, "t");
+    P.cyl(bc[0]!, bc[1]!, yc - 0.36, 0.11, 0.05, 6);
+    lights.push({ a: cx, y: yc - 0.6, d: cz, r: 3.5, k: 0.45, col: "#ffe2b8" });
+  } else {
+    S.glow.color("#ffe7c4");
+    S.glow.cyl(cx, cz, yc - 0.12, 0.1, 0.25, 10);
+    P.color("#2a2a2e");
+    P.cyl(cx, cz, yc - 0.02, 0.02, 0.28, 10);
+    lights.push({ a: cx, y: yc - 0.35, d: cz, r: 3.2, k: 0.9, col: "#ffe2b8" });
+  }
+  if (b.elev) {
+    // the shaft stands in the room: its walls, the landing doors and the indicator
+    const E = b.elev;
+    const Pn = b.pent;
+    G.color(style === "tall" ? "#c9b89a" : wallCol);
+    wallHolesD(G, Pn.d0, Pn.a0, Pn.a1, y0, yc, false, [[-0.84, 0.84, y0, y0 + 2.44]]);
+    G.wallA(Pn.d0, Pn.d1, y0, yc, Pn.a0, false, 0.7);
+    G.wallA(Pn.d0, Pn.d1, y0, yc, Pn.a1, true, 0.7);
+    G.wallD(Pn.a0, Pn.a1, y0, yc, Pn.d1, true, 0.7);
+    // (the landing frame covers the opening's edges)
+    landingDoorFrame(S, E.coreFront, y0, true);
+    S.glow.color("#ffd27a");
+    S.glow.box(0.7 + 0.5, 0.7 + 0.58, y0 + 1.06, y0 + 1.14, E.coreFront - 0.045, E.coreFront - 0.03, "b+d");
+    displays.push({ a: 0, y: y0 + 2.6, d: E.coreFront - 0.035, w: 0.62, h: 0.3, face: -1, level: 1 });
+    S.steel.color("#1b1b1d");
+    S.steel.box(-0.36, 0.36, y0 + 2.56, y0 + 2.9, E.coreFront - 0.03, E.coreFront, "b+d");
+    lights.push({ a: 0, y: y0 + 2.7, d: E.coreFront - 0.6, r: 1.5, k: 0.4, col: "#ffe0b0" });
+  }
+  G.bake(lights, 0.3, firstG);
+  P.bake(lights, 0.3, firstP);
+  S.steel.bake(lights, 0.34);
+}
+
+/** a steel ladder on the wall face (the rails run on past the deck edge as handholds) */
+function ladderExt(E: IGeo, b: AccessBuilding) {
+  const L = b.ladder!;
+  E.frame(b);
+  E.color("#b8bcc0");
+  const y0 = b.groundY - 0.1;
+  const y1 = b.top + 1.05;
+  for (const a of [-0.24, 0.24]) E.box(a - 0.025, a + 0.025, y0, y1, -0.16, -0.11);
+  E.color("#9ea3a8");
+  for (let y = b.groundY + 0.3; y < b.top - 0.05; y += 0.3) E.box(-0.24, 0.24, y, y + 0.03, -0.15, -0.12, "-a+a");
+  // stand-offs to the wall
+  for (const y of [b.groundY + 0.4, (b.groundY + b.top) / 2, b.top - 0.3])
+    for (const a of [-0.24, 0.24]) E.box(a - 0.02, a + 0.02, y, y + 0.04, -0.11, 0);
+  void L;
+}
+
+/** a guard rail round a deck / roof edge (posts and two rails), open at the ladder landing */
+function edgeRail(E: IGeo, b: AccessBuilding) {
+  E.frame(b);
+  const R = b.roofL;
+  const y0 = b.top;
+  const y1 = b.top + 1.05;
+  const gap = b.ladder ? [-0.5, 0.5] : null;
+  E.color("#e8e4dc");
+  const posts = new Set<string>(); // a corner post is shared by two runs: draw it once
+  const run = (a0: number, d0: number, a1: number, d1: number) => {
+    const len = Math.hypot(a1 - a0, d1 - d0);
+    const n = Math.max(1, Math.round(len / 1.2));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const key = `${(a0 + (a1 - a0) * t).toFixed(3)},${(d0 + (d1 - d0) * t).toFixed(3)}`;
+      if (posts.has(key)) continue;
+      posts.add(key);
+      E.box(a0 + (a1 - a0) * t - 0.03, a0 + (a1 - a0) * t + 0.03, y0, y1, d0 + (d1 - d0) * t - 0.03, d0 + (d1 - d0) * t + 0.03);
+    }
+    for (const y of [y1 - 0.05, y0 + 0.5]) {
+      if (a0 === a1) E.box(a0 - 0.025, a0 + 0.025, y, y + 0.05, Math.min(d0, d1), Math.max(d0, d1));
+      else E.box(Math.min(a0, a1), Math.max(a0, a1), y, y + 0.05, d0 - 0.025, d0 + 0.025);
+    }
+  };
+  // the ladder climbs over the front edge (d0): leave the gap there
+  if (gap) {
+    run(R.a0, R.d0, gap[0]!, R.d0);
+    run(gap[1]!, R.d0, R.a1, R.d0);
+  } else run(R.a0, R.d0, R.a1, R.d0);
+  run(R.a0, R.d1, R.a1, R.d1);
+  run(R.a0, R.d0, R.a0, R.d1);
+  run(R.a1, R.d0, R.a1, R.d1);
+}
+
 // ------------------------------------------------------------------ everything
 
 export function buildAccess(list: AccessBuilding[]): BuiltAccess {
@@ -930,23 +1241,46 @@ export function buildAccess(list: AccessBuilding[]): BuiltAccess {
   const beacons: [number, number, number][] = [];
   const per: BuiltBuilding[] = [];
   for (const b of list) {
-    entrance(E, GL, SG, PL, b);
-    penthouse(E, GL, SG, PL, b, beacons);
-    roofProps(E, GL, b, beacons);
     const displays: DisplaySpot[] = [];
     const low = set4();
     let high: Interior | null = null;
     let car: CarGeo | null = null;
+    // hosts that can't cut their facade: the entrance's reveals go in with the interior (drawn
+    // before the depth punch that opens the doorway)
+    const pre = b.spec.punch ? new IGeo() : null;
+    if (b.ladder) {
+      if (b.spec.drawLadder !== false) ladderExt(E, b);
+    } else entrance(E, GL, SG, PL, b, pre);
+    if (b.spec.rail || b.ladder) edgeRail(E, b);
+    if (!b.room && !b.ladder) {
+      penthouse(E, GL, SG, PL, b, beacons);
+      roofProps(E, GL, b, beacons);
+    }
     if (b.elev) {
       buildLobby(b, low, displays);
       const hs = set4();
-      buildVestibule(b, hs, displays);
+      if (b.room) buildRoom(b, hs, displays);
+      else buildVestibule(b, hs, displays);
       high = built(hs);
       const cs = set4();
       buildCar(b, cs, displays);
       car = built(cs);
-    } else buildStairs(b, low);
-    per.push({ low: built(low), high, car, displays, theta: Math.atan2(b.ix, b.tx) });
+    } else if (b.stair) {
+      buildStairs(b, low);
+      if (b.room) {
+        const hs = set4();
+        buildRoom(b, hs, displays);
+        high = built(hs);
+      }
+    }
+    per.push({
+      low: built(low),
+      high,
+      car,
+      displays,
+      theta: Math.atan2(b.ix, b.tx),
+      pre: pre ? pre.build() : null,
+    });
   }
   return { ext: E.build(), glow: GL.build(), sign: SG.build(), pools: PL.build(), beacons, per };
 }

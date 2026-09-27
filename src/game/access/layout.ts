@@ -54,7 +54,17 @@ export type StairInfo = {
   doorD: number;
 };
 
+export type LadderInfo = {
+  /** the climb: from the ground at d = base (in front of the wall) up `rise` metres, then
+   * forward along d to `land` on the deck */
+  base: number;
+  rise: number;
+  land: number;
+};
+
 export type ElevInfo = {
+  /** the car opens straight into a lookout room (no vestibule / penthouse) */
+  direct: boolean;
   coreFront: number;
   car: LRect;
   lobby: LRect;
@@ -84,6 +94,13 @@ export type AccessBuilding = {
   footL: LRect;
   elev?: ElevInfo | undefined;
   stair?: StairInfo | undefined;
+  ladder?: LadderInfo | undefined;
+  /** enclosed lookout room instead of an open roof */
+  room: boolean;
+  /** the room's own rectangle (local; the roof zone can add a terrace) */
+  roomL: LRect;
+  /** clear height above the roof surface that counts as the roof zone (bullets) */
+  roomH: number;
   /** [0] the street door, [1] the roof door */
   portals: [Portal, Portal];
   /** penthouse over the core (vestibule + machine room, or the stair bulkhead), local */
@@ -176,7 +193,7 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
   if (Math.abs(footL.d0) > 0.05) return null;
   const top = spec.roofY + 0.02;
   const rise = top - spec.groundY;
-  if (rise < 3) return null;
+  if (rise < (spec.kind === "ladder" ? 1.2 : 3)) return null;
   let elev: ElevInfo | undefined;
   let stair: StairInfo | undefined;
   let pent: LRect;
@@ -184,7 +201,46 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
   let portals: [Portal, Portal];
   let interiorL: LRect;
   let holeL: LRect;
-  if (spec.kind === "elevator") {
+  const room = spec.roofKind === "room";
+  // (a room with a terrace: the stairwell / shaft has to fit in the room itself)
+  const fitL = room && spec.roomRect ? localRect(f, spec.roomRect) : roofL;
+  let ladder: LadderInfo | undefined;
+  if (spec.kind === "elevator" && room) {
+    // the car opens straight into the room: the shaft stands in the room, its landing doors
+    // face the front; the lobby runs in from the street door to the same shaft
+    const coreFront = Math.max(fitL.d0 + 1.8, 6);
+    const car: LRect = { a0: -CAR_W / 2, a1: CAR_W / 2, d0: coreFront + CAR_GAP, d1: coreFront + CAR_GAP + CAR_D };
+    const shaft: LRect = { a0: car.a0 - 0.15, a1: car.a1 + 0.15, d0: coreFront, d1: car.d1 + 0.15 };
+    const wide = coreFront > 12 && footL.a0 < -4.2 && footL.a1 > 4.2 ? 3.6 : LOBBY_HALF;
+    const lobby: LRect = { a0: -wide, a1: wide, d0: WALL + 0.05, d1: coreFront };
+    const vest: LRect = { a0: -0.7, a1: 0.7, d0: coreFront, d1: coreFront };
+    pent = { a0: shaft.a0 - WALL, a1: shaft.a1 + WALL, d0: coreFront, d1: shaft.d1 + WALL };
+    pentH = 0;
+    const lobbyOuter: LRect = { a0: lobby.a0 - WALL, a1: lobby.a1 + WALL, d0: 0, d1: shaft.d1 + WALL };
+    if (!inside(lobbyOuter, footL, 0.3, -0.01)) return null;
+    if (!inside(pent, fitL, 0.2)) return null;
+    if (coreFront - fitL.d0 < 1.6) return null;
+    elev = { direct: true, coreFront, car, lobby, vest, shaft, floors: Math.max(2, spec.floors), ride: rideTime(rise) };
+    portals = [
+      { level: 0, a: 0, d: 0, na: 0, nd: -1, half: STREET_DOOR / 2, wall: WALL + 0.05 },
+      { level: 1, a: 0, d: coreFront, na: 0, nd: -1, half: 0.7, wall: 0, inn: 0, open: true },
+    ];
+    interiorL = { a0: lobbyOuter.a0, a1: lobbyOuter.a1, d0: 0, d1: lobbyOuter.d1 };
+    holeL = { a0: shaft.a0 - 0.05, a1: shaft.a1 + 0.05, d0: shaft.d0 - 0.05, d1: shaft.d1 + 0.05 };
+  } else if (spec.kind === "ladder") {
+    // climb the wall face at a = 0 from the ground to the deck edge, step forward onto it
+    const land = roofL.d0 + 0.25;
+    if (roofL.a0 > -0.6 || roofL.a1 < 0.6 || roofL.d1 < land + 1.2) return null;
+    ladder = { base: -0.45, rise, land };
+    pent = { a0: 0, a1: 0, d0: land, d1: land };
+    pentH = 0;
+    portals = [
+      { level: 0, a: 0, d: 0, na: 0, nd: -1, half: 0.4, wall: 0, open: true },
+      { level: 1, a: 0, d: land, na: 0, nd: 1, half: 0.45, wall: 0, open: true },
+    ];
+    interiorL = { a0: -0.6, a1: 0.6, d0: -0.9, d1: land + 0.4 };
+    holeL = { a0: 0, a1: 0, d0: 0, d1: 0 };
+  } else if (spec.kind === "elevator") {
     const coreFront = Math.max(roofL.d0 + STRIP + VEST_D + WALL, 6);
     const car: LRect = {
       a0: -CAR_W / 2,
@@ -206,7 +262,7 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     // a walkway all the way round the penthouse (the roof is one loop, not two dead ends)
     if (pent.a0 - roofL.a0 < 1.8 || roofL.a1 - pent.a1 < 1.8 || roofL.d1 - pent.d1 < 1.6) return null;
     const floors = Math.max(2, spec.floors);
-    elev = { coreFront, car, lobby, vest, shaft, floors, ride: rideTime(rise) };
+    elev = { direct: false, coreFront, car, lobby, vest, shaft, floors, ride: rideTime(rise) };
     portals = [
       { level: 0, a: 0, d: 0, na: 0, nd: -1, half: STREET_DOOR / 2, wall: WALL + 0.05 },
       { level: 1, a: 0, d: vest.d0 - WALL, na: 0, nd: -1, half: ROOF_DOOR / 2, wall: WALL },
@@ -224,19 +280,22 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     const depth = v0 + LAND_S + Lr + LAND_N;
     stair = { W, Ls: LAND_S, Ln: LAND_N, Lr, v0, h, steps, laps, doorD: v0 + LAND_S / 2 };
     pent = { a0: -W / 2 - WALL, a1: W / 2 + WALL, d0: v0 - WALL, d1: depth + WALL };
-    pentH = BULK_H + 0.25;
+    pentH = room ? 0 : BULK_H + 0.25;
     const outer: LRect = { a0: -W / 2 - WALL, a1: W / 2 + WALL, d0: 0, d1: depth + WALL };
     if (!inside(outer, footL, 0.3, -0.01)) return null;
-    if (!inside(pent, roofL, 0)) return null;
+    if (!inside(pent, fitL, 0)) return null;
     // the roof door opens on the +a side: it needs a walkway there
-    if (roofL.a1 - pent.a1 < 2.4 || pent.a0 - roofL.a0 < 0) return null;
+    if (fitL.a1 - pent.a1 < (room ? 1.3 : 2.4) || pent.a0 - fitL.a0 < 0) return null;
     // no squeeze gaps: the far side is either flush with the parapet or a real walkway
     const far = pent.a0 - roofL.a0;
-    if (far > 0.05 && far < 1.6) return null;
-    if (roofL.d1 - pent.d1 < 1.6) return null;
+    if (!room && far > 0.05 && far < 1.6) return null;
+    if (!room && roofL.d1 - pent.d1 < 1.6) return null;
     portals = [
       { level: 0, a: 0, d: 0, na: 0, nd: -1, half: 0.75, wall: WALL + 0.05 },
-      { level: 1, a: W / 2 + WALL, d: stair.doorD, na: 1, nd: 0, half: 0.65, wall: WALL },
+      room
+        ? // in a lookout room the top landing simply opens onto the floor (a railed stairwell)
+          { level: 1, a: W / 2, d: stair.doorD, na: 1, nd: 0, half: 0.8, wall: 0, open: true }
+        : { level: 1, a: W / 2 + WALL, d: stair.doorD, na: 1, nd: 0, half: 0.65, wall: WALL },
     ];
     interiorL = outer;
     holeL = { a0: -W / 2 - 0.05, a1: W / 2 + 0.05, d0: v0 - 0.05, d1: depth + 0.05 };
@@ -252,19 +311,54 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     footL,
     elev,
     stair,
+    ladder,
+    room,
+    roomL: spec.roomRect ? localRect(f, spec.roomRect) : roofL,
+    roomH: room ? (spec.roomH ?? 3) : 8,
     portals,
     pent,
     pentH,
     props: [],
-    obstacles: [worldRect(f, pent)],
+    obstacles: [...(pent.a1 > pent.a0 ? [worldRect(f, pent)] : []), ...(spec.hostObstacles ?? []), ...terraceWall(spec)],
     interior: worldRect(f, interiorL),
     hole: worldRect(f, holeL),
     pad: { x: 0, z: 0, r: 0 },
     spots: [],
     cap: 4,
   };
-  dressRoof(b);
+  if (spec.dressing ?? (!room && spec.kind !== "ladder")) dressRoof(b);
+  else findSpots(b);
   return b;
+}
+
+/** the room wall between a room and its terrace, as solid pieces either side of the door */
+function terraceWall(spec: AccessSpec): Rect[] {
+  const t = spec.terrace;
+  if (!t) return [];
+  const w = t.wall;
+  const alongX = w.x1 - w.x0 > w.z1 - w.z0;
+  const [d0, d1] = t.door;
+  return alongX
+    ? [
+        { x0: w.x0, z0: w.z0, x1: d0, z1: w.z1 },
+        { x0: d1, z0: w.z0, x1: w.x1, z1: w.z1 },
+      ]
+    : [
+        { x0: w.x0, z0: w.z0, x1: w.x1, z1: d0 },
+        { x0: w.x0, z0: d1, x1: w.x1, z1: w.z1 },
+      ];
+}
+
+/** spawn spots on an undressed roof / room (free points with body clearance) */
+function findSpots(b: AccessBuilding) {
+  const R = b.spec.roof;
+  for (let x = R.x0 + 0.8; x < R.x1 - 0.8; x += 1)
+    for (let z = R.z0 + 0.8; z < R.z1 - 0.8; z += 1) {
+      if (b.obstacles.some((o) => x > o.x0 - 0.9 && x < o.x1 + 0.9 && z > o.z0 - 0.9 && z < o.z1 + 0.9)) continue;
+      b.spots.push({ x, z });
+    }
+  // small decks and rooms hold a few (a lifeguard deck none: nobody spawns on top of you)
+  b.cap = Math.min(8, Math.floor(b.spots.length / 10));
 }
 
 /**
@@ -449,5 +543,29 @@ function dressRoof(b: AccessBuilding) {
       b.spots.push({ x, z });
     }
   }
-  b.cap = Math.max(3, Math.min(12, Math.floor(b.spots.length / 14)));
+  b.cap = Math.min(Math.floor(b.spots.length / 6), Math.max(3, Math.min(12, Math.floor(b.spots.length / 14))));
+}
+
+// ---- thin props (level.ts posts: lamp posts, sign poles, benches) and access doors ----
+
+type PostLike = { x: number; z: number; r: number };
+const OUT: Record<Facing, [number, number]> = { 0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0] };
+
+/** is the walk up to a door at (x, z) facing `f` free of thin props? (1.3 m either side of
+ * the door's centre line, from the wall out to 3.5 m) */
+export function doorwayClear(posts: readonly PostLike[], x: number, z: number, f: Facing) {
+  const [nx, nz] = OUT[f];
+  for (const p of posts) {
+    const out = (p.x - x) * nx + (p.z - z) * nz;
+    const lat = Math.abs((p.x - x) * nz - (p.z - z) * nx);
+    if (out > -0.5 - p.r && out < 3.5 + p.r && lat < 1.3 + p.r) return false;
+  }
+  return true;
+}
+
+/** the props that are left once every access door's approach is kept clear (a door whose
+ * adapter could not avoid a lamp post: the post keeps its look, loses its collision) */
+export function postsClearOfDoors<P extends PostLike>(posts: P[], list: readonly AccessBuilding[]): P[] {
+  if (!list.length) return posts;
+  return posts.filter((p) => list.every((b) => doorwayClear([p], b.spec.door.x, b.spec.door.z, b.spec.door.facing)));
 }
