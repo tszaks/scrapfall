@@ -73,7 +73,8 @@ type Enemy = {
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
   shot: number; // boss volley timer
-  slow: number; // frozen timer
+  slow: number; // slowed timer
+  frozen?: number; // cryo nova: fully frozen timer
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
@@ -714,6 +715,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Group>(null);
+  const ice = useRef<THREE.Mesh>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -732,6 +734,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
+    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0;
     if (flame.current) {
       const burning = data.burn > 0;
       flame.current.visible = burning;
@@ -771,6 +774,10 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group>
       {/* burning: flame tongues shown only while incendiary damage ticks */}
+      <mesh ref={ice} visible={false} position-y={0.9}>
+        <icosahedronGeometry args={[0.95, 0]} />
+        <meshStandardMaterial color="#bff4ff" emissive="#5fd8ff" emissiveIntensity={0.5} transparent opacity={0.45} flatShading roughness={0.1} />
+      </mesh>
       <group ref={flame} visible={false} position-y={0.75}>
         {[
           [0, 0.55, 0, 0.42, 1.5, "#ffe066"],
@@ -1489,6 +1496,7 @@ function World({
   const deadRef = useRef(dead);
   deadRef.current = dead;
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
+  const dashT = useRef(0); // phase dash burst timer
 
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -1999,8 +2007,16 @@ function World({
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1);
-    slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
-    slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    if (dashT.current > 0) {
+      // dash burst: carry the impulse, easing off, instead of snapping to walk speed
+      dashT.current -= delta;
+      const k = Math.min(1, delta * 4);
+      slide.current.x += (MOVE.x * spd - slide.current.x) * k;
+      slide.current.z += (MOVE.z * spd - slide.current.z) * k;
+    } else {
+      slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
+      slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    }
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
@@ -2340,8 +2356,9 @@ function World({
           }
         };
         if (id === "dash") {
-          slide.current.x += FORWARD.x * 26;
-          slide.current.z += FORWARD.z * 26;
+          slide.current.x = FORWARD.x * 30;
+          slide.current.z = FORWARD.z * 30;
+          dashT.current = 0.3;
           invuln.current = 0.7;
           playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
@@ -2357,7 +2374,7 @@ function World({
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
           playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
-          near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+          near(8, (e, ei) => { e.frozen = 3.5; hurtEnemy(e, 1, ei, 3.5); });
           playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
           const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
@@ -2491,6 +2508,14 @@ function World({
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
+        if ((e.frozen ?? 0) > 0) {
+          // frozen solid: no moving, no attacking, attack timers paused
+          e.frozen! -= delta;
+          if (e.burn > 0) { e.burn -= delta; }
+          e.cooldown += delta;
+          e.shot += delta;
+          continue;
+        }
         if (e.burn > 0) {
           e.burn -= delta;
           e.burnTick -= delta;
