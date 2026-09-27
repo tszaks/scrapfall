@@ -63,6 +63,10 @@ const TURRET_LIFE = 15;
 
 type Enemy = {
   kind: Kind;
+  /** city unstick tracking: last sampled spot and seconds without progress */
+  lastX?: number;
+  lastZ?: number;
+  stuckFor?: number;
   x: number;
   z: number;
   hp: number;
@@ -1369,7 +1373,7 @@ function World({
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps });
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, remotes, enemies]);
@@ -1810,7 +1814,8 @@ function World({
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    const enemyMul = 1 + 0.6 * extra;
+    // the real-scale city hides enemies behind blocks and streets, so it sends a bigger crowd
+    const enemyMul = (1 + 0.6 * extra) * (city ? 1.75 : 1);
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => Math.round(v * enemyMul);
@@ -1852,7 +1857,8 @@ function World({
       });
       e.elite = 0;
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
+      // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag
+      delay += i < 2 ? 0.4 : city ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
 
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
@@ -2377,6 +2383,8 @@ function World({
           e.x = pd.x;
           e.z = pd.z;
           e.alive = true;
+          delete e.lastX;
+          e.stuckFor = 0;
           if (e.kind === "boss") onBoss(BOSS_HP);
           pending.current[i] = null;
         }
@@ -2447,7 +2455,22 @@ function World({
               const q = e.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
               e.x = q.x;
               e.z = q.z;
+              e.stuckFor = 0;
+            } else if (e.kind !== "boss") {
+              // wedged on a corner the coarse nav grid thinks is open: once it has made no
+              // progress for 3 s and nobody can see it, it re-enters from another hidden spot
+              const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
+              e.stuckFor = moved < 0.5 && dmin > 18 ? (e.stuckFor ?? 0) + 1 : 0;
+              const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
+              if (e.stuckFor >= 3 && !seen) {
+                const q = spot(25, 45, true);
+                e.x = q.x;
+                e.z = q.z;
+                e.stuckFor = 0;
+              }
             }
+            e.lastX = e.x;
+            e.lastZ = e.z;
           }
         }
       }
@@ -2934,13 +2957,11 @@ function nightOverride(): boolean | null {
   return raw === "1" ? true : raw === "0" ? false : null;
 }
 
-const MAP_KEY = "df-map";
-/** Map picked in the start menu: `?map=` wins, then the saved pick; null = random. */
+const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
+/** Every visit opens on the city unless `?map=` names another; the start-menu picker
+ * switches for the rest of the visit. null = random. */
 function initialMapChoice(): number | null {
-  const f = forcedMapIndex();
-  if (f !== null || typeof window === "undefined") return f;
-  const n = Number(window.localStorage.getItem(MAP_KEY));
-  return window.localStorage.getItem(MAP_KEY) !== null && Number.isInteger(n) && n >= 0 && n < THEMES.length ? n : null;
+  return forcedMapIndex() ?? CITY_MAP;
 }
 
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
@@ -3322,8 +3343,6 @@ export function Game() {
   const pickMap = (choice: number | null) => {
     if (!isHost) return;
     setMapChoice(choice);
-    if (choice === null) window.localStorage.removeItem(MAP_KEY);
-    else window.localStorage.setItem(MAP_KEY, String(choice));
     const s = newSeed(choice);
     setSeed(s);
     net?.broadcast({ type: "seed", seed: s });
