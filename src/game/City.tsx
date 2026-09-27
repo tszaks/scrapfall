@@ -1,6 +1,6 @@
 // Renders the "city" map from the merged chunk geometry built in cityMesh.ts.
 // One facade material (a texture array with every facade style) draws every building,
-// prop and road; glass reflects a small PMREM env map of the generated sky (day or night).
+// prop and road; glass reflects a small PMREM env map of the generated sky (night or sunset).
 // Chunks cull by frustum (three.js) and their detail layers cull by distance (the LOD).
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -8,15 +8,11 @@ import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
 import { buildCityMeshes, DETAIL_RANGE } from "./cityMesh";
-import {
-  SUN_DIR,
-  TILE_COLS,
-  TILE_ROWS,
-  facadeArrays,
-  glowTexture,
-  signTexture,
-  skyTexture,
-} from "./cityTextures";
+import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture, signTexture } from "./cityTextures";
+import type { TimeOfDay } from "./lighting";
+import { CityPalms } from "./Palms";
+import { SUN_DIR, prewarmSunset, skyEnvSource, skyTexture } from "./sky";
+import { addSkyFogUniforms } from "./skyFog";
 import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
 
 const _col = new THREE.Color();
@@ -28,7 +24,7 @@ const _e = new THREE.Euler();
 
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
  * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
-function facadeMaterial(nightK: { value: number }) {
+function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
   const arr = facadeArrays();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -37,9 +33,11 @@ function facadeMaterial(nightK: { value: number }) {
     envMapIntensity: 1,
   });
   mat.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
     sh.uniforms["uDay"] = { value: arr.day };
     sh.uniforms["uNight"] = { value: arr.night };
     sh.uniforms["uNightK"] = nightK;
+    sh.uniforms["uDarkK"] = darkK;
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
@@ -57,6 +55,7 @@ precision highp sampler2DArray;
 uniform sampler2DArray uDay;
 uniform sampler2DArray uNight;
 uniform float uNightK;
+uniform float uDarkK;
 varying vec2 vFuv;
 varying vec3 vFac;
 varying float vWy;
@@ -88,23 +87,136 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
         `if (uNightK > 0.0) {
   vec4 nt = texture(uNight, vec3(tileUv, vFac.x));
   float hf = cityHash(vec2(floor(vFuv.y) + 0.5, vFac.y * 971.0 + floor(vFuv.x / 8.0) * 0.37));
-  float darkF = step(hf, 0.2);
+  float darkF = step(hf, uDarkK);
   float fullF = step(0.9, hf);
   vec3 em = mix(nt.rgb, vec3(0.95, 0.8, 0.56) * nt.a, fullF) * (1.0 - darkF);
   totalEmissiveRadiance += em * uNightK;
 }`,
       );
   };
-  mat.customProgramCacheKey = () => "city-facade-v2";
+  mat.customProgramCacheKey = () => "city-facade-v3";
   return mat;
 }
 
+/** a tileable ripple normal map (value-noise height field, several octaves) */
+let rippleTex: THREE.DataTexture | null = null;
+function rippleNormals() {
+  if (rippleTex) return rippleTex;
+  const N = 256;
+  const h = new Float32Array(N * N);
+  const hash = (x: number, y: number) => {
+    let v = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+    v = Math.imul(v ^ (v >>> 13), 1274126177);
+    return ((v ^ (v >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let o = 0, cell = 64, amp = 1; o < 5; o++, cell /= 2, amp *= 0.55) {
+    const cells = N / cell;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const gx = x / cell;
+        const gy = y / cell;
+        const x0 = Math.floor(gx);
+        const y0 = Math.floor(gy);
+        let fx = gx - x0;
+        let fy = gy - y0;
+        fx = fx * fx * (3 - 2 * fx);
+        fy = fy * fy * (3 - 2 * fy);
+        const H = (i: number, j: number) =>
+          hash(((i % cells) + cells) % cells, (((j % cells) + cells) % cells) + o * 977);
+        const a = H(x0, y0);
+        const b = H(x0 + 1, y0);
+        const c = H(x0, y0 + 1);
+        const d = H(x0 + 1, y0 + 1);
+        h[y * N + x]! += (a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy) * amp;
+      }
+  }
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = h[y * N + ((x + 1) % N)]! - h[y * N + ((x + N - 1) % N)]!;
+      const dy = h[((y + 1) % N) * N + x]! - h[((y + N - 1) % N) * N + x]!;
+      const n = new THREE.Vector3(-dx * 6, -dy * 6, 1).normalize();
+      const o = (y * N + x) * 4;
+      data[o] = Math.round((n.x * 0.5 + 0.5) * 255);
+      data[o + 1] = Math.round((n.y * 0.5 + 0.5) * 255);
+      data[o + 2] = Math.round((n.z * 0.5 + 0.5) * 255);
+      data[o + 3] = 255;
+    }
+  const t = new THREE.DataTexture(data, N, N);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  rippleTex = t;
+  return t;
+}
+
+/** The sea: a PBR mirror of the sky broken up by two drifting layers of ripples (a normal
+ * map, mipmapped so it calms down with distance instead of shimmering), with roughness
+ * rising far out so the sun spreads into a glitter path. Lighter fog so it keeps its colour. */
+function waterMaterial(time: { value: number }) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: "#174560",
+    roughness: 0.16,
+    metalness: 0.15,
+  });
+  mat.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
+    sh.uniforms["uTime"] = time;
+    sh.uniforms["uRipple"] = { value: rippleNormals() };
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\n#define WATER_FOG\nuniform float uTime;\nuniform sampler2D uRipple;\nvarying vec3 vWPos;",
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+float wDist = length(vWPos - cameraPosition);
+roughnessFactor = mix(roughnessFactor, 0.34, smoothstep(40.0, 700.0, wDist));`,
+      )
+      .replace(
+        "#include <normal_fragment_begin>",
+        `#include <normal_fragment_begin>
+{
+  vec2 p = vWPos.xz;
+  vec3 a = texture2D(uRipple, p / 31.0 + uTime * vec2(0.011, 0.004)).xyz * 2.0 - 1.0;
+  vec3 b = texture2D(uRipple, p / 11.0 + uTime * vec2(-0.017, 0.013)).xyz * 2.0 - 1.0;
+  vec2 g = (a.xy + b.xy * 0.6) * 0.55;
+  vec3 wn = normalize(vec3(g.x, 1.0, g.y));
+  normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
+}`,
+      );
+  };
+  mat.customProgramCacheKey = () => "city-water-v2";
+  return mat;
+}
+
+/** per time of day: how much of the lit-window texture shows, the share of dark windows,
+ * glass reflection strength, neon / bulb / sign brightness, and street light pools */
+const CITY_LIGHTS: Record<
+  TimeOfDay,
+  { windows: number; dark: number; env: number; glow: number; signs: number; pools: number }
+> = {
+  night: { windows: 0.95, dark: 0.2, env: 0.9, glow: 1.35, signs: 1.25, pools: 0.9 },
+  // dusk: the first windows and street lights coming on, a few neon signs already lit
+  sunset: { windows: 0.55, dark: 0.62, env: 1.15, glow: 1.1, signs: 1.0, pools: 0.32 },
+};
+
 export const CityScene = memo(function CityScene({
   city,
-  night,
+  time,
 }: {
   city: CityLayout;
-  night: boolean;
+  time: TimeOfDay;
 }) {
   const { gl, scene } = useThree();
   const built = useMemo(() => {
@@ -118,9 +230,11 @@ export const CityScene = memo(function CityScene({
   }, [city]);
 
   const nightK = useMemo(() => ({ value: 0 }), []);
+  const darkK = useMemo(() => ({ value: 0.2 }), []);
+  const waterTime = useMemo(() => ({ value: 0 }), []);
   const mats = useMemo(
     () => ({
-      facade: facadeMaterial(nightK),
+      facade: facadeMaterial(nightK, darkK),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
       signs: new THREE.MeshBasicMaterial({
         vertexColors: true,
@@ -137,46 +251,73 @@ export const CityScene = memo(function CityScene({
         polygonOffset: true,
         polygonOffsetFactor: -2,
       }),
-      water: new THREE.MeshStandardMaterial({ color: "#174560", roughness: 0.16, metalness: 0.15 }),
+      water: waterMaterial(waterTime),
       land: new THREE.MeshLambertMaterial({ color: "#8f8c84" }),
       beacon: new THREE.MeshBasicMaterial({ color: "#ff2a1a", toneMapped: false }),
       lamp: new THREE.MeshBasicMaterial({ color: "#ffffff", toneMapped: false }),
     }),
-    [nightK],
+    [nightK, darkK, waterTime],
   );
 
-  // reflection env maps: a small PMREM of each generated sky
-  const env = useMemo(() => {
-    const pm = new THREE.PMREMGenerator(gl);
-    const day = pm.fromEquirectangular(skyTexture(false));
-    const nightRT = pm.fromEquirectangular(skyTexture(true));
-    pm.dispose();
-    return { day, night: nightRT };
-  }, [gl]);
+  // reflection env maps: a small PMREM of each generated sky, made the first time it's needed
+  const envs = useMemo(() => new Map<TimeOfDay, THREE.WebGLRenderTarget>(), []);
   useEffect(
     () => () => {
-      env.day.dispose();
-      env.night.dispose();
+      envs.forEach((rt) => rt.dispose());
+      envs.clear();
     },
-    [env],
+    [envs],
   );
 
+  const envFor = useMemo(
+    () => (t: TimeOfDay) => {
+      let rt = envs.get(t);
+      if (!rt) {
+        const pm = new THREE.PMREMGenerator(gl);
+        rt = pm.fromEquirectangular(skyEnvSource(t));
+        pm.dispose();
+        envs.set(t, rt);
+      }
+      return rt;
+    },
+    [gl, envs],
+  );
+  // paint the sunset sky in idle moments and upload it, ready for the first press of N
   useEffect(() => {
-    const e = night ? env.night.texture : env.day.texture;
-    mats.facade.envMap = e;
-    mats.facade.envMapIntensity = night ? 0.9 : 1.0;
+    let live = true;
+    prewarmSunset(() => {
+      if (!live) return;
+      envFor("sunset");
+      gl.initTexture(skyTexture("sunset"));
+    });
+    return () => {
+      live = false;
+    };
+  }, [gl, envFor]);
+
+  useEffect(() => {
+    const rt = envFor(time);
+    const L = CITY_LIGHTS[time];
+    mats.facade.envMap = rt.texture;
+    mats.facade.envMapIntensity = L.env;
     mats.facade.needsUpdate = true;
-    mats.water.envMap = e;
+    mats.water.envMap = rt.texture;
+    // at dusk the sea turns into a mirror of the sky
+    mats.water.color.set(time === "night" ? "#174560" : "#241c3c");
+    mats.water.roughness = time === "night" ? 0.16 : 0.2;
+    mats.water.metalness = time === "night" ? 0.15 : 0.9;
     mats.water.needsUpdate = true;
-    nightK.value = night ? 0.95 : 0;
-    mats.glow.color.setScalar(night ? 1.35 : 0.75);
-    mats.signs.color.setScalar(night ? 1.25 : 0.8);
+    nightK.value = L.windows;
+    darkK.value = L.dark;
+    mats.glow.color.setScalar(L.glow);
+    mats.signs.color.setScalar(L.signs);
+    mats.pools.opacity = L.pools;
     const prev = scene.background;
-    scene.background = skyTexture(night);
+    scene.background = skyTexture(time);
     return () => {
       scene.background = prev;
     };
-  }, [night, env, mats, nightK, scene]);
+  }, [time, envFor, mats, nightK, darkK, scene]);
 
   useEffect(
     () => () => {
@@ -191,8 +332,6 @@ export const CityScene = memo(function CityScene({
   const detailRefs = useRef<(THREE.Mesh | null)[]>([]);
   const signRefs = useRef<(THREE.Mesh | null)[]>([]);
   const poolRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const nightRef = useRef(night);
-  nightRef.current = night;
 
   const beaconGeo = useMemo(() => new THREE.SphereGeometry(0.45, 6, 4), []);
   const lampGeo = useMemo(() => new THREE.BoxGeometry(0.24, 0.24, 0.06), []);
@@ -230,6 +369,7 @@ export const CityScene = memo(function CityScene({
   const lodTick = useRef(0);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
+    waterTime.value = t;
     const cam = state.camera.position;
     // aviation lights blink in unison
     mats.beacon.color.setScalar(Math.sin(t * 3.2) > 0.2 ? 1 : 0.12).multiply(_col.set("#ff2a1a"));
@@ -246,7 +386,7 @@ export const CityScene = memo(function CityScene({
         const sg = signRefs.current[i];
         if (sg) sg.visible = d < DETAIL_RANGE * 1.4;
         const pl = poolRefs.current[i];
-        if (pl) pl.visible = nightRef.current && d < 900;
+        if (pl) pl.visible = d < 900;
       });
     }
     // traffic lights follow the shared traffic clock
@@ -321,12 +461,12 @@ export const CityScene = memo(function CityScene({
               }}
               geometry={c.pools}
               material={mats.pools}
-              visible={night}
               renderOrder={2}
             />
           )}
         </group>
       ))}
+      <CityPalms city={city} />
       {built.beacons.length > 0 && (
         <instancedMesh ref={beaconRef} args={[beaconGeo, mats.beacon, built.beacons.length]} />
       )}
@@ -355,11 +495,11 @@ const SUN_DIST = 900;
  * few seconds, shadows switch off automatically (weak GPUs / laptops on battery).
  */
 export function CitySun({
-  night,
+  time,
   color,
   intensity,
 }: {
-  night: boolean;
+  time: TimeOfDay;
   color: string;
   intensity: number;
 }) {
@@ -368,7 +508,7 @@ export function CitySun({
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const dir = SUN_DIR[night ? "night" : "day"];
+  const dir = SUN_DIR[time];
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;

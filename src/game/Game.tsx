@@ -14,7 +14,8 @@ import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
 import { Minimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
-import { worldLook } from "./lighting";
+import { Atmosphere } from "./Atmosphere";
+import { worldLook, type TimeOfDay } from "./lighting";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
@@ -1250,7 +1251,7 @@ function World({
   onDeploys,
   city,
   seed,
-  night,
+  time,
   ability,
   onAbilityCd,
   onStat,
@@ -1288,7 +1289,7 @@ function World({
   onDeploys: (d: { turret: number; mines: number }) => void;
   city: CityLayout | null;
   seed: number;
-  night: boolean;
+  time: TimeOfDay;
   ability: AbilityId;
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
@@ -1367,7 +1368,7 @@ function World({
     c.fov = fov;
     c.updateProjectionMatrix();
   }, [fov, camera]);
-  const look3 = worldLook(theme, night, ARENA);
+  const look3 = worldLook(theme, time, ARENA);
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
@@ -2824,11 +2825,11 @@ function World({
 
   return (
     <>
-      {!city && <color attach="background" args={[look3.sky]} />}
-      <fog attach="fog" args={[look3.sky, look3.fog[0], look3.fog[1]]} />
+      <Atmosphere theme={theme} time={time} look={look3} city={!!city} />
+      <fog attach="fog" args={[look3.fogColor, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
-      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color="#9fb0e0" />}
-      {night && (
+      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color={look3.ambientColor} />}
+      {time === "night" && (
         <Stars
           radius={city ? 900 : 90}
           depth={city ? 200 : 20}
@@ -2842,7 +2843,7 @@ function World({
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
-          night={night}
+          time={time}
           color={look3.sun.color}
           intensity={look3.sun.intensity}
         />
@@ -2859,8 +2860,8 @@ function World({
       )}
       {city ? (
         <>
-          <CityScene city={city} night={night} />
-          <CityTraffic city={city} seed={seed} night={night} link={traffic} />
+          <CityScene city={city} time={time} />
+          <CityTraffic city={city} seed={seed} time={time} link={traffic} />
         </>
       ) : (
         <Level blocks={blocks} theme={theme} />
@@ -2949,12 +2950,22 @@ function forcedMapIndex(): number | null {
   const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
   return i >= 0 ? i : null;
 }
-const NIGHT_KEY = "dustfield-night";
-/** `?night=1` / `?night=0` overrides the saved preference (without overwriting it). */
-function nightOverride(): boolean | null {
+/** Every visit opens at night. `?time=night|sunset` picks the opening look for testing
+ * (old links: `?night=1` is night, `?night=0` is sunset). The choice isn't saved. */
+function initialTime(): TimeOfDay {
+  if (typeof window === "undefined") return "night";
+  const q = new URLSearchParams(window.location.search);
+  const t = q.get("time");
+  if (t === "night" || t === "sunset") return t;
+  return q.get("night") === "0" ? "sunset" : "night";
+}
+
+/** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
+function seedParam(): number | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("night");
-  return raw === "1" ? true : raw === "0" ? false : null;
+  const raw = new URLSearchParams(window.location.search).get("seed");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
 const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
@@ -2975,26 +2986,17 @@ export function Game() {
   const [mapChoice, setMapChoice] = useState(initialMapChoice);
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
-  const [seed, setSeed] = useState(() => newSeed(mapChoice));
-  const [night, setNight] = useState(false);
-  useEffect(() => {
-    const o = nightOverride();
-    if (o !== null) setNight(o);
-    else setNight(localStorage.getItem(NIGHT_KEY) === "1");
-  }, []);
-  const toggleNight = () => {
-    setNight((v) => {
-      localStorage.setItem(NIGHT_KEY, v ? "0" : "1");
-      return !v;
-    });
-  };
-  const toggleNightRef = useRef(toggleNight);
-  toggleNightRef.current = toggleNight;
+  const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
+  const [time, setTime] = useState<TimeOfDay>("night");
+  useEffect(() => setTime(initialTime()), []);
+  const toggleTime = () => setTime((t) => (t === "night" ? "sunset" : "night"));
+  const toggleTimeRef = useRef(toggleTime);
+  toggleTimeRef.current = toggleTime;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyN" || e.repeat) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      toggleNightRef.current();
+      toggleTimeRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -3548,7 +3550,7 @@ export function Game() {
           onDeploys={setDeploys}
           city={city}
           seed={seed}
-          night={night}
+          time={time}
           ability={ability}
           onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
           onStat={(k, n) => {
@@ -3781,7 +3783,7 @@ export function Game() {
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your
-                ability · 1-0 / Q E swap guns · N day/night · Esc to pause
+                ability · 1-0 / Q E swap guns · N night/sunset · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -3973,12 +3975,12 @@ export function Game() {
             {(
               <div>
                 <button
-                  onClick={toggleNight}
-                  aria-pressed={night}
-                  title="Toggle day / night (N)"
+                  onClick={toggleTime}
+                  aria-pressed={time === "sunset"}
+                  title="Switch between night and sunset (N)"
                   className="pointer-events-auto mt-4 block w-full rounded-md border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]"
                 >
-                  {night ? "☾ NIGHT" : "☀ DAY"} · PRESS N TO SWITCH
+                  {time === "night" ? "☾ NIGHT · PRESS N FOR SUNSET" : "SUNSET · PRESS N FOR NIGHT"}
                 </button>
                 <button
                   onClick={() => setShowSettings((v) => !v)}

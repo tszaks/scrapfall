@@ -24,6 +24,7 @@ import {
 import { newDirector, stepDirector } from "./pursuit";
 import { playSfx, setSiren } from "./audio";
 import { glowTexture } from "./cityTextures";
+import type { TimeOfDay } from "./lighting";
 
 /**
  * Numbers per car in the network snapshot: index, x, z, heading, speed + flags.
@@ -103,17 +104,17 @@ const sirenPitch = (t: number, i: number, yelp: boolean) => {
 export function CityTraffic({
   city,
   seed,
-  night,
+  time,
   link,
 }: {
   city: CityLayout;
   seed: number;
-  night: boolean;
+  time: TimeOfDay;
   link: React.MutableRefObject<TrafficLink>;
 }) {
   const { roadX, roadZ } = city;
-  const nightRef = useRef(night);
-  nightRef.current = night;
+  const timeRef = useRef(time);
+  timeRef.current = time;
 
   // ---- moving cars, deterministic start from the seed ----
   const cars = useMemo(
@@ -202,6 +203,12 @@ export function CityTraffic({
     [geo, mats],
   );
 
+  // headlight beams and road pools: full at night, faint in the dusk light
+  useEffect(() => {
+    mats.cone.opacity = time === "night" ? 0.06 : 0.025;
+    mats.pool.opacity = time === "night" ? 0.5 : 0.22;
+  }, [time, mats]);
+
   const paintRef = useRef<THREE.InstancedMesh>(null);
   const wheelRef = useRef<THREE.InstancedMesh>(null);
   const lampRef = useRef<THREE.InstancedMesh>(null);
@@ -213,35 +220,25 @@ export function CityTraffic({
   const meshOf = (k: Slot["mesh"]) =>
     k === "paint" ? paintRef.current : k === "wheel" ? wheelRef.current : lampRef.current;
 
-  /** lamp colours depend on day/night, whether the car is moving, and the police flasher */
-  const lampColor = (part: Part, moving: boolean, bar: Bar, isNight: boolean) => {
-    if (part.kind === "head")
-      return _c.set(moving ? (isNight ? 0xfff6d8 : 0xe8e6dc) : isNight ? 0x3a3a36 : 0xb8b8b0);
-    if (part.kind === "tail")
-      return _c.set(moving ? (isNight ? 0xff2a1a : 0x8a1a18) : isNight ? 0x3a0a08 : 0x6a1612);
-    if (part.kind === "sign") return _c.set(isNight ? part.color : 0xd8d0a0);
-    // lightbar: dark unless the siren is on, then red and blue take turns
+  /** lamp colours (lights are on at night and at dusk) depend on whether the car is moving,
+   * and the police lightbar (dark unless the siren is on, then red and blue take turns) */
+  const lampColor = (part: Part, moving: boolean, bar: Bar) => {
+    if (part.kind === "head") return _c.set(moving ? 0xfff6d8 : 0x3a3a36);
+    if (part.kind === "tail") return _c.set(moving ? 0xff2a1a : 0x3a0a08);
+    if (part.kind === "sign") return _c.set(part.color);
     if (part.kind === "barR") return _c.set(bar === 1 ? 0xff2020 : 0x5a1010);
     if (part.kind === "barB") return _c.set(bar === 2 ? 0x3060ff : 0x10205a);
     return _c.set(part.color);
   };
 
-  const placeCar = (
-    i: number,
-    x: number,
-    z: number,
-    yaw: number,
-    moving: boolean,
-    bar: Bar,
-    isNight: boolean,
-  ) => {
+  const placeCar = (i: number, x: number, z: number, yaw: number, moving: boolean, bar: Bar) => {
     _car.compose(_p.set(x, 0, z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
     for (const sl of slots[i]!) {
       const mesh = meshOf(sl.mesh);
       if (!mesh) continue;
       _m.multiplyMatrices(_car, sl.local);
       mesh.setMatrixAt(sl.index, _m);
-      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, bar, isNight));
+      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, bar));
     }
   };
 
@@ -414,7 +411,7 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
-    const isNight = nightRef.current;
+    const isNight = timeRef.current === "night";
     liveCars.length = 0;
     pursuitDots.length = 0;
     const cam = state.camera;
@@ -486,7 +483,7 @@ export function CityTraffic({
       const siren = (flags & F_SIREN) !== 0;
       const bar: Bar = siren ? barAt(t, ci) : 0;
       // ---- draw ----
-      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, bar, isNight);
+      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, bar);
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       liveCars.push({ x: np.x, z: np.z, sin, cos, hl: half, hw: c.v.wid / 2, h: c.h });
@@ -517,7 +514,7 @@ export function CityTraffic({
           );
           spillRef.current.setMatrixAt(ci, _car);
           spillRef.current.setColorAt(ci, _c.set(col));
-          const hs = isNight ? 3.4 : 1.8;
+          const hs = isNight ? 3.4 : 2.4;
           _car.compose(
             _p.set(np.x + cos * side * 0.35, c.h + 0.3, np.z - sin * side * 0.35),
             cam.quaternion,
@@ -603,9 +600,8 @@ export function CityTraffic({
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
-    if (coneRef.current) coneRef.current.visible = isNight;
-    if (poolRef.current) poolRef.current.visible = isNight;
-    if (spillRef.current) spillRef.current.visible = isNight;
+    // police light spill reads on the road at night and (fainter) at dusk
+    if (spillRef.current) mats.spill.opacity = isNight ? 0.75 : 0.4;
   });
 
   return (
@@ -638,19 +634,16 @@ export function CityTraffic({
             ref={coneRef}
             args={[geo.cone, mats.cone, cars.length]}
             frustumCulled={false}
-            visible={night}
           />
           <instancedMesh
             ref={poolRef}
             args={[geo.pool, mats.pool, cars.length]}
             frustumCulled={false}
-            visible={night}
           />
           <instancedMesh
             ref={spillRef}
             args={[geo.spill, mats.spill, cars.length]}
             frustumCulled={false}
-            visible={night}
           />
           <instancedMesh
             ref={haloRef}
