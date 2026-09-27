@@ -1,4 +1,5 @@
 import { useFrame } from "@react-three/fiber";
+import { groundY } from "./terrain";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
@@ -69,7 +70,7 @@ export function Shards({
         }
       }
       if (m) {
-        m.position.set(p.x, 0.45 + Math.sin(t * 4 + i) * 0.1, p.z);
+        m.position.set(p.x, groundY(p.x, p.z) + 0.45 + Math.sin(t * 4 + i) * 0.1, p.z);
         m.rotation.y = t * 3 + i;
         m.scale.setScalar(0.8 + Math.sqrt(p.v) * 0.25);
       }

@@ -1,6 +1,7 @@
 // Sky, fog and light settings per map, for day and night.
 import * as THREE from "three";
-import type { Theme } from "./themes";
+import { layoutOf, type Theme } from "./themes";
+import { alpineLook } from "./alpine/look";
 
 export type Look = {
   sky: string;
@@ -26,6 +27,8 @@ const mix = (a: string, b: string, t: number) => {
 };
 
 export function worldLook(theme: Theme, night: boolean, arena: number): Look {
+  // the alpine map keeps its night / sunset looks in its own table
+  if (layoutOf(theme) === "alpine") return alpineLook(night);
   const city = theme.blockShape === "city";
   if (city) {
     // real-scale downtown: a long view with aerial haze so the skyline reads, a low warm

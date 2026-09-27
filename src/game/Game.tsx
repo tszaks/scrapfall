@@ -8,13 +8,18 @@ import {
   setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_SOLO, CITY_COOP,
 } from "./level";
 
-import { THEMES, type Theme } from "./themes";
+import { THEMES, layoutOf, type Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
 import { Minimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
+import { groundY, groundSpeed, setTerrain, wind } from "./terrain";
+import { AlpineScene, AlpineSun } from "./alpine/Alpine";
+import { PloughBody, SkierModel } from "./alpine/enemies";
+import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
@@ -474,6 +479,7 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
+  if (b.shape === "plough") return <PloughBody theme={theme} />;
   const skin = <meshLambertMaterial color={b.body} flatShading />;
   const limb = <meshLambertMaterial color={b.limb} flatShading />;
   const glow = <meshBasicMaterial color={b.glow} fog={false} />;
@@ -724,7 +730,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
-    g.position.set(data.x, bob, data.z);
+    g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
@@ -995,7 +1001,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && <SpecialModel theme={theme} data={data} />}
+      {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {(kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
@@ -1368,6 +1374,7 @@ function World({
     c.updateProjectionMatrix();
   }, [fov, camera]);
   const look3 = worldLook(theme, night, ARENA);
+  const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
@@ -1535,6 +1542,7 @@ function World({
     crate.current.active = c[2] === 1;
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
     if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
+    if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -1599,7 +1607,7 @@ function World({
 
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
-    camera.position.set(city ? city.spawn.x : 0, EYE, city ? city.spawn.z : 0);
+    camera.position.set(city ? city.spawn.x : 0, EYE + (city ? groundY(city.spawn.x, city.spawn.z) : 0), city ? city.spawn.z : 0);
     look.current = { yaw: 0, pitch: city ? 0.12 : 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
@@ -1912,7 +1920,7 @@ function World({
 
 
   const outOfBounds = (p: THREE.Vector3) =>
-    p.y < 0 ||
+    p.y < groundY(p.x, p.z) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     blocked(blocks, p.x, p.z, 0.05) ||
@@ -1985,10 +1993,12 @@ function World({
     const moving = MOVE.lengthSq() > 0;
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
+    alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1);
+      * (overdrive.current > 0 ? 1.3 : 1)
+      * groundSpeed(cam.position.x, cam.position.z); // deep snow off the paths
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -1996,6 +2006,13 @@ function World({
       const nz = cam.position.z + slide.current.z * delta;
       if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
       if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+    }
+    // weather: blizzard gusts shove you downwind
+    if (wind.x !== 0 || wind.z !== 0) {
+      const wx = cam.position.x + wind.x * delta;
+      const wz = cam.position.z + wind.z * delta;
+      if (!blocked(blocks, wx, cam.position.z, 0.4)) cam.position.x = wx;
+      if (!blocked(blocks, cam.position.x, wz, 0.4)) cam.position.z = wz;
     }
 
     // car bumps: velocity that decays quickly, sliding along walls instead of through them
@@ -2016,7 +2033,7 @@ function World({
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
-    cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    cam.position.y = groundY(cam.position.x, cam.position.z) + EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
     // minimap feed (the HUD reads it)
     if (city) {
@@ -2059,7 +2076,7 @@ function World({
     if (pickupMesh.current) {
       pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
-        pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.position.set(pk.x, groundY(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
@@ -2080,7 +2097,7 @@ function World({
     if (healMesh.current) {
       healMesh.current.visible = hp.active;
       if (hp.active) {
-        healMesh.current.position.set(hp.x, 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.position.set(hp.x, groundY(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
@@ -2099,7 +2116,7 @@ function World({
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
-        crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.position.set(ck.x, groundY(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
         crateMesh.current.rotation.y += delta * 1.2;
       }
     }
@@ -2129,7 +2146,7 @@ function World({
       const mesh = turretMeshes.current[ti];
       if (mesh) {
         mesh.visible = t.t > 0;
-        mesh.position.set(t.x, 0, t.z);
+        mesh.position.set(t.x, groundY(t.x, t.z), t.z);
       }
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
@@ -2144,7 +2161,7 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        fireInto(bullets.current, new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2253,7 +2270,7 @@ function World({
           for (let s = 0; s < 8; s++) {
             const a = (s / 8) * Math.PI * 2;
             const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
           }
         }
         onScore();
@@ -2352,7 +2369,7 @@ function World({
     for (let mi = mines.current.length - 1; mi >= 0; mi--) {
       const mn = mines.current[mi]!;
       const mesh = mineMeshes.current[mi];
-      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2, mn.z); }
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, groundY(mn.x, mn.z) + 0.2, mn.z); }
       let hit = false;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
@@ -2421,7 +2438,7 @@ function World({
       const targets: Target[] = [];
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE });
+        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundY(r.x, r.z) });
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
@@ -2537,12 +2554,14 @@ function World({
           if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
           if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
           if (spType === "bile") dir = d > 5 ? 1 : 0;
+          // RIDGE RAIDER: carves in fast on skis, quicker still in a whiteout
+          if (spType === "skier") { dir = d > 6 ? 1 : 0; spMul = 1.5 + alpine.blizzard * 0.5; }
         }
         if (e.swing > 0) dir = 0;
         const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
-        if (spType === "stalker" || spType === "shinobi") {
+        if (spType === "stalker" || spType === "shinobi" || spType === "skier") {
           // flanking arcs / zig-zag dash-steps
           const now = performance.now() / 1000;
           const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2 : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
@@ -2588,7 +2607,7 @@ function World({
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
           e.cooldown = 1.5 + rand() * 0.6;
-          const from = new THREE.Vector3(e.x, 1.5, e.z);
+          const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 1.5, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
           fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
@@ -2598,15 +2617,16 @@ function World({
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
-            const from = new THREE.Vector3(e.x, 3.2, e.z);
-            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2, target.z - e.z).normalize();
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 3.2, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - from.y, target.z - e.z).normalize();
             from.addScaledVector(vel, 1.2);
             fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
           }
         }
         if (spType) {
           e.shot -= delta;
-          const aim = (y: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+          const aim = (y0: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+            const y = y0 + groundY(e.x, e.z);
             const from = new THREE.Vector3(e.x, y, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = 0; s < n; s++) {
@@ -2648,19 +2668,35 @@ function World({
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
           if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          if (spType === "skier") {
+            // a fan of thrown ice picks at mid range, a pole jab up close
+            if (ready && d < 20 && d > 4) { e.shot = 2.3; aim(1.3, 17, 0.12, 3, 1, 2, 0.12); }
+            if (d < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
+          }
         }
         if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
-            const from = new THREE.Vector3(e.x, 2.6, e.z);
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 2.6, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = -3; s <= 3; s++) {
               const a = base + s * 0.16;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - from.y) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
               fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
             }
+          }
+          // THE AVALANCHE ENGINE: every few seconds it drops the blade and ploughs straight at you
+          if (theme.boss.shape === "plough") {
+            e.aux = (e.aux ?? 5) - delta;
+            if (e.aux < 0 && e.aux > -1.4) {
+              const cx = e.x + (dx / d) * 10 * delta;
+              const cz = e.z + (dz / d) * 10 * delta;
+              if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
+              if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
+              if (d < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
+            } else if (e.aux <= -1.4) e.aux = d > 5 && d < 28 ? 5 + rand() * 3 : 1;
           }
         }
       }
@@ -2700,7 +2736,7 @@ function World({
             const e = enemies[ei]!;
             if (!e.alive) continue;
             const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y - groundY(e.x, e.z) < h) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               let dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
@@ -2784,9 +2820,11 @@ function World({
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
           const tr = traffic.current.encode?.();
+          const al = encodeAlpine();
           n.broadcast({
             type: "snap", e, b, mk,
             ...(tr ? { tr } : {}),
+            ...(al ? { al } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -2807,7 +2845,7 @@ function World({
       const pd = pending.current[i];
       const show = !!pd && pd.t <= MARK_TIME && Math.floor(state.clock.elapsedTime * 6) % 2 === 0;
       g.visible = show;
-      if (pd) g.position.set(pd.x, 0, pd.z);
+      if (pd) g.position.set(pd.x, groundY(pd.x, pd.z), pd.z);
     });
     const v = viewModel.current;
     if (!v) return;
@@ -2828,7 +2866,7 @@ function World({
       <fog attach="fog" args={[look3.sky, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
       {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color="#9fb0e0" />}
-      {night && (
+      {night && !alpineMap && (
         <Stars
           radius={city ? 900 : 90}
           depth={city ? 200 : 20}
@@ -2838,7 +2876,9 @@ function World({
           speed={0.3}
         />
       )}
-      {city ? (
+      {alpineMap ? (
+        <AlpineSun key="sun-alpine" night={night} />
+      ) : city ? (
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
@@ -2857,7 +2897,9 @@ function World({
           shadow-mapSize-height={1024}
         />
       )}
-      {city ? (
+      {alpineMap ? (
+        <AlpineScene layout={alpineMap} night={night} isHost={isHost} playing={locked && !gameOver} />
+      ) : city ? (
         <>
           <CityScene city={city} night={night} />
           <CityTraffic city={city} seed={seed} night={night} link={traffic} />
@@ -3264,9 +3306,15 @@ export function Game() {
     const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
     // co-op gets a bigger field; the real-scale city is far bigger and routes on 4 m nav cells
-    if (theme.blockShape === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    const mode = layoutOf(theme);
+    if (mode === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    // the alpine map is always the full co-op size; solo seals a smaller square with blockades
+    else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    const level = generateLevel(seed, theme.blockShape === "city" ? "city" : "scatter");
+    const level = generateLevel(seed, mode, !coop);
+    const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
+    setTerrain(alp ? alp.terrain : null);
+    resetAlpine(alp !== null);
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
     if (!level.city) {
