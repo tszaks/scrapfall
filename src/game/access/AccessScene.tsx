@@ -445,7 +445,8 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       const y = carY(b, c);
       const open = carOpen(c);
       if (r.car) {
-        r.car.position.y = y;
+        // the lobby floor is drawn 0.17 m up (over the lot paving), the vestibule 0.03 m
+        r.car.position.y = y + 0.14 * (1 - (y - b.groundY) / Math.max(1, b.top - b.groundY));
         r.car.visible = (r.low?.visible && c.level === 0 && c.phase !== MOVING) || (r.high?.visible && c.level === 1 && c.phase !== MOVING) || (mine && player.inCar) || false;
         r.carDoor[0]?.position.setX(-0.353 - open * 0.69);
         r.carDoor[1]?.position.setX(0.353 + open * 0.69);

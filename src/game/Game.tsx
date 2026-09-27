@@ -1477,7 +1477,7 @@ function World({
       };
       Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
       // building access: the buildings, the local player's zone state, cars and doors
-      Object.assign(handle, { access: { list: accessList, state: accessDebug, player: accPlayer, zoneAt, solid } });
+      Object.assign(handle, { access: { list: accessList, state: accessDebug, player: accPlayer, zoneAt, solid, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1) } });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
@@ -1850,7 +1850,7 @@ function World({
    * rooftop structures or at the roof door, and a full roof sends the rest to wait round the
    * building's entrance on the street.
    */
-  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number) => {
+  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number, already = false) => {
     if (!city) return randomSpawn(blocks, rand);
     if (!accessActive()) return spawnNear(blocks, rand, livePlayers(), rMin, rMax, hidden, 1, navOpen);
     const zp = zonePlayers();
@@ -1858,7 +1858,8 @@ function World({
     const zn = zone ?? (standing.length ? standing[Math.floor(rand() * standing.length)]!.zn : 0);
     if (zn > 0) {
       const b = zn - 1;
-      if (roofCount(b, enemies, pending.current) < (accessList()[b]?.cap ?? 0))
+      // (`already`: the caller is an enemy on that roof, re-placing itself: it has a place)
+      if (already || roofCount(b, enemies, pending.current) < (accessList()[b]?.cap ?? 0))
         return roofSpot(b, blocks, standing.filter((p) => p.zn === zn), rand, hidden);
       return spawnNear(blocks, rand, [doorstep(b)], rMin, rMax, hidden, 1, streetOnly);
     }
@@ -2885,7 +2886,7 @@ function World({
             for (const t of targets) dmin = Math.min(dmin, Math.hypot(t.x - e.x, t.z - e.z));
             if (dmin > (e.kind === "boss" ? 70 : 80)) {
               const home = accOn ? zoneAt(e.x, e.z) : undefined; // stays in its own zone
-              const q = e.kind === "boss" ? spot(25, 40, false, home) : spot(25, 45, true, home);
+              const q = e.kind === "boss" ? spot(25, 40, false, home, !!home) : spot(25, 45, true, home, !!home);
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -2896,7 +2897,7 @@ function World({
               e.stuckFor = moved < 0.5 && dmin > 18 ? (e.stuckFor ?? 0) + 1 : 0;
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if (e.stuckFor >= 3 && !seen) {
-                const q = spot(25, 45, true, accOn ? zoneAt(e.x, e.z) : undefined);
+                const q = spot(25, 45, true, accOn ? zoneAt(e.x, e.z) : undefined, accOn && zoneAt(e.x, e.z) > 0);
                 e.x = q.x;
                 e.z = q.z;
                 e.stuckFor = 0;

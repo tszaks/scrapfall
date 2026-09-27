@@ -152,7 +152,7 @@ function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding) {
     E.color("#2b3036");
     E.box(-hw - 0.45, hw + 0.45, cy0, cy0 + 0.14, -0.6, -pd, "+d");
     GL.color("#e6fff0");
-    GL.box(-hw, hw, cy0 - 0.01, cy0, -0.45, -0.3, "t");
+    GL.box(-hw, hw, cy0 - 0.02, cy0, -0.45, -0.3, "t");
     E.color("#16241c");
     E.box(-1.15, 1.15, cy0 + 0.2, cy0 + 0.62, -0.05, 0, "b+d");
     SG.color("#ffffff");
@@ -300,7 +300,7 @@ function roofProps(E: IGeo, GL: IGeo, b: AccessBuilding, beacons: [number, numbe
         E.color("#7a5a3a");
         E.cyl(p.x, p.z, y + 2.75, 2.9, 1.6, 14, false);
         E.color("#8a6a48");
-        for (let k = 0; k < 3; k++) E.cyl(p.x, p.z, y + 3.1 + k * 0.9, 0.08, 1.63, 14, false);
+        for (let k = 0; k < 3; k++) E.cyl(p.x, p.z, y + 3.1 + k * 0.9, 0.08, 1.66, 14, false);
         E.color("#5a4030");
         E.cone(p.x, p.z, y + 5.65, 0.8, 1.72, 14);
         break;
@@ -402,12 +402,12 @@ function landingDoorFrame(S: Set4, coreFront: number, y0: number, withCall: bool
   S.steel.box(-o, o, y0 + h, y0 + h + 0.14, coreFront - 0.05, coreFront, "b+d");
   // reveal into the shaft
   G.color("#9da1a6");
-  G.wallA(coreFront, coreFront + 0.1, y0, y0 + h, -o, true);
-  G.wallA(coreFront, coreFront + 0.1, y0, y0 + h, o, false);
-  G.flat(-o, o, coreFront, coreFront + 0.1, y0 + h, false);
+  G.wallA(coreFront, coreFront + 0.045, y0, y0 + h, -o, true);
+  G.wallA(coreFront, coreFront + 0.045, y0, y0 + h, o, false);
+  G.flat(-o, o, coreFront, coreFront + 0.045, y0 + h, false);
   // sill
   S.steel.color("#b9bdc2");
-  S.steel.flat(-o, o, coreFront - 0.05, coreFront + 0.1, y0 + 0.012, true);
+  S.steel.box(-o, o, y0 - 0.02, y0 + 0.025, coreFront - 0.05, coreFront + 0.045, "b");
   if (withCall) {
     // call button plate
     S.steel.color("#cfd2d6");
@@ -499,10 +499,10 @@ function buildLobby(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   const pw = Math.min(2.4, bay - 0.9);
   const ph = pw * 0.146;
   S.sign.color("#ffffff");
-  signA(S.sign, SIGN.UP, pd, y0 + 1.75, y0 + 1.75 + ph, L.a0 + 0.02, pw, 1);
+  signA(S.sign, SIGN.UP, pd, y0 + 1.75, y0 + 1.75 + ph, L.a0 + 0.035, pw, 1);
   G.color("#23201d");
   G.box(L.a0, L.a0 + 0.015, y0 + 1.72, y0 + 1.78 + ph, pd - pw / 2 - 0.04, pd + pw / 2 + 0.04, "-a");
-  signA(S.sign, SIGN.LOBBY, pd, y0 + 1.75, y0 + 1.75 + ph, L.a1 - 0.02, pw, -1);
+  signA(S.sign, SIGN.LOBBY, pd, y0 + 1.75, y0 + 1.75 + ph, L.a1 - 0.035, pw, -1);
   G.color("#2b2622");
   G.box(L.a1 - 0.015, L.a1, y0 + 1.72, y0 + 1.78 + ph, pd - pw / 2 - 0.04, pd + pw / 2 + 0.04, "+a");
   // planters in the front corners
@@ -528,7 +528,7 @@ function buildCar(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   G.color("#2e2724");
   G.flat(C.a0, C.a1, C.d0, C.d1, 0.03, true, 0.5);
   S.steel.color("#c9ccd0");
-  S.steel.flat(-o, o, C.d0 - 0.05, C.d0 + 0.08, 0.035, true);
+  S.steel.box(-o, o, 0, 0.05, C.d0 - 0.05, C.d0 + 0.08, "b");
   // walls: brushed steel panels, back wall bronze
   S.steel.color("#a3a8ae");
   S.steel.wallA(C.d0, C.d1, 0, H, C.a0, true, 0.3);
@@ -621,7 +621,7 @@ function buildVestibule(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   S.sign.color("#ffffff");
   G.color("#0a6b35");
   G.box(q.a - 0.34, q.a + 0.34, b.top + dh + 0.16, b.top + dh + 0.44, V.d0, V.d0 + 0.04, "b-d");
-  signD(S.sign, SIGN.EXIT, q.a, b.top + dh + 0.18, b.top + dh + 0.42, V.d0 + 0.055, 0.62, 1);
+  signD(S.sign, SIGN.EXIT, q.a, b.top + dh + 0.18, b.top + dh + 0.42, V.d0 + 0.06, 0.62, 1);
   const lights: BakeLight[] = [
     { a: 0, y: yc - 0.2, d: (V.d0 + V.d1) / 2, r: 2.2, k: 1.0 },
     { a: 0, y: y0 + 2.7, d: cf - 0.5, r: 1.6, k: 0.5, col: "#ffe0b0" },
@@ -695,14 +695,14 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     const yl = gy + n * s.h;
     const d0 = n === 0 ? 0.25 : s.v0;
     G.color("#9a958c");
-    G.flat(-W2, W2, d0, dS1, n === 0 ? y0 : yl + 0.03, true, 0.7);
+    G.flat(-W2, W2, d0, dS1 - (n > 0 ? 0.06 : 0), n === 0 ? y0 : yl + 0.03, true, 0.7);
     if (n > 0) {
       G.color("#8f8a80");
       G.flat(-W2, W2, s.v0, dS1, yl - slab, false, 0.7);
       G.wallD(-W2, W2, yl - slab, yl + 0.03, dS1, true);
       // yellow nosing strip on the landing edge
       G.color("#d8b02a");
-      G.box(-W2, W2, yl + 0.03, yl + 0.035, dS1 - 0.06, dS1, "b");
+      G.flat(-W2, W2, dS1 - 0.06, dS1, yl + 0.03, true);
     }
     // the half landing
     if (n < s.laps) {
@@ -728,19 +728,19 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     S.sign.color("#ffffff");
     if (n < s.laps) {
       G.color("#f2c230");
-      G.box(-W2, -W2 + 0.012, fy, fy + 0.46, s.v0 + 1.25, s.v0 + 1.63, "-a");
-      signA(S.sign, SIGN.FLOOR, s.v0 + 1.44, fy + 0.02, fy + 0.44, -W2 + 0.022, 0.36, 1, Math.min(8, n), 10);
+      G.box(-W2, -W2 + 0.035, fy, fy + 0.46, s.v0 + 1.25, s.v0 + 1.63, "-a");
+      signA(S.sign, SIGN.FLOOR, s.v0 + 1.44, fy + 0.02, fy + 0.44, -W2 + 0.055, 0.36, 1, Math.min(8, n), 10);
     } else {
       G.color("#f2c230");
-      G.box(-W2, -W2 + 0.012, fy, fy + 0.4, s.v0 + 0.15, s.v0 + 1.65, "-a");
-      signA(S.sign, SIGN.STAIRUP, s.v0 + 0.9, fy + 0.02, fy + 0.38, -W2 + 0.022, 1.46, 1);
+      G.box(-W2, -W2 + 0.035, fy, fy + 0.4, s.v0 + 0.15, s.v0 + 1.65, "-a");
+      signA(S.sign, SIGN.STAIRUP, s.v0 + 0.9, fy + 0.02, fy + 0.38, -W2 + 0.055, 1.46, 1);
     }
     if (n > 0 && n < s.laps) {
       // a (locked) steel door onto the floor, in the landing's front wall
       G.color("#5d666f");
       G.box(-0.5, 0.5, yl + 0.03, yl + 2.13, s.v0, s.v0 + 0.035, "b-d");
       G.color("#1c242c");
-      G.box(-0.14, 0.14, yl + 1.35, yl + 1.75, s.v0 + 0.035, s.v0 + 0.045, "b-d");
+      G.box(-0.14, 0.14, yl + 1.35, yl + 1.75, s.v0 + 0.035, s.v0 + 0.055, "b-d");
       G.color("#c8ccd0");
       G.box(0.32, 0.42, yl + 1.02, yl + 1.06, s.v0 + 0.035, s.v0 + 0.09, "b-d");
     }
@@ -802,7 +802,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   // EXIT over the roof door (inside)
   G.color("#0a6b35");
   G.box(W2 - 0.04, W2, topY + 2.4, topY + 2.68, q1.d - 0.34, q1.d + 0.34, "b+a");
-  signA(S.sign, SIGN.EXIT, q1.d, topY + 2.42, topY + 2.66, W2 - 0.055, 0.62, -1);
+  signA(S.sign, SIGN.EXIT, q1.d, topY + 2.42, topY + 2.66, W2 - 0.06, 0.62, -1);
   // roof door reveal floor
   G.color("#7c776e");
   G.flat(W2, W2 + q1.wall, q1.d - q1.half, q1.d + q1.half, topY + 0.03, true);
