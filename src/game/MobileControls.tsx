@@ -139,9 +139,10 @@ export function MobileControls({
         />
       </div>
 
-      <div className="absolute left-1/2 top-3 -translate-x-1/2">
+      <div className="absolute right-4 top-3">
         <Btn label="II" size={40} onTap={onPause} />
       </div>
+
 
     </div>
   );
