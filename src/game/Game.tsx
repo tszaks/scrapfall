@@ -3857,7 +3857,7 @@ export function Game() {
 
       {(!locked || ended) && picking && (
         <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
-          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl">
+          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
             <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
             <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
 
