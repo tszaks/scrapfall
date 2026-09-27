@@ -227,8 +227,8 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     const bDur = S.bassRate ? Math.min(2.5, stepDur * bRate * 0.9) : 0.14;
     tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: bDur, gain: 0.35, noise: 0, cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700, q: bRate === 1 ? 10 : 6 }, musicGain, t);
   }
-  if (S.pad && i === 0) {
-    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t));
+  if ((S.pad || menuMode) && i === 0) {
+    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: stepDur * 16, gain: menuMode ? 0.13 : 0.08, noise: 0, cut: 3000 }, musicGain, t));
   }
   const rate = S.arpRate ?? 2;
   if (intense || i % rate === 0) {
