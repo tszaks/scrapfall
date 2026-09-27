@@ -1986,8 +1986,8 @@ function World({
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
-    const moving = MOVE.lengthSq() > 0;
-    if (moving) MOVE.normalize();
+    const moving = MOVE.lengthSq() > 0.0004;
+    if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
