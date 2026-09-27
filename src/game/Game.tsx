@@ -3791,7 +3791,7 @@ export function Game() {
         <MobileControls
           onPause={() => {
             setLocked(false);
-            pauseAll();
+            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
           }}
           abilityName={ABILITIES[ability].name}
           abilityLeft={abilCd.left}
