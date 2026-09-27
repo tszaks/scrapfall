@@ -4,6 +4,7 @@ import { CITY_SUNSET, arenaPalette, horizonHex } from "./sky";
 import { installSkyFog } from "./skyFog";
 import { layoutOf, type Theme } from "./themes";
 import { alpineLook } from "./alpine/look";
+import { beachLook } from "./beach/beachLook";
 import { WESTERN_LOOK, WESTERN_SUNSET } from "./western/look";
 
 /** The game has two looks: night (the default) and a golden-hour sunset. */
@@ -100,8 +101,9 @@ const haze = (away: string, toward: string, k: number) => ({
 
 export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
   installSkyFog();
-  // the alpine map keeps its night / sunset looks in its own table
+  // the big maps keep their night / sunset looks in their own tables
   if (layoutOf(theme) === "alpine") return alpineLook(time);
+  if (layoutOf(theme) === "beach") return beachLook(time).look;
   if (layoutOf(theme) === "western") {
     // Dry Gulch: its own look table (western/look.ts); the sunset sky leans desert orange
     const w = WESTERN_LOOK[time];

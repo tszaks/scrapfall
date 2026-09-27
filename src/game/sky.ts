@@ -457,6 +457,25 @@ export function arenaSunsetSky(themeName: string, themeSky: string, sun: [number
   return cached(key, () => sunsetBackground(key, arenaPalette(themeSky, sun), 1024, 512));
 }
 
+/** Any big map's own sunset, painted from its palette: display background + HDR env source. */
+export function paletteSkyTextures(key: string, P: SunsetPalette) {
+  return {
+    background: cached(key, () => sunsetBackground(key, P, 2048, 1024)),
+    env: cached(`${key}-env`, () => sunsetEnv(`${key}-env`, P, 1024, 512)),
+  };
+}
+/** paint a palette's sunset in idle moments (like `prewarmSunset`); `done` runs once it's ready */
+export function prewarmPalette(key: string, P: SunsetPalette, done?: () => void) {
+  if (typeof window === "undefined") return;
+  job(key, P, 2048, 1024, false);
+  job(`${key}-env`, P, 1024, 512, true);
+  if (done) whenDone.push(done);
+  if (!slicing) {
+    slicing = true;
+    later(slice, 500);
+  }
+}
+
 /**
  * The sky's colour on the horizon (sRGB hex, as displayed): straight away from the sun, or
  * under the sun including its glow. The haze uses these so far towers melt into the sky.

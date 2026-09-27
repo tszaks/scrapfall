@@ -42,21 +42,35 @@ const KIND_COL: Record<number, [number, number, number]> = {
   [K_OPEN]: [206, 198, 182],
 };
 
-/** the city's radar source */
+/** optional per-map extras on a city-shaped layout (the beach map sets these) */
+type MapExtras = {
+  /** colours per cell kind, over the city's defaults */
+  palette?: Record<number, [number, number, number]>;
+  /** everything west of this x is sea */
+  seaX?: number;
+  /** solo play: the playable square's half-size (the rest is dimmed) */
+  soloHalf?: number | null;
+};
+
+/** the radar source for any city-shaped layout (Vice Heights, Pacific Pier) */
 export function cityMinimap(city: CityLayout, blocks: Block[], playHalf: number): MinimapSource {
+  const ex = city as CityLayout & MapExtras;
+  const sea = "#4f8fb0";
   return {
     cells: city.cells,
     half: city.half,
     base: paintBase(city, blocks),
     land: "#a8a397",
-    sea: { z: city.waterZ, color: "#4f8fb0" },
+    sea: ex.seaX === undefined ? { z: city.waterZ, color: sea } : null,
+    ...(ex.seaX === undefined ? {} : { seaWest: { x: ex.seaX, color: sea } }),
     landmark: city.landmark,
-    playHalf,
+    playHalf: ex.soloHalf ?? playHalf,
   };
 }
 
 function paintBase(city: CityLayout, blocks: Block[]) {
   const n = city.cells;
+  const pal = (city as CityLayout & MapExtras).palette;
   const c = document.createElement("canvas");
   c.width = n;
   c.height = n;
@@ -72,7 +86,7 @@ function paintBase(city: CityLayout, blocks: Block[]) {
     for (let j = 0; j < n; j++) {
       const k = city.kind[i * n + j]!;
       const h = heights[i * n + j]!;
-      let col = KIND_COL[k] ?? [150, 144, 132];
+      let col = pal?.[k] ?? KIND_COL[k] ?? [150, 144, 132];
       if (h > 0 && k !== K_PARKLANE && k !== K_ROAD) {
         // buildings: darker the taller, in the HUD's ink colour
         const t = Math.min(1, Math.log2(1 + h / 6) / 5.5);

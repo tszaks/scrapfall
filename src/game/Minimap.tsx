@@ -25,6 +25,8 @@ export type MinimapSource = {
   land: string;
   /** the sea south of this z (the city's waterfront) */
   sea: { z: number; color: string } | null;
+  /** the sea west of this x (the beach's Pacific) */
+  seaWest?: { x: number; color: string };
   landmark: { x: number; z: number } | null;
   /** half-size of the playable square (solo); the area beyond it is dimmed */
   playHalf: number;
@@ -85,6 +87,10 @@ export function Minimap({
       if (src.sea) {
         g.fillStyle = src.sea.color;
         g.fillRect(-R * 3, wz(src.sea.z), R * 6, R * 6);
+      }
+      if (src.seaWest) {
+        g.fillStyle = src.seaWest.color;
+        g.fillRect(wx(src.seaWest.x) - R * 6, -R * 3, R * 6, R * 6);
       }
       g.imageSmoothingEnabled = false;
       g.drawImage(base, wx(-src.half), wz(-src.half), src.cells * 2 * s, src.cells * 2 * s);

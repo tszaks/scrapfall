@@ -1,15 +1,19 @@
 import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
 import { generateAlpine } from "./alpine/layout";
+import { generateBeach } from "./beach/beachLayout";
+import { strictNav } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number };
-export type LayoutMode = "scatter" | "city" | "alpine" | "western";
+export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
 /** Vice Heights is real-scale (1 unit = 1 m): ~6x4 city blocks solo, ~8x6 in co-op */
 export const CITY_SOLO = 600;
 export const CITY_COOP = 800;
+/** Pacific Pier: the full 800 m map in both modes (solo seals a 560 m square with blockades) */
+export const BEACH_SIZE = 800;
 export let ARENA = SOLO_ARENA; // world size (centered at origin)
 export let HALF = ARENA / 2;
 /** Half-size of the square players can actually reach: the whole arena, except on a big
@@ -39,6 +43,13 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
   const cells = Math.floor(ARENA / BLOCK);
   let city: CityLayout | null = null;
   let western: WesternLayout | null = null;
+
+  if (mode === "beach") {
+    // the full map in solo and co-op; solo seals a smaller square with blockades. The caller
+    // installs its ground (beachTerrain) through terrain.ts, like the alpine heightfield.
+    const out = generateBeach(rand, cells, HALF, solo);
+    return { blocks: out.blocks, seed, rand, city: out.layout as CityLayout, western };
+  }
 
   if (mode === "city") {
     const out = generateCity(rand, cells, HALF);
@@ -146,7 +157,7 @@ export function spawnNear(
 ) {
   if (players.length === 0) return randomSpawn(blocks, rand);
   let fallback: { x: number; z: number } | null = null;
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < 96; i++) {
     const p = players[Math.floor(rand() * players.length)]!;
     const a = rand() * Math.PI * 2;
     const d = rMin + rand() * (rMax - rMin);
@@ -159,14 +170,17 @@ export function spawnNear(
     fallback ??= { x, z };
   }
   if (fallback) return fallback;
-  // tight spot (e.g. deep in an alley): accept anything open near the first player
+  // tight spot (e.g. deep in an alley, or out on a narrow pier): anything open near the first
+  // player, preferring routable spots at least half the minimum distance away
   const p = players[0]!;
-  for (let i = 0; i < 80; i++) {
-    const x = p.x + (rand() - 0.5) * rMax * 2;
-    const z = p.z + (rand() - 0.5) * rMax * 2;
-    const inPlay = Math.abs(x) < PLAY_HALF - 3 && Math.abs(z) < PLAY_HALF - 3;
-    if (inPlay && !blocked(blocks, x, z, radius) && ok(x, z)) return { x, z };
-  }
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < 80; i++) {
+      const x = p.x + (rand() - 0.5) * rMax * 2;
+      const z = p.z + (rand() - 0.5) * rMax * 2;
+      if (Math.abs(x) >= PLAY_HALF - 3 || Math.abs(z) >= PLAY_HALF - 3 || blocked(blocks, x, z, radius)) continue;
+      if (pass === 0 && (!ok(x, z) || Math.hypot(x - p.x, z - p.z) < rMin * 0.5)) continue;
+      return { x, z };
+    }
   return randomSpawn(blocks, rand);
 }
 
@@ -230,11 +244,13 @@ export function solidGrid(blocks: Block[]): NavGrid {
         }
       }
       const k = i * n + j;
-      // solid unless at least half of the sub-cells are open (and never outside the play square)
+      // solid unless at least half of the sub-cells are open. On a ground that asks for strict
+      // nav (the beach: a railing between a deck and the sand must cut the route) any solid
+      // sub-cell makes the nav cell solid. Never outside the play square.
       const cx = -HALF + (i + 0.5) * BLOCK * sc;
       const cz = -HALF + (j + 0.5) * BLOCK * sc;
       const out = Math.abs(cx) > PLAY_HALF || Math.abs(cz) > PLAY_HALF;
-      g[k] = open * 2 < total || open === 0 || out ? 1 : 0;
+      g[k] = (strictNav() ? open < total : open * 2 < total) || open === 0 || out ? 1 : 0;
       px[k] = open ? sx / open : 0;
       pz[k] = open ? sz / open : 0;
     }
