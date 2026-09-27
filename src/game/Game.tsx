@@ -10,6 +10,8 @@ import {
 
 import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
+import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
+import { MobileControls } from "./MobileControls";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
