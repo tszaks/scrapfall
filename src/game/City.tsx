@@ -24,6 +24,7 @@ const _e = new THREE.Euler();
 
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
  * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
 export function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
   const arr = facadeArrays();
   const mat = new THREE.MeshStandardMaterial({
@@ -100,6 +101,7 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
 
 /** a tileable ripple normal map (value-noise height field, several octaves) */
 let rippleTex: THREE.DataTexture | null = null;
+// eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
 export function rippleNormals() {
   if (rippleTex) return rippleTex;
   const N = 256;

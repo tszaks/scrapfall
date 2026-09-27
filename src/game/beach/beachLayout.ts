@@ -1054,7 +1054,8 @@ export function generateBeach(
     props.push({ k: "bench", x, z: 1.4, y: DECK, rot: Math.PI });
     props.push({ k: "trash", x: x + 3, z: 0, y: DECK, rot: 0 });
   }
-  for (const x of [-104, -68, -44]) props.push({ k: "cart", x, z: 4.5, y: DECK, rot: Math.PI / 2, c: Math.abs(x) % 6 });
+  for (const x of [-104, -68, -44])
+    props.push({ k: "cart", x, z: 4.5, y: DECK, rot: Math.PI / 2, c: Math.abs(x) % 6 });
   for (let x = -18; x < 38; x += 14) props.push({ k: "trash", x, z: 5, y: DECK, rot: 0 });
   for (const [x, z] of [
     [-24, -6],

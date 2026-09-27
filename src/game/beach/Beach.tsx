@@ -71,13 +71,17 @@ diffuseColor.rgb *= mix(vec3(1.0), grT.rgb, 0.85);`,
  * a waterline that washes up and down the wet sand, lines of breaking foam rolling in
  * through the surf zone and a soft foam edge. The shore strip is subdivided for the wash.
  */
-function seaMaterial(time: { value: number }, foam: { value: THREE.Color }, moon: { value: THREE.Vector4 }) {
+function seaMaterial(
+  time: { value: number },
+  foam: { value: THREE.Color },
+  moon: { value: THREE.Vector4 },
+) {
   const mat = new THREE.MeshStandardMaterial({ color: "#241c3c", roughness: 0.18, metalness: 0.9 });
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
     sh.uniforms["uTime"] = time;
     sh.uniforms["uFoam"] = foam;
-        sh.uniforms["uRipple"] = { value: rippleNormals() };
+    sh.uniforms["uRipple"] = { value: rippleNormals() };
     sh.uniforms["uMoon"] = moon;
     const common = `
 uniform float uTime;
@@ -129,7 +133,7 @@ foamK = max(foamK, smoothstep(0.16, 0.0, depth) * smoothstep(0.3, 0.6, breakup +
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.32, 0.3), smoothstep(1.2, 0.1, depth) * 0.45);
 diffuseColor.rgb = mix(diffuseColor.rgb, uFoam, clamp(foamK, 0.0, 1.0));`,
       )
-            .replace(
+      .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
 if (uMoon.w > 0.0) {
@@ -211,7 +215,7 @@ else led = hue(fract(uTime * 0.07)) * (0.6 + 0.4 * sin(vLed * 6.2831 * 3.0 + uTi
 diffuseColor.rgb = led * diffuseColor.rgb * uK;`,
       );
   };
-    mat.customProgramCacheKey = () => (halo ? "beach-led-halo-v1" : "beach-led-v1");
+  mat.customProgramCacheKey = () => (halo ? "beach-led-halo-v1" : "beach-led-v1");
   return mat;
 }
 
@@ -293,7 +297,7 @@ const BeachScene = memo(function BeachScene({
   const nightK = useMemo(() => ({ value: 0 }), []);
   const darkK = useMemo(() => ({ value: 0.2 }), []);
   const seaTime = useMemo(() => ({ value: 0 }), []);
-    const foamCol = useMemo(() => ({ value: new THREE.Color("#ffe6d6") }), []);
+  const foamCol = useMemo(() => ({ value: new THREE.Color("#ffe6d6") }), []);
   const moon = useMemo(() => ({ value: new THREE.Vector4(0, 1, 0, 0) }), []);
   const mats = useMemo(
     () => ({
@@ -315,7 +319,7 @@ const BeachScene = memo(function BeachScene({
         polygonOffset: true,
         polygonOffsetFactor: -2,
       }),
-            sea: seaMaterial(seaTime, foamCol, moon),
+      sea: seaMaterial(seaTime, foamCol, moon),
       lights: new THREE.PointsMaterial({
         color: "#ffd8a0",
         size: 2.4,
@@ -332,7 +336,7 @@ const BeachScene = memo(function BeachScene({
         depthWrite: false,
       }),
     }),
-        [nightK, darkK, seaTime, foamCol, moon],
+    [nightK, darkK, seaTime, foamCol, moon],
   );
 
   // reflection env maps (PMREM of the sky), made the first time they're needed
@@ -387,11 +391,12 @@ const BeachScene = memo(function BeachScene({
     mats.sea.roughness = B.water.roughness;
     mats.sea.metalness = B.water.metalness;
     mats.sea.needsUpdate = true;
-        foamCol.value.set(B.water.foam);
+    foamCol.value.set(B.water.foam);
     moon.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2], time === "night" ? 1 : 0);
     nightK.value = B.windows;
     darkK.value = B.dark;
     mats.glow.color.setScalar(B.glow);
+    mats.signs.color.setScalar((B.glow + B.signs) / 2);
     mats.signs.color.setScalar(B.signs);
     mats.pools.opacity = B.pools;
     mats.lights.opacity = time === "night" ? 1 : 0.35;
@@ -404,7 +409,8 @@ const BeachScene = memo(function BeachScene({
         : paletteSkyTextures(BEACH_SKY_KEY, BEACH_SUNSET).background;
     return () => {
       scene.background = prev;
-    };  }, [time, envFor, mats, nightK, darkK, foamCol, moon, scene]);
+    };
+  }, [time, envFor, mats, nightK, darkK, foamCol, moon, scene]);
 
   useEffect(
     () => () => {
@@ -564,11 +570,11 @@ function SetPieces({ city, time }: { city: BeachLayout; time: TimeOfDay }) {
     const nk = { value: 0 };
     const dk = { value: 0.5 };
     return {
-            led: ledMaterial(ledTime, ledK),
+      led: ledMaterial(ledTime, ledK),
       halo: ledMaterial(ledTime, ledK, true),
       frame: facadeMaterial(nk, dk),
       lambert: new THREE.MeshLambertMaterial({ vertexColors: true }),
-            flame: new THREE.MeshBasicMaterial({
+      flame: new THREE.MeshBasicMaterial({
         vertexColors: true,
         transparent: true,
         opacity: 0.9,
@@ -672,7 +678,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
   const geo = useMemo(() => {
     // wheel in its own frame: the disc in the x-y plane, axle along z
     const frame = new Acc();
-        const leds = new Acc();
+    const leds = new Acc();
     const halos = new Acc();
     const R = w.r;
     const rings = [-2.4, 2.4];
@@ -718,7 +724,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
         for (let s = 1; s < 8; s++) {
           const rr = (s / 8) * R;
           leds.color("#ffffff", k / GONDOLAS + s * 0.002);
-                    const bulb = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+          const bulb = new THREE.BoxGeometry(0.3, 0.3, 0.3);
           leds.add(
             bulb,
             new THREE.Matrix4().makeTranslation(
@@ -765,12 +771,17 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
     box(0, -2.3, 0, 2.0, 0.9, 1.6, "#ffffff");
     box(0, -1.5, 0, 2.3, 0.14, 1.9, "#ffffff");
     box(0, -2.85, 0, 1.9, 0.12, 1.5, "#2a2a2a");
-        return { frame: frame.build(), leds: leds.build(true), halos: halos.build(true), gon: gon.build() };
+    return {
+      frame: frame.build(),
+      leds: leds.build(true),
+      halos: halos.build(true),
+      gon: gon.build(),
+    };
   }, [w.r]);
   useEffect(
     () => () => {
       geo.frame.dispose();
-            geo.leds.dispose();
+      geo.leds.dispose();
       geo.halos.dispose();
       geo.gon.dispose();
     },
@@ -818,7 +829,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
     <group>
       <group ref={wheelRef} position={[w.x, w.y, w.z]}>
         <mesh geometry={geo.frame} material={mats.lambert} castShadow />
-                <mesh geometry={geo.leds} material={mats.led} />
+        <mesh geometry={geo.leds} material={mats.led} />
         <mesh geometry={geo.halos} material={mats.halo} renderOrder={3} />
       </group>
       <instancedMesh
@@ -1030,7 +1041,7 @@ function Bonfires({ city, mats, time }: { city: BeachLayout; mats: SetMats; time
     }
     return out;
   }, [city]);
-    const flameGeo = useMemo(() => {
+  const flameGeo = useMemo(() => {
     // three tongues of flame: a red-orange outer, an orange middle and a yellow core
     const a = new Acc();
     const tongue = (r: number, h: number, x: number, z: number, col: string) => {
@@ -1069,11 +1080,11 @@ function Bonfires({ city, mats, time }: { city: BeachLayout; mats: SetMats; time
     fires.forEach((f, i) => {
       const k = 0.8 + Math.sin(t * 11 + i * 3.1) * 0.12 + Math.sin(t * 17 + i) * 0.08;
       _e.set(0, t * 0.7 + i, 0);
-            _m4.compose(_v.set(f.x, f.y, f.z), _q.setFromEuler(_e), _s.set(1, k, 1));
+      _m4.compose(_v.set(f.x, f.y, f.z), _q.setFromEuler(_e), _s.set(1, k, 1));
       m.setMatrixAt(i, _m4);
     });
     m.instanceMatrix.needsUpdate = true;
-        mats.emb.opacity = (time === "night" ? 0.7 : 0.25) * (0.85 + Math.sin(t * 9) * 0.08);
+    mats.emb.opacity = (time === "night" ? 0.7 : 0.25) * (0.85 + Math.sin(t * 9) * 0.08);
     mats.flame.opacity = time === "night" ? 0.95 : 0.55;
   });
   if (!fires.length) return null;
@@ -1110,7 +1121,14 @@ function Mountains({ time }: { time: TimeOfDay }) {
     };
     const ridge = (t: number, seed: number) =>
       noise(t * 6 + seed) * 0.55 + noise(t * 17 + seed * 3) * 0.3 + noise(t * 43 + seed * 7) * 0.15;
-    const range = (a0: number, a1: number, R: number, hMax: number, seed: number, taper: (t: number) => number) => {
+    const range = (
+      a0: number,
+      a1: number,
+      R: number,
+      hMax: number,
+      seed: number,
+      taper: (t: number) => number,
+    ) => {
       const N = 90;
       for (let k = 0; k < N; k++) {
         const t0 = k / N;

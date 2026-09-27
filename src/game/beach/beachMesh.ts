@@ -7,7 +7,7 @@
 // Moving set pieces (Ferris wheel, coaster train, carousel, drop tower) live in Beach.tsx.
 import * as THREE from "three";
 
-import { Geo, L, facadeUV, rectPoly, type P2, type Tmpl } from "../cityGeo";
+import { Geo, L, STRIDE, facadeUV, rectPoly, type P2, type Tmpl } from "../cityGeo";
 import { vehicleParts, type Vehicle } from "../vehicles";
 import {
   BLUFF_H,
@@ -316,7 +316,7 @@ function templates(): Tmpls {
       g.cyl(0, -0.1, 0, 0.9, 0.55, 12, false);
       g.col("#6a645a");
       g.cyl(0, -0.1, 0, 0.78, 0.5, 12, false);
-            g.col("#2a2420");
+      g.col("#2a2420");
       g.cyl(0, 0.2, 0, 0.75, 0.02, 10);
       g.col("#4a3424");
       g.obox(0, 0.22, 0, 0.18, 0.16, 1.2, 0.5);
@@ -519,15 +519,36 @@ function templates(): Tmpls {
     shrub: t((g) => {
       const ico = new THREE.IcosahedronGeometry(1, 0);
       g.col("#3f5a2c");
-      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0, 0.5, 0), new THREE.Quaternion(), new THREE.Vector3(1.3, 0.8, 1.2)));
+      g.add(
+        ico,
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(0, 0.5, 0),
+          new THREE.Quaternion(),
+          new THREE.Vector3(1.3, 0.8, 1.2),
+        ),
+      );
       g.col("#4c6a34");
-      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0.8, 0.35, 0.4), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 0.9, 0)), new THREE.Vector3(0.9, 0.6, 0.9)));
+      g.add(
+        ico,
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(0.8, 0.35, 0.4),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 0.9, 0)),
+          new THREE.Vector3(0.9, 0.6, 0.9),
+        ),
+      );
       ico.dispose();
     }),
     rock: t((g) => {
       const ico = new THREE.IcosahedronGeometry(1, 0);
       g.col("#9a8a70");
-      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0, 0.2, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.2, 0.7)), new THREE.Vector3(1.2, 0.7, 0.9)));
+      g.add(
+        ico,
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(0, 0.2, 0),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.2, 0.7)),
+          new THREE.Vector3(1.2, 0.7, 0.9),
+        ),
+      );
       ico.dispose();
     }),
     aframe: t((g) => {
@@ -1409,6 +1430,15 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         rg.z0,
         uv,
       );
+    // a string of warm bulbs along the deck edge (the pier's night silhouette over the water)
+    if (rg.kind === "flat" && rg.h0 > 3) {
+      const Gl = ctx((rg.x0 + rg.x1) / 2, (rg.z0 + rg.z1) / 2).glow;
+      Gl.col("#ffd49a").mat(0);
+      for (let x = rg.x0 + 1.5; x < rg.x1; x += 3) {
+        Gl.box(x, rg.h0 - 0.3, rg.z0 - 0.08, 0.16, 0.16, 0.08);
+        Gl.box(x, rg.h0 - 0.3, rg.z1 + 0.08, 0.16, 0.16, 0.08);
+      }
+    }
     // fascia (the deck edge band) and the beam under it
     G.mat(L.plain, 0.5, 0).col("#7a5a3c");
     const hAt = (x: number) =>
@@ -1587,7 +1617,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           const along = di === 0; // rail runs along x when the open neighbour is in z
           const hh = regionOf[k]! >= 0 ? Math.min(h, heightOfRegion(beach, k, ex, ez)) : h;
           const y = Math.max(hh, h) + 0.02;
-                    if (h > 3 && (i + j) % 2 === 0) {
+          if (h > 3 && (i + j) % 2 === 0) {
             const Gl = ctx(x, z).glow;
             Gl.col("#ffe2a8").mat(0);
             Gl.box(ex, y + 1.12, ez, 0.14, 0.14, 0.14);
@@ -1637,7 +1667,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     D.mat(L.plain, 0.5, 0).col("#8a9096");
     for (const m of beach.mods) {
       const rim: [number, number][] = [];
-      if (m.t === "ell") for (let k = 0; k <= 48; k++) rim.push([m.x + Math.cos((k / 48) * Math.PI * 2) * m.rx, m.z + Math.sin((k / 48) * Math.PI * 2) * m.rz]);
+      if (m.t === "ell")
+        for (let k = 0; k <= 48; k++)
+          rim.push([
+            m.x + Math.cos((k / 48) * Math.PI * 2) * m.rx,
+            m.z + Math.sin((k / 48) * Math.PI * 2) * m.rz,
+          ]);
       else if (m.t === "cap") {
         const dx = m.bx - m.ax;
         const dz = m.bz - m.az;
@@ -1663,7 +1698,13 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     }
     for (const q of beach.qpipes) quarterPipe(D, q);
     const Cs = chunkAt(90, 76);
-    for (const [x, z, rot] of [[58, 50, 0], [118, 50, Math.PI], [58, 102, 0], [118, 102, Math.PI]] as const) prop({ k: "streetlight", x, z, y: 0, rot }, Cs, T, gv);
+    for (const [x, z, rot] of [
+      [58, 50, 0],
+      [118, 50, Math.PI],
+      [58, 102, 0],
+      [118, 102, Math.PI],
+    ] as const)
+      prop({ k: "streetlight", x, z, y: 0, rot }, Cs, T, gv);
     Cs.main.col("#3a3e44");
     Cs.main.box(X.bike - 1, 0, 74, 0.2, 4.2, 0.2);
     Cs.main.box(X.bike - 1, 0, 80, 0.2, 4.2, 0.2);
@@ -1674,10 +1715,30 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     // graffiti on the ledges and pipe backs
     const R = mulberry(31);
     for (let k = 0; k < 26; k++) {
-      Cs.detail.mat(L.plain, 0.5, 0).col(pick(["#ff4fa0", "#3affd8", "#ffe14a", "#9a6aff", "#ff7a3a", "#4fd0ff", "#7cff6a"], R));
+      Cs.detail
+        .mat(L.plain, 0.5, 0)
+        .col(
+          pick(["#ff4fa0", "#3affd8", "#ffe14a", "#9a6aff", "#ff7a3a", "#4fd0ff", "#7cff6a"], R),
+        );
       const q = beach.qpipes[k % 2]!;
-      if (q.face === 3) Cs.detail.box(q.x1 + 0.03, 0.3 + R() * 1.6, q.z0 + 1 + R() * (q.z1 - q.z0 - 3), 0.02, 0.4 + R() * 0.8, 0.8 + R() * 2);
-      else Cs.detail.box(q.x0 + 1 + R() * (q.x1 - q.x0 - 3), 0.3 + R() * 1.6, q.z0 - 0.03, 0.8 + R() * 2, 0.4 + R() * 0.8, 0.02);
+      if (q.face === 3)
+        Cs.detail.box(
+          q.x1 + 0.03,
+          0.3 + R() * 1.6,
+          q.z0 + 1 + R() * (q.z1 - q.z0 - 3),
+          0.02,
+          0.4 + R() * 0.8,
+          0.8 + R() * 2,
+        );
+      else
+        Cs.detail.box(
+          q.x0 + 1 + R() * (q.x1 - q.x0 - 3),
+          0.3 + R() * 1.6,
+          q.z0 - 0.03,
+          0.8 + R() * 2,
+          0.4 + R() * 0.8,
+          0.02,
+        );
     }
     // Muscle Beach arch
     const g = beach.gym;
@@ -1705,7 +1766,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       for (let z = ct.z0; z < ct.z1; z += 2) {
         const c = Math.floor((x + 1 + half) / 2) * n + Math.floor((z + 1 + half) / 2);
         if (!city.solid[c]) continue;
-                // the fence runs along whichever edge of the court this cell is on
+        // the fence runs along whichever edge of the court this cell is on
         const alongX = z === ct.z0 || z + 2 >= ct.z1;
         Cc.main.col("#5a6068");
         Cc.main.box(x + 1, 0.1, z + 1, 0.08, 3.4, 0.08);
@@ -1713,6 +1774,51 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         Cc.detail.mat(L.plain, 0.5, 0).col("#2e5a44");
         Cc.detail.box(x + 1, 0.15, z + 1, alongX ? 2 : 0.03, 1.7, alongX ? 0.03 : 2);
       }
+  }
+
+  // ---- festoon lights: zig-zag strings across the promenade and over the midway ----
+  {
+    const festoon = (
+      a: [number, number, number],
+      b: [number, number, number],
+      sag: number,
+      bulbs: number,
+    ) => {
+      const C = ctx((a[0] + b[0]) / 2, (a[2] + b[2]) / 2);
+      let prev: [number, number, number] | null = null;
+      for (let k = 0; k <= bulbs; k++) {
+        const t = k / bulbs;
+        const p: [number, number, number] = [
+          a[0] + (b[0] - a[0]) * t,
+          a[1] + (b[1] - a[1]) * t - Math.sin(Math.PI * t) * sag,
+          a[2] + (b[2] - a[2]) * t,
+        ];
+        if (prev) {
+          C.detail.mat(L.plain, 0.5, 0).col("#2a2622");
+          railBar(C.detail, prev, p, 0.012);
+        }
+        if (k > 0 && k < bulbs) {
+          C.glow.col(k % 3 === 0 ? "#ffb45a" : "#ffe6b0").mat(0);
+          C.glow.box(p[0], p[1] - 0.12, p[2], 0.13, 0.16, 0.13);
+        }
+        prev = p;
+      }
+      // a soft warm pool on the ground under the middle of the string
+      const mx = (a[0] + b[0]) / 2;
+      const mz = (a[2] + b[2]) / 2;
+      const gy = Math.min(a[1], b[1]) - sag - 3.6;
+      C.pools.col("#b8703a").mat(0);
+      C.pools.flat(mx - 6, mz - 6, mx + 6, mz + 6, Math.max(gy, 0.2), [0, 0, 1, 1]);
+    };
+    for (let z = -half + 18; z < half - 18; z += 12) {
+      if (Math.abs(z) < 20) continue;
+      festoon([X.prom + 2.4, 5.6, z], [X.shops - 0.4, 4.9, z + 6], 0.7, 11);
+      festoon([X.shops - 0.4, 4.9, z + 6], [X.prom + 2.4, 5.6, z + 12], 0.7, 11);
+    }
+    for (let x = -118; x < -26; x += 12)
+      festoon([x + 3, DECK + 3.6, -9], [x + 3, DECK + 3.6, 9], 1.1, 12);
+    for (let x = 44; x < 90; x += 10)
+      festoon([x, DECK + 4.2, -14], [x + 5, DECK + 4.2, 14], 1.3, 14);
   }
 
   // ---- the clifftop railing along the bluff edge (gaps at the stair landings) ----
@@ -1799,7 +1905,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       }
       if (k % 2 === 0) {
         C2.glow.col(k % 4 ? "#ffe14a" : "#ff4fa0").mat(0);
-        C2.glow.box(a[0] + px * 1.3, a[1] - 0.05, a[2] + pz * 1.3, 0.12, 0.12, 0.12);
+        C2.glow.box(a[0] + px * 1.3, a[1] - 0.05, a[2] + pz * 1.3, 0.22, 0.22, 0.22);
       }
     }
     // station canopy over the low stretch
@@ -1923,7 +2029,17 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         const G = chunkAt(px, pz).main;
         const k = R();
         if (k < 0.12) G.stamp(T.rock, px, gv(px, pz) - 0.3, pz, R() * 6, 1 + R(), 1 + R(), 1 + R());
-        else G.stamp(T.shrub, px, gv(px, pz) - 0.4, pz, R() * 6, 0.7 + R() * 0.9, 0.7 + R() * 0.7, 0.7 + R() * 0.9);
+        else
+          G.stamp(
+            T.shrub,
+            px,
+            gv(px, pz) - 0.4,
+            pz,
+            R() * 6,
+            0.7 + R() * 0.9,
+            0.7 + R() * 0.7,
+            0.7 + R() * 0.9,
+          );
       }
     }
   }
@@ -1963,7 +2079,18 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     ...far.list.map((c) => ({ c, far: true })),
   ];
   const out: BeachChunk[] = list.map(({ c, far: isFar }) => {
-    verts += c.ground.n + c.main.n + c.detail.n + c.glow.n + c.signs.n + c.pools.n;
+    // the bulbs and neon share the sign atlas material: their uvs point at its white corner,
+    // so glow + signs are one draw call per chunk
+    if (c.glow.n) {
+      const t = c.glow.freeze();
+      for (let k = 0; k < t.count; k++) {
+        t.data[k * STRIDE + 9] = 0.004;
+        t.data[k * STRIDE + 10] = 0.004;
+      }
+      c.signs.stamp(t, 0, 0, 0);
+      c.glow.n = 0;
+    }
+    verts += c.ground.n + c.main.n + c.detail.n + c.signs.n + c.pools.n;
     return {
       x0: c.x0,
       z0: c.z0,
@@ -1997,7 +2124,8 @@ function quarterPipe(G: Geo, q: Rect & { face: number }) {
   const open = q.face === 3 ? q.x0 : q.face === 1 ? q.x1 : q.face === 2 ? q.z1 : q.z0;
   const back = q.face === 3 ? q.x1 : q.face === 1 ? q.x0 : q.face === 2 ? q.z0 : q.z1;
   const dir = Math.sign(back - open);
-  const P = (a: number, d: number, y: number): [number, number, number] => (along ? [a, y, d] : [d, y, a]);
+  const P = (a: number, d: number, y: number): [number, number, number] =>
+    along ? [a, y, d] : [d, y, a];
   G.mat(L.ground, 0.5, 0).col("#bdbab2");
   for (let k = 0; k < N; k++) {
     const t0 = (k / N) * (Math.PI / 2);
@@ -2030,7 +2158,17 @@ function globeBottom(G: Geo, x: number, y: number, z: number, r: number) {
   for (let i = 0; i < 6; i++) {
     const t0 = (i / 6) * Math.PI * 2;
     const t1 = ((i + 1) / 6) * Math.PI * 2;
-    G.tri(x + Math.cos(t0) * r, y, z + Math.sin(t0) * r, x + Math.cos(t1) * r, y, z + Math.sin(t1) * r, x, y - r, z);
+    G.tri(
+      x + Math.cos(t0) * r,
+      y,
+      z + Math.sin(t0) * r,
+      x + Math.cos(t1) * r,
+      y,
+      z + Math.sin(t1) * r,
+      x,
+      y - r,
+      z,
+    );
   }
 }
 
@@ -2114,7 +2252,11 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
     case "globe": {
       C.main.stamp(T.globe, p.x, y, p.z, 0);
       C.glow.col("#fff2d0").mat(0);
-      for (const [dx, dy, r0] of [[-0.45, 3.5, 0.17], [0.45, 3.5, 0.17], [0, 3.72, 0.2]] as const) {
+      for (const [dx, dy, r0] of [
+        [-0.45, 3.5, 0.17],
+        [0.45, 3.5, 0.17],
+        [0, 3.72, 0.2],
+      ] as const) {
         C.glow.cone(p.x + dx, y + dy, p.z, r0, r0, 6, 0);
         C.glow.cyl(p.x + dx, y + dy - 0.001, p.z, r0, 0.001, 6, false);
         globeBottom(C.glow, p.x + dx, y + dy, p.z, r0);
@@ -2302,10 +2444,28 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
     }
     case "truck": {
       // the lifeguard pickup parked along the closure, light bar lit
-      const v: Vehicle = { type: "pickup", len: 5.4, wid: 2.0, wheel: 0.42, color: 0xf2f0ea, extras: 0, mass: 1.5 };
+      const v: Vehicle = {
+        type: "pickup",
+        len: 5.4,
+        wid: 2.0,
+        wheel: 0.42,
+        color: 0xf2f0ea,
+        extras: 0,
+        mass: 1.5,
+      };
       const rot = along ? Math.PI / 2 : 0;
       car(G, v, b.x, b.y + 0.02, b.z, rot);
-      signQuad(C.signs, W.LIFEGUARD, b.x + ix * 1.03, b.y + 1.05, b.z + iz * 1.03, 2.6, 0.55, b.face, "#3a6ab8");
+      signQuad(
+        C.signs,
+        W.LIFEGUARD,
+        b.x + ix * 1.03,
+        b.y + 1.05,
+        b.z + iz * 1.03,
+        2.6,
+        0.55,
+        b.face,
+        "#3a6ab8",
+      );
       C.glow.col("#ff3a2a").mat(0);
       C.glow.box(b.x - (along ? 0.4 : 0), b.y + 2.02, b.z - (along ? 0 : 0.4), 0.3, 0.14, 0.3);
       C.glow.col("#3a6aff");
@@ -2313,7 +2473,15 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
       break;
     }
     case "police": {
-      const v: Vehicle = { type: "police", len: 4.9, wid: 1.9, wheel: 0.34, color: 0x151518, extras: 0, mass: 1.2 };
+      const v: Vehicle = {
+        type: "police",
+        len: 4.9,
+        wid: 1.9,
+        wheel: 0.34,
+        color: 0x151518,
+        extras: 0,
+        mass: 1.2,
+      };
       car(G, v, b.x, b.y + 0.02, b.z, (along ? Math.PI / 2 : 0) + 0.25);
       C.glow.col("#ff2020").mat(0);
       C.glow.box(b.x - (along ? 0.3 : 0), b.y + 1.6, b.z - (along ? 0 : 0.3), 0.3, 0.12, 0.3);
@@ -2340,7 +2508,13 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
     case "buoyline": {
       const w = b.w ?? 20;
       for (let s = -w / 2; s < w / 2; s += 1.8)
-        G.stamp(T.float, b.x + (along ? s : 0), -1.0, b.z + (along ? 0 : s), along ? 0 : Math.PI / 2);
+        G.stamp(
+          T.float,
+          b.x + (along ? s : 0),
+          -1.0,
+          b.z + (along ? 0 : s),
+          along ? 0 : Math.PI / 2,
+        );
       // a net hanging under the float line, and a red flag post every 10 m
       G.mat(L.plain, 0.5, 0).col("#26302a");
       if (along) G.box(b.x, -2.2, b.z, w, 1.3, 0.03);
@@ -2349,7 +2523,14 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
         G.col("#e8e4dc");
         G.box(b.x + (along ? s : 0), -1.2, b.z + (along ? 0 : s), 0.08, 3.2, 0.08);
         G.col("#e8322a");
-        G.box(b.x + (along ? s + 0.5 : 0), 1.3, b.z + (along ? 0 : s + 0.5), along ? 1 : 0.03, 0.6, along ? 0.03 : 1);
+        G.box(
+          b.x + (along ? s + 0.5 : 0),
+          1.3,
+          b.z + (along ? 0 : s + 0.5),
+          along ? 1 : 0.03,
+          0.6,
+          along ? 0.03 : 1,
+        );
       }
       break;
     }
@@ -2427,7 +2608,16 @@ function backdrop(
         M.mat(L.plain, 0.5, 0).col("#b8583a");
         M.box(hx + off, hy + 6.5, zm, 15, 1.2, 13);
         const tr = farAt(hx, zm).main;
-        tr.stamp(templates().tree, hx + off - 12, hy - 0.5, zm + (r() - 0.5) * 16, r() * 6, 1.4, 1.4, 1.4);
+        tr.stamp(
+          templates().tree,
+          hx + off - 12,
+          hy - 0.5,
+          zm + (r() - 0.5) * 16,
+          r() * 6,
+          1.4,
+          1.4,
+          1.4,
+        );
       }
       // palms along the promenade continue into the distance
       for (let k = 0; k < 2; k++) {
@@ -2487,7 +2677,16 @@ function backdrop(
       const lx = half + r() * 1900;
       if (k >= 3 && k < 6 && lx < 1100) {
         const tr = farAt(lx, z).main;
-        tr.stamp(templates().tree, lx, (lx < 700 ? BLUFF_H + ((lx - half) / (700 - half)) * 30 : BLUFF_H + 30) - 0.5, z + r() * 40, r() * 6, 1.6, 1.6, 1.6);
+        tr.stamp(
+          templates().tree,
+          lx,
+          (lx < 700 ? BLUFF_H + ((lx - half) / (700 - half)) * 30 : BLUFF_H + 30) - 0.5,
+          z + r() * 40,
+          r() * 6,
+          1.6,
+          1.6,
+          1.6,
+        );
       }
       const ly =
         lx < 700

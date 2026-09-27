@@ -162,6 +162,9 @@ export function beachSignTexture() {
     }
     g.restore();
   });
+  // a white corner (uv 0,0): the unlit bulbs and neon strips sample it
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 1024 - 24, 24, 24);
   signTex = new THREE.CanvasTexture(c);
   signTex.colorSpace = THREE.SRGBColorSpace;
   signTex.anisotropy = 4;

@@ -573,22 +573,27 @@ function KrakenRig({ b }: { b: Theme["boss"] }) {
         <mesh key={y} position-y={y}><boxGeometry args={[1.1 - (y - 4.1) * 0.45, 0.07, 1.1 - (y - 4.1) * 0.45]} />{steel}</mesh>
       ))}
       <mesh position-y={6.05}><sphereGeometry args={[0.2, 8, 6]} />{glow}</mesh>
-      {/* tentacles */}
+      {/* tentacles: jointed steel segments curling out and up from the base */}
       {[0, 1, 2, 3, 4, 5].map((i) => {
         const a = (i / 6) * Math.PI * 2 + 0.3;
+        const segs: { y: number; r: number; th: number; k: number }[] = [];
+        let py = 0.3;
+        let pr = 1.35;
+        for (let k = 0; k < 6; k++) {
+          const th = 0.05 + k * 0.3 + (i % 2) * 0.08;
+          const L = 0.7 - k * 0.04;
+          segs.push({ y: py + (Math.sin(th) * L) / 2, r: pr + (Math.cos(th) * L) / 2, th, k });
+          py += Math.sin(th) * L;
+          pr += Math.cos(th) * L;
+        }
         return (
           <group key={i} rotation-y={a}>
-            {[0, 1, 2, 3, 4].map((k) => {
-              const r = 1.4 + k * 0.62;
-              const y = 0.35 + k * k * 0.16;
-              const s = 1 - k * 0.15;
-              return (
-                <mesh key={k} position={[0, y, r]} rotation-x={Math.PI / 2 - 0.25 - k * 0.28} castShadow>
-                  <cylinderGeometry args={[0.24 * s, 0.3 * s, 0.72, 7]} />{k % 2 ? brass : steel}
-                </mesh>
-              );
-            })}
-            <mesh position={[0, 0.35 + 25 * 0.16, 1.4 + 5 * 0.62]}><sphereGeometry args={[0.14, 6, 5]} />{glow}</mesh>
+            {segs.map((sg) => (
+              <mesh key={sg.k} position={[0, sg.y, sg.r]} rotation-x={Math.PI / 2 - sg.th} castShadow>
+                <cylinderGeometry args={[0.2 - sg.k * 0.025, 0.27 - sg.k * 0.025, 0.74, 7]} />{sg.k % 2 ? brass : steel}
+              </mesh>
+            ))}
+            <mesh position={[0, py, pr]}><sphereGeometry args={[0.13, 6, 5]} />{glow}</mesh>
           </group>
         );
       })}

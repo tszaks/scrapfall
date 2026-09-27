@@ -158,7 +158,7 @@ export function spawnNear(
 ) {
   if (players.length === 0) return randomSpawn(blocks, rand);
   let fallback: { x: number; z: number } | null = null;
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < 96; i++) {
     const p = players[Math.floor(rand() * players.length)]!;
     const a = rand() * Math.PI * 2;
     const d = rMin + rand() * (rMax - rMin);
@@ -171,14 +171,17 @@ export function spawnNear(
     fallback ??= { x, z };
   }
   if (fallback) return fallback;
-  // tight spot (e.g. deep in an alley): accept anything open near the first player
+  // tight spot (e.g. deep in an alley, or out on a narrow pier): anything open near the first
+  // player, preferring routable spots at least half the minimum distance away
   const p = players[0]!;
-  for (let i = 0; i < 80; i++) {
-    const x = p.x + (rand() - 0.5) * rMax * 2;
-    const z = p.z + (rand() - 0.5) * rMax * 2;
-    if (Math.abs(x) < HALF - 3 && Math.abs(z) < HALF - 3 && !blocked(blocks, x, z, radius))
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < 80; i++) {
+      const x = p.x + (rand() - 0.5) * rMax * 2;
+      const z = p.z + (rand() - 0.5) * rMax * 2;
+      if (Math.abs(x) >= HALF - 3 || Math.abs(z) >= HALF - 3 || blocked(blocks, x, z, radius)) continue;
+      if (pass === 0 && (!ok(x, z) || Math.hypot(x - p.x, z - p.z) < rMin * 0.5)) continue;
       return { x, z };
-  }
+    }
   return randomSpawn(blocks, rand);
 }
 
