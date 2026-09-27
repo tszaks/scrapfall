@@ -3016,7 +3016,7 @@ export function Game() {
       setSquad({});
       setSeed(Number(m.seed));
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
@@ -3061,7 +3061,7 @@ export function Game() {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current).maxHp : h));
+    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -3123,7 +3123,7 @@ export function Game() {
     setPicking(false);
     setStarted(false);
     setScore(0);
-    setHealth(MAX_HP);
+    setHealth(derive(NO_PERKS, clsRef.current).maxHp);
     setPerks(NO_PERKS);
     setShards(0);
     setBossHp(0);
@@ -3302,7 +3302,7 @@ export function Game() {
         net?.broadcast({ type: "seed", seed: s });
       }
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
