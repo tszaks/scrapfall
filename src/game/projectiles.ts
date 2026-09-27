@@ -126,6 +126,8 @@ type Proj = {
   pos: THREE.Vector3; vel: THREE.Vector3;
   prev: THREE.Vector3; spawn: THREE.Vector3; vo: THREE.Vector3;
   kind: VisKind; flags: number; age: number; trailT: number; scale: number;
+  /** metres of flight over which the muzzle offset fades out (where the shot will land) */
+  conv: number;
   /** where the harpoon's tether is tied: null = the local gun, else a remote player id */
   owner: string | null;
   // ghost-only simulation
@@ -133,7 +135,7 @@ type Proj = {
 };
 const mkProj = (): Proj => ({
   on: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), prev: new THREE.Vector3(), spawn: new THREE.Vector3(),
-  vo: new THREE.Vector3(), kind: VK.PISTOL, flags: 0, age: 0, trailT: 0, scale: 1, owner: null,
+  vo: new THREE.Vector3(), kind: VK.PISTOL, flags: 0, age: 0, trailT: 0, scale: 1, conv: 7, owner: null,
   life: 0, bounce: 0, pierce: 0, cluster: 0, chain: 0,
 });
 /** local rounds, indexed by Game.tsx's bullet slot */
@@ -242,9 +244,13 @@ function start(P: Proj, pos: THREE.Vector3, kind: VisKind, flags: number, size: 
   P.scale = size / LOOKS[kind].base;
   P.prev.copy(pos);
   P.spawn.copy(pos);
-  // the round really starts under the crosshair; draw it leaving the muzzle and converge
-  if (from) P.vo.copy(from).sub(pos);
-  else P.vo.set(0, 0, 0);
+  // the round really starts under the crosshair; draw it leaving the muzzle and meeting the
+  // flight line where it will land, so tracers read at an angle instead of end-on
+  if (from) {
+    P.vo.copy(from).sub(pos);
+    CONV_DIR.copy(P.vel).normalize();
+    P.conv = Math.max(3, Math.min(60, rayHit(pos, CONV_DIR, 60)));
+  } else P.vo.set(0, 0, 0);
   if (kind === VK.HARPOON) P.vo.set(0, 0, 0);
 }
 
@@ -327,13 +333,14 @@ export function fxStyle(i: number, m: THREE.Mesh, b: BulletLike) {
   }
   mat.color.setRGB(1, 1, 1);
   m.scale.setScalar(P.scale * (P.flags & VF.MAGNUM ? 1.35 : 1));
-  const k = converge(b.pos.distanceTo(P.spawn));
+  const k = converge(b.pos.distanceTo(P.spawn), P);
   m.position.copy(b.pos).addScaledVector(P.vo, k);
   orient(m.quaternion, b.vel, spinOf(P));
 }
 
-/** muzzle offset remaining after `d` metres of flight: the round meets the crosshair line by ~7 m */
-const converge = (d: number) => Math.max(0, 1 - d / 7);
+/** muzzle offset remaining after `d` metres of flight: gone by the point the shot lands */
+const converge = (d: number, P: Proj) => Math.max(0, 1 - d / P.conv);
+const CONV_DIR = new THREE.Vector3();
 
 function spinOf(P: Proj) {
   if (P.kind === VK.CRYO) return P.age * 22;
@@ -353,8 +360,8 @@ function orient(q: THREE.Quaternion, vel: THREE.Vector3, spin: number) {
 
 function bounceVis(P: Proj) {
   const p = P.pos;
-  glow(p.x, p.y, p.z, 1.3, 0x7cff4f, 0.12, 0.9);
-  glow(p.x, p.y, p.z, 0.5, 0xffffff, 0.06);
+  glow(p.x, p.y, p.z, 1.5, 0x7cff4f, 0.18, 1, 1.2, 44);
+  glow(p.x, p.y, p.z, 0.55, 0xffffff, 0.07, 1, 1, 12);
   V1.copy(P.vel).normalize();
   sparks(p.x, p.y, p.z, 12, 0x7cff4f, 7, V1.x, V1.y + 0.2, V1.z, 0.8, -10, 0.35, 0.04, 0xeaffd8);
   FX.rings?.add(p.x, p.y, p.z, 0.1, 0.9, 0.18, 0x7cff4f, false);
@@ -372,7 +379,7 @@ function hitVis(P: Proj, e: FxEnemy, terminal: boolean) {
   CONTACT.n.set(-P.vel.x, 0, -P.vel.z).normalize();
   switch (P.kind) {
     case VK.CANNON:
-      explosion(p.x, p.y, p.z, 1);
+      explosion(p.x, p.y, p.z, 2);
       break;
     case VK.CRYO:
       shatter(CONTACT, "robot");
@@ -385,13 +392,15 @@ function hitVis(P: Proj, e: FxEnemy, terminal: boolean) {
       impact("robot", CONTACT, P.vel, 1.2, lk.col);
       break;
     case VK.TESLA:
-      glow(p.x, p.y, p.z, 1.2, 0x5f9bff, 0.14, 0.9);
+      glow(p.x, p.y, p.z, 1.5, 0x5f9bff, 0.22, 1, 1.3, 46);
+      glow(p.x, p.y, p.z, 0.5, 0xe0ecff, 0.08, 1, 1, 12);
       sparks(p.x, p.y, p.z, 12, 0x7fb0ff, 7, 0, 0.5, 0, 1, -8, 0.3, 0.035, 0xe0ecff);
       sound("zap", p.x, p.y, p.z);
       chainFrom = e;
       break;
     case VK.RAIL:
       punchThrough(p, P.vel, lk.col);
+      glow(p.x, p.y, p.z, 1.8, lk.col, 0.26, 1, 1.4, 64);
       break;
     case VK.FLAK:
     case VK.MORTAR:
@@ -412,7 +421,7 @@ function dieVis(P: Proj, wall: boolean) {
   const c = CONTACT.p;
   switch (P.kind) {
     case VK.CANNON:
-      explosion(c.x, c.y, c.z, 1);
+      explosion(c.x, c.y, c.z, 2);
       return;
     case VK.CRYO:
       shatter(CONTACT, surf);
@@ -432,7 +441,7 @@ function dieVis(P: Proj, wall: boolean) {
       } else if (surf !== "air") impact(surf, CONTACT, P.vel, 1, lk.col, false);
       return;
     case VK.TESLA:
-      glow(c.x, c.y, c.z, 0.9, 0x5f9bff, 0.12);
+      glow(c.x, c.y, c.z, 1.1, 0x5f9bff, 0.18, 1, 1.2, 38);
       sparks(c.x, c.y, c.z, 10, 0x7fb0ff, 5, CONTACT.n.x, CONTACT.n.y, CONTACT.n.z, 1, -8, 0.3, 0.03, 0xe0ecff);
       if (surf === "wall" || surf === "ground") FX.decals?.add(c.x, c.y, c.z, CONTACT.n.x, CONTACT.n.y, CONTACT.n.z, 0.5, 1, 5, 0.6);
       if (surf !== "air") sound("zap", c.x, c.y, c.z);
@@ -440,7 +449,7 @@ function dieVis(P: Proj, wall: boolean) {
     case VK.RAIL:
       if (surf !== "air") {
         impact(surf, CONTACT, P.vel, 2, lk.col);
-        glow(c.x, c.y, c.z, 1.1, lk.col, 0.14);
+        glow(c.x, c.y, c.z, 1.4, lk.col, 0.22, 1, 1.3, 46);
         FX.rings?.add(c.x + CONTACT.n.x * 0.05, c.y + CONTACT.n.y * 0.05, c.z + CONTACT.n.z * 0.05, 0.1, 0.8, 0.2, lk.col, false);
       }
       return;
@@ -452,8 +461,8 @@ function dieVis(P: Proj, wall: boolean) {
 }
 
 function energyPop(p: THREE.Vector3, col: number) {
-  glow(p.x, p.y, p.z, 1.4, col, 0.14, 0.9);
-  glow(p.x, p.y, p.z, 0.5, 0xffffff, 0.07);
+  glow(p.x, p.y, p.z, 1.6, col, 0.2, 1, 1.3, 46);
+  glow(p.x, p.y, p.z, 0.55, 0xffffff, 0.08, 1, 1, 12);
   sparks(p.x, p.y, p.z, 16, col, 6, 0, 0.3, 0, 1.2, -6, 0.4, 0.04, 0xeaffd8);
   FX.rings?.add(p.x, p.y, p.z, 0.1, 1.2, 0.22, col, false);
   sound("fizz", p.x, p.y, p.z);
@@ -499,33 +508,39 @@ function chainArc(e: FxEnemy, o: FxEnemy) {
 
 /** LANCE: an instant, crisp beam from the muzzle to whatever it will strike, with an ionised spiral */
 const RB1 = new THREE.Vector3(), RB2 = new THREE.Vector3(), RB3 = new THREE.Vector3(), RBW = new THREE.Vector3();
-function railBeam(muz: THREE.Vector3, origin: THREE.Vector3, dir: THREE.Vector3, range: number) {
+/** how far a straight shot travels before it meets a wall, the ground, a car or a robot */
+function rayHit(origin: THREE.Vector3, dir: THREE.Vector3, range: number) {
   const env = FX.env;
   let t = range;
-  if (env) {
-    // walls / ground: march
-    for (let s = 0.3; s < range; s += 0.35) {
-      const x = origin.x + dir.x * s, y = origin.y + dir.y * s, z = origin.z + dir.z * s;
-      const h = env.half();
-      if (y < 0 || Math.abs(x) > h || Math.abs(z) > h || env.solid(x, z) || env.car(x, y, z)) { t = s; break; }
-    }
-    // robots: closest approach on the ground plane
-    const fl = Math.hypot(dir.x, dir.z) || 1;
-    for (const e of env.enemies) {
-      if (!e.alive) continue;
-      const ex = e.x - origin.x, ez = e.z - origin.z;
-      const along = (ex * dir.x + ez * dir.z) / fl;
-      if (along <= 0) continue;
-      const s3 = along / fl;
-      if (s3 >= t) continue;
-      const cx = ex - (dir.x / fl) * along, cz = ez - (dir.z / fl) * along;
-      if (Math.hypot(cx, cz) < env.radius(e.kind) + 0.2 && origin.y + dir.y * s3 < env.height(e.kind)) t = s3;
-    }
+  if (!env) return t;
+  const h = env.half();
+  for (let s = 0.3; s < range; s += 0.35) {
+    const x = origin.x + dir.x * s, y = origin.y + dir.y * s, z = origin.z + dir.z * s;
+    if (y < 0 || Math.abs(x) > h || Math.abs(z) > h || env.solid(x, z) || env.car(x, y, z)) { t = s; break; }
   }
+  // robots: closest approach on the ground plane
+  const fl = Math.hypot(dir.x, dir.z) || 1;
+  for (const e of env.enemies) {
+    if (!e.alive) continue;
+    const ex = e.x - origin.x, ez = e.z - origin.z;
+    const along = (ex * dir.x + ez * dir.z) / fl;
+    if (along <= 0) continue;
+    const s3 = along / fl;
+    if (s3 >= t) continue;
+    const cx = ex - (dir.x / fl) * along, cz = ez - (dir.z / fl) * along;
+    if (Math.hypot(cx, cz) < env.radius(e.kind) + 0.2 && origin.y + dir.y * s3 < env.height(e.kind)) t = s3;
+  }
+  return t;
+}
+
+function railBeam(muz: THREE.Vector3, origin: THREE.Vector3, dir: THREE.Vector3, range: number) {
+  const t = rayHit(origin, dir, range);
   RB3.copy(origin).addScaledVector(dir, t);
   const ax = muz.x, ay = muz.y, az = muz.z, bx = RB3.x, by = RB3.y, bz = RB3.z;
-  beam(ax, ay, az, bx, by, bz, 0.06, 0.02, 0xfff0ff, 1, 0.3);
-  beam(ax, ay, az, bx, by, bz, 0.34, 0.6, 0xe04bff, 0.55, 0.45);
+  // white-hot core inside a wide violet sheath, both with a floor on screen width
+  beam(ax, ay, az, bx, by, bz, 0.12, 0.04, 0xffffff, 1, 0.32, 0, 0, 0, 3.5);
+  beam(ax, ay, az, bx, by, bz, 0.3, 0.12, 0xffb8ff, 0.8, 0.38, 0, 0, 0, 7);
+  beam(ax, ay, az, bx, by, bz, 0.7, 1.1, 0xe04bff, 0.6, 0.5, 0, 0, 0, 16);
   // helix of ionised air around the beam line
   const len = Math.hypot(bx - ax, by - ay, bz - az);
   RB1.set(bx - ax, by - ay, bz - az).normalize();
@@ -543,10 +558,10 @@ function railBeam(muz: THREE.Vector3, origin: THREE.Vector3, dir: THREE.Vector3,
     const qx = ax + RB1.x * d + RB2.x * ca + w.x * sa;
     const qy = ay + RB1.y * d + RB2.y * ca + w.y * sa;
     const qz = az + RB1.z * d + RB2.z * ca + w.z * sa;
-    if (s > 1) beam(px, py, pz, qx, qy, qz, 0.035, 0.012, 0xc070ff, 0.7, 0.55 + (s / steps) * 0.25, (RB2.x * ca + w.x * sa) * 3, (RB2.y * ca + w.y * sa) * 3 + 0.15, (RB2.z * ca + w.z * sa) * 3);
+    if (s > 1) beam(px, py, pz, qx, qy, qz, 0.035, 0.012, 0xc070ff, 0.7, 0.55 + (s / steps) * 0.25, (RB2.x * ca + w.x * sa) * 3, (RB2.y * ca + w.y * sa) * 3 + 0.15, (RB2.z * ca + w.z * sa) * 3, 2);
     px = qx; py = qy; pz = qz;
   }
-  glow(bx, by, bz, 0.9, 0xe04bff, 0.18, 0.8);
+  glow(bx, by, bz, 1.3, 0xe04bff, 0.26, 1, 1.3, 46);
 }
 
 function ejectCasing(kind: VisKind) {
@@ -573,19 +588,21 @@ function trail(P: Proj, dt: number) {
   const add = FX.add;
   if (!add) return;
   const travelled = P.pos.distanceTo(P.spawn);
-  const k = converge(travelled);
+  const k = converge(travelled, P);
   // visual head: drawn leaving the gun's muzzle and converging onto the real flight line
   const hx = P.pos.x + P.vo.x * k, hy = P.pos.y + P.vo.y * k, hz = P.pos.z + P.vo.z * k;
   const sp = P.vel.length() || 1;
   const dx = P.vel.x / sp, dy = P.vel.y / sp, dz = P.vel.z / sp;
-  const streak = (len: number, core: number, glowW: number, cCol: number, gCol: number, a = 1) => {
-    const l = Math.min(len, travelled);
+  const streak = (len: number, core: number, glowW: number, cCol: number, gCol: number, a = 1, pxC = 2.6, pxG = 8) => {
+    // hot spot at the head: stays a few pixels wide however far away the round is
+    glow(hx, hy, hz, glowW * 2, gCol, 0, 0.85 * a, 1, pxG + 6);
+    const l = Math.min(len * 1.6, travelled);
     if (l <= 0.01) return;
-    const kt = converge(travelled - l);
+    const kt = converge(travelled - l, P);
     const tx = P.pos.x - dx * l + P.vo.x * kt, ty = P.pos.y - dy * l + P.vo.y * kt, tz = P.pos.z - dz * l + P.vo.z * kt;
-    seg(tx, ty, tz, hx, hy, hz, glowW * 1.6, gCol, 0.5 * a);
+    seg(tx, ty, tz, hx, hy, hz, glowW * 1.6, gCol, 0.75 * a, FX.add, pxG);
     const mx = tx + (hx - tx) * 0.3, my = ty + (hy - ty) * 0.3, mz = tz + (hz - tz) * 0.3;
-    seg(mx, my, mz, hx, hy, hz, core * 1.5, cCol, a);
+    seg(mx, my, mz, hx, hy, hz, core * 1.5, cCol, a, FX.add, pxC);
   };
   P.trailT -= dt;
   const tick = (every: number) => {
@@ -612,8 +629,8 @@ function trail(P: Proj, dt: number) {
       break;
     }
     case VK.SMG:
-      if (P.flags & VF.TRACER) streak(4, 0.04, 0.18, 0xe8fdff, 0x4fe3ff, 1);
-      else streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.7);
+      if (P.flags & VF.TRACER) streak(4, 0.04, 0.18, 0xe8fdff, 0x4fe3ff, 1, 3, 8);
+      else streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.7, 1.6, 3.5);
       break;
     case VK.TURRET:
     case VK.SCATTER:
@@ -622,10 +639,10 @@ function trail(P: Proj, dt: number) {
       break;
     case VK.RAIL:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol);
-      glow(hx, hy, hz, 0.45, 0xffd0ff, 0, 0.8);
+      glow(hx, hy, hz, 0.5, 0xffd0ff, 0, 0.9, 1, 12);
       break;
     case VK.CANNON:
-      seg(tx, ty, tz, tx, ty, tz, 0.5, 0xff6a2a, 0.6 + Math.random() * 0.4);
+      seg(tx, ty, tz, tx, ty, tz, 0.6, 0xff6a2a, 0.7 + Math.random() * 0.3, FX.add, 14);
       streak(0.9, 0.06, 0.25, 0xffb080, 0xff3b2a, 0.5);
       if (tick(0.022)) {
         puffs(tx, ty, tz, 1, 0x6a6660, 0.26, 1.3, 0.5, 0.15, 0.2, 0, -0.1, 0, 4.2, 0x2c2a28);
@@ -633,16 +650,16 @@ function trail(P: Proj, dt: number) {
       }
       break;
     case VK.REBOUND: {
-      glow(hx, hy, hz, 0.85, 0x7cff4f, 0, 0.45);
-      glow(hx, hy, hz, 0.34, 0xeaffd8, 0, 0.8);
+      glow(hx, hy, hz, 0.95, 0x7cff4f, 0, 0.55, 1, 16);
+      glow(hx, hy, hz, 0.36, 0xeaffd8, 0, 0.9, 1, 7);
       // motion trail: a ribbon of fading discs
       const s = spec();
-      s.x = hx; s.y = hy; s.z = hz; s.w0 = 0.36; s.w1 = 0.04; s.c0 = 0x7cff4f; s.c1 = 0x2a8a10; s.a = 0.55; s.life = 0.26; s.fpow = 1.3;
+      s.x = hx; s.y = hy; s.z = hz; s.w0 = 0.4; s.w1 = 0.05; s.c0 = 0x7cff4f; s.c1 = 0x2a8a10; s.a = 0.65; s.life = 0.3; s.fpow = 1.3; s.px = 6;
       add.emit(s);
       break;
     }
     case VK.HARPOON:
-      streak(1, 0.02, 0.06, 0xffffff, 0xd8ccb0, 0.35);
+      streak(1, 0.02, 0.06, 0xffffff, 0xd8ccb0, 0.5, 1.5, 4);
       tether(P, tx, ty, tz);
       break;
     case VK.CRYO:
@@ -658,13 +675,13 @@ function trail(P: Proj, dt: number) {
     case VK.FLAK:
     case VK.MORTAR:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.6);
-      seg(tx, ty, tz, tx, ty, tz, 0.16, 0xffc070, 0.5 + Math.random() * 0.5);
+      seg(tx, ty, tz, tx, ty, tz, 0.2, 0xffc070, 0.6 + Math.random() * 0.4, FX.add, 9);
       if (tick(0.03)) puffs(tx, ty, tz, 1, 0x7a746a, 0.14, 0.8, 0.35, 0.1, 0.15, 0, 0, 0, 3.5);
       break;
     case VK.TESLA:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.6);
-      glow(hx, hy, hz, 0.6, 0x5f9bff, 0, 0.6);
-      glow(hx, hy, hz, 0.2, 0xffffff, 0, 0.9);
+      glow(hx, hy, hz, 0.7, 0x5f9bff, 0, 0.7, 1, 16);
+      glow(hx, hy, hz, 0.22, 0xffffff, 0, 1, 1, 6);
       for (let a = 0; a < 3; a++) {
         V1.set(rnd(), rnd(), rnd()).normalize().multiplyScalar(0.3 + Math.random() * 0.25);
         bolt(hx, hy, hz, hx + V1.x, hy + V1.y, hz + V1.z, 0.014, 0x7fb0ff, 0.1, 0);
@@ -693,7 +710,7 @@ function tether(P: Proj, tx: number, ty: number, tz: number) {
     const t = s / N;
     const qx = ax + (tx - ax) * t, qz = az + (tz - az) * t;
     const qy = ay + (ty - ay) * t - sag * 4 * t * (1 - t);
-    seg(px, py, pz, qx, qy, qz, 0.022, 0xe0d4b8, 0.9, FX.alpha);
+    seg(px, py, pz, qx, qy, qz, 0.03, 0xeee4cc, 0.95, FX.alpha, 2.5);
     px = qx; py = qy; pz = qz;
   }
 }
@@ -709,19 +726,20 @@ function drawFlash(f: Flash, dt: number) {
   const d = f.d;
   // the flash sits just in front of the barrel
   const cx = p.x + d.x * 0.06, cy = p.y + d.y * 0.06, cz = p.z + d.z * 0.06;
+  const far = f.fixed ? 1 : 0; // seen from afar (teammates, turrets): keep a floor on screen size
   if (fl.w > 0) {
-    seg(cx, cy, cz, cx, cy, cz, fl.w * mag * (0.8 + Math.random() * 0.4), fl.col, 0.9);
-    seg(cx, cy, cz, cx, cy, cz, fl.w * 0.45 * mag, 0xffffff, 0.9);
+    seg(cx, cy, cz, cx, cy, cz, fl.w * 1.4 * mag * (0.8 + Math.random() * 0.4), fl.col, 0.95, FX.add, far * (14 + fl.w * 30));
+    seg(cx, cy, cz, cx, cy, cz, fl.w * 0.6 * mag, 0xffffff, 0.95, FX.add, far * 6);
   }
   if (fl.len > 0) {
     // forward cone plus a star of side spikes
-    const L2 = fl.len * mag * (0.7 + Math.random() * 0.6);
-    seg(cx, cy, cz, cx + d.x * L2, cy + d.y * L2, cz + d.z * L2, fl.w * 0.5 * mag, fl.col, 0.8);
+    const L2 = fl.len * 1.4 * mag * (0.7 + Math.random() * 0.6);
+    seg(cx, cy, cz, cx + d.x * L2, cy + d.y * L2, cz + d.z * L2, fl.w * 0.6 * mag, fl.col, 0.85, FX.add, far * 5);
     for (let s = 0; s < fl.spikes; s++) {
       V1.set(rnd(), rnd(), rnd());
       V1.addScaledVector(d, -V1.dot(d)).normalize().addScaledVector(d, 0.5).normalize();
-      const sl = fl.len * 0.5 * mag * (0.5 + Math.random());
-      seg(cx, cy, cz, cx + V1.x * sl, cy + V1.y * sl, cz + V1.z * sl, 0.04 * mag, fl.col, 0.75);
+      const sl = fl.len * 0.7 * mag * (0.5 + Math.random());
+      seg(cx, cy, cz, cx + V1.x * sl, cy + V1.y * sl, cz + V1.z * sl, 0.05 * mag, fl.col, 0.8, FX.add, far * 2);
     }
   }
   if (f.kind === VK.TESLA) {
@@ -918,6 +936,10 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
   if (!add || !alpha) return;
   add.step(dt);
   alpha.step(dt);
+  const fov = (camera as THREE.PerspectiveCamera).fov ?? 75;
+  const px = (2 * Math.tan((fov * Math.PI) / 360)) / Math.max(200, FX.viewH);
+  add.setPixel(px);
+  alpha.setPixel(px);
 
   if (vm && vm.visible) {
     const lk = LOOKS[viewKind];
@@ -952,7 +974,7 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
     const lk = LOOKS[P.kind];
     const pool = ghostPools[lk.geo];
     if (pool) {
-      const k = converge(P.pos.distanceTo(P.spawn));
+      const k = converge(P.pos.distanceTo(P.spawn), P);
       V1.copy(P.pos).addScaledVector(P.vo, k);
       orient(QA, P.vel, spinOf(P));
       pool.add(V1, QA, P.scale);
@@ -978,10 +1000,10 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
     // arch over the bodies, head to head, with a hot spot where it bites
     const ya = arc.a && env ? env.height(arc.a.kind) * 0.8 : 1.4, yb = env ? env.height(arc.b.kind) * 0.8 : 1.4;
     const mx = (ax + bx) / 2, mz = (az + bz) / 2, my = Math.max(ya, yb) + 0.25 + dl * 0.08;
-    bolt(ax, ya, az, mx, my, mz, 0.06, 0x6fa8ff, 0.35, 1);
-    bolt(mx, my, mz, bx, yb, bz, 0.06, 0x6fa8ff, 0.35, 1);
-    glow(ax, ya, az, 0.8, 0x6fa8ff, 0, 0.7);
-    glow(bx, yb, bz, 0.9, 0x9fc4ff, 0, 0.8);
+    bolt(ax, ya, az, mx, my, mz, 0.1, 0x6fa8ff, 0.4, 1);
+    bolt(mx, my, mz, bx, yb, bz, 0.1, 0x6fa8ff, 0.4, 1);
+    glow(ax, ya, az, 1, 0x6fa8ff, 0, 0.8, 1, 22);
+    glow(bx, yb, bz, 1.1, 0x9fc4ff, 0, 0.9, 1, 26);
   }
 
   // muzzle flashes
