@@ -55,8 +55,19 @@ export function hookAudioUnlock() {
 
 
 function applyVol() {
-  if (musicGain) musicGain.gain.value = vol.music * 0.35;
+  if (musicGain) musicGain.gain.value = vol.music * (menuMode ? 0.26 : 0.35);
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
+}
+/** Menu screens hear the arena track through "blast doors": muffled, no drums. */
+export function setMusicMenu(on: boolean) {
+  if (menuMode === on) return;
+  menuMode = on;
+  applyVol();
+  if (musicFilter && ctx) {
+    musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
+    musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, ctx.currentTime);
+    musicFilter.frequency.exponentialRampToValueAtTime(on ? 620 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
+  }
 }
 export function setVolumes(music: number, sfx: number) {
   vol = { music, sfx };
