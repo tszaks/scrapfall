@@ -6,11 +6,12 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
   setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
-  BEACH_SIZE,
+  BEACH_SIZE, setPosts,
 } from "./level";
 
 import { THEMES, layoutOf, type Theme } from "./themes";
 import { isBeach } from "./beach/beachLayout";
+import { mapPosts } from "./posts";
 import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
@@ -34,18 +35,18 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
-import { resetRide, ride, riderEye, stepRide } from "./alpine/ride";
+import { leaveRide, resetRide, ride, riderEye, stepRide } from "./alpine/ride";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
 import {
-  MAX_ORD, blast, damageMul, drainShield, newOrd, packOrds, rocketAt, shieldBlocks, stepNewKind, stepOrds, unpackOrds,
+  MAX_ORD, MELEE_DY, blast, damageMul, drainShield, newOrd, packOrds, rocketAt, shieldBlocks, stepNewKind, stepOrds, unpackOrds,
   type AICtx, type Ord,
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
@@ -1633,7 +1634,7 @@ function World({
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY });
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
       Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
@@ -2018,6 +2019,15 @@ function World({
   };
 
   /** where the living players are (the host sees everyone) */
+  /** chairlift chairs teammates are riding (so two players never share one) */
+  const ridersTaken = () => {
+    const out = new Set<number>();
+    const now = performance.now();
+    remotes.current.forEach((r) => {
+      if (now - r.last < 4000 && (r.rc ?? -1) >= 0) out.add(r.rc!);
+    });
+    return out;
+  };
   const livePlayers = (zone?: number) => {
     const out: { x: number; z: number }[] = [];
     const ok = (x: number, z: number, onLift: boolean) =>
@@ -2039,13 +2049,31 @@ function World({
     for (const p of livePlayers()) z.add(alpineZone(p.x, p.z));
     return z;
   };
-  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number) =>
-    big
-      ? spawnNear(
-          blocks, rand, livePlayers(zone), rMin, rMax, hidden, 1,
-          alpineMap && zone !== undefined ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone : navOpen,
-        )
-      : randomSpawn(blocks, rand);
+  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number) => {
+    if (!big) return randomSpawn(blocks, rand);
+    const q = spawnNear(
+      blocks, rand, livePlayers(zone), rMin, rMax, hidden, 1,
+      alpineMap && zone !== undefined ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone : navOpen,
+    );
+    // the alpine summit is a small open island where the ring search often finds nothing out
+    // of sight: fall back to any open island cell no player can see (behind the lodge or the
+    // top station), before ever appearing in view
+    if (hidden && alpineMap && alpineZone(q.x, q.z) === 1) {
+      const ps = livePlayers(1);
+      const seen = (x: number, z: number) => ps.some((p) => clearLine(blocks, p.x, p.z, x, z, 0.1));
+      if (seen(q.x, q.z)) {
+        const isl = alpineMap.alpine.island;
+        for (let k = 0; k < 120; k++) {
+          const x = isl.x0 + 1 + rand() * (isl.x1 - isl.x0 - 2);
+          const z = isl.z0 + 1 + rand() * (isl.z1 - isl.z0 - 2);
+          if (blocked(blocks, x, z, 1) || !navOpen(x, z) || seen(x, z)) continue;
+          if (ps.some((p) => Math.hypot(p.x - x, p.z - z) < 10)) continue;
+          return { x, z };
+        }
+      }
+    }
+    return q;
+  };
 
   /** where the boss appears: Dry Gulch's Iron Marshal steps off his train at the platform */
   const bossSpot = () => (western ? trainBossSpot() : spot(25, 40, false));
@@ -2540,8 +2568,13 @@ function World({
       if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
       if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
-    // weather: blizzard gusts shove you downwind
-    if (wind.x !== 0 || wind.z !== 0) {
+    // weather: blizzard gusts shove you downwind (not while you wait on a loading line)
+    const onLoadingLine =
+      !!alpineMap &&
+      [alpineMap.alpine.ride.boardUp, alpineMap.alpine.ride.boardDown].some(
+        ([bx, bz]) => Math.hypot(cam.position.x - bx, cam.position.z - bz) < 5,
+      );
+    if ((wind.x !== 0 || wind.z !== 0) && !onLoadingLine) {
       const wx = cam.position.x + wind.x * delta;
       const wz = cam.position.z + wind.z * delta;
       if (walkTo(wx, cam.position.z)) cam.position.x = wx;
@@ -2609,7 +2642,8 @@ function World({
     // DOWN in co-op: the view drops to the ground (a crawl)
     cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
     // alpine chairlift: stand on a loading line to board; seated, the chair carries you
-    if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current)) {
+    if (alpineMap && spectating && ride.chair >= 0) leaveRide(cam, alpineMap.alpine); // died on the chair
+    if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current, ridersTaken())) {
       slide.current.x = 0;
       slide.current.z = 0;
     }
@@ -2984,14 +3018,14 @@ function World({
       // everyone the enemies can go after
       const now = performance.now();
       // fx/fz: which way each player faces (the camera looks down -z at yaw 0); flankers use it
-      type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number };
+      type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; air?: boolean };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
+      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, air: ride.chair >= 0 });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
           const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + groundY(r.x, r.z);
-          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
+          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), air: (r.rc ?? -1) >= 0 });
         }
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
@@ -3127,22 +3161,17 @@ function World({
         }
         const dx = target.x - e.x;
         const dz = target.z - e.z;
+        // melee needs vertical proximity on every map: a player up on a deck, a rooftop or a
+        // chairlift is out of reach from the ground below (shots and ordnance leave from each
+        // enemy's own ground in enemyAI.ts). The beach's stairs keep its roomier 2.2 m.
+        const vReach = groundOwnsHits() ? 2.2 : MELEE_DY;
+        const inReach = !target.air && Math.abs(target.y - EYE - groundY(e.x, e.z)) < vReach;
         if (isNewKind(e.kind)) {
-          if (groundOwnsHits()) {
-            // the beach: a player up on a deck is out of melee reach from the sand below
-            // (enemyAI.ts already fires shots and ordnance from the enemy's own ground)
-            const reach = Math.abs(target.y - EYE - groundY(e.x, e.z)) < 2.2 ? d : Math.max(d, 3.5);
-            stepNewKind(e, ei, target, reach, aiCtx);
-            continue;
-          }
-          stepNewKind(e, ei, target, d, aiCtx); // enemyAI.ts: its own movement, telegraphs, attacks
+          stepNewKind(e, ei, target, inReach ? d : Math.max(d, 3.5), aiCtx); // enemyAI.ts
           continue;
         }
         e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
-        // the beach: melee can't reach a player up on a deck (shots already leave from each
-        // enemy's own ground); every other map measures melee on the ground plane as before
-        const ey = groundY(e.x, e.z);
-        const dm = groundOwnsHits() && Math.abs(target.y - EYE - ey) > 2.2 ? Infinity : d;
+        const dm = inReach ? d : Infinity;
 
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
@@ -3197,7 +3226,9 @@ function World({
           nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
         }
         const r = Math.min(st.radius, 0.8);
-        if (ghost) { e.x = nx; e.z = nz; }
+        // ghosts drift through walls but never over ground no one could walk on (a cliff, the
+        // mountain face under the chairlift, another zone, past a blockade)
+        if (ghost) { if (ghostOK(nx, nz)) { e.x = nx; e.z = nz; } }
         else {
           if (!blocked(blocks, nx, e.z, r)) e.x = nx;
           if (!blocked(blocks, e.x, nz, r)) e.z = nz;
@@ -3215,7 +3246,10 @@ function World({
             const a = rand() * Math.PI * 2;
             const bx = target.x + Math.sin(a) * 4;
             const bz = target.z + Math.cos(a) * 4;
-            if (!blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
+            // only onto open, walkable ground near a target standing on it (never under a rider)
+            const onGround = Math.abs(target.y - EYE - groundY(bx, bz)) < MELEE_DY;
+            const sameZone = !alpineMap || alpineZone(bx, bz) === alpineZone(e.x, e.z);
+            if (onGround && sameZone && ghostOK(bx, bz) && !blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
           }
           if (dm < 1.6 && e.cooldown <= 0) {
             e.cooldown = 1.4;
@@ -3300,7 +3334,7 @@ function World({
           if (spType === "skier") {
             // a fan of thrown ice picks at mid range, a pole jab up close
             if (ready && d < 20 && d > 4) { e.shot = 2.3; aim(1.3, 17, 0.12, 3, 1, 2, 0.12); }
-            if (d < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
+            if (dm < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
           }
           // TIDE CRAWLER: pincer snaps up close, a fan of sea-foam bubbles from mid range
           if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 2); }
@@ -3317,7 +3351,7 @@ function World({
             }
           };
           // the lasso lands: 1 damage and a yank toward him (a shove, synced like any hit)
-          marshalTick(e, d, dx, dz, delta, aimB, (kx, kz) => hurtTarget(target, 1, kx, kz));
+          marshalTick(e, inReach ? d : Math.max(d, 3.5), dx, dz, delta, aimB, (kx, kz) => hurtTarget(target, 1, kx, kz));
         } else if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
@@ -3339,7 +3373,7 @@ function World({
               const cz = e.z + (dz / d) * 10 * delta;
               if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
               if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
-              if (d < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
+              if (dm < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
             } else if (e.aux <= -1.4) e.aux = d > 5 && d < 28 ? 5 + rand() * 3 : 1;
           }
           // THE KRAKEN RIG: every few seconds its tentacles sweep a ring of shots all round
@@ -3350,7 +3384,7 @@ function World({
               for (let s = 0; s < 14; s++) {
                 const a = (s / 14) * Math.PI * 2 + rand();
                 const vel = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-                fireInto(enemyBullets.current, new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + ey, e.z + vel.z * 2.6), vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 3.2, 1, "", 0.26);
+                fireInto(enemyBullets.current, new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + groundY(e.x, e.z), e.z + vel.z * 2.6), vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 3.2, 1, "", 0.26);
               }
             }
           }
@@ -3380,8 +3414,8 @@ function World({
       const nudge = (e: Enemy, px: number, pz: number) => {
         const rr = Math.min(STATS[e.kind].radius, 0.8);
         const ghost = e.kind === "specter";
-        if (ghost || !blocked(blocks, e.x + px, e.z, rr)) e.x += px;
-        if (ghost || !blocked(blocks, e.x, e.z + pz, rr)) e.z += pz;
+        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr)) e.x += px;
+        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr)) e.z += pz;
       };
       for (let ei = 0; ei < enemies.length; ei++) {
         const a = enemies[ei]!;
@@ -4183,6 +4217,8 @@ export function Game() {
     );
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
+    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map
+    setPosts(mapPosts(level.city, level.western ?? null));
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);

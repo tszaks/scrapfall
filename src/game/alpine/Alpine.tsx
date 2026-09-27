@@ -687,16 +687,16 @@ void main() {
   vec3 vel = vec3(uWind.x * 6.0, -3.0, uWind.z * 6.0) * (0.7 + aSeed * 0.6);
   vec3 p = position * B + vel * uTime;
   p = mod(p - uCam + B * 0.5, B) + uCam - B * 0.5;
-  p -= vel * aEnd * 0.06;
+  p -= vel * aEnd * 0.03;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = -mv.z;
-  vA = uBlizz * smoothstep(0.3, 1.5, dist) * (1.0 - smoothstep(10.0, 20.0, dist)) * (1.0 - aEnd * 0.7);
+  vA = uBlizz * smoothstep(4.0, 8.0, dist) * (1.0 - smoothstep(14.0, 24.0, dist)) * (1.0 - aEnd * 0.7);
 }`,
     fragmentShader: /* glsl */ `
 uniform vec3 uCol;
 varying float vA;
-void main() { gl_FragColor = vec4(uCol, vA * 0.55); }`,
+void main() { gl_FragColor = vec4(uCol, vA * 0.3); }`,
   });
 }
 
@@ -1021,14 +1021,40 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
 
   // instanced forest per chunk (near + far LOD) and the far ring
-  // stable instance-colour buffers (a fresh array on re-render would wipe the tints to black)
-  const treeCols = useMemo(
-    () => ({ near: new Float32Array(MAX_NEAR * 3), mid: new Float32Array(built.trees.n * 3) }),
-    [built],
-  );
-  const nearRef = useRef<THREE.InstancedMesh>(null);
-  const midRef = useRef<THREE.InstancedMesh>(null);
+  // The near / mid forest meshes are built here, each with its own instance-colour buffer,
+  // and handed to the scene as objects. (Declared in JSX with a child <instancedBufferAttribute>,
+  // a world rebuild - solo to co-op on the host - left the recreated mesh drawing a colour
+  // buffer the LOD never filled: every near spruce rendered black.)
   const lodAt = useRef({ x: 1e9, z: 1e9 });
+  const forest = useMemo(() => {
+    const near = new THREE.InstancedMesh(geos.spruce, mats.tree, MAX_NEAR);
+    near.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_NEAR * 3), 3);
+    near.castShadow = true;
+    near.frustumCulled = false;
+    near.count = 0;
+    const mid = new THREE.InstancedMesh(geos.farSpruce, mats.tree, Math.max(1, built.trees.n));
+    mid.instanceColor = new THREE.InstancedBufferAttribute(
+      new Float32Array(Math.max(1, built.trees.n) * 3),
+      3,
+    );
+    mid.frustumCulled = false;
+    mid.count = 0;
+    return { near, mid };
+  }, [geos, mats, built]);
+  useEffect(
+    () => () => {
+      forest.near.dispose();
+      forest.mid.dispose();
+    },
+    [forest],
+  );
+  const nearRef = useRef<THREE.InstancedMesh | null>(null);
+  const midRef = useRef<THREE.InstancedMesh | null>(null);
+  nearRef.current = forest.near;
+  midRef.current = forest.mid;
+  useLayoutEffect(() => {
+    lodAt.current = { x: 1e9, z: 1e9 }; // re-sort into the fresh meshes
+  }, [forest]);
   const farRef = useRef<THREE.InstancedMesh>(null);
   const chairRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
@@ -1046,6 +1072,7 @@ export const AlpineScene = memo(function AlpineScene({
 
   // time of day: sky colours, light tints, window glow
   const skyRef = useRef<THREE.Mesh>(null);
+  const haloBase = useRef(0.6);
   useEffect(() => {
     const m = mats.sky;
     (m.uniforms["uTop"]!.value as THREE.Color).set(look.skyTop);
@@ -1065,10 +1092,12 @@ export const AlpineScene = memo(function AlpineScene({
     mats.signs.color.setScalar(nl(1.25, 0.95));
     U.uLampK.value = nl(0.85, 0.2);
     U.uBounce.value.set("#8a8fbc").lerp(new THREE.Color("#5a6ca8"), nk);
-    mats.halo.uniforms["uOpacity"]!.value = nl(0.85, 0.35);
+    haloBase.current = nl(0.85, 0.35);
     (mats.snow.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
     (mats.streak.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
-    (mats.smoke.uniforms["uColor"]!.value as THREE.Color).set("#e8d6dc").lerp(new THREE.Color("#7a849c"), nk);
+    (mats.smoke.uniforms["uColor"]!.value as THREE.Color)
+      .set("#e8d6dc")
+      .lerp(new THREE.Color("#7a849c"), nk);
     const prev = scene.background;
     scene.background = new THREE.Color(look.skyHorizon);
     return () => {
@@ -1087,7 +1116,6 @@ export const AlpineScene = memo(function AlpineScene({
   const q = useMemo(() => new THREE.Quaternion(), []);
   const ax = useMemo(() => new THREE.Vector3(0, 1, 0), []);
   const sc = useMemo(() => new THREE.Vector3(1, 1, 1), []);
-  const zero = useMemo(() => new THREE.Vector3(0.0001, 0.0001, 0.0001), []);
   const pv = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, raw) => {
@@ -1104,6 +1132,7 @@ export const AlpineScene = memo(function AlpineScene({
     U.uFogFar.value = bb > 0.001 ? THREE.MathUtils.lerp(2600, 24, Math.pow(bb, 0.35)) : 2e5;
     U.uMist.value.set(nl(260, 380), nl(1800, 2600));
     mats.sky.uniforms["uBlizz"]!.value = Math.min(1, bb * 1.15);
+    mats.halo.uniforms["uOpacity"]!.value = haloBase.current * (1 - 0.85 * bb); // lamps sink into a whiteout
     const f = scene.fog as THREE.Fog | null;
     if (f && "near" in f) {
       skyCol.set(look.fogColor);
@@ -1133,8 +1162,8 @@ export const AlpineScene = memo(function AlpineScene({
       for (let i = 0; i < nChairs; i++) {
         const p = chairAt(lift, i);
         q.setFromAxisAngle(ax, p.yaw);
-        // your own chair is hidden while you ride it (it would fill the view); teammates' show
-        m4.compose(pv.set(p.x, p.y, p.z), q, i === ride.chair ? zero : sc);
+        // (you sit on the left-hand seat, so your own chair shows under you)
+        m4.compose(pv.set(p.x, p.y, p.z), q, sc);
         ch.setMatrixAt(i, m4);
       }
       ch.instanceMatrix.needsUpdate = true;
@@ -1238,21 +1267,8 @@ export const AlpineScene = memo(function AlpineScene({
           {c.signs && <mesh geometry={c.signs} material={mats.signs} />}
         </group>
       ))}
-      <instancedMesh
-        ref={nearRef}
-        args={[geos.spruce, mats.tree, MAX_NEAR]}
-        castShadow
-        frustumCulled={false}
-      >
-        <instancedBufferAttribute attach="instanceColor" args={[treeCols.near, 3]} />
-      </instancedMesh>
-      <instancedMesh
-        ref={midRef}
-        args={[geos.farSpruce, mats.tree, built.trees.n]}
-        frustumCulled={false}
-      >
-        <instancedBufferAttribute attach="instanceColor" args={[treeCols.mid, 3]} />
-      </instancedMesh>
+      <primitive object={forest.near} />
+      <primitive object={forest.mid} />
       {built.far.length > 0 && (
         <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />
       )}

@@ -24,6 +24,9 @@ export type Terrain = {
   platforms?: { x0: number; z0: number; x1: number; z1: number; y: number }[];
   /** does a shot at (x, y, z) hit something solid standing there (below its top)? */
   shot?: (x: number, y: number, z: number) => boolean;
+  /** where wall-passing "ghost" enemies may go: through walls, never onto ground no one can
+   * walk (cliffs, another zone, past a blockade). Absent = anywhere. */
+  ghost?: (x: number, z: number) => boolean;
 };
 
 /**
@@ -38,6 +41,8 @@ export type Ground = {
   strictNav?: boolean;
   /** optional climbing limit (see Terrain.maxSlope) */
   maxSlope?: number;
+  /** see Terrain.ghost */
+  ghost?: (x: number, z: number) => boolean;
 };
 
 let G: Ground | null = null;
@@ -90,6 +95,7 @@ export function setTerrain(t: Terrain | Ground | null) {
       height,
       ...(t.speed ? { speed: t.speed } : {}),
       ...(t.maxSlope !== undefined ? { maxSlope: t.maxSlope } : {}),
+      ...(t.ghost ? { ghost: t.ghost } : {}),
     };
   } else G = t;
   wind.x = 0;
@@ -149,4 +155,9 @@ export function terrainY(x: number, z: number) {
 export function shotHits(x: number, y: number, z: number): boolean | null {
   if (!HF || !HF.shot) return null;
   return y < HF.height(x, z) || HF.shot(x, y, z);
+}
+
+/** May a wall-passing ghost enemy stand at (x, z)? (see Terrain.ghost) */
+export function ghostOK(x: number, z: number) {
+  return G?.ghost ? G.ghost(x, z) : true;
 }
