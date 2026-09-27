@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import type { AlpineLayout } from "../alpine/layout";
+import { setAmbiencePower } from "../ambience";
 import type { CityLayout } from "../cityLayout";
 import { glowTexture } from "../cityTextures";
 import { hitBand } from "../enemyKinds";
@@ -106,9 +107,16 @@ export function MapEvents({
       (window as unknown as { __events?: unknown }).__events = { avState, power, mapEvent, avalanchePlan };
   }, []);
   const announce = useRef(0);
+  const ambPower = useRef(1);
   useFrame((_, raw) => {
     const dt = Math.min(raw, 0.05);
     const c = cb.current;
+    // the blackout silences the neon buzz and dims the city hum around you
+    const pw = power.out ? powerAt(camera.position.x, camera.position.z) : 1;
+    if (Math.abs(pw - ambPower.current) > 0.02 || (pw === 1 && ambPower.current !== 1)) {
+      ambPower.current = pw;
+      setAmbiencePower(pw);
+    }
     if (!c.playing) return;
     const n = c.net;
     // host / solo: roll for events as waves start, and honour test requests

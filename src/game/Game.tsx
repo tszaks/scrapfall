@@ -43,7 +43,9 @@ import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
 import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
 import { FX, VF, VK, type VisKind } from "./impacts";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
+import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { MapEvents } from "./events/EventsLayer";
 import { forceMapEvent, mapEvent, onMapEventMsg } from "./events/mapEvents";
@@ -3785,6 +3787,7 @@ export function Game() {
   const [healMsg, setHealMsg] = useState(0);
   const [musicVol, setMusicVol] = useState(0.5);
   const [sfxVol, setSfxVol] = useState(0.7);
+  const [ambVol, setAmbVol] = useState(0.6);
   const [shards, setShards] = useState(0);
   const [ability, setAbility] = useState<AbilityId>(() => {
     if (typeof window === "undefined") return "dash";
@@ -3997,11 +4000,12 @@ export function Game() {
       else if (typeof v.sens === "number") setSensY(v.sens);
       if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
       if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
+      if (typeof v.ambVol === "number") setAmbVol(v.ambVol);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
-  }, [fov, sensX, sensY, musicVol, sfxVol]);
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+  }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -4260,6 +4264,8 @@ export function Game() {
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
+    // the background soundscape plays (and pauses) with the music
+    setAmbienceActive(started && locked && !ended);
   }, [started, locked, ended]);
   // if the browser blocked sound until now, the next click/keypress restarts it
   useEffect(() => {
@@ -4275,9 +4281,17 @@ export function Game() {
     };
   }, [started, locked, ended]);
 
-  useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
-  useEffect(() => setMusicTheme(theme.name), [theme.name]);
-  useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
+  useEffect(() => {
+    const boss = status.wave === WAVES.length && !status.won;
+    setMusicIntensity(boss);
+    setMusicProgress(status.wave, WAVES.length);
+    // the map's hazard (blizzard, dust storm, marine layer...) comes with the boss round
+    setAmbienceHazard(boss);
+  }, [status.wave, status.won]);
+  useEffect(() => setMusicTheme(theme.name, layoutOf(theme)), [theme]);
+  useEffect(() => setAmbienceScene(theme.name, layoutOf(theme), city), [theme, city]);
+  useEffect(() => setAmbienceTime(time), [time]);
+  useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
   // the time of day runs with the match; a new arena opens straight onto its wave-1 sunset
@@ -4388,6 +4402,7 @@ export function Game() {
           onRevived={squadCb.onRevived}
           onBleedOut={squadCb.onBleedOut}
         />
+        <AmbienceListener />
       </Canvas>
       <HudOverlay remotes={remotes} active={started && locked && !ended} coop={multiplayer} numOf={squadCb.numOf} />
 
@@ -4859,6 +4874,12 @@ export function Game() {
                   EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
                   <input type="range" min={0} max={1} step={0.05} value={sfxVol}
                     onChange={(e) => setSfxVol(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
+                  <input type="range" min={0} max={1} step={0.05} value={ambVol}
+                    onChange={(e) => setAmbVol(Number(e.target.value))}
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
               </div>
