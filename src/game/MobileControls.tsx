@@ -123,11 +123,7 @@ export function MobileControls({
       )}
 
       {/* action buttons */}
-      <div className="absolute bottom-6 right-5 flex items-end gap-3">
-        <div className="flex flex-col gap-3">
-          <Btn label="◀" size={48} onTap={() => (touchInput.swap = -1)} />
-          <Btn label="▶" size={48} onTap={() => (touchInput.swap = 1)} />
-        </div>
+      <div className="absolute bottom-6 right-5 flex items-end gap-4">
         <Btn
           label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
           sub="ABILITY"
@@ -143,9 +139,11 @@ export function MobileControls({
         />
       </div>
 
-      <div className="absolute right-4 top-4">
-        <Btn label="II" size={44} onTap={onPause} />
+      <div className="absolute right-4 top-3">
+        <Btn label="II" size={40} onTap={onPause} />
       </div>
+
+
     </div>
   );
 }

@@ -8,7 +8,9 @@ export const touchInput = {
   fire: false,
   ability: false, // one-shot
   swap: 0, // one-shot: -1 previous weapon, 1 next weapon
+  pick: null as string | null, // one-shot: equip this weapon directly (tapped HUD chip)
 };
+
 
 export function resetTouchInput() {
   touchInput.moveX = 0;
@@ -18,7 +20,9 @@ export function resetTouchInput() {
   touchInput.fire = false;
   touchInput.ability = false;
   touchInput.swap = 0;
+  touchInput.pick = null;
 }
+
 
 export function isTouchDevice() {
   if (typeof window === "undefined") return false;

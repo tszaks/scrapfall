@@ -1955,6 +1955,12 @@ function World({
       const next = list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length];
       if (next) equip(next);
     }
+    if (touchInput.pick) {
+      const want = touchInput.pick as Weapon;
+      touchInput.pick = null;
+      if (owned.current.has(want)) equip(want);
+    }
+
 
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
@@ -3589,7 +3595,7 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className="pointer-events-none fixed inset-0 z-10 font-mono">
+      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex flex-col items-start gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
@@ -3604,7 +3610,7 @@ export function Game() {
 
 
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className={`flex flex-col items-end gap-2 ${touchUi ? "mt-12" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {"♦".repeat(Math.max(0, health))}
               <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
@@ -3615,14 +3621,15 @@ export function Game() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2">
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center gap-2 ${touchUi ? "top-16 max-w-[calc(100vw-2rem)]" : "top-5 max-w-[calc(100vw-26rem)]"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
             return (
               <div
                 key={slot.w}
-                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${
+                onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
+                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${touchUi ? "pointer-events-auto" : ""} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
                     : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
@@ -3633,6 +3640,7 @@ export function Game() {
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
+
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
                 {slot.w === "pistol" && (
@@ -3679,12 +3687,13 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
-        {locked && !ended && (
+        {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
             [F] {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
           </div>
         )}
+
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
             ⚠ {eventMsg} ⚠
@@ -3821,7 +3830,7 @@ export function Game() {
 
       {(!locked || ended) && picking && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-md touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
             <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
 
@@ -3911,8 +3920,10 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
-          <div className="max-w-sm rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
+          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+
+
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
             </h1>
