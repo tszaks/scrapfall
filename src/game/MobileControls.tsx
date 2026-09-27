@@ -43,7 +43,6 @@ function Btn({
 }
 
 export function MobileControls({
-  onPause,
   abilityName,
   abilityLeft,
 }: {
