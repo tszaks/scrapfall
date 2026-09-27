@@ -1,10 +1,15 @@
+import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
+
+import { FX } from "./impacts";
 
 import { fxCreate, fxMount, fxUnmount } from "./projectiles";
 
 /** mounts every pooled combat-effect mesh (one draw call each, hidden when empty); render once inside the World */
 export function CombatFx() {
   const objs = useMemo(() => fxCreate(), []);
+  const h = useThree((s) => s.size.height);
+  useEffect(() => { FX.viewH = h; }, [h]);
   useEffect(() => {
     fxMount(objs);
     return () => fxUnmount();

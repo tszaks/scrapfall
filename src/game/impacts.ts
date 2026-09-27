@@ -43,6 +43,8 @@ export const FX = {
   ear: new THREE.Vector3(),
   /** camera kick applied on top of the look angles (radians) */
   kick: { pitch: 0, yaw: 0, shake: 0 },
+  /** canvas height in CSS pixels (screen-space minimum widths) */
+  viewH: 800,
 };
 
 const rnd = (a = 1) => (Math.random() * 2 - 1) * a;
@@ -52,12 +54,13 @@ export const sound = (k: ImpactSound, x: number, y: number, z: number) =>
 // ---------------------------------------------------------------- primitives
 
 /** additive glow disc */
-export function glow(x: number, y: number, z: number, w: number, col: number, life: number, a = 1, grow = 1) {
+export function glow(x: number, y: number, z: number, w: number, col: number, life: number, a = 1, grow = 1, px = 0) {
   const pool = FX.add;
   if (!pool) return;
   const s = spec();
   s.x = x; s.y = y; s.z = z; s.w0 = w; s.w1 = w * grow; s.c0 = col; s.life = life; s.a = a; s.fpow = 1.4;
   s.once = life <= 0; // life 0: just this frame (heads, halos)
+  s.px = px;
   pool.emit(s);
 }
 
@@ -76,7 +79,7 @@ export function sparks(
     dx /= l; dy /= l; dz /= l;
     s.x = x; s.y = y; s.z = z; s.vx = dx * v; s.vy = dy * v; s.vz = dz * v;
     s.grav = grav; s.drag = 1.5; s.stretch = 0.035; s.w0 = w; s.w1 = w * 0.5;
-    s.c0 = hot; s.c1 = col; s.life = life * (0.5 + Math.random() * 0.8); s.fpow = 1.2;
+    s.c0 = hot; s.c1 = col; s.life = life * (0.5 + Math.random() * 0.8); s.fpow = 1.2; s.px = 2;
     pool.emit(s);
   }
 }
@@ -135,8 +138,8 @@ export function bolt(ax: number, ay: number, az: number, bx: number, by: number,
       const j = jitter * Math.sin(Math.PI * t) * (0.5 + Math.random());
       qx += Q.x * j; qy += Q.y * j; qz += Q.z * j;
     }
-    seg(px, py, pz, qx, qy, qz, core, 0xffffff, 1);
-    seg(px, py, pz, qx, qy, qz, core * 5, col, 0.45);
+    seg(px, py, pz, qx, qy, qz, core, 0xffffff, 1, FX.add, 2.5);
+    seg(px, py, pz, qx, qy, qz, core * 4.5, col, 0.7, FX.add, 9);
     if (forks > 0 && i < n - 1 && Math.random() < forks / n) {
       // a short branch peeling off
       P.set(rnd(), rnd() * 0.6 - 0.3, rnd()).addScaledVector(D, 0.8).normalize();
@@ -148,24 +151,24 @@ export function bolt(ax: number, ay: number, az: number, bx: number, by: number,
 }
 
 /** one fixed segment drawn this frame only */
-export function seg(ax: number, ay: number, az: number, bx: number, by: number, bz: number, w: number, col: number, a: number, pool: SegPool | null = FX.add) {
+export function seg(ax: number, ay: number, az: number, bx: number, by: number, bz: number, w: number, col: number, a: number, pool: SegPool | null = FX.add, px = 0) {
   if (!pool) return;
   const s = spec();
   s.x = ax; s.y = ay; s.z = az; s.ox = bx - ax; s.oy = by - ay; s.oz = bz - az;
   if (!s.ox && !s.oy && !s.oz) s.ox = 1e-4;
-  s.w0 = s.w1 = w; s.c0 = col; s.a = a; s.once = true;
+  s.w0 = s.w1 = w; s.c0 = col; s.a = a; s.once = true; s.px = px;
   pool.emit(s);
 }
 
 /** a fixed segment that fades out over `life` (beams, ion trails) */
-export function beam(ax: number, ay: number, az: number, bx: number, by: number, bz: number, w0: number, w1: number, col: number, a: number, life: number, vx = 0, vy = 0, vz = 0) {
+export function beam(ax: number, ay: number, az: number, bx: number, by: number, bz: number, w0: number, w1: number, col: number, a: number, life: number, vx = 0, vy = 0, vz = 0, px = 0) {
   const pool = FX.add;
   if (!pool) return;
   const s = spec();
   s.x = ax; s.y = ay; s.z = az; s.ox = bx - ax; s.oy = by - ay; s.oz = bz - az;
   if (!s.ox && !s.oy && !s.oz) s.ox = 1e-4;
   s.vx = vx; s.vy = vy; s.vz = vz; s.drag = 2;
-  s.w0 = w0; s.w1 = w1; s.c0 = col; s.a = a; s.life = life; s.fpow = 1.6;
+  s.w0 = w0; s.w1 = w1; s.c0 = col; s.a = a; s.life = life; s.fpow = 1.6; s.px = px;
   pool.emit(s);
 }
 
@@ -255,12 +258,12 @@ export function impact(surface: Surface, c: Contact, vel: THREE.Vector3, power: 
   const bx = -vel.x / sp, by = -vel.y / sp, bz = -vel.z / sp;
   const k = Math.min(3, power);
   if (surface === "robot") {
-    glow(p.x, p.y, p.z, 0.8 + 0.3 * k, col, 0.12);
-    glow(p.x, p.y, p.z, 0.35, 0xffffff, 0.07);
+    glow(p.x, p.y, p.z, 1.1 + 0.35 * k, col, 0.22, 1, 1.3, 40 + 8 * k);
+    glow(p.x, p.y, p.z, 0.45, 0xffffff, 0.1, 1, 1, 16);
     sparks(p.x, p.y, p.z, Math.round(7 + 5 * k), 0xffb040, 5 + 2 * k, bx, by + 0.3, bz, 0.9, -14, 0.45);
     sound("metal", p.x, p.y, p.z);
   } else if (surface === "car") {
-    glow(p.x, p.y, p.z, 0.7, 0xfff0c0, 0.09);
+    glow(p.x, p.y, p.z, 0.9, 0xfff0c0, 0.14, 1, 1.2, 34);
     sparks(p.x, p.y, p.z, Math.round(10 + 4 * k), 0xffc060, 6, n.x, n.y + 0.4, n.z, 0.8, -14, 0.45);
     sound("metal", p.x, p.y, p.z);
   } else if (surface === "wall" || surface === "ground") {
@@ -268,7 +271,7 @@ export function impact(surface: Surface, c: Contact, vel: THREE.Vector3, power: 
     puffs(p.x + n.x * 0.1, p.y + n.y * 0.1, p.z + n.z * 0.1, 2 + Math.round(k), dust, 0.18 + 0.08 * k, 0.7, 0.45,
       0.35, 0.25, n.x * 1.2, n.y * 1.2, n.z * 1.2, 3.2);
     chips(p.x, p.y, p.z, 4 + Math.round(k * 1.5), 0x2a2622, 3 + k, n.x, n.y, n.z, 0.06);
-    glow(p.x + n.x * 0.05, p.y + n.y * 0.05, p.z + n.z * 0.05, 0.45, 0xffc080, 0.07, 0.8);
+    glow(p.x + n.x * 0.05, p.y + n.y * 0.05, p.z + n.z * 0.05, 0.6 + 0.15 * k, 0xffc080, 0.14, 0.9, 1.2, 28 + 6 * k);
     sparks(p.x, p.y, p.z, 3 + Math.round(k), 0xffa040, 4, n.x, n.y, n.z, 1.1, -14, 0.25, 0.045);
     if (hole && FX.decals) FX.decals.add(p.x, p.y, p.z, n.x, n.y, n.z, 0.16 + 0.05 * k, 0, 7, 0.9);
     sound("wall", p.x, p.y, p.z);
@@ -293,40 +296,53 @@ export function splash(x: number, y: number, z: number, k = 1) {
   sound("splash", x, y, z);
 }
 
-/** BOOMER shell: fireball, light flash, ground shockwave, debris, smoke, scorch */
+/** BOOMER shell: fireball, light flash, ground shockwave, debris, lingering smoke column, scorch */
 export function explosion(x: number, y: number, z: number, scale = 1) {
   const pool = FX.add;
   if (pool) {
     // the fake light: a huge soft flash that is gone in a blink
-    glow(x, y, z, 9 * scale, 0xffb060, 0.13, 0.55);
-    glow(x, y, z, 3.2 * scale, 0xffffff, 0.08, 0.9);
-    for (let i = 0; i < 12; i++) {
+    glow(x, y, z, 11 * scale, 0xffb060, 0.16, 0.6, 1, 120);
+    glow(x, y, z, 4 * scale, 0xffffff, 0.09, 0.95, 1, 60);
+    for (let i = 0; i < 16; i++) {
       const s = spec();
-      s.x = x + rnd(0.4); s.y = y + rnd(0.3) + 0.2; s.z = z + rnd(0.4);
+      s.x = x + rnd(0.5 * scale); s.y = y + rnd(0.4) + 0.3 * scale; s.z = z + rnd(0.5 * scale);
       s.vx = rnd(3.2) * scale; s.vy = (1 + Math.random() * 2.5) * scale; s.vz = rnd(3.2) * scale;
-      s.drag = 3.5; s.w0 = (0.7 + Math.random() * 0.6) * scale; s.w1 = s.w0 * 2.6;
-      s.c0 = 0xffe070; s.c1 = 0xc0200a; s.a = 0.95; s.life = 0.35 + Math.random() * 0.3; s.fpow = 1.2;
+      s.drag = 3.2; s.w0 = (0.8 + Math.random() * 0.7) * scale; s.w1 = s.w0 * 2.6;
+      s.c0 = 0xffe070; s.c1 = 0xc0200a; s.a = 1; s.life = 0.45 + Math.random() * 0.35; s.fpow = 1.1; s.px = 18;
       pool.emit(s);
     }
   }
-  sparks(x, y + 0.2, z, 26, 0xff8020, 12 * scale, 0, 0.8, 0, 1.1, -12, 0.8, 0.05);
-  chips(x, y + 0.2, z, 14, 0x1d1a18, 8 * scale, 0, 0.6, 0, 0.09);
-  puffs(x, y + 0.4, z, 8, 0x3a3634, 0.9 * scale, 1.9, 0.55, 1.3, 1.2, 0, 0, 0, 3.2, 0x1a1816);
-  const gy = Math.max(0.05, y < 2.2 ? 0.06 : y);
-  FX.rings?.add(x, y < 2.2 ? gy : y, z, 0.4, 6 * scale, 0.5, 0xffa050, y < 2.2);
-  if (y < 2.2) FX.decals?.add(x, 0.01, z, 0, 1, 0, 3.2 * scale, 1, 10, 1);
+  sparks(x, y + 0.2, z, 40, 0xff8020, 11 * scale, 0, 0.8, 0, 1.1, -12, 0.9, 0.07);
+  chips(x, y + 0.2, z, 22, 0x1d1a18, 7 * scale, 0, 0.6, 0, 0.11);
+  // lingering smoke column: slow puffs at staggered speeds so it climbs and spreads for seconds
+  const ap = FX.alpha;
+  if (ap) {
+    for (let i = 0; i < 18; i++) {
+      const s = spec();
+      s.x = x + rnd(0.6 * scale); s.y = Math.max(0.3, y) + Math.random() * 1.2; s.z = z + rnd(0.6 * scale);
+      s.vx = rnd(0.5); s.vy = 0.8 + Math.random() * 2.6; s.vz = rnd(0.5); s.drag = 0.45;
+      s.w0 = (0.7 + Math.random() * 0.5) * scale; s.w1 = s.w0 * 2.8;
+      s.c0 = 0x857d76; s.c1 = 0x3c3834; s.a = 0.6; s.life = 3 + Math.random() * 2; s.fin = 0.1; s.fpow = 1.1;
+      ap.emit(s);
+    }
+  }
+  const low = y < 2.2;
+  FX.rings?.add(x, low ? 0.06 : y, z, 0.5, 6.5 * scale, 0.75, 0xffc070, low);
+  FX.rings?.add(x, low ? 0.07 : y, z, 0.3, 3.5 * scale, 0.45, 0xfff0d0, low);
+  if (low) FX.decals?.add(x, 0.01, z, 0, 1, 0, 3.2 * scale, 1, 12, 1);
   sound("boom", x, y, z);
   const d = Math.hypot(x - FX.ear.x, z - FX.ear.z);
-  if (d < 22) FX.kick.shake = Math.max(FX.kick.shake, (1 - d / 22) * 0.9 * scale);
+  const R = 18 * scale;
+  if (d < R) FX.kick.shake = Math.max(FX.kick.shake, (1 - d / R) * 0.9);
 }
 
 /** FLAK: mid-air burst, dark smoke cloud, flash and a ring */
 export function airBurst(x: number, y: number, z: number) {
-  glow(x, y, z, 4.5, 0xffc070, 0.1, 0.8);
-  glow(x, y, z, 1.4, 0xffffff, 0.06);
-  sparks(x, y, z, 18, 0xff9a30, 9, 0, 0.2, 0, 1.2, -9, 0.45, 0.04);
-  puffs(x, y, z, 7, 0x3b3530, 0.7, 1.4, 0.6, 1.2, 0.25, 0, 0, 0, 3, 0x24201c);
-  FX.rings?.add(x, y, z, 0.2, 2.6, 0.28, 0x8a4418, false);
+  glow(x, y, z, 5.5, 0xffc070, 0.13, 0.9, 1, 70);
+  glow(x, y, z, 1.8, 0xffffff, 0.07, 1, 1, 30);
+  sparks(x, y, z, 24, 0xff9a30, 9, 0, 0.2, 0, 1.2, -9, 0.5, 0.06);
+  puffs(x, y, z, 9, 0x6e665e, 0.8, 1.8, 0.6, 1.2, 0.25, 0, 0, 0, 3, 0x38322c);
+  FX.rings?.add(x, y, z, 0.2, 3, 0.3, 0xa05020, false);
   sound("burst", x, y, z);
   const d = Math.hypot(x - FX.ear.x, z - FX.ear.z);
   if (d < 12) FX.kick.shake = Math.max(FX.kick.shake, (1 - d / 12) * 0.35);
@@ -335,8 +351,8 @@ export function airBurst(x: number, y: number, z: number) {
 /** GLACIER: the crystal shatters into shards and leaves frost behind */
 export function shatter(c: Contact, surface: Surface) {
   const { p, n } = c;
-  glow(p.x, p.y, p.z, 0.9, 0x9fe8ff, 0.12, 0.8);
-  sparks(p.x, p.y, p.z, 14, 0x9fe8ff, 6, n.x, n.y + 0.3, n.z, 1, -16, 0.5, 0.045, 0xf4fdff);
+  glow(p.x, p.y, p.z, 1.2, 0x9fe8ff, 0.2, 0.9, 1.3, 44);
+  sparks(p.x, p.y, p.z, 16, 0x9fe8ff, 6, n.x, n.y + 0.3, n.z, 1, -16, 0.55, 0.06, 0xf4fdff);
   puffs(p.x, p.y, p.z, 4, 0xd8f4ff, 0.3, 0.9, 0.4, 0.5, 0.1, 0, 0, 0, 3, 0xa8dcf0);
   if (FX.decals) {
     if (surface === "wall" || surface === "ground") FX.decals.add(p.x, p.y, p.z, n.x, n.y, n.z, 1.1, 2, 5);
@@ -349,9 +365,9 @@ export function shatter(c: Contact, surface: Surface) {
 export function punchThrough(p: THREE.Vector3, vel: THREE.Vector3, col: number) {
   const sp = Math.hypot(vel.x, vel.y, vel.z) || 1;
   const dx = vel.x / sp, dy = vel.y / sp, dz = vel.z / sp;
-  glow(p.x, p.y, p.z, 0.9, col, 0.1);
-  glow(p.x, p.y, p.z, 0.35, 0xffffff, 0.06);
-  sparks(p.x, p.y, p.z, 10, col, 10, dx, dy, dz, 0.45, -8, 0.3, 0.04);
+  glow(p.x, p.y, p.z, 1.2, col, 0.18, 1, 1.3, 40);
+  glow(p.x, p.y, p.z, 0.45, 0xffffff, 0.1, 1, 1, 16);
+  sparks(p.x, p.y, p.z, 12, col, 10, dx, dy, dz, 0.45, -8, 0.35, 0.06);
   sparks(p.x, p.y, p.z, 5, 0xffb040, 4, -dx, 0.4, -dz, 1);
   sound("crack", p.x, p.y, p.z);
 }

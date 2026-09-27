@@ -20,6 +20,8 @@ attribute vec3 iA;
 attribute vec3 iB;
 attribute float iW;
 attribute vec4 iC;
+attribute float iM;
+uniform float uPx;
 varying vec4 vC;
 varying vec2 vP;
 varying float vLen;
@@ -34,8 +36,22 @@ void main() {
   vec3 side = cross(dir, normalize(mid + vec3(0.0, 0.0, 1e-4)));
   float sl = length(side);
   side = sl > 1e-4 ? side / sl : vec3(0.0, 1.0, 0.0);
-  float r = iW * 0.5;
-  float along = mix(-r, len + r, position.x);
+  // never thinner than iM pixels on screen, so far tracers and flashes don't vanish
+  float ra = max(iW * 0.5, iM * 0.5 * max(-a.z, 0.01) * uPx);
+  float rb = max(iW * 0.5, iM * 0.5 * max(-b.z, 0.01) * uPx);
+  if (len < 1e-3) {
+    // a disc (flash, glow, puff): slide it toward the eye by its own radius so the surface it
+    // sits on (a robot's plating, a wall) doesn't swallow half of it; shrink to keep its screen size
+    float dist0 = length(a);
+    float sh = min(ra, dist0 * 0.6);
+    float k = (dist0 - sh) / max(dist0, 1e-4);
+    a *= k;
+    b = a;
+    ra *= k;
+    rb = ra;
+  }
+  float r = mix(ra, rb, position.x);
+  float along = position.x < 0.5 ? -ra : len + rb;
   vec3 p = a + dir * along + side * (position.y * r);
   vP = vec2(along, position.y * r);
   vLen = len;
@@ -57,7 +73,7 @@ void main() {
   float f = 1.0 - dist;
   if (uAdd > 0.5) {
     // glow: soft falloff with a white-hot core
-    float g = pow(f, 1.4) * 0.85 + pow(f, 6.0) * 0.8;
+    float g = pow(f, 0.9) * 0.8 + pow(f, 4.0) * 0.9;
     gl_FragColor = vec4(mix(vC.rgb, vec3(1.0), pow(f, 6.0) * 0.55) * vC.a * g, 1.0);
   } else {
     gl_FragColor = vec4(vC.rgb, vC.a * smoothstep(0.0, 0.8, f));
@@ -82,15 +98,17 @@ export type Spec = {
   flicker: boolean;
   /** draw exactly once this frame, then drop */
   once: boolean;
+  /** minimum on-screen width in pixels */
+  px: number;
 };
 const SPEC: Spec = {
   x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, ox: 0, oy: 0, oz: 0, life: 0.3, w0: 0.1, w1: 0.1,
-  c0: 0xffffff, c1: -1, a: 1, fpow: 1, fin: 0, grav: 0, drag: 0, stretch: 0, flicker: false, once: false,
+  c0: 0xffffff, c1: -1, a: 1, fpow: 1, fin: 0, grav: 0, drag: 0, stretch: 0, flicker: false, once: false, px: 0,
 };
 export function spec(): Spec {
   SPEC.x = SPEC.y = SPEC.z = SPEC.vx = SPEC.vy = SPEC.vz = SPEC.ox = SPEC.oy = SPEC.oz = 0;
   SPEC.life = 0.3; SPEC.w0 = SPEC.w1 = 0.1; SPEC.c0 = 0xffffff; SPEC.c1 = -1; SPEC.a = 1;
-  SPEC.fpow = 1; SPEC.fin = 0; SPEC.grav = 0; SPEC.drag = 0; SPEC.stretch = 0; SPEC.flicker = false; SPEC.once = false;
+  SPEC.fpow = 1; SPEC.fin = 0; SPEC.grav = 0; SPEC.drag = 0; SPEC.stretch = 0; SPEC.flicker = false; SPEC.once = false; SPEC.px = 0;
   return SPEC;
 }
 
@@ -107,9 +125,12 @@ export class SegPool {
   private a: Float32Array; private fpow: Float32Array; private fin: Float32Array;
   private grav: Float32Array; private drag: Float32Array; private str: Float32Array;
   private flags: Uint8Array;
+  private mpx: Float32Array;
+  private mat: THREE.ShaderMaterial;
   // GPU attributes
   private aA: THREE.InstancedBufferAttribute; private aB: THREE.InstancedBufferAttribute;
   private aW: THREE.InstancedBufferAttribute; private aC: THREE.InstancedBufferAttribute;
+  private aM: THREE.InstancedBufferAttribute;
 
   constructor(cap: number, additive: boolean) {
     this.cap = cap;
@@ -118,6 +139,7 @@ export class SegPool {
     this.w0 = f(1); this.w1 = f(1); this.c0 = f(3); this.c1 = f(3); this.a = f(1);
     this.fpow = f(1); this.fin = f(1); this.grav = f(1); this.drag = f(1); this.str = f(1);
     this.flags = new Uint8Array(cap);
+    this.mpx = f(1);
     const geo = new THREE.InstancedBufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([0, -1, 0, 1, -1, 0, 1, 1, 0, 0, 1, 0]), 3));
     geo.setIndex([0, 1, 2, 0, 2, 3]);
@@ -126,7 +148,8 @@ export class SegPool {
       at.setUsage(THREE.DynamicDrawUsage);
       return at;
     };
-    this.aA = mk(3); this.aB = mk(3); this.aW = mk(1); this.aC = mk(4);
+    this.aA = mk(3); this.aB = mk(3); this.aW = mk(1); this.aC = mk(4); this.aM = mk(1);
+    geo.setAttribute("iM", this.aM);
     geo.setAttribute("iA", this.aA);
     geo.setAttribute("iB", this.aB);
     geo.setAttribute("iW", this.aW);
@@ -136,14 +159,20 @@ export class SegPool {
     const mat = new THREE.ShaderMaterial({
       vertexShader: SEG_VERT,
       fragmentShader: SEG_FRAG,
-      uniforms: { uAdd: { value: additive ? 1 : 0 } },
+      uniforms: { uAdd: { value: additive ? 1 : 0 }, uPx: { value: 0.0015 } },
       transparent: true,
       depthWrite: false,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     });
+    this.mat = mat;
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = additive ? 12 : 11;
+  }
+
+  /** view-space size of one screen pixel at depth 1 (2 tan(fov/2) / viewport height) */
+  setPixel(v: number) {
+    this.mat.uniforms["uPx"]!.value = v;
   }
 
   emit(s: Spec) {
@@ -159,7 +188,7 @@ export class SegPool {
     this.c0[i3] = c0[0]; this.c0[i3 + 1] = c0[1]; this.c0[i3 + 2] = c0[2];
     this.c1[i3] = c1[0]; this.c1[i3 + 1] = c1[1]; this.c1[i3 + 2] = c1[2];
     this.a[i] = s.a; this.fpow[i] = s.fpow; this.fin[i] = s.fin;
-    this.grav[i] = s.grav; this.drag[i] = s.drag; this.str[i] = s.stretch;
+    this.grav[i] = s.grav; this.drag[i] = s.drag; this.str[i] = s.stretch; this.mpx[i] = s.px;
     this.flags[i] = (s.flicker ? 1 : 0) | (s.once ? 2 : 0) | (s.ox || s.oy || s.oz ? 4 : 0);
     return i;
   }
@@ -175,6 +204,7 @@ export class SegPool {
     this.life[i] = this.life[j]!; this.max[i] = this.max[j]!; this.w0[i] = this.w0[j]!; this.w1[i] = this.w1[j]!;
     this.a[i] = this.a[j]!; this.fpow[i] = this.fpow[j]!; this.fin[i] = this.fin[j]!;
     this.grav[i] = this.grav[j]!; this.drag[i] = this.drag[j]!; this.str[i] = this.str[j]!; this.flags[i] = this.flags[j]!;
+    this.mpx[i] = this.mpx[j]!;
   }
 
   /** age and move everything, dropping what has expired (one-shot entries survive to `upload`) */
@@ -197,8 +227,9 @@ export class SegPool {
   /** write the GPU buffers, then forget this frame's one-shot entries */
   upload() {
     const A = this.aA.array as Float32Array, B = this.aB.array as Float32Array;
-    const W = this.aW.array as Float32Array, C = this.aC.array as Float32Array;
+    const W = this.aW.array as Float32Array, C = this.aC.array as Float32Array, M = this.aM.array as Float32Array;
     for (let i = 0; i < this.n; i++) {
+      M[i] = this.mpx[i]!;
       const i3 = i * 3, i4 = i * 4;
       const t = 1 - this.life[i]! / this.max[i]!;
       const px = this.p[i3]!, py = this.p[i3 + 1]!, pz = this.p[i3 + 2]!;
@@ -223,7 +254,7 @@ export class SegPool {
     this.geo.instanceCount = this.n;
     this.mesh.visible = this.n > 0;
     if (this.n > 0) {
-      for (const at of [this.aA, this.aB, this.aW, this.aC]) {
+      for (const at of [this.aA, this.aB, this.aW, this.aC, this.aM]) {
         at.clearUpdateRanges();
         at.addUpdateRange(0, this.n * at.itemSize);
         at.needsUpdate = true;
