@@ -1,9 +1,12 @@
 // Procedural Web Audio: per-gun shot sounds, little UI blips and a synthwave loop.
 let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
+let musicFilter: BiquadFilterNode | null = null;
 let sfxGain: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 let vol = { music: 0.5, sfx: 0.7 };
+/** menu/lounge mode: muffled, drumless version of the arena track */
+let menuMode = false;
 
 export function initAudio() {
   if (typeof window === "undefined") return;
