@@ -1956,7 +1956,7 @@ function World({
       if (next) equip(next);
     }
     if (touchInput.pick) {
-      const want = touchInput.pick as GunId;
+      const want = touchInput.pick as Weapon;
       touchInput.pick = null;
       if (owned.current.has(want)) equip(want);
     }
