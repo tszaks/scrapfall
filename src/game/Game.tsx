@@ -73,7 +73,8 @@ type Enemy = {
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
   shot: number; // boss volley timer
-  slow: number; // frozen timer
+  slow: number; // slowed timer
+  frozen?: number; // cryo nova: fully frozen timer
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
@@ -714,6 +715,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Group>(null);
+  const ice = useRef<THREE.Mesh>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -732,6 +734,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
+    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0;
     if (flame.current) {
       const burning = data.burn > 0;
       flame.current.visible = burning;
@@ -771,6 +774,10 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group>
       {/* burning: flame tongues shown only while incendiary damage ticks */}
+      <mesh ref={ice} visible={false} position-y={0.9}>
+        <icosahedronGeometry args={[0.95, 0]} />
+        <meshStandardMaterial color="#bff4ff" emissive="#5fd8ff" emissiveIntensity={0.5} transparent opacity={0.45} flatShading roughness={0.1} />
+      </mesh>
       <group ref={flame} visible={false} position-y={0.75}>
         {[
           [0, 0.55, 0, 0.42, 1.5, "#ffe066"],
