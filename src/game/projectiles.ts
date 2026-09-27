@@ -492,6 +492,7 @@ function chainArc(e: FxEnemy, o: FxEnemy) {
   const from = chainFrom && chainFrom !== o ? chainFrom : e;
   if (arcs.length >= 24) arcs.shift();
   arcs.push({ a: from, ax: from.x, az: from.z, b: o, t: 0.3 });
+  fxNetStats.arcs++;
   chainFrom = o;
   sound("zap", o.x, 1, o.z);
 }
@@ -729,7 +730,7 @@ function drawFlash(f: Flash, dt: number) {
       bolt(cx, cy, cz, cx + V1.x, cy + V1.y, cz + V1.z, 0.012, 0x7fb0ff, 0.08, 0);
     }
   }
-  if (f.kind === VK.RAIL && f.t + dt >= fl.life) FX.rings?.add(cx, cy, cz, 0.05, 0.35, 0.15, 0xe04bff, false);
+  if (f.kind === VK.RAIL && f.t + dt >= fl.life) FX.rings?.add(cx, cy, cz, 0.03, 0.16, 0.12, 0x9a30b0, false);
   // smoke is emitted once, on the first frame
   if (fl.smoke > 0 && f.t + dt >= fl.life * (f.flags & VF.MAGNUM ? 1.4 : 1)) {
     puffs(cx, cy, cz, fl.smoke, f.kind === VK.HARPOON ? 0xd8d4cc : 0x8a8680, 0.12, 0.9, 0.3, 0.25, 0.2, d.x * 1.4, d.y * 1.4, d.z * 1.4, 4);
@@ -743,7 +744,7 @@ const pending: number[] = [];
 let lastSend = 0;
 let netRef: NetHandle | null = null;
 /** bytes / messages sent, for the co-op bandwidth check (?debug=1 exposes it) */
-export const fxNetStats = { msgs: 0, bytes: 0, shots: 0, recv: 0, recvShots: 0 };
+export const fxNetStats = { msgs: 0, bytes: 0, shots: 0, recv: 0, recvShots: 0, arcs: 0, cpuMs: 0, frames: 0 };
 const GROUP = 11;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -902,6 +903,12 @@ const QC = new THREE.Quaternion();
  * steps every pool, draws flight visuals, and flushes the co-op fire queue.
  */
 export function fxFrame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bullets: BulletLike[], weapon: string) {
+  const t0 = performance.now();
+  frame(dt, camera, vm, bullets, weapon);
+  fxNetStats.cpuMs += performance.now() - t0;
+  fxNetStats.frames++;
+}
+function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bullets: BulletLike[], weapon: string) {
   cam = camera;
   viewModel = vm;
   FX.ear.copy(camera.position);
@@ -958,8 +965,23 @@ export function fxFrame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | n
     const arc = arcs[a]!;
     arc.t -= dt;
     if (arc.t <= 0) { arcs.splice(a, 1); continue; }
-    const ax = arc.a ? arc.a.x : arc.ax, az = arc.a ? arc.a.z : arc.az;
-    bolt(ax, 1.1, az, arc.b.x, 1.1, arc.b.z, 0.045, 0x6fa8ff, 0.45, 1.5);
+    let ax = arc.a ? arc.a.x : arc.ax, az = arc.a ? arc.a.z : arc.az;
+    let bx = arc.b.x, bz = arc.b.z;
+    // run surface to surface, not centre to centre, so the bodies don't swallow the arc
+    const dl = Math.hypot(bx - ax, bz - az) || 1;
+    const env = FX.env;
+    const ra = arc.a && env ? env.radius(arc.a.kind) * 0.9 : 0, rb = env ? env.radius(arc.b.kind) * 0.9 : 0;
+    if (dl > ra + rb + 0.2) {
+      const ux = (bx - ax) / dl, uz = (bz - az) / dl;
+      ax += ux * ra; az += uz * ra; bx -= ux * rb; bz -= uz * rb;
+    }
+    // arch over the bodies, head to head, with a hot spot where it bites
+    const ya = arc.a && env ? env.height(arc.a.kind) * 0.8 : 1.4, yb = env ? env.height(arc.b.kind) * 0.8 : 1.4;
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, my = Math.max(ya, yb) + 0.25 + dl * 0.08;
+    bolt(ax, ya, az, mx, my, mz, 0.06, 0x6fa8ff, 0.35, 1);
+    bolt(mx, my, mz, bx, yb, bz, 0.06, 0x6fa8ff, 0.35, 1);
+    glow(ax, ya, az, 0.8, 0x6fa8ff, 0, 0.7);
+    glow(bx, yb, bz, 0.9, 0x9fc4ff, 0, 0.8);
   }
 
   // muzzle flashes
