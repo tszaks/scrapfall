@@ -3642,6 +3642,10 @@ export function Game() {
                 ) : (
                   <span className="text-[#b3261e]">DOWN</span>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
           </div>
         </div>
 
