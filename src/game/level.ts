@@ -1,7 +1,8 @@
 import { generateCity, type CityLayout } from "./cityLayout";
+import { generateWestern, type WesternLayout } from "./western/layout";
 
 export type Block = { x: number; z: number; h: number; tone: number };
-export type LayoutMode = "scatter" | "city";
+export type LayoutMode = "scatter" | "city" | "western";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
@@ -10,6 +11,9 @@ export const CITY_SOLO = 600;
 export const CITY_COOP = 800;
 export let ARENA = SOLO_ARENA; // world size (centered at origin)
 export let HALF = ARENA / 2;
+/** Half-size of the square players can actually reach: the whole arena, except on a big
+ * map in solo, where blockades fence play into a smaller square (see soloBounds.ts). */
+export let PLAY_HALF = HALF;
 export const BLOCK = 2; // block footprint (square)
 
 function mulberry32(seed: number) {
@@ -33,11 +37,17 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter") {
   const blocks: Block[] = [];
   const cells = Math.floor(ARENA / BLOCK);
   let city: CityLayout | null = null;
+  let western: WesternLayout | null = null;
 
   if (mode === "city") {
     const out = generateCity(rand, cells, HALF);
     city = out.layout;
-    return { blocks: out.blocks, seed, rand, city };
+    return { blocks: out.blocks, seed, rand, city, western };
+  }
+  if (mode === "western") {
+    const out = generateWestern(rand, cells, HALF);
+    western = out.layout;
+    return { blocks: out.blocks, seed, rand, city, western };
   }
 
   for (let i = 0; i < cells; i++) {
@@ -54,7 +64,7 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter") {
       });
     }
   }
-  return { blocks, seed, rand, city };
+  return { blocks, seed, rand, city, western };
 }
 
 // Collision lookups go through a per-array cell grid: the city map has hundreds of
@@ -104,8 +114,8 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
 
 export function randomSpawn(blocks: Block[], rand: () => number) {
   for (let i = 0; i < 60; i++) {
-    const x = (rand() - 0.5) * (ARENA - 6);
-    const z = (rand() - 0.5) * (ARENA - 6);
+    const x = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
+    const z = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
     if (!blocked(blocks, x, z, 1) && Math.hypot(x, z) > 10) return { x, z };
   }
   return { x: HALF - 4, z: HALF - 4 };
@@ -135,7 +145,7 @@ export function spawnNear(
     const d = rMin + rand() * (rMax - rMin);
     const x = p.x + Math.sin(a) * d;
     const z = p.z + Math.cos(a) * d;
-    if (Math.abs(x) > HALF - 3 || Math.abs(z) > HALF - 3) continue;
+    if (Math.abs(x) > PLAY_HALF - 3 || Math.abs(z) > PLAY_HALF - 3) continue;
     if (blocked(blocks, x, z, radius) || !ok(x, z)) continue;
     if (players.some((q) => Math.hypot(q.x - x, q.z - z) < rMin * 0.8)) continue;
     if (!hidden || !clearLine(blocks, p.x, p.z, x, z, 0.1)) return { x, z };
@@ -147,8 +157,8 @@ export function spawnNear(
   for (let i = 0; i < 80; i++) {
     const x = p.x + (rand() - 0.5) * rMax * 2;
     const z = p.z + (rand() - 0.5) * rMax * 2;
-    if (Math.abs(x) < HALF - 3 && Math.abs(z) < HALF - 3 && !blocked(blocks, x, z, radius))
-      return { x, z };
+    const inPlay = Math.abs(x) < PLAY_HALF - 3 && Math.abs(z) < PLAY_HALF - 3;
+    if (inPlay && !blocked(blocks, x, z, radius) && ok(x, z)) return { x, z };
   }
   return randomSpawn(blocks, rand);
 }
@@ -160,10 +170,12 @@ export let CELLS = Math.floor(ARENA / BLOCK);
 export let NAV_SCALE = 1;
 export let NAV_CELLS = CELLS;
 
-/** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level. */
-export function setArenaSize(size: number, navScale = 1) {
+/** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level.
+ * `playHalf` fences play into a smaller central square (solo on the big maps). */
+export function setArenaSize(size: number, navScale = 1, playHalf = size / 2) {
   ARENA = size;
   HALF = size / 2;
+  PLAY_HALF = playHalf;
   CELLS = Math.floor(size / BLOCK);
   NAV_SCALE = navScale;
   NAV_CELLS = Math.ceil(CELLS / navScale);
@@ -211,8 +223,11 @@ export function solidGrid(blocks: Block[]): NavGrid {
         }
       }
       const k = i * n + j;
-      // solid unless at least half of the sub-cells are open
-      g[k] = open * 2 < total || open === 0 ? 1 : 0;
+      // solid unless at least half of the sub-cells are open (and never outside the play square)
+      const cx = -HALF + (i + 0.5) * BLOCK * sc;
+      const cz = -HALF + (j + 0.5) * BLOCK * sc;
+      const out = Math.abs(cx) > PLAY_HALF || Math.abs(cz) > PLAY_HALF;
+      g[k] = open * 2 < total || open === 0 || out ? 1 : 0;
       px[k] = open ? sx / open : 0;
       pz[k] = open ? sz / open : 0;
     }

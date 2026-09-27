@@ -25,6 +25,11 @@ export function initAudio() {
   if (ctx.state === "suspended") void ctx.resume();
 }
 
+/** The live audio graph for map-specific sound (the western train's whistle and rumble). */
+export function audioOut() {
+  return ctx && sfxGain && noiseBuf ? { ctx, out: sfxGain, noise: noiseBuf } : null;
+}
+
 function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * 0.35;
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
@@ -161,6 +166,8 @@ const STYLES: Record<string, Style> = {
     leadLen: 1.2,
     echo: true,
   },
+  // western: a swung, twangy minor ballad, clip-clop woodblocks, a lonely echoing lead
+  western: { roots: [50, 46, 48, 45], bpm: 96, arp: [0, 7, 12, 10, 7, 3, 5, 7], lead: "triangle", leadCut: 2600, bass: "triangle", kick: [0, 8], snare: [6, 14], hat: "none", arpRate: 2, oct: 12, bassRate: 4, swing: 0.22, leadLen: 1.8, echo: true, wood: true },
   toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
 };
 const MAP_STYLE: Record<string, string> = {
@@ -168,6 +175,7 @@ const MAP_STYLE: Record<string, string> = {
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
+  "Dry Gulch": "western",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {
