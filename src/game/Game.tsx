@@ -1823,17 +1823,31 @@ function World({
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    const enemyMul = 1 + 0.6 * extra;
+    // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
+    const waveMul = 1.25 + 0.1 * (n - 1);
+    const enemyMul = waveMul * (1 + 0.6 * extra);
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
-    const scale = (v: number) => Math.round(v * enemyMul);
+    const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
-    const kinds: Kind[] = ([] as Kind[])
+    // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
+    const surprisePool: Kind[] = n >= 5 ? ["brute", "specter", "bomber", "vanguard", "special"] : n >= 3 ? ["brute", "shooter", "specter", "special"] : ["brute", "shooter", "runner"];
+    const surprises = Array<Kind>(1 + Math.floor(rand() * 2)).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
+    const roster: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
-      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : [])
-      .sort((a) => (a === "boss" ? -1 : 0))
-      .slice(0, MAX_ENEMIES);
+      .concat(surprises)
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
+    // shuffle arrivals so enemy types come mixed instead of type-by-type
+    const boss = roster.filter((k) => k === "boss");
+    const rest = roster.filter((k) => k !== "boss");
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const tmp = rest[i]!;
+      rest[i] = rest[j]!;
+      rest[j] = tmp;
+    }
+    const kinds: Kind[] = boss.concat(rest).slice(0, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
 
     // spread arrivals across the wave: a few right away, the rest trickle in
