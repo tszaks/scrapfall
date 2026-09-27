@@ -2970,6 +2970,9 @@ export function Game() {
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   /** phones and tablets play with on-screen controls instead of mouse + keyboard */
+  useEffect(() => {
+    if (!locked) resetTouchInput();
+  }, [locked]);
   const [touchUi, setTouchUi] = useState(false);
   const [portrait, setPortrait] = useState(false);
   useEffect(() => {
