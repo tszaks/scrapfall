@@ -3227,6 +3227,10 @@ export function Game() {
     if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
   }, [ability]);
   useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("df-class", cls);
+  }, [cls]);
+
+  useEffect(() => {
     if (!eventMsg) return;
     const t = window.setTimeout(() => setEventMsg(null), 3500);
     return () => window.clearTimeout(t);
