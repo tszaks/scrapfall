@@ -743,7 +743,7 @@ const pending: number[] = [];
 let lastSend = 0;
 let netRef: NetHandle | null = null;
 /** bytes / messages sent, for the co-op bandwidth check (?debug=1 exposes it) */
-export const fxNetStats = { msgs: 0, bytes: 0, shots: 0 };
+export const fxNetStats = { msgs: 0, bytes: 0, shots: 0, recv: 0, recvShots: 0 };
 const GROUP = 11;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -793,6 +793,7 @@ export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
   remotesRef = remotes;
   const s = Array.isArray(m.s) ? (m.s as number[]) : [];
   const id = String(m.from ?? "host");
+  fxNetStats.recv++;
   const r = remotes.get(id);
   for (let j = 0; j + GROUP <= s.length; j += GROUP) {
     const kind = s[j]! as VisKind;
@@ -811,6 +812,7 @@ export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     const dist = Math.hypot(muz.x - FX.ear.x, muz.z - FX.ear.z);
     if (dist < 60 && kind < 10) playGun(GUN_IDS[kind as number] ?? "pistol", dist > 14);
     if (kind === VK.RAIL) railBeam(muz, V1, V2, speed * g.life);
+    fxNetStats.recvShots += n;
     for (let c = 0; c < n; c++) {
       const rand = rng(s[j + 7]! + c);
       for (let p = 0; p < g.count; p++) {
