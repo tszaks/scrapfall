@@ -1496,6 +1496,7 @@ function World({
   const deadRef = useRef(dead);
   deadRef.current = dead;
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
+  const dashT = useRef(0); // phase dash burst timer
 
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -2006,8 +2007,16 @@ function World({
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1);
-    slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
-    slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    if (dashT.current > 0) {
+      // dash burst: carry the impulse, easing off, instead of snapping to walk speed
+      dashT.current -= delta;
+      const k = Math.min(1, delta * 4);
+      slide.current.x += (MOVE.x * spd - slide.current.x) * k;
+      slide.current.z += (MOVE.z * spd - slide.current.z) * k;
+    } else {
+      slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
+      slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    }
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
@@ -2347,8 +2356,9 @@ function World({
           }
         };
         if (id === "dash") {
-          slide.current.x += FORWARD.x * 26;
-          slide.current.z += FORWARD.z * 26;
+          slide.current.x = FORWARD.x * 30;
+          slide.current.z = FORWARD.z * 30;
+          dashT.current = 0.3;
           invuln.current = 0.7;
           playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
@@ -2364,7 +2374,7 @@ function World({
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
           playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
-          near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
+          near(8, (e, ei) => { e.frozen = 3.5; hurtEnemy(e, 1, ei, 3.5); });
           playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
           const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
@@ -2498,6 +2508,14 @@ function World({
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
+        if ((e.frozen ?? 0) > 0) {
+          // frozen solid: no moving, no attacking, attack timers paused
+          e.frozen! -= delta;
+          if (e.burn > 0) { e.burn -= delta; }
+          e.cooldown += delta;
+          e.shot += delta;
+          continue;
+        }
         if (e.burn > 0) {
           e.burn -= delta;
           e.burnTick -= delta;
