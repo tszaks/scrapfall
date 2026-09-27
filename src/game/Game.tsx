@@ -3495,7 +3495,7 @@ export function Game() {
 
 
   return (
-    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
+    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
       <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
