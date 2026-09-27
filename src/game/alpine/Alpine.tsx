@@ -14,7 +14,7 @@ import type { AlpineLayout, Lift } from "./layout";
 import type { TimeOfDay } from "../lighting";
 import { alpineLook, type AlpineLook } from "./look";
 import { mulberry } from "./noise";
-import { alpineArray, glowTexture, signTexture, T } from "./textures";
+import { alpineArray, glowTexture, signTexture, T, WHITE_UV } from "./textures";
 import {
   FOREST_EXTENT,
   farTrees,
@@ -27,7 +27,8 @@ import { alpine, tickAlpine } from "./weather";
 
 const CHUNK = 200;
 const DETAIL_RANGE = 280;
-const TREE_NEAR = 240;
+const TREE_NEAR = 105;
+const MAX_NEAR = 2200;
 
 // ---------------------------------------------------------------------------------------
 // shared uniforms: every alpine material reads the same atmosphere
@@ -152,10 +153,10 @@ if (aLayer == ${T.metal}.0 || aLayer == ${T.copper}.0) roughnessFactor = 0.55;`,
 if (aWin && aMask > 0.3) {
   float h = aHash(vec2(vFac.y * 977.0, aLayer));
   float lit = step(h, uWin * 0.88);
-  vec3 warm = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.8, 0.52), fract(h * 13.7));
+  vec3 warm = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.72, 0.4), fract(h * 13.7));
   // a little depth: brighter low in the pane, curtain shadow at the top
-  float grad = mix(1.15, 0.7, fract(vFuv.y));
-  totalEmissiveRadiance += warm * lit * aMask * 1.6 * grad;
+  float grad = mix(1.1, 0.65, fract(vFuv.y));
+  totalEmissiveRadiance += warm * lit * aMask * 1.05 * grad;
 }
 if (aLayer == ${T.snow}.0) {
   vec3 V = normalize(cameraPosition - vAWorld);
@@ -195,8 +196,10 @@ float slope = 1.0 - wN.y;
 vec3 col = mix(vec3(0.9, 0.93, 0.98), vec3(0.97, 0.98, 1.0), n1);
 col *= 0.96 + 0.05 * n2;
 // packed snow on streets and plazas: warmer, trodden, cobbles peeking through
-vec3 packed = mix(vec3(0.74, 0.73, 0.74), vec3(0.86, 0.85, 0.86), n3);
-packed = mix(packed, vec3(0.52, 0.48, 0.46), step(0.78, aNoise(wp * 1.7)) * 0.5);
+vec3 packed = mix(vec3(0.8, 0.8, 0.82), vec3(0.88, 0.88, 0.9), n3);
+// trodden ruts and the odd cobble showing through
+packed *= 0.94 + 0.06 * aNoise(vec2(wp.x * 0.4, wp.y * 4.0));
+packed = mix(packed, vec3(0.6, 0.57, 0.55), smoothstep(0.86, 0.95, aNoise(wp * 2.3)) * 0.35);
 col = mix(col, packed, sf.r * 0.85);
 // ploughed road: darker, grit
 col = mix(col, vec3(0.55, 0.55, 0.58) * (0.9 + 0.2 * n3), sf.b < 0.2 ? smoothstep(0.1, 0.2, sf.b) * 0.8 : 0.0);
@@ -233,11 +236,13 @@ aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy);`,
 {
   vec3 V = normalize(cameraPosition - vAWorld);
   // snow sparkle: rare glints that follow the view
-  vec2 cell = floor(vAWorld.xz * 14.0);
+  vec2 cell = floor(vAWorld.xz * 34.0);
   float h = aHash(cell);
-  float spec = pow(max(dot(reflect(-uSunDir, wN), V), 0.0), 6.0);
+  float spec = pow(max(dot(reflect(-uSunDir, wN), V), 0.0), 4.0);
   float fdist = length(vAWorld - cameraPosition);
-  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.985, h) * aSparkle * (0.35 + spec * 2.5) * (1.0 - smoothstep(20.0, 70.0, fdist));
+  // each glint only flashes from some view angles, like real snow crystals
+  float facet = step(0.6, aHash(cell + floor(V.xz * 6.0)));
+  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.993, h) * facet * aSparkle * (0.25 + spec * 3.0) * (1.0 - smoothstep(6.0, 30.0, fdist));
   // alpenglow: the high snow catches the low sun long after the valley has gone blue
   float hi = smoothstep(160.0, 1400.0, vAWorld.y);
   totalEmissiveRadiance += diffuseColor.rgb * uPeakLit * uAlpen * hi * max(dot(wN, uSunDir) + 0.25, 0.0) * 0.85;
@@ -531,7 +536,8 @@ type Built = {
   chunks: { x0: number; z0: number; x1: number; z1: number; main: THREE.BufferGeometry | null; detail: THREE.BufferGeometry | null; glow: THREE.BufferGeometry | null; signs: THREE.BufferGeometry | null; pools: THREE.BufferGeometry | null }[];
   terrain: ReturnType<typeof playTerrain>;
   outer: THREE.BufferGeometry;
-  trees: { x: number; z: number; near: THREE.Matrix4[]; tall: THREE.Matrix4[]; col: THREE.Color[]; tallCol: THREE.Color[] }[];
+  /** every tree's instance matrix and tint; split into near / mid LOD at run time */
+  trees: { n: number; mats: Float32Array; cols: Float32Array; x: Float32Array; z: Float32Array };
   far: THREE.Matrix4[];
   smoke: [number, number, number][];
   lamps: [number, number, number, number][];
@@ -553,6 +559,16 @@ function build(layout: AlpineLayout): Built {
     return kits[i * nc + j]!;
   };
   buildInto(kitAt, a, groundY);
+  // unlit glow boxes share the sign material: point their uvs at the atlas's white texel
+  for (const k of kits) {
+    const gb = k.glow.buf;
+    for (let v2 = 0; v2 < k.glow.n; v2++) {
+      gb[v2 * 14 + 9] = WHITE_UV[0];
+      gb[v2 * 14 + 10] = WHITE_UV[1];
+    }
+    if (k.glow.n) k.signs.stamp(k.glow.freeze(), 0, 0, 0);
+    k.glow.n = 0;
+  }
   let verts = 0;
   const chunks: Built["chunks"] = kits.map((k, idx) => {
     const i = Math.floor(idx / nc);
@@ -574,32 +590,26 @@ function build(layout: AlpineLayout): Built {
       pools: mk(k.pools, "uv"),
     };
   });
-  // trees per chunk
-  const trees: Built["trees"] = [];
-  for (let i = 0; i < nc; i++)
-    for (let j = 0; j < nc; j++) trees.push({ x: -half + (i + 0.5) * CHUNK, z: -half + (j + 0.5) * CHUNK, near: [], tall: [], col: [], tallCol: [] });
+  // trees: matrices and tints, bucketed by distance every few metres of travel
+  const n = a.trees.length;
+  const trees: Built["trees"] = { n, mats: new Float32Array(n * 16), cols: new Float32Array(n * 3), x: new Float32Array(n), z: new Float32Array(n) };
   const m4 = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
   const v = new THREE.Vector3();
   const s = new THREE.Vector3();
   const r = mulberry(4711);
-  for (const t of a.trees) {
-    const i = Math.max(0, Math.min(nc - 1, Math.floor((t.x + half) / CHUNK)));
-    const j = Math.max(0, Math.min(nc - 1, Math.floor((t.z + half) / CHUNK)));
-    const bucket = trees[i * nc + j]!;
+  const c = new THREE.Color();
+  a.trees.forEach((t, k) => {
     e.set((r() - 0.5) * 0.06, t.rot, (r() - 0.5) * 0.06);
-    const wk = t.w / 0.3;
+    const wk = (t.w / 0.3) * (t.k === 1 ? 0.72 : 1);
     m4.compose(v.set(t.x, t.y - 0.3, t.z), q.setFromEuler(e), s.set(t.h * wk, t.h, t.h * wk));
-    const c = new THREE.Color().setHSL(0.36 + (r() - 0.5) * 0.06, 0.1 + r() * 0.15, 0.85 + r() * 0.3);
-    if (t.k === 1) {
-      bucket.tall.push(m4.clone());
-      bucket.tallCol.push(c);
-    } else {
-      bucket.near.push(m4.clone());
-      bucket.col.push(c);
-    }
-  }
+    m4.toArray(trees.mats, k * 16);
+    c.setHSL(0.36 + (r() - 0.5) * 0.06, 0.1 + r() * 0.15, 0.85 + r() * 0.3);
+    trees.cols.set([c.r, c.g, c.b], k * 3);
+    trees.x[k] = t.x;
+    trees.z[k] = t.z;
+  });
   const ft = farTrees(half, 820);
   const far: THREE.Matrix4[] = [];
   for (let k = 0; k < ft.length; k += 5) {
@@ -654,7 +664,6 @@ export const AlpineScene = memo(function AlpineScene({
   const mats = useMemo(
     () => ({
       facade: facadeMaterial(),
-      glow: basicFog(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), "alpine-glow"),
       signs: basicFog(new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }), "alpine-signs"),
       pools: new THREE.MeshBasicMaterial({
         vertexColors: true,
@@ -686,11 +695,11 @@ export const AlpineScene = memo(function AlpineScene({
       }),
       smoke: new THREE.PointsMaterial({
         map: glowTexture(),
-        size: 5,
+        size: 2.6,
         sizeAttenuation: true,
         transparent: true,
         depthWrite: false,
-        opacity: 0.32,
+        opacity: 0.2,
         color: "#dfe2ea",
         fog: false,
       }),
@@ -771,7 +780,6 @@ export const AlpineScene = memo(function AlpineScene({
       smoke,
       sky: new THREE.SphereGeometry(9000, 32, 16),
       spruce: spruceGeo(false),
-      fir: spruceGeo(true),
       farSpruce: farSpruceGeo(),
       chair: chairGeo(),
     };
@@ -779,40 +787,13 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
 
   // instanced forest per chunk (near + far LOD) and the far ring
-  const nearRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
-  const tallRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
-  const lodRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const nearRef = useRef<THREE.InstancedMesh>(null);
+  const midRef = useRef<THREE.InstancedMesh>(null);
+  const lodAt = useRef({ x: 1e9, z: 1e9 });
   const farRef = useRef<THREE.InstancedMesh>(null);
   const chairRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
-    built.trees.forEach((t, i) => {
-      const n = nearRefs.current[i];
-      if (n) {
-        t.near.forEach((m, k) => {
-          n.setMatrixAt(k, m);
-          n.setColorAt(k, t.col[k]!);
-        });
-        n.instanceMatrix.needsUpdate = true;
-        if (n.instanceColor) n.instanceColor.needsUpdate = true;
-        n.computeBoundingSphere();
-      }
-      const tl = tallRefs.current[i];
-      if (tl) {
-        t.tall.forEach((m, k) => {
-          tl.setMatrixAt(k, m);
-          tl.setColorAt(k, t.tallCol[k]!);
-        });
-        tl.instanceMatrix.needsUpdate = true;
-        if (tl.instanceColor) tl.instanceColor.needsUpdate = true;
-        tl.computeBoundingSphere();
-      }
-      const l = lodRefs.current[i];
-      if (l) {
-        [...t.near, ...t.tall].forEach((m, k) => l.setMatrixAt(k, m));
-        l.instanceMatrix.needsUpdate = true;
-        l.computeBoundingSphere();
-      }
-    });
+    lodAt.current = { x: 1e9, z: 1e9 };
     const f = farRef.current;
     if (f) {
       built.far.forEach((m, k) => f.setMatrixAt(k, m));
@@ -842,8 +823,7 @@ export const AlpineScene = memo(function AlpineScene({
     U.uMistCol.value.set(look.haze);
     U.uHazeDist.value = night ? 5200 : 7000;
     U.uHazeMax.value = night ? 0.9 : 0.8;
-    mats.glow.color.setScalar(night ? 1.4 : 0.9);
-    mats.signs.color.setScalar(night ? 1.1 : 0.85);
+    mats.signs.color.setScalar(night ? 1.25 : 0.95);
     mats.pools.opacity = night ? 0.55 : 0.18;
     mats.halo.opacity = night ? 0.85 : 0.35;
     (mats.snow.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
@@ -935,6 +915,39 @@ export const AlpineScene = memo(function AlpineScene({
       }
     }
     sp.needsUpdate = true;
+    // forest LOD: detailed spruce near the player, simple cones beyond (re-sorted every 8 m)
+    const nm = nearRef.current;
+    const mm = midRef.current;
+    if (nm && mm && Math.hypot(cam.x - lodAt.current.x, cam.z - lodAt.current.z) > 8) {
+      lodAt.current = { x: cam.x, z: cam.z };
+      const T2 = built.trees;
+      const na = nm.instanceMatrix.array as Float32Array;
+      const ma = mm.instanceMatrix.array as Float32Array;
+      const nc = nm.instanceColor!.array as Float32Array;
+      const mc = mm.instanceColor!.array as Float32Array;
+      let ni = 0;
+      let mi = 0;
+      const R2 = TREE_NEAR * TREE_NEAR;
+      for (let k = 0; k < T2.n; k++) {
+        const dx = T2.x[k]! - cam.x;
+        const dz = T2.z[k]! - cam.z;
+        if (dx * dx + dz * dz < R2 && ni < MAX_NEAR) {
+          na.set(T2.mats.subarray(k * 16, k * 16 + 16), ni * 16);
+          nc.set(T2.cols.subarray(k * 3, k * 3 + 3), ni * 3);
+          ni++;
+        } else {
+          ma.set(T2.mats.subarray(k * 16, k * 16 + 16), mi * 16);
+          mc.set(T2.cols.subarray(k * 3, k * 3 + 3), mi * 3);
+          mi++;
+        }
+      }
+      nm.count = ni;
+      mm.count = mi;
+      nm.instanceMatrix.needsUpdate = true;
+      mm.instanceMatrix.needsUpdate = true;
+      nm.instanceColor!.needsUpdate = true;
+      mm.instanceColor!.needsUpdate = true;
+    }
     // distance LOD a few times a second
     lodTick.current -= 1;
     if (lodTick.current <= 0) {
@@ -943,13 +956,6 @@ export const AlpineScene = memo(function AlpineScene({
         const d = Math.hypot(Math.max(c.x0 - cam.x, 0, cam.x - c.x1), Math.max(c.z0 - cam.z, 0, cam.z - c.z1));
         const det = detailRefs.current[i];
         if (det) det.visible = d < DETAIL_RANGE;
-        const nearT = d < TREE_NEAR;
-        const n = nearRefs.current[i];
-        const tl = tallRefs.current[i];
-        const l = lodRefs.current[i];
-        if (n) n.visible = nearT;
-        if (tl) tl.visible = nearT;
-        if (l) l.visible = !nearT;
       });
     }
   });
@@ -974,44 +980,16 @@ export const AlpineScene = memo(function AlpineScene({
               castShadow
             />
           )}
-          {c.glow && <mesh geometry={c.glow} material={mats.glow} />}
           {c.signs && <mesh geometry={c.signs} material={mats.signs} />}
-          {c.pools && <mesh geometry={c.pools} material={mats.pools} renderOrder={2} />}
+          {c.pools && <mesh geometry={c.pools} material={mats.pools} renderOrder={2} visible={night} />}
         </group>
       ))}
-      {built.trees.map((t, i) => (
-        <group key={`tr${i}`}>
-          {t.near.length > 0 && (
-            <instancedMesh
-              ref={(m) => {
-                nearRefs.current[i] = m;
-              }}
-              args={[geos.spruce, mats.tree, t.near.length]}
-              castShadow
-              receiveShadow
-            />
-          )}
-          {t.tall.length > 0 && (
-            <instancedMesh
-              ref={(m) => {
-                tallRefs.current[i] = m;
-              }}
-              args={[geos.fir, mats.tree, t.tall.length]}
-              castShadow
-              receiveShadow
-            />
-          )}
-          {t.near.length + t.tall.length > 0 && (
-            <instancedMesh
-              ref={(m) => {
-                lodRefs.current[i] = m;
-              }}
-              args={[geos.farSpruce, mats.tree, t.near.length + t.tall.length]}
-              visible={false}
-            />
-          )}
-        </group>
-      ))}
+      <instancedMesh ref={nearRef} args={[geos.spruce, mats.tree, MAX_NEAR]} castShadow frustumCulled={false}>
+        <instancedBufferAttribute attach="instanceColor" args={[new Float32Array(MAX_NEAR * 3), 3]} />
+      </instancedMesh>
+      <instancedMesh ref={midRef} args={[geos.farSpruce, mats.tree, built.trees.n]} frustumCulled={false}>
+        <instancedBufferAttribute attach="instanceColor" args={[new Float32Array(built.trees.n * 3), 3]} />
+      </instancedMesh>
       {built.far.length > 0 && <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />}
       <instancedMesh ref={chairRef} args={[geos.chair, mats.chair, chairCount]} castShadow frustumCulled={false} />
       <points geometry={geos.halo} material={mats.halo} renderOrder={3} />

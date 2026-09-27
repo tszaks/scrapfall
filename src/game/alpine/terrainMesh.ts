@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { S_BLD, S_BLOCKADE, S_DECK, S_FOREST, S_ICE, S_PATH, S_PISTE, S_PLAZA, S_ROAD, S_ROCK, type AlpineData } from "./layout";
 import { fbm, hash2, naturalHeight, smooth } from "./noise";
 
-export const TCHUNK = 200;
+export const TCHUNK = 400;
 
 export type TerrainChunk = { x0: number; z0: number; x1: number; z1: number; geo: THREE.BufferGeometry };
 

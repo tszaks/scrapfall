@@ -28,34 +28,46 @@ function tri(b: Build, a: number[], c: number[], d: number[], col: string, k = 1
   }
 }
 
-/** a jagged cone tier: `pts` alternating outer / inner radii, apex above */
-function tier(b: Build, y0: number, y1: number, r: number, pts: number, col: string, snow: string, rot: number) {
-  const ring: number[][] = [];
+/**
+ * One tier of a snow-laden spruce: a white snow shelf sloping up from a jagged rim, a band
+ * of dark drooping branch tips below the rim, and (low tiers) a dark underside.
+ */
+function tier(b: Build, y: number, r: number, pts: number, rot: number, under: boolean, shelf: number) {
+  const rim: number[][] = [];
   for (let i = 0; i < pts * 2; i++) {
     const a = rot + (i / (pts * 2)) * Math.PI * 2;
-    const rr = i % 2 ? r * 0.62 : r;
-    // branch tips droop a little below the tier base
-    ring.push([Math.cos(a) * rr, y0 - (i % 2 ? 0 : r * 0.12), Math.sin(a) * rr]);
+    const tip = i % 2 === 0;
+    const rr = tip ? r : r * 0.74;
+    rim.push([Math.cos(a) * rr, y - (tip ? r * 0.1 : 0), Math.sin(a) * rr]);
   }
-  const apex = [0, y1, 0];
-  const mid = (p: number[], t: number) => [p[0]! * (1 - t), p[1]! + (y1 - p[1]!) * t, p[2]! * (1 - t)];
-  for (let i = 0; i < ring.length; i++) {
-    const p = ring[i]!;
-    const q = ring[(i + 1) % ring.length]!;
-    // needles on the lower half, snow resting on the upper half
-    const pm = mid(p, 0.45);
-    const qm = mid(q, 0.45);
-    tri(b, p, pm, q, col, i % 2 ? 0.8 : 1);
-    tri(b, q, pm, qm, col, i % 2 ? 0.8 : 1);
-    const lift = (v: number[]) => [v[0]! * 1.04, v[1]! + 0.012, v[2]! * 1.04];
-    tri(b, lift(pm), apex, lift(qm), snow, i % 2 ? 0.92 : 1);
-    // a clump of snow on each branch tip
-    if (i % 2 === 0) {
-      const t0 = mid(p, 0.1);
-      tri(b, lift(t0), lift(pm), lift(mid(ring[(i + ring.length - 1) % ring.length]!, 0.3)), snow, 0.96);
-    }
-    // underside, dark
-    tri(b, p, q, [0, y0 + (y1 - y0) * 0.1, 0], "#16241c");
+  const apex = [0, y + r * shelf, 0];
+  const fringe = r * 0.34;
+  for (let i = 0; i < rim.length; i++) {
+    const p = rim[i]!;
+    const q = rim[(i + 1) % rim.length]!;
+    // snow shelf, thinner (showing needles) towards the branch tips
+    triC(b, p, apex, q, i % 2 ? RIM2 : RIM, SNOWC, i % 2 ? RIM : RIM2);
+    // needle fringe hanging below the rim
+    const pd = [p[0]! * 0.9, p[1]! - fringe, p[2]! * 0.9];
+    const qd = [q[0]! * 0.9, q[1]! - fringe, q[2]! * 0.9];
+    tri(b, p, q, pd, NEEDLE, i % 2 ? 0.85 : 1);
+    tri(b, q, qd, pd, NEEDLE, i % 2 ? 0.75 : 0.9);
+    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#16241c");
+  }
+}
+
+/** triangle with a colour per corner */
+function triC(b: Build, a: number[], c: number[], d: number[], ca: string, cc: string, cd: string) {
+  const n0 = b.col.length;
+  tri(b, a, c, d, ca);
+  for (const [k, col] of [
+    [1, cc],
+    [2, cd],
+  ] as const) {
+    _c.set(col);
+    b.col[n0 + k * 3] = _c.r;
+    b.col[n0 + k * 3 + 1] = _c.g;
+    b.col[n0 + k * 3 + 2] = _c.b;
   }
 }
 
@@ -70,51 +82,65 @@ function toGeo(b: Build) {
 
 const NEEDLE = "#2c4636";
 const SNOWC = "#eef3fa";
+const RIM = "#b4c4c0";
+const RIM2 = "#8ea49c";
 
-/** near spruce, unit height, base radius ~0.21 */
+/** near spruce, unit height, base radius ~0.22 */
 export function spruceGeo(narrow = false) {
   const b: Build = { pos: [], col: [], nor: [] };
   // trunk
-  const tr = 0.022;
+  const tr = 0.024;
   for (let i = 0; i < 5; i++) {
     const a0 = (i / 5) * Math.PI * 2;
     const a1 = ((i + 1) / 5) * Math.PI * 2;
     const p0 = [Math.cos(a0) * tr, -0.05, Math.sin(a0) * tr];
     const p1 = [Math.cos(a1) * tr, -0.05, Math.sin(a1) * tr];
-    const q0 = [Math.cos(a0) * tr * 0.6, 0.35, Math.sin(a0) * tr * 0.6];
-    const q1 = [Math.cos(a1) * tr * 0.6, 0.35, Math.sin(a1) * tr * 0.6];
+    const q0 = [Math.cos(a0) * tr * 0.5, 0.5, Math.sin(a0) * tr * 0.5];
+    const q1 = [Math.cos(a1) * tr * 0.5, 0.5, Math.sin(a1) * tr * 0.5];
     tri(b, p0, q0, p1, "#4a3526");
     tri(b, p1, q0, q1, "#4a3526");
   }
-  const n = narrow ? 5 : 4;
-  const rBase = narrow ? 0.16 : 0.22;
+  const n = narrow ? 7 : 6;
+  const rBase = narrow ? 0.17 : 0.23;
   for (let i = 0; i < n; i++) {
     const t = i / n;
-    const y0 = 0.1 + t * 0.78;
-    const y1 = Math.min(1, y0 + (narrow ? 0.3 : 0.36));
-    tier(b, y0, i === n - 1 ? 1 : y1, rBase * (1 - t * 0.78), 7, NEEDLE, SNOWC, i * 0.7);
+    const y = 0.2 + t * 0.66;
+    const r = rBase * (1 - t * 0.82);
+    tier(b, y, r, 6, i * 0.9, i < 2, 0.9);
+  }
+  // snowy leader at the top
+  tier(b, 0.9, rBase * 0.12, 4, 0.3, false, 0.9);
+  const tip = [0, 1, 0];
+  const base = 0.88;
+  for (let i = 0; i < 4; i++) {
+    const a0 = (i / 4) * Math.PI * 2;
+    const a1 = ((i + 1) / 4) * Math.PI * 2;
+    tri(b, [Math.cos(a0) * 0.02, base, Math.sin(a0) * 0.02], tip, [Math.cos(a1) * 0.02, base, Math.sin(a1) * 0.02], SNOWC);
   }
   return toGeo(b);
 }
 
-/** far spruce: two plain cones with snowy tops */
+/** far spruce: three snow shelves over short dark fringes, a fraction of the near cost */
 export function farSpruceGeo() {
   const b: Build = { pos: [], col: [], nor: [] };
-  const cone = (y0: number, y1: number, r: number, snowFrom: number) => {
-    const seg = 6;
-    for (let i = 0; i < seg; i++) {
-      const a0 = (i / seg) * Math.PI * 2;
-      const a1 = ((i + 1) / seg) * Math.PI * 2;
-      const p = [Math.cos(a0) * r, y0, Math.sin(a0) * r];
-      const q = [Math.cos(a1) * r, y0, Math.sin(a1) * r];
-      const pm = [p[0]! * (1 - snowFrom), y0 + (y1 - y0) * snowFrom, p[2]! * (1 - snowFrom)];
-      const qm = [q[0]! * (1 - snowFrom), y0 + (y1 - y0) * snowFrom, q[2]! * (1 - snowFrom)];
-      tri(b, p, pm, q, NEEDLE);
-      tri(b, q, pm, qm, NEEDLE);
-      tri(b, pm, [0, y1, 0], qm, SNOWC, 0.95);
+  const shelf = (y: number, r: number, rot: number) => {
+    const n = 10;
+    const rim: number[][] = [];
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * Math.PI * 2;
+      const rr = i % 2 ? r * 0.72 : r;
+      rim.push([Math.cos(a) * rr, y - (i % 2 ? 0 : r * 0.1), Math.sin(a) * rr]);
+    }
+    const apex = [0, y + r * 1.0, 0];
+    for (let i = 0; i < n; i++) {
+      const p = rim[i]!;
+      const q = rim[(i + 1) % n]!;
+      triC(b, p, apex, q, i % 2 ? RIM2 : RIM, SNOWC, i % 2 ? RIM : RIM2);
+      tri(b, p, q, [p[0]! * 0.2, p[1]! - r * 0.5, p[2]! * 0.2], NEEDLE, 0.9);
     }
   };
-  cone(0.08, 0.62, 0.21, 0.45);
-  cone(0.45, 1, 0.14, 0.4);
+  shelf(0.28, 0.23, 0);
+  shelf(0.55, 0.16, 0.6);
+  shelf(0.8, 0.09, 1.2);
   return toGeo(b);
 }

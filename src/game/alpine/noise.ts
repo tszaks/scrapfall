@@ -80,7 +80,7 @@ export function mulberry(seed: number) {
 
 const VALLEY_Z = 40;
 /** the hero peak (a Matterhorn-like pyramid) far to the north-north-west */
-export const PEAK = { x: -1000, z: -5600, h: 2100, r: 2400 };
+export const PEAK = { x: -1000, z: -5600, h: 2700, r: 2300 };
 const VIEW = { x: 0, z: 30 };
 
 export function valleyCentre(x: number) {
@@ -97,7 +97,7 @@ function sideValley(x: number, z: number) {
   const px = VIEW.x + dx * t - x;
   const pz = VIEW.z + dz * t - z;
   const w = 260 + 900 * t;
-  return Math.exp(-(px * px + pz * pz) / (w * w)) * smooth(0.02, 0.12, t) * (1 - smooth(0.7, 0.9, t));
+  return Math.exp(-(px * px + pz * pz) / (w * w)) * smooth(0.02, 0.12, t) * (1 - smooth(0.82, 0.97, t));
 }
 
 function heroPeak(x: number, z: number) {
@@ -108,11 +108,13 @@ function heroPeak(x: number, z: number) {
   const rx = dx * c - dz * s;
   const rz = dx * s + dz * c;
   const sq = Math.max(Math.abs(rx), Math.abs(rz));
-  const d = sq * 0.6 + Math.hypot(rx, rz) * 0.4;
+  // a four-faced pyramid with sharp arêtes, its summit hooked slightly towards the valley
+  const d = sq * 0.72 + Math.hypot(rx, rz) * 0.28;
   if (d > PEAK.r) return 0;
   const t = 1 - d / PEAK.r;
-  // concave faces and a needle-sharp summit, roughened by ridges
-  return PEAK.h * Math.pow(t, 1.45) * (0.9 + 0.2 * ridged(x / 420, z / 420, 3, 91));
+  const face = Math.pow(t, 1.35);
+  const needle = Math.pow(Math.max(0, t - 0.72) / 0.28, 2) * 0.12;
+  return PEAK.h * (face + needle) * (0.94 + 0.12 * ridged(x / 300, z / 300, 3, 91));
 }
 
 export function naturalHeight(x: number, z: number) {
@@ -137,7 +139,12 @@ export function naturalHeight(x: number, z: number) {
   h += (fbm(x / 60, z / 60, 3, 7) - 0.5) * 2.2;
   // the range beyond
   const far = smooth(420, 2600, north) + 0.75 * smooth(380, 2600, south);
-  if (far > 0) h += ridged(x / 1100, z / 1100, 5, 3) * 1150 * far * (1 - 0.85 * side);
+  if (far > 0) {
+    // big ridgelines, then sharper secondary aretes and couloirs riding on their flanks
+    const r1 = ridged(x / 1100, z / 1100, 5, 3);
+    const r2 = ridged(x / 360, z / 360, 4, 21);
+    h += (r1 * 1150 + r2 * 360 * smooth(0.25, 0.65, r1)) * far * (1 - 0.85 * side);
+  }
   if (Math.abs(x - PEAK.x) < PEAK.r * 1.5 && Math.abs(z - PEAK.z) < PEAK.r * 1.5)
     h += heroPeak(x, z);
   return h;

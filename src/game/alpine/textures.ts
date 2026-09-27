@@ -427,7 +427,9 @@ export function alpineArray() {
 }
 
 // ---- sign atlas: one word per row, carved-wood and enamel styles ----
-export const SIGN_ROWS = 16;
+export const SIGN_ROWS = 17;
+/** a plain white texel in the sign atlas (unlit glow geometry shares the sign material) */
+export const WHITE_UV = [0.5, 1 - 16.5 / 17] as const;
 let signs: THREE.CanvasTexture | null = null;
 export function signTexture() {
   if (signs) return signs;
@@ -448,6 +450,8 @@ export function signTexture() {
     g.textBaseline = "middle";
     g.fillText(word, W / 2, y + RH / 2 + 2);
   });
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 16 * RH, W, RH);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;

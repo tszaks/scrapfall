@@ -243,7 +243,7 @@ const PATHS: APath[] = [
     name: "blue",
   },
   {
-    pts: [[64, -250], [96, -215], [124, -165], [116, -115], [88, -80], [70, -52]],
+    pts: [[66, -246], [64, -210], [68, -170], [76, -130], [80, -95], [70, -52]],
     w: 26,
     kind: "piste",
     name: "red",
@@ -379,19 +379,6 @@ export function generateAlpine(seed: number, solo: boolean) {
     const k = smooth(1, 1.35, e);
     return lakeY + (Math.max(h, lakeY + 0.3) - lakeY) * k;
   });
-  // the lift-top plateau (cut into the slope) and the base plaza
-  const plateauY = Math.round(hAt((PLATEAU.x0 + PLATEAU.x1) / 2, (PLATEAU.z0 + PLATEAU.z1) / 2));
-  shape(PLATEAU.x0 - 40, PLATEAU.z0 - 40, PLATEAU.x1 + 40, PLATEAU.z1 + 30, (x, z, h) => {
-    const d = rectDist(x, z, PLATEAU);
-    // the valley side drops away more steeply below the deck: a sharp edge to look out from
-    const k = 1 - smooth(0, z > PLATEAU.z1 ? 14 : 30, d);
-    return h + (plateauY - h) * k;
-  });
-  const plazaY = hAt((PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2);
-  shape(PLAZA.x0 - 30, PLAZA.z0 - 30, PLAZA.x1 + 30, PLAZA.z1 + 20, (x, z, h) => {
-    const k = 1 - smooth(0, 22, rectDist(x, z, PLAZA));
-    return h + (plazaY - h) * k;
-  });
   // streets, lanes, trails and roads: a smoothed profile along each, blended into the banks
   const profile = (p: APath) => {
     const len = polyDist(p.pts[0]![0], p.pts[0]![1], p.pts).len;
@@ -454,6 +441,26 @@ export function generateAlpine(seed: number, solo: boolean) {
       return k > 0 ? h + (prof(r.s) - h) * k : h;
     });
   }
+  // the lift-top plateau (cut into the slope) and the base plaza
+  const plateauY = Math.round(hAt((PLATEAU.x0 + PLATEAU.x1) / 2, (PLATEAU.z0 + PLATEAU.z1) / 2));
+  shape(PLATEAU.x0 - 40, PLATEAU.z0 - 40, PLATEAU.x1 + 40, PLATEAU.z1 + 30, (x, z, h) => {
+    const d = rectDist(x, z, PLATEAU);
+    // the valley side drops away more steeply below the deck: a sharp edge to look out from
+    const k = 1 - smooth(0, z > PLATEAU.z1 ? 14 : 30, d);
+    return h + (plateauY - h) * k;
+  });
+  const deckY = plateauY + 2.4;
+  shape(DECK.x0 - 4, DECK.z0 - 2, DECK.x1 + 2, DECK.z1 + 2, (x, z, h) => {
+    if (x >= DECK.x0 && x <= DECK.x1 + 1 && z >= DECK.z0 && z <= DECK.z1 + 1) return deckY;
+    // the stair ramp on the plateau side
+    if (x < DECK.x0 && x >= DECK.x0 - 4 && z >= DECK.z0 && z <= DECK.z0 + 6) return plateauY + ((x - (DECK.x0 - 4)) / 4) * 2.4;
+    return h;
+  });
+  const plazaY = hAt((PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2);
+  shape(PLAZA.x0 - 30, PLAZA.z0 - 30, PLAZA.x1 + 30, PLAZA.z1 + 20, (x, z, h) => {
+    const k = 1 - smooth(0, 22, rectDist(x, z, PLAZA));
+    return h + (plazaY - h) * k;
+  });
   // the creek: a frozen channel carved into everything, except under the covered bridge
   const creek = PATHS.find((p) => p.kind === "creek")!;
   {
@@ -541,6 +548,10 @@ export function generateAlpine(seed: number, solo: boolean) {
   });
   paint(DECK, (_x, _z, k) => {
     surf[k] = S_DECK;
+  });
+  // keep the view from the deck open: no trees on the drop straight below it
+  paint({ x0: DECK.x0 - 10, z0: DECK.z1, x1: DECK.x1 + 30, z1: DECK.z1 + 60 }, (_x, _z, k) => {
+    clear[k] = 1;
   });
 
   // ---- 4. buildings ----
@@ -891,7 +902,9 @@ export function generateAlpine(seed: number, solo: boolean) {
       const d = density(x, z, y);
       if (rand() > d) continue;
       const tall = rand() < 0.22;
-      const h = tall ? 17 + rand() * 7 : 8 + rand() * 9;
+      // stunted near the tree line, tallest down in the valley
+      const alt = 1 - 0.45 * smooth(50, 150, y);
+      const h = (tall ? 17 + rand() * 7 : 8 + rand() * 9) * alt;
       trees.push({ x, z, y, h, w: 0.26 + rand() * 0.1, rot: rand() * Math.PI * 2, k: tall ? 1 : 0 });
       solid[k] = 1;
       if (d > 0.35 && surf[k] === S_SNOW) surf[k] = S_FOREST;
@@ -1084,7 +1097,7 @@ export function generateAlpine(seed: number, solo: boolean) {
     rink: { ...RINK, y: rinkY },
     bridge: { ...BRIDGE, y: bridgeY },
     jump: { x: JUMP.x, z0: JUMP.z0, z1: JUMP.z1, top: jumpTopG + 20, lip: jumpLipG + 3, y0: jumpTopG, y1: jumpLipG },
-    deck: { ...DECK, y: plateauY },
+    deck: { ...DECK, y: deckY },
     plateau: plateauY,
     blockades,
     soloHalf: sHalf,

@@ -139,6 +139,44 @@ function blob(g: Geo, x: number, y: number, z: number, rx: number, ry: number, r
   }
 }
 
+/** smooth elongated snow mound (soft normals, tapered ends), `rot` turns its long axis */
+function mound(g: Geo, x: number, y: number, z: number, len: number, h: number, w: number, rot: number) {
+  const NL = 6;
+  const NA = 6;
+  const s = Math.sin(rot);
+  const c = Math.cos(rot);
+  const P = (u: number, t: number) => {
+    const taper = Math.pow(Math.sin(Math.PI * u), 0.55);
+    const lx = (u - 0.5) * len;
+    const ly = Math.sin(t) * h * taper;
+    const lz = Math.cos(t) * (w / 2) * (0.3 + 0.7 * taper);
+    // ellipsoid-ish normal
+    let nx = lx / ((len / 2) * (len / 2)) * 0.6;
+    let ny = ly / (h * h + 1e-3);
+    let nz = lz / ((w / 2) * (w / 2));
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nx /= l;
+    ny /= l;
+    nz /= l;
+    const wx = x + lx * c + lz * s;
+    const wz = z - lx * s + lz * c;
+    return [wx, y + ly - 0.15, wz, nx * c + nz * s, ny, -nx * s + nz * c, wx / 2, wz / 2 + ly / 2] as const;
+  };
+  for (let i = 0; i < NL; i++)
+    for (let j = 0; j < NA; j++) {
+      const a = P(i / NL, (j / NA) * Math.PI);
+      const b = P((i + 1) / NL, (j / NA) * Math.PI);
+      const cc = P((i + 1) / NL, ((j + 1) / NA) * Math.PI);
+      const d = P(i / NL, ((j + 1) / NA) * Math.PI);
+      g.v(...a);
+      g.v(...b);
+      g.v(...cc);
+      g.v(...a);
+      g.v(...cc);
+      g.v(...d);
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 // local frames: a building's street-facing side decides its local axes. lx runs along the
 // front (left to right seen from the street), lz runs from the front face into the house.
@@ -205,7 +243,7 @@ function windowAt(k: Kit, F: Frame, lx: number, lz: number, faceDir: 0 | 1 | 2 |
   lface(g, F, ax, az, bx, bz, y, y + h, [0, 0, 1, 1]);
   // shutters, a flower box and a snowy sill (detail)
   const dg = k.detail;
-  dg.mat(T.board, 0, 0).col(shutter);
+  dg.mat(T.plain, 0, 0).col(shutter);
   for (const side of [-1, 1]) {
     const c = side * (w / 2 + 0.26);
     const [sx, sz] = faceDir === 0 ? [lx + c, lz - 0.08] : faceDir === 2 ? [lx - c, lz + 0.08] : faceDir === 1 ? [lx + 0.08, lz + c] : [lx - 0.08, lz - c];
@@ -330,18 +368,18 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
     q4(g, dn(A), dn(Dd), Dd, A, F.out(0, -1));
     q4(g, dn(B), dn(C), C, B, F.out(0, 1));
     // the snow blanket: thick, slightly overhanging the eave, with a rounded lip
-    const sn = 0.42;
+    const sn = 0.5;
     const lift = (p: V3, h: number, spill = 0): V3 => [p[0] + out[0] * spill, p[1] + h, p[2] + out[2] * spill];
     g.mat(T.snow, 0, 0).col(SNOW);
-    const sA = lift(A, sn, 0.12);
-    const sB = lift(B, sn, 0.12);
+    const sA = lift(A, sn, 0.22);
+    const sB = lift(B, sn, 0.22);
     const sC = lift(C, sn + 0.06);
     const sD = lift(Dd, sn + 0.06);
     q4(g, sA, sB, sC, sD, up, [0, 0, (D + 2 * ovF) / 2, slope / 2]);
     // eave lip (a soft cornice) and gable-end edges
     g.col(SNOW_SHADE);
-    const lipA = lift(A, 0.02, 0.18);
-    const lipB = lift(B, 0.02, 0.18);
+    const lipA = lift(A, -0.08, 0.3);
+    const lipB = lift(B, -0.08, 0.3);
     q4(g, lipA, lipB, sB, sA, [out[0], 0.4, out[2]]);
     q4(g, lipA, lipB, B, A, [out[0], -0.6, out[2]]);
     q4(g, A, sA, sD, Dd, F.out(0, -1));
@@ -1093,34 +1131,49 @@ function groundUnder(_a: AlpineData, x: number, z: number) {
 function deck(k: Kit, a: AlpineData) {
   const d = a.deck;
   const g = k.main;
-  const y = d.y + 0.35;
+  const y = d.y + 0.05;
+  const base = a.plateau;
+  // the railing sits right at the edge of the walkable boards so you can lean over it
+  const ez = d.z1 + 0.5;
+  const ex = d.x1 + 0.5;
   g.mat(T.board, 0, 0).col("#b08a60");
-  g.flat(d.x0, d.z0, d.x1 + 2, d.z1 + 2, y, [0, 0, (d.x1 - d.x0) / 2, (d.z1 - d.z0) / 2]);
+  g.flat(d.x0, d.z0, ex, ez, y, [0, 0, (ex - d.x0) / 2, (ez - d.z0) / 2]);
   g.mat(T.board, 0, 0).col("#6a4a2e");
-  face(g, d.x1 + 2, d.z0, d.x0, d.z0, d.y - 0.5, y);
-  face(g, d.x0, d.z1 + 2, d.x1 + 2, d.z1 + 2, d.y - 6, y);
-  face(g, d.x1 + 2, d.z1 + 2, d.x1 + 2, d.z0, d.y - 6, y);
-  // stilts down the drop
+  face(g, ex, d.z0, d.x0, d.z0, base - 0.5, y);
+  face(g, d.x0, d.z0 + 6, d.x0, ez, base - 0.5, y);
+  face(g, d.x0, ez, ex, ez, d.y - 9, y);
+  face(g, ex, ez, ex, d.z0, d.y - 9, y);
+  // stairs up from the plateau
+  g.mat(T.board, 0, 0).col("#a07a50");
+  for (let st = 0; st < 6; st++) tbox(g, d.x0 - 4 + st * 0.67 + 0.33, base - 0.3, d.z0 + 3, 0.67, 0.3 + (st + 1) * 0.4, 6);
+  // stilts and cross braces down the drop
   g.mat(T.board, 0, 0).col("#5a3a22");
-  for (let x = d.x0 + 1; x <= d.x1 + 1; x += 4) tube(g, [x, y, d.z1 + 1.6], [x, groundFn(x, d.z1 + 1.6) - 1, d.z1 + 1.6], 0.2, 5);
+  for (let x = d.x0 + 1; x <= ex; x += 4) {
+    tube(g, [x, y, ez - 0.2], [x, groundFn(x, ez + 3) - 1, ez + 3], 0.2, 5);
+    tube(g, [x, y - 1, ez - 0.2], [x + 4, groundFn(x + 4, ez + 2) + 1, ez + 2], 0.08, 4);
+  }
   // railing along the drop, snow on the rail
   g.mat(T.rail, 0, 0).col("#ffffff");
   const railA = (ax: number, az: number, bx: number, bz: number) => {
     const len = Math.hypot(bx - ax, bz - az);
-    face(g, ax, az, bx, bz, y, y + 1.1, [0, 0, len / 1.6, 1]);
-    face(g, bx, bz, ax, az, y, y + 1.1, [0, 0, len / 1.6, 1]);
+    face(g, ax, az, bx, bz, y, y + 1.05, [0, 0, len / 1.6, 1]);
+    face(g, bx, bz, ax, az, y, y + 1.05, [0, 0, len / 1.6, 1]);
   };
-  railA(d.x0, d.z1 + 1.9, d.x1 + 1.9, d.z1 + 1.9);
-  railA(d.x1 + 1.9, d.z1 + 1.9, d.x1 + 1.9, d.z0);
+  railA(d.x0, ez - 0.1, ex - 0.1, ez - 0.1);
+  railA(ex - 0.1, ez - 0.1, ex - 0.1, d.z0);
   k.detail.mat(T.snow, 0, 0).col(SNOW);
-  tbox(k.detail, (d.x0 + d.x1 + 1.9) / 2, y + 1.1, d.z1 + 1.9, d.x1 - d.x0 + 2, 0.12, 0.2);
-  tbox(k.detail, d.x1 + 1.9, y + 1.1, (d.z0 + d.z1 + 1.9) / 2, 0.2, 0.12, d.z1 - d.z0 + 2);
-  // coin binoculars looking at the peak
+  tbox(k.detail, (d.x0 + ex) / 2, y + 1.05, ez - 0.1, ex - d.x0 + 0.2, 0.12, 0.2);
+  tbox(k.detail, ex - 0.1, y + 1.05, (d.z0 + ez) / 2, 0.2, 0.12, ez - d.z0 + 0.2);
+  // coin binoculars looking out over the valley
   for (const x of [d.x0 + 6, d.x0 + 16]) {
     g.mat(T.metal, 0, 0).col("#2a5a8a");
-    tube(g, [x, y, d.z1 + 0.9], [x, y + 1.1, d.z1 + 0.9], 0.08, 5);
-    tbox(g, x, y + 1.1, d.z1 + 0.9, 0.5, 0.35, 0.7, 0.3);
+    tube(g, [x, y, ez - 1.0], [x, y + 1.1, ez - 1.0], 0.08, 5);
+    tbox(g, x, y + 1.1, ez - 1.0, 0.5, 0.35, 0.7, 0.3);
   }
+  k.lamps.push([d.x0 + 2, y + 2.4, d.z0 + 2, 0]);
+  k.glow.col("#ffcf88").box(d.x0 + 2, y + 2.4, d.z0 + 2, 0.3, 0.4, 0.3);
+  g.mat(T.plain, 0, 0).col("#1e2024");
+  tube(g, [d.x0 + 2, y, d.z0 + 2], [d.x0 + 2, y + 2.2, d.z0 + 2], 0.06, 4);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1228,7 +1281,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
     }
     case "snowbank": {
       g.mat(T.snow, 0, 0).col(r() < 0.5 ? SNOW : SNOW_SHADE);
-      blob(g, x, y, z, 1.4 * s, 0.75 * s, 0.8 * s, r, 6, rot);
+      mound(g, x, y, z, 3.4 * s, 0.75 * s, 1.5 * s, rot + Math.PI / 2);
       break;
     }
     case "woodpile": {
