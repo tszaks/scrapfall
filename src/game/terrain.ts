@@ -107,13 +107,13 @@ export const groundHook: { fn: ((x: number, z: number) => number | undefined) | 
 
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
-  if (G) return G.height(x, z);
+  // a walkable roof (building access) wins over the ground under it
   const g = groundHook.fn;
   if (g) {
     const y = g(x, z);
     if (y !== undefined) return y;
   }
-  return 0;
+  return G ? G.height(x, z) : 0;
 }
 
 /** Walking-speed multiplier at (x, z): 1 on flat maps, lower in deep snow, sand or surf. */
