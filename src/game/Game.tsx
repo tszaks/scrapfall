@@ -1942,6 +1942,20 @@ function World({
     const isH = isHostRef.current;
     const spectating = deadRef.current;
 
+    // on-screen controls
+    if (touchInput.ability) {
+      touchInput.ability = false;
+      abilFire.current = true;
+    }
+    if (touchInput.swap) {
+      const dir = touchInput.swap;
+      touchInput.swap = 0;
+      const list = [...owned.current];
+      const i = list.indexOf(weapon.current);
+      const next = list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length];
+      if (next) equip(next);
+    }
+
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
       burstTimer.current -= delta;
