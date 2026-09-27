@@ -5,6 +5,8 @@
 // the rim so you can always find them.
 import { useEffect, useRef } from "react";
 
+import { pursuitDots } from "./trafficCore";
+
 export type MapItem = {
   x: number;
   z: number;
@@ -27,7 +29,7 @@ export type MinimapSource = {
   /** half-size of the playable square (solo); the area beyond it is dimmed */
   playHalf: number;
 };
-type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number };
+type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number; vis?: number };
 type MapRemote = { x: number; z: number; color: string; hp: number; last: number };
 
 const SIZE = 184; // css px
@@ -111,6 +113,7 @@ export function Minimap({
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;
+        if (e.kind === "cloaker" && ((e.vis ?? 0) >> 6) === 1) continue; // cloaked: off the radar too
         const x = wx(e.x);
         const z = wz(e.z);
         if (x * x + z * z > R * R) continue;
@@ -144,6 +147,35 @@ export function Minimap({
           g.fill();
           g.stroke();
         }
+      }
+      // police chases: cruisers flash red/blue (on the rim when they're further out, so you
+      // see them coming), the suspect is a small white dot
+      const blink = Math.floor(now / 160) % 2 === 0;
+      for (const d of pursuitDots) {
+        const x0 = wx(d.x);
+        const z0 = wz(d.z);
+        const inside = x0 * x0 + z0 * z0 < (R - 4 * dpr) ** 2;
+        if (d.kind === 2) {
+          if (!inside) continue;
+          g.fillStyle = "#ffffff";
+          g.strokeStyle = "#2b2118";
+          g.lineWidth = dpr;
+          g.beginPath();
+          g.arc(x0, z0, 2.6 * dpr, 0, Math.PI * 2);
+          g.fill();
+          g.stroke();
+          continue;
+        }
+        if (!inside && Math.hypot(d.x - f.x, d.z - f.z) > 300) continue;
+        const [x, z] = rim(x0, z0, 6);
+        const red = blink !== (d.i % 2 === 0);
+        g.fillStyle = red ? "#ff2a22" : "#2f64ff";
+        g.strokeStyle = "#f3e6cf";
+        g.lineWidth = 1.2 * dpr;
+        g.beginPath();
+        g.arc(x!, z!, (inside ? 4 : 3.2) * dpr, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
       }
       const now2 = performance.now();
       remotes.current.forEach((r) => {

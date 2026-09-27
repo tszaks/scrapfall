@@ -12,8 +12,23 @@ import {
   K_WALK,
   type CityLayout,
 } from "./cityLayout";
+import type { AlpineLayout } from "./alpine/layout";
+import { paintAlpine } from "./alpine/minimap";
 import type { Block } from "./level";
 import type { MinimapSource } from "./Minimap";
+
+/** Whiteout Pass's radar source (the alpine map seals its own solo square) */
+export function alpineMinimap(alpine: AlpineLayout): MinimapSource {
+  return {
+    cells: alpine.cells,
+    half: alpine.half,
+    base: paintAlpine(alpine),
+    land: "#8a9098",
+    sea: null,
+    landmark: alpine.landmark,
+    playHalf: alpine.half,
+  };
+}
 
 const KIND_COL: Record<number, [number, number, number]> = {
   [K_ROAD]: [70, 72, 78],

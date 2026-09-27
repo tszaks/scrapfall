@@ -15,10 +15,12 @@ export type Theme = {
   /** "city" swaps the random scatter for a street grid with skyscrapers (see cityLayout.ts). */
   blockShape:
     | "monument" | "crystal" | "tree" | "basalt" | "butte"
-    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "western";
+    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "alpine" | "western";
+  /** big real-scale maps: which generator builds the world (default: scatter, or city for blockShape "city") */
+  layout?: "scatter" | "city" | "alpine" | "western";
   boss: {
     name: string;
-    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "marshal";
+    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "plough" | "marshal";
     body: string;
     limb: string;
     eye: string;
@@ -30,7 +32,7 @@ export type Theme = {
   /** Map-exclusive bonus enemy that joins waves on top of the regular roster. */
   special: {
     name: string;
-    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "desperado";
+    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "skier" | "desperado";
     body: string;
     accent: string;
     glow: string;
@@ -269,6 +271,46 @@ export const THEMES: Theme[] = [
     },
   },
   {
+    name: "Whiteout Pass",
+    sky: "#9fb4d6",
+    ground: "#eef3fa",
+    grid: ["#dfe8f3", "#e8eef6"],
+    blocks: ["#7a5236", "#9aa4ae", "#f4f7fb"],
+    wall: "#5a4030",
+    hemi: ["#dfe9ff", "#7d8fb0"],
+    enemy: {
+      drifter: { body: "#e8452a", emissive: "#3a0c04", eye: "#e6fbff" },
+      brute: {
+        body: "#2e3a52",
+        head: "#223047",
+        eye: "#ffb13a",
+        club: "#5a4030",
+        clubHead: "#c8d8e8",
+      },
+      shooter: { body: "#f0f4fa", barrel: "#1a2230", eye: "#ff3a4a" },
+    },
+    enemyBullet: "#ff6a2a",
+    blockShape: "alpine",
+    layout: "alpine",
+    boss: {
+      name: "THE AVALANCHE ENGINE",
+      shape: "plough",
+      body: "#e8a21a",
+      limb: "#2a2e36",
+      eye: "#ff4a2a",
+      weapon: "#c8ccd4",
+      glow: "#ffb13a",
+    },
+    hazard: { name: "BLIZZARD", slip: 0.3 },
+    special: {
+      name: "RIDGE RAIDER",
+      type: "skier",
+      body: "#f2f5fa",
+      accent: "#2a6fd6",
+      glow: "#ff6a2a",
+    },
+  },
+  {
     // a real-scale 1880s railroad boomtown (western/layout.ts)
     name: "Dry Gulch",
     sky: "#f08a4a",
@@ -284,6 +326,7 @@ export const THEMES: Theme[] = [
     },
     enemyBullet: "#ffcf4a",
     blockShape: "western",
+    layout: "western",
     boss: {
       name: "THE IRON MARSHAL",
       shape: "marshal",
@@ -297,3 +340,8 @@ export const THEMES: Theme[] = [
     special: { name: "DESPERADO", type: "desperado", body: "#b8452a", accent: "#4a3a2e", glow: "#ffd24a" },
   },
 ];
+
+/** Which generator builds this theme's world. */
+export function layoutOf(t: Theme): "scatter" | "city" | "alpine" | "western" {
+  return t.layout ?? (t.blockShape === "city" ? "city" : "scatter");
+}

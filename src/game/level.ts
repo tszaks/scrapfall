@@ -1,8 +1,9 @@
 import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
+import { generateAlpine } from "./alpine/layout";
 
 export type Block = { x: number; z: number; h: number; tone: number };
-export type LayoutMode = "scatter" | "city" | "western";
+export type LayoutMode = "scatter" | "city" | "alpine" | "western";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
@@ -32,7 +33,7 @@ function mulberry32(seed: number) {
  * sparse block maze; "city" is a street grid of multi-cell buildings (one Block
  * per occupied cell, so collision and pathfinding work unchanged).
  */
-export function generateLevel(seed: number, mode: LayoutMode = "scatter") {
+export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo = false) {
   const rand = mulberry32(seed);
   const blocks: Block[] = [];
   const cells = Math.floor(ARENA / BLOCK);
@@ -47,6 +48,12 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter") {
   if (mode === "western") {
     const out = generateWestern(rand, cells, HALF);
     western = out.layout;
+    return { blocks: out.blocks, seed, rand, city, western };
+  }
+  if (mode === "alpine") {
+    // the full map in solo and co-op; solo seals a smaller square with blockades
+    const out = generateAlpine(seed, solo);
+    city = out.layout;
     return { blocks: out.blocks, seed, rand, city, western };
   }
 
