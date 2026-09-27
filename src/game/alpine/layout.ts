@@ -1043,19 +1043,11 @@ export function generateAlpine(seed: number, solo: boolean) {
   // each house is cut to just below its floor (the plinth runs down to the lowest ground at
   // its walls); the lift terminals sit on exactly level pads; the creek is carved last so
   // nothing ever fills its gully ----
-  for (const b of buildings) {
+  // each house sits on a level pad: ground under it is set to just below its floor
+  for (const b of buildings)
     shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) =>
-      x > b.x0 - 0.01 && x < b.x1 + 0.01 && z > b.z0 - 0.01 && z < b.z1 + 0.01
-        ? Math.min(h, b.y - 0.08)
-        : h,
+      x > b.x0 - 0.01 && x < b.x1 + 0.01 && z > b.z0 - 0.01 && z < b.z1 + 0.01 ? b.y - 0.08 : h,
     );
-    let lo = Infinity;
-    for (let x = b.x0 - 1; x <= b.x1 + 1.01; x += 1)
-      for (const z of [b.z0 - 1, b.z1 + 1]) lo = Math.min(lo, hAt(x, z));
-    for (let z = b.z0 - 1; z <= b.z1 + 1.01; z += 1)
-      for (const x of [b.x0 - 1, b.x1 + 1]) lo = Math.min(lo, hAt(x, z));
-    b.ymin = Math.min(lo, b.y) - 0.4;
-  }
   for (const [t, ty] of [
     [BASE_TERM, plazaY],
     [TOP_TERM, plateauY],
@@ -1066,6 +1058,13 @@ export function generateAlpine(seed: number, solo: boolean) {
     });
   }
   carveCreek();
+  // plinths reach the lowest ground under and around each house (after every cut)
+  for (const b of buildings) {
+    let lo = Infinity;
+    for (let x = b.x0 - 1; x <= b.x1 + 1.01; x += 1)
+      for (let z = b.z0 - 1; z <= b.z1 + 1.01; z += 1) lo = Math.min(lo, hAt(x, z));
+    b.ymin = Math.min(lo, b.y) - 0.4;
+  }
 
   // ---- 5. set-piece structures ----
   // covered bridge: the deck is a platform at street level (terrain.platforms), the creek
