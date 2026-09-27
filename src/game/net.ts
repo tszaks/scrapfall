@@ -29,6 +29,8 @@ export type RemoteState = {
   /** building access: zone code (0 street; see access/world.ts) and floor height */
   az?: number;
   ay?: number | undefined;
+  /** alpine: the chairlift chair this player is riding, -1 on foot */
+  rc?: number;
   last: number;
   // render smoothing
   rx: number;

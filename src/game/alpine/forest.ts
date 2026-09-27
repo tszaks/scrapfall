@@ -60,7 +60,7 @@ function tier(
     const qd = [q[0]! * 0.9, q[1]! - fringe, q[2]! * 0.9];
     tri(b, p, q, pd, NEEDLE, i % 2 ? 0.85 : 1);
     tri(b, q, qd, pd, NEEDLE, i % 2 ? 0.75 : 0.9);
-    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#2a4234");
+    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#3e5e4a");
   }
 }
 
@@ -108,11 +108,13 @@ export function spruceGeo(narrow = false) {
     tri(b, p0, q0, p1, "#4a3526");
     tri(b, p1, q0, q1, "#4a3526");
   }
-  const n = narrow ? 7 : 6;
-  const rBase = narrow ? 0.17 : 0.23;
+  // branches right down to the snow (as real spruce grow): from below you see needles,
+  // never a dark ceiling of undersides
+  const n = narrow ? 8 : 7;
+  const rBase = narrow ? 0.14 : 0.18;
   for (let i = 0; i < n; i++) {
     const t = i / n;
-    const y = 0.2 + t * 0.66;
+    const y = 0.1 + t * 0.76;
     const r = rBase * (1 - t * 0.82);
     tier(b, y, r, 6, i * 0.9, i < 2, 0.9);
   }

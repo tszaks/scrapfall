@@ -35,6 +35,27 @@ export const L = {
 } as const;
 export type Layer = (typeof L)[keyof typeof L];
 const LAYERS = 15;
+export const FACADE_LAYERS = LAYERS;
+/** rooms behind the windows (interiors.ts), per layer: -1 none, 0 offices, 1 homes, 2 shops */
+const ROOM_CATS: Record<number, number> = {
+  [L.glass]: 0,
+  [L.ribbon]: 0,
+  [L.office]: 0,
+  [L.dark]: 0,
+  [L.panel]: 0,
+  [L.brick]: 1,
+  [L.resid]: 1,
+  [L.stone]: 1,
+  [L.deco]: 1,
+  [L.store]: 2,
+};
+/** GLSL array literals: room category and window modules per room, per facade layer */
+export const ROOM_CAT = Array.from({ length: LAYERS }, (_, i) =>
+  (ROOM_CATS[i] ?? -1).toFixed(1),
+).join(", ");
+export const ROOM_SPAN = Array.from({ length: LAYERS }, (_, i) =>
+  i === L.glass || i === L.dark ? "2.0" : "1.0",
+).join(", ");
 /** real-world width of one window module per layer, metres */
 export const MODULE_W: Record<number, number> = {
   [L.plain]: 3,

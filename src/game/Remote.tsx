@@ -1,6 +1,8 @@
 import { useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
 import { remoteFloorY } from "./access/world";
+import { alpine } from "./alpine/weather";
+import { riderEye } from "./alpine/ride";
 import { useRef } from "react";
 import * as THREE from "three";
 
@@ -35,8 +37,18 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       p.ry += dy * k;
-      // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
-      g.position.set(p.rx, p.az ? remoteFloorY(p.az, p.ay, groundY(p.rx, p.rz)) : groundY(p.rx, p.rz), p.rz);
+      // a teammate riding the chairlift sits on their chair (its position is the shared lift clock)
+      const lift = alpine.active ? alpine.lift : null;
+      if (lift && (p.rc ?? -1) >= 0) {
+        const e = riderEye(lift, p.rc!);
+        p.rx = e.x;
+        p.rz = e.z;
+        g.position.set(e.x, e.y - 1.25, e.z);
+      } else {
+        // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
+        const gy = groundY(p.rx, p.rz);
+        g.position.set(p.rx, p.az ? remoteFloorY(p.az, p.ay, gy) : gy, p.rz);
+      }
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
       // their gun kicks back when they fire (projectiles.tsx replays the shot itself)
