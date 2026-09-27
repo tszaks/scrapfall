@@ -2193,9 +2193,22 @@ function World({
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
-        e.x += (kx / len) * push;
-        e.z += (kz / len) * push;
+        // walk the push in small steps so a shove never drives anyone into cover
+        const er = Math.min(STATS[e.kind].radius, 0.8);
+        const steps = Math.max(1, Math.ceil(push / 0.35));
+        const sx = (kx / len) * (push / steps);
+        const sz = (kz / len) * (push / steps);
+        for (let s = 0; s < steps; s++) {
+          const nx = e.x + sx;
+          const nz = e.z + sz;
+          const okX = !blocked(blocks, nx, e.z, er);
+          const okZ = !blocked(blocks, e.x, nz, er);
+          if (!okX && !okZ) break;
+          if (okX) e.x = nx;
+          if (okZ) e.z = nz;
+        }
       }
+
       if (!isH) {
         n?.broadcast({ type: "hit", i: idx, dmg, slow });
         e.flash = 0.1;
