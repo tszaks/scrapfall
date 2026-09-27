@@ -2284,7 +2284,7 @@ function World({
       abilFire.current = false;
       const id = abilityRef.current;
       if (!spectating && abilCd.current <= 0) {
-        abilCd.current = ABILITIES[id].cd;
+        abilCd.current = ABILITIES[id].cd * (1 - stats.current.haste);
         playSfx("buy");
         cam.getWorldDirection(FORWARD);
         FORWARD.y = 0;
