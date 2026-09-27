@@ -4,6 +4,7 @@ import { useRef } from "react";
 import * as THREE from "three";
 
 import type { RemoteState } from "./net";
+import { REMOTE_SHOT } from "./projectiles";
 
 const MAX_REMOTE = 3;
 const PIPS = 10;
@@ -13,6 +14,7 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
   const groups = useRef<(THREE.Group | null)[]>([]);
   const visors = useRef<(THREE.Mesh | null)[]>([]);
   const pips = useRef<(THREE.Mesh | null)[][]>([]);
+  const guns = useRef<(THREE.Mesh | null)[]>([]);
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -35,6 +37,12 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       g.position.set(p.rx, groundY(p.rx, p.rz), p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
+      // their gun kicks back when they fire (projectiles.tsx replays the shot itself)
+      const gun = guns.current[i];
+      if (gun) {
+        const since = (performance.now() - (REMOTE_SHOT.get(p.id) ?? -1e9)) / 1000;
+        gun.position.z = 0.3 - Math.max(0, 1 - since / 0.12) * 0.12;
+      }
       const visor = visors.current[i];
       if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
       const row = pips.current[i];
@@ -75,7 +83,7 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
             <boxGeometry args={[0.22, 0.9, 0.22]} />
             <meshLambertMaterial color="#454a55" flatShading />
           </mesh>
-          <mesh position={[0.45, 1.1, 0.3]} rotation-x={Math.PI / 2}>
+          <mesh ref={(m) => { guns.current[i] = m; }} position={[0.45, 1.1, 0.3]} rotation-x={Math.PI / 2}>
             <boxGeometry args={[0.14, 0.6, 0.14]} />
             <meshLambertMaterial color="#2f2f33" flatShading />
           </mesh>

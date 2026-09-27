@@ -33,6 +33,11 @@ export type CarBox = {
   h: number;
 };
 export const liveCars: CarBox[] = [];
+/**
+ * Pursuit cars this frame, for the minimap (kind 1 = cruiser with its siren on,
+ * 2 = the suspect). Filled by the traffic renderer on host and guests alike.
+ */
+export const pursuitDots: { x: number; z: number; kind: 1 | 2; i: number }[] = [];
 
 export function hitsTraffic(x: number, y: number, z: number) {
   for (const c of liveCars) {

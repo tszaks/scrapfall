@@ -23,17 +23,26 @@ import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weathe
 import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
+import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
+import {
+  MAX_ORD, blast, damageMul, drainShield, newOrd, packOrds, rocketAt, shieldBlocks, stepNewKind, stepOrds, unpackOrds,
+  type AICtx, type Ord,
+} from "./enemyAI";
+import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { CombatFx } from "./CombatFx";
+import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import { FX, VF, VK, type VisKind } from "./impacts";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
 
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
@@ -56,7 +65,8 @@ const GUNS: Record<Weapon, Gun> = {
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
-const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
+// wire order for co-op snapshots: only ever append (index 9 on are the newer types)
+const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special", ...NEW_KINDS];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
 const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
@@ -89,6 +99,26 @@ type Enemy = {
   aux?: number; // special-enemy state (leap / beam timer)
   yaw?: number; // facing, decided by the host (toward its target) and synced to guests
   elite?: number; // 1 = event champion (gold, tougher, big shard payout)
+  // newer enemy types (enemyAI.ts): AI state, telegraph state synced to guests, shield
+  vis?: number;
+  st?: number;
+  t1?: number;
+  ax?: number | undefined;
+  az?: number | undefined;
+  side?: number | undefined;
+  plan?: number;
+  shots?: number;
+  stuck?: number;
+  gd0?: number;
+  detour?: number;
+  shield?: number;
+  shieldMax?: number;
+  shieldT?: number;
+  blockT?: number;
+  hitT?: number;
+  tgt?: number;
+  /** who set it on fire (co-op kill credit for burn kills; null = host) */
+  burnFrom?: string | null;
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
@@ -108,23 +138,27 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
   bomber: { hp: 4, speed: 1.5, radius: 0.7, dmg: 2 },
   vanguard: { hp: 11, speed: 1.2, radius: 0.9, dmg: 2 },
   special: { hp: 6, speed: 2.6, radius: 0.65, dmg: 1 },
+  ...NEW_STATS,
 };
 
-// 12 rounds, ramping; the last one is the map boss
+// 12 rounds, ramping; the last one is the map boss. From wave 2 on, one or two of the newer
+// types join each round (hornet 2; flanker + grenadier 3; sniper 4; bulwark + charger 5;
+// medic 6; cloaker 7; gatling + rocketeer 8), and the old roster is thinned to make room,
+// so a round's total pressure stays close to what it was. The city multiplies counts by 1.75.
 type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
   { drifter: 5 },
-  { drifter: 6, shooter: 1, runner: 1 },
-  { drifter: 6, brute: 1, shooter: 2, specter: 1, special: 1 },
-  { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1, special: 1 },
-  { drifter: 7, brute: 2, shooter: 3, runner: 3, specter: 2, vanguard: 1, special: 2 },
-  { drifter: 7, brute: 3, shooter: 3, runner: 4, bomber: 1, vanguard: 1, special: 2 },
-  { drifter: 8, brute: 3, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 1, special: 2 },
-  { drifter: 8, brute: 4, shooter: 5, runner: 5, specter: 3, bomber: 2, vanguard: 2, special: 3 },
-  { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2, special: 3 },
-  { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3, special: 3 },
-  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3, special: 4 },
-  { boss: 1, drifter: 6, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 1 },
+  { drifter: 5, shooter: 1, runner: 1, hornet: 3 },
+  { drifter: 5, brute: 1, shooter: 1, specter: 1, special: 1, flanker: 1, grenadier: 1 },
+  { drifter: 4, brute: 2, shooter: 2, runner: 2, bomber: 1, special: 1, hornet: 3, sniper: 1 },
+  { drifter: 5, brute: 1, shooter: 2, runner: 2, specter: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, charger: 1, hornet: 3 },
+  { drifter: 5, brute: 1, shooter: 2, runner: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, medic: 1, hornet: 3 },
+  { drifter: 5, brute: 2, shooter: 2, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, bulwark: 1, medic: 1, cloaker: 2, hornet: 3 },
+  { drifter: 5, brute: 2, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 5, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, grenadier: 1, sniper: 2, bulwark: 1, medic: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 5, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 1, special: 2, flanker: 2, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 1, cloaker: 2, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 6, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 2, special: 2, flanker: 3, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 2, cloaker: 2, gatling: 1, rocketeer: 2, hornet: 5 },
+  { boss: 1, drifter: 4, brute: 2, shooter: 2, runner: 2, specter: 1, bomber: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, sniper: 1, medic: 1, hornet: 3 },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
@@ -142,6 +176,9 @@ const EYE = 1.6;
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const MOVE = new THREE.Vector3();
+const TMP_A = new THREE.Vector3();
+const TMP_B = new THREE.Vector3();
+const PLAYER_R = 0.4; // player body radius for enemy contact
 
 function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
@@ -707,7 +744,8 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
   );
 }
 
-const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
+const NO_ENEMIES: Enemy[] = [];
+const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; theme: Theme; all?: Enemy[] }) {
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
@@ -729,11 +767,11 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "boss" || k === "vanguard";
+    const heavy = k === "brute" || k === "boss" || k === "vanguard" || isNewKind(k); // newer types animate themselves
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
-    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
+    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : k === "hornet" ? 1.3 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
       aura.current.visible = !!data.elite;
@@ -758,7 +796,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     <group ref={ref}>
       {/* event champion: gold halo + ground ring */}
       <group ref={aura} visible={false}>
-        <mesh position-y={0.06} rotation-x={-Math.PI / 2}>
+        <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[1.1, 1.35, 20]} />
           <meshBasicMaterial color="#ffd24a" fog={false} />
         </mesh>
@@ -1003,6 +1041,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
       {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
+      {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
       {(kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
@@ -1061,26 +1100,53 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
   );
 });
 
+// A real bullet silhouette: straight casing with a tapered nose, lathed as one
+// mesh so the pool stays one draw call per slot and keeps per-shot tinting.
+const BULLET_PROFILE = [
+  [0, -1.35], [0.52, -1.35], [0.56, -0.55], [0.56, 0.25],
+  [0.48, 0.7], [0.32, 1.05], [0.14, 1.28], [0, 1.35],
+] as const;
+const BULLET_GEO = new THREE.LatheGeometry(
+  BULLET_PROFILE.map(([x, y]) => new THREE.Vector2(x * 0.14, y * 0.14)),
+  10,
+);
+const BULLET_UP = new THREE.Vector3(0, 1, 0);
+const TMP_DIR = new THREE.Vector3();
+
+
 const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
+  shape = "bullet",
 }: {
   meshes: { current: (THREE.Mesh | null)[] };
   color: string;
   size: number;
+  shape?: "bullet" | "sphere";
 }) {
   return (
     <>
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
-        <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
-          <sphereGeometry args={[size, 10, 10]} />
+        <mesh
+          key={i}
+          ref={(m) => { meshes.current[i] = m; }}
+          visible={false}
+          {...(shape === "bullet" ? { geometry: BULLET_GEO } : {})}
+        >
+          {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
         </mesh>
       ))}
     </>
   );
 });
+
+/** is this bulwark's shield raised? The host knows its shield strength; guests read the synced flag. */
+function shieldUp(e: Enemy, host: boolean) {
+  if (e.kind !== "bulwark") return false;
+  return host ? (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 : (((e.vis ?? 0) >> 6) & 1) === 1;
+}
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
@@ -1089,14 +1155,18 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
   };
-  const slot = pool.find((b) => !b.active);
+  const i = pool.findIndex((b) => !b.active);
+  const slot = pool[i];
   if (slot) {
     Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
+    return i;
   } else if (pool.length < MAX_BULLETS) {
     pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
+    return pool.length - 1;
   }
+  return -1;
 }
 
 
@@ -1361,7 +1431,15 @@ function World({
   const barrierMesh = useRef<THREE.Mesh>(null);
   const cdReport = useRef(0);
   // armour soaks damage; getting hit can discharge a shock ring
+  // knocked back by a ram / blast: same decaying push as a car bump
+  const shove = (kx: number, kz: number) => {
+    knock.current.x = kx;
+    knock.current.z = kz;
+    knock.current.shake = Math.max(knock.current.shake, 0.5);
+  };
+  const hitLog = useRef<{ dmg: number; t: number }[]>([]); // test handle: every incoming hit
   const takeHit = (dmg: number) => {
+    if (hitLog.current.length < 400) hitLog.current.push({ dmg, t: performance.now() });
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     const s2 = stats.current;
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
@@ -1382,9 +1460,32 @@ function World({
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
+      // enemy testing: ordnance, the hit log, the wave director, the damage path
+      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      const giveAll = () => {
+        for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
+        syncInv();
+      };
+      Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
-  }, [gl, scene, camera, city, remotes, enemies]);
+  }, [gl, scene, camera, city, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
+  // combat effects need to know the world: what is solid, where the robots are, the gun table
+  useEffect(() => {
+    fxGuns(ORDER.map((w) => GUNS[w]));
+    const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
+    fxEnv({
+      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      car: (x, y, z) => city !== null && hitsTraffic(x, y, z),
+      half: () => HALF,
+      waterZ: city ? city.waterZ : null,
+      enemies,
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      height: (k) => hitBand(k)[1], // fliers hover: their band tops out higher (enemyKinds.ts)
+      dust: Number.isFinite(dust) ? dust : 0x9a9080,
+    });
+  }, [blocks, city, enemies, theme]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1405,6 +1506,14 @@ function World({
   const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
   const enemyBullets = useRef<Bullet[]>([]);
   const enemyBulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  // grenades / rockets / blasts from the newer enemy types (the host simulates, guests mirror)
+  const ords = useRef<Ord[]>(Array.from({ length: MAX_ORD }, newOrd));
+  const ordTx = useRef(new Float32Array(MAX_ORD * 3));
+  const hornetCd = useRef({ v: 0 });
+  const guestRef = useRef(false);
+  // hornet packs: index of the pack leader each follower spawns beside (-1 = none)
+  const packLead = useRef(new Int16Array(MAX_ENEMIES).fill(-1));
+  const sepGrid = useRef(new Map<number, number[]>());
 
   // ---------- networking ----------
   const netRef = useRef<NetHandle | null>(net);
@@ -1412,6 +1521,7 @@ function World({
   const isHost = !net || net.role === "host";
   const isHostRef = useRef(isHost);
   isHostRef.current = isHost;
+  guestRef.current = !isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
@@ -1428,8 +1538,9 @@ function World({
     decode: null,
     enemies,
     // cars treat enemies at their drawn size: elites (bounty champion, mini-boss) are 1.6x
-    radiusOf: (e) => (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1),
-    isBig: (e) => !!e.elite || e.kind === "boss" || e.kind === "brute" || e.kind === "vanguard",
+    // fliers (hornets, medic drones) pass over traffic: a hugely negative radius never touches
+    radiusOf: (e) => (FLYERS.has(e.kind) ? -99 : (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1)),
+    isBig: (e) => !!e.elite || e.kind === "boss" || e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind),
     hurtEnemy: null,
     hitPlayer: () => {},
   });
@@ -1502,6 +1613,7 @@ function World({
       if (u.flash) e.flash = 0.1;
       e.elite = u.elite ? 1 : 0;
       e.aux = u.leaping ? 1 : 0; // only drives the leaper's jump pose on guests
+      e.vis = u.vis; // telegraphs, lasers, shields and cloak of the newer types
       const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0, yaw: 0 });
       t.x = u.x;
       t.z = u.z;
@@ -1513,6 +1625,7 @@ function World({
       }
       e.alive = u.alive;
     }
+    unpackOrds(ords.current, Array.isArray(m.od) ? (m.od as number[]) : [], ordTx.current);
     const eb = (m.b as number[]) ?? [];
     enemyBullets.current.forEach((b) => (b.active = false));
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
@@ -1555,6 +1668,7 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
       if (m.type === "left") {
         remotes.current.delete(String(m.from));
         remoteDeps.current.delete(String(m.from));
@@ -1570,14 +1684,23 @@ function World({
       }
       if (isHostRef.current) {
         if (m.type === "hit") {
-          const e = enemies[Number(m.i)];
+          // a guest's hit runs through exactly the same path as the host's own; a direct shot
+          // into a raised shield is re-checked with the host's facing (the host has final say)
+          const i = Number(m.i);
+          const e = enemies[i];
           if (e?.alive) {
-            e.hp -= Number(m.dmg);
-            e.flash = 0.1;
-            if (Number(m.slow) > 0) e.slow = Number(m.slow);
-            if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { e.alive = false; onScore(); }
+            applyHit(e, i, Number(m.dmg) || 0, {
+              slow: Number(m.slow ?? 0), burn: Number(m.burn ?? 0), kb: Number(m.kb ?? 0),
+              kx: Number(m.kx ?? 0), kz: Number(m.kz ?? 0), direct: m.d === 1,
+              shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1,
+            }, String(m.from));
           }
+        } else if (m.type === "shield") {
+          const e = enemies[Number(m.i)];
+          if (e?.alive && e.kind === "bulwark") drainShield(e, Number(m.dmg));
+        } else if (m.type === "odhit") {
+          const o = ords.current[Number(m.i)];
+          if (o?.on && o.tp === 1) { o.on = false; blast(ords.current, o.x, o.z, 0.8, o.y); }
         } else if (m.type === "ebhit") {
           const b = enemyBullets.current[Number(m.i)];
           if (b) b.active = false;
@@ -1596,9 +1719,24 @@ function World({
         }
       } else {
         if (m.type === "snap") applySnap(m);
-        else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
+        else if (m.type === "status") {
+          onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
+          if (m.banner) {
+            // a new wave: guests get the same fresh sidearm magazine the host's spawnWave hands out
+            ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+            onAmmo(ammo.current[weapon.current]);
+            syncInv();
+          }
+        }
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
+        else if (m.type === "kill") {
+          const e = enemies[Number(m.i)];
+          if (e) creditKill(e, m.el === 1, m.bo === 1); // I landed the killing blow
+        }
+        else if (m.type === "hurt") {
+          if (m.kx !== undefined && invuln.current <= 0) shove(Number(m.kx), Number(m.kz));
+          takeHit(Number(m.dmg) || 1);
+        }
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1626,6 +1764,7 @@ function World({
     lastDepKey.current = "";
     lastDeploys.current = { turret: -1, mines: -1 };
     onDeploys({ turret: 0, mines: 0 });
+    fxReset();
 
     syncInv();
 
@@ -1639,6 +1778,7 @@ function World({
     onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
+    ords.current.forEach((o) => (o.on = false));
     onStatus(1, 0, false, true);
   }, [blocks, camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1702,7 +1842,101 @@ function World({
   };
 
   const burstQueue = useRef(0);
+  const tracerCount = useRef(0);
   const bountyKills = useRef(0);
+
+  // ---- damage: ONE host-side path for every hit, the host's own and the guests' ----
+  // Guests never apply damage themselves: they send the full hit (damage, slow, burn,
+  // knockback, shred / executioner / bounty flags, shot direction) and the host runs
+  // applyHit exactly as for its own shots. Kill credit and kill rewards go back to the
+  // shooter, so nothing is lost and nothing is counted twice.
+  type HitFx = { slow?: number; burn?: number; kb?: number; kx?: number; kz?: number; direct?: boolean; shred?: boolean; exec?: boolean; bounty?: boolean };
+  /** kill credit and kill rewards, on the client of whoever landed the blow */
+  const creditKill = (e: Enemy, elite: boolean, bounty: boolean) => {
+    onScore();
+    if (elite) onShard(15);
+    if (bounty) {
+      onShard(1);
+      bountyKills.current++;
+      if (bountyKills.current % 6 === 0) onLeech();
+    }
+    const s2 = stats.current;
+    if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
+    if (s2.boom > 0 && Math.random() < s2.boom) {
+      for (let oi = 0; oi < enemies.length; oi++) {
+        const o = enemies[oi]!;
+        if (!o.alive || o === e) continue;
+        if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
+      }
+    }
+  };
+  /** host: an enemy dies; `from` is the shooter (null = this host player) */
+  const killEnemy = (e: Enemy, idx: number, from: string | null, bounty: boolean) => {
+    e.alive = false;
+    e.burn = 0;
+    if (e.kind === "special" && theme.special.type === "mite") {
+      // shell shatters into a ring of cold shrapnel
+      for (let s = 0; s < 8; s++) {
+        const a = (s / 8) * Math.PI * 2;
+        const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+        fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+      }
+    }
+    const elite = !!e.elite;
+    e.elite = 0;
+    if (from === null) creditKill(e, elite, bounty);
+    else netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
+  };
+  /** host only: apply one hit with all its effects */
+  const applyHit = (e: Enemy, idx: number, dmg: number, h: HitFx, from: string | null) => {
+    if (!e.alive) return;
+    // a direct shot into a raised bulwark shield is stopped, whoever fired it
+    if (h.direct && shieldBlocks(e, h.kx ?? 0, h.kz ?? 0, shieldUp(e, true))) {
+      drainShield(e, dmg);
+      return;
+    }
+    const now = performance.now();
+    if (h.exec && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2; // executioner: judged on the host's true health
+    if ((e.shredUntil ?? 0) > now) dmg *= 1.3;
+    if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
+    dmg *= damageMul(e); // a charger stunned against a wall takes extra
+    const kb = h.kb ?? 0;
+    if (kb > 0 && e.kind !== "boss") {
+      const kx = h.kx ?? 0;
+      const kz = h.kz ?? 0;
+      const len = Math.hypot(kx, kz) || 1;
+      const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
+      e.x += (kx / len) * push;
+      e.z += (kz / len) * push;
+    }
+    e.hp -= dmg;
+    e.flash = 0.1;
+    e.hitT = 2; // cloakers flicker into view when hurt
+    if ((h.slow ?? 0) > 0) e.slow = h.slow!;
+    if ((h.burn ?? 0) > 0) { e.burn = h.burn!; e.burnTick = 1; e.burnFrom = from; }
+    if (h.shred) e.shredUntil = now + 3000;
+    if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+    if (e.hp <= 0) killEnemy(e, idx, from, !!h.bounty);
+  };
+  /** this client's player deals damage: applied on the host, sent to the host from a guest */
+  const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0, fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {}) => {
+    if (!isHostRef.current) {
+      netRef.current?.broadcast({
+        type: "hit", i: idx, dmg,
+        ...(slow ? { slow } : {}),
+        ...(burn ? { burn } : {}),
+        ...(kb ? { kb } : {}),
+        ...(kb || fx.direct ? { kx: Math.round(kx * 100) / 100, kz: Math.round(kz * 100) / 100 } : {}),
+        ...(fx.direct ? { d: 1 } : {}),
+        ...(fx.shred ? { sh: 1 } : {}),
+        ...(fx.exec ? { ex: 1 } : {}),
+        ...(fx.bounty ? { bo: 1 } : {}),
+      });
+      e.flash = 0.1;
+      return;
+    }
+    applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
+  };
   const burstTimer = useRef(0);
 
   const spit = () => {
@@ -1712,10 +1946,14 @@ function World({
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
+    // seeded spread so co-op viewers can replay the exact same pellets
+    const seed = (Math.random() * 1e9) | 0;
+    const spread = rng(seed);
+    const kind = ORDER.indexOf(w) as VisKind;
+    let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
-      const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
-      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
-      dir.y += (Math.random() - 0.5) * g.spread * 0.6;
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, g.spread, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -1729,12 +1967,14 @@ function World({
         burn: isP && s2.incend ? 3 : 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
-      fireInto(
+      const slot = fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
@@ -1817,6 +2057,16 @@ function World({
     };
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** an open spot right next to (x, z): hornet pack members land around their leader */
+  const besides = (x: number, z: number) => {
+    for (let k = 0; k < 8; k++) {
+      const qx = x + (rand() - 0.5) * 2.4;
+      const qz = z + (rand() - 0.5) * 2.4;
+      if (!blocked(blocks, qx, qz, 0.5)) return { x: qx, z: qz };
+    }
+    return { x, z };
+  };
+
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
@@ -1830,11 +2080,31 @@ function World({
     const scale = (v: number) => Math.round(v * enemyMul);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
-    const kinds: Kind[] = ([] as Kind[])
+    const roster: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
-      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : [])
-      .sort((a) => (a === "boss" ? -1 : 0))
-      .slice(0, MAX_ENEMIES);
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
+    // arrival order: the boss first, then a shuffled mix, so the newer types turn up through
+    // the wave instead of all at the end; hornets arrive as one pack of 3-5 from one spot
+    const units: Kind[][] = roster.filter((k) => k !== "hornet" && k !== "boss").map((k) => [k]);
+    const hornets = roster.filter((k) => k === "hornet");
+    for (let h = 0; h < hornets.length; ) {
+      const left = hornets.length - h;
+      const size = left <= 5 ? left : 4;
+      units.push(hornets.slice(h, h + size));
+      h += size;
+    }
+    for (let u = units.length - 1; u > 0; u--) {
+      const j = Math.floor(rand() * (u + 1));
+      [units[u], units[j]] = [units[j]!, units[u]!];
+    }
+    const kinds: Kind[] = [];
+    const leadOf: number[] = [];
+    roster.filter((k) => k === "boss").forEach((k) => { kinds.push(k); leadOf.push(-1); });
+    for (const unit of units) {
+      const first = kinds.length;
+      unit.forEach((k, m) => { kinds.push(k); leadOf.push(m === 0 ? -1 : first); });
+    }
+    kinds.length = Math.min(kinds.length, MAX_ENEMIES);
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
 
     // spread arrivals across the wave: a few right away, the rest trickle in
@@ -1846,7 +2116,10 @@ function World({
         e.alive = false;
         return;
       }
-      const p = kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+      const lead = leadOf[i] ?? -1;
+      packLead.current[i] = lead;
+      const lp = lead >= 0 ? pending.current[lead] : null;
+      const p = lp ? besides(lp.x, lp.z) : kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
       Object.assign(e, {
         kind,
         x: p.x,
@@ -1863,11 +2136,30 @@ function World({
         slow: 0,
         burn: 0,
         burnTick: 0,
+        vis: 0,
+        st: 0,
+        t1: 0,
+        ax: undefined,
+        az: undefined,
+        side: undefined,
+        plan: 0,
+        shots: 0,
+        stuck: 0,
+        gd0: 99,
+        detour: 0,
+        shield: kind === "bulwark" ? Math.round(8 * hpMul) : 0,
+        shieldMax: kind === "bulwark" ? Math.round(8 * hpMul) : 0,
+        shieldT: 0,
+        blockT: 0,
+        hitT: 0,
+        tgt: -1,
       });
       e.elite = 0;
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag
-      delay += i < 2 ? 0.4 : city ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
+      // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag.
+      // A hornet pack lands together, a beat apart.
+      const nextLead = leadOf[i + 1] ?? -1;
+      delay += nextLead >= 0 ? 0.12 : i < 2 ? 0.4 : city ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
 
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
@@ -1953,7 +2245,8 @@ function World({
     const kn = knock.current;
     kn.shake = Math.max(0, kn.shake - delta * 2.2);
     const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
-    cam.rotation.set(look.current.pitch + roll * 0.4, look.current.yaw, roll);
+    const kick = fxKick(); // per-weapon camera kick + explosion shake
+    cam.rotation.set(look.current.pitch + roll * 0.4 + kick.pitch, look.current.yaw + kick.yaw, roll);
 
     if (gameOver || !locked) return;
 
@@ -2030,6 +2323,39 @@ function World({
       const decay = Math.exp(-delta * 6);
       kn.x *= decay;
       kn.z *= decay;
+    }
+
+    // enemies are solid: push the player back out of any body it walked into and let it slide
+    // round. Walls win (an enemy can never shove you into a building). Every client resolves
+    // its own player against the enemies it sees; fliers pass overhead; the phase dash goes
+    // straight through ("shrug off every hit").
+    const phasing = invuln.current > 0 && abilityRef.current === "dash";
+    if (!spectating && !phasing) {
+      for (let pass = 0; pass < 2; pass++) {
+        for (const e of enemies) {
+          if (!e.alive || FLYERS.has(e.kind)) continue;
+          const r = STATS[e.kind].radius * (e.elite ? 1.6 : 1) + PLAYER_R;
+          const ox = cam.position.x - e.x;
+          const oz = cam.position.z - e.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd);
+          // dead centre (e.g. it spawned on you): step out backwards
+          const nx = dist > 1e-4 ? ox / dist : -FORWARD.x;
+          const nz = dist > 1e-4 ? oz / dist : -FORWARD.z;
+          const push = r - dist;
+          const tx = cam.position.x + nx * push;
+          const tz = cam.position.z + nz * push;
+          if (!blocked(blocks, tx, cam.position.z, 0.4)) cam.position.x = tx;
+          if (!blocked(blocks, cam.position.x, tz, 0.4)) cam.position.z = tz;
+          // drop the velocity into the body so walking into it slides instead of bouncing
+          const vn = slide.current.x * nx + slide.current.z * nz;
+          if (vn < 0) {
+            slide.current.x -= vn * nx;
+            slide.current.z -= vn * nz;
+          }
+        }
+      }
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
@@ -2162,7 +2488,11 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        const from = new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z);
+        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(from.y - 0.2);
+        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
+        fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2234,52 +2564,6 @@ function World({
       if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
     };
 
-    const onKill = (e: Enemy) => {
-      const s2 = stats.current;
-      if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
-      if (s2.boom > 0 && Math.random() < s2.boom) {
-        for (let oi = 0; oi < enemies.length; oi++) {
-          const o = enemies[oi]!;
-          if (!o.alive || o === e) continue;
-          if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
-        }
-      }
-    };
-    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
-      if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
-      if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
-      if (kb > 0 && e.kind !== "boss") {
-        const len = Math.hypot(kx, kz) || 1;
-        const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
-        e.x += (kx / len) * push;
-        e.z += (kz / len) * push;
-      }
-      if (!isH) {
-        n?.broadcast({ type: "hit", i: idx, dmg, slow });
-        e.flash = 0.1;
-        return;
-      }
-      e.hp -= dmg;
-      e.flash = 0.1;
-      if (slow > 0) e.slow = slow;
-      if (burn > 0) { e.burn = burn; e.burnTick = 1; }
-      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-      if (e.hp <= 0) {
-        e.alive = false;
-        if (e.kind === "special" && theme.special.type === "mite") {
-          // shell shatters into a ring of cold shrapnel
-          for (let s = 0; s < 8; s++) {
-            const a = (s / 8) * Math.PI * 2;
-            const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
-          }
-        }
-        onScore();
-        if (e.elite) { onShard(15); e.elite = 0; }
-        onKill(e);
-      }
-    };
-
     // city traffic reads the player and can shove enemies through the regular hit path
     traffic.current.active = !spectating;
     traffic.current.hurtEnemy = (idx, dmg, kx, kz) => {
@@ -2334,8 +2618,10 @@ function World({
           }
         };
         if (id === "dash") {
-          slide.current.x += FORWARD.x * 26;
-          slide.current.z += FORWARD.z * 26;
+          // rides the decaying knock velocity (~4 m, sliding along walls): an impulse on
+          // `slide` was overwritten by the next frame's walk speed, so the dash never moved you
+          knock.current.x += FORWARD.x * 26;
+          knock.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
         } else if (id === "pool") {
           poolTicks.current = 3;
@@ -2350,7 +2636,9 @@ function World({
         } else if (id === "mortar") {
           const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
           pos.y -= 0.2;
-          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          const ms = fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          if (ms >= 0) fxShot(ms, bullets.current[ms]!, VK.MORTAR);
+          fxFired(VK.MORTAR, 0, pos, FORWARD, 0, 18, n);
         } else if (id === "barrier") {
           invuln.current = 6;
         } else if (id === "overdrive") {
@@ -2392,7 +2680,12 @@ function World({
         if (city && !pd.placed && pd.t <= MARK_TIME) {
           // late arrivals appear near wherever the squad is now, not where it was
           pd.placed = true;
-          const q = enemies[i]!.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+          const lead = packLead.current[i]!;
+          const lp = lead >= 0 ? pending.current[lead] : null;
+          const le = lead >= 0 ? enemies[lead] : undefined;
+          const q = lp ? besides(lp.x, lp.z)
+            : le?.alive && le.kind === "hornet" ? besides(le.x, le.z)
+            : enemies[i]!.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
           pd.x = q.x;
           pd.z = q.z;
         }
@@ -2435,18 +2728,39 @@ function World({
 
       // everyone the enemies can go after
       const now = performance.now();
-      type Target = { id: string | null; x: number; z: number; y: number };
+      // fx/fz: which way each player faces (the camera looks down -z at yaw 0); flankers use it
+      type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number };
+      const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundY(r.x, r.z) });
+        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundY(r.x, r.z), fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
       });
-      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
 
-      const hurtTarget = (t: Target, dmg: number) => {
-        if (t.id === null) takeHit(dmg);
-        else n?.sendTo(t.id, { type: "hurt", dmg });
+      const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0) => {
+        if (t.id === null) {
+          if ((kx || kz) && invuln.current <= 0) shove(kx, kz);
+          takeHit(dmg);
+        } else n?.sendTo(t.id, kx || kz ? { type: "hurt", dmg, kx, kz } : { type: "hurt", dmg });
       };
+      const aiCtx: AICtx = {
+        delta,
+        time: state.clock.elapsedTime,
+        blocks,
+        solid,
+        targets,
+        enemies,
+        rand,
+        fieldFor: (t) => fields.current.get(toNav(t.x) * 1000 + toNav(t.z)),
+        hurtTarget,
+        shoot: (x, y, z, vx, vy, vz, life, dmg, size) =>
+          fireInto(enemyBullets.current, TMP_A.set(x, y, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
+        ords: ords.current,
+        hornetCd: hornetCd.current,
+        navOpen,
+      };
+      hornetCd.current.v -= delta;
 
       // flow field per target cell (cached)
       const used = new Set<number>();
@@ -2494,7 +2808,8 @@ function World({
       }
 
       meleeCooldown.current -= delta;
-      for (const e of enemies) {
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
         if (!e.alive) continue;
         e.flash -= delta;
         e.cooldown -= delta;
@@ -2507,7 +2822,7 @@ function World({
             e.hp -= 1;
             e.flash = 0.1;
             if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { e.alive = false; e.burn = 0; onScore(); onKill(e); continue; }
+            if (e.hp <= 0) { killEnemy(e, ei, e.burnFrom ?? null, false); continue; }
           }
         }
         const st = STATS[e.kind];
@@ -2520,6 +2835,10 @@ function World({
         }
         const dx = target.x - e.x;
         const dz = target.z - e.z;
+        if (isNewKind(e.kind)) {
+          stepNewKind(e, ei, target, d, aiCtx); // enemyAI.ts: its own movement, telegraphs, attacks
+          continue;
+        }
         e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
 
         // route around obstacles: go straight if clear, else follow the flow field
@@ -2702,6 +3021,88 @@ function World({
         }
       }
 
+      // grenades and homing rockets
+      stepOrds(aiCtx);
+
+      // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
+      // inside you), and push apart lightly so a crowd doesn't stack into one blob. Fliers pass
+      // over everything. A spatial hash keeps the pair checks cheap with 110 enemies.
+      const grid = sepGrid.current;
+      if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
+      grid.forEach((cell) => (cell.length = 0));
+      const CELL = 2.5;
+      const keyOf = (x: number, z: number) => Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
+      const bodyR = (e: Enemy) => STATS[e.kind].radius * (e.elite ? 1.6 : 1);
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive || FLYERS.has(e.kind)) continue;
+        const k = keyOf(e.x, e.z);
+        let cell = grid.get(k);
+        if (!cell) grid.set(k, (cell = []));
+        cell.push(ei);
+      }
+      const nudge = (e: Enemy, px: number, pz: number) => {
+        const rr = Math.min(STATS[e.kind].radius, 0.8);
+        const ghost = e.kind === "specter";
+        if (ghost || !blocked(blocks, e.x + px, e.z, rr)) e.x += px;
+        if (ghost || !blocked(blocks, e.x, e.z + pz, rr)) e.z += pz;
+      };
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const a = enemies[ei]!;
+        if (!a.alive || FLYERS.has(a.kind)) continue;
+        const ra = bodyR(a);
+        const ci = Math.floor((a.x + HALF) / CELL);
+        const cj = Math.floor((a.z + HALF) / CELL);
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const cell = grid.get((ci + di) * 4096 + cj + dj);
+            if (!cell) continue;
+            for (const oj of cell) {
+              if (oj <= ei) continue;
+              const b = enemies[oj]!;
+              const rb = bodyR(b);
+              const reach = (ra + rb) * 0.8; // light: a little overlap is fine
+              const ox = b.x - a.x;
+              const oz = b.z - a.z;
+              const dd = ox * ox + oz * oz;
+              if (dd >= reach * reach) continue;
+              const dist = Math.sqrt(dd) || 0.01;
+              const nx = dd > 1e-6 ? ox / dist : Math.cos(ei);
+              const nz = dd > 1e-6 ? oz / dist : Math.sin(ei);
+              // soft: resolve part of the overlap per frame; the bigger body gives less ground
+              const push = Math.min(reach - dist, 0.5) * Math.min(1, delta * 10);
+              const wa = (rb * rb) / (ra * ra + rb * rb);
+              const bossA = a.kind === "boss" ? 0.1 : 1;
+              const bossB = b.kind === "boss" ? 0.1 : 1;
+              nudge(a, -nx * push * wa * bossA, -nz * push * wa * bossA);
+              nudge(b, nx * push * (1 - wa) * bossB, nz * push * (1 - wa) * bossB);
+            }
+          }
+        }
+        // keep out of the players: at most touching
+        for (const t of targets) {
+          const r = ra + PLAYER_R;
+          const ox = a.x - t.x;
+          const oz = a.z - t.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd) || 0.01;
+          nudge(a, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
+        }
+      }
+      // fliers aren't solid, but they still hover at arm's length rather than inside your head
+      for (const f of enemies) {
+        if (!f.alive || !FLYERS.has(f.kind)) continue;
+        for (const t of targets) {
+          const r = STATS[f.kind].radius + PLAYER_R + 0.3;
+          const ox = f.x - t.x;
+          const oz = f.z - t.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd) || 0.01;
+          nudge(f, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
+        }
+      }
     }
 
     // player bullets
@@ -2709,10 +3110,12 @@ function World({
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
+      fxBurst(b);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
-        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        const fs = fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
       }
     };
     bullets.current.forEach((b, i) => {
@@ -2729,28 +3132,55 @@ function World({
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
+          fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
           burst(b);
+          fxDie(i, hitWall);
           b.active = false;
         } else {
-          for (let ei = 0; ei < enemies.length; ei++) {
+          // a homing rocket can be shot down (the host has the final say in co-op)
+          const ri = rocketAt(ords.current, b.pos.x, b.pos.y, b.pos.z);
+          if (ri >= 0) {
+            const o = ords.current[ri]!;
+            o.on = false;
+            if (isH) blast(ords.current, o.x, o.z, 0.8, o.y);
+            else n?.broadcast({ type: "odhit", i: ri });
+            fxDie(i, true);
+            b.active = false;
+            onStat("hit", 1);
+          }
+          for (let ei = 0; b.active && ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
-            const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y - groundY(e.x, e.z) < h) {
+            // bulwark: the shield face stops shots from the front, including ones aimed past it
+            if (e.kind === "bulwark" && shieldUp(e, isH)) {
+              const fx = Math.sin(e.yaw ?? 0);
+              const fz = Math.cos(e.yaw ?? 0);
+              const rx = b.pos.x - e.x;
+              const rz = b.pos.z - e.z;
+              const fwd = rx * fx + rz * fz;
+              const lat = rx * fz - rz * fx;
+              if (fwd > 0.2 && fwd < 1.6 && Math.abs(lat) < 1.15 && b.pos.y - groundY(e.x, e.z) < 2.5 && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
+                if (isH) drainShield(e, b.damage);
+                else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
+                burst(b);
+                fxDie(i, true); // the round sparks off the shield face
+                b.active = false;
+                break;
+              }
+            }
+            const [lo, hi] = hitBand(e.kind);
+            const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
-              let dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
-              if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
-              const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
-              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              // executioner / shredder / bounty are judged on the host (it has the true health)
+              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
+                direct: true, shred: !!(b.mods & M_SHRED), exec: !!(b.mods & M_EXEC), bounty: !!(b.mods & M_BOUNTY),
+              });
+              fxHit(i, b, e);
               onStat("hit", 1);
               onStat("dmg", dmg);
-              if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
-              if (b.mods & M_BOUNTY && lethal) {
-                onShard(1);
-                bountyKills.current++;
-                if (bountyKills.current % 6 === 0) onLeech();
-              }
 
               if (b.chain > 0) {
                 let left = b.chain;
@@ -2760,6 +3190,7 @@ function World({
                   if (!o.alive || o === e) continue;
                   if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
                     hurtEnemy(o, b.damage, oi);
+                    fxChain(e, o);
                     left--;
                   }
                 }
@@ -2780,8 +3211,15 @@ function World({
         if (b.active) {
           m.scale.setScalar(b.size / 0.14);
           (m.material as THREE.MeshBasicMaterial).color.set(b.color);
+          // point the round along its flight path
+          if (b.vel.lengthSq() > 0.0001) {
+            TMP_DIR.copy(b.vel).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
+          fxStyle(i, m, b); // per-weapon round (projectiles.tsx)
         }
       }
+
     });
 
 
@@ -2822,8 +3260,10 @@ function World({
           });
           const tr = traffic.current.encode?.();
           const al = encodeAlpine();
+          const od = packOrds(ords.current);
           n.broadcast({
             type: "snap", e, b, mk,
+            ...(od.length ? { od } : {}),
             ...(tr ? { tr } : {}),
             ...(al ? { al } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
@@ -2859,6 +3299,7 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
   return (
@@ -2909,7 +3350,7 @@ function World({
         <Level blocks={blocks} theme={theme} />
       )}
       {enemies.map((e, i) => (
-        <EnemyMesh key={i} data={e} theme={theme} />
+        <EnemyMesh key={i} data={e} theme={theme} all={enemies} />
       ))}
       {enemies.map((_, i) => (
         <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
@@ -2956,6 +3397,7 @@ function World({
         </group>
       ))}
       <RemoteDeployables deps={remoteDeps} enemies={enemies} />
+      <OrdnancePool ords={ords.current} guestTx={ordTx.current} guest={guestRef} />
       <mesh ref={barrierMesh} visible={false}>
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
@@ -2964,10 +3406,11 @@ function World({
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
+      <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
-      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
+      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
     </>
   );
 }
@@ -3064,6 +3507,7 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
+  const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
@@ -3517,10 +3961,25 @@ export function Game() {
   }, [perks.regen, started, locked, ended, dead, maxHp]);
 
   // soundtrack
+  useEffect(() => { hookAudioUnlock(); }, []);
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
   }, [started, locked, ended]);
+  // if the browser blocked sound until now, the next click/keypress restarts it
+  useEffect(() => {
+    if (!(started && locked && !ended)) return;
+    const retry = () => { initAudio(); startMusic(); };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [started, locked, ended]);
+
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
@@ -4042,7 +4501,14 @@ export function Game() {
                 >
                   WEAPONS
                 </button>}
+                {!paused && <button
+                  onClick={() => setShowEnemies(true)}
+                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  ENEMIES
+                </button>}
                 {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+                {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
               </div>
             )}
             {showSettings && (
@@ -4134,6 +4600,125 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
             <div>AMMO<br /><b className="text-base">{g.ammo || "∞"}</b></div>
             <div>FIRE RATE<br /><b className="text-base">{(1 / g.cooldown).toFixed(1)}/s</b></div>
           </div>
+          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- enemy reference
+const PANEL_KINDS = Object.keys(ENEMY_INFO).filter((k): k is Kind => (KINDS as string[]).includes(k));
+const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
+  kind, x, z, hp: 1, alive: true, cooldown: 0, swing: 0, flash: 0, shot: 0, slow: 0, burn: 0, burnTick: 0, yaw: 0, vis: 0,
+});
+
+function LookAt({ y, z }: { y: number; z: number }) {
+  const { camera } = useThree();
+  useEffect(() => camera.lookAt(0, y, z), [camera, y, z]);
+  return null;
+}
+
+/** loops each newer type through idle, telegraph, attack and after, so the card shows its tell */
+function TelegraphDemo({ list, still }: { list: Enemy[]; still?: boolean }) {
+  useFrame(({ clock }) => {
+    if (still) {
+      // lineup: everyone at rest, shields raised, cloakers drawn solid so they can be seen
+      for (const e of list) if (e.kind === "bulwark") e.vis = packVis(0, 0, 1);
+      return;
+    }
+    const t = clock.elapsedTime % 4.2;
+    const ph = t < 1.2 ? 0 : t < 2.8 ? 1 : t < 3.6 ? 2 : 3;
+    const pr = ph === 1 ? (t - 1.2) / 1.6 : ph === 2 ? 1 : ph === 3 ? 1 - (t - 3.6) / 0.6 : 0;
+    for (const e of list) {
+      if (!isNewKind(e.kind)) continue;
+      let ex = 0;
+      if (e.kind === "sniper") ex = list.length > 1 ? 3 : 9;
+      if (e.kind === "bulwark") ex = ph === 2 ? 3 : 1;
+      if (e.kind === "cloaker") ex = ph === 0 ? 1 : ph === 1 ? 2 : 0;
+      e.vis = packVis(ph, pr, ex);
+    }
+  });
+  return null;
+}
+
+export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => void }) {
+  const [sel, setSel] = useState<Kind | "lineup">("lineup");
+  const lineup = useMemo(() => {
+    // the boss is huge: it stands in the middle of the back row
+    const rest = PANEL_KINDS.filter((k) => !isNewKind(k) && k !== "boss");
+    const old = [...rest.slice(0, 4), "boss" as Kind, ...rest.slice(4)];
+    const fresh = PANEL_KINDS.filter((k) => isNewKind(k));
+    return [
+      ...old.map((k, i) => fakeEnemy(k, (i - (old.length - 1) / 2) * 2.5, -4.5)),
+      ...fresh.map((k, i) => fakeEnemy(k, (i - (fresh.length - 1) / 2) * 2.2, 1.5)),
+    ];
+  }, []);
+  const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
+  const list = sel === "lineup" ? lineup : single;
+  const info = sel === "lineup" ? null : ENEMY_INFO[sel];
+  const st = sel === "lineup" ? null : STATS[sel];
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
+      <div className="flex max-h-full w-full max-w-5xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
+        <div className="grid grid-cols-2 gap-1 md:w-60 md:grid-cols-1">
+          <button onClick={() => setSel("lineup")}
+            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+            ALL · LINEUP
+          </button>
+          {PANEL_KINDS.map((k) => (
+            <button key={k} onClick={() => setSel(k)}
+              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+              <span style={{ color: ENEMY_INFO[k]!.accent }}>■</span> {k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}
+              <span className="float-right opacity-50">W{ENEMY_INFO[k]!.wave}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1">
+          <div className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}>
+            <Canvas key={sel === "lineup" ? "lineup" : "one"} camera={sel === "lineup" ? { position: [0, 6, 25], fov: 28 } : { position: [2.6, 2.4, 4.6], fov: 42 }}>
+              <LookAt y={sel === "lineup" ? 0.5 : 0} z={sel === "lineup" ? -1.5 : 0} />
+              <ambientLight intensity={0.9} />
+              <hemisphereLight args={["#ffe7c4", "#3a3028", 0.6]} />
+              <directionalLight position={[3, 6, 5]} intensity={1.6} />
+              <TelegraphDemo list={list} still={sel === "lineup"} />
+              {sel === "lineup" ? (
+                <group position={[0, -1.4, 0]}>
+                  {list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}
+                </group>
+              ) : (
+                <Spin><group position={[0, -1.1, 0]}>{list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}</group></Spin>
+              )}
+            </Canvas>
+          </div>
+          {info && st ? (
+            <>
+              <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: info.accent }}>
+                {sel === "special" ? theme.special.name : info.name}
+              </h2>
+              <p className="mt-2 text-sm opacity-90">{info.tactic}</p>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] tracking-widest opacity-80">
+                <div>HEALTH<br /><b className="text-base">{sel === "boss" ? BOSS_HP : st.hp}</b></div>
+                <div>SPEED<br /><b className="text-base">{st.speed} m/s</b></div>
+                <div>WEAPON<br /><b className="text-xs">{info.weapon}</b></div>
+                <div>FIRST WAVE<br /><b className="text-base">{info.wave}</b></div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 space-y-1 text-[11px] tracking-wider">
+              {[["BACK ROW", false], ["FRONT ROW", true]].map(([label, fresh]) => (
+                <div key={String(label)}>
+                  <span className="opacity-50">{label} · </span>
+                  {lineup.map((e) => e.kind).filter((k) => isNewKind(k) === fresh).map((k, i) => (
+                    <span key={k} style={{ color: ENEMY_INFO[k]!.accent }}>{i ? " · " : ""}{k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}</span>
+                  ))}
+                </div>
+              ))}
+              <p className="pt-1 text-sm opacity-80">
+                Every attack is telegraphed: watch for the glow, the laser, the lit lane or the red ring, then move.
+              </p>
+            </div>
+          )}
           <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
         </div>
       </div>
