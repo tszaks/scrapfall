@@ -64,7 +64,7 @@ export function tickAlpine(delta: number, isHost: boolean, playing: boolean) {
   // gusty wind that shoves walkers downwind during a blizzard
   const b = alpine.blizzard;
   const gust = 0.55 + 0.45 * Math.sin(alpine.t * 0.9) * Math.sin(alpine.t * 0.37 + 1.3);
-  const str = b * b * 2.4 * gust;
+  const str = b * b * 1.9 * gust;
   wind.x = Math.sin(alpine.windDir) * str;
   wind.z = Math.cos(alpine.windDir) * str;
   setMuffle(b);

@@ -5,7 +5,7 @@
 //   detail - shutters, flower boxes, railings, icicles, drifts, small props (near only)
 //   glow   - lamp bulbs, lit signs, Christmas lights (unlit, bright at night)
 //   signs  - shop and warning signs (sign atlas)
-//   pools  - fake light pools on the snow at night
+//   lights - ground light pools (baked into a light map the terrain and snowfall read)
 import * as THREE from "three";
 
 import { Geo } from "../cityGeo";
@@ -29,6 +29,8 @@ export type Kit = {
   glow: Geo;
   signs: Geo;
   pools: Geo;
+  /** ground light pools: x, z, radius, colour */
+  lights: [number, number, number, string][];
   /** chimney tops (smoke) */
   smoke: [number, number, number][];
   /** lamp heads (halo sprites) and their colour kind (0 warm lamp, 1 cold flood, 2 xmas) */
@@ -501,6 +503,8 @@ function gableHouse(k: Kit, b: { x0: number; z0: number; x1: number; z1: number;
     const lp = L3(F, doorAt + 0.9, y + 2.1, -0.15);
     k.glow.col("#ffd49a").box(lp[0], lp[1], lp[2], 0.16, 0.22, 0.16);
     k.lamps.push([lp[0], lp[1], lp[2], 0]);
+    const fp = L3(F, doorAt, 0, -2);
+    k.lights.push([fp[0], fp[2], 4, "#ffb060"]);
   }
 
   // balconies: slab, heart-cut railing, flower boxes, snow on the rail
@@ -911,6 +915,7 @@ function station(k: Kit, b: ABld, lift: Lift) {
   const lp = [(b.x0 + b.x1) / 2, sup.y + 1.6, (cz0 + cz1) / 2] as const;
   k.glow.col("#fff2d8").box(lp[0], lp[1], lp[2], 2.4, 0.08, 0.3);
   k.lamps.push([lp[0], lp[1] - 0.5, lp[2], 1]);
+  k.lights.push([lp[0], lp[2], 12, "#dfe6ff"]);
 }
 
 function panorama(k: Kit, b: ABld) {
@@ -1028,6 +1033,7 @@ function coveredBridge(k: Kit, a: AlpineData) {
     for (const z of [z0 - 0.3, z1 + 0.3]) {
       k.glow.col("#ffcf8a").box(x, y + 2.6, z, 0.25, 0.35, 0.25);
       k.lamps.push([x, y + 2.6, z, 0]);
+      k.lights.push([x, z, 5, "#ffb060"]);
     }
 }
 
@@ -1075,6 +1081,7 @@ function rink(k: Kit, a: AlpineData) {
     }
   }
   k.lamps.push([cx, y + 5, (rk.z0 + rk.z1) / 2, 2]);
+  k.lights.push([cx, (rk.z0 + rk.z1) / 2, 18, "#ffd8a0"]);
 }
 
 function skiJump(k: Kit, a: AlpineData) {
@@ -1171,6 +1178,7 @@ function deck(k: Kit, a: AlpineData) {
     tbox(g, x, y + 1.1, ez - 1.0, 0.5, 0.35, 0.7, 0.3);
   }
   k.lamps.push([d.x0 + 2, y + 2.4, d.z0 + 2, 0]);
+  k.lights.push([d.x0 + 2, d.z0 + 2, 6, "#ffb060"]);
   k.glow.col("#ffcf88").box(d.x0 + 2, y + 2.4, d.z0 + 2, 0.3, 0.4, 0.3);
   g.mat(T.plain, 0, 0).col("#1e2024");
   tube(g, [d.x0 + 2, y, d.z0 + 2], [d.x0 + 2, y + 2.2, d.z0 + 2], 0.06, 4);
@@ -1199,6 +1207,7 @@ export function liftGeo(k: Kit, a: AlpineData) {
     tube(g, [lf.x + 0.45, s.ground, s.z + 0.3], [lf.x + 0.45, top, s.z + 0.3], 0.03, 3);
     k.glow.col("#fff4e0").box(lf.x, top + 0.9, s.z, 0.35, 0.25, 0.35);
     k.lamps.push([lf.x, top + 0.9, s.z, 1]);
+    k.lights.push([lf.x, s.z, 10, "#dfe8ff"]);
     k.glow.col("#ff3a2a").box(lf.x, top + 1.25, s.z, 0.16, 0.16, 0.16);
   }
   // two cables following a gentle catenary between supports
@@ -1248,8 +1257,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       dg.mat(T.snow, 0, 0).col(SNOW);
       dg.cone(ax, y + 3.62, az, 0.22, 0.14, 4);
       k.lamps.push([ax, y + 3.3, az, 0]);
-      k.pools.col("#ffb86a");
-      pool(k.pools, ax, y + 0.06, az, 5.5);
+      k.lights.push([ax, az, 7, "#ffb060"]);
       break;
     }
     case "flood": {
@@ -1261,8 +1269,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       k.glow.col("#f4f8ff").box(ax, y + 9.55, az + 0.0, 1.2, 0.35, 0.44);
       k.lamps.push([ax, y + 9.5, az, 1]);
       const [px, pz] = W(0, 9);
-      k.pools.col("#dfe8ff");
-      pool(k.pools, px, groundFn(px, pz) + 0.08, pz, 13);
+      k.lights.push([px, pz, 15, "#cfdcff"]);
       break;
     }
     case "bench": {
@@ -1396,8 +1403,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       k.glow.col("#ffe27a");
       k.glow.cone(x, y + 11.6, z, 0.5, 0.8, 5);
       k.lamps.push([x, y + 6, z, 2]);
-      k.pools.col("#ffc27a");
-      pool(k.pools, x, y + 0.07, z, 9);
+      k.lights.push([x, z, 11, "#ffb870"]);
       break;
     }
     case "marker": {
@@ -1422,6 +1428,7 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       dg.cyl(x, y + 2.3, z, 0.7, 0.1, 8, true, 0.2);
       k.glow.col("#ff7a2a").box(x, y + 2.05, z, 0.24, 0.3, 0.24);
       k.lamps.push([x, y + 2.05, z, 2]);
+      k.lights.push([x, z, 3.5, "#ff9040"]);
       break;
     }
     case "table": {
@@ -1494,11 +1501,6 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
     default:
       break;
   }
-}
-
-/** additive ground pool quad (a soft circle from the glow texture) */
-function pool(g: Geo, x: number, y: number, z: number, r: number) {
-  g.quad(x - r, y, z + r, x + r, y, z + r, x + r, y, z - r, x - r, y, z - r, [0, 0, 1, 1]);
 }
 
 // ---------------------------------------------------------------------------------------

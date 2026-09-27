@@ -50,7 +50,51 @@ const U = {
   uAlpen: { value: 1 },
   uWin: { value: 0.6 },
   uTime: { value: 0 },
+  /** baked ground light from lamps (rgb), and how strongly it shows (night 1, sunset low) */
+  uLightMap: { value: null as THREE.Texture | null },
+  uLampK: { value: 1 },
+  /** the heightfield (so lamp light can fall off with height above the snow) */
+  uGround: { value: null as THREE.Texture | null },
 };
+
+function groundTexture(h: Float32Array, n: number) {
+  const t = new THREE.DataTexture(h, n, n, THREE.RedFormat, THREE.FloatType);
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** paint every lamp's pool of light into one texture over the play area */
+function lightMap(lights: [number, number, number, string][], half: number) {
+  const n = 1024;
+  const c = document.createElement("canvas");
+  c.width = n;
+  c.height = n;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#000";
+  g.fillRect(0, 0, n, n);
+  g.globalCompositeOperation = "lighter";
+  const k = n / (half * 2);
+  for (const [x, z, r, col] of lights) {
+    const px = (x + half) * k;
+    const pz = (z + half) * k;
+    const pr = r * k;
+    const gr = g.createRadialGradient(px, pz, 0, px, pz, pr);
+    const cc = new THREE.Color(col);
+    const rgb = (a: number) => `rgba(${Math.round(cc.r * 255)},${Math.round(cc.g * 255)},${Math.round(cc.b * 255)},${a})`;
+    gr.addColorStop(0, rgb(0.75));
+    gr.addColorStop(0.35, rgb(0.4));
+    gr.addColorStop(1, rgb(0));
+    g.fillStyle = gr;
+    g.fillRect(px - pr, pz - pr, pr * 2, pr * 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.flipY = false;
+  t.needsUpdate = true;
+  return t;
+}
 
 /** a linear colour as it lands on screen: ACES filmic tone mapping, then sRGB encoding */
 function toScreen(c: THREE.Color, out: THREE.Color, exposure = 1) {
@@ -104,6 +148,16 @@ uniform vec3 uPeakLit;
 uniform float uAlpen;
 uniform float uWin;
 uniform float uTime;
+uniform sampler2D uLightMap;
+uniform sampler2D uGround;
+uniform float uLampK;
+vec3 aLamp(vec3 wp) {
+  if (abs(wp.x) > 399.0 || abs(wp.z) > 399.0) return vec3(0.0);
+  // heightfield rows run along x (h[i * (n + 1) + j]), so x is the texture's v axis
+  float gy = texture2D(uGround, vec2((wp.z + 400.0) / 800.0, (wp.x + 400.0) / 800.0)).r;
+  float fall = 1.0 - smoothstep(0.5, 6.5, wp.y - gy);
+  return texture2D(uLightMap, (wp.xz + 400.0) / 800.0).rgb * uLampK * fall;
+}
 float aHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -183,6 +237,7 @@ if (aLayer == ${T.metal}.0 || aLayer == ${T.copper}.0) roughnessFactor = 0.55;`,
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
+totalEmissiveRadiance += diffuseColor.rgb * aLamp(vAWorld) * 0.9;
 if (aWin && aMask > 0.3) {
   float h = aHash(vec2(vFac.y * 977.0, aLayer));
   float lit = step(h, uWin * 0.88);
@@ -276,6 +331,8 @@ aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy);`,
   // each glint only flashes from some view angles, like real snow crystals
   float facet = step(0.6, aHash(cell + floor(V.xz * 6.0)));
   totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.994, h) * facet * aSparkle * (0.04 + spec * 3.0) * (1.0 - smoothstep(6.0, 30.0, fdist));
+  // lamp light pooling on the snow
+  totalEmissiveRadiance += diffuseColor.rgb * aLamp(vAWorld) * 1.6;
   // alpenglow: the high snow catches the low sun long after the valley has gone blue
   float hi = smoothstep(160.0, 1400.0, vAWorld.y);
   totalEmissiveRadiance += diffuseColor.rgb * uPeakLit * uAlpen * hi * max(dot(wN, uSunDir) + 0.25, 0.0) * 0.85;
@@ -421,6 +478,9 @@ function snowMaterial() {
       uBlizz: { value: 0 },
       uTex: { value: glowTexture() },
       uPx: { value: 1 },
+      uLightMap: U.uLightMap,
+      uLampK: U.uLampK,
+      uGround: U.uGround,
     },
     vertexShader: /* glsl */ `
 attribute float aSeed;
@@ -429,7 +489,11 @@ uniform vec3 uCam;
 uniform vec3 uWind;
 uniform float uBlizz;
 uniform float uPx;
+uniform sampler2D uLightMap;
+uniform sampler2D uGround;
+uniform float uLampK;
 varying float vA;
+varying vec3 vLamp;
 void main() {
   float B = ${SNOW_BOX}.0;
   vec3 p = position * B;
@@ -443,6 +507,11 @@ void main() {
   gl_Position = projectionMatrix * mv;
   float dist = -mv.z;
   gl_PointSize = uPx * (0.05 + aSeed * 0.05) * 900.0 / max(dist, 0.5);
+  vLamp = vec3(0.0);
+  if (abs(p.x) < 399.0 && abs(p.z) < 399.0) {
+    float gy = texture2D(uGround, vec2((p.z + 400.0) / 800.0, (p.x + 400.0) / 800.0)).r;
+    vLamp = texture2D(uLightMap, (p.xz + 400.0) / 800.0).rgb * uLampK * 2.4 * (1.0 - smoothstep(2.0, 9.0, p.y - gy));
+  }
   float keep = step(aSeed, 0.35 + uBlizz * 0.65);
   vA = keep * smoothstep(0.4, 2.0, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, dist));
 }`,
@@ -450,10 +519,11 @@ void main() {
 uniform sampler2D uTex;
 uniform vec3 uCol;
 varying float vA;
+varying vec3 vLamp;
 void main() {
   if (vA < 0.01) discard;
   float a = texture2D(uTex, gl_PointCoord).a;
-  gl_FragColor = vec4(uCol, a * vA * 0.9);
+  gl_FragColor = vec4(uCol + vLamp, a * vA * 0.9);
 }`,
   });
 }
@@ -575,6 +645,8 @@ type Built = {
   smoke: [number, number, number][];
   lamps: [number, number, number, number][];
   surf: THREE.DataTexture;
+  light: THREE.CanvasTexture;
+  ground: THREE.DataTexture;
   forest: THREE.DataTexture;
   stats: { verts: number; trees: number; far: number };
 };
@@ -585,7 +657,7 @@ function build(layout: AlpineLayout): Built {
   const nc = Math.ceil((half * 2) / CHUNK);
   const kits: Kit[] = [];
   for (let i = 0; i < nc * nc; i++)
-    kits.push({ main: new Geo(), detail: new Geo(), glow: new Geo(), signs: new Geo(), pools: new Geo(), smoke: [], lamps: [] });
+    kits.push({ main: new Geo(), detail: new Geo(), glow: new Geo(), signs: new Geo(), pools: new Geo(), lights: [], smoke: [], lamps: [] });
   const kitAt = (x: number, z: number) => {
     const i = Math.max(0, Math.min(nc - 1, Math.floor((x + half) / CHUNK)));
     const j = Math.max(0, Math.min(nc - 1, Math.floor((z + half) / CHUNK)));
@@ -653,9 +725,11 @@ function build(layout: AlpineLayout): Built {
   }
   const smoke: Built["smoke"] = [];
   const lamps: Built["lamps"] = [];
+  const lights: Kit["lights"] = [];
   for (const k of kits) {
     smoke.push(...k.smoke);
     lamps.push(...k.lamps);
+    lights.push(...k.lights);
   }
   return {
     chunks,
@@ -666,6 +740,8 @@ function build(layout: AlpineLayout): Built {
     smoke,
     lamps,
     surf: surfTexture(a),
+    light: lightMap(lights, half),
+    ground: groundTexture(a.terrain.h, a.terrain.n + 1),
     forest: forestTexture(),
     stats: { verts, trees: a.trees.length, far: far.length },
   };
@@ -693,6 +769,8 @@ export const AlpineScene = memo(function AlpineScene({
     return b;
   }, [layout]);
   const look: AlpineLook = alpineLook(time);
+  U.uLightMap.value = built.light;
+  U.uGround.value = built.ground;
   useEffect(() => {
     // test handle (?debug=1): the shared weather / lift clock
     if (new URLSearchParams(window.location.search).get("debug") === "1")
@@ -751,6 +829,8 @@ export const AlpineScene = memo(function AlpineScene({
       for (const t of built.terrain) t.geo.dispose();
       built.outer.dispose();
       built.surf.dispose();
+      built.light.dispose();
+      built.ground.dispose();
       built.forest.dispose();
     },
     [built],
@@ -867,7 +947,7 @@ export const AlpineScene = memo(function AlpineScene({
     U.uHazeDist.value = night ? 5200 : 7000;
     U.uHazeMax.value = night ? 0.9 : 0.8;
     mats.signs.color.setScalar(night ? 1.25 : 0.95);
-    mats.pools.opacity = night ? 0.55 : 0.18;
+    U.uLampK.value = night ? 1 : 0.22;
     mats.halo.opacity = night ? 0.85 : 0.35;
     (mats.snow.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
     (mats.streak.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
@@ -1027,7 +1107,6 @@ export const AlpineScene = memo(function AlpineScene({
             />
           )}
           {c.signs && <mesh geometry={c.signs} material={mats.signs} />}
-          {c.pools && <mesh geometry={c.pools} material={mats.pools} renderOrder={2} visible={night} />}
         </group>
       ))}
       <instancedMesh ref={nearRef} args={[geos.spruce, mats.tree, MAX_NEAR]} castShadow frustumCulled={false}>
