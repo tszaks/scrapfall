@@ -1839,8 +1839,8 @@ function World({
       .concat(surprises)
       .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
     // shuffle arrivals so enemy types come mixed instead of type-by-type
-    const boss = roster.filter((k) => k === "boss");
-    const rest = roster.filter((k) => k !== "boss");
+    const boss: Kind[] = roster.filter((k) => k === "boss");
+    const rest: Kind[] = roster.filter((k) => k !== "boss");
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(rand() * (i + 1));
       const tmp = rest[i]!;
