@@ -32,12 +32,13 @@ import { alpineMinimap, cityMinimap } from "./cityMinimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { Atmosphere } from "./Atmosphere";
 import { worldLook, type TimeOfDay } from "./lighting";
-import { climbable, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, wind, worldFx } from "./terrain";
+import { climbable, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
-import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
+import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
+import { resetRide, ride, riderEye, stepRide } from "./alpine/ride";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
@@ -54,7 +55,9 @@ import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
 import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
 import { FX, VF, VK, type VisKind } from "./impacts";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
+import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
@@ -1726,6 +1729,7 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.hp = Number(m.hp ?? MAX_HP);
     r.weapon = String(m.w ?? "pistol");
+    r.rc = Number(m.rc ?? -1);
     r.last = performance.now();
   };
 
@@ -1879,7 +1883,11 @@ function World({
     // the city starts on the landmark's plaza, looking up the tower
     camera.position.set(big ? big.spawn.x : 0, EYE + (city ? groundY(city.spawn.x, city.spawn.z) : 0), big ? big.spawn.z : 0);
     camGround.current = camera.position.y - EYE;
-    look.current = { yaw: western ? western.spawnYaw : isBeach(city) ? city.spawnYaw : 0, pitch: city ? 0.12 : 0 };
+    look.current = {
+      yaw: western ? western.spawnYaw : isBeach(city) ? city.spawnYaw : alpineMap ? alpineMap.alpine.spawnYaw : 0,
+      pitch: city ? 0.12 : 0,
+    };
+    resetRide();
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -1939,21 +1947,33 @@ function World({
   };
 
   /** where the living players are (the host sees everyone) */
-  const livePlayers = () => {
+  const livePlayers = (zone?: number) => {
     const out: { x: number; z: number }[] = [];
-    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z });
+    const ok = (x: number, z: number, onLift: boolean) =>
+      !alpineMap || (!onLift && (zone === undefined || alpineZone(x, z) === zone));
+    if (!deadRef.current && ok(camera.position.x, camera.position.z, ride.chair >= 0))
+      out.push({ x: camera.position.x, z: camera.position.z });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z });
+      if (r.hp > 0 && now - r.last < 4000 && ok(r.x, r.z, (r.rc ?? -1) >= 0)) out.push({ x: r.x, z: r.z });
     });
     if (out.length === 0) out.push({ x: camera.position.x, z: camera.position.z });
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
   const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)];
-  const spot = (rMin: number, rMax: number, hidden: boolean) =>
+  /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
+  const liveZones = () => {
+    const z = new Set<number>();
+    for (const p of livePlayers()) z.add(alpineZone(p.x, p.z));
+    return z;
+  };
+  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number) =>
     big
-      ? spawnNear(blocks, rand, livePlayers(), rMin, rMax, hidden, 1, navOpen)
+      ? spawnNear(
+          blocks, rand, livePlayers(zone), rMin, rMax, hidden, 1,
+          alpineMap && zone !== undefined ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone : navOpen,
+        )
       : randomSpawn(blocks, rand);
 
   /** where the boss appears: Dry Gulch's Iron Marshal steps off his train at the platform */
@@ -2353,7 +2373,9 @@ function World({
   const outOfBounds = (p: THREE.Vector3) =>
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
     // sea); every other map: under the ground or into a solid cell
-    (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05)) ||
+    // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
+    (shotHits(p.x, p.y, p.z) ??
+      (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05))) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     (big !== null && hitsTraffic(p.x, p.y, p.z));
@@ -2511,6 +2533,11 @@ function World({
       camGround.current = !groundOwnsHits() || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
     }
     cam.position.y = camGround.current + EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    // alpine chairlift: stand on a loading line to board; seated, the chair carries you
+    if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current)) {
+      slide.current.x = 0;
+      slide.current.z = 0;
+    }
 
     // minimap feed (the HUD reads it)
     if (big) {
@@ -2542,6 +2569,7 @@ function World({
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
+          ...(alpineMap ? { rc: ride.chair } : {}),
         });
       }
     }
@@ -2836,6 +2864,7 @@ function World({
           const q = lp ? besides(lp.x, lp.z)
             : le?.alive && le.kind === "hornet" ? besides(le.x, le.z)
             : enemies[i]!.kind === "boss" ? bossSpot() : spot(25, 45, true);
+          // (alpine: spot() only anchors on players standing in a zone, never riders)
           pd.x = q.x;
           pd.z = q.z;
         }
@@ -2884,7 +2913,10 @@ function World({
       const targets: Target[] = [];
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundY(r.x, r.z), fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
+        if (r.hp > 0 && now - r.last < 4000) {
+          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + groundY(r.x, r.z);
+          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw) });
+        }
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf });
 
@@ -2929,13 +2961,42 @@ function World({
         recycleT.current -= delta;
         if (recycleT.current <= 0) {
           recycleT.current = 1;
+          // alpine zones: when the last player has left a zone (and nobody is on the lift),
+          // its enemies re-enter out of sight in a zone that has players; otherwise every
+          // enemy stays in its own zone
+          const zones = alpineMap ? liveZones() : null;
+          const anyRiding = !!alpineMap && (ride.chair >= 0 || [...remotes.current.values()].some((r) => (r.rc ?? -1) >= 0 && r.hp > 0));
+          const zoneFor = (x: number, z: number) => {
+            if (!zones || zones.size === 0) return undefined;
+            const ez = alpineZone(x, z);
+            return zones.has(ez) ? ez : [...zones][0];
+          };
+          if (zones && zones.size > 0 && !anyRiding) {
+            for (const e of enemies) {
+              if (!e.alive || zones.has(alpineZone(e.x, e.z))) continue;
+              if (targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1))) continue;
+              const q = spot(25, 45, true, zoneFor(e.x, e.z));
+              e.x = q.x;
+              e.z = q.z;
+              e.stuckFor = 0;
+            }
+            pending.current.forEach((pd) => {
+              if (pd?.placed && !zones.has(alpineZone(pd.x, pd.z))) {
+                const q = spot(25, 45, true, zoneFor(pd.x, pd.z));
+                pd.x = q.x;
+                pd.z = q.z;
+              }
+            });
+          }
           for (const e of enemies) {
             if (!e.alive) continue;
             let dmin = Infinity;
             for (const t of targets) dmin = Math.min(dmin, Math.hypot(t.x - e.x, t.z - e.z));
             // (the Iron Marshal gets a head start from the station before he's brought closer)
-            if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
-              const q = e.kind === "boss" ? spot(25, 40, false) : spot(25, 45, true);
+            if (zones && (anyRiding || !zones.has(alpineZone(e.x, e.z)))) {
+              // nobody in its zone yet (or someone mid-ride): it stays put
+            } else if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
+              const q = e.kind === "boss" ? spot(25, 40, false, zoneFor(e.x, e.z)) : spot(25, 45, true, zoneFor(e.x, e.z));
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -2946,7 +3007,7 @@ function World({
               e.stuckFor = moved < 0.5 && dmin > 18 ? (e.stuckFor ?? 0) + 1 : 0;
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if (e.stuckFor >= 3 && !seen) {
-                const q = spot(25, 45, true);
+                const q = spot(25, 45, true, zoneFor(e.x, e.z));
                 e.x = q.x;
                 e.z = q.z;
                 e.stuckFor = 0;
@@ -2979,8 +3040,12 @@ function World({
         const st = STATS[e.kind];
         // nearest player
         let target = targets[0]!;
-        let d = Math.hypot(target.x - e.x, target.z - e.z) || 1;
+        let d = Infinity;
+        // (alpine: chase someone in your own zone if there is anyone; others are unreachable)
+        const ez = alpineMap ? alpineZone(e.x, e.z) : 0;
+        const same = alpineMap ? targets.some((t) => alpineZone(t.x, t.z) === ez) : true;
         for (const t of targets) {
+          if (alpineMap && same && alpineZone(t.x, t.z) !== ez) continue;
           const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
           if (dd < d) { d = dd; target = t; }
         }
@@ -3735,6 +3800,7 @@ export function Game() {
   const [healMsg, setHealMsg] = useState(0);
   const [musicVol, setMusicVol] = useState(0.5);
   const [sfxVol, setSfxVol] = useState(0.7);
+  const [ambVol, setAmbVol] = useState(0.6);
   const [shards, setShards] = useState(0);
   const [ability, setAbility] = useState<AbilityId>(() => {
     if (typeof window === "undefined") return "dash";
@@ -3934,11 +4000,12 @@ export function Game() {
       else if (typeof v.sens === "number") setSensY(v.sens);
       if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
       if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
+      if (typeof v.ambVol === "number") setAmbVol(v.ambVol);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
-  }, [fov, sensX, sensY, musicVol, sfxVol]);
+    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+  }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -3989,7 +4056,8 @@ export function Game() {
     setTerrain(
       alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : level.western ? level.western.terrain : null,
     );
-    resetAlpine(alp !== null);
+    resetAlpine(alp !== null, alp ? alp.lift : null);
+    resetRide();
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
@@ -4211,6 +4279,8 @@ export function Game() {
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
+    // the background soundscape plays (and pauses) with the music
+    setAmbienceActive(started && locked && !ended);
   }, [started, locked, ended]);
   // if the browser blocked sound until now, the next click/keypress restarts it
   useEffect(() => {
@@ -4226,9 +4296,17 @@ export function Game() {
     };
   }, [started, locked, ended]);
 
-  useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
-  useEffect(() => setMusicTheme(theme.name), [theme.name]);
-  useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
+  useEffect(() => {
+    const boss = status.wave === WAVES.length && !status.won;
+    setMusicIntensity(boss);
+    setMusicProgress(status.wave, WAVES.length);
+    // the map's hazard (blizzard, dust storm, marine layer...) comes with the boss round
+    setAmbienceHazard(boss);
+  }, [status.wave, status.won]);
+  useEffect(() => setMusicTheme(theme.name, layoutOf(theme)), [theme]);
+  useEffect(() => setAmbienceScene(theme.name, layoutOf(theme), city ?? western), [theme, city, western]);
+  useEffect(() => setAmbienceTime(time), [time]);
+  useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
 
@@ -4327,6 +4405,7 @@ export function Game() {
           onInv={setInv}
 
         />
+        <AmbienceListener />
       </Canvas>
 
       {hurtFlash > 0 && (
@@ -4788,6 +4867,12 @@ export function Game() {
                   EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
                   <input type="range" min={0} max={1} step={0.05} value={sfxVol}
                     onChange={(e) => setSfxVol(Number(e.target.value))}
+                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                </label>
+                <label className="block">
+                  AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
+                  <input type="range" min={0} max={1} step={0.05} value={ambVol}
+                    onChange={(e) => setAmbVol(Number(e.target.value))}
                     className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                 </label>
               </div>

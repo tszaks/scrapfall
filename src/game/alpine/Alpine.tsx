@@ -7,10 +7,11 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 
 import { Geo } from "../cityGeo";
-import { groundY } from "../terrain";
-import { buildInto, cableY, type Kit } from "./build";
+import { terrainY } from "../terrain";
+import { buildInto, type Kit } from "./build";
+import { chairAt, chairCount, ride } from "./ride";
 import { farSpruceGeo, spruceGeo } from "./forest";
-import type { AlpineLayout, Lift } from "./layout";
+import type { AlpineLayout } from "./layout";
 import type { TimeOfDay } from "../lighting";
 import { alpineLook, type AlpineLook } from "./look";
 import { mulberry } from "./noise";
@@ -20,6 +21,7 @@ import {
   farTrees,
   forestTexture,
   outerTerrain,
+  aoTexture,
   playTerrain,
   surfTexture,
 } from "./terrainMesh";
@@ -53,9 +55,26 @@ const U = {
   /** baked ground light from lamps (rgb), and how strongly it shows (night 1, sunset low) */
   uLightMap: { value: null as THREE.Texture | null },
   uLampK: { value: 1 },
+  /** light bounced off the snow onto walls */
+  uBounce: { value: new THREE.Color("#33416a") },
   /** the heightfield (so lamp light can fall off with height above the snow) */
   uGround: { value: null as THREE.Texture | null },
 };
+
+/** the heightfield with walkable decks (the bridge) written in, for lamp-light falloff */
+function withPlatforms(a: AlpineLayout["alpine"]) {
+  const t = a.terrain;
+  const h = t.h.slice();
+  const s = t.n + 1;
+  for (const p of t.platforms ?? [])
+    for (let i = 0; i <= t.n; i++)
+      for (let j = 0; j <= t.n; j++) {
+        const x = -t.half + i * t.cell;
+        const z = -t.half + j * t.cell;
+        if (x > p.x0 - 2 && x < p.x1 + 2 && z > p.z0 - 2 && z < p.z1 + 2) h[i * s + j] = p.y;
+      }
+  return h;
+}
 
 function groundTexture(h: Float32Array, n: number) {
   const t = new THREE.DataTexture(h, n, n, THREE.RedFormat, THREE.FloatType);
@@ -84,8 +103,8 @@ function lightMap(lights: [number, number, number, string][], half: number) {
     const cc = new THREE.Color(col);
     const rgb = (a: number) =>
       `rgba(${Math.round(cc.r * 255)},${Math.round(cc.g * 255)},${Math.round(cc.b * 255)},${a})`;
-    gr.addColorStop(0, rgb(0.75));
-    gr.addColorStop(0.35, rgb(0.4));
+    gr.addColorStop(0, rgb(0.8));
+    gr.addColorStop(0.45, rgb(0.45));
     gr.addColorStop(1, rgb(0));
     g.fillStyle = gr;
     g.fillRect(px - pr, pz - pr, pr * 2, pr * 2);
@@ -153,6 +172,7 @@ uniform float uTime;
 uniform sampler2D uLightMap;
 uniform sampler2D uGround;
 uniform float uLampK;
+uniform vec3 uBounce;
 vec3 aLamp(vec3 wp) {
   if (abs(wp.x) > 399.0 || abs(wp.z) > 399.0) return vec3(0.0);
   // heightfield rows run along x (h[i * (n + 1) + j]), so x is the texture's v axis
@@ -250,19 +270,24 @@ if (aLayer == ${T.metal}.0 || aLayer == ${T.copper}.0) roughnessFactor = 0.55;`,
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
 totalEmissiveRadiance += diffuseColor.rgb * aLamp(vAWorld) * 0.9;
+{
+  // snow is a huge soft reflector: walls facing away from the moon still catch its bounce
+  vec3 bwN = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  totalEmissiveRadiance += diffuseColor.rgb * uBounce * (0.35 + 0.65 * (1.0 - abs(bwN.y)));
+}
 if (aWin && aMask > 0.3) {
   float h = aHash(vec2(vFac.y * 977.0, aLayer));
   float lit = step(h, uWin * 0.88);
   vec3 warm = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.72, 0.4), fract(h * 13.7));
   // a little depth: brighter low in the pane, curtain shadow at the top
   float grad = mix(1.1, 0.65, fract(vFuv.y));
-  totalEmissiveRadiance += warm * lit * aMask * 1.05 * grad;
+  totalEmissiveRadiance += warm * lit * aMask * (aLayer == ${T.glasswall}.0 ? 0.55 : 1.05) * grad;
 }
 if (aLayer == ${T.snow}.0) {
   vec3 V = normalize(cameraPosition - vAWorld);
   vec3 wN = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
   float g = pow(max(dot(reflect(-uSunDir, wN), V), 0.0), 12.0);
-  totalEmissiveRadiance += vec3(0.9, 0.95, 1.0) * aMask * (0.25 + g * 2.0);
+  totalEmissiveRadiance += vec3(0.9, 0.95, 1.0) * aMask * (g * 1.5 + dot(aLamp(vAWorld), vec3(0.6)));
   totalEmissiveRadiance += diffuseColor.rgb * uPeakLit * uAlpen * 0.12 * max(dot(wN, uSunDir), 0.0);
 }`,
       );
@@ -272,17 +297,26 @@ if (aLayer == ${T.snow}.0) {
 }
 
 /** the snow itself: packed paths, groomed pistes, ice, rock, forest floor, far forest */
-function terrainMaterial(surf: THREE.Texture, forest: THREE.Texture) {
+function terrainMaterial(surf: THREE.Texture, forest: THREE.Texture, ao: THREE.Texture) {
   const mat = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.9, metalness: 0 });
   mat.fog = false;
   mat.onBeforeCompile = (sh) => {
-    withFog(sh as unknown as Shader);
     sh.uniforms["uSurf"] = { value: surf };
     sh.uniforms["uForest"] = { value: forest };
+    sh.uniforms["uAO"] = { value: ao };
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        `#include <common>\nuniform sampler2D uSurf;\nuniform sampler2D uForest;\nfloat aSparkle;\nfloat aIce;`,
+        `#include <common>\nfloat inPlayK(vec2 p) { return 1.0 - smoothstep(380.0, 400.0, max(abs(p.x), abs(p.y))); }\nuniform sampler2D uSurf;\nuniform sampler2D uForest;\nuniform sampler2D uAO;\nfloat aSparkle;\nfloat aIce;\nvec2 aBump;\n
+// snow relief (metres): wind-sculpted drifts and sastrugi on open snow, trodden dimples on
+// paths, twin ski tracks and footpath trails wandering across the fields
+float aSnowH(vec2 p, float packedK, float pisteK) {
+  float h = aNoise(p * 0.11) * 0.28 + aNoise(p * 0.37) * 0.08;
+  h += 0.035 * sin(dot(p, vec2(0.8, 0.6)) * 2.6 + aNoise(p * 0.45) * 5.0) * (1.0 - packedK);
+  h += aNoise(p * 5.0) * 0.03 * packedK;
+  h -= 0.04 * pisteK * smoothstep(0.35, 0.5, abs(fract((p.x + p.y) * 0.9) - 0.5) * 2.0);
+  return h;
+}`,
       )
       .replace(
         "#include <map_fragment>",
@@ -290,6 +324,19 @@ function terrainMaterial(surf: THREE.Texture, forest: THREE.Texture) {
 vec2 wp = vAWorld.xz;
 bool inPlay = abs(wp.x) < 399.0 && abs(wp.y) < 399.0;
 vec4 sf = inPlay ? texture2D(uSurf, (wp + 400.0) / 800.0) : vec4(0.0);
+float ao = inPlay ? texture2D(uAO, (wp + 400.0) / 800.0).r : 0.0;
+// footpath trails and ski tracks across the open snow (contours of a slow noise field)
+float tn = aNoise(wp * 0.021);
+float trail = (1.0 - smoothstep(0.006, 0.016, abs(tn - 0.5))) * (1.0 - sf.r) * (1.0 - sf.b) * step(abs(wp.x), 399.0);
+float tn2 = aNoise(wp * 0.017 + 40.0);
+float ski = (1.0 - smoothstep(0.0015, 0.004, abs(abs(tn2 - 0.5) - 0.012))) * sf.g;
+{
+  float pk = clamp(sf.r + trail, 0.0, 1.0);
+  float e = 0.25;
+  float h0 = aSnowH(wp, pk, sf.g);
+  aBump = vec2(aSnowH(wp + vec2(e, 0.0), pk, sf.g) - h0, aSnowH(wp + vec2(0.0, e), pk, sf.g) - h0) / e;
+  aBump *= (1.0 - smoothstep(60.0, 160.0, length(vAWorld - cameraPosition))) * inPlayK(wp);
+}
 float farForest = inPlay ? 0.0 : texture2D(uForest, (wp + ${FOREST_EXTENT}.0) / ${FOREST_EXTENT * 2}.0).r;
 float n1 = aNoise(wp * 0.05);
 float n2 = aNoise(wp * 0.6);
@@ -314,6 +361,10 @@ aIce = smoothstep(0.6, 0.9, sf.b);
 vec3 ice = mix(vec3(0.55, 0.68, 0.8), vec3(0.72, 0.84, 0.92), aNoise(wp * 0.35));
 ice = mix(ice, vec3(0.93, 0.96, 1.0), smoothstep(0.55, 0.8, aNoise(wp * 0.9 + 3.0)) * 0.7);
 col = mix(col, ice, aIce);
+// trodden trails and ski tracks: compacted, slightly grey
+col *= 1.0 - 0.1 * trail - 0.12 * ski;
+// walls and trunks shade the snow at their feet
+col *= 1.0 - 0.38 * ao;
 // forest floor: shaded snow with needle litter
 col = mix(col, vec3(0.74, 0.78, 0.82) * (0.9 + 0.15 * n3), sf.a * 0.45);
 // far forest seen from above: dark canopy flecked with snow
@@ -329,11 +380,16 @@ col = mix(col, rockC, clamp(rock, 0.0, 1.0) * (1.0 - step(0.8, n1 * n2 * 2.0) * 
 float gl = smoothstep(900.0, 1300.0, vAWorld.y) * (1.0 - smoothstep(0.25, 0.4, slope)) * smoothstep(0.45, 0.6, aNoise(wp * 0.0012));
 col = mix(col, vec3(0.74, 0.86, 0.97), gl * 0.6);
 diffuseColor.rgb = col;
-aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy);`,
+aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy) * (1.0 - ao);`,
       )
       .replace(
         "#include <roughnessmap_fragment>",
         `float roughnessFactor = mix(roughness, 0.2, aIce);`,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+normal = normalize(normal - (viewMatrix * vec4(aBump.x, 0.0, aBump.y, 0.0)).xyz * 0.9);`,
       )
       .replace(
         "#include <emissivemap_fragment>",
@@ -347,16 +403,19 @@ aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy);`,
   float fdist = length(vAWorld - cameraPosition);
   // each glint only flashes from some view angles, like real snow crystals
   float facet = step(0.6, aHash(cell + floor(V.xz * 6.0)));
-  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.994, h) * facet * aSparkle * (0.04 + spec * 3.0) * (1.0 - smoothstep(6.0, 30.0, fdist));
+  float glintLight = spec * 2.2 + dot(aLamp(vAWorld), vec3(0.8));
+  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.996, h) * facet * aSparkle * glintLight * (1.0 - smoothstep(4.0, 22.0, fdist));
   // lamp light pooling on the snow
-  totalEmissiveRadiance += diffuseColor.rgb * aLamp(vAWorld) * 1.6;
+  totalEmissiveRadiance += diffuseColor.rgb * aLamp(vAWorld) * 1.0;
   // alpenglow: the high snow catches the low sun long after the valley has gone blue
   float hi = smoothstep(160.0, 1400.0, vAWorld.y);
   totalEmissiveRadiance += diffuseColor.rgb * uPeakLit * uAlpen * hi * max(dot(wN, uSunDir) + 0.25, 0.0) * 0.85;
 }`,
       );
+    // after our own helpers, so the fog helpers (aNoise, aHash...) land in front of them
+    withFog(sh as unknown as Shader);
   };
-  mat.customProgramCacheKey = () => "alpine-terrain-v1";
+  mat.customProgramCacheKey = () => "alpine-terrain-v3";
   return mat;
 }
 
@@ -470,7 +529,7 @@ void main() {
       float rays = 0.55 + 0.45 * n2(vec2(az * 28.0, uTime * 0.12));
       float fold = smoothstep(-1.2, -0.2, az) * (1.0 - smoothstep(0.6, 1.4, az));
       vec3 ac = mix(vec3(0.1, 0.9, 0.55), vec3(0.55, 0.25, 0.8), smoothstep(band, band + 0.12, h));
-      col += ac * curtain * rays * fold * uAurora * 0.55;
+      col += ac * curtain * rays * fold * uAurora * 0.32;
     }
   }
   col = mix(col, uFogCol, uBlizz);
@@ -483,6 +542,53 @@ void main() {
 
 // ---------------------------------------------------------------------------------------
 // falling snow (points) and blizzard streaks (lines), both wrapped around the camera
+
+/** soft round camera-facing points, drawn procedurally (no sprite texture, any browser) */
+function roundPoints(
+  size: number,
+  additive: boolean,
+  vertexColors: boolean,
+  color: string,
+  opacity: number,
+) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    vertexColors,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    uniforms: {
+      uSize: { value: size },
+      uColor: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+      uPx: { value: 1 },
+    },
+    vertexShader: /* glsl */ `
+uniform float uSize;
+uniform float uPx;
+varying vec3 vCol;
+void main() {
+  #ifdef USE_COLOR
+  vCol = color;
+  #else
+  vCol = vec3(1.0);
+  #endif
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = min(96.0, uSize * uPx * 420.0 / max(-mv.z, 0.5));
+}`,
+    fragmentShader: /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+varying vec3 vCol;
+void main() {
+  float d = length(gl_PointCoord - 0.5) * 2.0;
+  if (d > 1.0) discard;
+  float a = pow(1.0 - d, 1.6);
+  gl_FragColor = vec4(uColor * vCol, a * uOpacity);
+}`,
+  });
+}
 
 const SNOW_BOX = 70;
 function snowMaterial() {
@@ -526,14 +632,15 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = -mv.z;
-  gl_PointSize = uPx * (0.05 + aSeed * 0.05) * 900.0 / max(dist, 0.5);
+  // real flakes are ~5-15 mm: a few pixels at most, never a big square near the lens
+  gl_PointSize = clamp(uPx * (0.012 + aSeed * 0.014) * 900.0 / max(dist, 0.5), 1.0, 4.5 * uPx);
   vLamp = vec3(0.0);
   if (abs(p.x) < 399.0 && abs(p.z) < 399.0) {
     float gy = texture2D(uGround, vec2((p.z + 400.0) / 800.0, (p.x + 400.0) / 800.0)).r;
     vLamp = texture2D(uLightMap, (p.xz + 400.0) / 800.0).rgb * uLampK * 2.4 * (1.0 - smoothstep(2.0, 9.0, p.y - gy));
   }
   float keep = step(aSeed, 0.35 + uBlizz * 0.65);
-  vA = keep * smoothstep(0.4, 2.0, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, dist));
+  vA = keep * smoothstep(1.2, 3.5, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, dist));
 }`,
     fragmentShader: /* glsl */ `
 uniform sampler2D uTex;
@@ -542,7 +649,9 @@ varying float vA;
 varying vec3 vLamp;
 void main() {
   if (vA < 0.01) discard;
-  float a = texture2D(uTex, gl_PointCoord).a;
+  float d = length(gl_PointCoord - 0.5) * 2.0;
+  if (d > 1.0) discard;
+  float a = 1.0 - d * d;
   gl_FragColor = vec4(uCol + vLamp, a * vA * 0.9);
 }`,
   });
@@ -587,48 +696,6 @@ void main() { gl_FragColor = vec4(uCol, vA * 0.55); }`,
 
 // ---------------------------------------------------------------------------------------
 // the chairlift path: up the west cable, round the top bullwheel, down the east cable
-
-function liftPath(lift: Lift) {
-  const s0 = lift.supports[0]!;
-  const s1 = lift.supports[lift.supports.length - 1]!;
-  const run = Math.abs(s0.z - s1.z);
-  const bull = Math.PI * lift.gauge;
-  const total = run * 2 + bull * 2;
-  const yAtZ = (z: number) => {
-    for (let i = 0; i + 1 < lift.supports.length; i++) {
-      const p = lift.supports[i]!;
-      const q = lift.supports[i + 1]!;
-      if (z <= p.z && z >= q.z) return cableY(p, q, (p.z - z) / (p.z - q.z));
-    }
-    return z > s0.z ? s0.y : s1.y;
-  };
-  const out = { x: 0, y: 0, z: 0, yaw: 0 };
-  const at = (s: number) => {
-    s = ((s % total) + total) % total;
-    if (s < run) {
-      out.x = lift.x - lift.gauge;
-      out.z = s0.z - s;
-      out.yaw = 0;
-    } else if (s < run + bull) {
-      const a = ((s - run) / bull) * Math.PI;
-      out.x = lift.x - Math.cos(a) * lift.gauge;
-      out.z = s1.z - Math.sin(a) * lift.gauge;
-      out.yaw = -a;
-    } else if (s < run * 2 + bull) {
-      out.x = lift.x + lift.gauge;
-      out.z = s1.z + (s - run - bull);
-      out.yaw = Math.PI;
-    } else {
-      const a = ((s - run * 2 - bull) / bull) * Math.PI;
-      out.x = lift.x + Math.cos(a) * lift.gauge;
-      out.z = s0.z + Math.sin(a) * lift.gauge;
-      out.yaw = Math.PI - a;
-    }
-    out.y = yAtZ(Math.max(Math.min(out.z, s0.z), s1.z));
-    return out;
-  };
-  return { total, at };
-}
 
 function chairGeo() {
   const g = new Geo();
@@ -675,6 +742,7 @@ type Built = {
   smoke: [number, number, number][];
   lamps: [number, number, number, number][];
   surf: THREE.DataTexture;
+  ao: THREE.DataTexture;
   light: THREE.CanvasTexture;
   ground: THREE.DataTexture;
   forest: THREE.DataTexture;
@@ -702,7 +770,7 @@ function build(layout: AlpineLayout): Built {
     const j = Math.max(0, Math.min(nc - 1, Math.floor((z + half) / CHUNK)));
     return kits[i * nc + j]!;
   };
-  buildInto(kitAt, a, groundY);
+  buildInto(kitAt, a, terrainY);
   // unlit glow boxes share the sign material: point their uvs at the atlas's white texel
   for (const k of kits) {
     const gb = k.glow.buf;
@@ -785,8 +853,9 @@ function build(layout: AlpineLayout): Built {
     smoke,
     lamps,
     surf: surfTexture(a),
+    ao: aoTexture(a),
     light: lightMap(lights, half),
-    ground: groundTexture(a.terrain.h, a.terrain.n + 1),
+    ground: groundTexture(withPlatforms(a), a.terrain.n + 1),
     forest: forestTexture(),
     stats: { verts, trees: a.trees.length, far: far.length },
   };
@@ -821,7 +890,10 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => {
     // test handle (?debug=1): the shared weather / lift clock
     if (new URLSearchParams(window.location.search).get("debug") === "1")
-      (window as unknown as { __alpine?: unknown }).__alpine = alpine;
+      Object.assign(window as unknown as Record<string, unknown>, {
+        __alpine: alpine,
+        __ride: ride,
+      });
   }, []);
 
   const mats = useMemo(
@@ -842,7 +914,7 @@ export const AlpineScene = memo(function AlpineScene({
         polygonOffsetFactor: -2,
         fog: false,
       }),
-      terrain: terrainMaterial(built.surf, built.forest),
+      terrain: terrainMaterial(built.surf, built.forest, built.ao),
       tree: treeMaterial(),
       sky: skyMaterial(),
       snow: snowMaterial(),
@@ -851,27 +923,8 @@ export const AlpineScene = memo(function AlpineScene({
         new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
         "alpine-chair",
       ),
-      halo: new THREE.PointsMaterial({
-        map: glowTexture(),
-        size: 3,
-        sizeAttenuation: true,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        vertexColors: true,
-        fog: false,
-        toneMapped: false,
-      }),
-      smoke: new THREE.PointsMaterial({
-        map: glowTexture(),
-        size: 2.6,
-        sizeAttenuation: true,
-        transparent: true,
-        depthWrite: false,
-        opacity: 0.2,
-        color: "#dfe2ea",
-        fog: false,
-      }),
+      halo: roundPoints(3, true, true, "#ffffff", 0.85),
+      smoke: roundPoints(2.6, false, false, "#dfe2ea", 0.2),
     }),
     [built],
   );
@@ -883,6 +936,7 @@ export const AlpineScene = memo(function AlpineScene({
       for (const t of built.terrain) t.geo.dispose();
       built.outer.dispose();
       built.surf.dispose();
+      built.ao.dispose();
       built.light.dispose();
       built.ground.dispose();
       built.forest.dispose();
@@ -979,8 +1033,8 @@ export const AlpineScene = memo(function AlpineScene({
     }
   }, [built]);
 
-  const path = useMemo(() => liftPath(layout.alpine.lift), [layout]);
-  const chairCount = Math.floor(path.total / 15);
+  const lift = layout.alpine.lift;
+  const nChairs = chairCount(lift);
 
   // time of day: sky colours, light tints, window glow
   const skyRef = useRef<THREE.Mesh>(null);
@@ -1001,11 +1055,12 @@ export const AlpineScene = memo(function AlpineScene({
     U.uHazeDist.value = night ? 5200 : 7000;
     U.uHazeMax.value = night ? 0.9 : 0.8;
     mats.signs.color.setScalar(night ? 1.25 : 0.95);
-    U.uLampK.value = night ? 1 : 0.22;
-    mats.halo.opacity = night ? 0.85 : 0.35;
+    U.uLampK.value = night ? 0.85 : 0.2;
+    U.uBounce.value.set(night ? "#5a6ca8" : "#8a8fbc");
+    mats.halo.uniforms["uOpacity"]!.value = night ? 0.85 : 0.35;
     (mats.snow.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
     (mats.streak.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
-    mats.smoke.color.set(night ? "#7a849c" : "#e8d6dc");
+    (mats.smoke.uniforms["uColor"]!.value as THREE.Color).set(night ? "#7a849c" : "#e8d6dc");
     const prev = scene.background;
     scene.background = new THREE.Color(look.skyHorizon);
     return () => {
@@ -1024,6 +1079,7 @@ export const AlpineScene = memo(function AlpineScene({
   const q = useMemo(() => new THREE.Quaternion(), []);
   const ax = useMemo(() => new THREE.Vector3(0, 1, 0), []);
   const sc = useMemo(() => new THREE.Vector3(1, 1, 1), []);
+  const zero = useMemo(() => new THREE.Vector3(0.0001, 0.0001, 0.0001), []);
   const pv = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((state, raw) => {
@@ -1066,11 +1122,11 @@ export const AlpineScene = memo(function AlpineScene({
     // chairs ride the cable on the shared clock
     const ch = chairRef.current;
     if (ch) {
-      const s0 = alpine.t * 2.3;
-      for (let i = 0; i < chairCount; i++) {
-        const p = path.at(s0 + (i * path.total) / chairCount);
+      for (let i = 0; i < nChairs; i++) {
+        const p = chairAt(lift, i);
         q.setFromAxisAngle(ax, p.yaw);
-        m4.compose(pv.set(p.x, p.y, p.z), q, sc);
+        // your own chair is hidden while you ride it (it would fill the view); teammates' show
+        m4.compose(pv.set(p.x, p.y, p.z), q, i === ride.chair ? zero : sc);
         ch.setMatrixAt(i, m4);
       }
       ch.instanceMatrix.needsUpdate = true;
@@ -1194,7 +1250,7 @@ export const AlpineScene = memo(function AlpineScene({
       )}
       <instancedMesh
         ref={chairRef}
-        args={[geos.chair, mats.chair, chairCount]}
+        args={[geos.chair, mats.chair, nChairs]}
         castShadow
         frustumCulled={false}
       />

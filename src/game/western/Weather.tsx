@@ -13,7 +13,7 @@ import { skyFog } from "../skyFog";
 import type { TrafficLink } from "../trafficCore";
 import type { WesternLayout } from "./layout";
 import { WESTERN_LOOK } from "./look";
-import { stormVoice } from "./sound";
+import { setAmbienceWeather } from "../ambience";
 import { puffTexture, softGlow } from "./textures";
 import { trainClock } from "./trainSim";
 import { stormAt } from "./storm";
@@ -171,11 +171,9 @@ export function WesternWeather({
     color: new THREE.Color(),
     sunK: 0,
   });
-  const voice = useRef<ReturnType<typeof stormVoice>>(null);
   useEffect(
     () => () => {
-      voice.current?.stop();
-      voice.current = null;
+      setAmbienceWeather(0);
       const b = base.current;
       if (b.fog) {
         b.fog.near = b.near;
@@ -197,8 +195,8 @@ export function WesternWeather({
     const st = stormAt(t);
     const k = st.k;
     const et = state.clock.elapsedTime;
-    if (!voice.current) voice.current = stormVoice();
-    voice.current?.update(k, et);
+    // the storm's howl is the shared ambience's weather layer (on top of the boss-round storm)
+    setAmbienceWeather(k);
 
     // ---- the haze closes in ----
     const fog = scene.fog as THREE.Fog | null;

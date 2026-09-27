@@ -125,37 +125,3 @@ export function trainVoice() {
     },
   };
 }
-
-/** the storm's howling wind (fades with `k`, 0..1) */
-export function stormVoice() {
-  const A = audioOut();
-  if (!A) return null;
-  const { ctx, out, noise } = A;
-  const src = ctx.createBufferSource();
-  src.buffer = noise;
-  src.loop = true;
-  const bp = ctx.createBiquadFilter();
-  bp.type = "bandpass";
-  bp.frequency.value = 420;
-  bp.Q.value = 0.9;
-  const g = ctx.createGain();
-  g.gain.value = 0;
-  src.connect(bp).connect(g).connect(out);
-  src.start();
-  return {
-    update(k: number, t: number) {
-      const now = ctx.currentTime;
-      g.gain.setTargetAtTime(0.5 * k, now, 0.4);
-      // gusts: the pitch of the howl swings
-      bp.frequency.setTargetAtTime(
-        320 + 260 * (0.5 + 0.5 * Math.sin(t * 0.7) * Math.sin(t * 0.23)),
-        now,
-        0.3,
-      );
-    },
-    stop() {
-      src.stop();
-      src.disconnect();
-    },
-  };
-}
