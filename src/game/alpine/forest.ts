@@ -52,7 +52,7 @@ function tier(b: Build, y: number, r: number, pts: number, rot: number, under: b
     const qd = [q[0]! * 0.9, q[1]! - fringe, q[2]! * 0.9];
     tri(b, p, q, pd, NEEDLE, i % 2 ? 0.85 : 1);
     tri(b, q, qd, pd, NEEDLE, i % 2 ? 0.75 : 0.9);
-    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#16241c");
+    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#2a4234");
   }
 }
 
@@ -80,7 +80,7 @@ function toGeo(b: Build) {
   return g;
 }
 
-const NEEDLE = "#2c4636";
+const NEEDLE = "#48705a";
 const SNOWC = "#eef3fa";
 const RIM = "#b4c4c0";
 const RIM2 = "#8ea49c";

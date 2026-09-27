@@ -1521,23 +1521,34 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
   const gy = (x: number, z: number) => groundFn(x, z);
   switch (bl.style) {
     case "debris": {
-      // avalanche debris: a chaotic ridge of snow blocks with snapped trunks sticking out
-      for (let i = 0; i <= n * 2; i++) {
-        const [x, z] = at(i / (n * 2));
-        const o = (r() - 0.3) * 2.5;
+      // avalanche debris: a ridge of piled snow with broken blocks and snapped trunks in it
+      for (let t = 0; t <= 1.001; t += 3.5 / bl.w) {
+        const [x, z] = at(Math.min(1, t));
+        const o = (r() - 0.4) * 1.5;
         const px = x + out[0]! * o;
         const pz = z + out[1]! * o;
-        const s = 1.1 + r() * 1.4;
-        g.mat(T.snow, 0, 0).col(r() < 0.5 ? SNOW : "#dde6f2");
-        blob(g, px, gy(px, pz) + s * 0.5 + r() * 1.2, pz, s, s * 0.8, s, r, 6, r() * 6);
+        g.mat(T.snow, 0, 0).col(r() < 0.5 ? SNOW : SNOW_SHADE);
+        mound(g, px, gy(px, pz), pz, 7 + r() * 3, 2.4 + r() * 1.2, 5 + r() * 2, rot + (r() - 0.5) * 0.6);
+      }
+      // broken slabs of snow crust tumbled on top
+      for (let i = 0; i < n; i++) {
+        const [x, z] = at(r());
+        const o = (r() - 0.5) * 2.5;
+        const px = x + out[0]! * o;
+        const pz = z + out[1]! * o;
+        const sz = 0.9 + r() * 1.1;
+        g.mat(T.snow, 0, 0).col(r() < 0.5 ? "#e8eef6" : "#d6e0ec");
+        tbox(g, px, gy(px, pz) + 1.4 + r() * 0.8, pz, sz * 1.4, sz * 0.7, sz, r() * 6);
       }
       g.mat(T.bark, 0, 0).col("#ffffff");
       for (let i = 0; i < 3; i++) {
         const [x, z] = at(0.15 + r() * 0.7);
         const a = r() * 6.28;
         const L = 3 + r() * 4;
-        tube(g, [x, gy(x, z) + 0.5, z], [x + Math.cos(a) * L, gy(x, z) + 1.5 + r() * 2.5, z + Math.sin(a) * L], 0.22, 5, 0.12);
+        tube(g, [x, gy(x, z) + 1.2, z], [x + Math.cos(a) * L, gy(x, z) + 2.2 + r() * 2.2, z + Math.sin(a) * L], 0.22, 5, 0.12);
       }
+      const [sx, sz] = at(0.5);
+      signBoard(k, sx - out[0]! * 3.2, gy(sx, sz), sz - out[1]! * 3.2, rot, W_AVALANCHE, out);
       break;
     }
     case "closed": {
@@ -1554,12 +1565,12 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
         q4(g, [x0, ya + 0.15, z0], [x1, yb + 0.15, z1], [x1, yb + 1.7, z1], [x0, ya + 1.7, z0], [-out[0]!, 0, -out[1]!], [0, 0, 1.25, 0.8]);
         q4(g, [x0, ya + 0.15, z0], [x1, yb + 0.15, z1], [x1, yb + 1.7, z1], [x0, ya + 1.7, z0], [out[0]!, 0, out[1]!], [0, 0, 1.25, 0.8]);
       }
-      for (let i = 0; i <= n; i++) {
-        const [x, z] = at(i / n);
-        const px = x + out[0]! * 2.4;
-        const pz = z + out[1]! * 2.4;
+      for (let t = 0; t <= 1.001; t += 4 / bl.w) {
+        const [x, z] = at(Math.min(1, t));
+        const px = x + out[0]! * 2.6;
+        const pz = z + out[1]! * 2.6;
         g.mat(T.snow, 0, 0).col(SNOW);
-        blob(g, px, gy(px, pz) + 0.8, pz, 2.2, 2.2, 1.6, r, 6, rot);
+        mound(g, px, gy(px, pz), pz, 7, 2.6, 4, rot);
       }
       const [sx, sz] = at(0.5);
       signBoard(k, sx - out[0]! * 0.3, gy(sx, sz), sz - out[1]! * 0.3, rot, W_CLOSED, out);
@@ -1589,12 +1600,13 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
       const yb = gy(x1, z1) + 1.0;
       q4(g, [x0, ya, z0], [x1, yb, z1], [x1, yb + 0.3, z1], [x0, ya + 0.3, z0], [-out[0]!, 0, -out[1]!], [0, 0, bl.w / 2, 0.15]);
       q4(g, [x0, ya, z0], [x1, yb, z1], [x1, yb + 0.3, z1], [x0, ya + 0.3, z0], [out[0]!, 0, out[1]!], [0, 0, bl.w / 2, 0.15]);
-      for (let i = 0; i <= n; i++) {
-        const [x, z] = at(i / n);
-        const px = x + out[0]! * 2.6;
-        const pz = z + out[1]! * 2.6;
+      // the plough ridge: the road's snow bulldozed into a wall behind the gate
+      for (let t = 0; t <= 1.001; t += 3.5 / bl.w) {
+        const [x, z] = at(Math.min(1, t));
+        const px = x + out[0]! * 2.8;
+        const pz = z + out[1]! * 2.8;
         g.mat(T.snow, 0, 0).col(r() < 0.5 ? SNOW : SNOW_SHADE);
-        blob(g, px, gy(px, pz) + 0.9, pz, 2.6, 2.4, 1.8, r, 6, rot);
+        mound(g, px, gy(px, pz), pz, 7.5, 3 + r() * 0.5, 4.5, rot + (r() - 0.5) * 0.2);
       }
       const [sx, sz] = at(0.5);
       signBoard(k, sx - out[0]! * 0.4, gy(sx, sz), sz - out[1]! * 0.4, rot, W_ROAD, out);
@@ -1645,7 +1657,7 @@ function blockadeGeo(k: Kit, bl: Blockade, r: () => number) {
       for (let i = 0; i <= n; i++) {
         const [x, z] = at(i / n);
         g.mat(T.snow, 0, 0).col(SNOW_SHADE);
-        blob(g, x, gy(x, z) + 0.2, z, 1.8, 1.0, 1.4, r, 6, rot);
+        mound(g, x, gy(x, z), z, 4.5, 1.4, 3, rot + (r() - 0.5) * 0.5);
         const px = x + out[0]! * (2 + r() * 2);
         const pz = z + out[1]! * (2 + r() * 2);
         young(g, px, gy(px, pz), pz, 3.5 + r() * 3, r);
@@ -1668,8 +1680,9 @@ function signBoard(k: Kit, x: number, y: number, z: number, rot: number, word: n
   const fz = -out[1]!;
   k.signs.mat(0, 0, 0).col("#ffffff");
   // A (left) and B (right) as seen by a viewer on the inside
-  const rx = -fz; // right = facing x up
-  const rz = fx;
+  // the viewer looks along -f; their right-hand side is (fz, -fx)
+  const rx = fz;
+  const rz = -fx;
   const hw = 1.6;
   face(k.signs, x - rx * hw + fx * 0.05, z - rz * hw + fz * 0.05, x + rx * hw + fx * 0.05, z + rz * hw + fz * 0.05, y + 2.0, y + 2.75, signUV(word));
   g.mat(T.plain, 0, 0).col("#2a2c30");

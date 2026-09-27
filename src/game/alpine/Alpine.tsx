@@ -40,6 +40,9 @@ const U = {
   uMistCol: { value: new THREE.Color("#c9a3b4") },
   uMist: { value: new THREE.Vector2(400, 2600) },
   uFogCol: { value: new THREE.Color("#b9bfd4") },
+  uHazeOut: { value: new THREE.Color() },
+  uMistOut: { value: new THREE.Color() },
+  uFogOut: { value: new THREE.Color() },
   uFogNear: { value: 1e5 },
   uFogFar: { value: 2e5 },
   uSunDir: { value: new THREE.Vector3(-0.8, 0.2, -0.5).normalize() },
@@ -48,6 +51,28 @@ const U = {
   uWin: { value: 0.6 },
   uTime: { value: 0 },
 };
+
+/** a linear colour as it lands on screen: ACES filmic tone mapping, then sRGB encoding */
+function toScreen(c: THREE.Color, out: THREE.Color, exposure = 1) {
+  const k = exposure / 0.6;
+  const r = c.r * k;
+  const g = c.g * k;
+  const b = c.b * k;
+  // ACES input matrix
+  let x = 0.59719 * r + 0.35458 * g + 0.04823 * b;
+  let y = 0.076 * r + 0.90834 * g + 0.01566 * b;
+  let z = 0.0284 * r + 0.13383 * g + 0.83777 * b;
+  const fit = (v: number) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081);
+  x = fit(x);
+  y = fit(y);
+  z = fit(z);
+  const cl = (v: number) => Math.min(1, Math.max(0, v));
+  const R = cl(1.60475 * x - 0.53108 * y - 0.07367 * z);
+  const G = cl(-0.10208 * x + 1.10813 * y - 0.00605 * z);
+  const B = cl(-0.00327 * x - 0.07276 * y + 1.07602 * z);
+  const enc = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+  return out.setRGB(enc(R), enc(G), enc(B), THREE.LinearSRGBColorSpace);
+}
 
 const FOG_VERT_HEAD = /* glsl */ `
 varying vec3 vAWorld;
@@ -69,6 +94,9 @@ uniform float uHazeMax;
 uniform vec3 uMistCol;
 uniform vec2 uMist;
 uniform vec3 uFogCol;
+uniform vec3 uHazeOut;
+uniform vec3 uMistOut;
+uniform vec3 uFogOut;
 uniform float uFogNear;
 uniform float uFogFar;
 uniform vec3 uSunDir;
@@ -90,15 +118,20 @@ float aNoise(vec2 p) {
 `;
 const FOG_FRAG_BODY = /* glsl */ `
 {
+  // fog runs after tone mapping and the output transform, so the haze colours arrive
+  // already mapped to screen space (see toScreen) and match the sky behind them
+  vec3 hazeC = uHazeOut;
+  vec3 mistC = uMistOut;
+  vec3 fogC = uFogOut;
   float fd = length(vAWorld - cameraPosition);
   float aerial = (1.0 - exp(-fd / uHazeDist)) * uHazeMax;
   // aerial perspective is stronger low in the valley, thinner up on the peaks
   aerial *= mix(1.0, 0.7, smoothstep(300.0, 2500.0, vAWorld.y));
   float mist = smoothstep(uMist.x, uMist.y, fd) * 0.35 * (1.0 - smoothstep(150.0, 900.0, vAWorld.y));
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, uMistCol, mist);
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, uHaze, aerial);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, mistC, mist);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeC, aerial);
   float bl = smoothstep(uFogNear, uFogFar, fd);
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, uFogCol, bl);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogC, bl);
 }
 `;
 
@@ -242,7 +275,7 @@ aSparkle = (1.0 - rock) * (1.0 - sf.r) * (1.0 - canopy);`,
   float fdist = length(vAWorld - cameraPosition);
   // each glint only flashes from some view angles, like real snow crystals
   float facet = step(0.6, aHash(cell + floor(V.xz * 6.0)));
-  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.993, h) * facet * aSparkle * (0.25 + spec * 3.0) * (1.0 - smoothstep(6.0, 30.0, fdist));
+  totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * step(0.994, h) * facet * aSparkle * (0.04 + spec * 3.0) * (1.0 - smoothstep(6.0, 30.0, fdist));
   // alpenglow: the high snow catches the low sun long after the valley has gone blue
   float hi = smoothstep(160.0, 1400.0, vAWorld.y);
   totalEmissiveRadiance += diffuseColor.rgb * uPeakLit * uAlpen * hi * max(dot(wN, uSunDir) + 0.25, 0.0) * 0.85;
@@ -660,6 +693,11 @@ export const AlpineScene = memo(function AlpineScene({
     return b;
   }, [layout]);
   const look: AlpineLook = alpineLook(time);
+  useEffect(() => {
+    // test handle (?debug=1): the shared weather / lift clock
+    if (new URLSearchParams(window.location.search).get("debug") === "1")
+      (window as unknown as { __alpine?: unknown }).__alpine = alpine;
+  }, []);
 
   const mats = useMemo(
     () => ({
@@ -787,6 +825,11 @@ export const AlpineScene = memo(function AlpineScene({
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
 
   // instanced forest per chunk (near + far LOD) and the far ring
+  // stable instance-colour buffers (a fresh array on re-render would wipe the tints to black)
+  const treeCols = useMemo(
+    () => ({ near: new Float32Array(MAX_NEAR * 3), mid: new Float32Array(built.trees.n * 3) }),
+    [built],
+  );
   const nearRef = useRef<THREE.InstancedMesh>(null);
   const midRef = useRef<THREE.InstancedMesh>(null);
   const lodAt = useRef({ x: 1e9, z: 1e9 });
@@ -868,6 +911,9 @@ export const AlpineScene = memo(function AlpineScene({
       f.near = THREE.MathUtils.lerp(look.fog[0], 1.5, Math.pow(bb, 0.35));
       f.far = THREE.MathUtils.lerp(look.fog[1], 24, Math.pow(bb, 0.35));
     }
+    toScreen(U.uHaze.value, U.uHazeOut.value, state.gl.toneMappingExposure);
+    toScreen(U.uMistCol.value, U.uMistOut.value, state.gl.toneMappingExposure);
+    toScreen(U.uFogCol.value, U.uFogOut.value, state.gl.toneMappingExposure);
     const sky = skyRef.current;
     if (sky) sky.position.copy(cam);
     // snow
@@ -985,10 +1031,10 @@ export const AlpineScene = memo(function AlpineScene({
         </group>
       ))}
       <instancedMesh ref={nearRef} args={[geos.spruce, mats.tree, MAX_NEAR]} castShadow frustumCulled={false}>
-        <instancedBufferAttribute attach="instanceColor" args={[new Float32Array(MAX_NEAR * 3), 3]} />
+        <instancedBufferAttribute attach="instanceColor" args={[treeCols.near, 3]} />
       </instancedMesh>
       <instancedMesh ref={midRef} args={[geos.farSpruce, mats.tree, built.trees.n]} frustumCulled={false}>
-        <instancedBufferAttribute attach="instanceColor" args={[new Float32Array(built.trees.n * 3), 3]} />
+        <instancedBufferAttribute attach="instanceColor" args={[treeCols.mid, 3]} />
       </instancedMesh>
       {built.far.length > 0 && <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />}
       <instancedMesh ref={chairRef} args={[geos.chair, mats.chair, chairCount]} castShadow frustumCulled={false} />
