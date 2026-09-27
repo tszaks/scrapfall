@@ -2969,6 +2969,20 @@ export function Game() {
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
+  /** phones and tablets play with on-screen controls instead of mouse + keyboard */
+  const [touchUi, setTouchUi] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    setTouchUi(isTouchDevice());
+    const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
   const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
