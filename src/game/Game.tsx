@@ -4139,11 +4139,12 @@ export function Game() {
             {(
               <div>
                 <button
-                  onClick={() => setShowSettings((v) => !v)}
+                  onClick={() => setShowSettings(true)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
                 >
-                  {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
+                  SETTINGS
                 </button>
+
                 {!paused && <button
                   onClick={() => setShowWeapons(true)}
                   className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
