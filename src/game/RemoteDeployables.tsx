@@ -3,6 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type * as THREE from "three";
+import { groundAt } from "./level";
 
 export type RemoteDeps = Map<string, { t: number[]; m: number[]; at: number }>;
 const POOL = 18; // up to 3 teammates x 6 each
@@ -32,7 +33,7 @@ export function RemoteDeployables({
         const x = d.t[k]! / 100;
         const z = d.t[k + 1]! / 100;
         g.visible = d.t[k + 2]! / 10 - age > 0; // life counts down locally
-        g.position.set(x, 0, z);
+        g.position.set(x, groundAt(x, z), z);
         // track the nearest enemy, like the owner's turret does
         let bx = 0;
         let bz = 0;
@@ -52,7 +53,7 @@ export function RemoteDeployables({
         const g = mines.current[mi++];
         if (!g) continue;
         g.visible = true;
-        g.position.set(d.m[k]! / 100, 0.2, d.m[k + 1]! / 100);
+        g.position.set(d.m[k]! / 100, 0.2 + groundAt(d.m[k]! / 100, d.m[k + 1]! / 100), d.m[k + 1]! / 100);
       }
     });
     for (; ti < POOL; ti++) {

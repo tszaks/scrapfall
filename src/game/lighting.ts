@@ -1,6 +1,7 @@
 // Sky, fog and light settings per map, for day and night.
 import * as THREE from "three";
 import type { Theme } from "./themes";
+import { beachLook } from "./beach/beachLook";
 
 export type Look = {
   sky: string;
@@ -26,6 +27,8 @@ const mix = (a: string, b: string, t: number) => {
 };
 
 export function worldLook(theme: Theme, night: boolean, arena: number): Look {
+  // Pacific Pier keeps its whole look table (night + sunset) in beach/beachLook.ts
+  if (theme.blockShape === "beach") return beachLook(night).look;
   const city = theme.blockShape === "city";
   if (city) {
     // real-scale downtown: a long view with aerial haze so the skyline reads, a low warm

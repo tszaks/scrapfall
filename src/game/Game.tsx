@@ -6,9 +6,12 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
   setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_SOLO, CITY_COOP,
+  BEACH_SIZE, groundAt, speedAt, terrain, worldFx,
 } from "./level";
 
-import { THEMES, type Theme } from "./themes";
+import { THEMES, layoutOf, type Theme } from "./themes";
+import { isBeach } from "./beach/beachLayout";
+import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
@@ -521,6 +524,7 @@ function BossBody({ theme }: { theme: Theme }) {
         <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
         <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
       </>)}
+      {b.shape === "kraken" && <KrakenRig b={b} />}
       {b.shape === "drake" && (<>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
@@ -531,6 +535,62 @@ function BossBody({ theme }: { theme: Theme }) {
           <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
         ))}
       </>)}
+    </group>
+  );
+}
+
+// THE KRAKEN RIG (Pacific Pier): a rusted pressure hull on a drilling derrick, dragging six
+// segmented steel tentacles.
+function KrakenRig({ b }: { b: Theme["boss"] }) {
+  const hull = <meshLambertMaterial color={b.body} flatShading />;
+  const steel = <meshLambertMaterial color={b.limb} flatShading />;
+  const brass = <meshLambertMaterial color={b.weapon} flatShading />;
+  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
+  const eye = <meshBasicMaterial color={b.eye} fog={false} />;
+  return (
+    <group>
+      <mesh position-y={1.7} castShadow><cylinderGeometry args={[1.2, 1.5, 2.8, 10]} />{hull}</mesh>
+      <mesh position-y={3.15} castShadow><sphereGeometry args={[1.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />{hull}</mesh>
+      {[0.9, 1.9, 2.8].map((y) => (
+        <mesh key={y} position-y={y}><torusGeometry args={[1.36 - y * 0.05, 0.07, 5, 14]} />{brass}</mesh>
+      ))}
+      <mesh position={[0, 2.1, 1.18]}><sphereGeometry args={[0.46, 12, 10]} />{eye}</mesh>
+      <mesh position={[0, 2.1, 1.12]} rotation-x={Math.PI / 2}><torusGeometry args={[0.52, 0.09, 6, 16]} />{brass}</mesh>
+      {[-0.75, 0.75].map((x) => (
+        <mesh key={x} position={[x, 1.25, 1.02]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.1, 10]} />{glow}</mesh>
+      ))}
+      {/* derrick */}
+      {[0, 1, 2, 3].map((k) => {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        return (
+          <mesh key={k} position={[Math.sin(a) * 0.45, 4.7, Math.cos(a) * 0.45]} rotation={[Math.cos(a) * -0.18, 0, Math.sin(a) * 0.18]}>
+            <boxGeometry args={[0.1, 2.6, 0.1]} />{steel}
+          </mesh>
+        );
+      })}
+      {[4.1, 4.9, 5.6].map((y) => (
+        <mesh key={y} position-y={y}><boxGeometry args={[1.1 - (y - 4.1) * 0.45, 0.07, 1.1 - (y - 4.1) * 0.45]} />{steel}</mesh>
+      ))}
+      <mesh position-y={6.05}><sphereGeometry args={[0.2, 8, 6]} />{glow}</mesh>
+      {/* tentacles */}
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        return (
+          <group key={i} rotation-y={a}>
+            {[0, 1, 2, 3, 4].map((k) => {
+              const r = 1.4 + k * 0.62;
+              const y = 0.35 + k * k * 0.16;
+              const s = 1 - k * 0.15;
+              return (
+                <mesh key={k} position={[0, y, r]} rotation-x={Math.PI / 2 - 0.25 - k * 0.28} castShadow>
+                  <cylinderGeometry args={[0.24 * s, 0.3 * s, 0.72, 7]} />{k % 2 ? brass : steel}
+                </mesh>
+              );
+            })}
+            <mesh position={[0, 0.35 + 25 * 0.16, 1.4 + 5 * 0.62]}><sphereGeometry args={[0.14, 6, 5]} />{glow}</mesh>
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -548,6 +608,10 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
       else if (sp.type === "spore") part.current.scale.setScalar(1 + Math.sin(t * 3) * 0.12);
       else if (sp.type === "leaper") part.current.position.y = (data.aux ?? 0) > 0 ? 1.4 : Math.abs(Math.sin(t * 5)) * 0.15;
       else if (sp.type === "wyrm") part.current.rotation.z = Math.sin(t * 2) * 0.3;
+      else if (sp.type === "crawler") {
+        part.current.rotation.z = Math.sin(t * 16) * 0.07;
+        part.current.position.y = Math.abs(Math.sin(t * 16)) * 0.05;
+      }
       else part.current.rotation.z = Math.sin(t * 4) * 0.15;
     }
   });
@@ -682,6 +746,34 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
         <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
       </group>)}
+      {sp.type === "crawler" && (<group ref={part}>
+        <mesh position-y={0.62} scale={[1.15, 0.42, 0.9]} castShadow><sphereGeometry args={[0.62, 12, 8]} />{B}</mesh>
+        {[-0.28, 0, 0.28].map((x) => (
+          <mesh key={x} position={[x, 0.86, -0.05]} scale={[0.16, 0.08, 0.5]}><sphereGeometry args={[0.6, 6, 5]} />{A}</mesh>
+        ))}
+        {[-0.18, 0.18].map((x) => (
+          <group key={`e${x}`} position={[x, 0.9, 0.4]}>
+            <mesh position-y={0.12}><cylinderGeometry args={[0.03, 0.035, 0.26, 5]} />{A}</mesh>
+            <mesh position-y={0.28}><sphereGeometry args={[0.07, 8, 6]} />{G}</mesh>
+          </group>
+        ))}
+        {[-1, 1].map((sd) => (
+          <group key={`c${sd}`} position={[sd * 0.55, 0.6, 0.45]} rotation-y={sd * -0.5}>
+            <mesh position-z={0.22} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.09, 0.45, 6]} />{B}</mesh>
+            <mesh position={[0, 0.02, 0.55]} scale={[0.9, 0.55, 1.2]}><sphereGeometry args={[0.2, 8, 6]} />{B}</mesh>
+            <mesh position={[sd * 0.06, 0.1, 0.76]} rotation-x={0.35}><boxGeometry args={[0.1, 0.06, 0.3]} />{B}</mesh>
+            <mesh position={[sd * 0.06, -0.06, 0.76]} rotation-x={-0.35}><boxGeometry args={[0.1, 0.06, 0.26]} />{A}</mesh>
+          </group>
+        ))}
+        {[-1, 1].map((sd) =>
+          [-0.3, 0, 0.3].map((z) => (
+            <mesh key={`l${sd}${z}`} position={[sd * 0.72, 0.32, z]} rotation={[0, 0, sd * 0.9]}>
+              <cylinderGeometry args={[0.035, 0.05, 0.7, 5]} />{A}
+            </mesh>
+          )),
+        )}
+        <mesh position-y={0.05} rotation-x={-Math.PI / 2}><ringGeometry args={[0.7, 0.85, 18]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
+      </group>)}
       {sp.type === "bile" && (<group>
         <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
         <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
@@ -724,7 +816,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
-    g.position.set(data.x, bob, data.z);
+    g.position.set(data.x, bob + groundAt(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
@@ -1373,7 +1465,7 @@ function World({
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, remotes, enemies]);
@@ -1384,6 +1476,8 @@ function World({
     c.updateProjectionMatrix();
   }, [look3.camFar, camera]);
   const bobAmt = useRef(0);
+  /** smoothed ground height under the player (decks, stairs, bowls on maps with relief) */
+  const camGround = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
@@ -1455,6 +1549,7 @@ function World({
   const guestTarget = useRef<GuestTarget[]>(enemies.map(() => ({ x: 0, z: 0, yaw: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
   const recycleT = useRef(1);
+  const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
 
   const upsertRemote = (m: NetMsg) => {
@@ -1600,7 +1695,9 @@ function World({
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
     camera.position.set(city ? city.spawn.x : 0, EYE, city ? city.spawn.z : 0);
-    look.current = { yaw: 0, pitch: city ? 0.12 : 0 };
+    camGround.current = groundAt(camera.position.x, camera.position.z);
+    camera.position.y += camGround.current;
+    look.current = { yaw: isBeach(city) ? city.spawnYaw : 0, pitch: city ? 0.12 : 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -1912,10 +2009,9 @@ function World({
 
 
   const outOfBounds = (p: THREE.Vector3) =>
-    p.y < 0 ||
+    (terrain ? terrain.hits(p.x, p.y, p.z) : p.y < 0 || blocked(blocks, p.x, p.z, 0.05)) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
-    blocked(blocks, p.x, p.z, 0.05) ||
     (city !== null && hitsTraffic(p.x, p.y, p.z));
 
   useFrame((state, rawDelta) => {
@@ -1985,10 +2081,12 @@ function World({
     const moving = MOVE.lengthSq() > 0;
     if (moving) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
+    worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss");
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1);
+      * (overdrive.current > 0 ? 1.3 : 1)
+      * speedAt(cam.position.x, cam.position.z);
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -2016,7 +2114,13 @@ function World({
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
-    cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    if (terrain) {
+      // follow decks, stairs and bowls; snap on big jumps (respawn, a teleport)
+      const gy = groundAt(cam.position.x, cam.position.z);
+      const dg = gy - camGround.current;
+      camGround.current = Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+    }
+    cam.position.y = camGround.current + EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
 
     // minimap feed (the HUD reads it)
     if (city) {
@@ -2059,7 +2163,7 @@ function World({
     if (pickupMesh.current) {
       pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
-        pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.position.set(pk.x, groundAt(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
@@ -2080,7 +2184,7 @@ function World({
     if (healMesh.current) {
       healMesh.current.visible = hp.active;
       if (hp.active) {
-        healMesh.current.position.set(hp.x, 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.position.set(hp.x, groundAt(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
@@ -2099,7 +2203,7 @@ function World({
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
-        crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.position.set(ck.x, groundAt(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
         crateMesh.current.rotation.y += delta * 1.2;
       }
     }
@@ -2129,7 +2233,7 @@ function World({
       const mesh = turretMeshes.current[ti];
       if (mesh) {
         mesh.visible = t.t > 0;
-        mesh.position.set(t.x, 0, t.z);
+        mesh.position.set(t.x, groundAt(t.x, t.z), t.z);
       }
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
@@ -2144,7 +2248,7 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1 + groundAt(t.x, t.z), t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2230,6 +2334,7 @@ function World({
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
+      if (e.kind === "special" && theme.special.type === "crawler") dmg *= 0.7; // crab shell
       if (kb > 0 && e.kind !== "boss") {
         const len = Math.hypot(kx, kz) || 1;
         const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
@@ -2253,7 +2358,7 @@ function World({
           for (let s = 0; s < 8; s++) {
             const a = (s / 8) * Math.PI * 2;
             const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2 + groundAt(e.x, e.z), e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
           }
         }
         onScore();
@@ -2352,7 +2457,7 @@ function World({
     for (let mi = mines.current.length - 1; mi >= 0; mi--) {
       const mn = mines.current[mi]!;
       const mesh = mineMeshes.current[mi];
-      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2, mn.z); }
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2 + groundAt(mn.x, mn.z), mn.z); }
       let hit = false;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
@@ -2421,7 +2526,7 @@ function World({
       const targets: Target[] = [];
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE });
+        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE + groundAt(r.x, r.z) });
       });
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
 
@@ -2503,6 +2608,9 @@ function World({
         const dx = target.x - e.x;
         const dz = target.z - e.z;
         e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
+        // relief maps: shots leave from the enemy's own ground, and melee can't reach a deck above
+        const ey = groundAt(e.x, e.z);
+        const dm = Math.abs(target.y - EYE - ey) < 2.2 ? d : Infinity;
 
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
@@ -2537,15 +2645,19 @@ function World({
           if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
           if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
           if (spType === "bile") dir = d > 5 ? 1 : 0;
+          if (spType === "crawler") { dir = d > 1.3 ? 1 : 0; spMul = 1.45; }
         }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir
+          * (terrain ? 0.5 + 0.5 * speedAt(e.x, e.z) : 1); // sand drags a little
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
-        if (spType === "stalker" || spType === "shinobi") {
-          // flanking arcs / zig-zag dash-steps
+        if (spType === "stalker" || spType === "shinobi" || spType === "crawler") {
+          // flanking arcs / zig-zag dash-steps / a crab's sideways scuttle
           const now = performance.now() / 1000;
-          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2 : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
+          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2
+            : spType === "crawler" ? Math.sign(Math.sin(now * 1.9 + (e.max ?? 1) * 1.7)) * 3.8
+            : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
           nx += (-dz / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
           nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
         }
@@ -2556,7 +2668,7 @@ function World({
           if (!blocked(blocks, e.x, nz, r)) e.z = nz;
         }
 
-        if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
+        if ((e.kind === "drifter" || e.kind === "runner") && dm < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
           hurtTarget(target, st.dmg);
         }
@@ -2570,7 +2682,7 @@ function World({
             const bz = target.z + Math.cos(a) * 4;
             if (!blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
           }
-          if (d < 1.6 && e.cooldown <= 0) {
+          if (dm < 1.6 && e.cooldown <= 0) {
             e.cooldown = 1.4;
             hurtTarget(target, st.dmg);
           }
@@ -2580,15 +2692,15 @@ function World({
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
-            if (before > 0.2 && e.swing <= 0.2 && d < reach) hurtTarget(target, st.dmg);
-          } else if (d < reach - 0.2 && e.cooldown <= 0) {
+            if (before > 0.2 && e.swing <= 0.2 && dm < reach) hurtTarget(target, st.dmg);
+          } else if (dm < reach - 0.2 && e.cooldown <= 0) {
             e.swing = 0.4;
             e.cooldown = e.kind === "boss" ? 1.3 : 1.6;
           }
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
           e.cooldown = 1.5 + rand() * 0.6;
-          const from = new THREE.Vector3(e.x, 1.5, e.z);
+          const from = new THREE.Vector3(e.x, 1.5 + ey, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
           fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
@@ -2598,8 +2710,8 @@ function World({
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
-            const from = new THREE.Vector3(e.x, 3.2, e.z);
-            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2, target.z - e.z).normalize();
+            const from = new THREE.Vector3(e.x, 3.2 + ey, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2 - ey, target.z - e.z).normalize();
             from.addScaledVector(vel, 1.2);
             fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
           }
@@ -2607,17 +2719,17 @@ function World({
         if (spType) {
           e.shot -= delta;
           const aim = (y: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
-            const from = new THREE.Vector3(e.x, y, e.z);
+            const from = new THREE.Vector3(e.x, y + ey, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = 0; s < n; s++) {
               const a = base + (n > 1 ? (s - (n - 1) / 2) * spread : 0);
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - y - ey) / d, Math.cos(a)).normalize();
               fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 0.8), vel.multiplyScalar(spd), life, dmg, "", size);
             }
           };
           const ready = e.shot <= 0;
           if (spType === "stalker" && ready && d < 18) { e.shot = 2.4; aim(0.9, 16, 0.08, 3, 1, 2.5, 0.12); }
-          if ((spType === "mite") && d < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
+          if ((spType === "mite") && dm < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
           if (spType === "spore" && ready && d < 26) { e.shot = 3.2; aim(3, ENEMY_BULLET_SPEED * 0.7, 0, 1, 1, 5, 0.42); }
           if (spType === "pyre" && ready && d < 24) { e.shot = 3; aim(1.1, 22, 0, 1, 2, 2.5, 0.34); }
           if (spType === "leaper") {
@@ -2627,7 +2739,7 @@ function World({
               const lz = e.z + (dz / d) * 14 * delta;
               if (!blocked(blocks, lx, e.z, 0.6)) e.x = lx;
               if (!blocked(blocks, e.x, lz, 0.6)) e.z = lz;
-              if (d < 1.4) { e.aux = 0; hurtTarget(target, 2); }
+              if (dm < 1.4) { e.aux = 0; hurtTarget(target, 2); }
             } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
           }
           if (spType === "shinobi" && ready && d < 16) { e.shot = 2; aim(1.3, 15, 0.25, 2, 1, 2, 0.16); }
@@ -2648,18 +2760,33 @@ function World({
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
           if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          // TIDE CRAWLER: pincer snaps up close, a fan of sea-foam bubbles from mid range
+          if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 2); }
+          if (spType === "crawler" && ready && d > 5 && d < 14) { e.shot = 3.4; aim(0.6, 11, 0.22, 5, 1, 1.3, 0.18); }
         }
         if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
-            const from = new THREE.Vector3(e.x, 2.6, e.z);
+            const from = new THREE.Vector3(e.x, 2.6 + ey, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = -3; s <= 3; s++) {
               const a = base + s * 0.16;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6 - ey) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
               fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
+            }
+          }
+          // THE KRAKEN RIG: every few seconds its tentacles sweep a ring of shots all round
+          if (theme.boss.shape === "kraken") {
+            krakenT.current -= delta;
+            if (krakenT.current <= 0 && d < 34) {
+              krakenT.current = 5;
+              for (let s = 0; s < 14; s++) {
+                const a = (s / 14) * Math.PI * 2 + rand();
+                const vel = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+                fireInto(enemyBullets.current, new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + ey, e.z + vel.z * 2.6), vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 3.2, 1, "", 0.26);
+              }
             }
           }
         }
@@ -2700,7 +2827,8 @@ function World({
             const e = enemies[ei]!;
             if (!e.alive) continue;
             const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
+            const gy = groundAt(e.x, e.z);
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h + gy && b.pos.y > gy - 0.3) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               let dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
@@ -2807,7 +2935,7 @@ function World({
       const pd = pending.current[i];
       const show = !!pd && pd.t <= MARK_TIME && Math.floor(state.clock.elapsedTime * 6) % 2 === 0;
       g.visible = show;
-      if (pd) g.position.set(pd.x, 0, pd.z);
+      if (pd) g.position.set(pd.x, groundAt(pd.x, pd.z), pd.z);
     });
     const v = viewModel.current;
     if (!v) return;
@@ -2838,7 +2966,7 @@ function World({
           speed={0.3}
         />
       )}
-      {city ? (
+      {isBeach(city) ? null : city ? (
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
@@ -2857,7 +2985,9 @@ function World({
           shadow-mapSize-height={1024}
         />
       )}
-      {city ? (
+      {isBeach(city) ? (
+        <BeachWorld city={city} seed={seed} night={night} link={traffic} look={look3} />
+      ) : city ? (
         <>
           <CityScene city={city} night={night} />
           <CityTraffic city={city} seed={seed} night={night} link={traffic} />
@@ -3263,10 +3393,13 @@ export function Game() {
     // the map decides the layout, so pick the theme first (still purely from the shared seed)
     const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
-    // co-op gets a bigger field; the real-scale city is far bigger and routes on 4 m nav cells
-    if (theme.blockShape === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    // co-op gets a bigger field; the real-scale maps are far bigger and route on 4 m nav cells
+    // (the beach is always its full 800 m; solo seals a smaller square with blockades)
+    const layout = layoutOf(theme);
+    if (layout === "city") setArenaSize(coop ? CITY_COOP : CITY_SOLO, 2);
+    else if (layout === "beach") setArenaSize(BEACH_SIZE, 2);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    const level = generateLevel(seed, theme.blockShape === "city" ? "city" : "scatter");
+    const level = generateLevel(seed, layout, !coop);
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
     if (!level.city) {

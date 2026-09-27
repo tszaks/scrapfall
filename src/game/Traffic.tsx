@@ -64,11 +64,14 @@ export function CityTraffic({
   seed,
   night,
   link,
+  cars: carCount,
 }: {
   city: CityLayout;
   seed: number;
   night: boolean;
   link: React.MutableRefObject<TrafficLink>;
+  /** fixed number of moving cars (default: about one per 45 m of street, 40-60) */
+  cars?: number;
 }) {
   const { roadX, roadZ } = city;
   const nightRef = useRef(night);
@@ -84,7 +87,7 @@ export function CityTraffic({
       (roadX.length * (roadZ[roadZ.length - 1]!.c - roadZ[0]!.c) +
         roadZ.length * (roadX[roadX.length - 1]!.c - roadX[0]!.c)) *
       2;
-    const want = Math.max(40, Math.min(60, Math.round(len / 45)));
+    const want = carCount ?? Math.max(40, Math.min(60, Math.round(len / 45)));
     for (let tries = 0; list.length < want && tries < 2000; tries++) {
       const axis = (rand() < 0.5 ? 0 : 1) as 0 | 1;
       const dir = (rand() < 0.5 ? 1 : -1) as 1 | -1;
@@ -145,7 +148,7 @@ export function CityTraffic({
       });
     }
     return list;
-  }, [seed, roadX, roadZ, city.spawn.x, city.spawn.z]);
+  }, [seed, roadX, roadZ, city.spawn.x, city.spawn.z, carCount]);
 
   // ---- instance slots for every part of every vehicle (parked first, then moving) ----
   const { slots, counts, parkedCount } = useMemo(() => {

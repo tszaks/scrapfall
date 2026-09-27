@@ -2,6 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
 
+import { groundAt } from "./level";
 import type { RemoteState } from "./net";
 
 const MAX_REMOTE = 3;
@@ -31,7 +32,7 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       p.ry += dy * k;
-      g.position.set(p.rx, 0, p.rz);
+      g.position.set(p.rx, groundAt(p.rx, p.rz), p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
       const visor = visors.current[i];
