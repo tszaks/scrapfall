@@ -3604,7 +3604,7 @@ export function Game() {
 
 
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className={`flex flex-col items-end gap-2 ${touchUi ? "mt-12" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {"♦".repeat(Math.max(0, health))}
               <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
@@ -3615,7 +3615,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2">
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center gap-2 ${touchUi ? "top-16 max-w-[calc(100vw-2rem)]" : "top-5 max-w-[calc(100vw-26rem)]"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -3679,12 +3679,13 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
-        {locked && !ended && (
+        {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
             [F] {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
           </div>
         )}
+
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
             ⚠ {eventMsg} ⚠
