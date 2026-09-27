@@ -3848,10 +3848,15 @@ export function Game() {
             setLocked(false);
             if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
           }}
-          className="fixed left-1/2 top-2 z-40 flex h-10 w-10 -translate-x-1/2 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 font-mono text-sm font-bold text-[#f3e6cf] active:bg-[#2b2118]"
+          style={{ left: "max(0.75rem, env(safe-area-inset-left))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+          className="fixed z-40 flex h-10 w-10 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 text-[#f3e6cf] shadow-lg backdrop-blur-sm active:scale-95 active:bg-[#2b2118]"
         >
-          II
+          <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true">
+            <rect x="1" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+            <rect x="9" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+          </svg>
         </button>
+
       )}
       {touchUi && portrait && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
