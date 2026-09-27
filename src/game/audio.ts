@@ -138,6 +138,53 @@ export function playSfx(kind: Sfx) {
   }
 }
 
+// ---- police sirens: a couple of persistent voices steered every frame by the traffic ----
+type SirenVoice = { osc: OscillatorNode; osc2: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; pan: StereoPannerNode | null };
+const sirenVoices: SirenVoice[] = [];
+/**
+ * Drive siren voice `slot`: pitch in Hz, gain 0..~0.2 (0 = silent), stereo pan -1..1 and
+ * brightness 0..1 (distant sirens sound muffled). Each call also schedules a fade to
+ * silence, so if the frames stop (tab hidden, game closed) the siren dies out by itself.
+ */
+export function setSiren(slot: number, freq: number, gain: number, pan: number, bright = 1) {
+  if (!ctx || !sfxGain) return;
+  let v = sirenVoices[slot];
+  if (!v) {
+    if (gain <= 0) return;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    const osc2 = ctx.createOscillator();
+    osc2.type = "square";
+    const mix2 = ctx.createGain();
+    mix2.gain.value = 0.3;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    osc.connect(filter);
+    osc2.connect(mix2).connect(filter);
+    filter.connect(g);
+    const p = typeof ctx.createStereoPanner === "function" ? ctx.createStereoPanner() : null;
+    if (p) g.connect(p).connect(sfxGain);
+    else g.connect(sfxGain);
+    osc.start();
+    osc2.start();
+    v = { osc, osc2, filter, gain: g, pan: p };
+    sirenVoices[slot] = v;
+  }
+  const now = ctx.currentTime;
+  v.osc.frequency.setTargetAtTime(freq, now, 0.012);
+  v.osc2.frequency.setTargetAtTime(freq * 1.006, now, 0.012);
+  v.filter.frequency.setTargetAtTime(700 + 2600 * Math.max(0, Math.min(1, bright)), now, 0.05);
+  const g = v.gain.gain;
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(Math.max(0, Math.min(0.22, gain)), now + 0.05);
+  g.linearRampToValueAtTime(0, now + 0.6);
+  if (v.pan) v.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), now, 0.03);
+}
+
 // ---- music: tiny lookahead step sequencer, one style per map ----
 type Style = {
   roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;
