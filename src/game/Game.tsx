@@ -3733,10 +3733,6 @@ export function Game() {
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
           </div>
         )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {shopOpen && (
