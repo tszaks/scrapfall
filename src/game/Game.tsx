@@ -3741,7 +3741,8 @@ export function Game() {
               <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
             </button>
           </div>
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
+
 
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
