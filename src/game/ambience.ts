@@ -30,6 +30,8 @@ type Env = {
   fx: number;
   fz: number;
   night: boolean;
+  /** 0..1 grid power where the listener stands (a blackout drops it): electric layers follow it */
+  power: number;
   /** 0..1, eased: the boss round's hazard, or the map's live weather */
   hazard: number;
   /** seconds since the scene started */
@@ -41,6 +43,7 @@ const scene = {
   layout: "",
   world: null as unknown,
   night: true,
+  power: 1,
   active: false,
   hazardTarget: 0,
   weather: 0,
@@ -61,6 +64,10 @@ export function setAmbienceScene(map: string, layout: string, world: unknown) {
 }
 export function setAmbienceTime(t: AmbienceTime) {
   scene.night = t === "night";
+}
+/** Grid power at the listener, 0..1 (map events: the Vice Heights blackout kills the neon). */
+export function setAmbiencePower(p: number) {
+  scene.power = Math.max(0, Math.min(1, p));
 }
 /** On while the game is being played (mirrors the music): paused / menus fade it out. */
 export function setAmbienceActive(on: boolean) {
@@ -521,7 +528,7 @@ export function updateAmbience(x: number, y: number, z: number, fx: number, fz: 
   const fl = Math.hypot(fx, fz) || 1;
   const hzTarget = Math.max(scene.hazardTarget, scene.weather, weatherLevel());
   R.hazard += (hzTarget - R.hazard) * (1 - Math.exp(-Math.min(dt, 0.5) / 3));
-  const e: Env = { x, y, z, fx: fx / fl, fz: fz / fl, night: scene.night, hazard: R.hazard, t: now - R.t0 };
+  const e: Env = { x, y, z, fx: fx / fl, fz: fz / fl, night: scene.night, power: scene.power, hazard: R.hazard, t: now - R.t0 };
   lastEnv = e;
   // while paused the beds are faded out by the pause gain; skip the work too
   if (!scene.active) return;
@@ -1116,14 +1123,14 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
   // Vice Heights: a city that never sleeps, a beach at its feet
   vice(R) {
     // distant city hum and traffic wash: always there, stronger near the roads
-    bed(R, { name: "city hum", src: "brown", filters: [{ type: "lowpass", f: 160, q: 0.7 }], gain: 0.18, level: (e) => (e.night ? 0.8 : 1), swell: [0.7, 1, 4, 10] });
+    bed(R, { name: "city hum", src: "brown", filters: [{ type: "lowpass", f: 160, q: 0.7 }], gain: 0.18, level: (e) => (e.night ? 0.8 : 1) * (0.45 + 0.55 * e.power), swell: [0.7, 1, 4, 10] });
     bed(R, { name: "traffic wash", src: "pink", filters: [{ type: "bandpass", f: 650, q: 0.6 }, { type: "lowpass", f: 2200 }], gain: 0.09, spot: "road", ref: 14, range: 400, level: (e) => (e.night ? 0.7 : 1), sweep: { spread: 0.35, every: [2, 6] }, swell: [0.55, 1, 2, 6] });
     // floor so a far-off wash stays even where the road falloff runs out
     bed(R, { name: "far traffic", src: "pink", filters: [{ type: "bandpass", f: 420, q: 0.5 }], gain: 0.035, level: always, swell: [0.6, 1, 3, 8] });
     // wind between towers: more of it the higher you climb
     windBed(R, "tower wind", 0.09, 1.3, (e) => 0.3 + clamp01(e.y / 50) * 0.9);
     crowdBed(R, "street crowd", 0.1, "street", 10, 70, (e) => (e.night ? 0.6 : 1) * (1 - e.hazard * 0.5));
-    bed(R, { name: "neon buzz", src: { osc: "sawtooth", f: [120, 240.6] }, filters: [{ type: "bandpass", f: 1900, q: 1.8 }], gain: 0.05, spot: "sign", ref: 4, range: 20, level: (e) => (e.night ? 1 : 0.5) });
+    bed(R, { name: "neon buzz", src: { osc: "sawtooth", f: [120, 240.6] }, filters: [{ type: "bandpass", f: 1900, q: 1.8 }], gain: 0.05, spot: "sign", ref: 4, range: 20, level: (e) => (e.night ? 1 : 0.5) * e.power });
     bed(R, { name: "ocean", src: "brown", filters: [{ type: "lowpass", f: 650, q: 0.5 }], gain: 0.3, spot: "water", ref: 18, range: 260, level: always, swell: [0.35, 1, 3, 7] });
     bed(R, { name: "ocean hiss", src: "white", filters: [{ type: "bandpass", f: 2400, q: 0.5 }], gain: 0.035, spot: "water", ref: 10, range: 120, level: always, swell: [0.2, 1, 3, 7] });
     crickets(R, "park crickets", 0.016, "park", 25, 110, nightOnly);
@@ -1131,7 +1138,7 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
     ev(R, "horn", [5, 16], "road", (e) => (e.night ? 0.6 : 1), (o, t) => horn(R, o, t), 160);
     ev(R, "far siren", [30, 75], "far", always, (o, t) => farSiren(R, o, t));
     ev(R, "helicopter", [70, 150], "overhead", always, (o, t) => helicopter(R, o, t));
-    ev(R, "neon flicker", [3, 9], "sign", nightOnly, (o, t) => {
+    ev(R, "neon flicker", [3, 9], "sign", (e) => nightOnly(e) * e.power, (o, t) => {
       for (let k = 0; k < Math.floor(rnd(2, 6)); k++) burst(R, o, t + k * rnd(0.03, 0.09), { f: 3200, q: 3, dur: 0.02, gain: 0.08 });
       return 0.6;
     }, 14);

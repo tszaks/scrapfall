@@ -27,6 +27,9 @@ import {
   type AccessBuilding,
 } from "./layout";
 import type { LRect, Portal } from "./types";
+import { registerPingTarget } from "../ping";
+
+let unping: (() => void) | null = null;
 
 // ---- elevator car state (host-authoritative in co-op) ----
 export const IDLE = 0;
@@ -99,6 +102,8 @@ function newCar(): Car {
 /** Install the access buildings for a new map (null / [] uninstalls every hook). */
 export function installAccess(list: AccessBuilding[] | null) {
   resetPlayer();
+  unping?.();
+  unping = null;
   if (!list || list.length === 0) {
     W = null;
     blockHook.fn = null;
@@ -132,6 +137,31 @@ export function installAccess(list: AccessBuilding[] | null) {
     const k = roofAt(x, z);
     return k < 0 ? undefined : list[k]!.top;
   };
+  // every entrance and roof door can be pinged (co-op: "up here", "elevator")
+  const doors = list.flatMap((b) =>
+    b.portals.map((q, i) => {
+      const [x, z] = toWorld(b, q.a + q.na * 0.3, q.d + q.nd * 0.3);
+      const label = b.kind === "elevator" ? (i ? "ELEVATOR · ROOF" : "ELEVATOR") : i ? "STAIRS · ROOF" : "STAIRS";
+      return { x, y: (i ? b.top : b.groundY) + 1.3, z, label };
+    }),
+  );
+  unping = registerPingTarget((o, dir, maxDist) => {
+    let best: { x: number; y: number; z: number; kind: "elev"; label: string; dist: number } | null = null;
+    for (const t of doors) {
+      const vx = t.x - o.x;
+      const vy = t.y - o.y;
+      const vz = t.z - o.z;
+      const along = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (along < 0.5 || along > maxDist) continue;
+      const px = vx - dir.x * along;
+      const py = vy - dir.y * along;
+      const pz = vz - dir.z * along;
+      const perp = Math.hypot(px, py, pz);
+      if (perp > Math.max(1.3, along * Math.tan((4 * Math.PI) / 180))) continue;
+      if (!best || along < best.dist) best = { x: t.x, y: t.y, z: t.z, kind: "elev", label: t.label, dist: along };
+    }
+    return best;
+  });
 }
 
 export function resetPlayer() {

@@ -13,7 +13,8 @@ import { chairAt, chairCount, ride } from "./ride";
 import { farSpruceGeo, spruceGeo } from "./forest";
 import type { AlpineLayout } from "./layout";
 import type { TimeOfDay } from "../lighting";
-import { alpineLook, type AlpineLook } from "./look";
+import { alpineLookAt, type AlpineLook } from "./look";
+import { liveLook, useTodK } from "../timeOfDay";
 import { mulberry } from "./noise";
 import { alpineArray, glowTexture, signTexture, T, WHITE_UV } from "./textures";
 import {
@@ -505,22 +506,26 @@ void main() {
   vec3 sd = normalize(uSun);
   float s = max(dot(d, sd), 0.0);
   float horiz = 1.0 - smoothstep(0.0, 0.35, h);
-  if (uNight < 0.5) {
+  float wDusk = 1.0 - smoothstep(0.3, 0.7, uNight);
+  float wNight = smoothstep(0.3, 0.7, uNight);
+  if (wDusk > 0.0) {
     // the afterglow over the western ridge and the pink belt of Venus opposite it
-    col += uGlow * (pow(s, 6.0) * 0.55 + pow(s, 48.0) * 0.6) * horiz;
+    col += uGlow * (pow(s, 6.0) * 0.55 + pow(s, 48.0) * 0.6) * horiz * wDusk;
     float anti = max(dot(normalize(d.xz), -normalize(sd.xz)), 0.0);
-    col += vec3(0.35, 0.16, 0.22) * anti * exp(-pow((h - 0.1) * 9.0, 2.0)) * 0.6;
-  } else {
+    col += vec3(0.35, 0.16, 0.22) * anti * exp(-pow((h - 0.1) * 9.0, 2.0)) * 0.6 * wDusk;
+  }
+  if (wNight > 0.0) {
+    vec3 nightAdd = vec3(0.0);
     // moon and its halo
-    col += vec3(0.85, 0.9, 1.0) * smoothstep(0.9993, 0.9996, s) * 1.6;
-    col += uGlow * pow(s, 90.0) * 0.4 + uGlow * pow(s, 8.0) * 0.06;
+    nightAdd += vec3(0.85, 0.9, 1.0) * smoothstep(0.9993, 0.9996, s) * 1.6;
+    nightAdd += uGlow * pow(s, 90.0) * 0.4 + uGlow * pow(s, 8.0) * 0.06;
     // stars, thinning towards the horizon
     vec3 sp = floor(d * 420.0);
     float st = step(0.9982, h1(sp));
     float tw = 0.6 + 0.4 * sin(uTime * 2.0 + h1(sp + 3.0) * 40.0);
-    col += vec3(0.9, 0.93, 1.0) * st * tw * smoothstep(0.02, 0.25, h) * (0.5 + h1(sp + 7.0));
+    nightAdd += vec3(0.9, 0.93, 1.0) * st * tw * smoothstep(0.02, 0.25, h) * (0.5 + h1(sp + 7.0));
     // milky band
-    col += vec3(0.05, 0.06, 0.09) * n2(d.xz * 9.0) * exp(-pow(dot(d, normalize(vec3(0.6, 0.3, 0.74))) * 3.0, 2.0));
+    nightAdd += vec3(0.05, 0.06, 0.09) * n2(d.xz * 9.0) * exp(-pow(dot(d, normalize(vec3(0.6, 0.3, 0.74))) * 3.0, 2.0));
     // aurora curtains low in the northern sky
     if (uAurora > 0.0 && d.z < 0.0) {
       float az = atan(d.x, -d.z);
@@ -529,8 +534,9 @@ void main() {
       float rays = 0.55 + 0.45 * n2(vec2(az * 28.0, uTime * 0.12));
       float fold = smoothstep(-1.2, -0.2, az) * (1.0 - smoothstep(0.6, 1.4, az));
       vec3 ac = mix(vec3(0.1, 0.9, 0.55), vec3(0.55, 0.25, 0.8), smoothstep(band, band + 0.12, h));
-      col += ac * curtain * rays * fold * uAurora * 0.32;
+      nightAdd += ac * curtain * rays * fold * uAurora * 0.32;
     }
+    col += nightAdd * wNight;
   }
   col = mix(col, uFogCol, uBlizz);
   gl_FragColor = vec4(col, 1.0);
@@ -865,16 +871,18 @@ function build(layout: AlpineLayout): Built {
 
 export const AlpineScene = memo(function AlpineScene({
   layout,
-  time,
   isHost,
   playing,
 }: {
   layout: AlpineLayout;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts */
+  time?: TimeOfDay;
   isHost: boolean;
   playing: boolean;
 }) {
-  const night = time === "night";
+  // the time of day in 1/64 steps (the match runs from sunset into night)
+  const nk = useTodK();
+  const nl = (n: number, s: number) => s + (n - s) * nk;
   const { scene, camera } = useThree();
   const built = useMemo(() => {
     const t0 = performance.now();
@@ -884,7 +892,7 @@ export const AlpineScene = memo(function AlpineScene({
     );
     return b;
   }, [layout]);
-  const look: AlpineLook = alpineLook(time);
+  const look: AlpineLook = alpineLookAt(nk);
   U.uLightMap.value = built.light;
   U.uGround.value = built.ground;
   useEffect(() => {
@@ -1044,29 +1052,29 @@ export const AlpineScene = memo(function AlpineScene({
     (m.uniforms["uMid"]!.value as THREE.Color).set(look.skyMid);
     (m.uniforms["uHor"]!.value as THREE.Color).set(look.skyHorizon);
     (m.uniforms["uGlow"]!.value as THREE.Color).set(look.sunGlow);
-    m.uniforms["uNight"]!.value = night ? 1 : 0;
+    m.uniforms["uNight"]!.value = nk;
     m.uniforms["uAurora"]!.value = look.aurora;
     U.uSunDir.value.set(...look.sunDir).normalize();
     U.uPeakLit.value.set(look.peakLit);
-    U.uAlpen.value = night ? 0.18 : 1;
+    U.uAlpen.value = nl(0.18, 1);
     U.uWin.value = look.windows;
     U.uHaze.value.set(look.haze);
     U.uMistCol.value.set(look.haze);
-    U.uHazeDist.value = night ? 5200 : 7000;
-    U.uHazeMax.value = night ? 0.9 : 0.8;
-    mats.signs.color.setScalar(night ? 1.25 : 0.95);
-    U.uLampK.value = night ? 0.85 : 0.2;
-    U.uBounce.value.set(night ? "#5a6ca8" : "#8a8fbc");
-    mats.halo.uniforms["uOpacity"]!.value = night ? 0.85 : 0.35;
+    U.uHazeDist.value = nl(5200, 7000);
+    U.uHazeMax.value = nl(0.9, 0.8);
+    mats.signs.color.setScalar(nl(1.25, 0.95));
+    U.uLampK.value = nl(0.85, 0.2);
+    U.uBounce.value.set("#8a8fbc").lerp(new THREE.Color("#5a6ca8"), nk);
+    mats.halo.uniforms["uOpacity"]!.value = nl(0.85, 0.35);
     (mats.snow.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
     (mats.streak.uniforms["uCol"]!.value as THREE.Color).set(look.snow);
-    (mats.smoke.uniforms["uColor"]!.value as THREE.Color).set(night ? "#7a849c" : "#e8d6dc");
+    (mats.smoke.uniforms["uColor"]!.value as THREE.Color).set("#e8d6dc").lerp(new THREE.Color("#7a849c"), nk);
     const prev = scene.background;
     scene.background = new THREE.Color(look.skyHorizon);
     return () => {
       scene.background = prev;
     };
-  }, [night, look, mats, scene]);
+  }, [nk, look, mats, scene]); // eslint-disable-line react-hooks/exhaustive-deps -- nl reads nk
 
   const detailRefs = useRef<(THREE.Mesh | null)[]>([]);
   const lodTick = useRef(0);
@@ -1094,7 +1102,7 @@ export const AlpineScene = memo(function AlpineScene({
     const bb = b * b * (3 - 2 * b);
     U.uFogNear.value = bb > 0.001 ? THREE.MathUtils.lerp(900, 1.5, Math.pow(bb, 0.35)) : 1e5;
     U.uFogFar.value = bb > 0.001 ? THREE.MathUtils.lerp(2600, 24, Math.pow(bb, 0.35)) : 2e5;
-    U.uMist.value.set(night ? 260 : 380, night ? 1800 : 2600);
+    U.uMist.value.set(nl(260, 380), nl(1800, 2600));
     mats.sky.uniforms["uBlizz"]!.value = Math.min(1, bb * 1.15);
     const f = scene.fog as THREE.Fog | null;
     if (f && "near" in f) {
@@ -1280,15 +1288,15 @@ const SUN_MAP = 2048;
 const SUN_DIST = 700;
 
 /** Low sun (or moon) whose shadow frustum follows the player; auto-off on slow devices. */
-export function AlpineSun({ time }: { time: TimeOfDay }) {
+export function AlpineSun(_props: { time?: TimeOfDay }) {
   const ref = useRef<THREE.DirectionalLight>(null);
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const look = alpineLook(time);
-  const dir = useMemo(() => new THREE.Vector3(...look.sunDir).normalize(), [look]);
   useFrame((state, raw) => {
+    // the blended sun (sinking at dusk) or moon for the current time of day
+    const dir = liveLook.sunDir;
     const l = ref.current;
     if (!l) return;
     const texel = (SUN_RANGE * 2) / SUN_MAP;
@@ -1299,7 +1307,8 @@ export function AlpineSun({ time }: { time: TimeOfDay }) {
     l.target.updateMatrixWorld();
     l.position.set(cx + dir.x * SUN_DIST, cy + dir.y * SUN_DIST, cz + dir.z * SUN_DIST);
     // the blizzard dims the sun
-    l.intensity = look.sun.intensity * (1 - alpine.blizzard * 0.75);
+    l.color.copy(liveLook.sunColor);
+    l.intensity = liveLook.sunI * (1 - alpine.blizzard * 0.75);
     if (forced !== null || low) return;
     ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
     if (ema.current > 0.04) {
@@ -1315,8 +1324,6 @@ export function AlpineSun({ time }: { time: TimeOfDay }) {
   return (
     <directionalLight
       ref={ref}
-      color={look.sun.color}
-      intensity={look.sun.intensity}
       castShadow={!low}
       shadow-mapSize-width={SUN_MAP}
       shadow-mapSize-height={SUN_MAP}

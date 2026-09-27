@@ -582,3 +582,10 @@ export function playImpact(kind: ImpactSound, dist = 0) {
   const far = dist > 18;
   IMPACTS[kind].forEach((t) => tone({ ...t, gain: t.gain * k, cut: far ? Math.min(t.cut, 1800) : t.cut }));
 }
+
+/** the live audio context, the effects bus and a second of white noise, for sounds built
+ * elsewhere (map events, pings); null until the first click unlocks audio */
+export function audioBus(): { ctx: AudioContext; out: GainNode; noise: AudioBuffer } | null {
+  if (!ctx || !sfxGain || !noiseBuf) return null;
+  return { ctx, out: sfxGain, noise: noiseBuf };
+}

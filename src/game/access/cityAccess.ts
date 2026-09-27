@@ -47,9 +47,14 @@ function roofRect(b: Bld, p: Part): Rect | null {
   return { x0: x0 + RIM, z0: z0 + RIM, x1: x1 - RIM, z1: z1 - RIM };
 }
 
-export function cityAccess(city: CityLayout): AccessBuilding[] {
+/**
+ * `playHalf`: solo plays inside a sealed square of this half-size (the rest of the 800 m city
+ * stays on screen behind blockades); only buildings wholly inside it get access. null = co-op.
+ */
+export function cityAccess(city: CityLayout, playHalf: number | null = null): AccessBuilding[] {
   const { cells, half, kind, solid } = city;
-  const coop = half > 350;
+  const coop = playHalf === null;
+  const lim = playHalf ?? half;
   const cellAt = (x: number, z: number) => {
     const i = Math.floor((x + half) / 2);
     const j = Math.floor((z + half) / 2);
@@ -62,13 +67,16 @@ export function cityAccess(city: CityLayout): AccessBuilding[] {
     return k === K_WALK || k === K_OPEN || k === K_PATH || k === K_PARK;
   };
   const onGrid = (v: number) => Math.abs((v + half) / 2 - Math.round((v + half) / 2)) < 1e-6;
-  const inArena = (x: number, z: number) => Math.abs(x) < half - 30 && Math.abs(z) < half - 30;
+  // (a margin inside the sealed edge: no entrance right against a blockade)
+  const inArena = (x: number, z: number) => Math.abs(x) < lim - 16 && Math.abs(z) < lim - 16;
+  const bInside = (b: Bld) =>
+    Math.max(Math.abs(b.x0), Math.abs(b.x1), Math.abs(b.z0), Math.abs(b.z1)) < lim - 4;
 
   type Cand = { b: Bld; a: AccessBuilding; score: number };
   const elevs: Cand[] = [];
   const stairs: Cand[] = [];
   city.buildings.forEach((b, bi) => {
-    if (b.backdrop || b.access) return;
+    if (b.backdrop || b.access || !bInside(b)) return;
     const okType =
       b.t === "tower" || b.t === "super" || b.t === "mid" || b.t === "slab" || b.t === "mall" ||
       b.t === "low" || b.t === "corner" || b.t === "warehouse" || b.t === "garage";

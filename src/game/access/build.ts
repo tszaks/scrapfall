@@ -30,9 +30,11 @@ export type Interior = {
   glow: THREE.BufferGeometry;
   sign: THREE.BufferGeometry;
   steel: THREE.BufferGeometry;
+  wood: THREE.BufferGeometry;
+  conc: THREE.BufferGeometry;
 };
 export type CarGeo = Interior;
-export type DisplaySpot = { a: number; y: number; d: number; w: number; h: number; face: 1 | -1; level: 0 | 1 | 2 };
+export type DisplaySpot = { a: number; y: number; d: number; w: number; h: number; face: 1 | -1; level: 0 | 1 | 2 | 3 };
 
 export type BuiltBuilding = {
   /** ground floor (lobby / whole stairwell) */
@@ -53,14 +55,31 @@ export type BuiltAccess = {
   per: BuiltBuilding[];
 };
 
-type Set4 = { base: IGeo; glow: IGeo; sign: IGeo; steel: IGeo };
-const set4 = (): Set4 => ({ base: new IGeo(), glow: new IGeo(), sign: new IGeo(), steel: new IGeo() });
+/** one geometry per interior material: vertex-colour only, brushed steel, wood veneer,
+ * concrete (the textured ones use planar world-scale uvs), lamps, signs */
+type Set4 = { base: IGeo; glow: IGeo; sign: IGeo; steel: IGeo; wood: IGeo; conc: IGeo };
+const set4 = (): Set4 => {
+  const g = () => new IGeo();
+  const steel = g();
+  steel.worldUV = 1.2;
+  const wood = g();
+  wood.worldUV = 1.2;
+  const conc = g();
+  conc.worldUV = 2;
+  return { base: g(), glow: g(), sign: g(), steel, wood, conc };
+};
 const built = (s: Set4): Interior => ({
   base: s.base.build(),
   glow: s.glow.build(),
   sign: s.sign.build(),
   steel: s.steel.build(),
+  wood: s.wood.build(),
+  conc: s.conc.build(),
 });
+/** thin square tube along a (fixed d), for handrails across a wall */
+function railA(G: IGeo, d: number, y: number, a0: number, a1: number, r = 0.025) {
+  G.box(a0, a1, y - r, y + r, d - r, d + r, "-a+a");
+}
 
 /** a sign quad in the plane d (facing +d or -d), centred on a */
 function signD(G: IGeo, row: number, a: number, y0: number, y1: number, d: number, w: number, face: 1 | -1, cell = 0, n = 1) {
@@ -521,69 +540,111 @@ function buildCar(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   const E = b.elev!;
   const C = E.car;
   const G = S.base;
+  const ST = S.steel;
+  const WD = S.wood;
   const H = CAR_H;
   const o = 0.7;
   const dh = 2.25;
-  // floor: dark stone with a steel sill at the door
-  G.color("#2e2724");
-  G.flat(C.a0, C.a1, C.d0, C.d1, 0.03, true, 0.5);
-  S.steel.color("#c9ccd0");
-  S.steel.box(-o, o, 0, 0.05, C.d0 - 0.05, C.d0 + 0.08, "b");
-  // walls: brushed steel panels, back wall bronze
-  S.steel.color("#a3a8ae");
-  S.steel.wallA(C.d0, C.d1, 0, H, C.a0, true, 0.3);
-  S.steel.wallA(C.d0, C.d1, 0, H, C.a1, false, 0.3);
-  S.steel.color("#8a6f52");
-  S.steel.wallD(C.a0, C.a1, 0, H, C.d1, false, 0.45);
-  // front returns and transom around the door
-  S.steel.color("#a3a8ae");
-  wallDHole(S.steel, C.a0, C.a1, 0, H, C.d0, true, -o, o, dh, 0.3);
-  // door reveal
-  S.steel.color("#aeb2b6");
-  S.steel.wallA(C.d0 - 0.05, C.d0, 0, dh, -o, true);
-  S.steel.wallA(C.d0 - 0.05, C.d0, 0, dh, o, false);
-  S.steel.flat(-o, o, C.d0 - 0.05, C.d0, dh, false);
-  // panel seams: thin dark strips proud of the side walls
-  G.color("#5b5e62");
-  for (const d of [C.d0 + (C.d1 - C.d0) / 3, C.d0 + (2 * (C.d1 - C.d0)) / 3]) {
-    G.box(C.a0, C.a0 + 0.012, 0.05, H - 0.05, d - 0.006, d + 0.006, "-a");
-    G.box(C.a1 - 0.012, C.a1, 0.05, H - 0.05, d - 0.006, d + 0.006, "+a");
-  }
-  // handrails (wood on brass posts)
-  G.color("#6b4526");
-  rail(G, C.a0 + 0.06, 0.92, C.d0 + 0.3, 0.92, C.d1 - 0.1, 0.03);
-  rail(G, C.a1 - 0.06, 0.92, C.d0 + 0.3, 0.92, C.d1 - 0.1, 0.03);
-  G.quad([C.a0 + 0.1, 0.89, C.d1 - 0.06], [C.a1 - 0.1, 0.89, C.d1 - 0.06], [C.a1 - 0.1, 0.95, C.d1 - 0.06], [C.a0 + 0.1, 0.95, C.d1 - 0.06]);
-  G.color("#b08d57");
+  const wain = 0.95;
+  // floor: dark granite with a lighter inlaid border, a steel sill at the door
+  G.color("#231f1d");
+  G.flat(C.a0 + 0.12, C.a1 - 0.12, C.d0 + 0.12, C.d1 - 0.12, 0.03, true, 0.35);
+  G.color("#5a4e45");
+  G.flat(C.a0, C.a1, C.d0, C.d0 + 0.12, 0.03, true, 0.35);
+  G.flat(C.a0, C.a1, C.d1 - 0.12, C.d1, 0.03, true, 0.35);
+  G.flat(C.a0, C.a0 + 0.12, C.d0 + 0.12, C.d1 - 0.12, 0.03, true, 0.35);
+  G.flat(C.a1 - 0.12, C.a1, C.d0 + 0.12, C.d1 - 0.12, 0.03, true, 0.35);
+  ST.color("#c9ccd0");
+  ST.box(-o, o, 0, 0.05, C.d0 - 0.05, C.d0 + 0.08, "b");
+  // side and back walls: walnut wainscot with a cap, brushed-steel panels above set in dark
+  // reveals, a steel frieze under the ceiling; the back wall carries a bronze mirror panel
+  const panels = (face: "-a" | "+a" | "-d") => {
+    const n = 3;
+    if (face !== "-d") {
+      const a = face === "-a" ? C.a0 : C.a1;
+      const s0 = face === "-a" ? 1 : -1;
+      const facing = face === "-a";
+      WD.color("#8a5634");
+      WD.wallA(C.d0, C.d1, 0.03, wain, a, facing, 0.25);
+      WD.color("#5e3a22");
+      WD.box(Math.min(a, a + s0 * 0.035), Math.max(a, a + s0 * 0.035), wain, wain + 0.05, C.d0, C.d1, facing ? "-a" : "+a");
+      G.color("#17181b");
+      G.wallA(C.d0, C.d1, wain + 0.05, H, a, facing, 0.3);
+      const L = (C.d1 - C.d0 - 0.024 * (n + 1)) / n;
+      for (let k = 0; k < n; k++) {
+        const d0 = C.d0 + 0.024 + k * (L + 0.024);
+        ST.color("#959aa0");
+        ST.box(Math.min(a, a + s0 * 0.014), Math.max(a, a + s0 * 0.014), wain + 0.08, 2.34, d0, d0 + L, facing ? "-a" : "+a", 0.3);
+      }
+      ST.color("#7c8086");
+      ST.box(Math.min(a, a + s0 * 0.014), Math.max(a, a + s0 * 0.014), 2.37, H, C.d0, C.d1, facing ? "-a" : "+a");
+    } else {
+      WD.color("#8a5634");
+      WD.wallD(C.a0, C.a1, 0.03, wain, C.d1, false, 0.25);
+      WD.color("#5e3a22");
+      WD.box(C.a0, C.a1, wain, wain + 0.05, C.d1 - 0.035, C.d1, "+d");
+      G.color("#17181b");
+      G.wallD(C.a0, C.a1, wain + 0.05, H, C.d1, false, 0.3);
+      ST.color("#8a9096");
+      ST.box(C.a0 + 0.05, C.a1 - 0.05, wain + 0.08, 2.34, C.d1 - 0.014, C.d1, "+d", 0.3);
+      ST.color("#84705a");
+      ST.box(C.a0 + 0.16, C.a1 - 0.16, wain + 0.18, 2.24, C.d1 - 0.036, C.d1 - 0.014, "+d", 0.3);
+      ST.color("#7c8086");
+      ST.box(C.a0, C.a1, 2.37, H, C.d1 - 0.014, C.d1, "+d");
+    }
+  };
+  panels("-a");
+  panels("+a");
+  panels("-d");
+  // front returns and transom round the door (steel), and the door reveal
+  ST.color("#959aa0");
+  wallDHole(ST, C.a0, C.a1, 0, H, C.d0, true, -o, o, dh, 0.3);
+  ST.color("#c3c7cb");
+  ST.wallA(C.d0 - 0.05, C.d0, 0, dh, -o, true);
+  ST.wallA(C.d0 - 0.05, C.d0, 0, dh, o, false);
+  ST.flat(-o, o, C.d0 - 0.05, C.d0, dh, false);
+  // brass handrail on three walls, on stand-off brackets
+  G.color("#caa45c");
+  rail(G, C.a0 + 0.075, 0.92, C.d0 + 0.3, 0.92, C.d1 - 0.075, 0.022);
+  rail(G, C.a1 - 0.075, 0.92, C.d0 + 0.3, 0.92, C.d1 - 0.075, 0.022);
+  railA(G, C.d1 - 0.075, 0.92, C.a0 + 0.053, C.a1 - 0.053, 0.022);
+  G.color("#a88444");
   for (const [a, d] of [
-    [C.a0 + 0.06, C.d0 + 0.35],
-    [C.a0 + 0.06, C.d1 - 0.15],
-    [C.a1 - 0.06, C.d0 + 0.35],
-    [C.a1 - 0.06, C.d1 - 0.15],
+    [C.a0 + 0.04, C.d0 + 0.4],
+    [C.a0 + 0.04, C.d1 - 0.35],
+    [C.a1 - 0.04, C.d0 + 0.4],
+    [C.a1 - 0.04, C.d1 - 0.35],
   ] as const)
-    G.box(a - 0.012, a + 0.012, 0.8, 0.9, d - 0.012, d + 0.012);
-  // ceiling: light panel in a steel rim
-  S.steel.color("#9ea2a6");
-  S.steel.flat(C.a0, C.a1, C.d0, C.d1, H, false, 0.5);
-  S.glow.color("#fff6e6");
-  S.glow.box(C.a0 + 0.25, C.a1 - 0.25, H - 0.035, H - 0.02, C.d0 + 0.25, C.d1 - 0.25, "t");
-  // the indicator over the door, and the button panel
-  S.steel.color("#141416");
-  S.steel.box(-0.34, 0.34, dh + 0.06, dh + 0.3, C.d0, C.d0 + 0.02, "b-d");
+    G.box(a - 0.03, a + 0.03, 0.9, 0.94, d - 0.012, d + 0.012);
+  for (const a of [C.a0 + 0.5, C.a1 - 0.5]) G.box(a - 0.012, a + 0.012, 0.9, 0.94, C.d1 - 0.075, C.d1);
+  // ceiling: a dark frame holding six lit diffuser tiles
+  G.color("#2b2d31");
+  G.flat(C.a0, C.a1, C.d0, C.d1, H, false, 0.4);
+  S.glow.color("#fff4e2");
+  const ta = (C.a1 - C.a0 - 0.5) / 3;
+  const td = (C.d1 - C.d0 - 0.4) / 2;
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 2; j++) {
+      const a0 = C.a0 + 0.25 + i * ta + 0.025;
+      const d0 = C.d0 + 0.2 + j * td + 0.025;
+      S.glow.box(a0, a0 + ta - 0.05, H - 0.03, H - 0.015, d0, d0 + td - 0.05, "t");
+    }
+  // the indicator over the door
+  ST.color("#141416");
+  ST.box(-0.34, 0.34, dh + 0.06, dh + 0.3, C.d0, C.d0 + 0.02, "b-d");
   displays.push({ a: 0, y: dh + 0.18, d: C.d0 + 0.028, w: 0.56, h: 0.2, face: 1, level: 2 });
-  S.steel.color("#d9dce0");
-  S.steel.box(o + 0.06, o + 0.34, 0.95, 1.65, C.d0, C.d0 + 0.02, "b-d");
-  S.glow.color("#ffb030");
-  for (let k = 0; k < 4; k++) {
-    const yy = 1.12 + k * 0.13;
-    S.glow.box(o + 0.16, o + 0.24, yy, yy + 0.07, C.d0 + 0.02, C.d0 + 0.028, "b-d");
-  }
+  // the button panel on the right-hand return (its face is a live texture: level 3)
+  ST.color("#d9dce0");
+  ST.box(o + 0.07, o + 0.35, 0.82, 1.78, C.d0, C.d0 + 0.02, "b-d");
+  displays.push({ a: o + 0.21, y: 1.3, d: C.d0 + 0.026, w: 0.24, h: 0.6, face: 1, level: 3 });
   const lights: BakeLight[] = [
-    { a: 0, y: H - 0.1, d: (C.d0 + C.d1) / 2, r: 1.1, k: 1.1 },
-    { a: 0, y: 1.2, d: C.d0 + 0.3, r: 0.9, k: 0.15 },
+    { a: 0, y: H - 0.05, d: (C.d0 + C.d1) / 2, r: 1.05, k: 1.25, col: "#fff0dc" },
+    { a: C.a0 + 0.5, y: H - 0.1, d: C.d1 - 0.4, r: 0.6, k: 0.35, col: "#ffe2bc" },
+    { a: C.a1 - 0.5, y: H - 0.1, d: C.d1 - 0.4, r: 0.6, k: 0.35, col: "#ffe2bc" },
   ];
-  G.bake(lights, 0.3);
-  S.steel.bake(lights, 0.34);
+  G.bake(lights, 0.16);
+  ST.bake(lights, 0.2);
+  WD.bake(lights, 0.2);
 }
 
 function buildVestibule(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
@@ -634,7 +695,8 @@ function buildVestibule(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
 
 function buildStairs(b: AccessBuilding, S: Set4) {
   const s = b.stair!;
-  const G = S.base;
+  const G = S.conc; // concrete: walls, slabs, steps
+  const P = S.base; // paint and metal: stripes, doors, rails, sign plates, the extinguisher
   const W2 = s.W / 2;
   const g = 0.1; // half the spine wall
   const gy = b.groundY;
@@ -651,8 +713,27 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   const hw = q0.half + 0.15;
   const hh = STREET_DOOR_H.stairs;
   const lights: BakeLight[] = [];
-  const wallC = "#aea89d";
+  const wallC = "#bdb9b1";
   const bandC = "#3f7f5a";
+  // uneven light: every lamp its own strength and tint (tired fluorescents among the warm
+  // bulkheads), and now and then a dead one
+  const rng = (() => {
+    let x = (b.spec.seed ^ 0x51a1) >>> 0;
+    return () => ((x = (Math.imul(x, 1664525) + 1013904223) >>> 0) / 4294967296);
+  })();
+  const lamp = (box: [number, number, number, number, number, number], face: string, at: BakeLight) => {
+    const r = rng();
+    if (r < 0.12) {
+      P.color("#4a4843");
+      P.box(...box, face);
+      return;
+    }
+    const cool = r > 0.66;
+    const col = cool ? "#e4edff" : "#ffdcb4";
+    S.glow.color(cool ? "#eef4ff" : "#ffe2b4", 0.8 + rng() * 0.25);
+    S.glow.box(...box, face);
+    lights.push({ ...at, k: at.k * (0.6 + rng() * 0.6), col });
+  };
   // ---- outer walls, full height, with a green band per storey ----
   const sideWall = (a: number, face: boolean) => {
     G.color(wallC);
@@ -678,26 +759,31 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   for (let n = 0; n <= s.laps; n++) {
     const yb = gy + n * s.h + 1.0;
     if (yb + 0.2 > ceil) break;
-    G.color(bandC);
-    G.box(-W2, -W2 + 0.015, yb, yb + 0.16, n === 0 ? 0.25 : s.v0, dEnd, "-a+d-d");
     const cutA = n === s.laps;
-    if (cutA) {
-      G.box(W2 - 0.015, W2, yb, yb + 0.16, n === 0 ? 0.25 : s.v0, q1.d - q1.half, "+a+d-d");
-      G.box(W2 - 0.015, W2, yb, yb + 0.16, q1.d + q1.half, dEnd, "+a+d-d");
-    } else G.box(W2 - 0.015, W2, yb, yb + 0.16, n === 0 ? 0.25 : s.v0, dEnd, "+a+d-d");
+    for (const [c, ya, yz] of [
+      [bandC, yb, yb + 0.16],
+      ["#d8b02a", yb - 0.09, yb - 0.05],
+    ] as const) {
+      P.color(c);
+      P.box(-W2, -W2 + 0.015, ya, yz, n === 0 ? 0.25 : s.v0, dEnd, "-a+d-d");
+      if (cutA) {
+        P.box(W2 - 0.015, W2, ya, yz, n === 0 ? 0.25 : s.v0, q1.d - q1.half, "+a+d-d");
+        P.box(W2 - 0.015, W2, ya, yz, q1.d + q1.half, dEnd, "+a+d-d");
+      } else P.box(W2 - 0.015, W2, ya, yz, n === 0 ? 0.25 : s.v0, dEnd, "+a+d-d");
+    }
   }
   // ---- spine wall between the flights ----
-  G.color("#a19b90");
+  G.color("#b5b1a9");
   G.box(-g, g, y0, topY + 1.05, dS1, dN0, "b", 0.8);
   // ---- landings ----
   const slab = 0.2;
   for (let n = 0; n <= s.laps; n++) {
     const yl = gy + n * s.h;
     const d0 = n === 0 ? 0.25 : s.v0;
-    G.color("#9a958c");
+    G.color("#a3a09a");
     G.flat(-W2, W2, d0, dS1 - (n > 0 ? 0.06 : 0), n === 0 ? y0 : yl + 0.03, true, 0.7);
     if (n > 0) {
-      G.color("#8f8a80");
+      G.color("#9a968f");
       G.flat(-W2, W2, s.v0, dS1, yl - slab, false, 0.7);
       G.wallD(-W2, W2, yl - slab, yl + 0.03, dS1, true);
       // yellow nosing strip on the landing edge
@@ -707,42 +793,56 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     // the half landing
     if (n < s.laps) {
       const yh = yl + s.h / 2;
-      G.color("#9a958c");
+      G.color("#a3a09a");
       G.flat(-W2, W2, dN0, dEnd, yh + 0.03, true, 0.7);
-      G.color("#8f8a80");
+      G.color("#9a968f");
       G.flat(-W2, W2, dN0, dEnd, yh - slab, false, 0.7);
       G.wallD(-W2, W2, yh - slab, yh + 0.03, dN0, false);
       // lamps
-      S.glow.color("#fff1d6");
-      S.glow.box(-0.3, 0.3, yh + 2.2, yh + 2.32, dEnd - 0.06, dEnd, "+d");
-      lights.push({ a: 0, y: yh + 2.1, d: dEnd - 0.4, r: 1.9, k: 0.85 });
+      lamp([-0.3, 0.3, yh + 2.2, yh + 2.32, dEnd - 0.06, dEnd], "+d", { a: 0, y: yh + 2.1, d: dEnd - 0.4, r: 1.8, k: 1.0 });
     }
     // storey landing lamp, floor number, a door onto the floor
-    S.glow.color("#fff1d6");
     const ly = (n === 0 ? gy : yl) + 2.35;
-    if (ly < ceil - 0.15) {
-      S.glow.box(-W2, -W2 + 0.07, ly, ly + 0.14, s.v0 + 0.5, s.v0 + 1.1, "-a");
-      lights.push({ a: -W2 + 0.5, y: ly, d: s.v0 + 0.8, r: 1.9, k: 0.9 });
+    if (ly < ceil - 0.15)
+      lamp([-W2, -W2 + 0.07, ly, ly + 0.14, s.v0 + 0.5, s.v0 + 1.1], "-a", { a: -W2 + 0.5, y: ly, d: s.v0 + 0.8, r: 1.8, k: 1.05 });
+    // a fire extinguisher on its bracket, and its sign, on the landing's +a wall
+    if (n < s.laps) {
+      const ex = (n === 0 ? gy : yl) + 0.03;
+      const ed = s.v0 + 0.5;
+      P.color("#3a3a3c");
+      P.box(W2 - 0.05, W2, ex + 0.62, ex + 0.66, ed - 0.06, ed + 0.06, "+a");
+      P.color("#c4161c");
+      P.cyl(W2 - 0.14, ed, ex + 0.1, 0.52, 0.085, 10);
+      P.color("#1d1d1f");
+      P.cyl(W2 - 0.14, ed, ex + 0.62, 0.07, 0.035, 8);
+      P.box(W2 - 0.2, W2 - 0.12, ex + 0.66, ex + 0.69, ed - 0.015, ed + 0.015);
+      P.color("#b3161b");
+      P.box(W2 - 0.03, W2, ex + 1.42, ex + 1.62, ed - 0.37, ed + 0.37, "+a");
+      signA(S.sign, SIGN.FIRE, ed, ex + 1.44, ex + 1.6, W2 - 0.05, 0.7, -1);
     }
     const fy = (n === 0 ? gy : yl) + 1.45;
     S.sign.color("#ffffff");
     if (n < s.laps) {
-      G.color("#f2c230");
-      G.box(-W2, -W2 + 0.035, fy, fy + 0.46, s.v0 + 1.25, s.v0 + 1.63, "-a");
+      P.color("#f2c230");
+      P.box(-W2, -W2 + 0.035, fy, fy + 0.46, s.v0 + 1.25, s.v0 + 1.63, "-a");
       signA(S.sign, SIGN.FLOOR, s.v0 + 1.44, fy + 0.02, fy + 0.44, -W2 + 0.055, 0.36, 1, Math.min(8, n), 10);
     } else {
-      G.color("#f2c230");
-      G.box(-W2, -W2 + 0.035, fy, fy + 0.4, s.v0 + 0.15, s.v0 + 1.65, "-a");
+      P.color("#f2c230");
+      P.box(-W2, -W2 + 0.035, fy, fy + 0.4, s.v0 + 0.15, s.v0 + 1.65, "-a");
       signA(S.sign, SIGN.STAIRUP, s.v0 + 0.9, fy + 0.02, fy + 0.38, -W2 + 0.055, 1.46, 1);
     }
     if (n > 0 && n < s.laps) {
       // a (locked) steel door onto the floor, in the landing's front wall
-      G.color("#5d666f");
-      G.box(-0.5, 0.5, yl + 0.03, yl + 2.13, s.v0, s.v0 + 0.035, "b-d");
-      G.color("#1c242c");
-      G.box(-0.14, 0.14, yl + 1.35, yl + 1.75, s.v0 + 0.035, s.v0 + 0.055, "b-d");
-      G.color("#c8ccd0");
-      G.box(0.32, 0.42, yl + 1.02, yl + 1.06, s.v0 + 0.035, s.v0 + 0.09, "b-d");
+      P.color("#7a2e28");
+      P.box(-0.5, 0.5, yl + 0.03, yl + 2.13, s.v0, s.v0 + 0.035, "b-d");
+      P.color("#1c242c");
+      P.box(-0.14, 0.14, yl + 1.35, yl + 1.75, s.v0 + 0.035, s.v0 + 0.055, "b-d");
+      P.color("#c8ccd0");
+      P.box(0.32, 0.42, yl + 1.02, yl + 1.06, s.v0 + 0.035, s.v0 + 0.09, "b-d");
+      // EXIT (down the stairs) over the floor door
+      P.color("#0a6b35");
+      P.box(-0.34, 0.34, yl + 2.25, yl + 2.5, s.v0, s.v0 + 0.035, "b-d");
+      signD(S.sign, SIGN.EXITARROW, 0, yl + 2.27, yl + 2.48, s.v0 + 0.05, 0.64, 1);
     }
   }
   // ---- flights ----
@@ -755,13 +855,13 @@ function buildStairs(b: AccessBuilding, S: Set4) {
         a1 = -g;
       const dA0 = dS1 + k * (s.Lr / s.steps);
       const dA1 = dS1 + (k + 1) * (s.Lr / s.steps);
-      G.color("#8d887f");
+      G.color("#aaa69e");
       G.flat(a0, a1, dA0 + 0.05, dA1, ya, true);
       G.color("#d8b02a");
       G.flat(a0, a1, dA0, dA0 + 0.05, ya, true);
-      G.color("#8f8a81");
+      G.color("#9d9991");
       G.wallD(a0, a1, ya - rise - 0.14, ya, dA0, false);
-      G.color("#8f8a80");
+      G.color("#9a968f");
       G.flat(a0, a1, dA0, dA1, ya - rise - 0.14, false);
       G.wallD(a0, a1, ya - rise - 0.14, ya - rise, dA1, true);
       // flight down side (lane B): d shrinks as it climbs
@@ -770,47 +870,54 @@ function buildStairs(b: AccessBuilding, S: Set4) {
         b1 = W2;
       const dB1 = dN0 - k * (s.Lr / s.steps);
       const dB0 = dN0 - (k + 1) * (s.Lr / s.steps);
-      G.color("#8d887f");
+      G.color("#aaa69e");
       G.flat(b0, b1, dB0, dB1 - 0.05, yb, true);
       G.color("#d8b02a");
       G.flat(b0, b1, dB1 - 0.05, dB1, yb, true);
-      G.color("#8f8a81");
+      G.color("#9d9991");
       G.wallD(b0, b1, yb - rise - 0.14, yb, dB1, true);
-      G.color("#8f8a80");
+      G.color("#9a968f");
       G.flat(b0, b1, dB0, dB1, yb - rise - 0.14, false);
       G.wallD(b0, b1, yb - rise - 0.14, yb - rise, dB0, false);
     }
     // handrails on the outer walls and both faces of the spine
-    G.color("#b8bcc0");
-    rail(G, -W2 + 0.06, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
-    rail(G, -g - 0.05, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
-    rail(G, W2 - 0.06, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
-    rail(G, g + 0.05, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
+    P.color("#c23a2a");
+    rail(P, -W2 + 0.06, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
+    rail(P, -g - 0.05, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
+    rail(P, W2 - 0.06, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
+    rail(P, g + 0.05, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
   }
   // under the first flight down: closed off (no basement)
   G.color(wallC);
   G.wallD(g, W2, y0, gy + s.h - rise - 0.14, dS1, false);
   // top: guard rail across the pit of the last flight up, bulkhead ceiling and lamp
-  G.color("#b8bcc0");
-  G.quad([-W2, topY + 1.02, dS1 + 0.03], [-g, topY + 1.02, dS1 + 0.03], [-g, topY + 1.08, dS1 + 0.03], [-W2, topY + 1.08, dS1 + 0.03]);
-  for (const a of [-W2 + 0.1, (-W2 - g) / 2, -g - 0.05]) G.box(a - 0.02, a + 0.02, topY + 0.03, topY + 1.05, dS1, dS1 + 0.06);
+  P.color("#c23a2a");
+  P.quad([-W2, topY + 1.02, dS1 + 0.03], [-g, topY + 1.02, dS1 + 0.03], [-g, topY + 1.08, dS1 + 0.03], [-W2, topY + 1.08, dS1 + 0.03]);
+  for (const a of [-W2 + 0.1, (-W2 - g) / 2, -g - 0.05]) P.box(a - 0.02, a + 0.02, topY + 0.03, topY + 1.05, dS1, dS1 + 0.06);
   G.color("#c2bdb3");
   G.flat(-W2, W2, s.v0, dEnd, ceil, false, 0.8);
-  S.glow.color("#fff0d8");
+  S.glow.color("#ffe6c0");
   S.glow.box(-0.3, 0.3, ceil - 0.1, ceil - 0.02, (s.v0 + dEnd) / 2 - 0.3, (s.v0 + dEnd) / 2 + 0.3, "t");
-  lights.push({ a: 0, y: ceil - 0.3, d: (s.v0 + dEnd) / 2, r: 2.6, k: 1.0 });
+  lights.push({ a: 0, y: ceil - 0.3, d: (s.v0 + dEnd) / 2, r: 2.2, k: 1.0, col: "#ffd9a8" });
   // EXIT over the roof door (inside)
-  G.color("#0a6b35");
-  G.box(W2 - 0.04, W2, topY + 2.4, topY + 2.68, q1.d - 0.34, q1.d + 0.34, "b+a");
+  P.color("#0a6b35");
+  P.box(W2 - 0.04, W2, topY + 2.4, topY + 2.68, q1.d - 0.34, q1.d + 0.34, "b+a");
   signA(S.sign, SIGN.EXIT, q1.d, topY + 2.42, topY + 2.66, W2 - 0.06, 0.62, -1);
   // roof door reveal floor
   G.color("#7c776e");
   G.flat(W2, W2 + q1.wall, q1.d - q1.half, q1.d + q1.half, topY + 0.03, true);
   // hall lamp
-  S.glow.color("#fff1d6");
+  S.glow.color("#ffe2b4");
   S.glow.box(-0.3, 0.3, hallH - 0.06, hallH, (0.25 + s.v0) / 2 - 0.2, (0.25 + s.v0) / 2 + 0.2, "t");
-  lights.push({ a: 0, y: hallH - 0.3, d: (0.25 + s.v0) / 2 + 0.3, r: 2.0, k: 0.8 });
-  G.bake(lights, 0.22);
+  lights.push({ a: 0, y: hallH - 0.3, d: (0.25 + s.v0) / 2 + 0.3, r: 1.8, k: 0.9, col: "#ffd29a" });
+  // EXIT over the street door, inside
+  if (hallH - (gy + hh) > 0.34) {
+    P.color("#0a6b35");
+    P.box(-0.34, 0.34, gy + hh + 0.05, gy + hh + 0.29, 0.25, 0.285, "b-d");
+    signD(S.sign, SIGN.EXIT, 0, gy + hh + 0.07, gy + hh + 0.27, 0.3, 0.64, 1);
+  }
+  G.bake(lights, 0.13);
+  P.bake(lights, 0.16);
 }
 
 // ------------------------------------------------------------------ everything

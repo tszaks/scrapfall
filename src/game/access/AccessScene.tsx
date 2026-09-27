@@ -12,7 +12,10 @@ import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
 import { buildAccess, STREET_DOOR_H, type DisplaySpot, type Interior } from "./build";
 import { CAR_H, type AccessBuilding } from "./layout";
-import { Display, signTexture, steelTexture } from "./textures";
+import { concreteTexture, CopPanel, Display, signTexture, steelTexture, woodTexture } from "./textures";
+import { POWER_GLSL, powerAt, powerUniforms } from "../events/power";
+import { addSkyFogUniforms } from "../skyFog";
+import { tod } from "../timeOfDay";
 import {
   CLOSING,
   IDLE,
@@ -27,15 +30,34 @@ import {
   portalDoor,
 } from "./world";
 
-const GLOW_K: Record<TimeOfDay, number> = { night: 1.35, sunset: 1.1 };
+/** exterior lights go dark with the city grid (the Vice Heights blackout) */
+function powered<T extends THREE.Material>(m: T, off = 0.03): T {
+  m.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
+    Object.assign(sh.uniforms, powerUniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vPwXZ;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPwXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", `#include <common>\nvarying vec2 vPwXZ;\n${POWER_GLSL}`)
+      .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= mix(${off.toFixed(3)}, 1.0, gridPower(vPwXZ));`);
+  };
+  m.customProgramCacheKey = () => "access-powered-" + off;
+  return m;
+}
+/** interiors on emergency power: a dim red wash from the battery lamps */
+const EMERGENCY = new THREE.Color(0.24, 0.055, 0.045);
+const INNER_STEEL = new THREE.Color("#8b9096");
+const _c = new THREE.Color();
+const WHITE = new THREE.Color(1, 1, 1);
 
 type Mats = ReturnType<typeof makeMats>;
 function makeMats() {
   return {
     ext: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.05 }),
-    glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
-    sign: new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }),
-    pools: new THREE.MeshBasicMaterial({
+    glow: powered(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })),
+    sign: powered(new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }), 0.08),
+    pools: powered(new THREE.MeshBasicMaterial({
       vertexColors: true,
       map: glowTexture(),
       transparent: true,
@@ -44,11 +66,13 @@ function makeMats() {
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,
-    }),
+    }), 0),
     beacon: new THREE.MeshBasicMaterial({ color: "#ff2a1a", toneMapped: false }),
     // interiors: baked light in the vertex colours
     base: new THREE.MeshBasicMaterial({ vertexColors: true }),
     steel: new THREE.MeshBasicMaterial({ vertexColors: true, map: steelTexture() }),
+    wood: new THREE.MeshBasicMaterial({ vertexColors: true, map: woodTexture() }),
+    conc: new THREE.MeshBasicMaterial({ vertexColors: true, map: concreteTexture() }),
     iglow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
     isign: new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }),
     // doors
@@ -74,6 +98,8 @@ function InteriorMeshes({ g, m }: { g: Interior; m: Mats }) {
     <>
       <mesh geometry={g.base} material={m.base} />
       <mesh geometry={g.steel} material={m.steel} />
+      <mesh geometry={g.wood} material={m.wood} />
+      <mesh geometry={g.conc} material={m.conc} />
       <mesh geometry={g.glow} material={m.iglow} />
       <mesh geometry={g.sign} material={m.isign} />
     </>
@@ -142,12 +168,14 @@ function Building({
   g,
   refs,
   display,
+  cop,
 }: {
   b: AccessBuilding;
   m: Mats;
   g: ReturnType<typeof buildAccess>["per"][number];
   refs: Refs;
   display: Display | null;
+  cop: CopPanel | null;
 }) {
   const elev = b.kind === "elevator";
   const q0 = b.portals[0];
@@ -159,12 +187,17 @@ function Building({
     () => (display ? new THREE.MeshBasicMaterial({ map: display.tex, toneMapped: false }) : null),
     [display],
   );
+  const copMat = useMemo(
+    () => (cop ? new THREE.MeshBasicMaterial({ map: cop.tex }) : null),
+    [cop],
+  );
   useEffect(() => () => dispMat?.dispose(), [dispMat]);
+  useEffect(() => () => copMat?.dispose(), [copMat]);
   const disp = (s: DisplaySpot, i: number) =>
     dispMat && (
       <mesh
         key={i}
-        material={dispMat}
+        material={s.level === 3 && copMat ? copMat : dispMat}
         position={[s.a, s.y, s.d]}
         rotation-y={s.face > 0 ? 0 : Math.PI}
       >
@@ -219,7 +252,7 @@ function Building({
           <mesh material={m.frameDark} position={[0, CAR_H + 0.08, (E.car.d0 + E.car.d1) / 2]}>
             <boxGeometry args={[E.car.a1 - E.car.a0 + 0.1, 0.12, E.car.d1 - E.car.d0 + 0.1]} />
           </mesh>
-          {g.displays.filter((s) => s.level === 2).map(disp)}
+          {g.displays.filter((s) => s.level >= 2).map(disp)}
         </group>
       )}
     </group>
@@ -331,6 +364,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
   const built = useMemo(() => buildAccess(list), [list]);
   const mats = useMemo(makeMats, []);
   const displays = useMemo(() => list.map((b) => (b.elev ? new Display() : null)), [list]);
+  const cops = useMemo(() => list.map((b) => (b.elev ? new CopPanel() : null)), [list]);
   const { scene } = useThree();
   const refs = useMemo<Refs[]>(
     () =>
@@ -357,13 +391,6 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
     seen.current = list.map(() => ({ dep: 0, arr: 0, phase: IDLE }));
   }, [list]);
 
-  useEffect(() => {
-    const k = GLOW_K[time];
-    mats.glow.color.setScalar(k);
-    mats.iglow.color.setScalar(1.15);
-    mats.sign.color.setScalar(time === "night" ? 1.15 : 1.0);
-    mats.pools.opacity = time === "night" ? 0.85 : 0.4;
-  }, [time, mats]);
 
   useEffect(() => {
     const m = beaconRef.current;
@@ -382,11 +409,12 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       built.pools.dispose();
       for (const p of built.per)
         for (const g of [p.low, p.high, p.car])
-          if (g) [g.base, g.glow, g.sign, g.steel].forEach((x) => x.dispose());
+          if (g) [g.base, g.glow, g.sign, g.steel, g.wood, g.conc].forEach((x) => x.dispose());
     },
     [built],
   );
   useEffect(() => () => displays.forEach((d) => d?.dispose()), [displays]);
+  useEffect(() => () => cops.forEach((d) => d?.dispose()), [cops]);
   useEffect(() => () => {
     Object.values(mats).forEach((m) => m.dispose());
     beaconGeo.dispose();
@@ -420,6 +448,32 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
         }
       }
     }
+    // exterior lights follow the continuous time of day (tod.v: 0 golden hour .. 1 night);
+    // the interiors are baked and don't depend on it at all
+    const tv = tod.v;
+    mats.glow.color.setScalar(1.1 + 0.25 * tv);
+    mats.sign.color.setScalar(1.0 + 0.15 * tv);
+    mats.pools.opacity = 0.4 + 0.45 * tv;
+    // blackout: the interior nearest the player (the one you're in, else the closest) runs on
+    // emergency power; the car keeps running on its battery with a dim red light
+    let near = player.zone !== 0 ? player.b : -1;
+    if (near < 0) {
+      let bd = 60;
+      list.forEach((b, k) => {
+        const d = Math.hypot(b.ox - cam.x, b.oz - cam.z);
+        if (d < bd) {
+          bd = d;
+          near = k;
+        }
+      });
+    }
+    const pw = near >= 0 ? powerAt(list[near]!.ox, list[near]!.oz) : 1;
+    const flick = pw < 0.5 && Math.sin(state.clock.elapsedTime * 23) > 0.93 ? 0.8 : 1;
+    _c.copy(EMERGENCY).lerp(WHITE, pw).multiplyScalar(flick);
+    for (const m of [mats.base, mats.steel, mats.wood, mats.conc]) m.color.copy(_c);
+    mats.innerSteel.color.copy(INNER_STEEL).multiply(_c);
+    mats.iglow.color.setRGB(0.06 + 1.09 * pw, 0.02 + 1.13 * pw, 0.02 + 1.13 * pw);
+    const emergency = pw < 0.5;
     const t = state.clock.elapsedTime;
     mats.beacon.color.setScalar(Math.sin(t * 3.2) > 0.2 ? 1 : 0.12).multiply(BEACON);
     let hideCity = false;
@@ -466,8 +520,9 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       if (disp) {
         const dir = c.phase === MOVING ? (c.level > c.from ? 1 : -1) : 0;
         const cap = c.phase === MOVING ? "" : c.level ? "ROOF" : "LOBBY";
-        disp.show(carFloor(b, c), dir, cap);
+        disp.show(carFloor(b, c), dir, emergency && k === near ? (c.phase === MOVING ? "" : "BATTERY") : cap, emergency && k === near);
       }
+      cops[k]?.show(carFloor(b, c), b.elev.floors, c.phase === MOVING ? c.level : c.level ? 0 : 1, emergency && k === near);
       // sounds for this client's own ride / landing
       const s = seen.current[k];
       if (s) {
@@ -506,7 +561,7 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
         <instancedMesh ref={beaconRef} args={[beaconGeo, mats.beacon, built.beacons.length]} />
       )}
       {list.map((b, k) => (
-        <Building key={k} b={b} m={mats} g={built.per[k]!} refs={refs[k]!} display={displays[k] ?? null} />
+        <Building key={k} b={b} m={mats} g={built.per[k]!} refs={refs[k]!} display={displays[k] ?? null} cop={cops[k] ?? null} />
       ))}
     </group>
   );

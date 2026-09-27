@@ -18,6 +18,9 @@ export class IGeo {
   col: number[] = [];
   uv: number[] = [];
   f: Frame = IDENTITY;
+  /** > 0: texture coordinates come from the local position (planar, this many metres per
+   * repeat) instead of each quad's own 0..1, so tiled materials (wood, concrete) keep scale */
+  worldUV = 0;
   private r = 1;
   private g = 1;
   private b = 1;
@@ -38,7 +41,15 @@ export class IGeo {
     this.pos.push(f.ox + f.tx * a + f.ix * d, y, f.oz + f.tz * a + f.iz * d);
     this.nor.push(f.tx * na + f.ix * nd, ny, f.tz * na + f.iz * nd);
     this.col.push(this.r, this.g, this.b);
-    this.uv.push(u, w);
+    if (this.worldUV > 0) {
+      const k = 1 / this.worldUV;
+      const ax = Math.abs(na);
+      const ay = Math.abs(ny);
+      const az = Math.abs(nd);
+      if (ay >= ax && ay >= az) this.uv.push(a * k, d * k);
+      else if (ax >= az) this.uv.push(d * k, y * k);
+      else this.uv.push(a * k, y * k);
+    } else this.uv.push(u, w);
   }
   /** quad p0 p1 p2 p3 counter-clockwise seen from the front (local coordinates [a, y, d]),
    * optionally subdivided n x m (for smooth baked light), uv spans [u0 v0 u1 v1] */

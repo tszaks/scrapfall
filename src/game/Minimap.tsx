@@ -1,27 +1,15 @@
-// City minimap: a rotating radar in the HUD corner. The street map is painted once per
-// city (one pixel per 2 m cell, buildings shaded by height); each frame draws the slice
+// Big-map minimap: a rotating radar in the HUD corner. The map is painted once per arena
+// by the map (cityMinimap.ts, western/minimap.ts); each frame draws the slice
 // around the player, turned so "up" is where you are looking, plus teammates (in their
 // player colours), enemies, the boss and pickups. Off-map teammates and pickups stick to
 // the rim so you can always find them.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-import {
-  K_ALLEY,
-  K_BOARD,
-  K_MEDIAN,
-  K_OPEN,
-  K_PARK,
-  K_PARKLANE,
-  K_PATH,
-  K_ROAD,
-  K_WALK,
-  type CityLayout,
-} from "./cityLayout";
-import type { Block } from "./level";
-import type { AlpineLayout } from "./alpine/layout";
-import { paintAlpine } from "./alpine/minimap";
 import { pursuitDots } from "./trafficCore";
 import { drawAccessIcons } from "./access/minimap";
+import { colorFor } from "./net";
+import { pings } from "./ping";
+import { DOWN, squad } from "./revive";
 
 export type MapItem = {
   x: number;
@@ -31,89 +19,43 @@ export type MapItem = {
   active: boolean;
 };
 export type MapFeed = { x: number; z: number; yaw: number; items: MapItem[] };
+/** What a big map hands the radar: its painted base map and a few landmarks. */
+export type MinimapSource = {
+  cells: number;
+  half: number;
+  /** one pixel per 2 m cell, canvas x = world x, canvas y = world z */
+  base: HTMLCanvasElement;
+  /** colour of the land beyond the map */
+  land: string;
+  /** the sea south of this z (the city's waterfront) */
+  sea: { z: number; color: string } | null;
+  /** the sea west of this x (the beach's Pacific) */
+  seaWest?: { x: number; color: string };
+  landmark: { x: number; z: number } | null;
+  /** half-size of the playable square (solo); the area beyond it is dimmed */
+  playHalf: number;
+};
 type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number; vis?: number };
-type MapRemote = { x: number; z: number; color: string; hp: number; last: number };
+type MapRemote = { id?: string; x: number; z: number; color: string; hp: number; last: number };
 
 const SIZE = 184; // css px
 const RANGE = 95; // metres from the centre to the rim
 
-const KIND_COL: Record<number, [number, number, number]> = {
-  [K_ROAD]: [70, 72, 78],
-  [K_PARKLANE]: [82, 84, 90],
-  [K_WALK]: [196, 188, 172],
-  [K_MEDIAN]: [120, 150, 90],
-  [K_ALLEY]: [90, 90, 94],
-  [K_PARK]: [118, 160, 86],
-  [K_PATH]: [210, 192, 150],
-  [K_BOARD]: [176, 138, 96],
-  [K_OPEN]: [206, 198, 182],
-};
-
-/** optional per-map minimap extras (the beach map sets these) */
-type MapExtras = {
-  /** colours per cell kind, over the city's defaults */
-  palette?: Record<number, [number, number, number]>;
-  /** everything west of this x is sea */
-  seaX?: number;
-  /** solo play: the playable square's half-size (the rest is dimmed) */
-  soloHalf?: number | null;
-};
-
-function paintBase(city: CityLayout, blocks: Block[]) {
-  const n = city.cells;
-  const pal = (city as CityLayout & MapExtras).palette;
-  const c = document.createElement("canvas");
-  c.width = n;
-  c.height = n;
-  const g = c.getContext("2d")!;
-  const img = g.createImageData(n, n);
-  const heights = new Float32Array(n * n);
-  for (const b of blocks) {
-    const i = Math.floor((b.x + city.half) / 2);
-    const j = Math.floor((b.z + city.half) / 2);
-    if (i >= 0 && j >= 0 && i < n && j < n) heights[i * n + j] = Math.max(heights[i * n + j]!, b.h);
-  }
-  for (let i = 0; i < n; i++)
-    for (let j = 0; j < n; j++) {
-      const k = city.kind[i * n + j]!;
-      const h = heights[i * n + j]!;
-      let col = pal?.[k] ?? KIND_COL[k] ?? [150, 144, 132];
-      if (h > 0 && k !== K_PARKLANE && k !== K_ROAD) {
-        // buildings: darker the taller, in the HUD's ink colour
-        const t = Math.min(1, Math.log2(1 + h / 6) / 5.5);
-        col = [Math.round(150 - 107 * t), Math.round(140 - 107 * t), Math.round(124 - 100 * t)];
-      }
-      const o = (j * n + i) * 4; // canvas x = world x, canvas y = world z
-      img.data[o] = col[0];
-      img.data[o + 1] = col[1];
-      img.data[o + 2] = col[2];
-      img.data[o + 3] = 255;
-    }
-  g.putImageData(img, 0, 0);
-  return c;
-}
-
 export function Minimap({
-  city,
-  blocks,
+  src,
   feed,
   enemies,
   remotes,
   myColor,
 }: {
-  city: CityLayout;
-  blocks: Block[];
+  src: MinimapSource;
   feed: React.MutableRefObject<MapFeed>;
   enemies: MapEnemy[];
   remotes: React.MutableRefObject<Map<string, MapRemote>>;
   myColor: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const alpine = "alpine" in city;
-  const base = useMemo(
-    () => ("alpine" in city ? paintAlpine(city as AlpineLayout) : paintBase(city, blocks)),
-    [city, blocks],
-  );
+  const base = src.base;
   const colorRef = useRef(myColor);
   colorRef.current = myColor;
 
@@ -144,36 +86,42 @@ export function Minimap({
       const wx = (x: number) => (x - f.x) * s;
       const wz = (z: number) => (z - f.z) * s;
       // backdrop land, the sea, then the street map
-      g.fillStyle = alpine ? "#8a9098" : "#a8a397";
+      g.fillStyle = src.land;
       g.fillRect(-R * 2, -R * 2, R * 4, R * 4);
-      if (!alpine) {
-        g.fillStyle = "#4f8fb0";
-        g.fillRect(-R * 3, wz(city.waterZ), R * 6, R * 6);
+      if (src.sea) {
+        g.fillStyle = src.sea.color;
+        g.fillRect(-R * 3, wz(src.sea.z), R * 6, R * 6);
       }
-      const ex = city as CityLayout & MapExtras;
-      if (ex.seaX !== undefined) g.fillRect(wx(ex.seaX) - R * 6, -R * 3, R * 6, R * 6);
+      if (src.seaWest) {
+        g.fillStyle = src.seaWest.color;
+        g.fillRect(wx(src.seaWest.x) - R * 6, -R * 3, R * 6, R * 6);
+      }
       g.imageSmoothingEnabled = false;
-      g.drawImage(base, wx(-city.half), wz(-city.half), city.cells * 2 * s, city.cells * 2 * s);
-      if (ex.soloHalf && !alpine) {
-        // solo: dim everything past the blockades
-        const h = ex.soloHalf;
-        g.fillStyle = "rgba(20,16,12,0.5)";
-        g.beginPath();
-        g.rect(-R * 4, -R * 4, R * 8, R * 8);
-        g.rect(wx(-h), wz(h), h * 2 * s, -h * 2 * s);
-        g.fill("evenodd");
-        g.strokeStyle = "#e8322a";
-        g.lineWidth = 1.5 * dpr;
-        g.strokeRect(wx(-h), wz(-h), h * 2 * s, h * 2 * s);
+      g.drawImage(base, wx(-src.half), wz(-src.half), src.cells * 2 * s, src.cells * 2 * s);
+      // solo: everything beyond the blockades is dimmed, the edge drawn as a dashed line
+      if (src.playHalf < src.half - 1) {
+        const p0 = -src.playHalf;
+        const p1 = src.playHalf;
+        const far = src.half * 3;
+        g.fillStyle = "rgba(24,18,12,0.62)";
+        g.fillRect(wx(-far), wz(-far), far * 2 * s, (far - p1) * s); // north
+        g.fillRect(wx(-far), wz(p1), far * 2 * s, (far - p1) * s); // south
+        g.fillRect(wx(-far), wz(p0), (far - p1) * s, (p1 - p0) * s); // west
+        g.fillRect(wx(p1), wz(p0), (far - p1) * s, (p1 - p0) * s); // east
+        g.setLineDash([6 * dpr, 4 * dpr]);
+        g.strokeStyle = "rgba(200,40,24,0.95)";
+        g.lineWidth = 2.2 * dpr;
+        g.strokeRect(wx(p0), wz(p0), (p1 - p0) * s, (p1 - p0) * s);
+        g.setLineDash([]);
       }
-      if (city.landmark) {
+      if (src.landmark) {
         g.fillStyle = "#2b2118";
         g.beginPath();
-        g.arc(wx(city.landmark.x), wz(city.landmark.z), 4 * dpr, 0, Math.PI * 2);
+        g.arc(wx(src.landmark.x), wz(src.landmark.z), 4 * dpr, 0, Math.PI * 2);
         g.fill();
       }
       // elevator / stairs badges and lobby doors (building access)
-      if (!alpine) drawAccessIcons(g, wx, wz, dpr, R, f.yaw);
+      drawAccessIcons(g, wx, wz, dpr, R, f.yaw); // (only Vice Heights installs any)
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;
@@ -241,11 +189,30 @@ export function Minimap({
         g.fill();
         g.stroke();
       }
+      // pings: a diamond in the pinger's colour (enemy pings ringed red), on the rim if far
+      for (const p of pings) {
+        const [x, z] = rim(wx(p.x), wz(p.z), 7);
+        const pulse = 1 + 0.25 * Math.sin(now / 110);
+        const sz = (p.kind === "enemy" ? 5.5 : 5) * dpr * pulse;
+        g.fillStyle = colorFor(p.num);
+        g.strokeStyle = p.kind === "enemy" ? "#ff2a1a" : "#2b2118";
+        g.lineWidth = (p.kind === "enemy" ? 2.4 : 1.4) * dpr;
+        g.beginPath();
+        g.moveTo(x!, z! - sz);
+        g.lineTo(x! + sz, z!);
+        g.lineTo(x!, z! + sz);
+        g.lineTo(x! - sz, z!);
+        g.closePath();
+        g.fill();
+        g.stroke();
+      }
       const now2 = performance.now();
       remotes.current.forEach((r) => {
         if (now2 - r.last > 4000) return;
         const [x, z] = rim(wx(r.x), wz(r.z), 8);
-        g.fillStyle = r.hp > 0 ? r.color : "#8a8680";
+        // a downed teammate flashes red until someone revives them
+        const down = r.hp <= 0 && r.id !== undefined && squad.get(r.id)?.st === DOWN;
+        g.fillStyle = r.hp > 0 ? r.color : down ? (blink ? "#ff2a1a" : r.color) : "#8a8680";
         g.strokeStyle = "#2b2118";
         g.lineWidth = 1.5 * dpr;
         g.beginPath();
@@ -289,7 +256,7 @@ export function Minimap({
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [alpine, base, city, enemies, feed, remotes]);
+  }, [base, src, enemies, feed, remotes]);
 
   return (
     <div className="rounded-full bg-[#f3e6cf]/80 p-1 shadow-md">

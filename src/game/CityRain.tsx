@@ -20,6 +20,7 @@ import * as THREE from "three";
 import { setAmbienceWeather } from "./ambience";
 import type { CityLayout } from "./cityLayout";
 import type { TimeOfDay } from "./lighting";
+import { liveLook, tod, todSmooth } from "./timeOfDay";
 import { blackTexture, resetWeather, tickWeather, weather, wetUniforms } from "./cityWeather";
 import { player as accessPlayer } from "./access/world";
 
@@ -196,13 +197,13 @@ void main() {
 
 export function CityRain({
   city,
-  time,
   isHost,
   drips,
   heights,
 }: {
   city: CityLayout;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts (rain falls once it's dark) */
+  time?: TimeOfDay;
   isHost: boolean;
   drips: [number, number, number, number][];
   heights: Float32Array;
@@ -488,12 +489,15 @@ export function CityRain({
   useFrame((state, dt) => {
     const delta = Math.min(dt, 0.1);
     tickWeather(delta, hostRef.current, true);
-    const shown = time === "night";
+    // the rain belongs to the night: it fades in as the dusk darkens (timeOfDay.ts)
+    const nightF = todSmooth(0.55, 0.9, tod.v);
+    const shown = nightF > 0.001;
     weather.shown = shown;
-    const rain = shown ? weather.rain : 0;
+    const rain = shown ? weather.rain * nightF : 0;
     // the ambience reads the live weather (same value as rainIntensity())
-    setAmbienceWeather(rain);
-    const wet = shown ? weather.wet : 0;
+    // indoors (lobby, car, stairwell) the rain is heard through the walls: much quieter
+    setAmbienceWeather(accessPlayer.zone === 1 ? rain * 0.3 : rain);
+    const wet = shown ? weather.wet * nightF : 0;
     const t = weather.t;
     time0.value = t;
     rainU.value = rain;
@@ -510,11 +514,10 @@ export function CityRain({
     const fog = scene.fog;
     const fb = fogBase.current;
     if (fog instanceof THREE.Fog) {
-      if (fb.fog !== fog) {
-        fb.fog = fog;
-        fb.near = fog.near;
-        fb.far = fog.far;
-      }
+      // the clear-weather fog comes from the blended time-of-day look
+      fb.fog = fog;
+      fb.near = liveLook.fogNear;
+      fb.far = liveLook.fogFar;
       fog.near = fb.near * (1 - 0.55 * rain);
       fog.far = fb.far * (1 - 0.5 * rain);
     }
