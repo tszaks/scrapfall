@@ -3413,11 +3413,13 @@ export function Game() {
   }, []);
 
   // regen perk
+  const regenRate = statsRef.current.regen;
   useEffect(() => {
-    if (!perks.regen || !started || !locked || ended || dead) return;
-    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / perks.regen);
+    if (!regenRate || !started || !locked || ended || dead) return;
+    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / regenRate);
     return () => window.clearInterval(id);
-  }, [perks.regen, started, locked, ended, dead, maxHp]);
+  }, [regenRate, started, locked, ended, dead, maxHp]);
+
 
   // soundtrack
   useEffect(() => { hookAudioUnlock(); }, []);
