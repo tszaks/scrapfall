@@ -17,6 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { setAmbienceWeather } from "./ambience";
 import type { CityLayout } from "./cityLayout";
 import type { TimeOfDay } from "./lighting";
 import { blackTexture, resetWeather, tickWeather, weather, wetUniforms } from "./cityWeather";
@@ -217,6 +218,7 @@ export function CityRain({
     return () => {
       weather.active = false;
       weather.shown = false;
+      setAmbienceWeather(0);
       wetUniforms.uWet.value = 0;
       wetUniforms.uReflOn.value = 0;
     };
@@ -488,6 +490,8 @@ export function CityRain({
     const shown = time === "night";
     weather.shown = shown;
     const rain = shown ? weather.rain : 0;
+    // the ambience reads the live weather (same value as rainIntensity())
+    setAmbienceWeather(rain);
     const wet = shown ? weather.wet : 0;
     const t = weather.t;
     time0.value = t;

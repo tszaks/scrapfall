@@ -3,6 +3,7 @@
 // snapshot, so everyone sees the same whiteout and the same chairs on the cable.
 import { wind } from "../terrain";
 import { setMuffle, setWindNoise } from "../audio";
+import type { Lift } from "./layout";
 
 export const alpine = {
   active: false,
@@ -19,10 +20,13 @@ export const alpine = {
   next: 75,
   /** guests: last snapshot clock, for smoothing */
   remoteT: -1,
+  /** the chairlift (for placing teammates who ride it) */
+  lift: null as Lift | null,
 };
 
-export function resetAlpine(active: boolean) {
+export function resetAlpine(active: boolean, lift: Lift | null = null) {
   alpine.active = active;
+  alpine.lift = lift;
   alpine.t = 0;
   alpine.blizzard = 0;
   alpine.target = 0;

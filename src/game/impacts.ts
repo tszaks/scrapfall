@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { groundY } from "./terrain";
+import { groundY, shotHits } from "./terrain";
 
 import { playImpact, type ImpactSound } from "./audio";
 import { spec, type DecalPool, type MeshPool, type RingPool, type SegPool } from "./fxCore";
@@ -218,13 +218,15 @@ export function classify(prev: THREE.Vector3, pos: THREE.Vector3, vel: THREE.Vec
     out.n.set(-vel.x, 0, -vel.z).normalize();
     return "car";
   }
-  if (env.solid(pos.x, pos.z)) {
+  // (on maps with terrain, solids have a height: shots fly over walls they clear)
+  const solidAt = (q: THREE.Vector3) => shotHits(q.x, q.y, q.z) ?? env.solid(q.x, q.z);
+  if (solidAt(pos)) {
     // walk back to the face it crossed
     let lo = 0, hi = 1;
     for (let k = 0; k < 7; k++) {
       const m = (lo + hi) / 2;
       P.lerpVectors(prev, pos, m);
-      if (env.solid(P.x, P.z)) hi = m; else lo = m;
+      if (solidAt(P)) hi = m; else lo = m;
     }
     out.p.lerpVectors(prev, pos, lo);
     P.lerpVectors(prev, pos, hi);

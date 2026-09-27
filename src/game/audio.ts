@@ -1,19 +1,42 @@
 // Procedural Web Audio: per-gun shot sounds, little UI blips and a synthwave loop.
+import { EXTRA_MAP_STYLE, EXTRA_STYLES, LAYOUT_STYLE, type StyleExtras } from "./musicStyles";
+import { makeReverb, playClop, playJingle, playVoice, type MusicOut } from "./musicVoices";
+
 let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
 let sfxGain: GainNode | null = null;
+/** background soundscapes (ambience.ts) sit on their own bus, under the music and effects */
+let ambGain: GainNode | null = null;
+let musicVerb: ConvolverNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 let muffle: BiquadFilterNode | null = null;
 let windGain: GainNode | null = null;
 let windFilter: BiquadFilterNode | null = null;
-let vol = { music: 0.5, sfx: 0.7 };
+let vol = { music: 0.5, sfx: 0.7, amb: 0.6 };
+/** the last blizzard / storm strength a map reported through setMuffle (the ambience listens) */
+let weather = 0;
 
 export function initAudio() {
   if (typeof window === "undefined") return;
   if (!ctx) {
     const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
-    ctx = new AC();
+    buildGraph(new AC());
+  }
+  if (!ctx) return;
+  if (ctx.state === "suspended") void ctx.resume();
+  // iOS/Safari: a zero-length buffer on a real gesture clears the hardware mute flag
+  try {
+    const s = ctx.createBufferSource();
+    s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    s.connect(ctx.destination);
+    s.start(0);
+  } catch { /* already unlocked */ }
+}
+
+function buildGraph(c: AudioContext) {
+  {
+    ctx = c;
     const master = ctx.createGain();
     master.gain.value = 0.8;
     // weather muffling (the alpine blizzard): a lowpass that is wide open by default
@@ -23,21 +46,44 @@ export function initAudio() {
     master.connect(muffle).connect(ctx.destination);
     musicGain = ctx.createGain();
     sfxGain = ctx.createGain();
+    ambGain = ctx.createGain();
     musicGain.connect(master);
     sfxGain.connect(master);
+    ambGain.connect(master);
+    // one shared reverb for the music's bells, whistles and surf guitar
+    musicVerb = makeReverb(ctx);
+    const wet = ctx.createGain();
+    wet.gain.value = 0.5;
+    musicVerb.connect(wet).connect(musicGain);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     applyVol();
   }
-  if (ctx.state === "suspended") void ctx.resume();
-  // iOS/Safari: a zero-length buffer on a real gesture clears the hardware mute flag
-  try {
-    const s = ctx.createBufferSource();
-    s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    s.connect(ctx.destination);
-    s.start(0);
-  } catch { /* already unlocked */ }
+}
+
+/**
+ * Offline rendering / instrumentation: build the graph on a context you own (an
+ * OfflineAudioContext in the audio harness). Not used by the game.
+ */
+export function attachAudioContextForTest(c: BaseAudioContext) {
+  ctx = null;
+  nextT = 0;
+  step = 0;
+  buildGraph(c as unknown as AudioContext);
+}
+
+/** The live audio graph for map-specific sound (the western train's whistle and rumble). */
+export function audioOut() {
+  return ctx && sfxGain && noiseBuf ? { ctx, out: sfxGain, noise: noiseBuf } : null;
+}
+/** The ambience bus (ambience.ts), with the shared noise buffer. */
+export function ambienceOut() {
+  return ctx && ambGain && noiseBuf ? { ctx, out: ambGain, noise: noiseBuf } : null;
+}
+/** Latest weather strength (0..1) a map reported through setMuffle: the blizzard. */
+export function weatherLevel() {
+  return weather;
 }
 
 // Browsers block audio until the visitor interacts with the page. Any click,
@@ -58,9 +104,10 @@ export function hookAudioUnlock() {
 function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * 0.35;
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
+  if (ambGain) ambGain.gain.value = vol.amb * 0.5;
 }
-export function setVolumes(music: number, sfx: number) {
-  vol = { music, sfx };
+export function setVolumes(music: number, sfx: number, amb = vol.amb) {
+  vol = { music, sfx, amb };
   applyVol();
 }
 
@@ -147,6 +194,7 @@ export function playSfx(kind: Sfx) {
 
 /** Blizzard muffling, 0 (clear) .. 1 (everything sounds far away through driving snow). */
 export function setMuffle(k: number) {
+  weather = Math.max(0, Math.min(1, k));
   if (!ctx || !muffle) return;
   const f = 20000 * Math.pow(900 / 20000, Math.max(0, Math.min(1, k)));
   muffle.frequency.setTargetAtTime(f, ctx.currentTime, 0.2);
@@ -254,7 +302,7 @@ export function playEnemySfx(kind: EnemySfx, vol = 1) {
 }
 
 // ---- music: tiny lookahead step sequencer, one style per map ----
-type Style = {
+export type Style = StyleExtras & {
   roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;
   bass: OscillatorType; kick: number[]; snare: number[]; hat: "odd" | "all" | "none" | "off"; pad?: boolean;
   /** lead plays every N sixteenths (default 2) */ arpRate?: number;
@@ -300,24 +348,41 @@ const STYLES: Record<string, Style> = {
     leadLen: 1.2,
     echo: true,
   },
-  // alpine: an oompah-less mountain waltz: bells and a warm pad, wood clicks, soft bass
+  // alpine: calm and snowbound. A harp-like pluck over a warm MAJOR organ pad (the old pad's
+  // minor tenth clashed with the major arp), a bell tune mid-run, sleigh bells, a low toll late
   alpine: {
     roots: [50, 55, 57, 52],
-    bpm: 96,
+    bpm: 88,
     arp: [0, 4, 7, 12, 7, 4, 9, 7],
     lead: "triangle",
+    leadVoice: "harp",
     leadCut: 5200,
     bass: "sine",
-    kick: [0, 12],
+    kick: [0],
     snare: [8],
     hat: "none",
     pad: true,
+    padIv: [0, 7, 16],
+    padVoice: "organ",
     arpRate: 2,
     oct: 12,
     bassRate: 8,
     leadLen: 1.8,
-    echo: true,
     wood: true,
+    jingle: [6, 14],
+    toll: true,
+    parts: [
+      {
+        voice: "bell",
+        rel: "key",
+        oct: 12,
+        rate: 4,
+        gain: 0.05,
+        from: 1,
+        //       D                G                A                Em
+        notes: [12, null, 11, 9, 12, null, 9, 5, 11, null, 7, null, 9, 7, 5, 2],
+      },
+    ],
   },
   toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
 };
@@ -326,11 +391,17 @@ const MAP_STYLE: Record<string, string> = {
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
+  "Pacific Pier": "surf",
   "Whiteout Pass": "alpine",
 };
 let style: Style = STYLES['desert']!;
-export function setMusicTheme(mapName: string) {
-  style = STYLES[MAP_STYLE[mapName] ?? "desert"]!;
+/**
+ * Pick the soundtrack for a map. Unknown names fall back on the big-map layout (so a renamed
+ * western / beach map still gets its style), then on the desert groove.
+ */
+export function setMusicTheme(mapName: string, layout?: string) {
+  const key = EXTRA_MAP_STYLE[mapName] ?? MAP_STYLE[mapName] ?? (layout ? LAYOUT_STYLE[layout] : undefined) ?? "desert";
+  style = EXTRA_STYLES[key] ?? STYLES[key] ?? STYLES["desert"]!;
 }
 
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
@@ -341,6 +412,20 @@ let intense = false;
 
 export function setMusicIntensity(boss: boolean) {
   intense = boss;
+}
+
+/**
+ * The music builds as the run goes on: 0 for the opening waves (no hats, no extra lines),
+ * 1 mid-run, 2 late. The boss round is `setMusicIntensity(true)` on top (level 3).
+ */
+let level = 0;
+export function setMusicProgress(wave: number, total: number) {
+  const k = total > 1 ? (wave - 1) / (total - 1) : 0;
+  level = k < 0.2 ? 0 : k < 0.6 ? 1 : 2;
+}
+
+function musicOut(): MusicOut | null {
+  return ctx && musicGain && noiseBuf ? { ctx, out: musicGain, verb: musicVerb, noise: noiseBuf } : null;
 }
 
 function scheduleStep(s: number, t0: number, stepDur: number) {
@@ -355,7 +440,10 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
     else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
   }
-  const hat = S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2) || intense;
+  const lvl = intense ? 3 : level;
+  const M = musicOut();
+  // hats join from the second stage (maps built around a constant hat keep it)
+  const hat = ((S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2)) && (lvl >= 1 || S.hat === "all")) || intense;
   if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
@@ -364,7 +452,28 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: bDur, gain: 0.35, noise: 0, cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700, q: bRate === 1 ? 10 : 6 }, musicGain, t);
   }
   if (S.pad && i === 0) {
-    [0, 7, 15].forEach((iv) => tone({ wave: "sine", f0: midi(root + 12 + iv), f1: midi(root + 12 + iv), dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t));
+    (S.padIv ?? [0, 7, 15]).forEach((iv) => {
+      const f = midi(root + 12 + iv);
+      if (S.padVoice && M) playVoice(M, S.padVoice, f, t, stepDur * 15, 0.035);
+      else tone({ wave: "sine", f0: f, f1: f, dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t);
+    });
+  }
+  if (M) {
+    if (S.clop?.includes(i)) playClop(M, t, S.clop.indexOf(i) % 2 === 0, intense ? 0.34 : 0.26);
+    if (intense && S.clop && i % 2 === 1 && !S.clop.includes(i)) playClop(M, t, false, 0.14); // the boss round gallops
+    if (S.jingle?.includes(i) && lvl >= 1) playJingle(M, t);
+    if (S.toll && lvl >= 2 && i === 0 && bar % 2 === 0) playVoice(M, "bell", midi(S.roots[0]!), t, 3, 0.07);
+    for (const p of S.parts ?? []) {
+      if (lvl < p.from || i % p.rate !== 0) continue;
+      const idx = Math.floor(s / p.rate) % p.notes.length;
+      const off = p.notes[idx];
+      if (off === null || off === undefined) continue;
+      // a note holds through the rests that follow it
+      let hold = 1;
+      while (hold < 8 && p.notes[(idx + hold) % p.notes.length] === null) hold++;
+      const base = p.rel === "key" ? S.roots[0]! : root;
+      playVoice(M, p.voice, midi(base + p.oct + off), t, Math.min(3, hold * p.rate * stepDur * 0.92), p.gain);
+    }
   }
   const rate = S.arpRate ?? 2;
   if (intense || i % rate === 0) {
@@ -373,8 +482,15 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     const base = S.lead === "sine" ? 0.25 : 0.12;
     const dur = base * (S.leadLen ?? 1);
     const g = S.lead === "sine" ? 0.14 : 0.1;
-    tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut }, musicGain, t);
-    if (S.echo) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
+    if (S.leadVoice && M) {
+      playVoice(M, S.leadVoice, midi(n), t, dur, g * 0.9);
+      if (S.echo) playVoice(M, S.leadVoice, midi(n), t + stepDur * 3, dur, g * 0.3);
+    } else {
+      tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut }, musicGain, t);
+      if (S.echo) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
+    }
+    // late waves: a quiet octave-up sparkle doubles every other lead note
+    if (lvl === 2 && !S.parts && idx % 2 === 0) tone({ wave: "triangle", f0: midi(n + 12), f1: midi(n + 12), dur: dur * 0.8, gain: g * 0.3, noise: 0, cut: 7000 }, musicGain, t + stepDur);
   }
 }
 
@@ -385,15 +501,21 @@ export function startMusic() {
   timer = window.setInterval(() => {
     if (!ctx) return;
     if (ctx.state === "suspended") { void ctx.resume(); return; }
-    const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
-    // after a tab switch or a late unlock the clock jumps; never replay the backlog
-    if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
-    while (nextT < ctx.currentTime + 0.12) {
-      scheduleStep(step, nextT, stepDur);
-      step++;
-      nextT += stepDur;
-    }
+    pumpMusic();
   }, 25);
+}
+
+/** schedule every step due in the next 120 ms (the timer calls this; so does the offline harness) */
+export function pumpMusic() {
+  if (!ctx) return;
+  const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+  // after a tab switch or a late unlock the clock jumps; never replay the backlog
+  if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
+  while (nextT < ctx.currentTime + 0.12) {
+    scheduleStep(step, nextT, stepDur);
+    step++;
+    nextT += stepDur;
+  }
 }
 
 

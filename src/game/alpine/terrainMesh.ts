@@ -262,3 +262,48 @@ export function farTrees(half: number, reach: number) {
     }
   return out;
 }
+
+/** soft darkening of the snow at the feet of walls, blockades and big trunks */
+export function aoTexture(a: AlpineData) {
+  const n = Math.round((a.terrain.half * 2) / 2);
+  const src = new Float32Array(n * n);
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++) {
+      const k = a.surf[i * n + j]!;
+      src[i * n + j] = k === S_BLD || k === S_BLOCKADE ? 1 : 0;
+    }
+  for (const t of a.trees) {
+    const i = Math.floor((t.x + a.terrain.half) / 2);
+    const j = Math.floor((t.z + a.terrain.half) / 2);
+    if (i >= 0 && j >= 0 && i < n && j < n) src[i * n + j] = Math.max(src[i * n + j]!, 0.6);
+  }
+  // two box-blur passes of radius 1 cell (~3 m falloff)
+  let cur = src;
+  for (let pass = 0; pass < 2; pass++) {
+    const out = new Float32Array(n * n);
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++) {
+        let s2 = 0;
+        for (let di = -1; di <= 1; di++)
+          for (let dj = -1; dj <= 1; dj++) {
+            const a2 = Math.min(n - 1, Math.max(0, i + di));
+            const b2 = Math.min(n - 1, Math.max(0, j + dj));
+            s2 += cur[a2 * n + b2]!;
+          }
+        out[i * n + j] = s2 / 9;
+      }
+    cur = out;
+  }
+  const data = new Uint8Array(n * n * 4);
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++) {
+      const o = (j * n + i) * 4;
+      data[o] = Math.round(Math.min(1, cur[i * n + j]! * 1.6) * 255);
+      data[o + 3] = 255;
+    }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
