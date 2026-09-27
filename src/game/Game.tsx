@@ -48,6 +48,7 @@ import { beachAccess } from "./access/beachAccess";
 import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
+import { postsClearOfDoors } from "./access/layout";
 import {
   accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
   encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
@@ -4360,16 +4361,19 @@ export function Game() {
     // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
     const accessOn = typeof window === "undefined" || new URLSearchParams(window.location.search).get("access") !== "0";
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
+    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
+    // the access adapters keep their doors clear of them
+    const posts0 = mapPosts(level.city, level.western ?? null);
     const accessList0 = !accessOn
       ? null
       : mode === "city" && level.city
         ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
         : isBeach(level.city)
-          ? beachAccess(level.city, !coop)
+          ? beachAccess(level.city, !coop, posts0)
           : alp && level.city
             ? (() => {
                 // (chalet balconies wall off the ground under them: extra collision)
-                const aa = alpineAccessFull(level.city as AlpineLayout, !coop);
+                const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
                 level.blocks = level.blocks.concat(aa.blocks);
                 return aa.list;
               })()
@@ -4377,8 +4381,8 @@ export function Game() {
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
-    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map
-    setPosts(mapPosts(level.city, level.western ?? null));
+    // (a door no adapter could keep clear, e.g. a city hydrant: that prop loses its collision)
+    setPosts(postsClearOfDoors(posts0, accessList0 ?? []));
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);

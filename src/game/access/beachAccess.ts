@@ -10,12 +10,14 @@
 import type { BBld, BeachLayout } from "../beach/beachLayout";
 import { soloHalf } from "../soloBounds";
 import { groundY } from "../terrain";
-import { layoutAccess, type AccessBuilding } from "./layout";
+import { doorwayClear, layoutAccess, type AccessBuilding } from "./layout";
+import type { Post } from "../level";
 import type { AccessKind, AccessSpec, Facing, Rect } from "./types";
 
 const RIM = 0.35;
 
-export function beachAccess(city: BeachLayout, solo: boolean): AccessBuilding[] {
+/** `posts`: the map's thin props (posts.ts), kept out of every door's approach */
+export function beachAccess(city: BeachLayout, solo: boolean, posts: readonly Post[] = []): AccessBuilding[] {
   const { cells, half, solid } = city;
   const sq = solo ? (city.soloHalf ?? soloHalf(half)) : half;
   const within = (r: Rect, m: number) => Math.max(Math.abs(r.x0), Math.abs(r.x1), Math.abs(r.z0), Math.abs(r.z1)) < sq - m;
@@ -45,7 +47,7 @@ export function beachAccess(city: BeachLayout, solo: boolean): AccessBuilding[] 
           const z = dz + nz * d + (alongX ? 0 : lat);
           if (!open(x, z)) clear = false;
         }
-      if (!clear) continue;
+      if (!clear || !doorwayClear(posts, dx, dz, facing)) continue;
       const spec: AccessSpec = {
         kind,
         footprint: { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1 },
@@ -115,7 +117,7 @@ export function beachAccess(city: BeachLayout, solo: boolean): AccessBuilding[] 
   // lifeguard towers: a ladder up the back (+x) to the deck round the hut
   for (const t of city.beach.towers) {
     const fp = { x0: t.x - 2, z0: t.z - 2, x1: t.x + 2, z1: t.z + 2 };
-    if (!within(fp, 8)) continue;
+    if (!within(fp, 8) || !doorwayClear(posts, t.x + 2, t.z, 1)) continue;
     const gy = groundY(t.x, t.z);
     const spec: AccessSpec = {
       kind: "ladder",

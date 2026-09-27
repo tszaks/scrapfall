@@ -545,3 +545,27 @@ function dressRoof(b: AccessBuilding) {
   }
   b.cap = Math.min(Math.floor(b.spots.length / 6), Math.max(3, Math.min(12, Math.floor(b.spots.length / 14))));
 }
+
+// ---- thin props (level.ts posts: lamp posts, sign poles, benches) and access doors ----
+
+type PostLike = { x: number; z: number; r: number };
+const OUT: Record<Facing, [number, number]> = { 0: [0, -1], 1: [1, 0], 2: [0, 1], 3: [-1, 0] };
+
+/** is the walk up to a door at (x, z) facing `f` free of thin props? (1.3 m either side of
+ * the door's centre line, from the wall out to 3.5 m) */
+export function doorwayClear(posts: readonly PostLike[], x: number, z: number, f: Facing) {
+  const [nx, nz] = OUT[f];
+  for (const p of posts) {
+    const out = (p.x - x) * nx + (p.z - z) * nz;
+    const lat = Math.abs((p.x - x) * nz - (p.z - z) * nx);
+    if (out > -0.5 - p.r && out < 3.5 + p.r && lat < 1.3 + p.r) return false;
+  }
+  return true;
+}
+
+/** the props that are left once every access door's approach is kept clear (a door whose
+ * adapter could not avoid a lamp post: the post keeps its look, loses its collision) */
+export function postsClearOfDoors<P extends PostLike>(posts: P[], list: readonly AccessBuilding[]): P[] {
+  if (!list.length) return posts;
+  return posts.filter((p) => list.every((b) => doorwayClear([p], b.spec.door.x, b.spec.door.z, b.spec.door.facing)));
+}
