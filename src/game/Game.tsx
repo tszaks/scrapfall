@@ -4273,7 +4273,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    DUSTFIELD · v1.0.1
+                    DUSTFIELD · v1.0.2
                   </div>
                 </div>
               </div>
