@@ -2954,10 +2954,15 @@ export function Game() {
   const perksRef = useRef(perks);
   perksRef.current = perks;
   const clsMods = CLASSES[cls].mods;
+  const clsRef = useRef(clsMods);
+  clsRef.current = clsMods;
   const statsRef = useRef<Derived>(derive(perks, clsMods));
   statsRef.current = derive(perks, clsMods);
 
   const maxHp = statsRef.current.maxHp;
+  /** health a fresh run starts on for this class */
+  const startHp = derive(NO_PERKS, clsMods).maxHp;
+
 
   // ---------- co-op room ----------
   const [net, setNet] = useState<NetHandle | null>(null);
