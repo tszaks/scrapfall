@@ -22,7 +22,12 @@ export function beachTerrain(city: BeachLayout): Terrain {
     m.t === "ell"
       ? [m.x - m.rx, m.z - m.rz, m.x + m.rx, m.z + m.rz]
       : m.t === "cap"
-        ? [Math.min(m.ax, m.bx) - m.r, Math.min(m.az, m.bz) - m.r, Math.max(m.ax, m.bx) + m.r, Math.max(m.az, m.bz) + m.r]
+        ? [
+            Math.min(m.ax, m.bx) - m.r,
+            Math.min(m.az, m.bz) - m.r,
+            Math.max(m.ax, m.bx) + m.r,
+            Math.max(m.az, m.bz) + m.r,
+          ]
         : [m.x0 - m.ramp, m.z0 - m.ramp, m.x1 + m.ramp, m.z1 + m.ramp],
   );
   const cellOf = (x: number, z: number) => {

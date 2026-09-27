@@ -80,7 +80,17 @@ function mulberry(seed: number) {
   };
 }
 const _c = new THREE.Color();
-const PASTEL = ["#f6d8c0", "#f2c4c8", "#bfe4dc", "#f8e8b0", "#cfe0f4", "#f4f0e6", "#e8d0f0", "#fbd6a8", "#c8ecd0"];
+const PASTEL = [
+  "#f6d8c0",
+  "#f2c4c8",
+  "#bfe4dc",
+  "#f8e8b0",
+  "#cfe0f4",
+  "#f4f0e6",
+  "#e8d0f0",
+  "#fbd6a8",
+  "#c8ecd0",
+];
 const AWN: [string, string][] = [
   ["#e8433a", "#f4f0e6"],
   ["#1f8a9a", "#f4f0e6"],
@@ -90,7 +100,16 @@ const AWN: [string, string][] = [
   ["#3aa860", "#f4f0e6"],
 ];
 const NEON = ["#ff4fa0", "#3affd8", "#ffe14a", "#9a6aff", "#ff7a3a", "#4fd0ff"];
-const UMB = ["#e8433a", "#f2c21f", "#1f8ad8", "#f4f0e6", "#e85a9a", "#3ab88a", "#ff8a2a", "#6a4ad8"];
+const UMB = [
+  "#e8433a",
+  "#f2c21f",
+  "#1f8ad8",
+  "#f4f0e6",
+  "#e85a9a",
+  "#3ab88a",
+  "#ff8a2a",
+  "#6a4ad8",
+];
 const pick = <T>(a: readonly T[], r: () => number) => a[Math.floor(r() * a.length) % a.length]!;
 
 /** ground height used for drawing (natural ground, bowls included; the pier deck is separate) */
@@ -136,6 +155,8 @@ type TKey =
   | "bike"
   | "cooler"
   | "tree"
+  | "shrub"
+  | "rock"
   | "aframe"
   | "jersey"
   | "cone"
@@ -148,7 +169,17 @@ type TKey =
 type Tmpls = Record<TKey, Tmpl>;
 let TM: Tmpls | null = null;
 
-function fan(g: Geo, cx: number, cy: number, cz: number, yaw: number, pitch: number, r: number, seg: number, spread: number) {
+function fan(
+  g: Geo,
+  cx: number,
+  cy: number,
+  cz: number,
+  yaw: number,
+  pitch: number,
+  r: number,
+  seg: number,
+  spread: number,
+) {
   // a pleated fan leaf: centre (cx, cy, cz), pointing along yaw, tilted by pitch, drawn both sides
   const dir = (a: number, rad: number, lift: number): [number, number, number] => {
     const ca = yaw + a;
@@ -191,7 +222,11 @@ function templates(): Tmpls {
         for (let i = 0; i < n; i++) {
           const t0 = (i / n) * Math.PI * 2;
           const t1 = ((i + 1) / n) * Math.PI * 2;
-          const P = (tt: number, r: number, y: number, o: number): [number, number, number] => [Math.cos(tt) * r, y, Math.sin(tt) * r + o];
+          const P = (tt: number, r: number, y: number, o: number): [number, number, number] => [
+            Math.cos(tt) * r,
+            y,
+            Math.sin(tt) * r + o,
+          ];
           const A = P(t0, r0, a, off(a));
           const B = P(t1, r0, a, off(a));
           const C = P(t1, r1, b, off(b));
@@ -252,7 +287,17 @@ function templates(): Tmpls {
       for (let i = 0; i < 8; i++) {
         const a0 = (i / 8) * Math.PI * 2;
         const a1 = ((i + 1) / 8) * Math.PI * 2;
-        g.tri(0, 2.45, 0, Math.cos(a0) * 1.3, 1.95, Math.sin(a0) * 1.3, Math.cos(a1) * 1.3, 1.95, Math.sin(a1) * 1.3);
+        g.tri(
+          0,
+          2.45,
+          0,
+          Math.cos(a0) * 1.3,
+          1.95,
+          Math.sin(a0) * 1.3,
+          Math.cos(a1) * 1.3,
+          1.95,
+          Math.sin(a1) * 1.3,
+        );
       }
     }),
     towel: t((g) => {
@@ -271,8 +316,11 @@ function templates(): Tmpls {
       g.cyl(0, -0.1, 0, 0.9, 0.55, 12, false);
       g.col("#6a645a");
       g.cyl(0, -0.1, 0, 0.78, 0.5, 12, false);
-      g.col("#2a2420");
+            g.col("#2a2420");
       g.cyl(0, 0.2, 0, 0.75, 0.02, 10);
+      g.col("#4a3424");
+      g.obox(0, 0.22, 0, 0.18, 0.16, 1.2, 0.5);
+      g.obox(0, 0.3, 0, 0.18, 0.16, 1.2, -0.6);
     }),
     net: t((g) => {
       g.col("#e8e4dc");
@@ -302,7 +350,13 @@ function templates(): Tmpls {
       g.col("#1f8a9a");
       g.cone(0, 2.0, 0, 1.4, 0.45, 8, 0);
       g.col("#d8d4cc");
-      for (const [x, z] of [[0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]] as const) g.box(x, 0, z, 0.35, 0.45, 0.35);
+      for (const [x, z] of [
+        [0.8, 0],
+        [-0.8, 0],
+        [0, 0.8],
+        [0, -0.8],
+      ] as const)
+        g.box(x, 0, z, 0.35, 0.45, 0.35);
     }),
     rack: t((g) => {
       g.col("#2a2c30");
@@ -378,7 +432,11 @@ function templates(): Tmpls {
     }),
     busstop: t((g) => {
       g.col("#3a3e44");
-      for (const [x, z] of [[-1.8, -0.6], [1.8, -0.6]] as const) g.box(x, 0, z, 0.08, 2.5, 0.08);
+      for (const [x, z] of [
+        [-1.8, -0.6],
+        [1.8, -0.6],
+      ] as const)
+        g.box(x, 0, z, 0.08, 2.5, 0.08);
       g.col("#c9d4da");
       g.box(0, 2.5, 0, 3.9, 0.1, 1.6);
       g.col("#9fb4c0");
@@ -439,9 +497,37 @@ function templates(): Tmpls {
       g.cyl(0, 0, 0, 0.2, 3.2, 6, false, 0.14);
       const ico = new THREE.IcosahedronGeometry(1, 0);
       g.col("#4f7a34");
-      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0, 4.6, 0), new THREE.Quaternion(), new THREE.Vector3(2.6, 2, 2.6)));
+      g.add(
+        ico,
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(0, 4.6, 0),
+          new THREE.Quaternion(),
+          new THREE.Vector3(2.6, 2, 2.6),
+        ),
+      );
       g.col("#5a8a3a");
-      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(1, 4, 0.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.7, 0)), new THREE.Vector3(1.7, 1.5, 1.7)));
+      g.add(
+        ico,
+        new THREE.Matrix4().compose(
+          new THREE.Vector3(1, 4, 0.6),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.7, 0)),
+          new THREE.Vector3(1.7, 1.5, 1.7),
+        ),
+      );
+      ico.dispose();
+    }),
+    shrub: t((g) => {
+      const ico = new THREE.IcosahedronGeometry(1, 0);
+      g.col("#3f5a2c");
+      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0, 0.5, 0), new THREE.Quaternion(), new THREE.Vector3(1.3, 0.8, 1.2)));
+      g.col("#4c6a34");
+      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0.8, 0.35, 0.4), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, 0.9, 0)), new THREE.Vector3(0.9, 0.6, 0.9)));
+      ico.dispose();
+    }),
+    rock: t((g) => {
+      const ico = new THREE.IcosahedronGeometry(1, 0);
+      g.col("#9a8a70");
+      g.add(ico, new THREE.Matrix4().compose(new THREE.Vector3(0, 0.2, 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.2, 0.7)), new THREE.Vector3(1.2, 0.7, 0.9)));
       ico.dispose();
     }),
     aframe: t((g) => {
@@ -542,15 +628,28 @@ type Ctx = {
 };
 
 /** a sign quad facing `front` on a wall line, centre (x, y, z), w x h */
-function signQuad(G: Geo, word: number, x: number, y: number, z: number, w: number, h: number, front: number, col = "#ffffff") {
+function signQuad(
+  G: Geo,
+  word: number,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  front: number,
+  col = "#ffffff",
+) {
   const uv = beachWordUV(word);
   G.col(col).mat(0);
   const hw = w / 2;
   const hh = h / 2;
   // outward normal per front: 0 -z, 1 +x, 2 +z, 3 -x
-  if (front === 0) G.quad(x + hw, y - hh, z, x - hw, y - hh, z, x - hw, y + hh, z, x + hw, y + hh, z, uv);
-  else if (front === 2) G.quad(x - hw, y - hh, z, x + hw, y - hh, z, x + hw, y + hh, z, x - hw, y + hh, z, uv);
-  else if (front === 1) G.quad(x, y - hh, z + hw, x, y - hh, z - hw, x, y + hh, z - hw, x, y + hh, z + hw, uv);
+  if (front === 0)
+    G.quad(x + hw, y - hh, z, x - hw, y - hh, z, x - hw, y + hh, z, x + hw, y + hh, z, uv);
+  else if (front === 2)
+    G.quad(x - hw, y - hh, z, x + hw, y - hh, z, x + hw, y + hh, z, x - hw, y + hh, z, uv);
+  else if (front === 1)
+    G.quad(x, y - hh, z + hw, x, y - hh, z - hw, x, y + hh, z - hw, x, y + hh, z + hw, uv);
   else G.quad(x, y - hh, z - hw, x, y - hh, z + hw, x, y + hh, z + hw, x, y + hh, z - hw, uv);
 }
 
@@ -607,10 +706,22 @@ function building(b: BBld, C: Ctx) {
   const poly = rectPoly(b.x0, b.z0, b.x1, b.z1);
   const y0 = b.y0;
   const tone = pick(PASTEL, r);
-  const wallCol = b.t === "restroom" ? "#cfc8bc" : b.t === "hq" ? "#e8ecee" : b.t === "house" ? pick(["#f4ead8", "#efe2cc", "#f6f0e4", "#e8d8c0"], r) : tone;
+  const wallCol =
+    b.t === "restroom"
+      ? "#cfc8bc"
+      : b.t === "hq"
+        ? "#e8ecee"
+        : b.t === "house"
+          ? pick(["#f4ead8", "#efe2cc", "#f6f0e4", "#e8d8c0"], r)
+          : tone;
   const groundH = b.t === "house" ? 3.2 : 4.2;
   const fh = 3.3;
-  const storeFront = b.t !== "house" && b.t !== "restroom" && b.t !== "harbor" && b.t !== "camera" && b.t !== "stall";
+  const storeFront =
+    b.t !== "house" &&
+    b.t !== "restroom" &&
+    b.t !== "harbor" &&
+    b.t !== "camera" &&
+    b.t !== "stall";
   const top = y0 + b.h;
 
   if (b.t === "stall") {
@@ -620,8 +731,20 @@ function building(b: BBld, C: Ctx) {
     const cx = (b.x0 + b.x1) / 2;
     const cz = (b.z0 + b.z1) / 2;
     G.col("#8a6a4a");
-    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const)
-      G.box(cx + dx * ((b.x1 - b.x0) / 2 - 0.3), y0 + 1.1, cz + dz * ((b.z1 - b.z0) / 2 - 0.3), 0.12, 1.8, 0.12);
+    for (const [dx, dz] of [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ] as const)
+      G.box(
+        cx + dx * ((b.x1 - b.x0) / 2 - 0.3),
+        y0 + 1.1,
+        cz + dz * ((b.z1 - b.z0) / 2 - 0.3),
+        0.12,
+        1.8,
+        0.12,
+      );
     const cols = pick(AWN, r);
     const hw = (b.x1 - b.x0) / 2;
     const hd = (b.z1 - b.z0) / 2;
@@ -629,7 +752,17 @@ function building(b: BBld, C: Ctx) {
       const a0 = (k / 8) * Math.PI * 2 + Math.PI / 8;
       const a1 = ((k + 1) / 8) * Math.PI * 2 + Math.PI / 8;
       G.col(cols[k % 2]!);
-      G.tri(cx + Math.cos(a1) * hw * 1.2, y0 + 2.9, cz + Math.sin(a1) * hd * 1.3, cx + Math.cos(a0) * hw * 1.2, y0 + 2.9, cz + Math.sin(a0) * hd * 1.3, cx, y0 + 4.1, cz);
+      G.tri(
+        cx + Math.cos(a1) * hw * 1.2,
+        y0 + 2.9,
+        cz + Math.sin(a1) * hd * 1.3,
+        cx + Math.cos(a0) * hw * 1.2,
+        y0 + 2.9,
+        cz + Math.sin(a0) * hd * 1.3,
+        cx,
+        y0 + 4.1,
+        cz,
+      );
     }
     // prizes on the counter
     for (let k = 0; k < 5; k++) {
@@ -637,11 +770,19 @@ function building(b: BBld, C: Ctx) {
       G.box(b.x0 + 0.8 + k * ((b.x1 - b.x0 - 1.6) / 4), y0 + 1.1, cz, 0.35, 0.4 + r() * 0.3, 0.35);
     }
     const f = frontLine(b, b.front, 0.05);
-    if (b.sign >= 0) signQuad(C.signs, b.sign, f.x, y0 + 2.5, f.z, Math.min(3.6, f.half * 1.6), 1.0, b.front);
+    if (b.sign >= 0)
+      signQuad(C.signs, b.sign, f.x, y0 + 2.5, f.z, Math.min(3.6, f.half * 1.6), 1.0, b.front);
     C.glow.col(pick(NEON, r)).mat(0);
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
-      C.glow.box(cx + Math.cos(a) * hw * 1.15, y0 + 2.8, cz + Math.sin(a) * hd * 1.2, 0.14, 0.14, 0.14);
+      C.glow.box(
+        cx + Math.cos(a) * hw * 1.15,
+        y0 + 2.8,
+        cz + Math.sin(a) * hd * 1.2,
+        0.14,
+        0.14,
+        0.14,
+      );
     }
     return;
   }
@@ -660,9 +801,22 @@ function building(b: BBld, C: Ctx) {
       G.wall(p, q, y0, y0 + groundH, facadeUV(L.resid, faceW, 0, groundH, fh, 0, 0));
     }
     if (b.h > groundH + 0.5) {
-      const layer = b.t === "restaurant" ? L.glass : b.t === "hotel" ? (b.seed < 0.5 ? L.resid : L.office) : L.resid;
+      const layer =
+        b.t === "restaurant"
+          ? L.glass
+          : b.t === "hotel"
+            ? b.seed < 0.5
+              ? L.resid
+              : L.office
+            : L.resid;
       G.mat(layer, b.seed, 1).col(wallCol);
-      G.wall(p, q, y0 + groundH, top, facadeUV(layer, faceW, groundH, b.h, fh, Math.floor(r() * 8), 2));
+      G.wall(
+        p,
+        q,
+        y0 + groundH,
+        top,
+        facadeUV(layer, faceW, groundH, b.h, fh, Math.floor(r() * 8), 2),
+      );
     }
   }
   // ---- roof ----
@@ -684,11 +838,57 @@ function building(b: BBld, C: Ctx) {
       [cx - rx, cz],
       [cx + rx, cz],
     ];
-    G.quad(rp[1]![0], top, rp[1]![1], rp[0]![0], top, rp[0]![1], ridge[0]![0], top + rh, ridge[0]![1], ridge[1]![0], top + rh, ridge[1]![1]);
-    G.quad(rp[3]![0], top, rp[3]![1], rp[2]![0], top, rp[2]![1], ridge[1]![0], top + rh, ridge[1]![1], ridge[0]![0], top + rh, ridge[0]![1]);
+    G.quad(
+      rp[1]![0],
+      top,
+      rp[1]![1],
+      rp[0]![0],
+      top,
+      rp[0]![1],
+      ridge[0]![0],
+      top + rh,
+      ridge[0]![1],
+      ridge[1]![0],
+      top + rh,
+      ridge[1]![1],
+    );
+    G.quad(
+      rp[3]![0],
+      top,
+      rp[3]![1],
+      rp[2]![0],
+      top,
+      rp[2]![1],
+      ridge[1]![0],
+      top + rh,
+      ridge[1]![1],
+      ridge[0]![0],
+      top + rh,
+      ridge[0]![1],
+    );
     G.col("#a84c32");
-    G.tri(rp[0]![0], top, rp[0]![1], rp[3]![0], top, rp[3]![1], ridge[0]![0], top + rh, ridge[0]![1]);
-    G.tri(rp[2]![0], top, rp[2]![1], rp[1]![0], top, rp[1]![1], ridge[1]![0], top + rh, ridge[1]![1]);
+    G.tri(
+      rp[0]![0],
+      top,
+      rp[0]![1],
+      rp[3]![0],
+      top,
+      rp[3]![1],
+      ridge[0]![0],
+      top + rh,
+      ridge[0]![1],
+    );
+    G.tri(
+      rp[2]![0],
+      top,
+      rp[2]![1],
+      rp[1]![0],
+      top,
+      rp[1]![1],
+      ridge[1]![0],
+      top + rh,
+      ridge[1]![1],
+    );
     return;
   }
   G.mat(L.plain, b.seed, 0).col(b.t === "restaurant" ? "#2f5f8a" : "#d8d2c6");
@@ -707,14 +907,29 @@ function building(b: BBld, C: Ctx) {
     const q = poly[(i + 1) % 4]!;
     const dx = q[0] - p[0];
     const dz = q[1] - p[1];
-    G.obox((p[0] + q[0]) / 2, top + 0.6, (p[1] + q[1]) / 2, Math.hypot(dx, dz) + 0.3, 0.12, 0.3, Math.atan2(dx, dz) + Math.PI / 2);
+    G.obox(
+      (p[0] + q[0]) / 2,
+      top + 0.6,
+      (p[1] + q[1]) / 2,
+      Math.hypot(dx, dz) + 0.3,
+      0.12,
+      0.3,
+      Math.atan2(dx, dz) + Math.PI / 2,
+    );
   }
   // rooftop clutter: AC units
   if (b.t !== "restroom" && b.t !== "harbor" && b.t !== "camera") {
     G.col("#b8b4ac");
     const n = 1 + Math.floor(r() * 3);
     for (let k = 0; k < n; k++)
-      G.box(b.x0 + 2 + r() * Math.max(0.1, b.x1 - b.x0 - 4), top, b.z0 + 2 + r() * Math.max(0.1, b.z1 - b.z0 - 4), 1.4, 1.0, 1.1);
+      G.box(
+        b.x0 + 2 + r() * Math.max(0.1, b.x1 - b.x0 - 4),
+        top,
+        b.z0 + 2 + r() * Math.max(0.1, b.z1 - b.z0 - 4),
+        1.4,
+        1.0,
+        1.1,
+      );
   }
 
   const f = frontLine(b, b.front, 0.06);
@@ -733,7 +948,16 @@ function building(b: BBld, C: Ctx) {
     if ((b.floors >= 2 || b.t === "arcade") && b.sign >= 0) {
       const w = Math.min(f.half * 1.8, 12);
       G.col("#3a3a3c");
-      signQuad(C.signs, b.sign, f.x, top + 2.2, f.z - (b.front === 0 ? -0.6 : b.front === 2 ? 0.6 : 0), w, w / 2, b.front);
+      signQuad(
+        C.signs,
+        b.sign,
+        f.x,
+        top + 2.2,
+        f.z - (b.front === 0 ? -0.6 : b.front === 2 ? 0.6 : 0),
+        w,
+        w / 2,
+        b.front,
+      );
       if (b.front === 0 || b.front === 2) {
         G.box(f.x - w / 3, top, f.z + (b.front === 0 ? 0.8 : -0.8), 0.12, 2.2, 0.12);
         G.box(f.x + w / 3, top, f.z + (b.front === 0 ? 0.8 : -0.8), 0.12, 2.2, 0.12);
@@ -788,13 +1012,21 @@ function building(b: BBld, C: Ctx) {
       const fr = frontLine(b, b.front, 0.7);
       if (b.front === 1 || b.front === 3) D.box(fr.x, y, fr.z, 1.4, 0.15, fr.half * 2 - 1);
       D.col("#9ac8d8");
-      if (b.front === 1 || b.front === 3) D.box(fr.x + (b.front === 3 ? -0.65 : 0.65), y + 0.15, fr.z, 0.05, 1.0, fr.half * 2 - 1);
+      if (b.front === 1 || b.front === 3)
+        D.box(fr.x + (b.front === 3 ? -0.65 : 0.65), y + 0.15, fr.z, 0.05, 1.0, fr.half * 2 - 1);
       D.col("#f4f0e6");
     }
     if (b.sign >= 0) {
       signQuad(C.signs, b.sign, f.x, top + 2.6, f.z, 12, 5, b.front);
       C.glow.col("#3affd8").mat(0);
-      C.glow.box(f.x, top + 0.1, f.z, b.front === 1 || b.front === 3 ? 0.1 : 12, 0.1, b.front === 1 || b.front === 3 ? 12 : 0.1);
+      C.glow.box(
+        f.x,
+        top + 0.1,
+        f.z,
+        b.front === 1 || b.front === 3 ? 0.1 : 12,
+        0.1,
+        b.front === 1 || b.front === 3 ? 12 : 0.1,
+      );
     }
   }
   if (b.t === "hq") {
@@ -888,8 +1120,8 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   const beachColor = (x: number, z: number, h: number) => {
     // dry sand -> damp -> wet (shiny) -> sea floor; a little noise so it never looks flat
     const nse = Math.sin(x * 0.37 + z * 0.11) * 0.5 + Math.sin(x * 0.05 - z * 0.23) * 0.5;
-    const dry = new THREE.Color("#e6cfa2").offsetHSL(0, 0, nse * 0.025);
-    const damp = tmpA.set("#c9ad80");
+    const dry = new THREE.Color("#f0d29c").offsetHSL(0, 0, nse * 0.025);
+    const damp = tmpA.set("#d2b284");
     const wet = new THREE.Color("#9e8462");
     const floor = new THREE.Color("#7a6a52");
     let rough = 1;
@@ -909,7 +1141,14 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     void h;
     return rough;
   };
-  const gridCell = (G: Geo, x0: number, z0: number, x1: number, z1: number, colorAt: (x: number, z: number, h: number) => [THREE.Color, number]) => {
+  const gridCell = (
+    G: Geo,
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    colorAt: (x: number, z: number, h: number) => [THREE.Color, number],
+  ) => {
     const pts: [number, number][] = [
       [x0, z1],
       [x1, z1],
@@ -945,7 +1184,10 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   const bluffAt = (x: number, z: number, h: number): [THREE.Color, number] => {
     const nse = Math.sin(x * 0.7 + z * 0.13) * Math.sin(z * 0.31 + x * 0.05);
     const t = (h / BLUFF_H) * 0.6 + nse * 0.3;
-    const c = new THREE.Color("#6f7a3e").lerp(new THREE.Color("#a08a62"), Math.max(0, Math.min(1, 0.4 + t * 0.6)));
+    const c = new THREE.Color("#6f7a3e").lerp(
+      new THREE.Color("#a08a62"),
+      Math.max(0, Math.min(1, 0.4 + t * 0.6)),
+    );
     if (nse > 0.55) c.lerp(new THREE.Color("#c8506a"), 0.35); // ice plant in flower
     return [c, 1];
   };
@@ -961,11 +1203,15 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       const G = chunkAt(x + 1, z + 1).ground;
       if (x < X.strip) gridCell(G, x, z, x + 2, z + 2, beachAt);
       else if (x >= X.bluff && x < X.top) gridCell(G, x, z, x + 2, z + 2, bluffAt);
-      else if (x >= skate.x0 && x < skate.x1 && z >= skate.z0 && z < skate.z1) gridCell(G, x, z, x + 2, z + 2, skateAt);
+      else if (x >= skate.x0 && x < skate.x1 && z >= skate.z0 && z < skate.z1)
+        gridCell(G, x, z, x + 2, z + 2, skateAt);
     }
   }
   // flat town ground in runs along z
-  const TOWN: Record<number, { h: number; c: string; layer: number; pave?: number; paveX?: number; rough: number }> = {
+  const TOWN: Record<
+    number,
+    { h: number; c: string; layer: number; pave?: number; paveX?: number; rough: number }
+  > = {
     [K_ROAD]: { h: 0, c: "#3e4045", layer: L.ground, rough: 0.9 },
     [K_PARKLANE]: { h: 0.02, c: "#46484c", layer: L.ground, rough: 0.9 },
     [K_WALK]: { h: 0.15, c: "#c8c0b0", layer: L.paving, pave: 1.5, rough: 0.9 },
@@ -1012,7 +1258,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       const kz = s.pave ?? 3;
       const kx = s.paveX ?? kz;
       ch.ground.mat(s.layer, s.rough, 0).col(s.c);
-      ch.ground.flat(x0, z0c, x0 + 2, z1, baseY + s.h, [x0 / kx, -z1 / kz, (x0 + 2) / kx, -z0c / kz]);
+      ch.ground.flat(x0, z0c, x0 + 2, z1, baseY + s.h, [
+        x0 / kx,
+        -z1 / kz,
+        (x0 + 2) / kx,
+        -z0c / kz,
+      ]);
       j = j1;
     }
   }
@@ -1042,14 +1293,18 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   for (const zc of [0, -100, 100]) {
     const D = chunkAt(ROAD_C, zc).detail;
     D.col("#f4f2ea");
-    for (let x = X.road0 + 0.5; x < X.road1; x += 1.2) D.flat(x, zc - 2.5, x + 0.6, zc + 2.5, 0.012);
+    for (let x = X.road0 + 0.5; x < X.road1; x += 1.2)
+      D.flat(x, zc - 2.5, x + 0.6, zc + 2.5, 0.012);
   }
   // basketball court lines, skate park coping
   {
     const D = chunkAt(108, 144).detail;
     D.col("#f4f2ea");
     const c = beach.courts;
-    for (const [z0, z1] of [[c.z0 + 2, c.z0 + 22], [c.z1 - 22, c.z1 - 2]] as const) {
+    for (const [z0, z1] of [
+      [c.z0 + 2, c.z0 + 22],
+      [c.z1 - 22, c.z1 - 2],
+    ] as const) {
       D.flat(c.x0 + 3, z0, c.x1 - 3, z0 + 0.1, 0.11);
       D.flat(c.x0 + 3, z1 - 0.1, c.x1 - 3, z1, 0.11);
       D.flat(c.x0 + 3, z0, c.x0 + 3.1, z1, 0.11);
@@ -1070,7 +1325,14 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         G.mat(L.ground, 0.4, 0).col("#cdc6b8");
         for (let k = 0; k < steps; k++) {
           const y = rg.h0 + ((k + 1) * (rg.h1 - rg.h0)) / steps;
-          G.box((rg.x0 + rg.x1) / 2, y - 0.2 - 0.6, rg.z0 + (k + 0.5) * run, rg.x1 - rg.x0, 0.8, run + 0.01);
+          G.box(
+            (rg.x0 + rg.x1) / 2,
+            y - 0.2 - 0.6,
+            rg.z0 + (k + 0.5) * run,
+            rg.x1 - rg.x0,
+            0.8,
+            run + 0.01,
+          );
         }
         G.col("#b8b0a2");
         for (const x of [rg.x0 + 0.25, rg.x1 - 0.25])
@@ -1083,12 +1345,43 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         for (const x of [rg.x0 + 0.6, rg.x1 - 0.6]) {
           const a = [x, rg.h0 + 1, rg.z0] as const;
           const b = [x, rg.h1 + 1, rg.z1] as const;
-          G.quad(a[0] - 0.04, a[1], a[2], a[0] + 0.04, a[1], a[2], b[0] + 0.04, b[1], b[2], b[0] - 0.04, b[1], b[2]);
-          G.quad(a[0] + 0.04, a[1] - 0.06, a[2], a[0] - 0.04, a[1] - 0.06, a[2], b[0] - 0.04, b[1] - 0.06, b[2], b[0] + 0.04, b[1] - 0.06, b[2]);
+          G.quad(
+            a[0] - 0.04,
+            a[1],
+            a[2],
+            a[0] + 0.04,
+            a[1],
+            a[2],
+            b[0] + 0.04,
+            b[1],
+            b[2],
+            b[0] - 0.04,
+            b[1],
+            b[2],
+          );
+          G.quad(
+            a[0] + 0.04,
+            a[1] - 0.06,
+            a[2],
+            a[0] - 0.04,
+            a[1] - 0.06,
+            a[2],
+            b[0] - 0.04,
+            b[1] - 0.06,
+            b[2],
+            b[0] + 0.04,
+            b[1] - 0.06,
+            b[2],
+          );
         }
       } else {
         G.mat(L.paving, 0.8, 0).col("#cdc6b8");
-        G.flat(rg.x0, rg.z0, rg.x1, rg.z1, rg.h0 + 0.02, [rg.x0 / 1.5, -rg.z1 / 1.5, rg.x1 / 1.5, -rg.z0 / 1.5]);
+        G.flat(rg.x0, rg.z0, rg.x1, rg.z1, rg.h0 + 0.02, [
+          rg.x0 / 1.5,
+          -rg.z1 / 1.5,
+          rg.x1 / 1.5,
+          -rg.z0 / 1.5,
+        ]);
         G.col("#b8b0a2");
         const p = rectPoly(rg.x0, rg.z0, rg.x1, rg.z1);
         for (let k = 0; k < 4; k++) G.wall(p[k]!, p[(k + 1) % 4]!, rg.h0 - 3, rg.h0 + 0.02);
@@ -1100,19 +1393,115 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     const y00 = rg.h0 + 0.02;
     const uv = [rg.x0 / 0.35, -rg.z1 / 4, rg.x1 / 0.35, -rg.z0 / 4];
     if (rg.kind === "flat") G.flat(rg.x0, rg.z0, rg.x1, rg.z1, y00, uv);
-    else if (rg.kind === "rampX") G.quad(rg.x0, rg.h0 + 0.02, rg.z1, rg.x1, rg.h1 + 0.02, rg.z1, rg.x1, rg.h1 + 0.02, rg.z0, rg.x0, rg.h0 + 0.02, rg.z0, uv);
+    else if (rg.kind === "rampX")
+      G.quad(
+        rg.x0,
+        rg.h0 + 0.02,
+        rg.z1,
+        rg.x1,
+        rg.h1 + 0.02,
+        rg.z1,
+        rg.x1,
+        rg.h1 + 0.02,
+        rg.z0,
+        rg.x0,
+        rg.h0 + 0.02,
+        rg.z0,
+        uv,
+      );
     // fascia (the deck edge band) and the beam under it
     G.mat(L.plain, 0.5, 0).col("#7a5a3c");
-    const hAt = (x: number) => (rg.kind === "rampX" ? rg.h0 + ((rg.h1 - rg.h0) * (x - rg.x0)) / (rg.x1 - rg.x0) : rg.h0);
+    const hAt = (x: number) =>
+      rg.kind === "rampX" ? rg.h0 + ((rg.h1 - rg.h0) * (x - rg.x0)) / (rg.x1 - rg.x0) : rg.h0;
     const yb = (x: number) => hAt(x) - 0.75;
-    G.quad(rg.x0, yb(rg.x0), rg.z1, rg.x1, yb(rg.x1), rg.z1, rg.x1, hAt(rg.x1) + 0.02, rg.z1, rg.x0, hAt(rg.x0) + 0.02, rg.z1);
-    G.quad(rg.x1, yb(rg.x1), rg.z0, rg.x0, yb(rg.x0), rg.z0, rg.x0, hAt(rg.x0) + 0.02, rg.z0, rg.x1, hAt(rg.x1) + 0.02, rg.z0);
-    G.quad(rg.x1, yb(rg.x1), rg.z1, rg.x1, yb(rg.x1), rg.z0, rg.x1, hAt(rg.x1) + 0.02, rg.z0, rg.x1, hAt(rg.x1) + 0.02, rg.z1);
-    G.quad(rg.x0, yb(rg.x0), rg.z0, rg.x0, yb(rg.x0), rg.z1, rg.x0, hAt(rg.x0) + 0.02, rg.z1, rg.x0, hAt(rg.x0) + 0.02, rg.z0);
+    G.quad(
+      rg.x0,
+      yb(rg.x0),
+      rg.z1,
+      rg.x1,
+      yb(rg.x1),
+      rg.z1,
+      rg.x1,
+      hAt(rg.x1) + 0.02,
+      rg.z1,
+      rg.x0,
+      hAt(rg.x0) + 0.02,
+      rg.z1,
+    );
+    G.quad(
+      rg.x1,
+      yb(rg.x1),
+      rg.z0,
+      rg.x0,
+      yb(rg.x0),
+      rg.z0,
+      rg.x0,
+      hAt(rg.x0) + 0.02,
+      rg.z0,
+      rg.x1,
+      hAt(rg.x1) + 0.02,
+      rg.z0,
+    );
+    G.quad(
+      rg.x1,
+      yb(rg.x1),
+      rg.z1,
+      rg.x1,
+      yb(rg.x1),
+      rg.z0,
+      rg.x1,
+      hAt(rg.x1) + 0.02,
+      rg.z0,
+      rg.x1,
+      hAt(rg.x1) + 0.02,
+      rg.z1,
+    );
+    G.quad(
+      rg.x0,
+      yb(rg.x0),
+      rg.z0,
+      rg.x0,
+      yb(rg.x0),
+      rg.z1,
+      rg.x0,
+      hAt(rg.x0) + 0.02,
+      rg.z1,
+      rg.x0,
+      hAt(rg.x0) + 0.02,
+      rg.z0,
+    );
     // underside
     G.col("#4a3a2a");
-    if (rg.kind === "flat") G.quad(rg.x0, yb(rg.x0), rg.z0, rg.x1, yb(rg.x1), rg.z0, rg.x1, yb(rg.x1), rg.z1, rg.x0, yb(rg.x0), rg.z1);
-    else G.quad(rg.x0, yb(rg.x0), rg.z0, rg.x1, yb(rg.x1), rg.z0, rg.x1, yb(rg.x1), rg.z1, rg.x0, yb(rg.x0), rg.z1);
+    if (rg.kind === "flat")
+      G.quad(
+        rg.x0,
+        yb(rg.x0),
+        rg.z0,
+        rg.x1,
+        yb(rg.x1),
+        rg.z0,
+        rg.x1,
+        yb(rg.x1),
+        rg.z1,
+        rg.x0,
+        yb(rg.x0),
+        rg.z1,
+      );
+    else
+      G.quad(
+        rg.x0,
+        yb(rg.x0),
+        rg.z0,
+        rg.x1,
+        yb(rg.x1),
+        rg.z0,
+        rg.x1,
+        yb(rg.x1),
+        rg.z1,
+        rg.x0,
+        yb(rg.x0),
+        rg.z1,
+      );
     // piles: rows every 6 m along x, every ~4 m across, cross beams and X bracing between rows
     for (let x = rg.x0 + 1.5; x < rg.x1; x += 6) {
       const top = yb(x);
@@ -1130,8 +1519,34 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           P.col("#4a3c2e");
           const y0 = Math.max(gv(x, z), SEA) + 0.4;
           const zz0 = prevZ;
-          P.quad(x - 0.05, y0, zz0, x - 0.05, y0, z, x - 0.05, top - 0.3, z + 0.001, x - 0.05, top - 0.1, zz0);
-          P.quad(x + 0.05, top - 0.3, zz0, x + 0.05, top - 0.1, z, x + 0.05, y0, z, x + 0.05, y0 + 0.2, zz0);
+          P.quad(
+            x - 0.05,
+            y0,
+            zz0,
+            x - 0.05,
+            y0,
+            z,
+            x - 0.05,
+            top - 0.3,
+            z + 0.001,
+            x - 0.05,
+            top - 0.1,
+            zz0,
+          );
+          P.quad(
+            x + 0.05,
+            top - 0.3,
+            zz0,
+            x + 0.05,
+            top - 0.1,
+            z,
+            x + 0.05,
+            y0,
+            z,
+            x + 0.05,
+            y0 + 0.2,
+            zz0,
+          );
         }
         prevZ = z;
       }
@@ -1144,7 +1559,11 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   {
     const solid = city.solid;
     const regionOf = beach.regionOf;
-    const isRail = (c: number) => solid[c] && regionOf[c]! >= 0 && beach.pTop[c]! - beach.pBot[c]! < 1.2 && beach.pTop[c]! - beach.pBot[c]! > 1.0;
+    const isRail = (c: number) =>
+      solid[c] &&
+      regionOf[c]! >= 0 &&
+      beach.pTop[c]! - beach.pBot[c]! < 1.2 &&
+      beach.pTop[c]! - beach.pBot[c]! > 1.0;
     for (let i = 1; i < n - 1; i++)
       for (let j = 1; j < n - 1; j++) {
         const c = i * n + j;
@@ -1154,7 +1573,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         const z = cx(j);
         const G = ctx(x, z).main;
         G.mat(L.plain, 0.5, 0);
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        for (const [di, dj] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
           const k = (i + di) * n + (j + dj);
           if (solid[k]) continue;
           // the rail sits 0.8 m in from the shared edge (inside the railing cell)
@@ -1163,6 +1587,11 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           const along = di === 0; // rail runs along x when the open neighbour is in z
           const hh = regionOf[k]! >= 0 ? Math.min(h, heightOfRegion(beach, k, ex, ez)) : h;
           const y = Math.max(hh, h) + 0.02;
+                    if (h > 3 && (i + j) % 2 === 0) {
+            const Gl = ctx(x, z).glow;
+            Gl.col("#ffe2a8").mat(0);
+            Gl.box(ex, y + 1.12, ez, 0.14, 0.14, 0.14);
+          }
           G.col("#f4f0e6");
           if (along) {
             G.box(ex, y + 1.02, ez, 2.02, 0.1, 0.14);
@@ -1179,23 +1608,123 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       }
   }
 
-  // ---- the pier arch over the ramp foot ----
+  // ---- the pier arch over the ramp foot: a beam on two posts and a big lit board on top ----
   {
-    const G = chunkAt(126, 0).main;
+    const C0 = chunkAt(126, 0);
     const x = X.prom - 1.5;
-    G.mat(L.plain, 0.5, 0).col("#12418a");
-    G.box(x, 0, -7.2, 0.9, 7.8, 0.9);
-    G.box(x, 0, 7.2, 0.9, 7.8, 0.9);
-    G.box(x, 7.4, 0, 1.0, 2.8, 16.2);
-    signQuad(chunkAt(126, 0).signs, W["PACIFIC PIER"], x + 0.52, 8.8, 0, 13.5, 6.6 * 0.42, 1);
-    signQuad(chunkAt(126, 0).signs, W["PACIFIC PIER"], x - 0.52, 8.8, 0, 13.5, 6.6 * 0.42, 3);
-    const Gl = chunkAt(126, 0).glow;
-    Gl.col("#ffd878").mat(0);
-    for (let k = 0; k < 18; k++) {
-      const z = -7.6 + (k / 17) * 15.2;
-      Gl.box(x, 10.25, z, 1.08, 0.12, 0.12);
-      Gl.box(x, 7.35, z, 1.08, 0.12, 0.12);
+    C0.main.mat(L.plain, 0.5, 0).col("#12418a");
+    C0.main.box(x, 0, -7.2, 0.9, 8.4, 0.9);
+    C0.main.box(x, 0, 7.2, 0.9, 8.4, 0.9);
+    C0.main.box(x, 7.4, 0, 1.0, 1.0, 16.2);
+    C0.main.box(x, 8.3, 0, 0.8, 4.4, 9.2);
+    signQuad(C0.signs, W["PACIFIC PIER"], x + 0.42, 10.5, 0, 8.6, 4.3, 1);
+    signQuad(C0.signs, W["PACIFIC PIER"], x - 0.42, 10.5, 0, 8.6, 4.3, 3);
+    C0.glow.col("#ffd878").mat(0);
+    for (let k = 0; k < 16; k++) {
+      const z = -4.4 + (k / 15) * 8.8;
+      C0.glow.box(x, 12.75, z, 0.9, 0.12, 0.12);
+      C0.glow.box(x, 8.25, z, 0.9, 0.12, 0.12);
     }
+    for (let k = 0; k < 20; k++) {
+      const z = -7.8 + (k / 19) * 15.6;
+      C0.glow.box(x, 7.35, z, 1.08, 0.1, 0.1);
+    }
+  }
+
+  // ---- skate park: coping round the bowls, quarter pipes, lights, a sign ----
+  {
+    const D = chunkAt(90, 76).main;
+    D.mat(L.plain, 0.5, 0).col("#8a9096");
+    for (const m of beach.mods) {
+      const rim: [number, number][] = [];
+      if (m.t === "ell") for (let k = 0; k <= 48; k++) rim.push([m.x + Math.cos((k / 48) * Math.PI * 2) * m.rx, m.z + Math.sin((k / 48) * Math.PI * 2) * m.rz]);
+      else if (m.t === "cap") {
+        const dx = m.bx - m.ax;
+        const dz = m.bz - m.az;
+        const l = Math.hypot(dx, dz);
+        const nx = -dz / l;
+        const nz = dx / l;
+        const base = Math.atan2(nz, nx);
+        for (let k = 0; k <= 16; k++) {
+          const a = base + (k / 16) * Math.PI;
+          rim.push([m.ax + Math.cos(a) * m.r, m.az + Math.sin(a) * m.r]);
+        }
+        for (let k = 0; k <= 16; k++) {
+          const a = base + Math.PI + (k / 16) * Math.PI;
+          rim.push([m.bx + Math.cos(a) * m.r, m.bz + Math.sin(a) * m.r]);
+        }
+        rim.push(rim[0]!);
+      } else continue;
+      for (let k = 0; k + 1 < rim.length; k++) {
+        const [ax, az] = rim[k]!;
+        const [bx, bz] = rim[k + 1]!;
+        railBar(D, [ax, gv(ax, az) + 0.04, az], [bx, gv(bx, bz) + 0.04, bz], 0.06);
+      }
+    }
+    for (const q of beach.qpipes) quarterPipe(D, q);
+    const Cs = chunkAt(90, 76);
+    for (const [x, z, rot] of [[58, 50, 0], [118, 50, Math.PI], [58, 102, 0], [118, 102, Math.PI]] as const) prop({ k: "streetlight", x, z, y: 0, rot }, Cs, T, gv);
+    Cs.main.col("#3a3e44");
+    Cs.main.box(X.bike - 1, 0, 74, 0.2, 4.2, 0.2);
+    Cs.main.box(X.bike - 1, 0, 80, 0.2, 4.2, 0.2);
+    Cs.main.col("#15121a");
+    Cs.main.box(X.bike - 1, 3.2, 77, 0.3, 1.6, 6.4);
+    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 0.84, 4.0, 77, 6, 1.5, 1);
+    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 1.16, 4.0, 77, 6, 1.5, 3);
+    // graffiti on the ledges and pipe backs
+    const R = mulberry(31);
+    for (let k = 0; k < 26; k++) {
+      Cs.detail.mat(L.plain, 0.5, 0).col(pick(["#ff4fa0", "#3affd8", "#ffe14a", "#9a6aff", "#ff7a3a", "#4fd0ff", "#7cff6a"], R));
+      const q = beach.qpipes[k % 2]!;
+      if (q.face === 3) Cs.detail.box(q.x1 + 0.03, 0.3 + R() * 1.6, q.z0 + 1 + R() * (q.z1 - q.z0 - 3), 0.02, 0.4 + R() * 0.8, 0.8 + R() * 2);
+      else Cs.detail.box(q.x0 + 1 + R() * (q.x1 - q.x0 - 3), 0.3 + R() * 1.6, q.z0 - 0.03, 0.8 + R() * 2, 0.4 + R() * 0.8, 0.02);
+    }
+    // Muscle Beach arch
+    const g = beach.gym;
+    const Cg = chunkAt(108, -70);
+    Cg.main.mat(L.plain, 0.5, 0).col("#2a2c30");
+    Cg.main.box(X.bike - 1, 0, -74, 0.25, 4.6, 0.25);
+    Cg.main.box(X.bike - 1, 0, -66, 0.25, 4.6, 0.25);
+    Cg.main.box(X.bike - 1, 4.2, -70, 0.3, 1.5, 8.4);
+    signQuad(Cg.signs, W["MUSCLE BEACH"], X.bike - 0.84, 4.95, -70, 8, 1.4, 1);
+    signQuad(Cg.signs, W["MUSCLE BEACH"], X.bike - 1.16, 4.95, -70, 8, 1.4, 3);
+    // the pen: low green rails on every solid fence cell
+    Cg.main.col("#2f5a3e");
+    for (let x = g.x0; x < g.x1; x += 2)
+      for (let z = g.z0; z < g.z1; z += 2) {
+        const c = Math.floor((x + 1 + half) / 2) * n + Math.floor((z + 1 + half) / 2);
+        if (!city.solid[c] || beach.pTop[c]! > 1.3) continue;
+        Cg.main.box(x + 1, 0.1, z + 1, 1.9, 0.06, 1.9);
+        Cg.main.box(x + 1, 1.05, z + 1, 1.9, 0.08, 1.9);
+        Cg.main.box(x + 1, 0.1, z + 1, 0.1, 1.0, 0.1);
+      }
+    // court fences: tall chain link (a dark mesh panel on posts)
+    const ct = beach.courts;
+    const Cc = chunkAt(108, 144);
+    for (let x = ct.x0; x < ct.x1; x += 2)
+      for (let z = ct.z0; z < ct.z1; z += 2) {
+        const c = Math.floor((x + 1 + half) / 2) * n + Math.floor((z + 1 + half) / 2);
+        if (!city.solid[c]) continue;
+                // the fence runs along whichever edge of the court this cell is on
+        const alongX = z === ct.z0 || z + 2 >= ct.z1;
+        Cc.main.col("#5a6068");
+        Cc.main.box(x + 1, 0.1, z + 1, 0.08, 3.4, 0.08);
+        Cc.main.box(x + 1, 3.4, z + 1, alongX ? 2 : 0.06, 0.06, alongX ? 0.06 : 2);
+        Cc.detail.mat(L.plain, 0.5, 0).col("#2e5a44");
+        Cc.detail.box(x + 1, 0.15, z + 1, alongX ? 2 : 0.03, 1.7, alongX ? 0.03 : 2);
+      }
+  }
+
+  // ---- the clifftop railing along the bluff edge (gaps at the stair landings) ----
+  for (let z = -half + 1; z < half - 1; z += 2.5) {
+    const c = Math.floor((X.top + 1 + half) / 2) * n + Math.floor((z + half) / 2);
+    const cl = Math.floor((X.top - 1 + half) / 2) * n + Math.floor((z + half) / 2);
+    if (beach.regionOf[cl]! >= 0 || beach.regionOf[c]! >= 0) continue;
+    const G = chunkAt(X.top, z).main;
+    G.mat(L.plain, 0.5, 0).col("#e8e2d6");
+    G.box(X.top + 0.6, BLUFF_H, z, 0.12, 1.1, 0.12);
+    G.box(X.top + 0.6, BLUFF_H + 1.02, z + 1.25, 0.1, 0.08, 2.5);
+    G.box(X.top + 0.6, BLUFF_H + 0.5, z + 1.25, 0.06, 0.06, 2.5);
   }
 
   // ---- buildings ----
@@ -1255,7 +1784,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       const pz = (dx / l) * 0.55;
       C2.main.col("#e8433a");
       for (const s of [-1, 1]) {
-        railBar(C2.main, [a[0] + px * s, a[1], a[2] + pz * s], [b[0] + px * s, b[1], b[2] + pz * s], 0.09);
+        railBar(
+          C2.main,
+          [a[0] + px * s, a[1], a[2] + pz * s],
+          [b[0] + px * s, b[1], b[2] + pz * s],
+          0.09,
+        );
       }
       C2.main.col("#3a3e44");
       C2.main.obox(a[0], a[1] - 0.12, a[2], 1.4, 0.1, 0.2, Math.atan2(dx, dz) + Math.PI / 2);
@@ -1271,9 +1805,22 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     // station canopy over the low stretch
     const st = beach.coaster.station;
     C2.main.col("#f4f0e6");
-    for (const [x, z] of [[st.x0, st.z0], [st.x1, st.z0], [st.x0, st.z1], [st.x1, st.z1]] as const) C2.main.box(x, DECK, z, 0.3, 4.2, 0.3);
+    for (const [x, z] of [
+      [st.x0, st.z0],
+      [st.x1, st.z0],
+      [st.x0, st.z1],
+      [st.x1, st.z1],
+    ] as const)
+      C2.main.box(x, DECK, z, 0.3, 4.2, 0.3);
     C2.main.col("#e8433a");
-    C2.main.box((st.x0 + st.x1) / 2, DECK + 4.2, (st.z0 + st.z1) / 2, st.x1 - st.x0 + 1, 0.3, st.z1 - st.z0 + 1);
+    C2.main.box(
+      (st.x0 + st.x1) / 2,
+      DECK + 4.2,
+      (st.z0 + st.z1) / 2,
+      st.x1 - st.x0 + 1,
+      0.3,
+      st.z1 - st.z0 + 1,
+    );
     signQuad(C2.signs, W["WEST COASTER"], (st.x0 + st.x1) / 2, DECK + 5.3, st.z0 - 0.4, 8, 2, 0);
 
     // carousel pavilion (the carousel itself turns in Beach.tsx)
@@ -1282,7 +1829,14 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     P.main.mat(L.plain, 0.5, 0).col("#f4f0e6");
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * Math.PI * 2;
-      P.main.cyl(cr.x + Math.cos(a) * (cr.r + 1.2), DECK, cr.z + Math.sin(a) * (cr.r + 1.2), 0.18, 5.2, 6);
+      P.main.cyl(
+        cr.x + Math.cos(a) * (cr.r + 1.2),
+        DECK,
+        cr.z + Math.sin(a) * (cr.r + 1.2),
+        0.18,
+        5.2,
+        6,
+      );
     }
     P.main.col("#e85a6a");
     P.main.cone(cr.x, DECK + 5.2, cr.z, cr.r + 2.2, 3.4, 12, 0);
@@ -1292,7 +1846,14 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     P.glow.col("#fff0c0").mat(0);
     for (let k = 0; k < 24; k++) {
       const a = (k / 24) * Math.PI * 2;
-      P.glow.box(cr.x + Math.cos(a) * (cr.r + 2.35), DECK + 5.2, cr.z + Math.sin(a) * (cr.r + 2.35), 0.16, 0.16, 0.16);
+      P.glow.box(
+        cr.x + Math.cos(a) * (cr.r + 2.35),
+        DECK + 5.2,
+        cr.z + Math.sin(a) * (cr.r + 2.35),
+        0.16,
+        0.16,
+        0.16,
+      );
     }
   }
 
@@ -1301,9 +1862,24 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     const y = gv(t.x, t.z);
     const Cx = ctx(t.x, t.z);
     const G = Cx.main;
-    const col = ["#7ec8e0", "#f2c24a", "#f29ab0", "#9ae0b0", "#f4f0e6", "#b8a0e8", "#ff9a6a", "#8ad8d0"][t.n % 8]!;
+    const col = [
+      "#7ec8e0",
+      "#f2c24a",
+      "#f29ab0",
+      "#9ae0b0",
+      "#f4f0e6",
+      "#b8a0e8",
+      "#ff9a6a",
+      "#8ad8d0",
+    ][t.n % 8]!;
     G.mat(L.plain, 0.5, 0).col("#e8e4dc");
-    for (const [dx, dz] of [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]] as const) G.box(t.x + dx, y - 0.5, t.z + dz, 0.22, 2.9, 0.22);
+    for (const [dx, dz] of [
+      [-1.5, -1.5],
+      [1.5, -1.5],
+      [1.5, 1.5],
+      [-1.5, 1.5],
+    ] as const)
+      G.box(t.x + dx, y - 0.5, t.z + dz, 0.22, 2.9, 0.22);
     G.col("#d8d2c6");
     G.box(t.x, y + 2.3, t.z, 4.4, 0.2, 4.4);
     // hut (pastel, rounded-ish with a big window facing the sea)
@@ -1315,11 +1891,41 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     G.box(t.x + 0.4, y + 4.8, t.z, 3.3, 0.18, 3.7);
     // ramp down the back (landward)
     G.col("#d8d2c6");
-    G.quad(t.x + 2.2, y + 2.35, t.z - 0.6, t.x + 2.2, y + 2.35, t.z + 0.6, t.x + 7, y, t.z + 0.6, t.x + 7, y, t.z - 0.6);
+    G.quad(
+      t.x + 2.2,
+      y + 2.35,
+      t.z - 0.6,
+      t.x + 2.2,
+      y + 2.35,
+      t.z + 0.6,
+      t.x + 7,
+      y,
+      t.z + 0.6,
+      t.x + 7,
+      y,
+      t.z - 0.6,
+    );
     G.col("#e8e4dc");
     G.cyl(t.x - 1.8, y + 2.4, t.z + 1.8, 0.04, 3.2, 4);
     Cx.glow.col("#e8322a").mat(0);
     Cx.glow.box(t.x - 1.8, y + 5.2, t.z + 2.2, 0.03, 0.5, 0.8);
+  }
+
+  // ---- scrub and rocks on the bluff face ----
+  {
+    const R = mulberry(77);
+    for (let z = -half + 2; z < half - 2; z += 3.2) {
+      for (let x = X.bluff + 2; x < X.top - 1; x += 4.5) {
+        const px = x + (R() - 0.5) * 3;
+        const pz = z + (R() - 0.5) * 3;
+        const c = Math.floor((px + half) / 2) * n + Math.floor((pz + half) / 2);
+        if (beach.regionOf[c]! >= 0 || R() < 0.35) continue;
+        const G = chunkAt(px, pz).main;
+        const k = R();
+        if (k < 0.12) G.stamp(T.rock, px, gv(px, pz) - 0.3, pz, R() * 6, 1 + R(), 1 + R(), 1 + R());
+        else G.stamp(T.shrub, px, gv(px, pz) - 0.4, pz, R() * 6, 0.7 + R() * 0.9, 0.7 + R() * 0.7, 0.7 + R() * 0.9);
+      }
+    }
   }
 
   // ---- props ----
@@ -1344,14 +1950,18 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       G.col("#d0c8b8");
       G.box(X.bluff + 0.3, 6.2, zc, 0.8, 0.5, 12);
       ctx(X.bluff, zc).glow.col("#ffb04a").mat(0);
-      for (let k = -2; k <= 2; k++) ctx(X.bluff, zc).glow.box(X.bluff - 0.1, 5.9, zc + k * 2.2, 0.1, 0.12, 0.6);
+      for (let k = -2; k <= 2; k++)
+        ctx(X.bluff, zc).glow.box(X.bluff - 0.1, 5.9, zc + k * 2.2, 0.1, 0.12, 0.6);
     }
 
   // ---- backdrop: the coast carrying on north and south, the hills and their lights ----
   backdrop(city, far.at, chunkAt, hillLights);
 
   let verts = 0;
-  const list = [...near.list.map((c) => ({ c, far: false })), ...far.list.map((c) => ({ c, far: true }))];
+  const list = [
+    ...near.list.map((c) => ({ c, far: false })),
+    ...far.list.map((c) => ({ c, far: true })),
+  ];
   const out: BeachChunk[] = list.map(({ c, far: isFar }) => {
     verts += c.ground.n + c.main.n + c.detail.n + c.glow.n + c.signs.n + c.pools.n;
     return {
@@ -1374,6 +1984,54 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     hillLights,
     stats: { verts },
   };
+}
+
+/** a skate quarter pipe: a curved ramp rising to a deck with coping, facing `face` */
+function quarterPipe(G: Geo, q: Rect & { face: number }) {
+  const R = 2.4;
+  const N = 7;
+  const along = q.face === 0 || q.face === 2;
+  const a0 = along ? q.x0 : q.z0;
+  const a1 = along ? q.x1 : q.z1;
+  // the curved face runs from the open side (ground) up to the deck edge
+  const open = q.face === 3 ? q.x0 : q.face === 1 ? q.x1 : q.face === 2 ? q.z1 : q.z0;
+  const back = q.face === 3 ? q.x1 : q.face === 1 ? q.x0 : q.face === 2 ? q.z0 : q.z1;
+  const dir = Math.sign(back - open);
+  const P = (a: number, d: number, y: number): [number, number, number] => (along ? [a, y, d] : [d, y, a]);
+  G.mat(L.ground, 0.5, 0).col("#bdbab2");
+  for (let k = 0; k < N; k++) {
+    const t0 = (k / N) * (Math.PI / 2);
+    const t1 = ((k + 1) / N) * (Math.PI / 2);
+    const d0 = open + dir * Math.sin(t0) * R;
+    const d1 = open + dir * Math.sin(t1) * R;
+    const y0 = R - Math.cos(t0) * R;
+    const y1 = R - Math.cos(t1) * R;
+    const A = P(a0, d0, y0);
+    const B = P(a1, d0, y0);
+    const C = P(a1, d1, y1);
+    const D = P(a0, d1, y1);
+    G.quad(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2], D[0], D[1], D[2]);
+    G.quad(B[0], B[1], B[2], A[0], A[1], A[2], D[0], D[1], D[2], C[0], C[1], C[2]);
+  }
+  // deck, back wall and coping
+  const e = open + dir * R;
+  G.col("#c9c6be");
+  if (along) {
+    G.box((a0 + a1) / 2, 0, (e + back) / 2, a1 - a0, R, Math.abs(back - e));
+  } else G.box((e + back) / 2, 0, (a0 + a1) / 2, Math.abs(back - e), R, a1 - a0);
+  G.col("#8a9096");
+  const c0 = P(a0, e, R + 0.03);
+  const c1 = P(a1, e, R + 0.03);
+  railBar(G, c0, c1, 0.07);
+}
+
+/** the lower half of a globe (an inverted cone) */
+function globeBottom(G: Geo, x: number, y: number, z: number, r: number) {
+  for (let i = 0; i < 6; i++) {
+    const t0 = (i / 6) * Math.PI * 2;
+    const t1 = ((i + 1) / 6) * Math.PI * 2;
+    G.tri(x + Math.cos(t0) * r, y, z + Math.sin(t0) * r, x + Math.cos(t1) * r, y, z + Math.sin(t1) * r, x, y - r, z);
+  }
 }
 
 function heightOfRegion(beach: BeachLayout["beach"], c: number, x: number, z: number) {
@@ -1421,7 +2079,16 @@ function car(D: Geo, v: Vehicle, x: number, y: number, z: number, rot: number) {
   for (const p of vehicleParts(v)) {
     const wx = x + p.x * c + p.z * s;
     const wz = z - p.x * s + p.z * c;
-    const color = p.kind === "head" ? 0xb8b8b0 : p.kind === "tail" ? 0x6a1612 : p.kind === "barR" ? 0x5a1010 : p.kind === "barB" ? 0x10205a : p.color;
+    const color =
+      p.kind === "head"
+        ? 0xb8b8b0
+        : p.kind === "tail"
+          ? 0x6a1612
+          : p.kind === "barR"
+            ? 0x5a1010
+            : p.kind === "barB"
+              ? 0x10205a
+              : p.color;
     D.col(color);
     if (p.kind === "wheel") D.obox(wx, y + p.y - p.sy / 2, wz, p.sz, p.sy, p.sx, rot);
     else D.obox(wx, y + p.y - p.sy / 2, wz, p.sx, p.sy, p.sz, rot);
@@ -1433,22 +2100,9 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
   const y = p.y;
   const tint = new THREE.Color();
   switch (p.k) {
-    case "palm": {
-      // Washingtonia robusta: 18-30 m, skinny, a small crown over a shaggy skirt
-      const H = p.s ?? 22;
-      const v = Math.floor(Math.abs(p.x * 13 + p.z * 7)) % 3;
-      const lean = v === 0 ? 0.4 : v === 1 ? 1.2 : 2.2;
-      const G = C.main;
-      const k = v === 0 ? T.trunk0 : v === 1 ? T.trunk1 : T.trunk2;
-      G.stamp(k, p.x, y, p.z, p.rot, 1, H, 1);
-      const s = Math.sin(p.rot);
-      const c = Math.cos(p.rot);
-      const tx = p.x + lean * s;
-      const tz = p.z + lean * c;
-      G.stamp(T.skirt, tx, y + H, tz, p.rot);
-      G.stamp(T.crown, tx, y + H + 0.3, tz, p.rot + p.x);
+    case "palm":
+      // planted as instanced palms in Beach.tsx (Palms.tsx)
       break;
-    }
     case "lamp": {
       D.stamp(T.lamp, p.x, y + 0.15, p.z, p.rot);
       C.glow.col("#ffd9a0").mat(0);
@@ -1460,9 +2114,11 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
     case "globe": {
       C.main.stamp(T.globe, p.x, y, p.z, 0);
       C.glow.col("#fff2d0").mat(0);
-      C.glow.box(p.x - 0.45, y + 3.55, p.z, 0.34, 0.34, 0.34);
-      C.glow.box(p.x + 0.45, y + 3.55, p.z, 0.34, 0.34, 0.34);
-      C.glow.box(p.x, y + 3.75, p.z, 0.4, 0.4, 0.4);
+      for (const [dx, dy, r0] of [[-0.45, 3.5, 0.17], [0.45, 3.5, 0.17], [0, 3.72, 0.2]] as const) {
+        C.glow.cone(p.x + dx, y + dy, p.z, r0, r0, 6, 0);
+        C.glow.cyl(p.x + dx, y + dy - 0.001, p.z, r0, 0.001, 6, false);
+        globeBottom(C.glow, p.x + dx, y + dy, p.z, r0);
+      }
       C.pools.col("#ffc080").mat(0);
       C.pools.flat(p.x - 6, p.z - 6, p.x + 6, p.z + 6, y + 0.06, [0, 0, 1, 1]);
       break;
@@ -1474,7 +2130,14 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       C.glow.col("#ffb86a").mat(0);
       C.glow.obox(p.x + s * 2.8, y + 9.1, p.z + c * 2.8, 0.3, 0.05, 0.6, p.rot);
       C.pools.col("#ff9a3a").mat(0);
-      C.pools.flat(p.x + s * 3.4 - 9, p.z + c * 3.4 - 9, p.x + s * 3.4 + 9, p.z + c * 3.4 + 9, y + 0.2, [0, 0, 1, 1]);
+      C.pools.flat(
+        p.x + s * 3.4 - 9,
+        p.z + c * 3.4 - 9,
+        p.x + s * 3.4 + 9,
+        p.z + c * 3.4 + 9,
+        y + 0.2,
+        [0, 0, 1, 1],
+      );
       break;
     }
     case "bench":
@@ -1599,7 +2262,10 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
 function blockade(b: Blockade, C: Ctx, T: Tmpls) {
   const D = C.detail;
   const G = C.main;
-  const tint = new THREE.Color();
+  const along = b.rot === 0; // the closure line runs along x
+  // unit vector toward the playable side, and its heading (for things that face the player)
+  const ix = b.face === 1 ? 1 : b.face === 3 ? -1 : 0;
+  const iz = b.face === 2 ? 1 : b.face === 0 ? -1 : 0;
   switch (b.k) {
     case "aframe":
       G.stamp(T.aframe, b.x, b.y, b.z, b.rot);
@@ -1610,72 +2276,71 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
     case "cone":
       D.stamp(T.cone, b.x, b.y, b.z, 0);
       break;
-    case "fence":
+    case "fence": {
       G.stamp(T.fence, b.x, b.y, b.z, b.rot);
+      if (b.label !== undefined) {
+        // a closure banner zip-tied to the panel, facing the player
+        const word = CLOSED_WORD[b.label] ?? W["KEEP OUT"];
+        signQuad(C.signs, word, b.x + ix * 0.04, b.y + 1.25, b.z + iz * 0.04, 2.0, 1.0, b.face);
+      }
       break;
+    }
     case "sandbag":
-      D.stamp(T.sandbag, b.x + (b.rot ? 1.4 : 0), b.y, b.z + (b.rot ? 0 : 1.4), b.rot);
+      D.stamp(T.sandbag, b.x, b.y, b.z, b.rot);
       break;
     case "tape": {
-      // stakes with red/white tape, a metre in front of the barricades
       const w = b.w ?? 10;
-      const along = b.rot === 0;
-      const off = 1.4;
+      D.mat(L.plain, 0.5, 0);
       for (let s = -w / 2; s <= w / 2; s += 2.5) {
-        D.mat(L.plain, 0.5, 0).col("#f4f2ea");
-        D.box(b.x + (along ? s : -off), b.y - 0.2, b.z + (along ? -off : s), 0.06, 1.3, 0.06);
+        D.col("#f4f2ea");
+        D.box(b.x + (along ? s : 0), b.y - 0.2, b.z + (along ? 0 : s), 0.06, 1.3, 0.06);
       }
       D.col("#e8322a");
-      if (along) D.box(b.x, b.y + 0.95, b.z - off, w, 0.08, 0.02);
-      else D.box(b.x - off, b.y + 0.95, b.z, 0.02, 0.08, w);
+      if (along) D.box(b.x, b.y + 0.95, b.z, w, 0.08, 0.02);
+      else D.box(b.x, b.y + 0.95, b.z, 0.02, 0.08, w);
       break;
     }
     case "truck": {
-      // the lifeguard pickup parked across the sand, light bar lit
+      // the lifeguard pickup parked along the closure, light bar lit
       const v: Vehicle = { type: "pickup", len: 5.4, wid: 2.0, wheel: 0.42, color: 0xf2f0ea, extras: 0, mass: 1.5 };
-      car(G, v, b.x, b.y + 0.02, b.z + (b.rot === 0 ? 3.2 : 0), b.rot === 0 ? Math.PI / 2 : 0);
-      signQuad(C.signs, W.LIFEGUARD, b.x, b.y + 1.05, b.z + (b.rot === 0 ? 2.15 : 0), 2.6, 0.55, b.rot === 0 ? 0 : 3, "#3a6ab8");
+      const rot = along ? Math.PI / 2 : 0;
+      car(G, v, b.x, b.y + 0.02, b.z, rot);
+      signQuad(C.signs, W.LIFEGUARD, b.x + ix * 1.03, b.y + 1.05, b.z + iz * 1.03, 2.6, 0.55, b.face, "#3a6ab8");
       C.glow.col("#ff3a2a").mat(0);
-      C.glow.box(b.x - 0.4, b.y + 2.02, b.z + (b.rot === 0 ? 3.2 : 0), 0.4, 0.14, 0.3);
+      C.glow.box(b.x - (along ? 0.4 : 0), b.y + 2.02, b.z - (along ? 0 : 0.4), 0.3, 0.14, 0.3);
       C.glow.col("#3a6aff");
-      C.glow.box(b.x + 0.4, b.y + 2.02, b.z + (b.rot === 0 ? 3.2 : 0), 0.4, 0.14, 0.3);
+      C.glow.box(b.x + (along ? 0.4 : 0), b.y + 2.02, b.z + (along ? 0 : 0.4), 0.3, 0.14, 0.3);
       break;
     }
     case "police": {
       const v: Vehicle = { type: "police", len: 4.9, wid: 1.9, wheel: 0.34, color: 0x151518, extras: 0, mass: 1.2 };
-      const along = b.rot === 0;
-      car(G, v, b.x + (along ? 0 : 3.5), b.y + 0.02, b.z + (along ? 3.5 : 0), along ? Math.PI / 2 + 0.25 : 0.25);
+      car(G, v, b.x, b.y + 0.02, b.z, (along ? Math.PI / 2 : 0) + 0.25);
       C.glow.col("#ff2020").mat(0);
-      C.glow.box(b.x - (along ? 0.3 : -3.5), b.y + 1.6, b.z + (along ? 3.5 : 0.3), 0.3, 0.12, 0.3);
+      C.glow.box(b.x - (along ? 0.3 : 0), b.y + 1.6, b.z - (along ? 0 : 0.3), 0.3, 0.12, 0.3);
       C.glow.col("#2050ff");
-      C.glow.box(b.x + (along ? 0.3 : 3.5), b.y + 1.6, b.z + (along ? 3.5 : -0.3), 0.3, 0.12, 0.3);
+      C.glow.box(b.x + (along ? 0.3 : 0), b.y + 1.6, b.z + (along ? 0 : 0.3), 0.3, 0.12, 0.3);
       break;
     }
     case "arrowboard": {
-      const along = b.rot === 0;
-      const ax = b.x + (along ? 0 : -2.5);
-      const az = b.z + (along ? -2.5 : 0);
-      G.stamp(T.arrowboard, ax, b.y, az, along ? 0 : Math.PI / 2);
+      G.stamp(T.arrowboard, b.x, b.y, b.z, along ? 0 : Math.PI / 2);
       C.glow.col("#ffb01a").mat(0);
       for (let k = -3; k <= 3; k++) {
-        if (along) C.glow.box(ax + k * 0.28, b.y + 2.9 - Math.abs(k) * 0.06, az - 0.07, 0.16, 0.16, 0.04);
-        else C.glow.box(ax - 0.07, b.y + 2.9 - Math.abs(k) * 0.06, az + k * 0.28, 0.04, 0.16, 0.16);
+        const y = b.y + 2.9 - Math.abs(k) * 0.06;
+        if (along) C.glow.box(b.x + k * 0.28, y, b.z + iz * 0.07, 0.16, 0.16, 0.04);
+        else C.glow.box(b.x + ix * 0.07, y, b.z + k * 0.28, 0.04, 0.16, 0.16);
       }
       break;
     }
     case "sign": {
-      const along = b.rot === 0;
-      const sx = b.x + (along ? 0 : -1.8);
-      const sz = b.z + (along ? -1.8 : 0);
-      D.stamp(T.signpost, sx, b.y, sz, b.rot);
+      D.stamp(T.signpost, b.x, b.y, b.z, b.rot);
       const word = CLOSED_WORD[b.label ?? 0] ?? W["KEEP OUT"];
-      signQuad(C.signs, word, sx + (along ? 0 : -0.04), b.y + 1.8, sz + (along ? -0.04 : 0), 1.95, 0.97, along ? 0 : 3);
+      signQuad(C.signs, word, b.x + ix * 0.04, b.y + 1.8, b.z + iz * 0.04, 1.95, 0.97, b.face);
       break;
     }
     case "buoyline": {
       const w = b.w ?? 20;
-      const along = b.rot === 0;
-      for (let s = -w / 2; s < w / 2; s += 1.8) G.stamp(T.float, b.x + (along ? s : 0), -1.0, b.z + (along ? 0 : s), along ? 0 : Math.PI / 2);
+      for (let s = -w / 2; s < w / 2; s += 1.8)
+        G.stamp(T.float, b.x + (along ? s : 0), -1.0, b.z + (along ? 0 : s), along ? 0 : Math.PI / 2);
       // a net hanging under the float line, and a red flag post every 10 m
       G.mat(L.plain, 0.5, 0).col("#26302a");
       if (along) G.box(b.x, -2.2, b.z, w, 1.3, 0.03);
@@ -1689,8 +2354,7 @@ function blockade(b: Blockade, C: Ctx, T: Tmpls) {
       break;
     }
     case "boat":
-      tint.set("#ffffff");
-      G.stamp(T.boat, b.x - (b.rot === 0 ? 0 : 3), -1.0, b.z - (b.rot === 0 ? 3 : 0), b.rot, 1, 1, 1, tint);
+      G.stamp(T.boat, b.x, -1.0, b.z, b.rot);
       break;
     default:
       break;
@@ -1726,7 +2390,12 @@ function backdrop(
         G.mat(L.ground, rough, 0).col(col);
         const oa = curve(za);
         const ob = curve(zb);
-        G.quad(x0 + oa, h0, za, x1 + oa, h1, za, x1 + ob, h1, zb, x0 + ob, h0, zb, [x0 / 3, -zb / 3, x1 / 3, -za / 3]);
+        G.quad(x0 + oa, h0, za, x1 + oa, h1, za, x1 + ob, h1, zb, x0 + ob, h0, zb, [
+          x0 / 3,
+          -zb / 3,
+          x1 / 3,
+          -za / 3,
+        ]);
         if (s > 0) {
           // winding: keep the faces pointing up on both sides
         }
@@ -1750,16 +2419,15 @@ function backdrop(
         M.box(170 + off, 0, zm, 36, h, step * 0.7);
       }
       for (let k = 0; k < 3; k++) {
-        const hx = 290 + k * 60 + r() * 30;
+        if (r() < 0.45) continue;
+        const hx = 290 + k * 70 + r() * 50;
         const hy = BLUFF_H + ((hx - 260) / 440) * 30;
         M.mat(L.resid, r(), 1).col(pick(["#f4ead8", "#efe2cc", "#f6f0e4", "#e8d8c0"], r));
         M.box(hx + off, hy - 1, zm + (r() - 0.5) * 20, 14, 7.5, 12);
         M.mat(L.plain, 0.5, 0).col("#b8583a");
         M.box(hx + off, hy + 6.5, zm, 15, 1.2, 13);
-        if (r() < 0.5) {
-          const pt = farAt(hx, zm).main;
-          pt.stamp(templates().trunk1, hx + off - 10, hy, zm, r() * 6, 1, 20 + r() * 8, 1);
-        }
+        const tr = farAt(hx, zm).main;
+        tr.stamp(templates().tree, hx + off - 12, hy - 0.5, zm + (r() - 0.5) * 16, r() * 6, 1.4, 1.4, 1.4);
       }
       // palms along the promenade continue into the distance
       for (let k = 0; k < 2; k++) {
@@ -1774,7 +2442,10 @@ function backdrop(
       // lights on the hills
       for (let k = 0; k < 6; k++) {
         const lx = 300 + r() * 1900;
-        const ly = lx < 700 ? BLUFF_H + ((lx - 260) / 440) * 30 : BLUFF_H + 30 + ((lx - 700) / 1700) * (150 + Math.sin(zm * 0.002) * 60);
+        const ly =
+          lx < 700
+            ? BLUFF_H + ((lx - 260) / 440) * 30
+            : BLUFF_H + 30 + ((lx - 700) / 1700) * (150 + Math.sin(zm * 0.002) * 60);
         lights.push([lx + off, ly + 2, zm + (r() - 0.5) * step]);
       }
     }
@@ -1783,12 +2454,45 @@ function backdrop(
   for (let z = -half; z < half; z += 40) {
     const G = farAt(1000, z).ground;
     G.mat(L.ground, 1, 0).col("#6a7a44");
-    G.quad(half, BLUFF_H, z, 700, BLUFF_H + 30, z, 700, BLUFF_H + 30, z + 40, half, BLUFF_H, z + 40);
+    G.quad(
+      half,
+      BLUFF_H,
+      z,
+      700,
+      BLUFF_H + 30,
+      z,
+      700,
+      BLUFF_H + 30,
+      z + 40,
+      half,
+      BLUFF_H,
+      z + 40,
+    );
     G.col("#5a6a48");
-    G.quad(700, BLUFF_H + 30, z, 2400, 180 + Math.sin(z * 0.002) * 60, z, 2400, 180 + Math.sin((z + 40) * 0.002) * 60, z + 40, 700, BLUFF_H + 30, z + 40);
+    G.quad(
+      700,
+      BLUFF_H + 30,
+      z,
+      2400,
+      180 + Math.sin(z * 0.002) * 60,
+      z,
+      2400,
+      180 + Math.sin((z + 40) * 0.002) * 60,
+      z + 40,
+      700,
+      BLUFF_H + 30,
+      z + 40,
+    );
     for (let k = 0; k < 8; k++) {
       const lx = half + r() * 1900;
-      const ly = lx < 700 ? BLUFF_H + ((lx - half) / (700 - half)) * 30 : BLUFF_H + 30 + ((lx - 700) / 1700) * (150 + Math.sin(z * 0.002) * 60);
+      if (k >= 3 && k < 6 && lx < 1100) {
+        const tr = farAt(lx, z).main;
+        tr.stamp(templates().tree, lx, (lx < 700 ? BLUFF_H + ((lx - half) / (700 - half)) * 30 : BLUFF_H + 30) - 0.5, z + r() * 40, r() * 6, 1.6, 1.6, 1.6);
+      }
+      const ly =
+        lx < 700
+          ? BLUFF_H + ((lx - half) / (700 - half)) * 30
+          : BLUFF_H + 30 + ((lx - 700) / 1700) * (150 + Math.sin(z * 0.002) * 60);
       lights.push([lx, ly + 2, z + r() * 40]);
       if (k < 3 && lx < 1200) {
         const M = farAt(lx, z).main;
@@ -1799,27 +2503,6 @@ function backdrop(
       }
     }
   }
-  // distant mountains ringing the bay: Santa Monica Mountains to the north-west, Palos Verdes
-  // to the south-west (a low band of peaks, fogged into the sky)
-  const Gm = farAt(-2400, 0).ground;
-  const ring = (a0: number, a1: number, R: number, hMax: number, col: string) => {
-    const N = 40;
-    Gm.mat(L.ground, 1, 0).col(col);
-    for (let k = 0; k < N; k++) {
-      const t0 = a0 + ((a1 - a0) * k) / N;
-      const t1 = a0 + ((a1 - a0) * (k + 1)) / N;
-      const h0 = hMax * (0.55 + 0.45 * Math.sin(k * 1.7) * Math.sin(k * 0.37 + 1));
-      const h1 = hMax * (0.55 + 0.45 * Math.sin((k + 1) * 1.7) * Math.sin((k + 1) * 0.37 + 1));
-      const env = (t: number) => Math.sin(((t - a0) / (a1 - a0)) * Math.PI);
-      const p0: [number, number] = [Math.sin(t0) * R, Math.cos(t0) * R];
-      const p1: [number, number] = [Math.sin(t1) * R, Math.cos(t1) * R];
-      Gm.quad(p1[0], -5, p1[1], p0[0], -5, p0[1], p0[0], h0 * env(t0), p0[1], p1[0], h1 * env(t1), p1[1]);
-      Gm.quad(p0[0], -5, p0[1], p1[0], -5, p1[1], p1[0], h1 * env(t1), p1[1], p0[0], h0 * env(t0), p0[1]);
-    }
-  };
-  // angles: atan2(x, z); north-west (-x, -z) is around -2.4 rad, south-west around -0.8
-  ring(-2.95, -1.95, 3000, 260, "#6a6a78");
-  ring(-1.1, -0.35, 2800, 150, "#72707e");
   void kindUnused;
 }
 const kindUnused = [K_BLUFF, K_WALK, K_PATH];

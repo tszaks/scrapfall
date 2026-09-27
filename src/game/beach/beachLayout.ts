@@ -166,7 +166,15 @@ export type PropKind =
   | "hydrant"
   | "sign66"
   | "booth";
-export type BProp = { k: PropKind; x: number; z: number; y: number; rot: number; s?: number; c?: number };
+export type BProp = {
+  k: PropKind;
+  x: number;
+  z: number;
+  y: number;
+  rot: number;
+  s?: number;
+  c?: number;
+};
 export type Parked = { x: number; z: number; y: number; rot: number; v: Vehicle };
 /** blockade dressing pieces, placed along a sealed gap */
 export type BlockKind =
@@ -182,7 +190,17 @@ export type BlockKind =
   | "sign"
   | "arrowboard"
   | "boat";
-export type Blockade = { k: BlockKind; x: number; z: number; y: number; rot: number; w?: number; label?: number };
+export type Blockade = {
+  k: BlockKind;
+  x: number;
+  z: number;
+  y: number;
+  rot: number;
+  /** the side facing the playable area (0 -z, 1 +x, 2 +z, 3 -x) */
+  face: 0 | 1 | 2 | 3;
+  w?: number;
+  label?: number;
+};
 
 export type BeachData = {
   regions: Region[];
@@ -211,6 +229,8 @@ export type BeachData = {
   towers: { x: number; z: number; rot: number; n: number }[];
   firesLit: { x: number; z: number }[];
   skate: Rect;
+  /** quarter pipes: footprint + the side the ramp faces (0 -z, 1 +x, 2 +z, 3 -x) */
+  qpipes: (Rect & { face: 0 | 1 | 2 | 3 })[];
   gym: Rect;
   courts: Rect;
   lot: Rect;
@@ -225,8 +245,7 @@ export type BeachLayout = CityLayout & {
   spawnYaw: number;
 };
 
-export const isBeach = (c: CityLayout | null | undefined): c is BeachLayout =>
-  !!c && "beach" in c;
+export const isBeach = (c: CityLayout | null | undefined): c is BeachLayout => !!c && "beach" in c;
 
 // ---------------------------------------------------------------------------------------
 
@@ -363,7 +382,15 @@ export function generateBeach(
     return h;
   };
   const prop = (k: PropKind, x: number, z: number, rot = 0, s?: number, c?: number) =>
-    props.push({ k, x, z, y: heightAt(x, z), rot, ...(s !== undefined ? { s } : {}), ...(c !== undefined ? { c } : {}) });
+    props.push({
+      k,
+      x,
+      z,
+      y: heightAt(x, z),
+      rot,
+      ...(s !== undefined ? { s } : {}),
+      ...(c !== undefined ? { c } : {}),
+    });
   const free = (x0: number, z0: number, x1: number, z1: number) => {
     let ok = true;
     each(rect(x0, z0, x1, z1), (_i, _j, c) => {
@@ -383,7 +410,7 @@ export function generateBeach(
     else if (x < X.bike) k = K_PARK;
     else if (x < X.prom) k = K_BIKE;
     else if (x < X.shops) k = K_PROM;
-    else if (x < X.walkW) k = K_OPEN;
+    else if (x < X.walkW) k = K_WALK;
     else if (x < X.road0) k = K_WALK;
     else if (x < X.road1) k = K_ROAD;
     else if (x < X.walkE) k = K_WALK;
@@ -432,8 +459,18 @@ export function generateBeach(
     const za = s * 22;
     const zb = s * 32;
     const bot2 = baseProfile(12, s * 27);
-    addRegion({ ...rect(-20, Math.min(za, zb), 12, Math.max(za, zb)), kind: "rampX", h0: DECK, h1: bot2 });
-    stairs.push({ ...rect(-20, Math.min(za, zb), 12, Math.max(za, zb)), axis: "x", h0: DECK, h1: bot2 });
+    addRegion({
+      ...rect(-20, Math.min(za, zb), 12, Math.max(za, zb)),
+      kind: "rampX",
+      h0: DECK,
+      h1: bot2,
+    });
+    stairs.push({
+      ...rect(-20, Math.min(za, zb), 12, Math.max(za, zb)),
+      axis: "x",
+      h0: DECK,
+      h1: bot2,
+    });
   }
 
   // ---- 3. bluff stairs (carved into the slope, climbing along z) ----
@@ -442,7 +479,10 @@ export function generateBeach(
     addRegion({ ...rect(X.walkE - 4, s - 8, 248, s), kind: "flat", h0: 0, h1: 0 }, K_WALK);
     addRegion({ ...rect(236, s, 248, s + 44), kind: "rampZ", h0: 0, h1: BLUFF_H }, K_WALK);
     stairs.push({ ...rect(236, s, 248, s + 44), axis: "z", h0: 0, h1: BLUFF_H });
-    addRegion({ ...rect(236, s + 44, X.top, s + 56), kind: "flat", h0: BLUFF_H, h1: BLUFF_H }, K_WALK);
+    addRegion(
+      { ...rect(236, s + 44, X.top, s + 56), kind: "flat", h0: BLUFF_H, h1: BLUFF_H },
+      K_WALK,
+    );
     each(rect(X.walkE - 4, s - 8, X.top, s + 56), (_i, _j, c) => {
       if (regionOf[c]! >= 0) {
         solid[c] = 0;
@@ -467,6 +507,12 @@ export function generateBeach(
   // ledges and a stair set (low cover)
   solidify(rect(94, 52, 96, 60), -5, 0.55);
   solidify(rect(112, 64, 116, 66), -5, 0.55);
+  // quarter pipes along two edges (solid: a skater's wall, a shooter's cover)
+  const qpipes: BeachData["qpipes"] = [
+    { ...rect(114, 76, 120, 100), face: 3 },
+    { ...rect(60, 48, 90, 54), face: 2 },
+  ];
+  for (const q of qpipes) solidify(q, -5, 2.6);
   props.push({ k: "rail", x: 96, z: 78, y: 0, rot: Math.PI / 2, s: 8 });
   props.push({ k: "rail", x: 114, z: 96, y: 0, rot: 0, s: 6 });
   props.push({ k: "ledge", x: 95, z: 56, y: 0, rot: 0, s: 8 });
@@ -508,7 +554,8 @@ export function generateBeach(
     [112, 166, X.bike, 168],
   ] as const)
     solidify(rect(a, b, c2, d), -5, 3.4);
-  for (const z of [124, 142, 146, 164]) props.push({ k: "hoop", x: 108, z, y: 0, rot: z < 144 ? 0 : Math.PI });
+  for (const z of [124, 142, 146, 164])
+    props.push({ k: "hoop", x: 108, z, y: 0, rot: z < 144 ? 0 : Math.PI });
 
   // playground
   paint(rect(96, -128, X.bike, -100), K_PATH);
@@ -529,7 +576,16 @@ export function generateBeach(
     return full;
   };
   bld({ ...rect(64, -168, 88, -148), t: "hq", y0: 0, h: 8.5, floors: 2, front: 3, sign: 10 });
-  for (const z of [-204, 170]) bld({ ...rect(80, z, 92, z + 10), t: "restroom", y0: 0, h: 3.6, floors: 1, front: 3, sign: -1 });
+  for (const z of [-204, 170])
+    bld({
+      ...rect(80, z, 92, z + 10),
+      t: "restroom",
+      y0: 0,
+      h: 3.6,
+      floors: 1,
+      front: 3,
+      sign: -1,
+    });
 
   // beach lot (south) with a driveway across the strip to PCH
   const lot = rect(60, 184, X.bike, 256);
@@ -540,13 +596,39 @@ export function generateBeach(
   type Seg = { t: BType | "lot" | "plaza" | "drive"; w: number };
   const segsFor = (z0: number, z1: number, flip: boolean) => {
     const out: { t: Seg["t"]; a: number; b: number }[] = [];
-    const pool: Seg["t"][] = ["shop", "surf", "taco", "motel", "cafe", "shop", "arcade", "lot", "hotel", "shop", "taco", "surf", "motel", "cafe", "lot"];
+    const pool: Seg["t"][] = [
+      "shop",
+      "surf",
+      "taco",
+      "motel",
+      "cafe",
+      "shop",
+      "arcade",
+      "lot",
+      "hotel",
+      "shop",
+      "taco",
+      "surf",
+      "motel",
+      "cafe",
+      "lot",
+    ];
     let z = z0;
     let k = Math.floor(r() * pool.length);
     while (z < z1 - 12) {
       const t = pool[k++ % pool.length]!;
       const w =
-        t === "motel" ? 44 : t === "hotel" ? 36 : t === "lot" ? 32 : t === "taco" ? 16 : t === "arcade" ? 28 : 20 + Math.floor(r() * 3) * 4;
+        t === "motel"
+          ? 44
+          : t === "hotel"
+            ? 36
+            : t === "lot"
+              ? 32
+              : t === "taco"
+                ? 16
+                : t === "arcade"
+                  ? 28
+                  : 20 + Math.floor(r() * 3) * 4;
       if (z + w > z1) break;
       out.push({ t, a: z, b: z + w });
       z += w + 8; // 8 m passage
@@ -580,13 +662,36 @@ export function generateBeach(
           parked.push({ x: x + 2.5, z, y: 0, rot: Math.PI / 2 + (r() < 0.5 ? 0 : Math.PI), v });
         }
       }
-      props.push({ k: "palm", x: X.shops + 12, z: (s.a + s.b) / 2, y: 0, rot: r() * 6, s: 22 + r() * 5 });
+      props.push({
+        k: "palm",
+        x: X.shops + 12,
+        z: (s.a + s.b) / 2,
+        y: 0,
+        rot: r() * 6,
+        s: 22 + r() * 5,
+      });
       continue;
     }
     if (s.t === "motel") {
       // L-shaped two-storey motel around a parking court that opens onto PCH
-      bld({ ...rect(X.shops + 2, s.a, X.shops + 16, s.b), t: "motel", y0: 0, h: 7, floors: 2, front: 1, sign });
-      bld({ ...rect(X.shops + 16, s.a, X.walkW - 4, s.a + 12), t: "motel", y0: 0, h: 7, floors: 2, front: 2, sign: -1 });
+      bld({
+        ...rect(X.shops + 2, s.a, X.shops + 16, s.b),
+        t: "motel",
+        y0: 0,
+        h: 7,
+        floors: 2,
+        front: 1,
+        sign,
+      });
+      bld({
+        ...rect(X.shops + 16, s.a, X.walkW - 4, s.a + 12),
+        t: "motel",
+        y0: 0,
+        h: 7,
+        floors: 2,
+        front: 2,
+        sign: -1,
+      });
       paint(rect(X.shops + 16, s.a + 12, X.walkW, s.b), K_OPEN);
       for (let z = s.a + 16; z < s.b - 3; z += 3.2) {
         if (r() < 0.35) continue;
@@ -597,22 +702,63 @@ export function generateBeach(
       continue;
     }
     if (s.t === "hotel") {
-      bld({ ...rect(X.shops + 2, s.a, X.walkW - 6, s.b), t: "hotel", y0: 0, h: 22, floors: 6, front: 3, sign });
+      bld({
+        ...rect(X.shops + 2, s.a, X.walkW - 6, s.b),
+        t: "hotel",
+        y0: 0,
+        h: 22,
+        floors: 6,
+        front: 3,
+        sign,
+      });
       continue;
     }
     if (s.t === "taco") {
-      bld({ ...rect(X.shops + 10, s.a + 2, X.shops + 20, s.b - 2), t: "taco", y0: 0, h: 4.2, floors: 1, front: 3, sign });
+      bld({
+        ...rect(X.shops + 10, s.a + 2, X.shops + 20, s.b - 2),
+        t: "taco",
+        y0: 0,
+        h: 4.2,
+        floors: 1,
+        front: 3,
+        sign,
+      });
       paint(rect(X.shops, s.a, X.shops + 10, s.b), K_PROM);
-      for (const z of [s.a + 4, s.b - 4]) props.push({ k: "table", x: X.shops + 4, z, y: 0, rot: 0 });
+      for (const z of [s.a + 4, s.b - 4])
+        props.push({ k: "table", x: X.shops + 4, z, y: 0, rot: 0 });
       // a surf shack or bike rental faces the road behind the taco stand
-      bld({ ...rect(X.shops + 26, s.a, X.walkW - 6, s.b), t: "shop", y0: 0, h: 4.6, floors: 1, front: 1, sign: 12 });
+      bld({
+        ...rect(X.shops + 26, s.a, X.walkW - 6, s.b),
+        t: "shop",
+        y0: 0,
+        h: 4.6,
+        floors: 1,
+        front: 1,
+        sign: 12,
+      });
       continue;
     }
     // promenade-facing shop row (1-3 storeys) + an alley + something facing the road
     const floors = s.t === "arcade" ? 2 : 1 + Math.floor(r() * 3);
-    bld({ ...rect(X.shops + 2, s.a, X.shops + 22, s.b), t: s.t as BType, y0: 0, h: 4.4 + (floors - 1) * 3.4, floors, front: 3, sign });
-    if (r() < 0.6)
-      bld({ ...rect(X.shops + 28, s.a + 2, X.walkW - 6, s.b - 2), t: "shop", y0: 0, h: 4.6 + Math.floor(r() * 2) * 3.4, floors: 1, front: 1, sign: SIGNS.shop![Math.floor(r() * 5)]! });
+    bld({
+      ...rect(X.shops + 2, s.a, X.shops + 22, s.b),
+      t: s.t as BType,
+      y0: 0,
+      h: 4.4 + (floors - 1) * 3.4,
+      floors,
+      front: 3,
+      sign,
+    });
+    if (r() < 0.85)
+      bld({
+        ...rect(X.shops + 28, s.a + 2, X.walkW - 6, s.b - 2),
+        t: "shop",
+        y0: 0,
+        h: 4.6 + Math.floor(r() * 2) * 3.4,
+        floors: 1,
+        front: 1,
+        sign: SIGNS.shop![Math.floor(r() * 5)]!,
+      });
     else paint(rect(X.shops + 24, s.a, X.walkW, s.b), K_OPEN);
   }
 
@@ -626,8 +772,25 @@ export function generateBeach(
   // midway stalls: 6 m booths, 6 m gaps, both sides (none in front of the coaster station)
   for (let x = -120; x < -26; x += 12) {
     const sn = 14 + (Math.abs(x / 12) % 3);
-    bld({ ...rect(x, -12, x + 6, -8), t: "stall", y0: DECK, h: 3.2, floors: 1, front: 2, sign: sn });
-    if (x < -64 || x > -40) bld({ ...rect(x, 8, x + 6, 12), t: "stall", y0: DECK, h: 3.2, floors: 1, front: 0, sign: 14 + ((Math.abs(x / 12) + 1) % 3) });
+    bld({
+      ...rect(x, -12, x + 6, -8),
+      t: "stall",
+      y0: DECK,
+      h: 3.2,
+      floors: 1,
+      front: 2,
+      sign: sn,
+    });
+    if (x < -64 || x > -40)
+      bld({
+        ...rect(x, 8, x + 6, 12),
+        t: "stall",
+        y0: DECK,
+        h: 3.2,
+        floors: 1,
+        front: 0,
+        sign: 14 + ((Math.abs(x / 12) + 1) % 3),
+      });
   }
   // the coaster: a figure-eight over the south half of the deck, dipping through its station
   const coaster: [number, number, number][] = [];
@@ -638,24 +801,67 @@ export function generateBeach(
       const x = -86 + Math.sin(a) * 34;
       const z = 21 + Math.sin(a * 2) * 7;
       const hill = (1 - Math.cos(a - Math.PI / 2)) / 2;
-      const y = DECK + 1.4 + hill * 9.5 * (0.8 + 0.2 * Math.sin(a * 3)) + Math.sin(a * 5) * 1.2 * hill;
+      const y =
+        DECK + 1.4 + hill * 9.5 * (0.8 + 0.2 * Math.sin(a * 3)) + Math.sin(a * 5) * 1.2 * hill;
       coaster.push([x, y, z]);
       // where the track runs low it is in the way: solid (cover) under it
-      if (y < DECK + 3.2) solidify(rect(Math.floor(x / 2) * 2, Math.floor(z / 2) * 2, Math.floor(x / 2) * 2 + 2, Math.floor(z / 2) * 2 + 2), DECK - 1, y + 0.4);
+      if (y < DECK + 3.2)
+        solidify(
+          rect(
+            Math.floor(x / 2) * 2,
+            Math.floor(z / 2) * 2,
+            Math.floor(x / 2) * 2 + 2,
+            Math.floor(z / 2) * 2 + 2,
+          ),
+          DECK - 1,
+          y + 0.4,
+        );
     }
   }
   const carousel = { x: 66, z: -6, r: 7.5 };
   solidify(rect(58, -14, 74, 2), DECK - 8, DECK + 5.5);
-  bld({ ...rect(-232, -18, -208, 4), t: "restaurant", y0: DECK, h: 8, floors: 2, front: 1, sign: 9 });
-  bld({ ...rect(-232, 10, -222, 18), t: "harbor", y0: DECK, h: 3.6, floors: 1, front: 1, sign: -1 });
+  bld({
+    ...rect(-232, -18, -208, 4),
+    t: "restaurant",
+    y0: DECK,
+    h: 8,
+    floors: 2,
+    front: 1,
+    sign: 17,
+  });
+  bld({
+    ...rect(-232, 10, -222, 18),
+    t: "harbor",
+    y0: DECK,
+    h: 3.6,
+    floors: 1,
+    front: 1,
+    sign: -1,
+  });
   bld({ ...rect(-204, -16, -198, -10), t: "stall", y0: DECK, h: 3, floors: 1, front: 1, sign: 16 });
 
   // ---- 7. clifftop: park, Ocean Ave, houses ----
-  bld({ ...rect(272, -116, 280, -108), t: "camera", y0: BLUFF_H, h: 5, floors: 1, front: 3, sign: -1 });
+  bld({
+    ...rect(272, -116, 280, -108),
+    t: "camera",
+    y0: BLUFF_H,
+    h: 5,
+    floors: 1,
+    front: 3,
+    sign: -1,
+  });
   for (let z = -half + 8; z < half - 20; z += 28) {
     const w = 20 + Math.floor(r() * 2) * 4;
     if (r() < 0.12) continue;
-    bld({ ...rect(X.ave1 + 12, z, X.ave1 + 12 + w * 0.9, z + w - 6), t: "house", y0: BLUFF_H, h: 6.8, floors: 2, front: 3, sign: -1 });
+    bld({
+      ...rect(X.ave1 + 12, z, X.ave1 + 12 + w * 0.9, z + w - 6),
+      t: "house",
+      y0: BLUFF_H,
+      h: 6.8,
+      floors: 2,
+      front: 3,
+      sign: -1,
+    });
     props.push({ k: "palm", x: X.ave1 + 6, z: z + 3, y: BLUFF_H, rot: r() * 6, s: 20 + r() * 8 });
   }
   for (let z = -half + 10; z < half - 10; z += 11) {
@@ -715,10 +921,13 @@ export function generateBeach(
   }
   for (const z of [-178, 182]) prop("shower", 94, z, 0);
   // buoys marking the swim area (the deep-water line)
-  for (let z = -half + 6; z < half; z += 12) props.push({ k: "buoy", x: X.seal - 2, z, y: SEA, rot: 0 });
+  for (let z = -half + 6; z < half; z += 12)
+    props.push({ k: "buoy", x: X.seal - 2, z, y: SEA, rot: 0 });
 
   const inFeature = (x: number, z: number) =>
-    [skate, gym, courts, lot, rect(96, -128, X.bike, -100)].some((f) => x > f.x0 - 3 && x < f.x1 + 3 && z > f.z0 - 3 && z < f.z1 + 3);
+    [skate, gym, courts, lot, rect(96, -128, X.bike, -100)].some(
+      (f) => x > f.x0 - 3 && x < f.x1 + 3 && z > f.z0 - 3 && z < f.z1 + 3,
+    );
   // parked rows in the beach lot, light poles between them
   for (const x of [66, 84, 102]) {
     for (let z = lot.z0 + 4; z < lot.z1 - 3; z += 2.9) {
@@ -737,12 +946,29 @@ export function generateBeach(
     const nearPier = Math.abs(z) < 12;
     if (!nearPier) {
       props.push({ k: "palm", x: X.prom + 2, z, y: 0, rot: r() * 6, s: 22 + r() * 7 });
-      if (!inFeature(X.bike - 2, z + 6)) props.push({ k: "palm", x: X.bike - 2, z: z + 6, y: 0, rot: r() * 6, s: 19 + r() * 8 });
+      if (!inFeature(X.bike - 2, z + 6))
+        props.push({ k: "palm", x: X.bike - 2, z: z + 6, y: 0, rot: r() * 6, s: 19 + r() * 8 });
     }
-    if (!nearPier && Math.round((z + half) / 12) % 2 === 0) props.push({ k: "lamp", x: X.shops - 3, z: z + 3, y: 0, rot: -Math.PI / 2 });
+    if (!nearPier && Math.round((z + half) / 12) % 2 === 0)
+      props.push({ k: "lamp", x: X.shops - 3, z: z + 3, y: 0, rot: -Math.PI / 2 });
     if (!nearPier) props.push({ k: "bench", x: X.prom + 3.4, z: z + 4, y: 0, rot: -Math.PI / 2 });
-    if (!nearPier && r() < 0.28) props.push({ k: "cart", x: X.prom + 10, z: z + 6, y: 0, rot: r() < 0.5 ? 0 : Math.PI, c: Math.floor(r() * 6) });
-    if (!nearPier && r() < 0.18) props.push({ k: "bike", x: X.bike + 3, z: z + r() * 8, y: 0, rot: Math.PI / 2 * (r() < 0.5 ? 1 : -1) });
+    if (!nearPier && r() < 0.28)
+      props.push({
+        k: "cart",
+        x: X.prom + 10,
+        z: z + 6,
+        y: 0,
+        rot: r() < 0.5 ? 0 : Math.PI,
+        c: Math.floor(r() * 6),
+      });
+    if (!nearPier && r() < 0.18)
+      props.push({
+        k: "bike",
+        x: X.bike + 3,
+        z: z + r() * 8,
+        y: 0,
+        rot: (Math.PI / 2) * (r() < 0.5 ? 1 : -1),
+      });
     // PCH: palms and cobra-head lights on both sidewalks, a bus stop now and then
     props.push({ k: "palm", x: X.walkW + 4, z: z + 2, y: 0, rot: r() * 6, s: 24 + r() * 6 });
     if (Math.floor((z + half) / 12) % 3 === 0) {
@@ -751,13 +977,42 @@ export function generateBeach(
     }
     // clifftop park: a double row of very tall palms, benches facing the sea
     props.push({ k: "palm", x: X.top + 6, z: z + 4, y: BLUFF_H, rot: r() * 6, s: 25 + r() * 6 });
-    if (r() < 0.6) props.push({ k: "palm", x: X.top + 22 + r() * 10, z: z + r() * 10, y: BLUFF_H, rot: r() * 6, s: 22 + r() * 8 });
-    if (r() < 0.5) props.push({ k: "tree", x: X.top + 32 + r() * 6, z: z + r() * 10, y: BLUFF_H, rot: r() * 6, s: 1 + r() * 0.5 });
+    if (r() < 0.6)
+      props.push({
+        k: "palm",
+        x: X.top + 22 + r() * 10,
+        z: z + r() * 10,
+        y: BLUFF_H,
+        rot: r() * 6,
+        s: 22 + r() * 8,
+      });
+    if (r() < 0.5)
+      props.push({
+        k: "tree",
+        x: X.top + 32 + r() * 6,
+        z: z + r() * 10,
+        y: BLUFF_H,
+        rot: r() * 6,
+        s: 1 + r() * 0.5,
+      });
     props.push({ k: "bench", x: X.top + 3, z: z + 9, y: BLUFF_H, rot: -Math.PI / 2 });
   }
-  for (const z of [-236, -96, 44, 232]) props.push({ k: "busstop", x: X.road1 + 3.5, z, y: 0, rot: -Math.PI / 2 });
+  for (const z of [-236, -96, 44, 232])
+    props.push({ k: "busstop", x: X.road1 + 3.5, z, y: 0, rot: -Math.PI / 2 });
   // palms in the parking lots and around the skate park / gym
-  for (const [x, z] of [[58, 46], [58, 106], [122, 46], [94, -90], [94, -50], [122, -92], [94, 118], [94, 170], [64, 182], [64, 258], [100, 258]] as const)
+  for (const [x, z] of [
+    [58, 46],
+    [58, 106],
+    [122, 46],
+    [94, -90],
+    [94, -50],
+    [122, -92],
+    [94, 118],
+    [94, 170],
+    [64, 182],
+    [64, 258],
+    [100, 258],
+  ] as const)
     props.push({ k: "palm", x, z, y: heightAt(x, z), rot: r() * 6, s: 20 + r() * 8 });
 
   // pier furniture: globe lamps along both railings, benches, rods at the end, scopes, flags
@@ -778,16 +1033,37 @@ export function generateBeach(
     props.push({ k: "globe", x: x + 5, z: 30.2, y: DECK, rot: 0 });
   }
   for (let x = -192; x < -126; x += 7) {
-    if (r() < 0.55) props.push({ k: "rod", x, z: -6.1, y: DECK, rot: Math.PI, c: Math.floor(r() * 4) });
-    if (r() < 0.55) props.push({ k: "rod", x: x + 3, z: 6.1, y: DECK, rot: 0, c: Math.floor(r() * 4) });
-    if (r() < 0.3) props.push({ k: "bench", x: x + 1, z: 0, y: DECK, rot: r() < 0.5 ? 0 : Math.PI });
+    if (r() < 0.55)
+      props.push({ k: "rod", x, z: -6.1, y: DECK, rot: Math.PI, c: Math.floor(r() * 4) });
+    if (r() < 0.55)
+      props.push({ k: "rod", x: x + 3, z: 6.1, y: DECK, rot: 0, c: Math.floor(r() * 4) });
+    if (r() < 0.3)
+      props.push({ k: "bench", x: x + 1, z: 0, y: DECK, rot: r() < 0.5 ? 0 : Math.PI });
   }
-  for (const [x, z] of [[-234, -10], [-234, 10], [-222, 18], [-210, -18]] as const)
+  for (const [x, z] of [
+    [-234, -10],
+    [-234, 10],
+    [-222, 18],
+    [-210, -18],
+  ] as const)
     props.push({ k: "scope", x, z, y: DECK, rot: 0 });
   props.push({ k: "sign66", x: -202, z: -4, y: DECK, rot: -Math.PI / 2 });
   for (let x = 44; x < 90; x += 8) props.push({ k: "bench", x, z: 12, y: DECK, rot: Math.PI });
+  for (let x = -116; x < -30; x += 18) {
+    props.push({ k: "bench", x, z: -1.4, y: DECK, rot: 0 });
+    props.push({ k: "bench", x, z: 1.4, y: DECK, rot: Math.PI });
+    props.push({ k: "trash", x: x + 3, z: 0, y: DECK, rot: 0 });
+  }
+  for (const x of [-104, -68, -44]) props.push({ k: "cart", x, z: 4.5, y: DECK, rot: Math.PI / 2, c: Math.abs(x) % 6 });
   for (let x = -18; x < 38; x += 14) props.push({ k: "trash", x, z: 5, y: DECK, rot: 0 });
-  for (const [x, z] of [[-24, -6], [-24, 6], [-120, 30], [-120, -30], [36, -14], [36, 14]] as const)
+  for (const [x, z] of [
+    [-24, -6],
+    [-24, 6],
+    [-120, 30],
+    [-120, -30],
+    [36, -14],
+    [36, 14],
+  ] as const)
     props.push({ k: "flag", x, z, y: DECK, rot: 0, c: 0 });
 
   // ---- 10. seal the deep ocean (a line just past the swim buoys) ----
@@ -825,7 +1101,10 @@ export function generateBeach(
 
   // ---- 12. traffic: PCH plus the tunnel connectors (the loop closes far behind the bluff) ----
   const tz = solo ? TUNNEL_Z.slice(0, 1) : TUNNEL_Z;
-  const roadZ: Road[] = [...tz.map((z) => ({ c: -z, cls: "side" as const })).reverse(), ...tz.map((z) => ({ c: z, cls: "side" as const }))];
+  const roadZ: Road[] = [
+    ...tz.map((z) => ({ c: -z, cls: "side" as const })).reverse(),
+    ...tz.map((z) => ({ c: z, cls: "side" as const })),
+  ];
   const roadX: Road[] = [
     { c: ROAD_C, cls: "avenue" },
     { c: 1100, cls: "side" },
@@ -861,7 +1140,11 @@ export function generateBeach(
       }
     }
   }
-  const blockades = dressGaps(allGaps.map((a) => a.g), heightAt, r);
+  const blockades = dressGaps(
+    allGaps.map((a) => a.g),
+    heightAt,
+    r,
+  );
 
   // ---- 14. spawn, then flood fill: every open cell the spawn can't reach becomes solid ----
   const spawn = { x: X.prom + 8, z: 26 };
@@ -874,7 +1157,12 @@ export function generateBeach(
       const c = q[h]!;
       const i = Math.floor(c / n);
       const j = c - i * n;
-      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      for (const [di, dj] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
         const a = i + di;
         const b = j + dj;
         if (!inside(a, b)) continue;
@@ -893,7 +1181,12 @@ export function generateBeach(
       const c = i * n + j;
       if (!reach[c]) {
         const real = solid[c] && pTop[c]! > pBot[c]!;
-        blocks.push({ x: cx(i), z: cx(j), h: real ? Math.max(0, pTop[c]! - Math.max(0, pBot[c]!)) : 0, tone: 0 });
+        blocks.push({
+          x: cx(i),
+          z: cx(j),
+          h: real ? Math.max(0, pTop[c]! - Math.max(0, pBot[c]!)) : 0,
+          tone: 0,
+        });
         solid[c] = 1;
       }
     }
@@ -936,6 +1229,7 @@ export function generateBeach(
       towers,
       firesLit,
       skate,
+      qpipes,
       gym,
       courts,
       lot,
@@ -952,23 +1246,40 @@ export function generateBeach(
  * Turn each sealed opening into believable, deliberate dressing: what goes there depends on
  * the ground it crosses (surf, sand, promenade, road, clifftop park).
  */
-function dressGaps(gaps: Gap[], heightAt: (x: number, z: number) => number, r: () => number): Blockade[] {
+function dressGaps(
+  gaps: Gap[],
+  heightAt: (x: number, z: number) => number,
+  r: () => number,
+): Blockade[] {
   const out: Blockade[] = [];
   for (const g of gaps) {
     const along = g.axis;
     const a0 = (along === "x" ? g.x : g.z) - g.w / 2;
     const a1 = a0 + g.w;
     const rot = along === "x" ? 0 : Math.PI / 2;
-    const at = (t: number) => (along === "x" ? { x: t, z: g.z } : { x: g.x, z: t });
+    // toward the playable side; everything is placed on the sealed cells or beyond them
+    const ix = along === "z" ? -Math.sign(g.x) : 0;
+    const iz = along === "x" ? -Math.sign(g.z) : 0;
+    const face: 0 | 1 | 2 | 3 = iz > 0 ? 2 : iz < 0 ? 0 : ix > 0 ? 1 : 3;
+    const at = (t: number, off = 0) =>
+      along === "x" ? { x: t, z: g.z + iz * off } : { x: g.x + ix * off, z: t };
     const zoneOf = (t: number) => {
-      const p = at(t);
-      const x = p.x;
+      const x = at(t).x;
       if (x < X.wet) return "surf";
       if (x < X.strip) return "sand";
       if (x < X.walkW) return "walk";
       if (x < X.road1 + 1 && x >= X.road0 - 1) return "road";
       if (x < X.bluff) return "walk";
       return "park";
+    };
+    const place = (k: BlockKind, s: number, off = 0, extra: Partial<Blockade> = {}) => {
+      const p = at(s, off);
+      out.push({ k, x: p.x, z: p.z, y: heightAt(p.x, p.z), rot, face, ...extra });
+    };
+    const fenceRun = (t: number, t1: number, label: number, off = 0.2) => {
+      let n = 0;
+      for (let s = t + 1.2; s < t1 - 0.5; s += 2.4, n++)
+        place("fence", s, off, n % 3 === 1 ? { label } : {});
     };
     // split the gap into runs of one zone
     let t = a0;
@@ -978,34 +1289,29 @@ function dressGaps(gaps: Gap[], heightAt: (x: number, z: number) => number, r: (
       while (t1 < a1 - 0.01 && zoneOf(t1 + 1) === z0) t1 += 2;
       const mid = (t + t1) / 2;
       const len = t1 - t;
-      const place = (k: BlockKind, s: number, extra: Partial<Blockade> = {}) => {
-        const p = at(s);
-        out.push({ k, x: p.x, z: p.z, y: heightAt(p.x, p.z), rot, ...extra });
-      };
       if (z0 === "surf") {
-        place("buoyline", mid, { w: len });
-        if (len > 20) place("boat", mid + (r() - 0.5) * len * 0.4);
+        place("buoyline", mid, 0, { w: len });
+        if (len > 20) place("boat", mid + (r() - 0.5) * len * 0.4, -4);
       } else if (z0 === "sand") {
-        for (let s = t + 1.5; s < t1 - 1; s += 3.2) place("aframe", s);
-        place("tape", mid, { w: len });
-        if (len > 30) place("truck", mid + (r() - 0.5) * (len - 16));
-        for (let s = t + 10; s < t1 - 4; s += 22) place("sign", s, { label: 0 });
+        // a lifeguard closure: tall fencing with banners, barricades in front, a truck behind
+        fenceRun(t, t1, 0, -0.2);
+        for (let s = t + 2; s < t1 - 1; s += 4.8) place("aframe", s, 0.75);
+        place("tape", mid, 1.1, { w: len - 1 });
+        if (len > 30) place("truck", mid + (r() - 0.5) * (len - 16), -4.5);
+        for (let s = t + 12; s < t1 - 6; s += 30) place("sign", s, 0.9, { label: 0 });
       } else if (z0 === "road") {
-        for (let s = t + 1.2; s < t1 - 0.8; s += 2.05) place("jersey", s);
-        for (let s = t + 1; s < t1; s += 2.5) {
-          const p = at(s);
-          out.push({ k: "cone", x: p.x + (along === "z" ? -3 : 0), z: p.z + (along === "x" ? -3 : 0), y: 0, rot });
-        }
-        place("police", mid + 4);
-        place("arrowboard", mid - 5);
-        place("sign", mid, { label: 1 });
+        for (let s = t + 1.2; s < t1 - 0.8; s += 2.05) place("jersey", s, 0.5);
+        fenceRun(t, t1, 1, -0.6);
+        for (let s = t + 1; s < t1; s += 2.5) place("cone", s, 1.05);
+        place("police", mid, -4.5);
+        place("arrowboard", mid - 6, -3);
+        place("sign", mid + 3, 0.9, { label: 1 });
       } else if (z0 === "walk") {
-        for (let s = t + 1; s < t1 - 0.5; s += 2.4) place("fence", s, { w: 2.4 });
-        for (let s = t + 6; s < t1 - 3; s += 16) place("sign", s, { label: 2 });
-        if (len > 10) place("sandbag", mid);
+        fenceRun(t, t1, 2);
+        if (len > 10) place("sandbag", mid, 0.9);
+        if (len > 16) place("sign", mid + len / 4, 0.9, { label: 2 });
       } else {
-        for (let s = t + 1; s < t1 - 0.5; s += 2.4) place("fence", s, { w: 2.4 });
-        for (let s = t + 12; s < t1 - 3; s += 40) place("sign", s, { label: 3 });
+        fenceRun(t, t1, 3);
       }
       t = t1;
     }
