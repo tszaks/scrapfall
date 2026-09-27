@@ -143,18 +143,20 @@
   }
 }
 
-/* the game fills the screen and never scrolls, zooms or bounces */
+/* the game fills the screen and never scrolls, zooms or bounces.
+   No position:fixed on body — on mobile Safari that shifts tap targets
+   away from where buttons are drawn when the browser bars are visible. */
 html,
 body {
   height: 100%;
+  height: 100dvh;
+  margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 body {
-  position: fixed;
-  inset: 0;
   width: 100%;
   touch-action: manipulation;
   -webkit-user-select: none;

@@ -3925,7 +3925,7 @@ export function Game() {
             ) : (
               <button
                 onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
               >
                 ENTER ARENA
               </button>
@@ -3971,7 +3971,7 @@ export function Game() {
                 </div>
                 <button
                   onClick={() => { initAudio(); setPicking(true); }}
-                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
                 >
                   CHOOSE LOADOUT
                 </button>
@@ -3983,7 +3983,7 @@ export function Game() {
                   initAudio();
                   setPicking(true);
                 }}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
               </button>
@@ -4067,7 +4067,7 @@ export function Game() {
               <div className="mt-3">
                 <button
                   onClick={leaveGame}
-                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
                 >
                   {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
                 </button>
