@@ -17,7 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { setAmbienceWeather } from "./ambience";
+import { setAmbienceRain } from "./ambience";
 import type { CityLayout } from "./cityLayout";
 import type { TimeOfDay } from "./lighting";
 import { liveLook, tod, todSmooth } from "./timeOfDay";
@@ -220,7 +220,7 @@ export function CityRain({
     return () => {
       weather.active = false;
       weather.shown = false;
-      setAmbienceWeather(0);
+      setAmbienceRain(0);
       wetUniforms.uWet.value = 0;
       wetUniforms.uReflOn.value = 0;
     };
@@ -495,8 +495,8 @@ export function CityRain({
     weather.shown = shown;
     const rain = shown ? weather.rain * nightF : 0;
     // the ambience reads the live weather (same value as rainIntensity())
-    // indoors (lobby, car, stairwell) the rain is heard through the walls: much quieter
-    setAmbienceWeather(accessPlayer.zone === 1 ? rain * 0.3 : rain);
+    // (its own rain soundscape; indoors the access code muffles the whole ambience: setIndoor)
+    setAmbienceRain(rain);
     const wet = shown ? weather.wet * nightF : 0;
     const t = weather.t;
     time0.value = t;

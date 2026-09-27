@@ -569,6 +569,19 @@ function sideClear(c: Car, list: Car[], fx: number, fz: number, lo: number, hi: 
   return true;
 }
 
+/**
+ * Roads may carry their index in the full city grid (`sig`, out of `sigN` roads along z), so
+ * a trimmed road list (solo play keeps traffic inside the blockades) still reads the same
+ * light phases the rendered traffic lights show.
+ */
+type SigRoad = Road & { sig?: number; sigN?: number };
+function signalId(crossRoad: SigRoad, ownRoad: SigRoad, axis: 0 | 1, fallback: number) {
+  const x = axis === 0 ? crossRoad : ownRoad; // the N-S road (fixed x)
+  const z = axis === 0 ? ownRoad : crossRoad;
+  if (x.sig === undefined || z.sig === undefined || z.sigN === undefined) return fallback;
+  return x.sig * z.sigN + z.sig;
+}
+
 /** the node id of the intersection a car is heading for */
 const nodeOf = (c: Car, nz: number) => (c.axis === 0 ? c.next * nz + c.line : c.line * nz + c.next);
 
@@ -738,8 +751,10 @@ export function stepCars(
     const committed = !!c.arc || (c.s - stopCentre) * c.dir > 0.05;
     // blackout: a dead signal is an all-way stop, so cars creep through (the box check
     // below still keeps them out of cross traffic)
-    const deadSignal = nodeDark(node);
-    const light = deadSignal ? GREEN : signal(node, t, c.axis);
+    // (the lights are numbered on the full city grid, even when solo play trims the roads)
+    const sid = signalId(crossRoad, ownRoad, c.axis, node);
+    const deadSignal = nodeDark(sid);
+    const light = deadSignal ? GREEN : signal(sid, t, c.axis);
     if (committed && !c.committedPrev && light === RED) {
       if (special) trafficStats.redRunsSpecial++;
       else trafficStats.redRunsNormal++;

@@ -46,7 +46,8 @@ export type Bot = {
   tgt?: number;
 };
 
-export type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number };
+/** `air`: riding the chairlift, so only ranged fire can reach them */
+export type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; air?: boolean };
 
 export const ORD_GRENADE = 0;
 export const ORD_ROCKET = 1;
@@ -113,6 +114,12 @@ function turn(e: Bot, want: number, rate: number, dt: number) {
 }
 
 /** Walk `dist` metres toward (tx, tz), sliding along walls. Returns false if fully blocked. */
+/** melee can only land on a target standing near this enemy's own ground (not a player on
+ * a chairlift overhead, a deck above the sand, or a rooftop) */
+export const MELEE_DY = 1.6;
+const eyeOf = (t: Target) => t.y - 1.6;
+export const meleeOK = (t: Target, x: number, z: number, dy = MELEE_DY) => !t.air && Math.abs(eyeOf(t) - groundY(x, z)) < dy;
+
 function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   const mx = tx - e.x;
   const mz = tz - e.z;
@@ -238,7 +245,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         const moved = walk(e, e.x + e.ax! * 5, e.z + e.az! * 5, 11 * (e.slow > 0 ? 0.5 : 1) * dt, ctx);
         let hit = false;
         for (const t of ctx.targets) {
-          if (Math.hypot(t.x - e.x, t.z - e.z) < 1.0) {
+          if (Math.hypot(t.x - e.x, t.z - e.z) < 1.0 && meleeOK(t, e.x, e.z, 2.4)) {
             if (ctx.hornetCd.v <= 0) { ctx.hurtTarget(t, stats.dmg); ctx.hornetCd.v = 0.25; }
             hit = true;
             break;
@@ -513,7 +520,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           if (blocked(ctx.blocks, nx, nz, rad(e))) { wall = true; break; }
           e.x = nx;
           e.z = nz;
-          const hitT = ctx.targets.find((t) => Math.hypot(t.x - e.x, t.z - e.z) < reach);
+          const hitT = ctx.targets.find((t) => Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z));
           if (hitT) {
             ctx.hurtTarget(hitT, stats.dmg, ux * 14, uz * 14);
             e.st = 4;
@@ -728,7 +735,7 @@ export function stepOrds(ctx: AICtx) {
         o.on = false;
         for (const t of ctx.targets) {
           const dd = Math.hypot(t.x - o.x, t.z - o.z);
-          if (dd < o.r) ctx.hurtTarget(t, 2, ((t.x - o.x) / (dd || 1)) * 6, ((t.z - o.z) / (dd || 1)) * 6);
+          if (dd < o.r && Math.abs(eyeOf(t) - o.y) < o.r + 1.5) ctx.hurtTarget(t, 2, ((t.x - o.x) / (dd || 1)) * 6, ((t.z - o.z) / (dd || 1)) * 6);
         }
         blast(ctx.ords, o.x, o.z, o.r);
       }
@@ -753,7 +760,7 @@ export function stepOrds(ctx: AICtx) {
       o.on = false;
       for (const q of ctx.targets) {
         const dd = Math.hypot(q.x - o.x, q.z - o.z);
-        if (dd < o.r) ctx.hurtTarget(q, 3, ((q.x - o.x) / (dd || 1)) * 8, ((q.z - o.z) / (dd || 1)) * 8);
+        if (dd < o.r && Math.abs(eyeOf(q) - o.y) < o.r + 1.5) ctx.hurtTarget(q, 3, ((q.x - o.x) / (dd || 1)) * 8, ((q.z - o.z) / (dd || 1)) * 8);
       }
       blast(ctx.ords, o.x, o.z, o.r, o.y);
     }

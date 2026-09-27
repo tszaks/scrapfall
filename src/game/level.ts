@@ -115,12 +115,49 @@ export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | un
   fn: null,
 };
 
+/** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
+ * that the 2 m block grid can't express. Each map installs its own list (or none). */
+export type Post = { x: number; z: number; r: number };
+let postGrid: Map<number, Post[]> | null = null;
+const postKey = (i: number, j: number) => i * 65536 + j;
+export function setPosts(list: Post[] | null) {
+  if (!list || list.length === 0) {
+    postGrid = null;
+    return;
+  }
+  postGrid = new Map();
+  for (const p of list)
+    for (let i = Math.floor((p.x - p.r) / 4); i <= Math.floor((p.x + p.r) / 4); i++)
+      for (let j = Math.floor((p.z - p.r) / 4); j <= Math.floor((p.z + p.r) / 4); j++) {
+        const k = postKey(i, j);
+        let a = postGrid.get(k);
+        if (!a) postGrid.set(k, (a = []));
+        a.push(p);
+      }
+}
+function hitsPost(x: number, z: number, radius: number) {
+  if (!postGrid) return false;
+  const i0 = Math.floor((x - radius - 1) / 4);
+  const i1 = Math.floor((x + radius + 1) / 4);
+  const j0 = Math.floor((z - radius - 1) / 4);
+  const j1 = Math.floor((z + radius + 1) / 4);
+  for (let i = i0; i <= i1; i++)
+    for (let j = j0; j <= j1; j++) {
+      const a = postGrid.get(postKey(i, j));
+      if (!a) continue;
+      for (const p of a) if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+    }
+  return false;
+}
+
 export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
   if (blockHook.fn) {
     const h = blockHook.fn(x, z, radius);
     if (h !== undefined) return h;
   }
+  // (thin posts only stop bodies, not bullets: shots test with a tiny radius)
+  if (radius >= 0.2 && hitsPost(x, z, radius)) return true;
   const half = BLOCK / 2 + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes

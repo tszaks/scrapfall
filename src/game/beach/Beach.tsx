@@ -24,6 +24,9 @@ import { BLUFF_H, DECK, SEA, X, type BeachLayout } from "./beachLayout";
 import { BEACH_SKY_KEY, BEACH_SUNSET, beachLook, type BeachLook } from "./beachLook";
 import { DETAIL_RANGE, buildBeachMeshes } from "./beachMesh";
 import { beachSignTexture } from "./beachTextures";
+import { provideEventHooks } from "../events/mapHooks";
+import { SurgeFx } from "./SurgeFx";
+import { waveSurge } from "./waveSurge";
 
 const _m4 = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -253,8 +256,14 @@ export const BeachWorld = memo(function BeachWorld({
   look: Look;
 }) {
   const L = beachLook(time);
+  // the WAVE SURGE map event's set piece belongs to this map while it is up
+  useEffect(() => {
+    provideEventHooks("wave-surge", waveSurge);
+    return () => provideEventHooks("wave-surge", null);
+  }, []);
   return (
     <>
+      <SurgeFx city={city} />
       <CitySun time={time} color={look.sun.color} intensity={look.sun.intensity} dir={L.lightDir} />
       <BeachScene city={city} time={time} />
       <BeachPalms city={city} />

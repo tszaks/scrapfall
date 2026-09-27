@@ -252,9 +252,19 @@ export function farTrees(half: number, reach: number) {
         12;
       const d = forestDensity(jx, jz, h, s);
       if (hash2(Math.round(jx * 3), Math.round(jz * 3), 9) > d * 1.25) continue;
+      // stand on the LOWEST ground nearby: the coarse outer terrain mesh interpolates between
+      // samples 16 m apart, so the exact height can float a tree above what is drawn
+      let lo = h;
+      for (const [ox, oz] of [
+        [-8, -8],
+        [8, -8],
+        [-8, 8],
+        [8, 8],
+      ] as const)
+        lo = Math.min(lo, naturalHeight(jx + ox, jz + oz));
       out.push(
         jx,
-        h,
+        lo - 0.5,
         jz,
         9 + hash2(Math.round(jx), Math.round(jz), 11) * 11,
         hash2(Math.round(jx), Math.round(jz), 12) * 6.28,

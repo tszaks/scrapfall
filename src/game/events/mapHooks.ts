@@ -4,9 +4,9 @@
 //
 // Dry Gulch provides "train-robbery" from western/robbery.ts (the payroll train rolls in on
 // the timetable's stopping run and a gang jumps off at the platform).
-// TODO(map-beach): the beach pier does the same for "wave-surge" (a big swell rolls up the
-//   beach: telegraph it on the horizon, sweep the sand and the lower pier, shove / hurt
-//   anyone caught with ctx.hurtPlayer, and let the water drain away).
+// Pacific Pier provides "wave-surge" from beach/waveSurge.ts (a rogue swell rises on the
+//   horizon, breaks, runs up the sand to just short of the boardwalk, shoves and hurts anyone
+//   caught, sweeps small enemies, then drains away; the deck and the boardwalk stay dry).
 //
 // Until a map provides its hooks, its event never fires. Everything a hook does should be
 // a function of (ctx.seed, ctx.t) so every co-op client shows the same thing.
@@ -58,7 +58,7 @@ export const WAVE_SURGE_EVENT: MapEventDef = {
   sub: "GET TO HIGH GROUND",
   color: "#1c5a8a",
   applies: (t) => isLayout(t, ["beach", "pier"]) && hooks.has("wave-surge"),
-  waves: [3, 10],
+  waves: [4, 11],
   chance: 0.45,
   cooldown: 4,
   guarantee: 7,
