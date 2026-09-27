@@ -3856,8 +3856,8 @@ export function Game() {
 
 
       {(!locked || ended) && picking && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
-          <div className="max-h-[92vh] w-full max-w-md touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+        <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
+          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
             <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
             <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
 
@@ -3965,7 +3965,9 @@ export function Game() {
             )}
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · Esc to pause
+                {touchUi
+                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · tap a gun to swap · pause button up top"
+                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (

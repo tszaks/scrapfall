@@ -162,3 +162,13 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* compact loadout card on touch phones (landscape is short) */
+.loadout-compact h1 { font-size: 1.1rem; }
+.loadout-compact > .mt-4, .loadout-compact > div > .mt-4 { margin-top: 0.4rem; }
+.loadout-compact .mt-5 { margin-top: 0.4rem; }
+.loadout-compact .mt-6 { margin-top: 0.5rem; }
+.loadout-compact .mt-3 { margin-top: 0.25rem; }
+.loadout-compact .mt-2 { margin-top: 0.2rem; }
+.loadout-compact .grid-cols-2 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.loadout-compact button { padding-top: 0.3rem; padding-bottom: 0.3rem; }
