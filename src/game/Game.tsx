@@ -3628,7 +3628,8 @@ export function Game() {
             return (
               <div
                 key={slot.w}
-                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${
+                onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
+                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${touchUi ? "pointer-events-auto" : ""} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
                     : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
@@ -3639,6 +3640,7 @@ export function Game() {
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
+
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
                 {slot.w === "pistol" && (
