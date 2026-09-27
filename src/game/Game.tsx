@@ -3752,9 +3752,34 @@ export function Game() {
 
       {(!locked || ended) && picking && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
-          <div className="w-full max-w-md rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            <h1 className="text-2xl font-bold tracking-tight">Choose your ability</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">PRESS F IN GAME</p>
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
+            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
+
+            <div className="mt-4 grid grid-cols-5 gap-1">
+              {CLASS_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setCls(id)}
+                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  }`}
+                  style={cls === id ? { background: CLASSES[id].color } : undefined}
+                >
+                  {CLASSES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
+            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
+              {CLASSES[cls].pros.map((t) => (
+                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
+              ))}
+              {CLASSES[cls].cons.map((t) => (
+                <span key={t} className="text-[#b3261e]">▼ {t}</span>
+              ))}
+            </div>
+
             <div className="mt-4 grid grid-cols-2 gap-1">
               {ABILITY_IDS.map((id) => (
                 <button
@@ -3778,6 +3803,9 @@ export function Game() {
                     <div key={p.id} className="flex items-center gap-2">
                       <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                       <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
+                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
+                      </span>
                       <span className="opacity-60">
                         {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
                       </span>
@@ -3787,6 +3815,7 @@ export function Game() {
                 </div>
               </div>
             )}
+
 
             {multiplayer && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
