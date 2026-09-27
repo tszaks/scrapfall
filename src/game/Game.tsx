@@ -3359,6 +3359,15 @@ export function Game() {
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
     if (touchUi) {
       resetTouchInput();
+      try {
+        const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+        if (!document.fullscreenElement) {
+          const r = el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.();
+          (r as Promise<void> | undefined)?.then?.(() => (screen.orientation as unknown as { lock?: (o: string) => Promise<void> }).lock?.("landscape").catch(() => {})).catch?.(() => {});
+        }
+      } catch {
+        /* fullscreen not supported (iPhone Safari) */
+      }
       return; // touch devices steer with the on-screen controls, no pointer lock
     }
     try {
@@ -3610,7 +3619,7 @@ export function Game() {
 
 
           </div>
-          <div className={`flex flex-col items-end gap-2 ${touchUi ? "mt-12" : ""}`}>
+          <div className={`flex flex-col items-end gap-2`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {"♦".repeat(Math.max(0, health))}
               <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
@@ -3618,6 +3627,25 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
+        {multiplayer && locked && !ended && (
+          <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
+            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
+            {[...remotes.current.values()].map((r) => (
+              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
+                {r.hp > 0 ? (
+                  <span>
+                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
+                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
+                  </span>
+                ) : (
+                  <span className="text-[#b3261e]">DOWN</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
           </div>
         </div>
 
@@ -3705,29 +3733,10 @@ export function Game() {
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
           </div>
         )}
-        {multiplayer && locked && !ended && (
-          <div className="absolute right-5 top-[7.5rem] space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
-            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
-            {[...remotes.current.values()].map((r) => (
-              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
-                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
-                {r.hp > 0 ? (
-                  <span>
-                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
-                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
-                  </span>
-                ) : (
-                  <span className="text-[#b3261e]">DOWN</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30 font-mono text-[#2b2118]">
+        <div className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
@@ -3765,7 +3774,8 @@ export function Game() {
                 <button
                   key={i}
                   onClick={() => buyRef.current(i)}
-                  className="pointer-events-auto relative w-36 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000] active:bg-[#e8c98f] sm:w-44"
+                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
+                  
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
@@ -3805,6 +3815,19 @@ export function Game() {
           abilityName={ABILITIES[ability].name}
           abilityLeft={abilCd.left}
         />
+      )}
+      {touchUi && locked && !ended && (
+        <button
+          aria-label="Pause"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setLocked(false);
+            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+          }}
+          className="fixed left-1/2 top-2 z-40 flex h-10 w-10 -translate-x-1/2 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 font-mono text-sm font-bold text-[#f3e6cf] active:bg-[#2b2118]"
+        >
+          II
+        </button>
       )}
       {touchUi && portrait && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">

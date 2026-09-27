@@ -142,3 +142,21 @@
     color: var(--color-foreground);
   }
 }
+
+/* the game fills the screen and never scrolls, zooms or bounces */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
