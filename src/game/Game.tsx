@@ -3673,7 +3673,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center gap-2 ${touchUi ? "top-16 max-w-[calc(100vw-2rem)]" : "top-5 max-w-[calc(100vw-26rem)]"}`}>
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -3681,17 +3681,18 @@ export function Game() {
               <div
                 key={slot.w}
                 onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
-                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${touchUi ? "pointer-events-auto" : ""} ${
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
                     : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[10px] font-bold text-[#f7eeda]"
+                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "h-3 w-3 text-[7px]" : "h-4 w-4 text-[10px]"}`}
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
+
 
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
