@@ -16,6 +16,8 @@ import { Shards } from "./Shards";
 import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
+
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special";
@@ -1449,11 +1451,13 @@ function World({
   const takeHit = (dmg: number) => {
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     const s2 = stats.current;
+    if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
   };
+
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     c.fov = fov;
@@ -1707,7 +1711,7 @@ function World({
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
       const fx: Fx = {
         bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
-        pierce: g.pierce ?? 0,
+        pierce: (g.pierce ?? 0) + s2.pierce,
         slow: g.slow ?? 0,
         cluster: g.cluster ?? 0,
         chain: g.chain ?? 0,
@@ -2282,7 +2286,7 @@ function World({
       abilFire.current = false;
       const id = abilityRef.current;
       if (!spectating && abilCd.current <= 0) {
-        abilCd.current = ABILITIES[id].cd;
+        abilCd.current = ABILITIES[id].cd * (1 - stats.current.haste);
         playSfx("buy");
         cam.getWorldDirection(FORWARD);
         FORWARD.y = 0;
@@ -2352,7 +2356,7 @@ function World({
     cdReport.current -= delta;
     if (cdReport.current <= 0) {
       cdReport.current = 0.2;
-      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd);
+      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd * (1 - stats.current.haste));
     }
 
     // cryo mines freeze and hurt whatever walks onto them
@@ -2930,10 +2934,17 @@ export function Game() {
     const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
     return saved && ABILITIES[saved] ? saved : "dash";
   });
+  /** starter class, chosen on the loadout screen alongside the ability */
+  const [cls, setCls] = useState<ClassId>(() => {
+    if (typeof window === "undefined") return "vanguard";
+    const saved = window.localStorage.getItem("df-class") as ClassId | null;
+    return saved && CLASSES[saved] ? saved : "vanguard";
+  });
   /** ability pick screen shown after pressing START, before the match begins */
   const [picking, setPicking] = useState(false);
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
+  const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
@@ -2942,9 +2953,14 @@ export function Game() {
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
-  const statsRef = useRef<Derived>(derive(perks));
-  statsRef.current = derive(perks);
+  const clsMods = CLASSES[cls].mods;
+  const clsRef = useRef(clsMods);
+  clsRef.current = clsMods;
+  const statsRef = useRef<Derived>(derive(perks, clsMods));
+  statsRef.current = derive(perks, clsMods);
+
   const maxHp = statsRef.current.maxHp;
+
 
   // ---------- co-op room ----------
   const [net, setNet] = useState<NetHandle | null>(null);
@@ -2998,7 +3014,7 @@ export function Game() {
       setSquad({});
       setSeed(Number(m.seed));
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
@@ -3012,9 +3028,12 @@ export function Game() {
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
+      const c = String(m.cls) as ClassId;
       if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
+      if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
       return;
     }
+
     if (m.type === "statline") {
       const num = Number(m.num);
       setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
@@ -3040,7 +3059,7 @@ export function Game() {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current).maxHp : h));
+    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -3102,7 +3121,7 @@ export function Game() {
     setPicking(false);
     setStarted(false);
     setScore(0);
-    setHealth(MAX_HP);
+    setHealth(derive(NO_PERKS, clsRef.current).maxHp);
     setPerks(NO_PERKS);
     setShards(0);
     setBossHp(0);
@@ -3214,6 +3233,10 @@ export function Game() {
     if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
   }, [ability]);
   useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("df-class", cls);
+  }, [cls]);
+
+  useEffect(() => {
     if (!eventMsg) return;
     const t = window.setTimeout(() => setEventMsg(null), 3500);
     return () => window.clearTimeout(t);
@@ -3235,8 +3258,10 @@ export function Game() {
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
-    netHolder.current?.broadcast({ type: "pick", num: myNum, ability });
-  }, [ability, myNum, roster.length, picking]);
+    setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
+  }, [ability, cls, myNum, roster.length, picking]);
+
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -3275,7 +3300,7 @@ export function Game() {
         net?.broadcast({ type: "seed", seed: s });
       }
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
@@ -3318,7 +3343,9 @@ export function Game() {
     for (let i = 2; i <= w; i++) p += Math.ceil((i - 1) / 3);
     return p;
   };
-  const rerollCost = rerollBase(status.wave) * Math.pow(2, rerolls);
+  const freeRerolls = statsRef.current.freeRerolls;
+  const freeLeft = Math.max(0, freeRerolls - rerolls);
+  const rerollCost = freeLeft > 0 ? 0 : rerollBase(status.wave) * Math.pow(2, Math.max(0, rerolls - freeRerolls));
   const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
@@ -3346,6 +3373,7 @@ export function Game() {
     setRerolls((r) => r + 1);
     setBought([]);
     drawOffers();
+
     playSfx("buy");
   };
   const patchRef = useRef<() => void>(() => {});
@@ -3383,11 +3411,13 @@ export function Game() {
   }, []);
 
   // regen perk
+  const regenRate = statsRef.current.regen;
   useEffect(() => {
-    if (!perks.regen || !started || !locked || ended || dead) return;
-    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / perks.regen);
+    if (!regenRate || !started || !locked || ended || dead) return;
+    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / regenRate);
     return () => window.clearInterval(id);
-  }, [perks.regen, started, locked, ended, dead, maxHp]);
+  }, [regenRate, started, locked, ended, dead, maxHp]);
+
 
   // soundtrack
   useEffect(() => { hookAudioUnlock(); }, []);
@@ -3658,8 +3688,10 @@ export function Game() {
             <div className="flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000]">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
               <span className="font-bold tracking-widest">REROLL</span>
-              <span className="opacity-60">{rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}</span>
-              <span className="font-bold">◆ {rerollCost}</span>
+              <span className="opacity-60">
+                {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
+              </span>
+              <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
             </div>
           </div>
           <div className="flex justify-center gap-3">
@@ -3668,7 +3700,7 @@ export function Game() {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
               if (bought.includes(i)) return null;
-              const sold = false;
+              const isMod = PISTOL_MODS.includes(id);
               return (
                 <div
                   key={i}
@@ -3677,11 +3709,24 @@ export function Game() {
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
                   </span>
+                  {isMod && <PistolBadge />}
                   <div className="text-xs font-bold tracking-widest">{info.name}</div>
-                  <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  {info.pros ? (
+                    <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
+                      {info.pros.map((t) => (
+                        <div key={t} className="font-bold text-[#1d7a37]">▲ {t}</div>
+                      ))}
+                      {info.cons?.map((t) => (
+                        <div key={t} className="font-bold text-[#b3261e]">▼ {t}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  )}
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
-                  <div className="mt-2 text-sm font-bold">{sold ? "BOUGHT" : `◆ ${cost}`}</div>
+                  <div className="mt-2 text-sm font-bold">◆ {cost}</div>
                 </div>
+
               );
             })}
           </div>
@@ -3705,9 +3750,34 @@ export function Game() {
 
       {(!locked || ended) && picking && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 p-6">
-          <div className="w-full max-w-md rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            <h1 className="text-2xl font-bold tracking-tight">Choose your ability</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">PRESS F IN GAME</p>
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
+            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
+
+            <div className="mt-4 grid grid-cols-5 gap-1">
+              {CLASS_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setCls(id)}
+                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  }`}
+                  style={cls === id ? { background: CLASSES[id].color } : undefined}
+                >
+                  {CLASSES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
+            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
+              {CLASSES[cls].pros.map((t) => (
+                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
+              ))}
+              {CLASSES[cls].cons.map((t) => (
+                <span key={t} className="text-[#b3261e]">▼ {t}</span>
+              ))}
+            </div>
+
             <div className="mt-4 grid grid-cols-2 gap-1">
               {ABILITY_IDS.map((id) => (
                 <button
@@ -3731,6 +3801,9 @@ export function Game() {
                     <div key={p.id} className="flex items-center gap-2">
                       <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                       <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
+                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
+                      </span>
                       <span className="opacity-60">
                         {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
                       </span>
@@ -3740,6 +3813,7 @@ export function Game() {
                 </div>
               </div>
             )}
+
 
             {multiplayer && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
@@ -3794,7 +3868,7 @@ export function Game() {
                   onClick={() => { initAudio(); setPicking(true); }}
                   className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
                 >
-                  CHOOSE ABILITY
+                  CHOOSE LOADOUT
                 </button>
               </div>
             ) : (
@@ -3859,23 +3933,29 @@ export function Game() {
             })()}
 
 
-            {paused && (activeMods.length > 0 || activePerks.length > 0) && (
-              <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  {activeMods.map((id) => (
-                    <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                      {perkBadge(id, 1)}
-                    </span>
-                  ))}
-                  {activePerks.map(({ id, label }) => (
-                    <span key={id} className="text-[10px] tracking-wider text-black">
-                      {label}
-                    </span>
-                  ))}
-                </div>
+            {paused && (
+              <div className="w-full max-w-sm px-4">
+                <StatSheet d={statsRef.current} cls={cls} />
+                {(activeMods.length > 0 || activePerks.length > 0) && (
+                  <div className="mt-3 text-left text-black">
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                      {activeMods.map((id) => (
+                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
+                          {perkBadge(id, 1)}
+                        </span>
+                      ))}
+                      {activePerks.map(({ id, label }) => (
+                        <span key={id} className="text-[10px] tracking-wider text-black">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
 
 
             {paused || (multiplayer && ended) ? (
@@ -4059,6 +4139,86 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
           </div>
           <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** tiny pistol silhouette shown on pistol-mod shop cards */
+function PistolBadge() {
+  return (
+    <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
+      <path
+        d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z"
+        fill="#2b2118"
+      />
+      <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
+    </svg>
+  );
+}
+
+type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
+
+/** Brotato-style stat sheet: green above baseline, red below */
+export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
+  const [tab, setTab] = useState<"combat" | "survival">("combat");
+  const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
+  const combat: StatRow[] = [
+    { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
+    { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
+    { label: "Crit Protocol", value: `${Math.round(d.crit * 100)}%`, tone: pct(d.crit, 0) },
+    { label: "Piercing", value: `${d.pierce}`, tone: pct(d.pierce, 0) },
+    { label: "Ricochet", value: `${Math.round(d.ricochet * 100)}%`, tone: pct(d.ricochet, 0) },
+    { label: "Combustion", value: `${Math.round(d.boom * 100)}%`, tone: pct(d.boom, 0) },
+    { label: "Impact Force", value: `${Math.round(d.knock * 100)}%`, tone: pct(d.knock, 0) },
+    { label: "Ammo Capacity", value: `${Math.round(d.ammoMul * 100)}%`, tone: pct(d.ammoMul) },
+  ];
+  const survival: StatRow[] = [
+    { label: "Hull Integrity", value: `${d.maxHp}`, tone: pct(d.maxHp, 10) },
+    { label: "Armor Plating", value: `${Math.round(d.armor * 100)}%`, tone: pct(d.armor, 0) },
+    { label: "Phase Shift", value: `${Math.round(d.dodge * 100)}%`, tone: pct(d.dodge, 0) },
+    { label: "Life Siphon", value: `${Math.round(d.steal * 100)}%`, tone: pct(d.steal, 0) },
+    { label: "Nano-Regen", value: d.regen ? `x${d.regen}` : "0", tone: d.regen ? 1 : 0 },
+    { label: "Shock Thorns", value: `${Math.round(d.thorns * 100)}%`, tone: pct(d.thorns, 0) },
+    { label: "Thruster Speed", value: `${Math.round(d.speed * 100)}%`, tone: pct(d.speed) },
+    { label: "Flux Magnet", value: `${d.magnet.toFixed(1)}m`, tone: pct(d.magnet, 2) },
+    { label: "Salvage Yield", value: `${Math.round(d.greed * 100)}%`, tone: pct(d.greed) },
+    { label: "Recharge Haste", value: `${Math.round(d.haste * 100)}%`, tone: pct(d.haste, 0) },
+    { label: "Free Rerolls", value: `${d.freeRerolls}`, tone: pct(d.freeRerolls, 0) },
+  ];
+  const rows = tab === "combat" ? combat : survival;
+  return (
+    <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
+      <div className="flex items-center justify-between">
+        <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
+        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+          {CLASSES[cls].name}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {(["combat", "survival"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`pointer-events-auto flex-1 rounded px-2 py-1 text-[10px] font-bold tracking-widest ${
+              tab === t ? "bg-[#f3e6cf] text-[#2b2118]" : "bg-[#f3e6cf]/10 text-[#f3e6cf]/70"
+            }`}
+          >
+            {t === "combat" ? "COMBAT" : "SURVIVAL"}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between">
+            <span className={r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : "text-[#f3e6cf]/75"}>
+              {r.label}
+            </span>
+            <span className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}>
+              {r.value}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
