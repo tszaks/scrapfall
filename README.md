@@ -1,4 +1,4 @@
-# Simple Shoot
+# Scrapfall
 
 lets create a first person, procedurally generated shooter, make it very very simple
 

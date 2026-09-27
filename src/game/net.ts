@@ -37,7 +37,7 @@ export type RemoteState = {
 export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
 export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
-const PREFIX = "dustfield-arena-v1-";
+const PREFIX = "scrapfall-arena-v1-";
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
