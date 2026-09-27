@@ -26,6 +26,8 @@ export type RemoteState = {
   color: string;
   /** 1 = host, 2-4 = guests */
   num: number;
+  /** alpine: the chairlift chair this player is riding, -1 on foot */
+  rc?: number;
   last: number;
   // render smoothing
   rx: number;

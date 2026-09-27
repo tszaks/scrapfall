@@ -16,7 +16,7 @@ import type { Block } from "../level";
 import type { CityLayout } from "../cityLayout";
 import type { Terrain } from "../terrain";
 import { findGaps, sealGaps, soloHalf, type Gap } from "../soloBounds";
-import { clamp, fbm, mulberry, naturalHeight, smooth } from "./noise";
+import { clamp, fbm, mulberry, naturalHeight, smooth, valleyCentre } from "./noise";
 
 export const ALPINE_SIZE = 800;
 const HALF = ALPINE_SIZE / 2;
@@ -55,7 +55,8 @@ export type BldType =
   | "barn"
   | "hut"
   | "boathouse"
-  | "ticket";
+  | "ticket"
+  | "summit";
 export type ABld = {
   t: BldType;
   x0: number;
@@ -110,6 +111,7 @@ export type PropKind =
   | "flag"
   | "signpost"
   | "barrel"
+  | "umbrella"
   | "tower"
   // blockade dressing (solo only)
   | "debris"
@@ -155,7 +157,25 @@ export type AlpineData = {
   blockades: Blockade[];
   /** solo square half-size, or null in co-op */
   soloHalf: number | null;
+  /** facing (camera yaw) at the spawn */
+  spawnYaw: number;
+  /** the summit zone: its own walkable island, reached only by the chairlift */
+  island: { x0: number; z0: number; x1: number; z1: number };
+  /** lift terminals (walkable loading platforms under a canopy) */
+  terminals: { kind: "base" | "top"; x0: number; z0: number; x1: number; z1: number; y: number }[];
+  /** the summit lodge's big deck */
+  lodgeDeck: { x0: number; z0: number; x1: number; z1: number; y: number };
+  /** where riders board and step off: [x, z, yaw] */
+  ride: { boardUp: P2; boardDown: P2; offTop: [number, number, number]; offBase: [number, number, number] };
+  /** top of whatever solid thing stands in each 2 m cell (shots fly over walk-only cells) */
+  tops: Float32Array;
 };
+
+/** 0 in the village, 1 on the summit island */
+export const SUMMIT = { x0: 4, z0: -276, x1: 82, z1: -248 };
+export function alpineZone(x: number, z: number) {
+  return x > SUMMIT.x0 - 2 && x < SUMMIT.x1 + 2 && z > SUMMIT.z0 - 2 && z < SUMMIT.z1 + 2 ? 1 : 0;
+}
 
 export type AlpineLayout = CityLayout & { alpine: AlpineData };
 
@@ -222,7 +242,12 @@ const RINK = { x0: -12, z0: 50, x1: 16, z1: 70 };
 const SQUARE = { x0: -40, z0: 36, x1: 40, z1: 84 };
 const PLAZA = { x0: 6, z0: -50, x1: 82, z1: -22 };
 const JUMP = { x: -205, z0: -180, z1: -126 };
-export const SPAWN = { x: 2, z: STREET_Z };
+// the solo start: flat ground on the village square, looking at the church, rink and peaks
+export const SPAWN = { x: 10, z: 79 };
+const SPAWN_YAW = 0.55;
+const LODGE_DECK = { x0: 4, z0: -262, x1: 30, z1: -250 };
+const BASE_TERM = { x0: 28, z0: -74, x1: 50, z1: -58 };
+const TOP_TERM = { x0: 30, z0: -268, x1: 50, z1: -258 };
 
 const PATHS: APath[] = [
   {
@@ -373,31 +398,6 @@ const PATHS: APath[] = [
     w: 8,
     kind: "road",
   },
-  // winter hiking trail up to the top station (switchbacks east of the lift)
-  {
-    pts: [
-      [82, -40],
-      [100, -72],
-      [78, -110],
-      [104, -150],
-      [80, -190],
-      [100, -228],
-      [80, -262],
-    ],
-    w: 4,
-    kind: "trail",
-  },
-  // co-op: the summit trail behind the top station, and the hamlet track
-  {
-    pts: [
-      [LIFT_X, -278],
-      [36, -330],
-      [46, -396],
-    ],
-    w: 5,
-    kind: "trail",
-    coop: true,
-  },
   // pistes
   {
     pts: [
@@ -490,6 +490,8 @@ export const SIGN_WORDS = [
   "PANORAMA",
   "KONDITOREI",
   "BERGBAHN",
+  "LIFT",
+  "SUMMIT LODGE",
 ] as const;
 export const W_HOTEL = 0;
 export const W_RENTAL = 1;
@@ -501,6 +503,8 @@ export const W_PASS = 11;
 export const W_SEEHOF = 12;
 export const W_PANORAMA = 13;
 export const W_BERGBAHN = 15;
+export const W_LIFT = 16;
+export const W_LODGE = 17;
 const SHOP_WORDS = [2, 3, 4, 5, 6, 7, 14];
 
 // ---------------------------------------------------------------------------------------
@@ -511,6 +515,8 @@ export function generateAlpine(seed: number, solo: boolean) {
   const surf = new Uint8Array(N * N);
   const solid = new Uint8Array(N * N);
   const clear = new Uint8Array(N * N); // no trees here
+  // top of the solid thing in each cell (walk-only cells stay at -inf: shots fly over them)
+  const tops = new Float32Array(N * N).fill(-1e9);
   const buildings: ABld[] = [];
   const trees: ATree[] = [];
   const props: AProp[] = [];
@@ -620,7 +626,7 @@ export function generateAlpine(seed: number, solo: boolean) {
   for (const p of PATHS) {
     if (p.kind === "piste" || p.kind === "creek") continue;
     const prof = profile(p);
-    const blend = p.kind === "trail" ? 3 : 6;
+    const blend = p.kind === "trail" ? 6 : 10;
     const b = bbox(p.pts, p.w / 2 + blend);
     shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) => {
       const r = polyDist(x, z, p.pts);
@@ -644,7 +650,7 @@ export function generateAlpine(seed: number, solo: boolean) {
   shape(PLATEAU.x0 - 40, PLATEAU.z0 - 40, PLATEAU.x1 + 40, PLATEAU.z1 + 30, (x, z, h) => {
     const d = rectDist(x, z, PLATEAU);
     // the valley side drops away more steeply below the deck: a sharp edge to look out from
-    const k = 1 - smooth(0, z > PLATEAU.z1 ? 14 : 30, d);
+    const k = 1 - smooth(0, z > PLATEAU.z1 ? 22 : 45, d);
     return h + (plateauY - h) * k;
   });
   const deckY = plateauY + 2.4;
@@ -656,24 +662,43 @@ export function generateAlpine(seed: number, solo: boolean) {
     return h;
   });
   const plazaY = hAt((PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2);
-  shape(PLAZA.x0 - 30, PLAZA.z0 - 30, PLAZA.x1 + 30, PLAZA.z1 + 20, (x, z, h) => {
-    const k = 1 - smooth(0, 22, rectDist(x, z, PLAZA));
+  const basePad = { x0: PLAZA.x0, z0: BASE_TERM.z0 - 2, x1: PLAZA.x1, z1: PLAZA.z1 };
+  shape(basePad.x0 - 30, basePad.z0 - 30, basePad.x1 + 30, basePad.z1 + 20, (x, z, h) => {
+    const k = 1 - smooth(0, z < basePad.z0 ? 10 : 40, rectDist(x, z, basePad));
     return h + (plazaY - h) * k;
   });
-  // the creek: a frozen channel carved into everything, except under the covered bridge
+  // the creek: a real gully ~3 m deep with snowy banks. Its ice floor is level along each
+  // reach and only ever steps down towards the lake; it runs on under the covered bridge
+  // (whose deck is a walkable platform at street level, see terrain.platforms)
   const creek = PATHS.find((p) => p.kind === "creek")!;
+  const lakeY0 = -0.9;
+  let creekFloor: (s: number) => number;
   {
-    const prof = profile(creek);
-    const b = bbox(creek.pts, creek.w / 2 + 5);
+    const len = polyDist(creek.pts[0]![0], creek.pts[0]![1], creek.pts).len;
+    const n = Math.ceil(len / 2);
+    const floor: number[] = [];
+    let lo = Infinity;
+    for (let k = 0; k <= n; k++) {
+      const q = polyAt(creek.pts, (k / n) * len);
+      // lowest ground across the channel here, 3 m down, never higher than upstream
+      let g = Infinity;
+      for (let o = -4; o <= 4; o += 2) g = Math.min(g, hAt(q[0] + o, q[1]), hAt(q[0], q[1] + o));
+      lo = Math.min(lo, g - 3);
+      floor.push(Math.max(lo, lakeY0 - 0.05));
+    }
+    // level reaches: quantise into steps (small frozen falls between them)
+    for (let k = 0; k <= n; k++) floor[k] = Math.max(lakeY0 - 0.05, Math.floor(floor[k]! / 1.5) * 1.5);
+    for (let k = 1; k <= n; k++) floor[k] = Math.min(floor[k]!, floor[k - 1]!);
+    creekFloor = (sv: number) => floor[clamp(Math.round((sv / len) * n), 0, n)]!;
+    const b = bbox(creek.pts, creek.w / 2 + 10);
     shape(b.x0, b.z0, b.x1, b.z1, (x, z, h) => {
-      if (x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1)
-        return h;
       const r = polyDist(x, z, creek.pts);
       const half = creek.w / 2;
-      if (r.d > half + 5) return h;
-      const bed = Math.min(prof(r.s), h) - 1.7;
-      if (r.d < half - 1) return bed;
-      const k = smooth(half - 1, half + 5, r.d);
+      if (r.d > half + 8) return h;
+      const bed = creekFloor(r.s);
+      if (r.d < half) return Math.min(h, bed);
+      // banks: steep near the ice, easing out onto the snow
+      const k = Math.pow(smooth(half, half + 8, r.d), 0.7);
       return Math.min(h, bed + (h - bed) * k);
     });
   }
@@ -760,11 +785,12 @@ export function generateAlpine(seed: number, solo: boolean) {
   });
 
   // ---- 4. buildings ----
-  const block = (x0: number, z0: number, x1: number, z1: number, kind = S_BLD) => {
+  const block = (x0: number, z0: number, x1: number, z1: number, kind = S_BLD, top = 1e9) => {
     for (let i = ci(x0 + 0.01); i <= ci(x1 - 0.01); i++)
       for (let j = ci(z0 + 0.01); j <= ci(z1 - 0.01); j++) {
         solid[S(i, j)] = 1;
         if (kind >= 0) surf[S(i, j)] = kind;
+        tops[S(i, j)] = Math.max(tops[S(i, j)]!, top === 1e9 ? hAt(cc(i), cc(j)) + 2 : top);
       }
   };
   const clearRect = (x0: number, z0: number, x1: number, z1: number, pad: number) => {
@@ -802,9 +828,17 @@ export function generateAlpine(seed: number, solo: boolean) {
     x1 = Math.round(x1 / 2) * 2;
     z0 = Math.round(z0 / 2) * 2;
     z1 = Math.round(z1 / 2) * 2;
+    const f0 = footprintY(x0, z0, x1, z1);
+    // level a pad under and around the house (flat, walkable ground at the door), easing
+    // back into the natural slope over ~14 m so there are no steep banks against the walls
+    const pad = Math.max(f0.y, f0.lo + 0.3);
+    const pr = { x0, z0, x1, z1 };
+    shape(x0 - 18, z0 - 18, x1 + 18, z1 + 18, (x, z, h) => {
+      const k = 1 - smooth(2.5, 16, rectDist(x, z, pr));
+      return h + (pad - h) * k;
+    });
     const f = footprintY(x0, z0, x1, z1);
-    // on slopes the floor sits a little above the average, the plinth shows downhill
-    const y = Math.max(f.y, f.lo + 0.4) + 0.25;
+    const y = Math.max(f.y, f.lo + 0.2) + 0.25;
     const b: ABld = {
       t,
       x0,
@@ -820,7 +854,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       sign,
     };
     buildings.push(b);
-    block(x0, z0, x1, z1);
+    block(x0, z0, x1, z1, S_BLD, y + floors * 2.8 + 10);
     clearRect(x0, z0, x1, z1, 4);
     return b;
   };
@@ -831,11 +865,14 @@ export function generateAlpine(seed: number, solo: boolean) {
   addB("church", -36, 44, -20, 70, 0, 2, -1, 0);
   addB("church", -32, 36, -24, 44, 0, 7, -1, 9);
   addB("hotel", 108, -8, 152, 22, 2, 5, W_HOTEL, 0);
-  addB("station", 28, -70, 52, -52, 0, 1, W_BERGBAHN, 0);
+  // base terminal: the ticket hall beside the open loading platform (see terminals)
+  addB("station", 52, -64, 64, -48, 3, 1, W_LIFT, 0);
   addB("rental", 10, -48, 26, -32, 1, 2, W_RENTAL, 0);
   addB("ticket", 56, -34, 62, -28, 3, 1, -1, 0);
-  addB("topstation", 26, -278, 54, -264, 2, 1, W_BERGBAHN, 0);
-  addB("panorama", 4, -276, 22, -260, 2, 2, W_PANORAMA, 0);
+  // top terminal: the bullwheel house behind the unloading platform; the summit lodge
+  // beside it, its deck running straight onto the platform
+  addB("topstation", 30, -278, 50, -268, 2, 1, W_BERGBAHN, 0);
+  addB("summit", 6, -278, 28, -262, 2, 2, W_LODGE, 0);
   addB("cafe", 22, 40, 38, 56, 3, 2, W_CAFE, 1);
   addB("lodge", -152, 6, -130, 24, 2, 3, W_SEEHOF, 1);
   addB("boathouse", -150, 64, -138, 78, 3, 1, -1, 0);
@@ -866,7 +903,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       const floors = big ? 4 : 2 + Math.floor(rand() * 2);
       if (side === 2) addB(t, x, STREET_Z - 6 - 1 - d, x + w, STREET_Z - 6 - 1, 2, floors, sign);
       else addB(t, x, STREET_Z + 6 + 1, x + w, STREET_Z + 6 + 1 + d, 0, floors, sign);
-      x += w + 2 + Math.floor(rand() * 2) * 2;
+      x += w + 6 + Math.floor(rand() * 2) * 2;
     }
   };
   frontage(-102, -64, 2, [12, 16]);
@@ -883,7 +920,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       const w = 10 + Math.floor(rand() * 4) * 2;
       const d = Math.min(z1 - z0, 10 + Math.floor(rand() * 3) * 2);
       const zz0 = front === 0 ? z0 : z1 - d;
-      if (x + w <= xb && !overlaps(x, zz0, x + w, zz0 + d, 2) && rand() < 0.85)
+      if (x + w <= xb && !overlaps(x, zz0, x + w, zz0 + d, 6) && rand() < 0.85)
         addB(
           rand() < 0.15 ? "barn" : "chalet",
           x,
@@ -893,7 +930,7 @@ export function generateAlpine(seed: number, solo: boolean) {
           front,
           2 + (rand() < 0.4 ? 1 : 0),
         );
-      x += w + 4 + Math.floor(rand() * 3) * 2;
+      x += w + 6 + Math.floor(rand() * 3) * 2;
     }
   };
   row(-100, -64, -16, 4, 0);
@@ -940,9 +977,51 @@ export function generateAlpine(seed: number, solo: boolean) {
   scatter(4, -390, -250, -290, 250, "barn", true);
   scatter(3, 290, 150, 390, 360, "chalet", true);
 
+  // ---- 4b. snow that piles up: drifts banked against walls (wind-sculpted ramps that
+  // merge into the ground), and ploughed ridges along the street and lane edges ----
+  for (const b of buildings) {
+    if (b.t === "station" || b.t === "topstation") continue;
+    const br = mulberry(Math.floor(b.seed * 7e8));
+    const amp = 0.55 + br() * 0.5;
+    shape(b.x0 - 5, b.z0 - 5, b.x1 + 5, b.z1 + 5, (x, z, h) => {
+      const dx = Math.max(b.x0 - x, 0, x - b.x1);
+      const dz = Math.max(b.z0 - z, 0, z - b.z1);
+      const d = Math.hypot(dx, dz);
+      if (d <= 0 || d > 4.5) return h;
+      // the street front stays clear (doors, shopfronts)
+      const onFront =
+        (b.front === 0 && z < b.z0 && dx === 0) ||
+        (b.front === 2 && z > b.z1 && dx === 0) ||
+        (b.front === 1 && x > b.x1 && dz === 0) ||
+        (b.front === 3 && x < b.x0 && dz === 0);
+      if (onFront) return h;
+      const wob = 0.6 + 0.8 * fbm(x / 6, z / 6, 2, 131);
+      return h + amp * wob * Math.pow(1 - d / 4.5, 1.6);
+    });
+  }
+  for (const p of PATHS) {
+    if (p.kind !== "street" && p.kind !== "lane" && p.kind !== "road") continue;
+    const bx = bbox(p.pts, p.w / 2 + 5);
+    shape(bx.x0, bx.z0, bx.x1, bx.z1, (x, z, h) => {
+      const r = polyDist(x, z, p.pts);
+      const e = r.d - p.w / 2; // metres beyond the kerb
+      if (e < -0.6 || e > 4) return h;
+      // gaps where the plough lifted the blade (doorways, lanes), irregular height
+      const gate = smooth(0.42, 0.52, fbm(r.s / 9, p.w, 2, 71));
+      if (gate <= 0) return h;
+      const hgt = (0.6 + 0.5 * fbm(x / 5, z / 5, 2, 93)) * gate;
+      // steep cut face on the road side, a flat-ish crest, a long back slope
+      const prof = e < 0.6 ? smooth(-0.6, 0.6, e) : 1 - smooth(1.4, 4, e);
+      return h + hgt * prof;
+    });
+  }
+
   // ---- 5. set-piece structures ----
-  // covered bridge deck (the creek passes under; the ground under the deck stays level)
-  const bridgeY = hAt((BRIDGE.x0 + BRIDGE.x1) / 2, BRIDGE.z);
+  // covered bridge: the deck is a platform at street level (terrain.platforms), the creek
+  // gully runs on beneath it; its side walls and abutments are solid
+  const bridgeY = Math.max(hAt(BRIDGE.x0 - 3, BRIDGE.z), hAt(BRIDGE.x1 + 3, BRIDGE.z));
+  for (const zz of [BRIDGE.z - BRIDGE.w / 2 - 1, BRIDGE.z + BRIDGE.w / 2 + 1])
+    block(BRIDGE.x0 - 2, zz - 1, BRIDGE.x1 + 2, zz + 1, -1, bridgeY + 6);
   // rink: boards around the ice, open at the north and south
   const rinkY = hAt((RINK.x0 + RINK.x1) / 2, (RINK.z0 + RINK.z1) / 2);
   for (let x = RINK.x0; x < RINK.x1; x += 2) {
@@ -957,24 +1036,61 @@ export function generateAlpine(seed: number, solo: boolean) {
     block(RINK.x1, z, RINK.x1 + 2, z + 2, -1);
   }
   // ski jump: timber in-run on trestles
-  block(JUMP.x - 3, JUMP.z0 - 2, JUMP.x + 3, JUMP.z1, S_BLD);
+  block(JUMP.x - 3, JUMP.z0 - 2, JUMP.x + 3, JUMP.z1, S_BLD, jumpTopG + 25);
   // deck railing (front and east edges)
-  for (let x = DECK.x0; x < DECK.x1; x += 2) block(x, DECK.z1, x + 2, DECK.z1 + 2, -1);
-  for (let z = DECK.z0; z < DECK.z1 + 2; z += 2) block(DECK.x1, z, DECK.x1 + 2, z + 2, -1);
-
-  // chairlift supports: stations and a tower every ~40 m, following the ground
-  const supports: LiftSupport[] = [];
-  supports.push({ z: LIFT_Z0 + 2, y: plazaY + 6.2, ground: plazaY, kind: "base" });
-  const span = LIFT_Z0 - LIFT_Z1;
-  const nT = Math.round(span / 40) - 1;
-  for (let k = 1; k <= nT; k++) {
-    const z = LIFT_Z0 - (span * k) / (nT + 1);
-    const g = hAt(LIFT_X, z);
-    supports.push({ z, y: g + 11 + (k % 2) * 1.5, ground: g, kind: "tower" });
-    block(LIFT_X - 1, z - 1, LIFT_X + 1, z + 1, -1);
-    props.push({ k: "tower", x: LIFT_X, z, y: g, rot: 0, s: 11 + (k % 2) * 1.5 });
+  for (let x = DECK.x0; x < DECK.x1; x += 2) block(x, DECK.z1, x + 2, DECK.z1 + 2, -1, deckY + 1.3);
+  for (let z = DECK.z0; z < DECK.z1 + 2; z += 2) block(DECK.x1, z, DECK.x1 + 2, z + 2, -1, deckY + 1.3);
+  // summit lodge deck: railing along its downhill (south) and west edges
+  for (let x = LODGE_DECK.x0; x < LODGE_DECK.x1; x += 2) block(x, LODGE_DECK.z1, x + 2, LODGE_DECK.z1 + 2, -1, plateauY + 1.3);
+  for (let z = LODGE_DECK.z0; z < LODGE_DECK.z1 + 2; z += 2) block(LODGE_DECK.x0 - 2, z, LODGE_DECK.x0, z + 2, -1, plateauY + 1.3);
+  // terminal canopy posts
+  for (const t of [BASE_TERM, TOP_TERM]) {
+    const gy = hAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2);
+    for (const px of [t.x0, t.x1 - 2]) for (const pz of [t.z0, t.z1 - 2]) block(px, pz, px + 2, pz + 2, -1, gy + 6);
   }
-  supports.push({ z: LIFT_Z1 - 2, y: plateauY + 6.2, ground: plateauY, kind: "top" });
+
+  // chairlift supports: the two stations (seat ~0.6 m above each loading platform) and a
+  // tower every ~35 m, each tall enough that a hanging chair clears the snow by 3.5 m+
+  const supports: LiftSupport[] = [];
+  const baseZ = LIFT_Z0 + 2;
+  const topZ = LIFT_Z1 - 2;
+  supports.push({ z: baseZ, y: plazaY + 3.2, ground: plazaY, kind: "base" });
+  const tz: number[] = [baseZ - 12];
+  const nT = Math.max(2, Math.round((baseZ - 12 - (topZ + 12)) / 35));
+  for (let k = 1; k <= nT; k++) tz.push(baseZ - 12 - ((baseZ - 12 - (topZ + 12)) * k) / nT);
+  for (const z of tz) {
+    const g = hAt(LIFT_X, z);
+    supports.push({ z, y: g + 10, ground: g, kind: "tower" });
+  }
+  supports.push({ z: topZ, y: plateauY + 3.2, ground: plateauY, kind: "top" });
+  // raise towers until every span clears: chair hangs 3.1 m, then 3.6 m of air (the first
+  // and last 7 m by each station are the loading ramps)
+  const CLEAR = 3.1 + 3.6;
+  for (let it = 0; it < 40; it++) {
+    let worst = 0;
+    for (let i = 0; i + 1 < supports.length; i++) {
+      const p0 = supports[i]!;
+      const p1 = supports[i + 1]!;
+      const span = Math.abs(p1.z - p0.z);
+      for (let t = 0.02; t < 1; t += 0.02) {
+        const z = p0.z + (p1.z - p0.z) * t;
+        if (Math.abs(z - baseZ) < 7 || Math.abs(z - topZ) < 7) continue;
+        const cy = p0.y + (p1.y - p0.y) * t - span * 0.018 * 4 * t * (1 - t);
+        const need = Math.max(hAt(LIFT_X - 2.6, z), hAt(LIFT_X + 2.6, z)) + CLEAR - cy;
+        if (need > 0.01) {
+          worst = Math.max(worst, need);
+          if (p0.kind === "tower") p0.y += need * (1 - t) * 1.2 + 0.05;
+          if (p1.kind === "tower") p1.y += need * t * 1.2 + 0.05;
+        }
+      }
+    }
+    if (worst < 0.01) break;
+  }
+  for (const sp of supports) {
+    if (sp.kind !== "tower") continue;
+    block(LIFT_X - 1, sp.z - 1, LIFT_X + 1, sp.z + 1, -1, sp.y + 1);
+    props.push({ k: "tower", x: LIFT_X, z: sp.z, y: sp.ground, rot: 0, s: sp.y - sp.ground });
+  }
   const lift: Lift = { x: LIFT_X, gauge: 2.6, supports };
 
   // ---- 6. props ----
@@ -1005,57 +1121,52 @@ export function generateAlpine(seed: number, solo: boolean) {
       side = -side;
     }
   }
-  // snowbanks along the street edges, broken at doors and lanes
-  for (const p of PATHS) {
-    if (p.kind !== "street" && p.kind !== "lane" && p.kind !== "road") continue;
-    const len = polyDist(p.pts[0]![0], p.pts[0]![1], p.pts).len;
-    for (let s = 2; s < len - 2; s += 3.2) {
-      const a = polyAt(p.pts, s);
-      const b = polyAt(p.pts, s + 1);
-      const dx = b[0] - a[0];
-      const dz = b[1] - a[1];
-      const l = Math.hypot(dx, dz) || 1;
-      for (const side of [-1, 1]) {
-        if (rand() < 0.3) continue;
-        const off = p.w / 2 - 0.2;
-        const x = a[0] + (-dz / l) * off * side;
-        const z = a[1] + (dx / l) * off * side;
-        if (surf[S(ci(x), ci(z))] === S_PLAZA) continue;
-        prop("snowbank", x, z, Math.atan2(dx, dz), 0.7 + rand() * 0.7);
-      }
-    }
-  }
   // the square: fountain, a big lit Christmas tree, benches and café tables
   prop("xmas", 2, 43.5, 0, 1);
   block(0, 42, 4, 46, -1);
   prop("fountain", -8, 78, 0, 1);
   block(-10, 76, -6, 80, -1);
-  for (let k = 0; k < 6; k++) prop("bench", -38 + k * 13.5, 83, Math.PI, 1);
+  for (let k = 0; k < 6; k++) {
+    prop("bench", -38 + k * 13.5, 83, Math.PI, 1);
+    block(-38 + k * 13.5 - 1, 82, -38 + k * 13.5 + 1, 84, -1);
+  }
   for (let k = 0; k < 4; k++) {
     prop("table", 20 + (k % 2) * 4, 60 + Math.floor(k / 2) * 4, rand() * 3, 1);
     prop("heater", 22 + (k % 2) * 4, 62 + Math.floor(k / 2) * 4, 0, 1);
   }
   prop("snowman", 30, 76, 2.4, 1);
+  block(29, 75, 31, 77, -1);
   prop("flag", -18, 38, 0, 1);
   // lift base plaza: snowcats, snowmobiles, ski racks, a signpost
   prop("snowcat", 18, -27, Math.PI / 2, 1, 0);
-  block(12, -30, 24, -24, -1);
+  block(12, -30, 24, -24, -1, plazaY + 4.5);
   prop("snowcat", 74, -44, 0.2, 1, 1);
-  block(70, -50, 78, -38, -1);
+  block(70, -50, 78, -38, -1, plazaY + 4.5);
   for (let k = 0; k < 4; k++) prop("snowmobile", 62 + k * 3.2, -24.5, 0, 1, k);
   block(60, -26, 74, -22, -1);
-  for (let k = 0; k < 3; k++) prop("skirack", 29 + k * 3.6, -46.8, 0, 1);
+  for (let k = 0; k < 3; k++) prop("skirack", 30 + k * 3.6, -52.8, 0, 1);
+  block(28, -54, 40, -52, -1);
   for (let k = 0; k < 3; k++) prop("skirack", 8.2, -30 + k * 3.6, Math.PI / 2, 1);
+  block(7, -32, 10, -22, -1);
   prop("signpost", 34, -30, 0.4, 1);
-  prop("woodpile", 22, -51, 0, 1);
-  prop("bench", 58, -40, Math.PI / 2, 1);
+  prop("bench", 66, -40, Math.PI / 2, 1);
+  block(65, -42, 67, -38, -1);
   // groomer parked on the blue run, one on the east run (co-op)
   prop("snowcat", -40, -150, 0.9, 1, 2);
   block(-46, -156, -34, -144, -1);
-  // plateau: benches, a flag, signpost
-  prop("flag", 60, -250, 0, 1.3);
-  prop("signpost", 24, -250, -0.3, 1);
-  for (let k = 0; k < 3; k++) prop("bench", 60 + k * 6, -249, Math.PI, 1);
+  // summit: benches on the observation deck, the flag, café tables and umbrellas on the
+  // lodge deck
+  prop("flag", 54, -252, 0, 1.3);
+  for (let k = 0; k < 3; k++) {
+    prop("bench", 60 + k * 6, -252, Math.PI, 1);
+    block(59 + k * 6, -253, 61 + k * 6, -251, -1);
+  }
+  for (let k = 0; k < 4; k++) {
+    const tx = 9 + k * 5.5;
+    prop("table", tx, -255, rand() * 3, 1);
+    prop("umbrella", tx, -255, 0, 1, k);
+    block(tx - 1, -256, tx + 1, -254, -1);
+  }
   // piste markers and floodlights along the runs
   for (const p of PATHS) {
     if (p.kind !== "piste") continue;
@@ -1083,19 +1194,25 @@ export function generateAlpine(seed: number, solo: boolean) {
       }
     }
   }
-  // garden dressing near chalets: woodpiles, sleds, barrels, trash bins
+  // garden dressing against the back wall of chalets (never in a passage between houses),
+  // only where there is room, and solid
   for (const b of buildings) {
     if (b.t !== "chalet" && b.t !== "barn" && b.t !== "lodge") continue;
     const r = mulberry(Math.floor(b.seed * 1e9));
-    const n = 1 + Math.floor(r() * 2);
-    for (let k = 0; k < n; k++) {
-      const side = (b.front + 1 + Math.floor(r() * 2) * 2) % 4;
-      const t = 0.2 + r() * 0.6;
-      const x = side === 1 ? b.x1 + 0.9 : side === 3 ? b.x0 - 0.9 : b.x0 + (b.x1 - b.x0) * t;
-      const z = side === 2 ? b.z1 + 0.9 : side === 0 ? b.z0 - 0.9 : b.z0 + (b.z1 - b.z0) * t;
-      const kinds: PropKind[] = ["woodpile", "woodpile", "sled", "barrel", "trash", "skirack"];
-      prop(kinds[Math.floor(r() * kinds.length)]!, x, z, side * (Math.PI / 2), 1);
-    }
+    const back = ((b.front + 2) % 4) as 0 | 1 | 2 | 3;
+    const t = 0.25 + r() * 0.5;
+    const x = back === 1 ? b.x1 + 1 : back === 3 ? b.x0 - 1 : b.x0 + (b.x1 - b.x0) * t;
+    const z = back === 2 ? b.z1 + 1 : back === 0 ? b.z0 - 1 : b.z0 + (b.z1 - b.z0) * t;
+    // at least 5 m of open ground beyond it
+    const ox = back === 1 ? 1 : back === 3 ? -1 : 0;
+    const oz = back === 2 ? 1 : back === 0 ? -1 : 0;
+    let room = true;
+    for (let d = 1; d <= 6 && room; d += 1)
+      if (solid[S(ci(x + ox * d * 1.0), ci(z + oz * d * 1.0))] || surf[S(ci(x + ox * d), ci(z + oz * d))] === S_PATH) room = false;
+    if (!room) continue;
+    const kinds: PropKind[] = ["woodpile", "woodpile", "sled", "barrel", "woodpile"];
+    prop(kinds[Math.floor(r() * kinds.length)]!, x, z, back * (Math.PI / 2), 1);
+    block(x - 1, z - 1, x + 1, z + 1, -1);
   }
 
   // ---- 7. forest and rocks ----
@@ -1128,7 +1245,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       const tall = rand() < 0.22;
       // stunted near the tree line, tallest down in the valley
       const alt = 1 - 0.45 * smooth(50, 150, y);
-      const h = (tall ? 17 + rand() * 7 : 8 + rand() * 9) * alt;
+      const h = (tall ? 15 + rand() * 6 : 7 + rand() * 8) * alt;
       trees.push({
         x,
         z,
@@ -1138,7 +1255,18 @@ export function generateAlpine(seed: number, solo: boolean) {
         rot: rand() * Math.PI * 2,
         k: tall ? 1 : 0,
       });
+      // block around the trunk out to about half the canopy, so nobody walks in under the
+      // lowest branches (from beneath they are just dark undersides)
+      const wk = ((0.26 + 0.05) / 0.3) * (tall ? 0.72 : 1);
+      const br = 0.18 * h * wk + 0.3;
+      for (let i = ci(x - br); i <= ci(x + br); i++)
+        for (let j = ci(z - br); j <= ci(z + br); j++)
+          if (Math.hypot(cc(i) - x, cc(j) - z) < br && !clear[S(i, j)]) {
+            solid[S(i, j)] = 1;
+            tops[S(i, j)] = Math.max(tops[S(i, j)]!, y + h * (Math.hypot(cc(i) - x, cc(j) - z) < 1.2 ? 1 : 0.5));
+          }
       solid[k] = 1;
+      tops[k] = Math.max(tops[k]!, y + h);
       if (d > 0.35 && surf[k] === S_SNOW) surf[k] = S_FOREST;
     }
   // forest floor tint around the trees (minimap + terrain shading)
@@ -1168,6 +1296,7 @@ export function generateAlpine(seed: number, solo: boolean) {
       for (let j = ci(z - s * 0.8); j <= ci(z + s * 0.8); j++) {
         solid[S(i, j)] = 1;
         surf[S(i, j)] = S_ROCK;
+        tops[S(i, j)] = Math.max(tops[S(i, j)]!, y + s * 1.6);
       }
   }
   for (let i = 0; i < N; i++)
@@ -1176,13 +1305,44 @@ export function generateAlpine(seed: number, solo: boolean) {
       const b = hv(i + 1, j);
       const c = hv(i, j + 1);
       const d = hv(i + 1, j + 1);
-      const rise = Math.max(a, b, c, d) - Math.min(a, b, c, d);
+      // gradient across the cell; tan(32 deg) = 0.62
+      const grad = Math.hypot((b - a + d - c) / 2, (c - a + d - b) / 2) / CELL;
       const k = S(i, j);
-      if (rise > 2.3 && surf[k] !== S_DECK && surf[k] !== S_ICE) {
+      const onBridge = cc(i) > BRIDGE.x0 - 1 && cc(i) < BRIDGE.x1 + 1 && Math.abs(cc(j) - BRIDGE.z) < BRIDGE.w / 2 + 1;
+      if (grad > 0.62 && surf[k] !== S_DECK && !onBridge) {
         solid[k] = 1;
         if (surf[k] !== S_BLD) surf[k] = S_ROCK;
       }
     }
+
+  // ---- 7b. zones: the mountain face above the village can't be walked (up or down); the
+  // summit island around the lodge and the top terminal is reached only by the lift ----
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++) {
+      const x = cc(i);
+      const z = cc(j);
+      const north = valleyCentre(x) - 90 - z;
+      const k = S(i, j);
+      const onIsland = x > SUMMIT.x0 && x < SUMMIT.x1 && z > SUMMIT.z0 && z < SUMMIT.z1;
+      if (north > 30 && !onIsland) solid[k] = 1;
+      // the creek gully floor is off limits except under the bridge deck
+      const onBridge = x > BRIDGE.x0 - 1 && x < BRIDGE.x1 + 1 && Math.abs(z - BRIDGE.z) < BRIDGE.w / 2 + 1;
+      if (surf[k] === S_ICE && !onBridge && lakeE(x, z) > 1.02 && !(x > RINK.x0 - 1 && x < RINK.x1 + 1 && z > RINK.z0 - 1 && z < RINK.z1 + 1)) solid[k] = 1;
+    }
+  // the island's own edge: a solid ring (railings, fences) so nobody steps off
+  for (let x = SUMMIT.x0 - 2; x <= SUMMIT.x1; x += 2) {
+    block(x, SUMMIT.z0 - 2, x + 2, SUMMIT.z0, -1, plateauY + 1.3);
+    block(x, SUMMIT.z1, x + 2, SUMMIT.z1 + 2, -1, plateauY + 1.3);
+  }
+  for (let z = SUMMIT.z0 - 2; z <= SUMMIT.z1; z += 2) {
+    block(SUMMIT.x0 - 2, z, SUMMIT.x0, z + 2, -1, plateauY + 1.3);
+    block(SUMMIT.x1, z, SUMMIT.x1 + 2, z + 2, -1, plateauY + 1.3);
+  }
+  // ... but the loading platform under the top terminal's canopy stays open
+  for (let i = ci(TOP_TERM.x0 + 2); i <= ci(TOP_TERM.x1 - 2.01); i++)
+    for (let j = ci(TOP_TERM.z0 + 0.01); j <= ci(TOP_TERM.z1 - 0.01); j++) solid[S(i, j)] = 0;
+  for (let i = ci(BASE_TERM.x0 + 2); i <= ci(BASE_TERM.x1 - 2.01); i++)
+    for (let j = ci(BASE_TERM.z0 + 2); j <= ci(BASE_TERM.z1 - 0.01); j++) solid[S(i, j)] = 0;
 
   // ---- 8. solo: seal the square with themed blockades ----
   const blockades: Blockade[] = [];
@@ -1194,6 +1354,7 @@ export function generateAlpine(seed: number, solo: boolean) {
         const k = S(ci(b.x), ci(b.z));
         solid[k] = 1;
         surf[k] = S_BLOCKADE;
+        tops[k] = hAt(b.x, b.z) + 4;
       }
       // split long gaps into dressed segments that suit the ground they cross
       const segs = Math.max(1, Math.round(g.w / 14));
@@ -1264,8 +1425,12 @@ export function generateAlpine(seed: number, solo: boolean) {
       nav[a * NN + b] = open < 2 || a === 0 || b === 0 || a === NN - 1 || b === NN - 1 ? 1 : 0;
     }
   const seenN = new Uint8Array(NN * NN);
-  const q: number[] = [(spawnI >> 1) * NN + (spawnJ >> 1)];
+  // two zones: the village (from the spawn) and the summit island (from its platform)
+  const sumI = ci(40);
+  const sumJ = ci(-254);
+  const q: number[] = [(spawnI >> 1) * NN + (spawnJ >> 1), (sumI >> 1) * NN + (sumJ >> 1)];
   seenN[q[0]!] = 1;
+  seenN[q[1]!] = 1;
   for (let h = 0; h < q.length; h++) {
     const c = q[h]!;
     const a = Math.floor(c / NN);
@@ -1291,8 +1456,9 @@ export function generateAlpine(seed: number, solo: boolean) {
         for (let db = 0; db < 2; db++) solid[S(a * 2 + da, b * 2 + db)] = 1;
     }
   const seen = new Uint8Array(N * N);
-  const fq: number[] = [S(spawnI, spawnJ)];
+  const fq: number[] = [S(spawnI, spawnJ), S(sumI, sumJ)];
   seen[fq[0]!] = 1;
+  seen[fq[1]!] = 1;
   for (let h = 0; h < fq.length; h++) {
     const c = fq[h]!;
     const i = Math.floor(c / N);
@@ -1331,6 +1497,15 @@ export function generateAlpine(seed: number, solo: boolean) {
     cell: CELL,
     n: N,
     h: H,
+    platforms: [
+      { x0: BRIDGE.x0 - 1, z0: BRIDGE.z - BRIDGE.w / 2 - 0.5, x1: BRIDGE.x1 + 1, z1: BRIDGE.z + BRIDGE.w / 2 + 0.5, y: bridgeY + 0.1 },
+    ],
+    shot: (x: number, y: number, z: number) => {
+      const i = Math.floor((x + HALF) / CELL);
+      const j = Math.floor((z + HALF) / CELL);
+      if (i < 0 || j < 0 || i >= N || j >= N) return true;
+      return y < tops[i * N + j]!;
+    },
     speed: (x: number, z: number) => {
       const i = Math.floor((x + HALF) / CELL);
       const j = Math.floor((z + HALF) / CELL);
@@ -1368,6 +1543,20 @@ export function generateAlpine(seed: number, solo: boolean) {
     plateau: plateauY,
     blockades,
     soloHalf: sHalf,
+    spawnYaw: SPAWN_YAW,
+    island: { ...SUMMIT },
+    terminals: [
+      { kind: "base", ...BASE_TERM, y: plazaY },
+      { kind: "top", ...TOP_TERM, y: plateauY },
+    ],
+    lodgeDeck: { ...LODGE_DECK, y: plateauY },
+    ride: {
+      boardUp: [LIFT_X - 2.6, LIFT_Z0 + 3],
+      boardDown: [LIFT_X + 2.6, LIFT_Z1 + 2],
+      offTop: [LIFT_X - 6, LIFT_Z1 + 4, Math.PI * 0.75],
+      offBase: [LIFT_X + 6, LIFT_Z0 + 8, Math.PI],
+    },
+    tops,
   };
   const layout: AlpineLayout = {
     cells: N,

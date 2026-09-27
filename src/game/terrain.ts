@@ -14,6 +14,10 @@ export type Terrain = {
   h: Float32Array;
   /** optional walking-speed multiplier per 2 m cell (deep snow off the paths), same layout as h */
   speed?: (x: number, z: number) => number;
+  /** walkable decks above the ground (a bridge over a gully): these win over the heightfield */
+  platforms?: { x0: number; z0: number; x1: number; z1: number; y: number }[];
+  /** does a shot at (x, y, z) hit something solid (below the top of what stands there)? */
+  shot?: (x: number, y: number, z: number) => boolean;
 };
 
 let T: Terrain | null = null;
@@ -33,6 +37,15 @@ export function hasTerrain() {
 
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
+  const t = T;
+  if (!t) return 0;
+  if (t.platforms)
+    for (const p of t.platforms) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.y;
+  return terrainY(x, z);
+}
+
+/** the bare heightfield (what the terrain mesh draws), ignoring decks */
+export function terrainY(x: number, z: number) {
   const t = T;
   if (!t) return 0;
   const n = t.n;
@@ -58,4 +71,13 @@ export function groundY(x: number, z: number) {
 /** Walking-speed multiplier at (x, z): 1 on flat maps and on paths, lower in deep snow. */
 export function groundSpeed(x: number, z: number) {
   return T?.speed ? T.speed(x, z) : 1;
+}
+
+/**
+ * Height-aware shot collision on maps with terrain: true when (x, y, z) is inside something
+ * solid. Returns null on flat maps so callers fall back to their 2D block test.
+ */
+export function shotHits(x: number, y: number, z: number): boolean | null {
+  if (!T || !T.shot) return null;
+  return y < terrainY(x, z) || T.shot(x, y, z);
 }
