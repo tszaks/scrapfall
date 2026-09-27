@@ -147,7 +147,11 @@ export function stormVoice() {
       const now = ctx.currentTime;
       g.gain.setTargetAtTime(0.5 * k, now, 0.4);
       // gusts: the pitch of the howl swings
-      bp.frequency.setTargetAtTime(320 + 260 * (0.5 + 0.5 * Math.sin(t * 0.7) * Math.sin(t * 0.23)), now, 0.3);
+      bp.frequency.setTargetAtTime(
+        320 + 260 * (0.5 + 0.5 * Math.sin(t * 0.7) * Math.sin(t * 0.23)),
+        now,
+        0.3,
+      );
     },
     stop() {
       src.stop();

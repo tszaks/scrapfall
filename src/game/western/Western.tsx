@@ -6,10 +6,10 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 
 import type { TimeOfDay } from "../lighting";
-import { sunsetBackground } from "../sky";
 import { addSkyFogUniforms, skyFog } from "../skyFog";
 import { WK, WORDS, type WesternLayout } from "./layout";
-import { WESTERN_LOOK, WESTERN_SUNSET } from "./look";
+import { WESTERN_LOOK } from "./look";
+import { facadeMaterial, westernBackground, westernEnv } from "./materials";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
@@ -28,73 +28,6 @@ const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
-
-/** The western facade material: MeshStandard + the texture array, lamp-lit windows at night,
- * reflective window glass, and a little ground-level darkening on walls. */
-export function facadeMaterial(nightK: { value: number }) {
-  const arr = westernArrays(WORDS);
-  const mat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.93,
-    metalness: 0,
-    envMapIntensity: 1,
-  });
-  mat.onBeforeCompile = (sh) => {
-    addSkyFogUniforms(sh);
-    sh.uniforms["uDay"] = { value: arr.day };
-    sh.uniforms["uNight"] = { value: arr.night };
-    sh.uniforms["uNightK"] = nightK;
-    sh.vertexShader = sh.vertexShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying float vWy;",
-      )
-      .replace(
-        "#include <begin_vertex>",
-        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvWy = (modelMatrix * vec4(transformed, 1.0)).y;",
-      );
-    sh.fragmentShader = sh.fragmentShader
-      .replace(
-        "#include <common>",
-        `#include <common>
-precision highp sampler2DArray;
-uniform sampler2DArray uDay;
-uniform sampler2DArray uNight;
-uniform float uNightK;
-varying vec2 vFuv;
-varying vec3 vFac;
-varying float vWy;
-float wHash(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}`,
-      )
-      .replace(
-        "#include <map_fragment>",
-        `vec4 facT = texture(uDay, vec3(vFuv, vFac.x));
-diffuseColor.rgb *= facT.rgb;
-float glassK = facT.a;
-float aoK = step(5.0, vFac.z);
-float litMode = mod(vFac.z, 10.0);
-diffuseColor.rgb *= mix(1.0, mix(0.62, 1.0, smoothstep(0.0, 2.6, vWy)), aoK);`,
-      )
-      .replace("#include <roughnessmap_fragment>", "float roughnessFactor = mix(roughness, 0.14, glassK);")
-      .replace("#include <metalnessmap_fragment>", "float metalnessFactor = mix(metalness, 0.55, glassK);")
-      .replace(
-        "#include <emissivemap_fragment>",
-        `if (uNightK > 0.0 && litMode > 0.5) {
-  vec4 nt = texture(uNight, vec3(vFuv, vFac.x));
-  float hf = wHash(floor(vFuv * 4.0) + vec2(vFac.y * 97.0, vFac.y * 13.0));
-  float on = litMode > 1.5 ? 1.0 : step(0.42, hf);
-  float k = litMode > 1.5 ? 1.7 : 1.0;
-  totalEmissiveRadiance += nt.rgb * nt.a * on * k * uNightK;
-}`,
-      );
-  };
-  mat.customProgramCacheKey = () => "western-facade-v1";
-  return mat;
-}
 
 /** The ground: desert sand everywhere, blended with street dirt, riverbed mud, packed yards
  * and ballast from a per-cell splat map, with large-scale colour drift so it never tiles. */
@@ -150,7 +83,10 @@ function groundMaterial(L: WesternLayout) {
     sh.uniforms["uHalf"] = { value: L.half };
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;",
+      );
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
@@ -194,14 +130,6 @@ diffuseColor.rgb *= col;`,
   return { mat, splat };
 }
 
-/** the sky behind Dry Gulch: the painted sunset (sun low in the west) or the starry night */
-let sunsetSky: THREE.Texture | null = null;
-export function westernBackground(mode: WMode) {
-  if (mode === "night") return westernSky("night");
-  sunsetSky ??= sunsetBackground("western-sunset", WESTERN_SUNSET, 1536, 768);
-  return sunsetSky;
-}
-
 export const WesternScene = memo(function WesternScene({
   layout,
   time,
@@ -216,7 +144,9 @@ export const WesternScene = memo(function WesternScene({
     const t0 = performance.now();
     const m = buildWesternMeshes(layout);
     if (import.meta.env.DEV)
-      console.info(`[western] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`);
+      console.info(
+        `[western] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
+      );
     return m;
   }, [layout]);
 
@@ -283,6 +213,8 @@ export const WesternScene = memo(function WesternScene({
     const e = mode === "night" ? env.night.texture : env.sunset.texture;
     mats.facade.envMap = e;
     mats.facade.envMapIntensity = look.env;
+    westernEnv.map = e;
+    westernEnv.intensity = look.env;
     mats.facade.needsUpdate = true;
     ground.mat.envMap = e;
     ground.mat.envMapIntensity = 0.35;
@@ -302,7 +234,8 @@ export const WesternScene = memo(function WesternScene({
 
   useEffect(
     () => () => {
-      for (const c of built.chunks) [c.main, c.detail, c.glow, c.pools].forEach((g) => g?.dispose());
+      for (const c of built.chunks)
+        [c.main, c.detail, c.glow, c.pools].forEach((g) => g?.dispose());
       built.far.dispose();
     },
     [built],
@@ -334,7 +267,10 @@ export const WesternScene = memo(function WesternScene({
   const bladeRef = useRef<THREE.InstancedMesh>(null);
 
   // ---- fire flames (flicker) ----
-  const flameGeo = useMemo(() => new THREE.ConeGeometry(0.34, 1, 6, 1, true).translate(0, 0.5, 0), []);
+  const flameGeo = useMemo(
+    () => new THREE.ConeGeometry(0.34, 1, 6, 1, true).translate(0, 0.5, 0),
+    [],
+  );
   useEffect(() => () => flameGeo.dispose(), [flameGeo]);
   const flameRef = useRef<THREE.InstancedMesh>(null);
 
@@ -367,7 +303,11 @@ export const WesternScene = memo(function WesternScene({
     if (disc) {
       const d = SKY_DIR[mode];
       const dist = 3000;
-      disc.position.set(cam.position.x + d[0] * dist, cam.position.y + d[1] * dist, cam.position.z + d[2] * dist);
+      disc.position.set(
+        cam.position.x + d[0] * dist,
+        cam.position.y + d[1] * dist,
+        cam.position.z + d[2] * dist,
+      );
       disc.quaternion.copy(cam.quaternion);
       disc.scale.setScalar(look.disc.size);
     }
@@ -379,7 +319,11 @@ export const WesternScene = memo(function WesternScene({
         _q.setFromEuler(_e);
         const spin = new THREE.Quaternion().setFromAxisAngle(_v.set(0, 0, 1), t * 1.6 + i);
         _q.multiply(spin);
-        _m4.compose(_v.set(w.x + Math.sin(w.rot) * 0.6 * w.s, w.y, w.z + Math.cos(w.rot) * 0.6 * w.s), _q, _s.set(w.s, w.s, w.s));
+        _m4.compose(
+          _v.set(w.x + Math.sin(w.rot) * 0.6 * w.s, w.y, w.z + Math.cos(w.rot) * 0.6 * w.s),
+          _q,
+          _s.set(w.s, w.s, w.s),
+        );
         bm.setMatrixAt(i, _m4);
       });
       bm.instanceMatrix.needsUpdate = true;
@@ -388,7 +332,11 @@ export const WesternScene = memo(function WesternScene({
     if (fm) {
       built.fires.forEach((f, i) => {
         const k = 0.8 + Math.sin(t * 11 + i * 3) * 0.12 + Math.sin(t * 23 + i) * 0.08;
-        _m4.compose(_v.set(f.x, f.y - 0.3, f.z), _q.setFromEuler(_e.set(0, t * 2 + i, 0)), _s.set(f.s * k, f.s * (0.9 + k * 0.4), f.s * k));
+        _m4.compose(
+          _v.set(f.x, f.y - 0.3, f.z),
+          _q.setFromEuler(_e.set(0, t * 2 + i, 0)),
+          _s.set(f.s * k, f.s * (0.9 + k * 0.4), f.s * k),
+        );
         fm.setMatrixAt(i, _m4);
       });
       fm.instanceMatrix.needsUpdate = true;
@@ -446,10 +394,19 @@ export const WesternScene = memo(function WesternScene({
         </group>
       ))}
       {built.windmills.length > 0 && (
-        <instancedMesh ref={bladeRef} args={[blades, mats.blades, built.windmills.length]} castShadow frustumCulled={false} />
+        <instancedMesh
+          ref={bladeRef}
+          args={[blades, mats.blades, built.windmills.length]}
+          castShadow
+          frustumCulled={false}
+        />
       )}
       {built.fires.length > 0 && (
-        <instancedMesh ref={flameRef} args={[flameGeo, mats.flame, built.fires.length]} frustumCulled={false} />
+        <instancedMesh
+          ref={flameRef}
+          args={[flameGeo, mats.flame, built.fires.length]}
+          frustumCulled={false}
+        />
       )}
       <mesh
         ref={discRef}
@@ -540,7 +497,9 @@ export function WesternSun({ time }: { time: TimeOfDay }) {
     if (ema.current > 0.04) {
       slowFor.current += raw;
       if (slowFor.current > 3) {
-        console.info("[western] frames are slow: switching shadows off (use ?shadows=1 to keep them)");
+        console.info(
+          "[western] frames are slow: switching shadows off (use ?shadows=1 to keep them)",
+        );
         setLow(true);
       }
     } else slowFor.current = 0;

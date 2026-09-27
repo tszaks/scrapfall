@@ -74,7 +74,7 @@ export const TILE_M: Record<number, [number, number]> = {
   [WL.TIN]: [4, 4],
   [WL.SHINGLE]: [4, 4],
   [WL.DECK]: [4, 4],
-  [WL.ROCK]: [36, 18],
+  [WL.ROCK]: [30, 15],
   [WL.TIMBER]: [2, 2],
   [WL.CANVAS]: [3, 3],
   [WL.CACTUS]: [1, 2],
@@ -136,7 +136,15 @@ function grain(P: Painter, amt: number, blot = 0) {
 }
 
 /** horizontal lap siding: `exp` px per board, shadow under each lap */
-function clapboard(c: Ctx, x: number, y: number, w: number, h: number, exp: number, r: () => number) {
+function clapboard(
+  c: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  exp: number,
+  r: () => number,
+) {
   for (let yy = y; yy < y + h; yy += exp) {
     const g = c.createLinearGradient(0, yy, 0, yy + exp);
     const k = 0.9 + r() * 0.1;
@@ -151,17 +159,40 @@ function clapboard(c: Ctx, x: number, y: number, w: number, h: number, exp: numb
     rect(c, rgba(120, 100, 80, 0.05 + r() * 0.08), sx, y + r() * h, 1 + r() * 2, 6 + r() * 40);
   }
   for (let i = 0; i < (w * h) / 5000; i++)
-    rect(c, rgba(140, 125, 105, 0.35 + r() * 0.3), x + r() * w, y + r() * h, 4 + r() * 16, 2 + r() * 4);
+    rect(
+      c,
+      rgba(140, 125, 105, 0.35 + r() * 0.3),
+      x + r() * w,
+      y + r() * h,
+      4 + r() * 16,
+      2 + r() * 4,
+    );
 }
 
 /** vertical board-and-batten, weathered wood colour baked in */
-function boards(c: Ctx, x: number, y: number, w: number, h: number, bw: number, r: () => number, base: [number, number, number]) {
+function boards(
+  c: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  bw: number,
+  r: () => number,
+  base: [number, number, number],
+) {
   for (let xx = x; xx < x + w; xx += bw) {
     const k = 0.78 + r() * 0.32;
     rect(c, rgba(base[0] * k, base[1] * k, base[2] * k, 1), xx, y, bw, h);
     // grain
     for (let g = 0; g < 5; g++)
-      rect(c, rgba(base[0] * k * 0.7, base[1] * k * 0.7, base[2] * k * 0.7, 0.35), xx + r() * bw, y, 1, h);
+      rect(
+        c,
+        rgba(base[0] * k * 0.7, base[1] * k * 0.7, base[2] * k * 0.7, 0.35),
+        xx + r() * bw,
+        y,
+        1,
+        h,
+      );
     // knots
     if (r() < 0.5) {
       c.fillStyle = rgba(base[0] * 0.45, base[1] * 0.4, base[2] * 0.35, 0.8);
@@ -212,7 +243,14 @@ function adobeWall(c: Ctx, x: number, y: number, w: number, h: number, r: () => 
   rect(c, "#d7b48c", x, y, w, h);
   for (let i = 0; i < (w * h) / 60; i++) {
     const k = r();
-    rect(c, rgba(150 + k * 90, 110 + k * 70, 70 + k * 50, 0.08 + r() * 0.1), x + r() * w, y + r() * h, 2 + r() * 10, 2 + r() * 8);
+    rect(
+      c,
+      rgba(150 + k * 90, 110 + k * 70, 70 + k * 50, 0.08 + r() * 0.1),
+      x + r() * w,
+      y + r() * h,
+      2 + r() * 10,
+      2 + r() * 8,
+    );
   }
   // exposed mud bricks where the plaster has fallen off
   for (let i = 0; i < (w * h) / 26000; i++) {
@@ -222,10 +260,12 @@ function adobeWall(c: Ctx, x: number, y: number, w: number, h: number, r: () => 
     const ph = 12 + r() * 20;
     rect(c, "#9a7050", px, py, pw, ph);
     for (let yy = py; yy < py + ph; yy += 6)
-      for (let xx = px + ((yy / 6) % 2) * 6; xx < px + pw; xx += 12) rect(c, "#b0805a", xx, yy, 11, 5);
+      for (let xx = px + ((yy / 6) % 2) * 6; xx < px + pw; xx += 12)
+        rect(c, "#b0805a", xx, yy, 11, 5);
   }
   // rain streaks from the roof beams
-  for (let i = 0; i < w / 30; i++) rect(c, "rgba(90,60,35,0.12)", x + r() * w, y, 2 + r() * 3, 20 + r() * 60);
+  for (let i = 0; i < w / 30; i++)
+    rect(c, "rgba(90,60,35,0.12)", x + r() * w, y, 2 + r() * 3, 20 + r() * 60);
 }
 function logs(c: Ctx, x: number, y: number, w: number, h: number, r: () => number) {
   const lh = 10;
@@ -252,7 +292,15 @@ const MW = TEX / FAC_COLS;
 const SH = TEX / FAC_ROWS;
 const LIT = ["#ffb45a", "#ffc878", "#ffd9a0", "#ffa446", "#ffcf8a"];
 
-function glassPane(P: Painter, x: number, y: number, w: number, h: number, bars: [number, number], lit: number) {
+function glassPane(
+  P: Painter,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  bars: [number, number],
+  lit: number,
+) {
   const { d, g, n, m, r } = P;
   const gr = d.createLinearGradient(x, y, x + w * 0.4, y + h);
   gr.addColorStop(0, "#5d6a70");
@@ -270,7 +318,14 @@ function glassPane(P: Painter, x: number, y: number, w: number, h: number, bars:
   rect(m, "#fff", x, y, w, h);
   if (r() < lit) {
     const col = LIT[Math.floor(r() * LIT.length)]!;
-    const lg = n.createRadialGradient(x + w / 2, y + h * 0.6, 2, x + w / 2, y + h * 0.6, Math.max(w, h));
+    const lg = n.createRadialGradient(
+      x + w / 2,
+      y + h * 0.6,
+      2,
+      x + w / 2,
+      y + h * 0.6,
+      Math.max(w, h),
+    );
     lg.addColorStop(0, col);
     lg.addColorStop(1, "#6a3010");
     rect(n, lg, x, y, w, h);
@@ -310,7 +365,12 @@ function trim(c: Ctx, x: number, y: number, w: number, h: number, t: number, col
   rect(c, col, x + w, y, t, h);
   rect(c, "rgba(0,0,0,0.25)", x - t, y + h + t * 1.4, w + t * 2, 2);
 }
-function sash(P: Painter, col: number, row: number, opts: { shutters?: string | undefined; trimCol?: string; lit?: number } = {}) {
+function sash(
+  P: Painter,
+  col: number,
+  row: number,
+  opts: { shutters?: string | undefined; trimCol?: string; lit?: number } = {},
+) {
   const x = col * MW + MW * 0.28;
   const w = MW * 0.44;
   const y = (FAC_ROWS - 1 - row) * SH + SH * 0.18;
@@ -320,13 +380,21 @@ function sash(P: Painter, col: number, row: number, opts: { shutters?: string | 
   if (opts.shutters) {
     for (const sx of [x - 4 - w * 0.42, x + w + 4]) {
       rect(P.d, opts.shutters, sx, y - 2, w * 0.42, h + 4);
-      for (let yy = y + 3; yy < y + h; yy += 5) rect(P.d, "rgba(0,0,0,0.28)", sx + 2, yy, w * 0.42 - 4, 1.5);
+      for (let yy = y + 3; yy < y + h; yy += 5)
+        rect(P.d, "rgba(0,0,0,0.28)", sx + 2, yy, w * 0.42 - 4, 1.5);
     }
   }
   // sill
   rect(P.d, "rgba(0,0,0,0.35)", x - 6, y + h + 5, w + 12, 3);
 }
-function door(P: Painter, col: number, row: number, wFrac: number, kind: "panel" | "glass" | "saloon" | "plank" | "double", paint = "#6a3a22") {
+function door(
+  P: Painter,
+  col: number,
+  row: number,
+  wFrac: number,
+  kind: "panel" | "glass" | "saloon" | "plank" | "double",
+  paint = "#6a3a22",
+) {
   const { d, g, m, n, r } = P;
   const w = MW * wFrac;
   const x = col * MW + (MW - w) / 2;
@@ -354,7 +422,8 @@ function door(P: Painter, col: number, row: number, wFrac: number, kind: "panel"
     ] as const) {
       rect(d, paint, sx, dy, sw, dh);
       rect(n, "#000", sx, dy, sw, dh);
-      for (let yy = dy + 4; yy < dy + dh - 4; yy += 6) rect(d, "rgba(0,0,0,0.35)", sx + 3, yy, sw - 6, 2);
+      for (let yy = dy + 4; yy < dy + dh - 4; yy += 6)
+        rect(d, "rgba(0,0,0,0.35)", sx + 3, yy, sw - 6, 2);
       d.fillStyle = paint;
       d.beginPath();
       d.moveTo(sx, dy);
@@ -404,7 +473,14 @@ function display(P: Painter, col: number, row: number, trimCol = "#efe8da") {
   rect(P.d, "rgba(255,255,255,0.3)", x + 4, y + h + 12, w - 8, 2);
   // goods in the window: bolts of cloth, bottles, hats (albedo only)
   for (let i = 0; i < 6; i++)
-    rect(P.d, ["#8a5a2a", "#c0a060", "#5a3a2a", "#9a3a2a", "#4a6a8a"][Math.floor(P.r() * 5)]!, x + 6 + P.r() * (w - 20), y + h - 10 - P.r() * 16, 6 + P.r() * 10, 8 + P.r() * 14);
+    rect(
+      P.d,
+      ["#8a5a2a", "#c0a060", "#5a3a2a", "#9a3a2a", "#4a6a8a"][Math.floor(P.r() * 5)]!,
+      x + 6 + P.r() * (w - 20),
+      y + h - 10 - P.r() * 16,
+      6 + P.r() * 10,
+      8 + P.r() * 14,
+    );
 }
 
 // ---- per-layer painters ----
@@ -413,7 +489,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
     clapboard(P.d, 0, 0, TEX, TEX, 6, P.r);
     const shut = ["#3a5a3a", "#5a2a22", "#2a3a4a", "#4a3a2a"];
     for (let col = 0; col < FAC_COLS; col++) {
-      for (let row = 1; row < FAC_ROWS; row++) sash(P, col, row, { shutters: P.r() < 0.5 ? shut[col % 4]! : undefined, lit: 0.5 });
+      for (let row = 1; row < FAC_ROWS; row++)
+        sash(P, col, row, { shutters: P.r() < 0.5 ? shut[col % 4]! : undefined, lit: 0.5 });
       if (col === 0) door(P, col, 0, 0.55, "double", "#5a2e1c");
       else if (col === 3) door(P, col, 0, 0.42, "glass", "#3a4a3a");
       else display(P, col, 0);
@@ -530,7 +607,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
         // stained glass by candlelight
         const cols = ["#ff5a3a", "#ffd24a", "#4a8aff", "#5aff8a", "#ff8ad8", "#ffb040"];
         for (let yy = y; yy < y + h; yy += 9)
-          for (let xx = x; xx < x + w; xx += 8) rect(P.n, cols[Math.floor(P.r() * cols.length)]!, xx, yy, 8, 9);
+          for (let xx = x; xx < x + w; xx += 8)
+            rect(P.n, cols[Math.floor(P.r() * cols.length)]!, xx, yy, 8, 9);
         for (let yy = y; yy < y + h; yy += 9) rect(P.n, "#000", x, yy, w, 1.5);
         for (let yy = y; yy < y + h; yy += 18) rect(d, "#1a2430", x, yy, w, 1.5);
       }
@@ -569,7 +647,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
         d.lineWidth = 5;
         d.strokeRect(x, y, MW * 0.9, SH * 0.7);
       } else if (col !== 2) sash(P, col, 1, { trimCol: "#eee6d6", lit: 0.2 });
-      for (let row = 2; row < FAC_ROWS; row++) if (col !== 2) sash(P, col, row, { trimCol: "#eee6d6", lit: 0.2 });
+      for (let row = 2; row < FAC_ROWS; row++)
+        if (col !== 2) sash(P, col, row, { trimCol: "#eee6d6", lit: 0.2 });
     }
     grain(P, 0.6, 20);
   },
@@ -620,14 +699,22 @@ const PAINT: Record<number, (P: Painter) => void> = {
       const y = Math.floor(r() * 4) * 128;
       if (r() < 0.35) rect(d, rgba(150, 80, 40, 0.35 + r() * 0.4), x, y, 64, 128);
     }
-    for (let i = 0; i < 260; i++) rect(d, rgba(140 + r() * 40, 70, 30, 0.2 + r() * 0.3), r() * TEX, r() * TEX, 2 + r() * 5, 6 + r() * 60);
+    for (let i = 0; i < 260; i++)
+      rect(
+        d,
+        rgba(140 + r() * 40, 70, 30, 0.2 + r() * 0.3),
+        r() * TEX,
+        r() * TEX,
+        2 + r() * 5,
+        6 + r() * 60,
+      );
     for (let y = 0; y < TEX; y += 128) rect(d, "rgba(40,30,20,0.5)", 0, y, TEX, 2); // sheet laps
   },
   [WL.SHINGLE]: (P) => {
     const { d, r } = P;
     rect(d, "#3a3028", 0, 0, TEX, TEX);
     for (let y = 0, row = 0; y < TEX; y += 16, row++)
-      for (let x = -(row % 2) * 10; x < TEX; ) {
+      for (let x = -(row % 2) * 10; x < TEX;) {
         const w = 12 + r() * 16;
         const k = 0.75 + r() * 0.4;
         const g = d.createLinearGradient(0, y, 0, y + 16);
@@ -642,13 +729,23 @@ const PAINT: Record<number, (P: Painter) => void> = {
     boards(P.d, 0, 0, TEX, TEX, 20, P.r, [140, 112, 84]);
     // nail heads, gaps between planks read dark
     for (let x = 0; x < TEX; x += 20) rect(P.d, "rgba(20,12,6,0.7)", x, 0, 2.5, TEX);
-    for (let y = 0; y < TEX; y += 128) for (let x = 4; x < TEX; x += 20) rect(P.d, "#2a2018", x, y + 6, 2, 2);
+    for (let y = 0; y < TEX; y += 128)
+      for (let x = 4; x < TEX; x += 20) rect(P.d, "#2a2018", x, y + 6, 2, 2);
     grain(P, 0.6, 18);
   },
   [WL.ROCK]: (P) => {
     // red sandstone strata: bands of rust, salmon and cream, desert varnish streaks, cracks
     const { d, r } = P;
-    const bands = ["#b2512c", "#c4653a", "#a4452a", "#d07a48", "#b85a34", "#e0a070", "#9a4028", "#c96d40"];
+    const bands = [
+      "#b2512c",
+      "#c4653a",
+      "#a4452a",
+      "#d07a48",
+      "#b85a34",
+      "#e0a070",
+      "#9a4028",
+      "#c96d40",
+    ];
     let y = 0;
     while (y < TEX) {
       const h = 6 + r() * 34;
@@ -660,7 +757,14 @@ const PAINT: Record<number, (P: Painter) => void> = {
     }
     for (let i = 0; i < 9000; i++) {
       const k = r();
-      rect(d, rgba(80 + k * 140, 40 + k * 80, 20 + k * 50, 0.08 + r() * 0.12), r() * TEX, r() * TEX, 1 + r() * 4, 1 + r() * 2);
+      rect(
+        d,
+        rgba(80 + k * 140, 40 + k * 80, 20 + k * 50, 0.08 + r() * 0.12),
+        r() * TEX,
+        r() * TEX,
+        1 + r() * 4,
+        1 + r() * 2,
+      );
     }
     // desert varnish: dark streaks running down from ledges
     for (let i = 0; i < 90; i++) {
@@ -671,12 +775,12 @@ const PAINT: Record<number, (P: Painter) => void> = {
       g.addColorStop(1, "rgba(40,20,14,0)");
       rect(d, g, x, y0, 2 + r() * 8, 180);
     }
-    // vertical joints / cracks
-    for (let i = 0; i < 40; i++) {
+    // vertical joints / cracks (faint: this tile covers a lot of cliff)
+    for (let i = 0; i < 26; i++) {
       let x = r() * TEX;
       let yy = r() * TEX;
-      d.strokeStyle = "rgba(50,22,12,0.45)";
-      d.lineWidth = 1 + r();
+      d.strokeStyle = "rgba(60,28,16,0.22)";
+      d.lineWidth = 1;
       d.beginPath();
       d.moveTo(x, yy);
       for (let s = 0; s < 8; s++) {
@@ -693,7 +797,14 @@ const PAINT: Record<number, (P: Painter) => void> = {
     for (let i = 0; i < 600; i++) {
       const y = r() * TEX;
       const k = r();
-      rect(d, rgba(70 + k * 90, 50 + k * 60, 30 + k * 40, 0.3 + r() * 0.3), 0, y, TEX, 1 + r() * 2.5);
+      rect(
+        d,
+        rgba(70 + k * 90, 50 + k * 60, 30 + k * 40, 0.3 + r() * 0.3),
+        0,
+        y,
+        TEX,
+        1 + r() * 2.5,
+      );
     }
     for (let i = 0; i < 30; i++) {
       d.fillStyle = "rgba(50,32,18,0.6)";
@@ -745,7 +856,15 @@ const PAINT: Record<number, (P: Painter) => void> = {
       d.fillStyle = fg;
       d.fillText(word, x + cw / 2, y + ch / 2 + 0.5);
       // sun-faded, chipped paint
-      for (let k = 0; k < 60; k++) rect(d, rgba(255, 245, 220, 0.12 * r()), x + r() * cw, y + r() * ch, 2 + r() * 6, 1 + r() * 2);
+      for (let k = 0; k < 60; k++)
+        rect(
+          d,
+          rgba(255, 245, 220, 0.12 * r()),
+          x + r() * cw,
+          y + r() * ch,
+          2 + r() * 6,
+          1 + r() * 2,
+        );
     });
   },
   [WL.CANVAS]: (P) => {
@@ -783,7 +902,14 @@ const PAINT: Record<number, (P: Painter) => void> = {
     rect(d, "#d2a574", 0, 0, TEX, TEX);
     for (let i = 0; i < 16000; i++) {
       const k = r();
-      rect(d, rgba(150 + k * 100, 110 + k * 80, 70 + k * 60, 0.25), r() * TEX, r() * TEX, 1 + r() * 2, 1 + r() * 2);
+      rect(
+        d,
+        rgba(150 + k * 100, 110 + k * 80, 70 + k * 60, 0.25),
+        r() * TEX,
+        r() * TEX,
+        1 + r() * 2,
+        1 + r() * 2,
+      );
     }
     // wind ripples
     for (let y = 0; y < TEX; y += 7 + r() * 5) {
@@ -807,7 +933,14 @@ const PAINT: Record<number, (P: Painter) => void> = {
     rect(d, "#a57a52", 0, 0, TEX, TEX);
     for (let i = 0; i < 14000; i++) {
       const k = r();
-      rect(d, rgba(110 + k * 90, 75 + k * 70, 45 + k * 50, 0.28), r() * TEX, r() * TEX, 1 + r() * 3, 1 + r() * 2);
+      rect(
+        d,
+        rgba(110 + k * 90, 75 + k * 70, 45 + k * 50, 0.28),
+        r() * TEX,
+        r() * TEX,
+        1 + r() * 3,
+        1 + r() * 2,
+      );
     }
     // wheel ruts along the street (u = along the street)
     for (const y of [0.22, 0.34, 0.66, 0.78]) {
@@ -825,7 +958,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
       d.fill();
     }
     // horse apples, straw
-    for (let i = 0; i < 40; i++) rect(d, "rgba(200,170,90,0.6)", r() * TEX, r() * TEX, 6 + r() * 8, 1);
+    for (let i = 0; i < 40; i++)
+      rect(d, "rgba(200,170,90,0.6)", r() * TEX, r() * TEX, 6 + r() * 8, 1);
   },
   [WL.MUD]: (P) => {
     const { d, r } = P;
@@ -865,7 +999,14 @@ const PAINT: Record<number, (P: Painter) => void> = {
     rect(d, "#b08a60", 0, 0, TEX, TEX);
     for (let i = 0; i < 12000; i++) {
       const k = r();
-      rect(d, rgba(120 + k * 90, 90 + k * 70, 55 + k * 50, 0.25), r() * TEX, r() * TEX, 1 + r() * 3, 1 + r() * 2);
+      rect(
+        d,
+        rgba(120 + k * 90, 90 + k * 70, 55 + k * 50, 0.25),
+        r() * TEX,
+        r() * TEX,
+        1 + r() * 3,
+        1 + r() * 2,
+      );
     }
     for (let i = 0; i < 400; i++) {
       d.strokeStyle = rgba(210, 180, 100, 0.5 + r() * 0.3);
@@ -893,8 +1034,17 @@ const PAINT: Record<number, (P: Painter) => void> = {
   [WL.IRON]: (P) => {
     const { d, r } = P;
     rect(d, "#3a3a3c", 0, 0, TEX, TEX);
-    for (let i = 0; i < 4000; i++) rect(d, rgba(90 + r() * 60, 60 + r() * 30, 40, 0.12), r() * TEX, r() * TEX, 1 + r() * 4, 1 + r() * 4);
-    for (let y = 32; y < TEX; y += 128) for (let x = 8; x < TEX; x += 16) rect(d, "#5a5a5c", x, y, 3, 3); // rivets
+    for (let i = 0; i < 4000; i++)
+      rect(
+        d,
+        rgba(90 + r() * 60, 60 + r() * 30, 40, 0.12),
+        r() * TEX,
+        r() * TEX,
+        1 + r() * 4,
+        1 + r() * 4,
+      );
+    for (let y = 32; y < TEX; y += 128)
+      for (let x = 8; x < TEX; x += 16) rect(d, "#5a5a5c", x, y, 3, 3); // rivets
     for (let y = 0; y < TEX; y += 128) rect(d, "rgba(0,0,0,0.5)", 0, y, TEX, 2);
   },
   [WL.PAINT]: (P) => {
@@ -988,7 +1138,7 @@ export type WMode = TimeOfDay;
 /** direction TOWARD the sun (sunset) or the moon (night) */
 export const SKY_DIR: Record<WMode, [number, number, number]> = {
   // low in the west, a touch south: it hangs just beside the church's bell tower
-  sunset: [-0.978, 0.15, 0.144],
+  sunset: [-0.972, 0.185, 0.143],
   // the moon rides over the buttes in the east-north-east
   night: [0.62, 0.42, -0.66],
 };
@@ -1144,12 +1294,12 @@ export function sunTexture() {
   if (sunTex) return sunTex;
   const [c, g] = canvas(256, 256);
   const gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  gr.addColorStop(0, "rgba(255,252,232,1)");
-  gr.addColorStop(0.2, "rgba(255,236,178,1)");
-  gr.addColorStop(0.3, "rgba(255,190,100,1)");
-  gr.addColorStop(0.32, "rgba(255,150,70,0.75)");
-  gr.addColorStop(0.45, "rgba(255,120,60,0.28)");
-  gr.addColorStop(0.7, "rgba(255,100,60,0.08)");
+  gr.addColorStop(0, "rgba(255,246,220,1)");
+  gr.addColorStop(0.2, "rgba(255,226,170,1)");
+  gr.addColorStop(0.285, "rgba(255,184,104,1)");
+  gr.addColorStop(0.3, "rgba(255,150,70,0.6)");
+  gr.addColorStop(0.42, "rgba(255,120,60,0.2)");
+  gr.addColorStop(0.7, "rgba(255,100,60,0.05)");
   gr.addColorStop(1, "rgba(255,90,60,0)");
   g.fillStyle = gr;
   g.fillRect(0, 0, 256, 256);

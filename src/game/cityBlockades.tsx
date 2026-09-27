@@ -89,7 +89,8 @@ function build(city: CityLayout, gaps: Gap[]) {
   for (const gap of gaps) {
     const r = mulberry(Math.round(gap.x * 7 + gap.z * 13) + 17);
     const out = gap.axis === "x" ? Math.sign(gap.z) : Math.sign(gap.x);
-    const rot = gap.axis === "x" ? (gap.z < 0 ? 0 : Math.PI) : gap.x < 0 ? Math.PI / 2 : -Math.PI / 2;
+    const rot =
+      gap.axis === "x" ? (gap.z < 0 ? 0 : Math.PI) : gap.x < 0 ? Math.PI / 2 : -Math.PI / 2;
     const s = Math.sin(rot);
     const c = Math.cos(rot);
     const ring = (gap.axis === "x" ? gap.z : gap.x) - out; // inner edge of the sealed ring
@@ -132,7 +133,8 @@ function build(city: CityLayout, gaps: Gap[]) {
       for (const e of [-L, L]) {
         const pts = prof.map(([z, y]) => q(e, y, z));
         for (let i = 1; i + 1 < pts.length; i++) {
-          const [p0, p1, p2] = e < 0 ? [pts[0]!, pts[i]!, pts[i + 1]!] : [pts[0]!, pts[i + 1]!, pts[i]!];
+          const [p0, p1, p2] =
+            e < 0 ? [pts[0]!, pts[i]!, pts[i + 1]!] : [pts[0]!, pts[i + 1]!, pts[i]!];
           body.tri(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
         }
       }
@@ -146,8 +148,18 @@ function build(city: CityLayout, gaps: Gap[]) {
       fence.col("#ffffff");
       fence.mat(0);
       // double-sided mesh quad, uv in metres
-      fence.quad(a[0], 0.12, a[2], b[0], 0.12, b[2], b[0], 2.3, b[2], a[0], 2.3, a[2], [0, 0, 3.5 / 0.15, 2.2 / 0.15]);
-      fence.quad(b[0], 0.12, b[2], a[0], 0.12, a[2], a[0], 2.3, a[2], b[0], 2.3, b[2], [0, 0, 3.5 / 0.15, 2.2 / 0.15]);
+      fence.quad(a[0], 0.12, a[2], b[0], 0.12, b[2], b[0], 2.3, b[2], a[0], 2.3, a[2], [
+        0,
+        0,
+        3.5 / 0.15,
+        2.2 / 0.15,
+      ]);
+      fence.quad(b[0], 0.12, b[2], a[0], 0.12, a[2], a[0], 2.3, a[2], b[0], 2.3, b[2], [
+        0,
+        0,
+        3.5 / 0.15,
+        2.2 / 0.15,
+      ]);
       body.col("#8a8e92");
       for (const e of [0, 3.5]) {
         const p = W(t + e, 1.6);
@@ -168,14 +180,38 @@ function build(city: CityLayout, gaps: Gap[]) {
       const a = P(t, 1.52, 1.1, -1.25, 0);
       const b = P(t, 1.52, 1.1, 1.25, 0);
       signs.col("#ffffff");
-      signs.quad(a[0], 1.1, a[2], b[0], 1.1, b[2], b[0], 1.72, b[2], a[0], 1.72, a[2], [0, 0.5, 1, 1]);
+      signs.quad(
+        a[0],
+        1.1,
+        a[2],
+        b[0],
+        1.1,
+        b[2],
+        b[0],
+        1.72,
+        b[2],
+        a[0],
+        1.72,
+        a[2],
+        [0, 0.5, 1, 1],
+      );
     }
     {
       const a = P(-half, 0.52, 0.95, 0, 0);
       const b = P(half, 0.52, 0.95, 0, 0);
       signs.col("#ffffff");
-      signs.quad(a[0], 0.86, a[2], b[0], 0.86, b[2], b[0], 1.02, b[2], a[0], 1.02, a[2], [0, 0, w / 5, 0.5]);
-      signs.quad(b[0], 0.86, b[2], a[0], 0.86, a[2], a[0], 1.02, a[2], b[0], 1.02, b[2], [0, 0, w / 5, 0.5]);
+      signs.quad(a[0], 0.86, a[2], b[0], 0.86, b[2], b[0], 1.02, b[2], a[0], 1.02, a[2], [
+        0,
+        0,
+        w / 5,
+        0.5,
+      ]);
+      signs.quad(b[0], 0.86, b[2], a[0], 0.86, a[2], a[0], 1.02, a[2], b[0], 1.02, b[2], [
+        0,
+        0,
+        w / 5,
+        0.5,
+      ]);
     }
     // ---- striped sawhorses with amber flashers in front of the fence ----
     const nsh = Math.max(1, Math.floor(w / 7));
@@ -211,11 +247,18 @@ function build(city: CityLayout, gaps: Gap[]) {
           const wx = p.x + part.x * cy + part.z * sy;
           const wz = p.z - part.x * sy + part.z * cy;
           if (part.kind === "barR" || part.kind === "barB") {
-            lights.push({ x: wx, y: part.y, z: wz, kind: part.kind === "barR" ? "red" : "blue", ph: side > 0 ? 0 : 0.5 });
+            lights.push({
+              x: wx,
+              y: part.y,
+              z: wz,
+              kind: part.kind === "barR" ? "red" : "blue",
+              ph: side > 0 ? 0 : 0.5,
+            });
             continue;
           }
           body.col(part.kind === "head" ? 0xe8e6dc : part.kind === "tail" ? 0x8a1a18 : part.color);
-          if (part.kind === "wheel") body.obox(wx, part.y - part.sy / 2, wz, part.sz, part.sy, part.sx, yaw);
+          if (part.kind === "wheel")
+            body.obox(wx, part.y - part.sy / 2, wz, part.sz, part.sy, part.sx, yaw);
           else body.obox(wx, part.y - part.sy / 2, wz, part.sx, part.sy, part.sz, yaw);
         }
       }
@@ -240,7 +283,15 @@ function build(city: CityLayout, gaps: Gap[]) {
   };
 }
 
-export function CityBlockades({ city, gaps, time }: { city: CityLayout; gaps: Gap[]; time: TimeOfDay }) {
+export function CityBlockades({
+  city,
+  gaps,
+  time,
+}: {
+  city: CityLayout;
+  gaps: Gap[];
+  time: TimeOfDay;
+}) {
   const built = useMemo(() => build(city, gaps), [city, gaps]);
   const mats = useMemo(
     () => ({
@@ -288,7 +339,9 @@ export function CityBlockades({ city, gaps, time }: { city: CityLayout; gaps: Ga
     built.lights.forEach((l, i) => {
       const phase = (t * (l.kind === "amber" ? 1.3 : 2.4) + l.ph) % 1;
       const on = l.kind === "amber" ? phase < 0.5 : l.kind === "red" ? phase < 0.5 : phase >= 0.5;
-      _c.set(l.kind === "red" ? "#ff2020" : l.kind === "blue" ? "#2a5aff" : "#ffb020").multiplyScalar(on ? k : 0.12);
+      _c.set(
+        l.kind === "red" ? "#ff2020" : l.kind === "blue" ? "#2a5aff" : "#ffb020",
+      ).multiplyScalar(on ? k : 0.12);
       m.setColorAt(i, _c);
     });
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
@@ -298,7 +351,9 @@ export function CityBlockades({ city, gaps, time }: { city: CityLayout; gaps: Ga
       {built.body && <mesh geometry={built.body} material={mats.body} castShadow receiveShadow />}
       {built.signs && <mesh geometry={built.signs} material={mats.signs} />}
       {built.fence && <mesh geometry={built.fence} material={mats.fence} castShadow />}
-      {built.lights.length > 0 && <instancedMesh ref={lightRef} args={[lightGeo, mats.light, built.lights.length]} />}
+      {built.lights.length > 0 && (
+        <instancedMesh ref={lightRef} args={[lightGeo, mats.light, built.lights.length]} />
+      )}
     </group>
   );
 }

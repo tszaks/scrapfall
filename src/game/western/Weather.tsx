@@ -36,7 +36,10 @@ function dustMaterial() {
   });
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aAlpha;\nvarying float vAlpha;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float aAlpha;\nvarying float vAlpha;",
+      )
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvAlpha = aAlpha;");
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vAlpha;")
@@ -110,10 +113,22 @@ export function WesternWeather({
     const g = new THREE.IcosahedronGeometry(0.5, 1);
     return g;
   }, []);
-  const weedMat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#a08452", wireframe: true }), []);
-  const weedCore = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8a7046", transparent: true, opacity: 0.55 }), []);
+  const weedMat = useMemo(
+    () => new THREE.MeshLambertMaterial({ color: "#a08452", wireframe: true }),
+    [],
+  );
+  const weedCore = useMemo(
+    () => new THREE.MeshLambertMaterial({ color: "#8a7046", transparent: true, opacity: 0.55 }),
+    [],
+  );
   const weeds = useRef(
-    Array.from({ length: WEEDS }, (_, i) => ({ x: 0, z: 0, ph: i * 1.7, alive: false, s: 0.7 + (i % 4) * 0.15 })),
+    Array.from({ length: WEEDS }, (_, i) => ({
+      x: 0,
+      z: 0,
+      ph: i * 1.7,
+      alive: false,
+      s: 0.7 + (i % 4) * 0.15,
+    })),
   );
   const wallGeo = useMemo(() => new THREE.SphereGeometry(44, 24, 12), []);
   const wallMat = useMemo(
@@ -142,7 +157,13 @@ export function WesternWeather({
   const coreRef = useRef<THREE.InstancedMesh>(null);
   const wallRef = useRef<THREE.Mesh>(null);
   // the fog we tint during a storm (captured afresh whenever the game swaps its fog)
-  const base = useRef<{ fog: THREE.Fog | null; near: number; far: number; color: THREE.Color; sunK: number }>({
+  const base = useRef<{
+    fog: THREE.Fog | null;
+    near: number;
+    far: number;
+    color: THREE.Color;
+    sunK: number;
+  }>({
     fog: null,
     near: 0,
     far: 0,
@@ -309,8 +330,19 @@ export function WesternWeather({
   return (
     <group>
       <points ref={moteRef} geometry={motes} material={moteMat} frustumCulled={false} />
-      <instancedMesh ref={dustRef} args={[dustGeo, dustMat, DUST]} frustumCulled={false} renderOrder={5} visible={false} />
-      <instancedMesh ref={weedRef} args={[weedGeo, weedMat, WEEDS]} frustumCulled={false} castShadow />
+      <instancedMesh
+        ref={dustRef}
+        args={[dustGeo, dustMat, DUST]}
+        frustumCulled={false}
+        renderOrder={5}
+        visible={false}
+      />
+      <instancedMesh
+        ref={weedRef}
+        args={[weedGeo, weedMat, WEEDS]}
+        frustumCulled={false}
+        castShadow
+      />
       <instancedMesh ref={coreRef} args={[weedGeo, weedCore, WEEDS]} frustumCulled={false} />
       <mesh ref={wallRef} geometry={wallGeo} material={wallMat} renderOrder={4} visible={false} />
     </group>

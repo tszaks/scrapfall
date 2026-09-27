@@ -4,6 +4,7 @@
 // BRIDGE OUT signs. The collision comes from soloBounds.sealGaps(); this only dresses it.
 // Everything stands on or beyond the sealed ring of cells, so nothing pokes into the
 // playable square, and it's all taller than a person.
+import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
@@ -14,7 +15,7 @@ import { W, WK, type WesternLayout } from "./layout";
 import { WESTERN_LOOK } from "./look";
 import { geoKit, propTemplate } from "./mesh";
 import { WL, softGlow } from "./textures";
-import { facadeMaterial } from "./Western";
+import { facadeMaterial, syncEnv } from "./materials";
 
 function mulberry(seed: number) {
   let a = seed >>> 0;
@@ -30,28 +31,68 @@ const { boxP, beam, cylP, signBoard } = geoKit;
 
 /** an overturned wagon lying on its side (local: long axis x, bed facing +z, base y = 0) */
 function overturnedWagon(G: Geo, r: () => number) {
-  G.col("#8a6a48");
+  G.col("#c4a47e");
   // the bed on its side: bottom boards face the player
   boxP(G, WL.TIMBER, -2.2, 0, -0.5, 2.2, 1.75, 0.35);
-  G.col("#6a4a30");
-  for (const x of [-2.1, -0.7, 0.7, 2.1]) boxP(G, WL.TIMBER, x - 0.08, 0, 0.35, x + 0.08, 1.75, 0.45); // cross members
+  G.col("#9a7a58");
+  for (const x of [-2.1, -0.7, 0.7, 2.1])
+    boxP(G, WL.TIMBER, x - 0.08, 0, 0.35, x + 0.08, 1.75, 0.45); // cross members
   boxP(G, WL.TIMBER, -2.3, 1.55, 0.3, 2.3, 1.7, 0.5); // axle beam (upper)
   boxP(G, WL.TIMBER, -2.3, 0.1, 0.3, 2.3, 0.25, 0.5);
   // wheels: the upper pair stick out flat, one sags, a broken one leans on the bed
   const wheel = (x: number, y: number, z: number, rad: number, flat: boolean, tilt = 0) => {
     const seg = 14;
-    G.col("#5a3e28");
+    G.col("#8a6a4a");
     for (let i = 0; i < seg; i++) {
       const a0 = (i / seg) * Math.PI * 2;
       const a1 = ((i + 1) / seg) * Math.PI * 2;
       if (flat)
-        beam(G, x + Math.cos(a0) * rad, y + Math.sin(a0) * rad * tilt, z + Math.sin(a0) * rad, x + Math.cos(a1) * rad, y + Math.sin(a1) * rad * tilt, z + Math.sin(a1) * rad, 0.09);
-      else beam(G, x + Math.cos(a0) * rad, y + Math.sin(a0) * rad, z, x + Math.cos(a1) * rad, y + Math.sin(a1) * rad, z, 0.09);
+        beam(
+          G,
+          x + Math.cos(a0) * rad,
+          y + Math.sin(a0) * rad * tilt,
+          z + Math.sin(a0) * rad,
+          x + Math.cos(a1) * rad,
+          y + Math.sin(a1) * rad * tilt,
+          z + Math.sin(a1) * rad,
+          0.09,
+        );
+      else
+        beam(
+          G,
+          x + Math.cos(a0) * rad,
+          y + Math.sin(a0) * rad,
+          z,
+          x + Math.cos(a1) * rad,
+          y + Math.sin(a1) * rad,
+          z,
+          0.09,
+        );
     }
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI;
-      if (flat) beam(G, x - Math.cos(a) * rad, y - Math.sin(a) * rad * tilt, z - Math.sin(a) * rad, x + Math.cos(a) * rad, y + Math.sin(a) * rad * tilt, z + Math.sin(a) * rad, 0.045);
-      else beam(G, x - Math.cos(a) * rad, y - Math.sin(a) * rad, z, x + Math.cos(a) * rad, y + Math.sin(a) * rad, z, 0.045);
+      if (flat)
+        beam(
+          G,
+          x - Math.cos(a) * rad,
+          y - Math.sin(a) * rad * tilt,
+          z - Math.sin(a) * rad,
+          x + Math.cos(a) * rad,
+          y + Math.sin(a) * rad * tilt,
+          z + Math.sin(a) * rad,
+          0.045,
+        );
+      else
+        beam(
+          G,
+          x - Math.cos(a) * rad,
+          y - Math.sin(a) * rad,
+          z,
+          x + Math.cos(a) * rad,
+          y + Math.sin(a) * rad,
+          z,
+          0.045,
+        );
     }
   };
   wheel(-1.4, 2.1, 0.4, 0.62, true, 0.15);
@@ -66,7 +107,7 @@ function overturnedWagon(G: Geo, r: () => number) {
 
 /** a sheriff's sawhorse barricade with a wanted poster nailed to it (local: along x) */
 function sawhorse(G: Geo, E: Geo, w: number) {
-  G.col("#7a5a3a");
+  G.col("#a88a66");
   for (const x of [-w / 2 + 0.2, w / 2 - 0.2]) {
     beam(G, x, 0, -0.45, x, 1.25, 0, 0.09);
     beam(G, x, 0, 0.45, x, 1.25, 0, 0.09);
@@ -91,13 +132,13 @@ function sawhorse(G: Geo, E: Geo, w: number) {
 
 /** a big painted road sign on two posts (local: along x, facing +z) */
 function roadSign(G: Geo, word: number) {
-  G.col("#6a4a30");
+  G.col("#9a7a58");
   boxP(G, WL.TIMBER, -1.5, 0, -0.08, -1.34, 2.9, 0.08);
   boxP(G, WL.TIMBER, 1.34, 0, -0.08, 1.5, 2.9, 0.08);
   signBoard(G, word, 0, 1.8, 0.09, 3.2, 0.95);
 }
 
-export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
+function buildBlockades(L: WesternLayout, gaps: Gap[]) {
   const G = new Geo();
   const E = new Geo();
   const P = new Geo();
@@ -107,7 +148,8 @@ export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
   const crates = propTemplate("crates");
   const crate = propTemplate("crate");
   const boulder = propTemplate("boulder");
-  const tint = new THREE.Color(1, 1, 1);
+  // sun-bleached: the barricades face away from the sunset, so they are paler than town props
+  const tint = new THREE.Color(1.5, 1.45, 1.4);
   const groundAt = (x: number, z: number) => {
     const i = Math.floor((x + L.half) / 2);
     const j = Math.floor((z + L.half) / 2);
@@ -135,7 +177,10 @@ export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
       if (E2.n) E.stamp(E2.freeze(), p.x, 0, p.z, rot + yaw);
     };
     const mid = at(0, 0);
-    const kind = groundAt(mid.x + (g.axis === "z" ? -out * 3 : 0), mid.z + (g.axis === "x" ? -out * 3 : 0));
+    const kind = groundAt(
+      mid.x + (g.axis === "z" ? -out * 3 : 0),
+      mid.z + (g.axis === "x" ? -out * 3 : 0),
+    );
     const rocky = kind === WK.RIVER || g.w < 16;
     const w = g.w;
     let t = -w / 2 - 0.6;
@@ -144,15 +189,38 @@ export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
       while (t < w / 2 + 0.6) {
         const sc = 1.3 + r() * 1.3;
         const p = at(t + sc * 0.6, 1.6 + r() * 1.2);
-        if (boulder) G.stamp(boulder.d, p.x, -0.1, p.z, r() * 6.28, sc * 1.25, sc * (1.25 + r() * 0.5), sc * 1.25, tint);
+        if (boulder)
+          G.stamp(
+            boulder.d,
+            p.x,
+            -0.1,
+            p.z,
+            r() * 6.28,
+            sc * 1.25,
+            sc * (1.25 + r() * 0.5),
+            sc * 1.25,
+            tint,
+          );
         t += sc * 0.9;
       }
       for (let k = 0; k < w / 2.5; k++) {
         const p = at(-w / 2 + r() * w, 0.9 + r() * 0.6);
-        if (boulder) G.stamp(boulder.d, p.x, -0.15, p.z, r() * 6.28, 0.6 + r() * 0.5, 0.6 + r() * 0.5, 0.6 + r() * 0.5, tint);
+        if (boulder)
+          G.stamp(
+            boulder.d,
+            p.x,
+            -0.15,
+            p.z,
+            r() * 6.28,
+            0.6 + r() * 0.5,
+            0.6 + r() * 0.5,
+            0.6 + r() * 0.5,
+            tint,
+          );
       }
       // a sign for the riverbed crossing
-      if (kind === WK.RIVER) stampLocal((G2) => roadSign(G2, W["BRIDGE OUT"]), 0, 0.2, (r() - 0.5) * 0.3);
+      if (kind === WK.RIVER)
+        stampLocal((G2) => roadSign(G2, W["BRIDGE OUT"]), 0, 0.2, (r() - 0.5) * 0.3);
       else stampLocal((G2) => roadSign(G2, W["KEEP OUT"]), r() < 0.5 ? -w / 4 : w / 4, 0.2);
     } else {
       // a road: wagons tipped across it, barrels and crates stacked in the gaps
@@ -171,7 +239,17 @@ export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
           const top = pick === "barrels" ? barrel : crate;
           if (top) {
             const q = at(tt + (r() - 0.5) * 0.3, 1.1);
-            G.stamp(top.d, q.x, pick === "barrels" ? 1.75 : 1.5, q.z, r() * 6.28, 1.1, 1.1, 1.1, tint);
+            G.stamp(
+              top.d,
+              q.x,
+              pick === "barrels" ? 1.75 : 1.5,
+              q.z,
+              r() * 6.28,
+              1.1,
+              1.1,
+              1.1,
+              tint,
+            );
           }
           t += 2.1;
         }
@@ -195,7 +273,15 @@ export function buildBlockades(L: WesternLayout, gaps: Gap[]) {
   };
 }
 
-export function WesternBlockades({ layout, gaps, time }: { layout: WesternLayout; gaps: Gap[]; time: TimeOfDay }) {
+export function WesternBlockades({
+  layout,
+  gaps,
+  time,
+}: {
+  layout: WesternLayout;
+  gaps: Gap[];
+  time: TimeOfDay;
+}) {
   const built = useMemo(() => buildBlockades(layout, gaps), [layout, gaps]);
   const nightK = useMemo(() => ({ value: 0 }), []);
   const mats = useMemo(
@@ -225,11 +311,14 @@ export function WesternBlockades({ layout, gaps, time }: { layout: WesternLayout
     [built],
   );
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  useFrame(() => syncEnv(mats.main));
   return (
     <group>
       {built.main && <mesh geometry={built.main} material={mats.main} castShadow receiveShadow />}
       {built.glow && <mesh geometry={built.glow} material={mats.glow} />}
-      {built.pools && time === "night" && <mesh geometry={built.pools} material={mats.pools} renderOrder={2} />}
+      {built.pools && time === "night" && (
+        <mesh geometry={built.pools} material={mats.pools} renderOrder={2} />
+      )}
     </group>
   );
 }

@@ -11,7 +11,7 @@ import * as THREE from "three";
 
 import { Geo } from "../cityGeo";
 import type { TimeOfDay } from "../lighting";
-import { liveCars, type TrafficLink } from "../trafficCore";
+import { hitsTraffic, liveCars, type TrafficLink } from "../trafficCore";
 import { RAIL_X, type WesternLayout } from "./layout";
 import { WESTERN_LOOK } from "./look";
 import { trainVoice, whistle } from "./sound";
@@ -28,9 +28,19 @@ import {
   type Run,
 } from "./trainSim";
 import { addUV } from "./mesh";
-import { facadeMaterial } from "./Western";
+import { facadeMaterial, syncEnv } from "./materials";
 
-const KINDS: CarKind[] = ["loco", "tender", "box", "flat", "tank", "stock", "gondola", "caboose", "armored"];
+const KINDS: CarKind[] = [
+  "loco",
+  "tender",
+  "box",
+  "flat",
+  "tank",
+  "stock",
+  "gondola",
+  "caboose",
+  "armored",
+];
 const MAX_PER_KIND = 14;
 const MAX_WHEELS = 260;
 const PUFFS = 72;
@@ -49,11 +59,25 @@ const _c = new THREE.Color();
 // ---------------------------------------------------------------------------------------
 // car geometry (local: y = 0 on the rail head, +z = front, centred)
 
-function box(G: Geo, layer: number, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) {
+function box(
+  G: Geo,
+  layer: number,
+  x0: number,
+  y0: number,
+  z0: number,
+  x1: number,
+  y1: number,
+  z1: number,
+) {
   const [tu, tv] = TILE_M[layer] ?? [2, 2];
   G.mat(layer);
   const w = (ax: number, az: number, bx: number, bz: number) =>
-    G.quad(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y1, az, [0, y0 / tv, Math.hypot(bx - ax, bz - az) / tu, y1 / tv]);
+    G.quad(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y1, az, [
+      0,
+      y0 / tv,
+      Math.hypot(bx - ax, bz - az) / tu,
+      y1 / tv,
+    ]);
   w(x1, z0, x0, z0);
   w(x1, z1, x1, z0);
   w(x0, z1, x1, z1);
@@ -62,14 +86,34 @@ function box(G: Geo, layer: number, x0: number, y0: number, z0: number, x1: numb
   G.quad(x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1, [0, 0, 1, 1]);
 }
 /** a cylinder lying along z */
-function tubeZ(G: Geo, layer: number, y: number, x: number, r: number, z0: number, z1: number, seg = 14, caps = true) {
+function tubeZ(
+  G: Geo,
+  layer: number,
+  y: number,
+  x: number,
+  r: number,
+  z0: number,
+  z1: number,
+  seg = 14,
+  caps = true,
+) {
   const g = new THREE.CylinderGeometry(r, r, z1 - z0, seg, 1, !caps);
   g.rotateX(Math.PI / 2);
   G.mat(layer);
   G.add(g, new THREE.Matrix4().makeTranslation(x, y, (z0 + z1) / 2));
   g.dispose();
 }
-function cylY(G: Geo, layer: number, x: number, y0: number, z: number, r0: number, r1: number, h: number, seg = 12) {
+function cylY(
+  G: Geo,
+  layer: number,
+  x: number,
+  y0: number,
+  z: number,
+  r0: number,
+  r1: number,
+  h: number,
+  seg = 12,
+) {
   const g = new THREE.CylinderGeometry(r1, r0, h, seg);
   G.mat(layer);
   G.add(g, new THREE.Matrix4().makeTranslation(x, y0 + h / 2, z));
@@ -89,7 +133,8 @@ function frame(G: Geo, len: number) {
 }
 function ladder(G: Geo, x: number, z: number, y0: number, y1: number) {
   G.col("#2a2624");
-  for (let y = y0 + 0.3; y < y1; y += 0.42) box(G, WL.IRON, x - 0.02, y, z - 0.25, x + 0.03, y + 0.04, z + 0.25);
+  for (let y = y0 + 0.3; y < y1; y += 0.42)
+    box(G, WL.IRON, x - 0.02, y, z - 0.25, x + 0.03, y + 0.04, z + 0.25);
 }
 
 function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, number][] } {
@@ -110,19 +155,23 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
     box(G, WL.PAINT, -1.15, 0.8, 5.0, 1.15, 1.3, 5.35);
     for (let x = -0.9; x <= 0.91; x += 0.3) {
       const b = new THREE.BoxGeometry(0.09, 0.09, 1.5);
-      const m = new THREE.Matrix4().makeTranslation(x * 0.65, 0.6, 5.85).multiply(new THREE.Matrix4().makeRotationX(0.62));
+      const m = new THREE.Matrix4()
+        .makeTranslation(x * 0.65, 0.6, 5.85)
+        .multiply(new THREE.Matrix4().makeRotationX(0.62));
       G.mat(WL.PAINT);
       G.add(b, m);
       b.dispose();
     }
     // steam chests and cylinders
     G.col("#2e2a28");
-    for (const s of [-1, 1]) box(G, WL.IRON, s > 0 ? 0.85 : -1.3, 0.85, 3.1, s > 0 ? 1.3 : -0.85, 1.65, 4.6);
+    for (const s of [-1, 1])
+      box(G, WL.IRON, s > 0 ? 0.85 : -1.3, 0.85, 3.1, s > 0 ? 1.3 : -0.85, 1.65, 4.6);
     // boiler with brass bands, the smokebox, the front door
     G.col("#1f2a24");
     tubeZ(G, WL.IRON, 2.35, 0, 0.8, -3.0, 4.2);
     G.col("#c8a040");
-    for (const z of [-2.2, -0.6, 1.0, 2.6]) tubeZ(G, WL.PAINT, 2.35, 0, 0.83, z, z + 0.14, 14, false);
+    for (const z of [-2.2, -0.6, 1.0, 2.6])
+      tubeZ(G, WL.PAINT, 2.35, 0, 0.83, z, z + 0.14, 14, false);
     G.col("#1a1816");
     tubeZ(G, WL.IRON, 2.35, 0, 0.86, 4.2, 5.0);
     G.col("#c8a040");
@@ -184,7 +233,14 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
     // the coal heap
     const ico = new THREE.IcosahedronGeometry(1, 1);
     G.col("#1a1816");
-    addUV(G, ico, new THREE.Matrix4().makeTranslation(0, 2.4, 1.6).multiply(new THREE.Matrix4().makeScale(1.3, 0.75, 1.9)), WL.BALLAST);
+    addUV(
+      G,
+      ico,
+      new THREE.Matrix4()
+        .makeTranslation(0, 2.4, 1.6)
+        .multiply(new THREE.Matrix4().makeScale(1.3, 0.75, 1.9)),
+      WL.BALLAST,
+    );
     ico.dispose();
     wheels = truckWheels(len);
   } else if (kind === "box" || kind === "stock") {
@@ -197,14 +253,44 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
       G.col("#1a120c");
       box(G, WL.PAINT, -1.3, 1.12, -len / 2 + 0.2, 1.3, 3.8, len / 2 - 0.2);
       G.col("#ffffff");
-      for (let y = 1.25; y < 3.9; y += 0.45) box(G, WL.P_BOARD, -1.48, y, -len / 2, 1.48, y + 0.26, len / 2);
-      for (let z = -len / 2; z <= len / 2; z += 1.4) box(G, WL.P_BOARD, -1.5, 1.12, z - 0.08, 1.5, 3.95, z + 0.08);
+      for (let y = 1.25; y < 3.9; y += 0.45)
+        box(G, WL.P_BOARD, -1.48, y, -len / 2, 1.48, y + 0.26, len / 2);
+      for (let z = -len / 2; z <= len / 2; z += 1.4)
+        box(G, WL.P_BOARD, -1.5, 1.12, z - 0.08, 1.5, 3.95, z + 0.08);
     }
     // a shallow peaked roof with the running board on top
     G.col("#6a5a4e");
     G.mat(WL.P_BOARD);
-    G.quad(1.58, 3.95, len / 2, 1.58, 3.95, -len / 2, 0, 4.2, -len / 2, 0, 4.2, len / 2, [0, 0, 3, 0.4]);
-    G.quad(-1.58, 3.95, -len / 2, -1.58, 3.95, len / 2, 0, 4.2, len / 2, 0, 4.2, -len / 2, [0, 0, 3, 0.4]);
+    G.quad(
+      1.58,
+      3.95,
+      len / 2,
+      1.58,
+      3.95,
+      -len / 2,
+      0,
+      4.2,
+      -len / 2,
+      0,
+      4.2,
+      len / 2,
+      [0, 0, 3, 0.4],
+    );
+    G.quad(
+      -1.58,
+      3.95,
+      -len / 2,
+      -1.58,
+      3.95,
+      len / 2,
+      0,
+      4.2,
+      len / 2,
+      0,
+      4.2,
+      -len / 2,
+      [0, 0, 3, 0.4],
+    );
     G.col("#8a7258");
     box(G, WL.TIMBER, -0.3, 4.2, -len / 2, 0.3, 4.27, len / 2);
     // sliding doors with bracing
@@ -231,9 +317,11 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
     box(G, WL.TIMBER, -1.3, 1.3, -5.2, 1.3, 2.7, -0.4);
     box(G, WL.TIMBER, -1.3, 1.3, 0.4, 1.3, 2.4, 5.2);
     G.col("#2a2624");
-    for (const z of [-4.2, -1.5, 1.5, 4.2]) box(G, WL.IRON, -1.34, 1.3, z - 0.05, 1.34, z < 0 ? 2.74 : 2.44, z + 0.05);
+    for (const z of [-4.2, -1.5, 1.5, 4.2])
+      box(G, WL.IRON, -1.34, 1.3, z - 0.05, 1.34, z < 0 ? 2.74 : 2.44, z + 0.05);
     for (let z = -5; z <= 5; z += 2.5)
-      for (const s of [-1, 1]) box(G, WL.TIMBER, s * 1.4 - 0.06, 1.3, z - 0.06, s * 1.4 + 0.06, 2.3, z + 0.06);
+      for (const s of [-1, 1])
+        box(G, WL.TIMBER, s * 1.4 - 0.06, 1.3, z - 0.06, s * 1.4 + 0.06, 2.3, z + 0.06);
     wheels = truckWheels(len);
   } else if (kind === "tank") {
     const len = 10.4;
@@ -257,7 +345,14 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
     const ico = new THREE.IcosahedronGeometry(1, 1);
     G.col("#b89a88");
     for (const z of [-3, 0, 3])
-      addUV(G, ico, new THREE.Matrix4().makeTranslation(0, 2.05, z).multiply(new THREE.Matrix4().makeScale(1.25, 0.5, 1.7)), WL.BALLAST);
+      addUV(
+        G,
+        ico,
+        new THREE.Matrix4()
+          .makeTranslation(0, 2.05, z)
+          .multiply(new THREE.Matrix4().makeScale(1.25, 0.5, 1.7)),
+        WL.BALLAST,
+      );
     ico.dispose();
     wheels = truckWheels(len);
   } else if (kind === "caboose") {
@@ -273,14 +368,29 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
     for (const s of [-1, 1])
       for (const z of [-2.2, 0.2, 2.2]) {
         const x = s * 1.46;
-        G.quad(x, 2.1, z + s * 0.45, x, 2.1, z - s * 0.45, x, 3.0, z - s * 0.45, x, 3.0, z + s * 0.45, [0, 0, 1, 1]);
+        G.quad(
+          x,
+          2.1,
+          z + s * 0.45,
+          x,
+          2.1,
+          z - s * 0.45,
+          x,
+          3.0,
+          z - s * 0.45,
+          x,
+          3.0,
+          z + s * 0.45,
+          [0, 0, 1, 1],
+        );
       }
     // end platforms with railings
     G.col("#2a2624");
     for (const e of [-1, 1]) {
       box(G, WL.IRON, -1.3, 1.12, e > 0 ? 3.6 : -4.7, 1.3, 1.2, e > 0 ? 4.7 : -3.6);
       box(G, WL.IRON, -1.3, 2.1, e * 4.6 - 0.03, 1.3, 2.16, e * 4.6 + 0.03);
-      for (const x of [-1.25, 1.25]) box(G, WL.IRON, x - 0.03, 1.2, e * 4.6 - 0.03, x + 0.03, 2.1, e * 4.6 + 0.03);
+      for (const x of [-1.25, 1.25])
+        box(G, WL.IRON, x - 0.03, 1.2, e * 4.6 - 0.03, x + 0.03, 2.1, e * 4.6 + 0.03);
     }
     wheels = truckWheels(len);
   } else {
@@ -300,7 +410,8 @@ function carGeo(kind: CarKind): { geo: THREE.BufferGeometry; wheels: [number, nu
         const a2 = Math.PI / 2 + ((i + 1) / 5) * Math.PI * 2;
         const R = 0.9;
         const r = 0.38;
-        const p = (a: number, rr: number) => [2.6 + Math.sin(a) * rr, Math.cos(a) * rr * s] as const;
+        const p = (a: number, rr: number) =>
+          [2.6 + Math.sin(a) * rr, Math.cos(a) * rr * s] as const;
         const [y0, z0] = p(a0, R);
         const [y1, z1] = p(a1, r);
         const [y2, z2] = p(a2, R);
@@ -340,7 +451,10 @@ function puffMaterial() {
   });
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aAlpha;\nvarying float vAlpha;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float aAlpha;\nvarying float vAlpha;",
+      )
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvAlpha = aAlpha;");
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vAlpha;")
@@ -457,7 +571,17 @@ export function WesternTrain({
 
   // puffs of smoke: world-space particles in a ring buffer
   const puffs = useRef(
-    Array.from({ length: PUFFS }, () => ({ x: 0, y: -99, z: 0, vx: 0, vy: 0, vz: 0, age: 99, life: 1, s: 1 })),
+    Array.from({ length: PUFFS }, () => ({
+      x: 0,
+      y: -99,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      age: 99,
+      life: 1,
+      s: 1,
+    })),
   );
   const puffAt = useRef(0);
   const puffT = useRef(0);
@@ -499,18 +623,30 @@ export function WesternTrain({
   const lastT = useRef(0);
 
   useEffect(() => {
-    const debug = import.meta.env.DEV || new URLSearchParams(window.location.search).get("debug") === "1";
-    if (debug) (window as unknown as { __rsTrain?: unknown }).__rsTrain = { trainClock, trainLine, trainsAt, frontOf, carCentres };
+    const debug =
+      import.meta.env.DEV || new URLSearchParams(window.location.search).get("debug") === "1";
+    if (debug)
+      (window as unknown as { __rsTrain?: unknown }).__rsTrain = {
+        trainClock,
+        trainLine,
+        trainsAt,
+        frontOf,
+        carCentres,
+        hitsTraffic,
+        log: debugLog,
+      };
   }, []);
 
   useFrame((state, raw) => {
     const dt = Math.min(raw, 0.05);
+    syncEnv(mats.car);
     const L = link.current;
     const guest = L.role === "guest";
     const now = performance.now();
     // ---- the clock: fixed steps on the host, the host's clock on guests ----
     if (guest) {
-      if (hostClock.current) trainClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
+      if (hostClock.current)
+        trainClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
     } else {
       acc.current += dt;
       let steps = 0;
@@ -540,6 +676,8 @@ export function WesternTrain({
           const dx = RAIL_X - cam.x;
           const d = Math.hypot(dx, dz);
           whistle(d, (dx * yawRight.x + dz * yawRight.z) / Math.max(1, d), w !== whistles(run)[2]);
+          if (debugLog.length < 200)
+            debugLog.push({ t, kind: "whistle", d: Math.round(d), arrive: run.arrive, k: run.k });
         }
       }
       const tail = f - run.dir * run.length;
@@ -625,23 +763,44 @@ export function WesternTrain({
         }
         // bullets stop on the cars (not up on the trestle, where they pass underneath)
         const onTrestle = y0 > 1.6;
-        if (!onTrestle) liveCars.push({ x: RAIL_X, z: zc, sin: 0, cos: run.dir, hl: car.len / 2, hw: car.w / 2, h: y0 + car.h });
+        if (!onTrestle)
+          liveCars.push({
+            x: RAIL_X,
+            z: zc,
+            sin: 0,
+            cos: run.dir,
+            hl: car.len / 2,
+            hw: car.w / 2,
+            h: y0 + car.h,
+          });
         if (onTrestle || sp < 0.05) return;
         // ---- bumping the local player: hard, and it never stops ----
         const hl = car.len / 2 + 0.55;
         const hw = car.w / 2 + 0.5;
-        if (L.active && hitCd.current <= 0 && Math.abs(pz - zc) < hl && Math.abs(px - RAIL_X) < hw) {
+        if (
+          L.active &&
+          hitCd.current <= 0 &&
+          Math.abs(pz - zc) < hl &&
+          Math.abs(px - RAIL_X) < hw
+        ) {
           const side = px >= RAIL_X ? 1 : -1;
           const k = Math.min(1, sp / TRAIN_SPEED_HINT);
-          L.hitPlayer(sp > 3 ? 3 : 0, side * (8 + 12 * k), run.dir * (4 + 12 * k), Math.min(1, 0.3 + k));
+          L.hitPlayer(
+            sp > 3 ? 3 : 0,
+            side * (12 + 16 * k),
+            run.dir * (5 + 13 * k),
+            Math.min(1, 0.3 + k),
+          );
           hitCd.current = 0.8;
+          if (debugLog.length < 200) debugLog.push({ t, kind: "bump", k: run.k });
         }
         // ---- small enemies are thrown clear and broken, big ones knocked aside (host) ----
         if (L.isHost && L.hurtEnemy) {
           L.enemies.forEach((e, idx) => {
             if (!e.alive) return;
             const r = L.radiusOf(e);
-            if (Math.abs(e.z - zc) > car.len / 2 + r || Math.abs(e.x - RAIL_X) > car.w / 2 + r) return;
+            if (Math.abs(e.z - zc) > car.len / 2 + r || Math.abs(e.x - RAIL_X) > car.w / 2 + r)
+              return;
             const last = enemyHit.current.get(idx) ?? -9;
             if (t - last < 0.9) return;
             enemyHit.current.set(idx, t);
@@ -673,7 +832,8 @@ export function WesternTrain({
       const alpha = puffGeo.getAttribute("aAlpha") as THREE.InstancedBufferAttribute;
       let alive = 0;
       const night = timeRef.current === "night";
-      pm.material instanceof THREE.MeshBasicMaterial && pm.material.color.set(night ? "#5a5a66" : "#c8a890");
+      if (pm.material instanceof THREE.MeshBasicMaterial)
+        pm.material.color.set(night ? "#5a5a66" : "#c8a890");
       for (let i = 0; i < PUFFS; i++) {
         const pf = puffs.current[i]!;
         pf.age += dt;
@@ -729,8 +889,18 @@ export function WesternTrain({
           visible={false}
         />
       ))}
-      <instancedMesh ref={wheelRef} args={[wheelGeo, mats.wheel, MAX_WHEELS]} frustumCulled={false} visible={false} />
-      <instancedMesh ref={puffRef} args={[puffGeo, mats.puff, PUFFS]} frustumCulled={false} renderOrder={3} />
+      <instancedMesh
+        ref={wheelRef}
+        args={[wheelGeo, mats.wheel, MAX_WHEELS]}
+        frustumCulled={false}
+        visible={false}
+      />
+      <instancedMesh
+        ref={puffRef}
+        args={[puffGeo, mats.puff, PUFFS]}
+        frustumCulled={false}
+        renderOrder={3}
+      />
       {[0, 1].map((i) => (
         <group
           key={i}
@@ -748,3 +918,5 @@ export function WesternTrain({
   );
 }
 const TRAIN_SPEED_HINT = 17;
+/** test log (debug builds): whistles and bumps, with the train clock and distances */
+const debugLog: { t: number; kind: string; d?: number; arrive?: number; k?: number }[] = [];

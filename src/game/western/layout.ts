@@ -123,6 +123,9 @@ export type WPropKind =
   | "woodpile"
   | "outcrop"
   | "arch"
+  | "horse"
+  | "stagecoach"
+  | "sacks"
   | "sign";
 export type WProp = { k: WPropKind; x: number; z: number; rot: number; s: number; a?: number };
 
@@ -196,7 +199,8 @@ export const W = Object.fromEntries(WORDS.map((w, i) => [w, i])) as Record<
 
 // ---------- noise ----------
 function hash2(x: number, z: number, s: number) {
-  let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s, 2147483647)) | 0;
+  let h =
+    (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s, 2147483647)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
@@ -311,8 +315,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   ];
   const inClear = (x: number, z: number, pad = 0) =>
     clear.some((c) => x > c.x0 - pad && x < c.x1 + pad && z > c.z0 - pad && z < c.z1 + pad);
-  const inRiver = (x: number, z: number, pad = 0) =>
-    Math.abs(z - riverZ(x)) < riverW(x) / 2 + pad;
+  const inRiver = (x: number, z: number, pad = 0) => Math.abs(z - riverZ(x)) < riverW(x) / 2 + pad;
 
   // ======================================================================
   // 2. rock: the outer rim, the ring ridge, the north canyon, mesas and buttes
@@ -345,7 +348,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const off = (hr(n + 100) - 0.45) * 50; // mostly inward
       const bx = side === 0 ? along : side === 1 ? RING - off : side === 2 ? -along : -RING + off;
       const bz = side === 0 ? -RING + off : side === 1 ? along : side === 2 ? RING - off : -along;
-      blobs.push({ x: bx, z: bz, r: 10 + hr(n + 200) * 16, h: 14 + hr(n + 300) * 30, ex: 1 + hr(n + 400) * 1.4, rot: hr(n + 500) * 3 });
+      blobs.push({
+        x: bx,
+        z: bz,
+        r: 10 + hr(n + 200) * 16,
+        h: 14 + hr(n + 300) * 30,
+        ex: 1 + hr(n + 400) * 1.4,
+        rot: hr(n + 500) * 3,
+      });
     }
   }
   const openings: { side: 0 | 1 | 2 | 3; c: number; hw: number }[] = [
@@ -382,7 +392,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       }
       // the north canyon: tall cliffs behind town, the mine and the rail tunnel in its face
       const face =
-        -208 + 44 * (spread(fbm(x * 0.012, 0.5, seedN + 6)) - 0.5) + 9 * Math.sin(x / 31) + 5 * Math.sin(x / 13 + 2);
+        -208 +
+        44 * (spread(fbm(x * 0.012, 0.5, seedN + 6)) - 0.5) +
+        9 * Math.sin(x / 31) +
+        5 * Math.sin(x / 13 + 2);
       if (z < face && Math.abs(x) < RING + 30) {
         const t = smooth(0, 10, face - z);
         h = Math.max(h, t * (24 + 36 * spread(fbm(x * 0.015, z * 0.015, seedN + 7, 5))));
@@ -398,8 +411,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         const w = dx * s + dz * c;
         const dist = Math.hypot(u, w);
         const ang = Math.atan2(w, u);
-        const rr = b.r * (0.8 + 0.4 * fbm(Math.cos(ang) * 1.6 + b.x, Math.sin(ang) * 1.6, seedN + 8));
-        if (dist < rr) h = Math.max(h, b.h * smooth(0, 6, rr - dist) * (0.85 + 0.3 * fbm(x * 0.05, z * 0.05, seedN + 9)));
+        const rr =
+          b.r * (0.8 + 0.4 * fbm(Math.cos(ang) * 1.6 + b.x, Math.sin(ang) * 1.6, seedN + 8));
+        if (dist < rr)
+          h = Math.max(
+            h,
+            b.h * smooth(0, 6, rr - dist) * (0.85 + 0.3 * fbm(x * 0.05, z * 0.05, seedN + 9)),
+          );
       }
       if (h <= 0) continue;
       // carve the passes through the ring ridge
@@ -409,6 +427,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         if (Math.abs(along - o.c) < o.hw && across > RING - 40 && across < half - 20) h = 0;
       }
       if (inClear(x, z) || (inRiver(x, z, 1) && e < half - 44)) h = 0;
+      // co-op: a wagon trail loops round the outer desert between the ridges and the rim, so
+      // every part of it connects (the north side stays solid canyon)
+      const loopE = RING + (half - RING) * 0.5;
+      if (Math.abs(e - loopE) < 5 && !(z < -RING && Math.abs(x) < RING - 30)) h = 0;
       if (h < 1.2) continue;
       rock[k] = terrace(h, 8);
     }
@@ -592,7 +614,16 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   };
 
   /** one row of false-front buildings along Main Street; `north` = the row on the -z side */
-  type Plan = { w: number; t: WType; sign: number; storeys: number; mat?: WMat; porch?: 0 | 1 | 2; ff?: 0 | 1 | 2 | 3; d?: number };
+  type Plan = {
+    w: number;
+    t: WType;
+    sign: number;
+    storeys: number;
+    mat?: WMat;
+    porch?: 0 | 1 | 2;
+    ff?: 0 | 1 | 2 | 3;
+    d?: number;
+  };
   const row = (north: boolean, x0: number, x1: number, fixed: Plan[]) => {
     const zf = north ? -STREET_HALF - BOARD_D : STREET_HALF + BOARD_D; // building front line
     const front = north ? 2 : 0;
@@ -609,7 +640,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     // interleave the landmarks with the fillers deterministically
     const fillers = plans.slice(fixed.length);
-    const order: Plan[] = [];
+    let order: Plan[] = [];
     const every = Math.max(1, Math.round(fillers.length / (fixed.length + 1)));
     let fi = 0;
     for (let li = 0; li < fixed.length; li++) {
@@ -617,9 +648,19 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       order.push(fixed[li]!);
     }
     while (fi < fillers.length) order.push(fillers[fi++]!);
-    for (const p of order) {
-      const gap = rand() < 0.35 ? 4 : 2; // alleys between buildings (flanking routes)
-      if (x + p.w > x1) break;
+    // alleys between buildings (flanking routes); drop fillers until everything fits, so
+    // every landmark is always built
+    const gaps = order.map(() => (rand() < 0.35 ? 4 : 2));
+    const need = () => order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - 2;
+    while (need() > x1 - x0) {
+      const k = order.map((p) => fixed.includes(p)).lastIndexOf(false);
+      if (k < 0) break;
+      order = order.filter((_, i) => i !== k);
+      gaps.splice(k, 1);
+    }
+    for (let oi = 0; oi < order.length; oi++) {
+      const p = order[oi]!;
+      const gap = gaps[oi]!;
       const d = p.d ?? 14 + Math.floor(rand() * 4) * 2;
       const bz0 = north ? zf - d : zf;
       const bz1 = north ? zf : zf + d;
@@ -640,21 +681,65 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         roof: mat === "adobe" ? "flat" : rand() < 0.7 ? "gable" : "shed",
       });
       // boardwalk in front (walkable deck), hitching rail + trough on the street edge
-      setGround(x - (gap > 2 ? 0 : 1), north ? zf : zf - BOARD_D, x + p.w + 1, north ? zf + BOARD_D : zf, WK.BOARD);
+      setGround(
+        x - (gap > 2 ? 0 : 1),
+        north ? zf : zf - BOARD_D,
+        x + p.w + 1,
+        north ? zf + BOARD_D : zf,
+        WK.BOARD,
+      );
       const edge = north ? -STREET_HALF + 0.6 : STREET_HALF - 0.6;
       if (p.t !== "smithy" && rand() < 0.75) {
         const hx = x + p.w * (0.3 + rand() * 0.4);
         prop("hitch", hx, edge, 0, Math.min(4, p.w * 0.4));
-        if (rand() < 0.45) solidProp("trough", hx + 3.2, edge - (north ? -0.1 : 0.1), 0, 2.4, 0.8, 0.8);
+        // horses tied up at the rail, noses to it, one or two
+        if (rand() < 0.62) {
+          const nh = rand() < 0.4 ? 2 : 1;
+          for (let hi = 0; hi < nh; hi++)
+            prop(
+              "horse",
+              hx + (hi - (nh - 1) / 2) * 1.5 + (rand() - 0.5) * 0.3,
+              edge + (north ? 1.5 : -1.5),
+              north ? Math.PI + (rand() - 0.5) * 0.25 : (rand() - 0.5) * 0.25,
+              0.95 + rand() * 0.1,
+              Math.floor(rand() * 6),
+            );
+        }
+        if (rand() < 0.45)
+          solidProp("trough", hx + 3.2, edge - (north ? -0.1 : 0.1), 0, 2.4, 0.8, 0.8);
       }
       if (rand() < 0.5)
-        prop(rand() < 0.5 ? "barrels" : "crates", x + 1 + rand() * (p.w - 2), north ? zf + 0.8 : zf - 0.8, rand() * 6.28, 0.8 + rand() * 0.4);
-      if (rand() < 0.55) prop("bench", x + p.w / 2 + (rand() - 0.5) * 3, north ? zf + 0.6 : zf - 0.6, north ? 0 : Math.PI);
+        prop(
+          rand() < 0.5 ? "barrels" : "crates",
+          x + 1 + rand() * (p.w - 2),
+          north ? zf + 0.8 : zf - 0.8,
+          rand() * 6.28,
+          0.8 + rand() * 0.4,
+        );
+      if (rand() < 0.55)
+        prop(
+          "bench",
+          x + p.w / 2 + (rand() - 0.5) * 3,
+          north ? zf + 0.6 : zf - 0.6,
+          north ? 0 : Math.PI,
+        );
+      if (rand() < 0.3)
+        prop("sacks", x + 1 + rand() * (p.w - 2), north ? zf + 0.7 : zf - 0.7, rand() * 6.28, 1);
       // porch lanterns
-      if (porch > 0) prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
+      if (porch > 0)
+        prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
       // back lot clutter
       const back = north ? bz0 - 3 : bz1 + 3;
-      if (rand() < 0.35) solidProp("outhouse", x + 2 + rand() * (p.w - 4), back - (north ? 4 : -4), 0, 1.6, 1.6, 2.4);
+      if (rand() < 0.35)
+        solidProp(
+          "outhouse",
+          x + 2 + rand() * (p.w - 4),
+          back - (north ? 4 : -4),
+          0,
+          1.6,
+          1.6,
+          2.4,
+        );
       else if (rand() < 0.4) prop("woodpile", x + p.w / 2, back, rand() * 0.3, 1);
       else if (rand() < 0.3) prop("barrels", x + p.w / 2, back, rand(), 1);
       x += p.w + gap;
@@ -802,6 +887,28 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     prop("hay", cx0 + 4, cz0 + 20, 0.2, 1);
     prop("hay", cx0 + 7, cz0 + 21, 1.4, 1);
   }
+  // the stagecoach waits outside the hotel
+  const hotel = buildings.find((b) => b.t === "hotel");
+  if (hotel)
+    solidProp(
+      "stagecoach",
+      (hotel.x0 + hotel.x1) / 2,
+      -STREET_HALF + 3.6,
+      Math.PI / 2,
+      2.2,
+      7.5,
+      2.8,
+    );
+  // horses in the livery corral
+  for (let n = 0; n < 5; n++)
+    prop(
+      "horse",
+      stable.x0 + 2 + rand() * (stable.x1 - stable.x0 + 4),
+      stable.z1 + 8 + rand() * 18,
+      rand() * 6.28,
+      0.95 + rand() * 0.1,
+      Math.floor(rand() * 6),
+    );
   // the blacksmith's yard: anvil, wagon wheels, a quench barrel
   const smithy = buildings.find((b) => b.t === "smithy")!;
   prop("anvil", (smithy.x0 + smithy.x1) / 2, smithy.z0 - 2.2, 0.3, 1);
@@ -931,6 +1038,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     markSolid(x1 - 1, z0, x1 + 1, z1, 1.3);
     prop("hay", -210, 124, 0.3, 1);
     solidProp("trough", -190, 126, 0, 3, 1, 0.8);
+    for (let n = 0; n < 4; n++)
+      prop(
+        "horse",
+        x0 + 5 + rand() * (x1 - x0 - 10),
+        z0 + 4 + rand() * (z1 - z0 - 8),
+        rand() * 6.28,
+        1,
+        Math.floor(rand() * 6),
+      );
   }
 
   // the mine: a timbered portal in the north canyon face, ore-cart rails down to a tipple
@@ -1006,7 +1122,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (y > 0.7) markSolid(RAIL_X - 5, z, RAIL_X + 5, z + 2, y + 0.4);
   }
   // trestle bents: timber towers every 6 m you can walk between
-  for (let z = trestle.z0 + 4; z < trestle.z1 - 2; z += 6) markSolid(RAIL_X - 3, z - 0.5, RAIL_X + 3, z + 0.5, TRESTLE_Y);
+  for (let z = trestle.z0 + 4; z < trestle.z1 - 2; z += 6)
+    markSolid(RAIL_X - 3, z - 0.5, RAIL_X + 3, z + 0.5, TRESTLE_Y);
 
   // ======================================================================
   // 6. co-op outer band: a second homestead, a prospector camp, a stage-relay ruin
@@ -1015,13 +1132,104 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (!isFree(b.x0 - 2, b.z0 - 2, b.x1 + 2, b.z1 + 2)) return;
     bld({ ...b, coop: true });
   };
-  coopBld({ t: "house", x0: -344, z0: 90, x1: -332, z1: 100, front: 1, storeys: 1, mat: "log", sign: -1, porch: 1, ff: 0, roof: "gable" });
-  coopBld({ t: "barn", x0: -350, z0: 110, x1: -336, z1: 126, front: 1, storeys: 1, mat: "barn", sign: -1, porch: 0, ff: 0, roof: "gable" });
-  coopBld({ t: "tent", x0: 318, z0: 318, x1: 324, z1: 324, front: 3, storeys: 1, mat: "board", sign: -1, porch: 0, ff: 0, roof: "gable" });
-  coopBld({ t: "tent", x0: 330, z0: 312, x1: 335, z1: 318, front: 3, storeys: 1, mat: "board", sign: -1, porch: 0, ff: 0, roof: "gable" });
-  coopBld({ t: "shack", x0: 340, z0: 326, x1: 346, z1: 332, front: 3, storeys: 1, mat: "board", sign: -1, porch: 0, ff: 0, roof: "shed" });
-  coopBld({ t: "ruin", x0: -330, z0: -318, x1: -314, z1: -306, front: 0, storeys: 1, mat: "adobe", sign: -1, porch: 0, ff: 0, roof: "flat" });
-  coopBld({ t: "ruin", x0: -306, z0: -322, x1: -298, z1: -314, front: 0, storeys: 1, mat: "adobe", sign: -1, porch: 0, ff: 0, roof: "flat" });
+  coopBld({
+    t: "house",
+    x0: -344,
+    z0: 90,
+    x1: -332,
+    z1: 100,
+    front: 1,
+    storeys: 1,
+    mat: "log",
+    sign: -1,
+    porch: 1,
+    ff: 0,
+    roof: "gable",
+  });
+  coopBld({
+    t: "barn",
+    x0: -350,
+    z0: 110,
+    x1: -336,
+    z1: 126,
+    front: 1,
+    storeys: 1,
+    mat: "barn",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "gable",
+  });
+  coopBld({
+    t: "tent",
+    x0: 318,
+    z0: 318,
+    x1: 324,
+    z1: 324,
+    front: 3,
+    storeys: 1,
+    mat: "board",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "gable",
+  });
+  coopBld({
+    t: "tent",
+    x0: 330,
+    z0: 312,
+    x1: 335,
+    z1: 318,
+    front: 3,
+    storeys: 1,
+    mat: "board",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "gable",
+  });
+  coopBld({
+    t: "shack",
+    x0: 340,
+    z0: 326,
+    x1: 346,
+    z1: 332,
+    front: 3,
+    storeys: 1,
+    mat: "board",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "shed",
+  });
+  coopBld({
+    t: "ruin",
+    x0: -330,
+    z0: -318,
+    x1: -314,
+    z1: -306,
+    front: 0,
+    storeys: 1,
+    mat: "adobe",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "flat",
+  });
+  coopBld({
+    t: "ruin",
+    x0: -306,
+    z0: -322,
+    x1: -298,
+    z1: -314,
+    front: 0,
+    storeys: 1,
+    mat: "adobe",
+    sign: -1,
+    porch: 0,
+    ff: 0,
+    roof: "flat",
+  });
   prop("windmill", -326, 104, 0.2, 0.9);
   prop("campfire", 328, 326, 0, 0.8);
   prop("covered", 312, 330, 1.2, 1);
@@ -1036,7 +1244,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         const k = at(x + dx, z + dz);
         if (k < 0 || solid[k] || rock[k]! > 0) return false;
         const g = ground[k]!;
-        if (g === WK.STREET || g === WK.BOARD || g === WK.RAIL || g === WK.PLATFORM || g === WK.LOT) return false;
+        if (g === WK.STREET || g === WK.BOARD || g === WK.RAIL || g === WK.PLATFORM || g === WK.LOT)
+          return false;
       }
     return true;
   };
@@ -1052,7 +1261,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (k < 0) continue;
     const g = ground[k]!;
     if (g === WK.RIVER) {
-      if (r < 0.2 && desertCell(x, z, 0)) prop(r < 0.1 ? "boulder" : "bush", x, z, rand() * 6.28, 0.5 + rand() * 0.7);
+      if (r < 0.2 && desertCell(x, z, 0))
+        prop(r < 0.1 ? "boulder" : "bush", x, z, rand() * 6.28, 0.5 + rand() * 0.7);
       continue;
     }
     if (g === WK.TRAIL || g === WK.YARD) continue;
@@ -1088,7 +1298,16 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (!desertCell(x, z, big ? 4 : 2)) continue;
     const g = ground[at(x, z)]!;
     if (g === WK.TRAIL) continue;
-    solidProp("boulder", x, z, rand() * 6.28, w, w, big ? 2.4 : 1.4, big ? 1.9 + rand() * 0.6 : 1 + rand() * 0.3);
+    solidProp(
+      "boulder",
+      x,
+      z,
+      rand() * 6.28,
+      w,
+      w,
+      big ? 2.4 : 1.4,
+      big ? 1.9 + rand() * 0.6 : 1 + rand() * 0.3,
+    );
     boulders++;
   }
 

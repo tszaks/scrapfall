@@ -86,11 +86,7 @@ export function sealGaps(gaps: Gap[]): Block[] {
     const start = (g.axis === "x" ? g.x : g.z) - ((cells - 1) * GRID) / 2;
     for (let k = 0; k < cells; k++) {
       const t = start + k * GRID;
-      out.push(
-        g.axis === "x"
-          ? { x: t, z: g.z, h: 3, tone: 0 }
-          : { x: g.x, z: t, h: 3, tone: 0 },
-      );
+      out.push(g.axis === "x" ? { x: t, z: g.z, h: 3, tone: 0 } : { x: g.x, z: t, h: 3, tone: 0 });
     }
   }
   return out;

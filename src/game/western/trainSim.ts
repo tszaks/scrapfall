@@ -20,7 +20,8 @@ const BRAKE = 1.25;
 const PULL = 0.7;
 const DWELL = 16;
 
-export type CarKind = "loco" | "tender" | "box" | "flat" | "tank" | "stock" | "gondola" | "caboose" | "armored";
+export type CarKind =
+  "loco" | "tender" | "box" | "flat" | "tank" | "stock" | "gondola" | "caboose" | "armored";
 export type CarSpec = { kind: CarKind; len: number; w: number; h: number; tint: number };
 const SPEC: Record<CarKind, { len: number; w: number; h: number }> = {
   loco: { len: 12.6, w: 3.0, h: 5.4 },
@@ -59,7 +60,10 @@ export type Run = {
 
 export function consist(seed: number, k: number, boss = false): CarSpec[] {
   const r = mulberry(seed * 31 + k * 7919 + 17);
-  const cars: CarSpec[] = [{ kind: "loco", ...SPEC.loco, tint: r() }, { kind: "tender", ...SPEC.tender, tint: r() }];
+  const cars: CarSpec[] = [
+    { kind: "loco", ...SPEC.loco, tint: r() },
+    { kind: "tender", ...SPEC.tender, tint: r() },
+  ];
   if (boss) {
     cars.push({ kind: "armored", ...SPEC.armored, tint: 0 });
     cars.push({ kind: "box", ...SPEC.box, tint: 0.1 });
@@ -75,7 +79,8 @@ export function consist(seed: number, k: number, boss = false): CarSpec[] {
   cars.push({ kind: "caboose", ...SPEC.caboose, tint: r() });
   return cars;
 }
-const lengthOf = (cars: CarSpec[]) => cars.reduce((s, c) => s + c.len, 0) + COUPLE * (cars.length - 1);
+const lengthOf = (cars: CarSpec[]) =>
+  cars.reduce((s, c) => s + c.len, 0) + COUPLE * (cars.length - 1);
 
 /** Shared train state. The host advances `t`; guests copy it (and `bossAt`) from snapshots. */
 export const trainClock = { t: 0, bossAt: -1, bossFrom: -1 };
@@ -168,7 +173,8 @@ export function trainsAt(t: number): Run[] {
   for (const run of timetable(t)) {
     if (run.arrive > t + 60) break;
     // runs due after the boss train was called, until it has pulled out, are cancelled
-    if (boss && run.arrive > trainClock.bossFrom - 1 && run.arrive < boss.arrive + DWELL + 45) continue;
+    if (boss && run.arrive > trainClock.bossFrom - 1 && run.arrive < boss.arrive + DWELL + 45)
+      continue;
     if (live(run, t)) out.push(run);
   }
   if (boss && live(boss, t)) out.push(boss);
@@ -194,13 +200,20 @@ export function carCentres(run: Run, t: number) {
  */
 export function callBossTrain(now: number) {
   let at = now + 24;
-  // a train already out on the line runs on; the boss train follows once it has cleared
+  // a train already out on the line runs on; the boss train follows once it's out of the way:
+  // a northbound one must be back in the north tunnel, a southbound one past the station
   for (const run of timetable(now)) {
     if (run.arrive > now) break;
     if (!live(run, now)) continue;
+    const clear = (t: number) => {
+      const tail = frontOf(run, t) - run.dir * run.length;
+      return run.dir > 0 ? tail > trainLine.stop + 40 : tail < trainLine.north - 20;
+    };
     let end = now;
-    while (end < now + 240 && live(run, end)) end += 1;
-    at = Math.max(at, end + 24);
+    while (end < now + 120 && !clear(end)) end += 0.5;
+    // the boss train takes ~24 s from the call to stand at the platform; it may leave the
+    // tunnel once the line is clear
+    at = Math.max(at, end + (run.dir > 0 ? 6 : 20));
   }
   trainClock.bossAt = at;
   trainClock.bossFrom = now;
