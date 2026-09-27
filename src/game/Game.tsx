@@ -1955,6 +1955,12 @@ function World({
       const next = list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length];
       if (next) equip(next);
     }
+    if (touchInput.pick) {
+      const want = touchInput.pick as GunId;
+      touchInput.pick = null;
+      if (owned.current.has(want)) equip(want);
+    }
+
 
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
