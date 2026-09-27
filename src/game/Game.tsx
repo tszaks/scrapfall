@@ -14,7 +14,8 @@ import { CityScene, CitySun } from "./City";
 import { CityTraffic } from "./Traffic";
 import { Minimap, type MapFeed } from "./Minimap";
 import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
-import { worldLook } from "./lighting";
+import { Atmosphere } from "./Atmosphere";
+import { worldLook, type TimeOfDay } from "./lighting";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
 import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
@@ -28,7 +29,10 @@ import { useKeyboard } from "./useKeyboard";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { CombatFx } from "./CombatFx";
+import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import { FX, VF, VK, type VisKind } from "./impacts";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 
@@ -1090,20 +1094,41 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
   );
 });
 
+// A real bullet silhouette: straight casing with a tapered nose, lathed as one
+// mesh so the pool stays one draw call per slot and keeps per-shot tinting.
+const BULLET_PROFILE = [
+  [0, -1.35], [0.52, -1.35], [0.56, -0.55], [0.56, 0.25],
+  [0.48, 0.7], [0.32, 1.05], [0.14, 1.28], [0, 1.35],
+] as const;
+const BULLET_GEO = new THREE.LatheGeometry(
+  BULLET_PROFILE.map(([x, y]) => new THREE.Vector2(x * 0.14, y * 0.14)),
+  10,
+);
+const BULLET_UP = new THREE.Vector3(0, 1, 0);
+const TMP_DIR = new THREE.Vector3();
+
+
 const BulletPool = memo(function BulletPool({
   meshes,
   color,
   size,
+  shape = "bullet",
 }: {
   meshes: { current: (THREE.Mesh | null)[] };
   color: string;
   size: number;
+  shape?: "bullet" | "sphere";
 }) {
   return (
     <>
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
-        <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
-          <sphereGeometry args={[size, 10, 10]} />
+        <mesh
+          key={i}
+          ref={(m) => { meshes.current[i] = m; }}
+          visible={false}
+          {...(shape === "bullet" ? { geometry: BULLET_GEO } : {})}
+        >
+          {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
         </mesh>
       ))}
@@ -1124,14 +1149,18 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
   };
-  const slot = pool.find((b) => !b.active);
+  const i = pool.findIndex((b) => !b.active);
+  const slot = pool[i];
   if (slot) {
     Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
+    return i;
   } else if (pool.length < MAX_BULLETS) {
     pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
+    return pool.length - 1;
   }
+  return -1;
 }
 
 
@@ -1292,7 +1321,7 @@ function World({
   onDeploys,
   city,
   seed,
-  night,
+  time,
   ability,
   onAbilityCd,
   onStat,
@@ -1330,7 +1359,7 @@ function World({
   onDeploys: (d: { turret: number; mines: number }) => void;
   city: CityLayout | null;
   seed: number;
-  night: boolean;
+  time: TimeOfDay;
   ability: AbilityId;
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
@@ -1417,16 +1446,39 @@ function World({
     c.fov = fov;
     c.updateProjectionMatrix();
   }, [fov, camera]);
-  const look3 = worldLook(theme, night, ARENA);
+  const look3 = worldLook(theme, time, ARENA);
   const { gl, scene } = useThree();
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
       const handle = { gl, scene, camera, look, liveCars, knock, city, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, invuln, ords, net: netRef, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave });
+      // enemy testing: ordnance, the hit log, the wave director, the damage path
+      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      const giveAll = () => {
+        for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
+        syncInv();
+      };
+      Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
+  // combat effects need to know the world: what is solid, where the robots are, the gun table
+  useEffect(() => {
+    fxGuns(ORDER.map((w) => GUNS[w]));
+    const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
+    fxEnv({
+      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      car: (x, y, z) => city !== null && hitsTraffic(x, y, z),
+      half: () => HALF,
+      waterZ: city ? city.waterZ : null,
+      enemies,
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      height: (k) => hitBand(k)[1], // fliers hover: their band tops out higher (enemyKinds.ts)
+      dust: Number.isFinite(dust) ? dust : 0x9a9080,
+    });
+  }, [blocks, city, enemies, theme]);
   useEffect(() => {
     // the city needs a much deeper view so the skyline reads; other maps keep 120
     const c = camera as THREE.PerspectiveCamera;
@@ -1608,6 +1660,7 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
       if (m.type === "left") {
         remotes.current.delete(String(m.from));
         remoteDeps.current.delete(String(m.from));
@@ -1703,6 +1756,7 @@ function World({
     lastDepKey.current = "";
     lastDeploys.current = { turret: -1, mines: -1 };
     onDeploys({ turret: 0, mines: 0 });
+    fxReset();
 
     syncInv();
 
@@ -1780,6 +1834,7 @@ function World({
   };
 
   const burstQueue = useRef(0);
+  const tracerCount = useRef(0);
   const bountyKills = useRef(0);
 
   // ---- damage: ONE host-side path for every hit, the host's own and the guests' ----
@@ -1883,10 +1938,14 @@ function World({
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
+    // seeded spread so co-op viewers can replay the exact same pellets
+    const seed = (Math.random() * 1e9) | 0;
+    const spread = rng(seed);
+    const kind = ORDER.indexOf(w) as VisKind;
+    let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
-      const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
-      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
-      dir.y += (Math.random() - 0.5) * g.spread * 0.6;
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, g.spread, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -1900,12 +1959,14 @@ function World({
         burn: isP && s2.incend ? 3 : 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
-      fireInto(
+      const slot = fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
@@ -2176,7 +2237,8 @@ function World({
     const kn = knock.current;
     kn.shake = Math.max(0, kn.shake - delta * 2.2);
     const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
-    cam.rotation.set(look.current.pitch + roll * 0.4, look.current.yaw, roll);
+    const kick = fxKick(); // per-weapon camera kick + explosion shake
+    cam.rotation.set(look.current.pitch + roll * 0.4 + kick.pitch, look.current.yaw + kick.yaw, roll);
 
     if (gameOver || !locked) return;
 
@@ -2409,7 +2471,11 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        const from = new THREE.Vector3(t.x, 1.1, t.z);
+        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(0.9);
+        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
+        fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2553,7 +2619,9 @@ function World({
         } else if (id === "mortar") {
           const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
           pos.y -= 0.2;
-          fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          const ms = fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
+          if (ms >= 0) fxShot(ms, bullets.current[ms]!, VK.MORTAR);
+          fxFired(VK.MORTAR, 0, pos, FORWARD, 0, 18, n);
         } else if (id === "barrier") {
           invuln.current = 6;
         } else if (id === "overdrive") {
@@ -3006,10 +3074,12 @@ function World({
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
+      fxBurst(b);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
-        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        const fs = fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
       }
     };
     bullets.current.forEach((b, i) => {
@@ -3026,8 +3096,10 @@ function World({
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
+          fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
           burst(b);
+          fxDie(i, hitWall);
           b.active = false;
         } else {
           // a homing rocket can be shot down (the host has the final say in co-op)
@@ -3037,6 +3109,7 @@ function World({
             o.on = false;
             if (isH) blast(ords.current, o.x, o.z, 0.8, o.y);
             else n?.broadcast({ type: "odhit", i: ri });
+            fxDie(i, true);
             b.active = false;
             onStat("hit", 1);
           }
@@ -3055,6 +3128,7 @@ function World({
                 if (isH) drainShield(e, b.damage);
                 else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
                 burst(b);
+                fxDie(i, true); // the round sparks off the shield face
                 b.active = false;
                 break;
               }
@@ -3067,6 +3141,7 @@ function World({
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
                 direct: true, shred: !!(b.mods & M_SHRED), exec: !!(b.mods & M_EXEC), bounty: !!(b.mods & M_BOUNTY),
               });
+              fxHit(i, b, e);
               onStat("hit", 1);
               onStat("dmg", dmg);
 
@@ -3078,6 +3153,7 @@ function World({
                   if (!o.alive || o === e) continue;
                   if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
                     hurtEnemy(o, b.damage, oi);
+                    fxChain(e, o);
                     left--;
                   }
                 }
@@ -3098,8 +3174,15 @@ function World({
         if (b.active) {
           m.scale.setScalar(b.size / 0.14);
           (m.material as THREE.MeshBasicMaterial).color.set(b.color);
+          // point the round along its flight path
+          if (b.vel.lengthSq() > 0.0001) {
+            TMP_DIR.copy(b.vel).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
+          fxStyle(i, m, b); // per-weapon round (projectiles.tsx)
         }
       }
+
     });
 
 
@@ -3177,15 +3260,16 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
   return (
     <>
-      {!city && <color attach="background" args={[look3.sky]} />}
-      <fog attach="fog" args={[look3.sky, look3.fog[0], look3.fog[1]]} />
+      <Atmosphere theme={theme} time={time} look={look3} city={!!city} />
+      <fog attach="fog" args={[look3.fogColor, look3.fog[0], look3.fog[1]]} />
       <hemisphereLight args={[look3.hemi[0], look3.hemi[1], look3.hemi[2]]} />
-      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color="#9fb0e0" />}
-      {night && (
+      {look3.ambient > 0 && <ambientLight intensity={look3.ambient} color={look3.ambientColor} />}
+      {time === "night" && (
         <Stars
           radius={city ? 900 : 90}
           depth={city ? 200 : 20}
@@ -3199,7 +3283,7 @@ function World({
         // city sun: shadow frustum follows the player, auto-off on slow devices
         <CitySun
           key="sun-city"
-          night={night}
+          time={time}
           color={look3.sun.color}
           intensity={look3.sun.intensity}
         />
@@ -3216,8 +3300,8 @@ function World({
       )}
       {city ? (
         <>
-          <CityScene city={city} night={night} />
-          <CityTraffic city={city} seed={seed} night={night} link={traffic} />
+          <CityScene city={city} time={time} />
+          <CityTraffic city={city} seed={seed} time={time} link={traffic} />
         </>
       ) : (
         <Level blocks={blocks} theme={theme} />
@@ -3279,10 +3363,11 @@ function World({
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
+      <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
-      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} />
+      <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
     </>
   );
 }
@@ -3307,12 +3392,22 @@ function forcedMapIndex(): number | null {
   const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
   return i >= 0 ? i : null;
 }
-const NIGHT_KEY = "dustfield-night";
-/** `?night=1` / `?night=0` overrides the saved preference (without overwriting it). */
-function nightOverride(): boolean | null {
+/** Every visit opens at night. `?time=night|sunset` picks the opening look for testing
+ * (old links: `?night=1` is night, `?night=0` is sunset). The choice isn't saved. */
+function initialTime(): TimeOfDay {
+  if (typeof window === "undefined") return "night";
+  const q = new URLSearchParams(window.location.search);
+  const t = q.get("time");
+  if (t === "night" || t === "sunset") return t;
+  return q.get("night") === "0" ? "sunset" : "night";
+}
+
+/** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
+function seedParam(): number | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("night");
-  return raw === "1" ? true : raw === "0" ? false : null;
+  const raw = new URLSearchParams(window.location.search).get("seed");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
 const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
@@ -3333,26 +3428,17 @@ export function Game() {
   const [mapChoice, setMapChoice] = useState(initialMapChoice);
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
-  const [seed, setSeed] = useState(() => newSeed(mapChoice));
-  const [night, setNight] = useState(false);
-  useEffect(() => {
-    const o = nightOverride();
-    if (o !== null) setNight(o);
-    else setNight(localStorage.getItem(NIGHT_KEY) === "1");
-  }, []);
-  const toggleNight = () => {
-    setNight((v) => {
-      localStorage.setItem(NIGHT_KEY, v ? "0" : "1");
-      return !v;
-    });
-  };
-  const toggleNightRef = useRef(toggleNight);
-  toggleNightRef.current = toggleNight;
+  const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
+  const [time, setTime] = useState<TimeOfDay>("night");
+  useEffect(() => setTime(initialTime()), []);
+  const toggleTime = () => setTime((t) => (t === "night" ? "sunset" : "night"));
+  const toggleTimeRef = useRef(toggleTime);
+  toggleTimeRef.current = toggleTime;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyN" || e.repeat) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      toggleNightRef.current();
+      toggleTimeRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -3826,10 +3912,25 @@ export function Game() {
   }, [perks.regen, started, locked, ended, dead, maxHp]);
 
   // soundtrack
+  useEffect(() => { hookAudioUnlock(); }, []);
   useEffect(() => {
     if (started && locked && !ended) startMusic();
     else stopMusic();
   }, [started, locked, ended]);
+  // if the browser blocked sound until now, the next click/keypress restarts it
+  useEffect(() => {
+    if (!(started && locked && !ended)) return;
+    const retry = () => { initAudio(); startMusic(); };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    document.addEventListener("visibilitychange", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      document.removeEventListener("visibilitychange", retry);
+    };
+  }, [started, locked, ended]);
+
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);
   useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
@@ -3907,7 +4008,7 @@ export function Game() {
           onDeploys={setDeploys}
           city={city}
           seed={seed}
-          night={night}
+          time={time}
           ability={ability}
           onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
           onStat={(k, n) => {
@@ -4140,7 +4241,7 @@ export function Game() {
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your
-                ability · 1-0 / Q E swap guns · N day/night · Esc to pause
+                ability · 1-0 / Q E swap guns · N night/sunset · Esc to pause
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -4332,12 +4433,12 @@ export function Game() {
             {(
               <div>
                 <button
-                  onClick={toggleNight}
-                  aria-pressed={night}
-                  title="Toggle day / night (N)"
+                  onClick={toggleTime}
+                  aria-pressed={time === "sunset"}
+                  title="Switch between night and sunset (N)"
                   className="pointer-events-auto mt-4 block w-full rounded-md border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]"
                 >
-                  {night ? "☾ NIGHT" : "☀ DAY"} · PRESS N TO SWITCH
+                  {time === "night" ? "☾ NIGHT · PRESS N FOR SUNSET" : "SUNSET · PRESS N FOR NIGHT"}
                 </button>
                 <button
                   onClick={() => setShowSettings((v) => !v)}

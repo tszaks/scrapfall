@@ -14,6 +14,14 @@ import { GRENADE_FUSE, MAX_ORD, ORD_BLAST, ORD_GRENADE, ORD_ROCKET, type Ord } f
 
 // ---------------------------------------------------------------- shared materials
 const LIT = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+// a little self-light (a quarter of each part's own colour) so the bodies keep their colour
+// and silhouette at sunset and at night instead of going flat black
+LIT.onBeforeCompile = (sh) => {
+  sh.fragmentShader = sh.fragmentShader.replace(
+    "vec3 totalEmissiveRadiance = emissive;",
+    "vec3 totalEmissiveRadiance = emissive + vColor.rgb * 0.26;",
+  );
+};
 const GLOW = new THREE.MeshBasicMaterial({ vertexColors: true });
 const CLOAK = new THREE.MeshBasicMaterial({ color: "#cfe0ff", transparent: true, opacity: 0.09, depthWrite: false });
 const CLOAK_GLOW = new THREE.MeshBasicMaterial({ color: "#9fd8ff", transparent: true, opacity: 0.18, depthWrite: false });
@@ -193,7 +201,7 @@ function partsFor(kind: NewKind): Part[] {
       ];
     }
     case "gatling": {
-      const i = "#44403c", dk = "#26231f";
+      const i = "#5a554f", dk = "#34302b";
       return [
         bx(0.38, 0.75, 0.45, [0.35, 0.37, 0], dk), bx(0.38, 0.75, 0.45, [-0.35, 0.37, 0], dk),
         bx(1.25, 1.0, 0.95, [0, 1.25, 0], i),
