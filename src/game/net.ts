@@ -39,7 +39,7 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 
 const PREFIX = "dustfield-arena-v1-";
 /** player-to-player chatter the host forwards to the other guests */
-const RELAYED = new Set(["t", "fire", "pause", "resume", "dep"]);
+const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {

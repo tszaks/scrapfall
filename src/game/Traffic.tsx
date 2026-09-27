@@ -25,6 +25,7 @@ import { newDirector, stepDirector } from "./pursuit";
 import { playSfx, setSiren } from "./audio";
 import { glowTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
+import { liveCity, tod } from "./timeOfDay";
 
 /**
  * Numbers per car in the network snapshot: index, x, z, heading, speed + flags.
@@ -117,12 +118,11 @@ export function CityTraffic({
 }: {
   city: CityLayout;
   seed: number;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts */
+  time?: TimeOfDay;
   link: React.MutableRefObject<TrafficLink>;
 }) {
   const { roadX, roadZ } = city;
-  const timeRef = useRef(time);
-  timeRef.current = time;
 
   // ---- moving cars, deterministic start from the seed ----
   const cars = useMemo(
@@ -211,11 +211,6 @@ export function CityTraffic({
     [geo, mats],
   );
 
-  // headlight beams and road pools: full at night, faint in the dusk light
-  useEffect(() => {
-    mats.cone.opacity = time === "night" ? 0.06 : 0.025;
-    mats.pool.opacity = time === "night" ? 0.5 : 0.22;
-  }, [time, mats]);
 
   const paintRef = useRef<THREE.InstancedMesh>(null);
   const wheelRef = useRef<THREE.InstancedMesh>(null);
@@ -420,7 +415,10 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
-    const isNight = timeRef.current === "night";
+    // headlight beams and road pools: full at night, faint in the dusk light
+    mats.cone.opacity = liveCity.cone;
+    mats.pool.opacity = liveCity.headPool;
+    const nightK = tod.v;
     liveCars.length = 0;
     pursuitDots.length = 0;
     const cam = state.camera;
@@ -525,7 +523,7 @@ export function CityTraffic({
           );
           spillRef.current.setMatrixAt(ci, _car);
           spillRef.current.setColorAt(ci, _c.set(col));
-          const hs = isNight ? 3.4 : 2.4;
+          const hs = 2.4 + nightK;
           _car.compose(
             _p.set(np.x + cos * side * 0.35, c.h + 0.3, np.z - sin * side * 0.35),
             cam.quaternion,
@@ -622,7 +620,7 @@ export function CityTraffic({
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
     // police light spill reads on the road at night and (fainter) at dusk
-    if (spillRef.current) mats.spill.opacity = isNight ? 0.75 : 0.4;
+    if (spillRef.current) mats.spill.opacity = liveCity.spill;
   });
 
   return (

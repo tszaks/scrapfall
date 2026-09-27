@@ -14,6 +14,7 @@
 // aside to open a corridor) and hold at a green while a pursuit is crossing.
 import { CURB, LANES, type Road, type StreetClass } from "./cityLayout";
 import { signal, GREEN, RED, YELLOW } from "./trafficCore";
+import { nodeDark } from "./events/power";
 import { makeVehicle, vehicleHeight, type Vehicle } from "./vehicles";
 
 export const SIM_DT = 1 / 60;
@@ -735,7 +736,10 @@ export function stepCars(
     const node = nodeOf(c, roadZ.length);
     const stopCentre = cx - c.dir * (crossHalf + CROSSWALK + half);
     const committed = !!c.arc || (c.s - stopCentre) * c.dir > 0.05;
-    const light = signal(node, t, c.axis);
+    // blackout: a dead signal is an all-way stop, so cars creep through (the box check
+    // below still keeps them out of cross traffic)
+    const deadSignal = nodeDark(node);
+    const light = deadSignal ? GREEN : signal(node, t, c.axis);
     if (committed && !c.committedPrev && light === RED) {
       if (special) trafficStats.redRunsSpecial++;
       else trafficStats.redRunsNormal++;
@@ -756,6 +760,10 @@ export function stepCars(
       }
     };
     let vcap = c.vmax;
+    if (deadSignal && !committed) {
+      const toStop = (stopCentre - c.s) * c.dir;
+      if (toStop < 22) vcap = Math.min(vcap, 2.2 + Math.max(0, toStop) * 0.3);
+    }
     let yawOffT = 0;
     const turnDir = c.turn === 1 || c.turn === -1 ? c.turn : 0;
     // how close we are to where our arc would begin (no lateral changes in the last metres)

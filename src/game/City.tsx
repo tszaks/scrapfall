@@ -11,9 +11,12 @@ import { buildCityMeshes, DETAIL_RANGE } from "./cityMesh";
 import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture, signTexture } from "./cityTextures";
 import type { TimeOfDay } from "./lighting";
 import { CityPalms } from "./Palms";
-import { SUN_DIR, prewarmSunset, skyEnvSource, skyTexture } from "./sky";
+import { prewarmSunset, skyEnvSource, skyTexture } from "./sky";
 import { addSkyFogUniforms } from "./skyFog";
 import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
+import { liveCity, liveLook, tod, todFrame } from "./timeOfDay";
+import { SkyDome } from "./TimeScene";
+import { POWER_GLSL, power, powerAt, powerUniforms, setPowerArea } from "./events/power";
 
 const _col = new THREE.Color();
 const _m4 = new THREE.Matrix4();
@@ -22,9 +25,58 @@ const _v = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
 
+/** Reflections cross-fade between the sunset and night env maps (both PMREMs are the same
+ * size, so one set of cube-UV defines serves both): `envMap` is the sunset, `envMap2` the
+ * night, `uEnvMix` = k. No recompiles and no PMREM regeneration as the time moves. */
+const envMix = { envMap2: { value: null as THREE.Texture | null }, uEnvMix: { value: 0 } };
+function addEnvMix(sh: THREE.WebGLProgramParametersWithUniforms) {
+  sh.uniforms["envMap2"] = envMix.envMap2;
+  sh.uniforms["uEnvMix"] = envMix.uEnvMix;
+  sh.fragmentShader = sh.fragmentShader.replace(
+    "#include <envmap_physical_pars_fragment>",
+    `#ifdef USE_ENVMAP
+uniform sampler2D envMap2;
+uniform float uEnvMix;
+vec4 textureCubeUVMix( vec3 d, float r ) {
+  // only the two ends of the day need a single map; the dusk in between blends both
+  if ( uEnvMix <= 0.001 ) return textureCubeUV( envMap, d, r );
+  if ( uEnvMix >= 0.999 ) return textureCubeUV( envMap2, d, r );
+  return mix( textureCubeUV( envMap, d, r ), textureCubeUV( envMap2, d, r ), uEnvMix );
+}
+#endif
+` + THREE.ShaderChunk.envmap_physical_pars_fragment.replaceAll("textureCubeUV( envMap,", "textureCubeUVMix("),
+  );
+}
+
+/** Street lights, neon, bulbs and signs go dark with their district's power (blackout). */
+function poweredBasic(mat: THREE.MeshBasicMaterial, key: string) {
+  mat.onBeforeCompile = (sh) => {
+    addSkyFogUniforms(sh);
+    Object.assign(sh.uniforms, powerUniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vPwXz;")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvPwXz = (modelMatrix * vec4(transformed, 1.0)).xz;",
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vPwXz;\n" + POWER_GLSL)
+      .replace(
+        "#include <opaque_fragment>",
+        "outgoingLight *= gridPower(vPwXz);\n#include <opaque_fragment>",
+      );
+  };
+  mat.customProgramCacheKey = () => key;
+  return mat;
+}
+
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
  * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
-function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
+function facadeMaterial(
+  nightK: { value: number },
+  darkK: { value: number },
+  lightH: { value: number },
+) {
   const arr = facadeArrays();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -38,14 +90,17 @@ function facadeMaterial(nightK: { value: number }, darkK: { value: number }) {
     sh.uniforms["uNight"] = { value: arr.night };
     sh.uniforms["uNightK"] = nightK;
     sh.uniforms["uDarkK"] = darkK;
+    sh.uniforms["uLightH"] = lightH;
+    Object.assign(sh.uniforms, powerUniforms);
+    addEnvMix(sh);
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying float vWy;",
+        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying float vWy;\nvarying vec2 vWxz;",
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvWy = (modelMatrix * vec4(transformed, 1.0)).y;",
+        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvec4 cityWp = modelMatrix * vec4(transformed, 1.0);\nvWy = cityWp.y;\nvWxz = cityWp.xz;",
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -56,9 +111,12 @@ uniform sampler2DArray uDay;
 uniform sampler2DArray uNight;
 uniform float uNightK;
 uniform float uDarkK;
+uniform float uLightH;
 varying vec2 vFuv;
 varying vec3 vFac;
 varying float vWy;
+varying vec2 vWxz;
+${POWER_GLSL}
 float cityHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -90,11 +148,13 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
   float darkF = step(hf, uDarkK);
   float fullF = step(0.9, hf);
   vec3 em = mix(nt.rgb, vec3(0.95, 0.8, 0.56) * nt.a, fullF) * (1.0 - darkF);
-  totalEmissiveRadiance += em * uNightK;
+  // dusk: the lights come on floor by floor from the street up (each column at its own pace)
+  float litF = step(vWy, uLightH + cityHash(vec2(hf * 17.3, vFac.y + 3.1)) * 36.0);
+  totalEmissiveRadiance += em * uNightK * litF * gridPower(vWxz);
 }`,
       );
   };
-  mat.customProgramCacheKey = () => "city-facade-v3";
+  mat.customProgramCacheKey = () => "city-facade-v4";
   return mat;
 }
 
@@ -164,6 +224,7 @@ function waterMaterial(time: { value: number }) {
   });
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
+    addEnvMix(sh);
     sh.uniforms["uTime"] = time;
     sh.uniforms["uRipple"] = { value: rippleNormals() };
     sh.vertexShader = sh.vertexShader
@@ -196,29 +257,18 @@ roughnessFactor = mix(roughnessFactor, 0.34, smoothstep(40.0, 700.0, wDist));`,
 }`,
       );
   };
-  mat.customProgramCacheKey = () => "city-water-v2";
+  mat.customProgramCacheKey = () => "city-water-v3";
   return mat;
 }
 
-/** per time of day: how much of the lit-window texture shows, the share of dark windows,
- * glass reflection strength, neon / bulb / sign brightness, and street light pools */
-const CITY_LIGHTS: Record<
-  TimeOfDay,
-  { windows: number; dark: number; env: number; glow: number; signs: number; pools: number }
-> = {
-  night: { windows: 0.95, dark: 0.2, env: 0.9, glow: 1.35, signs: 1.25, pools: 0.9 },
-  // dusk: the first windows and street lights coming on, a few neon signs already lit
-  sunset: { windows: 0.55, dark: 0.62, env: 1.15, glow: 1.1, signs: 1.0, pools: 0.32 },
-};
-
 export const CityScene = memo(function CityScene({
   city,
-  time,
 }: {
   city: CityLayout;
-  time: TimeOfDay;
+  /** legacy: the time of day now comes from timeOfDay.ts */
+  time?: TimeOfDay;
 }) {
-  const { gl, scene } = useThree();
+  const { gl } = useThree();
   const built = useMemo(() => {
     const t0 = performance.now();
     const m = buildCityMeshes(city);
@@ -231,35 +281,46 @@ export const CityScene = memo(function CityScene({
 
   const nightK = useMemo(() => ({ value: 0 }), []);
   const darkK = useMemo(() => ({ value: 0.2 }), []);
+  const lightH = useMemo(() => ({ value: 1e4 }), []);
   const waterTime = useMemo(() => ({ value: 0 }), []);
   const mats = useMemo(
     () => ({
-      facade: facadeMaterial(nightK, darkK),
-      glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
-      signs: new THREE.MeshBasicMaterial({
-        vertexColors: true,
-        map: signTexture(),
-        toneMapped: false,
-      }),
-      pools: new THREE.MeshBasicMaterial({
-        vertexColors: true,
-        map: glowTexture(),
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-      }),
+      facade: facadeMaterial(nightK, darkK, lightH),
+      glow: poweredBasic(
+        new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
+        "city-glow-pw",
+      ),
+      signs: poweredBasic(
+        new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          map: signTexture(),
+          toneMapped: false,
+        }),
+        "city-signs-pw",
+      ),
+      pools: poweredBasic(
+        new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          map: glowTexture(),
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+        }),
+        "city-pools-pw",
+      ),
       water: waterMaterial(waterTime),
       land: new THREE.MeshLambertMaterial({ color: "#8f8c84" }),
       beacon: new THREE.MeshBasicMaterial({ color: "#ff2a1a", toneMapped: false }),
       lamp: new THREE.MeshBasicMaterial({ color: "#ffffff", toneMapped: false }),
     }),
-    [nightK, darkK, waterTime],
+    [nightK, darkK, lightH, waterTime],
   );
 
-  // reflection env maps: a small PMREM of each generated sky, made the first time it's needed
+  // reflection env maps: a small PMREM of each generated sky. Both are made up front (the
+  // match runs from sunset into night) and cross-faded in the shader.
   const envs = useMemo(() => new Map<TimeOfDay, THREE.WebGLRenderTarget>(), []);
   useEffect(
     () => () => {
@@ -282,42 +343,49 @@ export const CityScene = memo(function CityScene({
     },
     [gl, envs],
   );
-  // paint the sunset sky in idle moments and upload it, ready for the first press of N
+  // anything of the sunset still unpainted gets painted in idle moments
   useEffect(() => {
-    let live = true;
-    prewarmSunset(() => {
-      if (!live) return;
-      envFor("sunset");
-      gl.initTexture(skyTexture("sunset"));
-    });
-    return () => {
-      live = false;
-    };
-  }, [gl, envFor]);
+    prewarmSunset();
+  }, []);
+  // the two skies behind the dome (painted on first use; the menu opens on the sunset)
+  const skies = useMemo(() => ({ sunset: skyTexture("sunset"), night: skyTexture("night") }), []);
 
   useEffect(() => {
-    const rt = envFor(time);
-    const L = CITY_LIGHTS[time];
-    mats.facade.envMap = rt.texture;
-    mats.facade.envMapIntensity = L.env;
+    const sun = envFor("sunset");
+    const night = envFor("night");
+    mats.facade.envMap = sun.texture;
+    mats.water.envMap = sun.texture;
+    envMix.envMap2.value = night.texture;
     mats.facade.needsUpdate = true;
-    mats.water.envMap = rt.texture;
-    // at dusk the sea turns into a mirror of the sky
-    mats.water.color.set(time === "night" ? "#174560" : "#241c3c");
-    mats.water.roughness = time === "night" ? 0.16 : 0.2;
-    mats.water.metalness = time === "night" ? 0.15 : 0.9;
     mats.water.needsUpdate = true;
+    setPowerArea(city.half + 40);
+    power.nodePos.clear();
+    for (const l of built.lamps) if (!power.nodePos.has(l.node)) power.nodePos.set(l.node, [l.x, l.z]);
+    seenTod.current = -1;
+  }, [envFor, mats, city, built]);
+
+  // the time of day, only on frames it moved: uniforms and colours, never a recompile
+  const seenTod = useRef(-1);
+  const waterA = useMemo(() => new THREE.Color("#241c3c"), []);
+  const waterB = useMemo(() => new THREE.Color("#174560"), []);
+  useFrame(() => {
+    if (seenTod.current === todFrame.version) return;
+    seenTod.current = todFrame.version;
+    const k = tod.v;
+    const L = liveCity;
+    envMix.uEnvMix.value = k;
+    mats.facade.envMapIntensity = L.env;
+    // at dusk the sea is a mirror of the sky; at night it turns deep blue
+    mats.water.color.lerpColors(waterA, waterB, k);
+    mats.water.roughness = 0.2 + (0.16 - 0.2) * k;
+    mats.water.metalness = 0.9 + (0.15 - 0.9) * k;
     nightK.value = L.windows;
     darkK.value = L.dark;
+    lightH.value = L.lightH;
     mats.glow.color.setScalar(L.glow);
     mats.signs.color.setScalar(L.signs);
     mats.pools.opacity = L.pools;
-    const prev = scene.background;
-    scene.background = skyTexture(time);
-    return () => {
-      scene.background = prev;
-    };
-  }, [time, envFor, mats, nightK, darkK, scene]);
+  });
 
   useEffect(
     () => () => {
@@ -393,7 +461,7 @@ export const CityScene = memo(function CityScene({
     const lm = lampRef.current;
     if (!lm) return;
     const tt = trafficClock.t;
-    let key = "";
+    let key = `${power.version}:`;
     const states = built.lamps.map((l) => signal(l.node, tt, l.axis));
     for (let i = 0; i < states.length; i += 3) key += states[i];
     if (key === lastPhase.current) return;
@@ -406,6 +474,8 @@ export const CityScene = memo(function CityScene({
         (l.which === 2 && s === GREEN);
       _col.set(l.which === 0 ? "#ff2a1a" : l.which === 1 ? "#ffb81a" : "#2aff6a");
       if (!on) _col.multiplyScalar(0.1);
+      // blackout: dead signals
+      if (power.out) _col.multiplyScalar(Math.max(0.02, powerAt(l.x, l.z)));
       lm.setColorAt(i, _col);
     });
     if (lm.instanceColor) lm.instanceColor.needsUpdate = true;
@@ -414,6 +484,7 @@ export const CityScene = memo(function CityScene({
   const ext = city.extent + 2600;
   return (
     <group>
+      <SkyDome sunset={skies.sunset} night={skies.night} />
       {/* land beyond the backdrop, and the sea to the south */}
       <mesh
         rotation-x={-Math.PI / 2}
@@ -494,30 +565,25 @@ const SUN_DIST = 900;
  * from the player still throw their shadows across the street. If frames stay slow for a
  * few seconds, shadows switch off automatically (weak GPUs / laptops on battery).
  */
-export function CitySun({
-  time,
-  color,
-  intensity,
-}: {
-  time: TimeOfDay;
-  color: string;
-  intensity: number;
-}) {
+export function CitySun(_props: { time?: TimeOfDay; color?: string; intensity?: number }) {
   const ref = useRef<THREE.DirectionalLight>(null);
   const forced = useMemo(shadowParam, []);
   const [low, setLow] = useState(forced === false);
   const ema = useRef(1 / 60);
   const slowFor = useRef(0);
-  const dir = SUN_DIR[time];
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;
+    // the blended sun (sinking at dusk) or moon for the current time of day
+    const dir = liveLook.sunDir;
+    l.color.copy(liveLook.sunColor);
+    l.intensity = liveLook.sunI;
     const texel = (SUN_RANGE * 2) / SUN_MAP;
     const cx = Math.round(state.camera.position.x / texel) * texel;
     const cz = Math.round(state.camera.position.z / texel) * texel;
     l.target.position.set(cx, 0, cz);
     l.target.updateMatrixWorld();
-    l.position.set(cx + dir[0] * SUN_DIST, dir[1] * SUN_DIST, cz + dir[2] * SUN_DIST);
+    l.position.set(cx + dir.x * SUN_DIST, dir.y * SUN_DIST, cz + dir.z * SUN_DIST);
     if (forced !== null || low) return;
     ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
     if (ema.current > 0.04) {
@@ -531,8 +597,6 @@ export function CitySun({
   return (
     <directionalLight
       ref={ref}
-      color={color}
-      intensity={intensity}
       castShadow={!low}
       shadow-mapSize-width={SUN_MAP}
       shadow-mapSize-height={SUN_MAP}

@@ -2,6 +2,7 @@
 // sunset is the alpenglow hero look). Everything the alpine scene needs to change between
 // the two lives here.
 import type { Look, TimeOfDay } from "../lighting";
+import { blendTable } from "../timeOfDay";
 
 export type AlpineMode = TimeOfDay;
 
@@ -87,4 +88,19 @@ export const ALPINE_LOOKS: Record<AlpineMode, AlpineLook> = {
 
 export function alpineLook(time: TimeOfDay): AlpineLook {
   return ALPINE_LOOKS[time];
+}
+
+/** the look part-way from sunset (k = 0) to night (k = 1): the waves carry the match into night */
+const blended = new Map<number, AlpineLook>();
+export function alpineLookAt(k: number): AlpineLook {
+  if (k <= 0) return ALPINE_LOOKS.sunset;
+  if (k >= 1) return ALPINE_LOOKS.night;
+  const key = Math.round(k * 256);
+  let l = blended.get(key);
+  if (!l) {
+    if (blended.size > 300) blended.clear();
+    l = blendTable(ALPINE_LOOKS.sunset, ALPINE_LOOKS.night, key / 256);
+    blended.set(key, l);
+  }
+  return l;
 }
