@@ -7,10 +7,23 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
-import { buildCityMeshes, DETAIL_RANGE } from "./cityMesh";
-import { TILE_COLS, TILE_ROWS, facadeArrays, glowTexture, signTexture } from "./cityTextures";
+import { buildCityMeshes, DETAIL_RANGE, groundHeights } from "./cityMesh";
+import {
+  FACADE_LAYERS,
+  L,
+  ROOM_CAT,
+  ROOM_SPAN,
+  TILE_COLS,
+  TILE_ROWS,
+  facadeArrays,
+  glowTexture,
+  signTexture,
+} from "./cityTextures";
+import { INTERIOR_GLSL, ROOM, addInteriorUniforms, interiorUniforms } from "./interiors";
+import { WET_GLSL, addWetUniforms, wetUniforms } from "./cityWeather";
 import type { TimeOfDay } from "./lighting";
 import { CityPalms } from "./Palms";
+import { CityRain } from "./CityRain";
 import { prewarmSunset, skyEnvSource, skyTexture } from "./sky";
 import { addSkyFogUniforms } from "./skyFog";
 import { signal, trafficClock, GREEN, YELLOW } from "./trafficCore";
@@ -96,7 +109,8 @@ function poweredBasic(mat: THREE.MeshBasicMaterial, key: string) {
 }
 
 /** Facade material: MeshStandardMaterial + texture-array facades, per-floor night lighting,
- * glass reflectivity from the texture's alpha, and ground-level darkening on buildings. */
+ * glass reflectivity from the texture's alpha, ground-level darkening on buildings, rooms
+ * behind the windows (interior mapping, see interiors.ts) and wet streets in the rain. */
 // eslint-disable-next-line react-refresh/only-export-components -- shared with the beach map
 export function facadeMaterial(
   nightK: { value: number },
@@ -113,6 +127,8 @@ export function facadeMaterial(
   });
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
+    addInteriorUniforms(sh);
+    addWetUniforms(sh);
     sh.uniforms["uDay"] = { value: arr.day };
     sh.uniforms["uNight"] = { value: arr.night };
     sh.uniforms["uNightK"] = nightK;
@@ -123,11 +139,11 @@ export function facadeMaterial(
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying float vWy;\nvarying vec2 vWxz;",
+        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying vec3 vWPos;",
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvec4 cityWp = modelMatrix * vec4(transformed, 1.0);\nvWy = cityWp.y;\nvWxz = cityWp.xz;",
+        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;",
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -141,15 +157,20 @@ uniform float uDarkK;
 uniform float uLightH;
 varying vec2 vFuv;
 varying vec3 vFac;
-varying float vWy;
-varying vec2 vWxz;
+varying vec3 vWPos;
+#define vWy vWPos.y
 ${POWER_GLSL}
 float cityHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
-}`,
+}
+// per facade layer: room category (-1 none, 0 offices, 1 homes, 2 shops), modules per room
+const float ROOM_CAT[${FACADE_LAYERS}] = float[${FACADE_LAYERS}](${ROOM_CAT});
+const float ROOM_SPAN[${FACADE_LAYERS}] = float[${FACADE_LAYERS}](${ROOM_SPAN});
+${INTERIOR_GLSL}`,
       )
+      .replace("#include <color_pars_fragment>", `#include <color_pars_fragment>\n${WET_GLSL}`)
       .replace(
         "#include <map_fragment>",
         `vec2 tileUv = vFuv / vec2(${TILE_COLS.toFixed(1)}, ${TILE_ROWS.toFixed(1)});
@@ -157,7 +178,13 @@ vec4 facT = texture(uDay, vec3(tileUv, vFac.x));
 diffuseColor.rgb *= facT.rgb;
 float glassK = facT.a;
 float aoK = step(0.5, vFac.z);
-diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
+diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);
+// derivatives for the rooms, taken here in uniform control flow
+vec3 irP = -vViewPosition;
+vec3 irDp1 = dFdx(irP);
+vec3 irDp2 = dFdy(irP);
+vec2 irDu1 = dFdx(vFuv);
+vec2 irDu2 = dFdy(vFuv);`,
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -174,11 +201,79 @@ diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);`,
   float hf = cityHash(vec2(floor(vFuv.y) + 0.5, vFac.y * 971.0 + floor(vFuv.x / 8.0) * 0.37));
   float darkF = step(hf, uDarkK);
   float fullF = step(0.9, hf);
-  vec3 em = mix(nt.rgb, vec3(0.95, 0.8, 0.56) * nt.a, fullF) * (1.0 - darkF);
-  // dusk: the lights come on floor by floor from the street up (each column at its own pace)
+  // dusk: the lights come on floor by floor from the street up (each column at its own
+  // pace); a blackout kills them district by district (events/power.ts)
   float litF = step(vWy, uLightH + cityHash(vec2(hf * 17.3, vFac.y + 3.1)) * 36.0);
-  totalEmissiveRadiance += em * uNightK * litF * gridPower(vWxz);
-}`,
+  float pwF = gridPower(vWPos.xz);
+  vec3 em = mix(nt.rgb, vec3(0.95, 0.8, 0.56) * nt.a, fullF) * (1.0 - darkF) * uNightK * litF * pwF;
+  int layer = int(vFac.x + 0.5);
+  float cat = ROOM_CAT[layer];
+  float span = ROOM_SPAN[layer];
+  // rooms fade in once a room is several pixels across; further out the baked windows stay
+  float pxU = span / max(length(vec2(irDu1.x, irDu2.x)), 1e-6);
+  float pxV = 1.0 / max(length(vec2(irDu1.y, irDu2.y)), 1e-6);
+  float roomK = smoothstep(4.0, 9.0, min(pxU, pxV)) * step(0.0, cat) * uRoomOn;
+  float winM = nt.a;
+  if (roomK > 0.0 && winM > 0.01) {
+    vec2 ruv = vec2(vFuv.x / span, vFuv.y);
+    vec2 cell = floor(ruv);
+    vec2 f = ruv - cell;
+    float bseed = vFac.y * 113.0;
+    vec4 rnd = irHash4(cell + bseed);
+    float rt = irHash(cell * 1.71 + bseed + 5.3);
+    // lit or not follows the baked window pattern, so near and far agree
+    vec2 sUv = vec2(cell.x * span + 0.5, cell.y + 0.35) / vec2(${TILE_COLS.toFixed(1)}, ${TILE_ROWS.toFixed(1)});
+    vec3 ns = textureLod(uNight, vec3(sUv, vFac.x), 0.0).rgb;
+    float nmax = max(ns.r, max(ns.g, ns.b));
+    float lit = max(step(0.03, nmax), fullF) * (1.0 - darkF) * litF * pwF;
+    vec3 lamp = fullF > 0.5 ? vec3(1.0, 0.82, 0.55) : ns / max(nmax, 1e-3);
+    lamp = max(mix(vec3(dot(lamp, vec3(0.333))), lamp, 1.25), 0.0) * (0.8 + 0.4 * rnd.w);
+    float type;
+    float depth;
+    float kind = 0.0;
+    float r2 = fract(rt * 7.13);
+    if (cat < 0.5) {
+      type = rt < 0.5 ? ${ROOM.office}.0 : rt < 0.8 ? ${ROOM.meeting}.0 : ${ROOM.empty}.0;
+      depth = 4.0 + rnd.z * 5.0;
+      kind = r2 < 0.3 ? 1.0 : 0.0;
+    } else if (cat < 1.5) {
+      type = rt < 0.36 ? ${ROOM.living}.0 : rt < 0.62 ? ${ROOM.bedroom}.0 : rt < 0.86 ? ${ROOM.kitchen}.0 : ${ROOM.empty}.0;
+      depth = 3.2 + rnd.z * 2.6;
+      kind = r2 < 0.3 ? 3.0 : r2 < 0.45 ? 2.0 : 0.0;
+    } else {
+      type = rt < 0.82 ? ${ROOM.shop}.0 : ${ROOM.meeting}.0;
+      depth = 5.0 + rnd.z * 4.0;
+    }
+    // a stairwell runs up a whole column of some buildings, lit all night
+    if (cat < 1.5 && irHash(vec2(cell.x, bseed + 3.7)) < 0.045) {
+      type = ${ROOM.stairs}.0;
+      depth = 3.0;
+      kind = 0.0;
+      lit = pwF;
+      lamp = vec3(0.6, 0.68, 0.72);
+    }
+    vec3 d = irRayD(irP, irDp1, irDp2, irDu1 / vec2(span, 1.0), irDu2 / vec2(span, 1.0), normal, depth);
+    vec2 gx = irDu1 / vec2(span, 1.0);
+    vec2 gy = irDu2 / vec2(span, 1.0);
+    vec3 room = irTrace(f, d, type, rnd, lit, lamp, gx, gy);
+    vec4 dr = irDressing(f, kind, 0.2 + 0.6 * fract(rt * 3.7), fract(rt * 11.3), lit, lamp, length(gx) + length(gy));
+    room = mix(room, dr.rgb, dr.a);
+    // glass on top: reflective at grazing angles, clear looking straight in
+    float tower = step(abs(vFac.x - ${L.glass}.0), 0.1) + step(abs(vFac.x - ${L.dark}.0), 0.1);
+    float ndv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+    float f0 = mix(0.04, 0.16, tower);
+    float fr = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
+    room *= (1.0 - fr) * mix(0.95, 0.8, tower);
+    float k = roomK * winM;
+    em = mix(em, room * winM, roomK);
+    // clear glass: little diffuse, a dielectric-ish reflection instead of the painted pane
+    diffuseColor.rgb *= 1.0 - 0.65 * k;
+    metalnessFactor = mix(metalnessFactor, mix(0.25, 0.55, tower), k);
+    roughnessFactor = mix(roughnessFactor, 0.04, k);
+  }
+  totalEmissiveRadiance += em;
+}
+if (uWet > 0.0) cityWet(diffuseColor, roughnessFactor, totalEmissiveRadiance, normal);`,
       );
   };
   mat.customProgramCacheKey = () => "city-facade-v4";
@@ -289,12 +384,22 @@ roughnessFactor = mix(roughnessFactor, 0.34, smoothstep(40.0, 700.0, wDist));`,
   return mat;
 }
 
+/** rooms behind the windows at sunset and at night: unlit-room sky glow (linear) and lamp
+ * strength (blended by the time of day) */
+const ROOM_LIGHT: Record<TimeOfDay, { amb: [number, number, number]; lit: number }> = {
+  night: { amb: [0.008, 0.01, 0.018], lit: 1 },
+  sunset: { amb: [0.1, 0.075, 0.08], lit: 1.15 },
+};
+
 export const CityScene = memo(function CityScene({
   city,
+  isHost = true,
 }: {
   city: CityLayout;
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
+  /** co-op: the host rolls the weather and ships it to the guests */
+  isHost?: boolean;
 }) {
   const { gl } = useThree();
   const built = useMemo(() => {
@@ -306,6 +411,7 @@ export const CityScene = memo(function CityScene({
       );
     return m;
   }, [city]);
+  const heights = useMemo(() => groundHeights(city), [city]);
 
   const nightK = useMemo(() => ({ value: 0 }), []);
   const darkK = useMemo(() => ({ value: 0.2 }), []);
@@ -412,9 +518,16 @@ export const CityScene = memo(function CityScene({
     nightK.value = L.windows;
     darkK.value = L.dark;
     lightH.value = L.lightH;
+    const RS = ROOM_LIGHT.sunset;
+    const RN = ROOM_LIGHT.night;
+    interiorUniforms.uRoomAmb.value.setRGB(
+      RS.amb[0] + (RN.amb[0] - RS.amb[0]) * k,
+      RS.amb[1] + (RN.amb[1] - RS.amb[1]) * k,
+      RS.amb[2] + (RN.amb[2] - RS.amb[2]) * k,
+    );
+    interiorUniforms.uRoomLit.value = RS.lit + (RN.lit - RS.lit) * k;
     mats.glow.color.setScalar(L.glow);
     mats.signs.color.setScalar(L.signs);
-    mats.pools.opacity = L.pools;
   });
 
   useEffect(
@@ -468,6 +581,8 @@ export const CityScene = memo(function CityScene({
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     waterTime.value = t;
+    // wet streets mirror the lamps instead of scattering them: the fake light pools dim
+    mats.pools.opacity = liveCity.pools * (1 - 0.5 * wetUniforms.uWet.value);
     const cam = state.camera.position;
     // aviation lights blink in unison
     mats.beacon.color.setScalar(Math.sin(t * 3.2) > 0.2 ? 1 : 0.12).multiply(_col.set("#ff2a1a"));
@@ -568,6 +683,7 @@ export const CityScene = memo(function CityScene({
         </group>
       ))}
       <CityPalms city={city} />
+      <CityRain city={city} isHost={isHost} drips={built.drips} heights={heights} />
       {built.beacons.length > 0 && (
         <instancedMesh ref={beaconRef} args={[beaconGeo, mats.beacon, built.beacons.length]} />
       )}
