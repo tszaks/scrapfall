@@ -3595,7 +3595,7 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className="pointer-events-none fixed inset-0 z-10 font-mono">
+      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className="flex flex-col items-start gap-2">
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
