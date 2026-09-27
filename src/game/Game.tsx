@@ -3345,7 +3345,9 @@ export function Game() {
     for (let i = 2; i <= w; i++) p += Math.ceil((i - 1) / 3);
     return p;
   };
-  const rerollCost = rerollBase(status.wave) * Math.pow(2, rerolls);
+  const freeRerolls = statsRef.current.freeRerolls;
+  const freeLeft = Math.max(0, freeRerolls - rerolls);
+  const rerollCost = freeLeft > 0 ? 0 : rerollBase(status.wave) * Math.pow(2, Math.max(0, rerolls - freeRerolls));
   const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
@@ -3373,6 +3375,7 @@ export function Game() {
     setRerolls((r) => r + 1);
     setBought([]);
     drawOffers();
+
     playSfx("buy");
   };
   const patchRef = useRef<() => void>(() => {});
