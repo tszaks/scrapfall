@@ -19,6 +19,7 @@ import {
 } from "./trafficSim";
 import { playSfx } from "./audio";
 import { glowTexture } from "./cityTextures";
+import type { TimeOfDay } from "./lighting";
 
 /** Numbers per car in the network snapshot: index, x, z, heading, speed. */
 const CAR_FIELDS = 5;
@@ -62,17 +63,15 @@ type Slot = { mesh: "paint" | "wheel" | "lamp"; index: number; local: THREE.Matr
 export function CityTraffic({
   city,
   seed,
-  night,
+  time,
   link,
 }: {
   city: CityLayout;
   seed: number;
-  night: boolean;
+  time: TimeOfDay;
   link: React.MutableRefObject<TrafficLink>;
 }) {
   const { roadX, roadZ } = city;
-  const nightRef = useRef(night);
-  nightRef.current = night;
 
   // ---- moving cars, deterministic start from the seed ----
   const cars = useMemo(() => {
@@ -206,6 +205,12 @@ export function CityTraffic({
     [geo, mats],
   );
 
+  // headlight beams and road pools: full at night, faint in the dusk light
+  useEffect(() => {
+    mats.cone.opacity = time === "night" ? 0.06 : 0.025;
+    mats.pool.opacity = time === "night" ? 0.5 : 0.22;
+  }, [time, mats]);
+
   const paintRef = useRef<THREE.InstancedMesh>(null);
   const wheelRef = useRef<THREE.InstancedMesh>(null);
   const lampRef = useRef<THREE.InstancedMesh>(null);
@@ -215,13 +220,12 @@ export function CityTraffic({
   const meshOf = (k: Slot["mesh"]) =>
     k === "paint" ? paintRef.current : k === "wheel" ? wheelRef.current : lampRef.current;
 
-  /** lamp colours depend on day/night, whether the car is moving, and the police flasher */
-  const lampColor = (part: Part, moving: boolean, flash: boolean, isNight: boolean) => {
-    if (part.kind === "head")
-      return _c.set(moving ? (isNight ? 0xfff6d8 : 0xe8e6dc) : isNight ? 0x3a3a36 : 0xb8b8b0);
-    if (part.kind === "tail")
-      return _c.set(moving ? (isNight ? 0xff2a1a : 0x8a1a18) : isNight ? 0x3a0a08 : 0x6a1612);
-    if (part.kind === "sign") return _c.set(isNight ? part.color : 0xd8d0a0);
+  /** lamp colours (lights are on at night and at dusk) depend on whether the car is moving,
+   * and the police flasher */
+  const lampColor = (part: Part, moving: boolean, flash: boolean) => {
+    if (part.kind === "head") return _c.set(moving ? 0xfff6d8 : 0x3a3a36);
+    if (part.kind === "tail") return _c.set(moving ? 0xff2a1a : 0x3a0a08);
+    if (part.kind === "sign") return _c.set(part.color);
     if (part.kind === "barR") return _c.set(moving && flash ? 0xff2020 : 0x5a1010);
     if (part.kind === "barB") return _c.set(moving && !flash ? 0x3060ff : 0x10205a);
     return _c.set(part.color);
@@ -234,7 +238,6 @@ export function CityTraffic({
     yaw: number,
     moving: boolean,
     flash: boolean,
-    isNight: boolean,
   ) => {
     _car.compose(_p.set(x, 0, z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
     for (const sl of slots[i]!) {
@@ -242,7 +245,7 @@ export function CityTraffic({
       if (!mesh) continue;
       _m.multiplyMatrices(_car, sl.local);
       mesh.setMatrixAt(sl.index, _m);
-      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, flash, isNight));
+      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, flash));
     }
   };
 
@@ -394,7 +397,6 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
-    const isNight = nightRef.current;
     const flash = Math.floor(t * 4) % 2 === 0;
     liveCars.length = 0;
 
@@ -451,7 +453,7 @@ export function CityTraffic({
       let dy = yaw - c.yawVis;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       c.yawVis += dy * (1 - Math.exp(-dt * 9)); // same easing at any frame rate
-      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, flash, isNight);
+      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, flash);
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       liveCars.push({ x: np.x, z: np.z, sin, cos, hl: half, hw: c.v.wid / 2, h: c.h });
@@ -510,8 +512,6 @@ export function CityTraffic({
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
-    if (coneRef.current) coneRef.current.visible = isNight;
-    if (poolRef.current) poolRef.current.visible = isNight;
   });
 
   return (
@@ -544,13 +544,11 @@ export function CityTraffic({
             ref={coneRef}
             args={[geo.cone, mats.cone, cars.length]}
             frustumCulled={false}
-            visible={night}
           />
           <instancedMesh
             ref={poolRef}
             args={[geo.pool, mats.pool, cars.length]}
             frustumCulled={false}
-            visible={night}
           />
         </>
       )}
