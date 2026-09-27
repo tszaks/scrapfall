@@ -4155,39 +4155,62 @@ export function Game() {
               </div>
             )}
             {showSettings && (
-              <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                <label className="block">
-                  FIELD OF VIEW · {fov}°
-                  <input type="range" min={50} max={110} step={1} value={fov}
-                    onChange={(e) => setFov(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sensX}
-                    onChange={(e) => setSensX(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sensY}
-                    onChange={(e) => setSensY(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                  <input type="range" min={0} max={1} step={0.05} value={musicVol}
-                    onChange={(e) => setMusicVol(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                  <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                    onChange={(e) => setSfxVol(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
+              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6] sm:items-center">
+                <div className="w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
+                    <button
+                      onClick={() => setShowSettings(false)}
+                      className="rounded px-3 py-1 text-xs tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
+                    >
+                      CLOSE
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
+                    <label className="block">
+                      FIELD OF VIEW · {fov}°
+                      <input type="range" min={50} max={110} step={1} value={fov}
+                        onChange={(e) => setFov(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
+                      <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                        onChange={(e) => setSensX(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
+                      <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                        onChange={(e) => setSensY(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      MUSIC VOLUME · {Math.round(musicVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={musicVol}
+                        onChange={(e) => setMusicVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                        onChange={(e) => setSfxVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="pointer-events-auto mt-5 w-full rounded bg-[#b4653f] py-3 text-sm font-bold tracking-widest active:scale-95"
+                  >
+                    DONE
+                  </button>
+                  <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
+                    DUSTFIELD · v1.0.0
+                  </div>
+                </div>
               </div>
             )}
+
           </div>
         </div>
       )}
