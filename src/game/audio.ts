@@ -18,8 +18,11 @@ export function initAudio() {
     master.gain.value = 0.8;
     master.connect(ctx.destination);
     musicGain = ctx.createGain();
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = "lowpass";
+    musicFilter.frequency.value = menuMode ? 620 : 18000;
     sfxGain = ctx.createGain();
-    musicGain.connect(master);
+    musicGain.connect(musicFilter).connect(master);
     sfxGain.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
