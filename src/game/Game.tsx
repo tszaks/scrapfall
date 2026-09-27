@@ -3783,6 +3783,25 @@ export function Game() {
 
         </div>
       )}
+
+      {touchUi && locked && !ended && (
+        <MobileControls
+          onPause={() => {
+            setLocked(false);
+            pauseAll();
+          }}
+          abilityName={ABILITIES[ability].name}
+          abilityLeft={abilCd.left}
+        />
+      )}
+      {touchUi && portrait && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
+          <div>
+            <div className="text-2xl font-bold tracking-[0.2em]">ROTATE YOUR DEVICE</div>
+            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">DUSTFIELD PLAYS IN LANDSCAPE</div>
+          </div>
+        </div>
+      )}
       {healMsg > 0 && locked && !ended && (
         <div className="pointer-events-none fixed left-1/2 top-1/3 z-10 -translate-x-1/2 rounded-md bg-[#f3e6cf]/85 px-4 py-1.5 font-mono text-sm tracking-widest text-[#b3261e]">
           +3 HEALTH
