@@ -137,7 +137,8 @@ function midBlock(c: Car, env: SimEnv) {
   const nextBox = cross[c.next]!;
   if ((nextBox.c - c.s) * c.dir - CURB[nextBox.cls] < 24) return false;
   const prev = cross[c.next - c.dir];
-  if (prev && (c.s - prev.c) * c.dir - CURB[prev.cls] < 8) return false;
+  // room behind it for the cruisers too, so nobody parks in the junction
+  if (prev && (c.s - prev.c) * c.dir - CURB[prev.cls] < 22) return false;
   return true;
 }
 

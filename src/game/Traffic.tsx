@@ -67,6 +67,15 @@ const _c = new THREE.Color();
 const _right = new THREE.Vector3();
 type SirenSrc = { ci: number; d: number; x: number; z: number; yaw: number; speed: number };
 const sirens: SirenSrc[] = [];
+/** what each siren voice is doing (debug handle only) */
+const sirenDebug: ({
+  car: number;
+  d: number;
+  gain: number;
+  doppler: number;
+  pan: number;
+  yelp: boolean;
+} | null)[] = [];
 
 function partMatrix(p: Part) {
   const m = new THREE.Matrix4();
@@ -81,11 +90,10 @@ type Slot = { mesh: "paint" | "wheel" | "lamp"; index: number; local: THREE.Matr
 type Bar = 0 | 1 | 2;
 /** flasher phase for car `i` at traffic time `t`: each cruiser flashes out of step with the others */
 const barAt = (t: number, i: number): Bar => {
-  const ph = (t * 3.2 + i * 0.37) % 1;
-  // double flash on each side: R R . B B .
-  if (ph < 0.12 || (ph > 0.18 && ph < 0.3)) return 1;
-  if ((ph > 0.5 && ph < 0.62) || (ph > 0.68 && ph < 0.8)) return 2;
-  return 0;
+  const ph = (t * 2.6 + i * 0.37) % 1;
+  // red half, blue half, each with a quick double-flash flicker: R R . B B .
+  if (ph < 0.5) return ph > 0.2 && ph < 0.26 ? 0 : 1;
+  return ph > 0.7 && ph < 0.76 ? 0 : 2;
 };
 /** siren tone: a slow wail far away, the fast yelp up close */
 const sirenPitch = (t: number, i: number, yelp: boolean) => {
@@ -346,6 +354,7 @@ export function CityTraffic({
         __rsCars: cars,
         __rsPursuit: director,
         __rsTrafficStats: trafficStats,
+        __rsSiren: sirenDebug,
       });
   }, [cars, director]);
 
@@ -458,6 +467,8 @@ export function CityTraffic({
           c.speed = sp;
           yaw = ns.yaw;
           flags = ns.flags;
+          // mirror the host's pursuit roles (render-only here: guests never simulate)
+          c.role = flags & F_SIREN ? ROLE_COP : flags & F_SUSPECT ? ROLE_SUSPECT : ROLE_NORMAL;
         } else {
           yaw = c.yawVis;
           c.speed = 0;
@@ -574,6 +585,7 @@ export function CityTraffic({
       const s = sirens[k];
       if (!s || !L.active) {
         setSiren(k, 700, 0, 0, 0);
+        sirenDebug[k] = null;
         continue;
       }
       const lx = cam.position.x - s.x;
@@ -585,7 +597,16 @@ export function CityTraffic({
       const near = 1 / (1 + Math.pow(s.d / 22, 1.4));
       const fade = Math.max(0, 1 - s.d / SIREN_RANGE);
       const pan = Math.max(-0.85, Math.min(0.85, (-lx * _right.x - lz * _right.z) / dd));
-      setSiren(k, sirenPitch(t, s.ci, s.d < 50) * dop, 0.2 * near * fade, pan, near);
+      const base = sirenPitch(t, s.ci, s.d < 50);
+      setSiren(k, base * dop, 0.2 * near * fade, pan, near);
+      sirenDebug[k] = {
+        car: s.ci,
+        d: s.d,
+        gain: 0.2 * near * fade,
+        doppler: dop,
+        pan,
+        yelp: s.d < 50,
+      };
     }
     for (const m of [
       paintRef.current,
