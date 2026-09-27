@@ -2821,6 +2821,49 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
 
   // ---- rock, the railroad, the mine ----
   const hv = rockMesh(L, chunkAt);
+  // talus at the cliff feet: fallen blocks and rubble heaped where the walls meet the desert.
+  // They sit inside the rock's own collision cells (poking out less than a player's radius),
+  // so the ground you walk on is unchanged.
+  {
+    const { cells, half, rock } = L;
+    const hash = (a: number, b: number) => {
+      const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const rk = (i: number, j: number) =>
+      i < 0 || j < 0 || i >= cells || j >= cells ? 1 : rock[i * cells + j]!;
+    const rubble = new THREE.Color();
+    for (let i = 1; i < cells - 1; i++)
+      for (let j = 1; j < cells - 1; j++) {
+        const h = rock[i * cells + j]!;
+        if (h < 3) continue;
+        for (const [di, dj] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
+          if (rk(i + di, j + dj) > 0) continue;
+          const r = hash(i * 4 + di + 2, j * 4 + dj + 2);
+          if (r > 0.34) continue;
+          const cx = -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
+          const cz = -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
+          const ch = chunkAt(cx, cz);
+          const k = 0.8 + hash(i + 3, j + 5) * 0.25;
+          rubble.setRGB(k * 1.05, k * 0.72, k * 0.6);
+          const big = r < 0.09;
+          const sc = big ? 0.95 + hash(i, j) * 0.35 : 0.45 + hash(j, i) * 0.35;
+          // a big fallen block, or a low heap of scree
+          ch.detail.stamp(T.boulder!.d, cx, -0.1, cz, r * 40, sc, big ? sc * 0.9 : sc * 0.45, sc * 1.2, rubble);
+          if (!big && r < 0.2) {
+            // a second, smaller stone beside it
+            const ox = dj !== 0 ? 0.7 : 0;
+            const oz = di !== 0 ? 0.7 : 0;
+            ch.detail.stamp(T.boulder!.d, cx + ox, -0.1, cz + oz, r * 70, sc * 0.55, sc * 0.4, sc * 0.6, rubble);
+          }
+        }
+      }
+  }
   railroad(L, chunkAt);
   minePortal(L, chunkAt);
 

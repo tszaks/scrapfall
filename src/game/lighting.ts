@@ -109,7 +109,7 @@ export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
     const w = WESTERN_LOOK[time];
     const P = WESTERN_SUNSET;
     const away = time === "sunset" ? horizonHex(P, false) : w.fog;
-    const toward = time === "sunset" ? horizonHex(P, true) : mix(w.fog, "#3a4070", 0.5);
+    const toward = time === "sunset" ? horizonHex(P, true) : mix(w.fog, "#26324e", 0.5);
     return {
       sky: away,
       fog: w.fogRange,

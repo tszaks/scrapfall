@@ -604,13 +604,70 @@ const PAINT: Record<number, (P: Painter) => void> = {
           c.lineTo(x + w, y + h);
           c.fill();
         }
-        // stained glass by candlelight
-        const cols = ["#ff5a3a", "#ffd24a", "#4a8aff", "#5aff8a", "#ff8ad8", "#ffb040"];
-        for (let yy = y; yy < y + h; yy += 9)
-          for (let xx = x; xx < x + w; xx += 8)
-            rect(P.n, cols[Math.floor(P.r() * cols.length)]!, xx, yy, 8, 9);
-        for (let yy = y; yy < y + h; yy += 9) rect(P.n, "#000", x, yy, w, 1.5);
-        for (let yy = y; yy < y + h; yy += 18) rect(d, "#1a2430", x, yy, w, 1.5);
+        // stained glass: diamond quarries in muted jewel tones (ruby, sapphire, emerald, amber,
+        // amethyst) held in lead, lit softly by candles inside (warmest low in the middle)
+        const jewels: [number, number, number][] = [
+          [110, 26, 34],
+          [30, 50, 100],
+          [28, 80, 56],
+          [140, 88, 30],
+          [70, 38, 88],
+          [96, 70, 44],
+        ];
+        const arch = (c: CanvasRenderingContext2D) => {
+          c.beginPath();
+          c.moveTo(x, y + h);
+          c.lineTo(x, y + w * 0.5);
+          c.quadraticCurveTo(x + w / 2, y - w * 0.4, x + w, y + w * 0.5);
+          c.lineTo(x + w, y + h);
+          c.closePath();
+        };
+        const dx = w / 4;
+        const dy = dx * 1.4;
+        const picks: number[] = [];
+        for (let k = 0; k < 400; k++) picks.push(Math.floor(P.r() * jewels.length));
+        for (const [c, lum] of [
+          [P.n, 0.62],
+          [d, 0.3],
+        ] as const) {
+          c.save();
+          arch(c);
+          c.clip();
+          c.fillStyle = "#000";
+          c.fillRect(x, y - w, w, h + w);
+          let k = 0;
+          for (let j = -2; j * (dy / 2) < h + w; j++)
+            for (let i = -1; i <= 4; i++) {
+              const cx = x + i * dx + (j % 2 === 0 ? 0 : dx / 2);
+              const cy = y - w * 0.4 + (j * dy) / 2;
+              const [r, g, b] = jewels[picks[k++ % picks.length]!]!;
+              // candle glow: brightest low and centred, dimmer toward the arch
+              const glow = lum * (0.55 + 0.45 * Math.min(1, (cy - y) / h)) * (1 - 0.35 * Math.abs(cx - (x + w / 2)) / (w / 2));
+              c.fillStyle = `rgb(${Math.round(r * glow)},${Math.round(g * glow)},${Math.round(b * glow)})`;
+              c.beginPath();
+              c.moveTo(cx, cy - dy / 2);
+              c.lineTo(cx + dx / 2, cy);
+              c.lineTo(cx, cy + dy / 2);
+              c.lineTo(cx - dx / 2, cy);
+              c.closePath();
+              c.fill();
+            }
+          // the lead: the diamond lattice, a centre mullion and saddle bars
+          c.strokeStyle = "#0a0806";
+          c.lineWidth = 1.6;
+          for (let t = -h * 2; t < w + h * 2; t += dx) {
+            c.beginPath();
+            c.moveTo(x + t, y - w);
+            c.lineTo(x + t + ((h + w) * dx) / dy, y + h);
+            c.moveTo(x + t, y - w);
+            c.lineTo(x + t - ((h + w) * dx) / dy, y + h);
+            c.stroke();
+          }
+          c.fillStyle = "#0a0806";
+          c.fillRect(x + w / 2 - 1.5, y - w, 3, h + w);
+          for (let yy = y + h * 0.2; yy < y + h; yy += h * 0.26) c.fillRect(x, yy, w, 2.5);
+          c.restore();
+        }
       }
     grain(P, 0.4, 6);
   },

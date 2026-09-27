@@ -1288,6 +1288,32 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
 
 /** Simple blocky gun model, different silhouette per weapon. */
 type ModLooks = Partial<Record<"burst" | "incend" | "magnum" | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty", boolean>>;
+/**
+ * A modest rim and fill light on the first-person gun's lit materials, so a dark gun still
+ * reads against a bright sunset or a dark night: a soft edge highlight where its surfaces turn
+ * away from the eye, and a small lift of its own colour. Patched once per material.
+ */
+function addGunRim(m: THREE.Material) {
+  if (m.userData["gunRim"] || !(m instanceof THREE.MeshLambertMaterial || m instanceof THREE.MeshStandardMaterial)) return;
+  m.userData["gunRim"] = true;
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <aomap_fragment>",
+      `#include <aomap_fragment>
+{
+  vec3 vd = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vViewPosition);
+  float rim = pow(1.0 - clamp(dot(normal, vd), 0.0, 1.0), 3.0);
+  totalEmissiveRadiance += (diffuseColor.rgb * 0.5 + vec3(0.32, 0.34, 0.38)) * rim * 0.42 + diffuseColor.rgb * 0.07;
+}`,
+    );
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => key() + "|gun-rim";
+  m.needsUpdate = true;
+}
+
 function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
   const g = GUNS[w];
   const glow = <meshBasicMaterial color={g.color} fog={false} />;
@@ -3564,6 +3590,7 @@ function World({
       if (o.renderOrder < 999) o.renderOrder = 1000;
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
+      if (m && !Array.isArray(m)) addGunRim(m);
     });
     fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });

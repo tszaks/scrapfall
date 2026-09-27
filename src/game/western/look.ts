@@ -51,19 +51,21 @@ export const WESTERN_LOOK: Record<TimeOfDay, WesternLook> = {
   },
   // lanterns in the windows, the moon over the buttes, stars, a glowing saloon, a campfire
   night: {
-    fog: "#1a2040",
-    fogRange: [90, 2600],
-    hemi: ["#90a6e8", "#4a4260", 1.2],
-    sun: { color: "#b8c8ff", intensity: 1.0 },
-    ambient: 0.28,
-    ambientColor: "#a8b8e8",
+    // crisp desert moonlight: a cool blue-silver key, clear air (the fog barely starts before
+    // the horizon), neutral blue-grey fill so the sand and cactus read instead of a purple haze
+    fog: "#16203a",
+    fogRange: [320, 4600],
+    hemi: ["#8ea6e0", "#4a5264", 1.2],
+    sun: { color: "#c8d8ff", intensity: 1.75 },
+    ambient: 0.26,
+    ambientColor: "#9fb4e0",
     camFar: 5200,
     windows: 1,
     flames: 1.45,
     pools: true,
     motes: "#8a9ad8",
     env: 0.7,
-    disc: { color: "#e8eeff", size: 320 },
+    disc: { color: "#eef2ff", size: 320 },
     storm: "#3a3448",
   },
 };
