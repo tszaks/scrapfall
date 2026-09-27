@@ -373,6 +373,65 @@ const isStreetEdge = (p: P2, q: P2, mask: number) => {
   return s >= 0 ? ((mask >> s) & 1) === 1 : mask !== 0;
 };
 
+/** a building part's volume, when it is a plain box (its outline is its bounding rectangle) */
+type Vol = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number } | null;
+const volsOf = (b: Bld): Vol[] =>
+  b.parts.map((p) =>
+    (p.shape ?? "box") === "box" && p.role !== "bridge"
+      ? { x0: p.x0, z0: p.z0, x1: p.x1, z1: p.z1, y0: p.y0, y1: p.y0 + p.h }
+      : null,
+  );
+
+/** is (x, y, z) inside one of the building's other parts (strictly, so their faces don't count) */
+function inSibling(vols: Vol[], self: number, x: number, y: number, z: number, e = 0.02) {
+  return vols.some(
+    (v, j) =>
+      j !== self &&
+      v !== null &&
+      x > v.x0 + e &&
+      x < v.x1 - e &&
+      z > v.z0 + e &&
+      z < v.z1 - e &&
+      y > v.y0 + e &&
+      y < v.y1 - e,
+  );
+}
+
+/** stretches [t0, t1] (metres from p) of the edge p -> q that no other part of the building
+ * buries or covers anywhere between ya and yb (a roof parapet under a flush upper storey) */
+function openSpans(vols: Vol[], self: number, p: P2, q: P2, ya: number, yb: number) {
+  const fw = Math.hypot(q[0] - p[0], q[1] - p[1]);
+  const alongX = Math.abs(q[1] - p[1]) < 1e-6;
+  const alongZ = Math.abs(q[0] - p[0]) < 1e-6;
+  let spans: [number, number][] = [[0, fw]];
+  if (!alongX && !alongZ) return spans;
+  const e = 1e-3;
+  vols.forEach((v, j) => {
+    if (j === self || !v || v.y0 > ya + e || v.y1 < yb - e) return;
+    // the edge line must lie within (or on the boundary of) the other part's footprint
+    const [c, lo, hi, a0, a1] = alongX
+      ? [p[1], v.z0, v.z1, v.x0, v.x1]
+      : [p[0], v.x0, v.x1, v.z0, v.z1];
+    if (c < lo - e || c > hi + e) return;
+    const s0 = alongX ? p[0] : p[1];
+    const dir = Math.sign(alongX ? q[0] - p[0] : q[1] - p[1]);
+    const ta = (a0 - s0) * dir;
+    const tb = (a1 - s0) * dir;
+    const c0 = Math.min(ta, tb);
+    const c1 = Math.max(ta, tb);
+    const next: [number, number][] = [];
+    for (const [s, t] of spans) {
+      if (c1 <= s || c0 >= t) next.push([s, t]);
+      else {
+        if (c0 > s) next.push([s, c0]);
+        if (c1 < t) next.push([c1, t]);
+      }
+    }
+    spans = next;
+  });
+  return spans.filter(([s, t]) => t - s > 0.05);
+}
+
 /** facade walls of an outline between y0 and y1 (optionally a storefront band at street level) */
 function walls(
   G: Geo,
@@ -440,10 +499,33 @@ function ring(G: Geo, outer: P2[], inner: P2[], y: number) {
 }
 
 /** roof: parapet wall + cap; returns the inner outline */
-function roof(G: Geo, poly: P2[], y: number, st: Style, para = 1.0, rim = 0.35, roofCol = st.roof) {
+function roof(
+  G: Geo,
+  poly: P2[],
+  y: number,
+  st: Style,
+  para = 1.0,
+  rim = 0.35,
+  roofCol = st.roof,
+  open?: (p: P2, q: P2, ya: number, yb: number) => [number, number][],
+) {
   const inner = insetPoly(poly, rim);
   G.mat(L.plain, st.seed, 1).col(st.tint, 0.9);
-  for (let i = 0; i < poly.length; i++) G.wall(poly[i]!, poly[(i + 1) % poly.length]!, y, y + para);
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i]!;
+    const q = poly[(i + 1) % poly.length]!;
+    if (!open) {
+      G.wall(p, q, y, y + para);
+      continue;
+    }
+    // skip the stretches where a flush upper part stands on this edge: the parapet would
+    // sit in the plane of that part's facade and z-fight with it
+    const fw = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    const ux = (q[0] - p[0]) / fw;
+    const uz = (q[1] - p[1]) / fw;
+    for (const [t0, t1] of open(p, q, y, y + para))
+      G.wall([p[0] + ux * t0, p[1] + uz * t0], [p[0] + ux * t1, p[1] + uz * t1], y, y + para);
+  }
   G.col(st.tint, 0.72);
   for (let i = 0; i < inner.length; i++)
     G.wall(inner[(i + 1) % inner.length]!, inner[i]!, y, y + para);
@@ -664,7 +746,7 @@ function crown(C: Ctx, poly: P2[], y: number, st: Style, b: Bld, kind: Crown) {
 }
 
 /** storefront dressing along the street faces of a ground-floor outline */
-function shopfronts(C: Ctx, poly: P2[], st: Style, b: Bld) {
+function shopfronts(C: Ctx, poly: P2[], st: Style, b: Bld, vols: Vol[], self: number) {
   const r = st.r;
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i]!;
@@ -676,6 +758,8 @@ function shopfronts(C: Ctx, poly: P2[], st: Style, b: Bld) {
     if (fw < 5) continue;
     const nx = dz / fw;
     const nz = -dx / fw;
+    // a street-side face buried behind another part of the building (a terrace's back tiers)
+    if (inSibling(vols, self, (p[0] + q[0]) / 2 + nx, 2, (p[1] + q[1]) / 2 + nz)) continue;
     const ux = dx / fw;
     const uz = dz / fw;
     const rot = Math.atan2(nx, nz);
@@ -775,23 +859,37 @@ function shopfronts(C: Ctx, poly: P2[], st: Style, b: Bld) {
 }
 
 /** balconies on the street faces of a residential outline (rectangles only) */
-function balconies(C: Ctx, poly: P2[], y0: number, y1: number, st: Style, b: Bld, store: boolean) {
+function balconies(
+  C: Ctx,
+  poly: P2[],
+  y0: number,
+  y1: number,
+  st: Style,
+  b: Bld,
+  store: boolean,
+  vols: Vol[],
+  self: number,
+) {
   const D = C.detail;
   const glassRail = st.r() < 0.5;
+  // module grid and storey lines exactly as walls() tiles this facade, so every slab
+  // lands under a balcony door of the texture
+  const modW = MODULE_W[st.layer] ?? 3;
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i]!;
     const q = poly[(i + 1) % poly.length]!;
-    if (!isStreetEdge(p, q, b.street) && st.r() < 0.6) continue;
+    const street = isStreetEdge(p, q, b.street);
+    if (!street && st.r() < 0.6) continue;
     const dx = q[0] - p[0];
     const dz = q[1] - p[1];
     const fw = Math.hypot(dx, dz);
     if (fw < 6) continue;
-    const mods = Math.max(1, Math.round(fw / 3));
+    const mods = Math.max(1, Math.round(fw / modW));
     const mw = fw / mods;
     const nx = dz / fw;
     const nz = -dx / fw;
     const rot = Math.atan2(nx, nz);
-    const base = store && y0 < 0.1 ? 4.5 : y0;
+    const base = store && y0 < 0.1 && y1 > 6 && fw > 3 && street ? 4.5 : y0;
     const floors = Math.floor((y1 - base) / st.fh);
     for (let f = 1; f < floors; f++) {
       const y = base + f * st.fh;
@@ -799,8 +897,21 @@ function balconies(C: Ctx, poly: P2[], y0: number, y1: number, st: Style, b: Bld
         // balcony doors sit on the even columns of the facade texture (counted from the far end)
         if ((st.uOff + (mods - 1 - m)) % 2 !== 0) continue;
         const t = (m + 0.5) * mw;
-        const cx = p[0] + (dx / fw) * t + nx * 0.65;
-        const cz = p[1] + (dz / fw) * t + nz * 0.65;
+        // not on a face buried against another part of the building
+        const hw = mw * 0.41;
+        const ex = (dx / fw) * hw;
+        const ez = (dz / fw) * hw;
+        const ox = p[0] + (dx / fw) * t + nx * 0.65;
+        const oz = p[1] + (dz / fw) * t + nz * 0.65;
+        if (
+          inSibling(vols, self, ox - ex, y, oz - ez, -0.3) ||
+          inSibling(vols, self, ox + ex, y, oz + ez, -0.3) ||
+          inSibling(vols, self, ox - ex, y + 1, oz - ez, -0.3) ||
+          inSibling(vols, self, ox + ex, y + 1, oz + ez, -0.3)
+        )
+          continue;
+        const cx = ox;
+        const cz = oz;
         D.mat(L.plain, st.seed, 0).col("#d8d4cc");
         D.obox(cx, y - 0.1, cz, mw * 0.82, 0.16, 1.3, rot);
         D.col(glassRail ? "#9fb4c0" : "#3a3c40");
@@ -811,7 +922,7 @@ function balconies(C: Ctx, poly: P2[], y0: number, y1: number, st: Style, b: Bld
 }
 
 /** iron fire escape zig-zagging up the front of a brick walk-up */
-function fireEscape(C: Ctx, poly: P2[], y1: number, st: Style, b: Bld) {
+function fireEscape(C: Ctx, poly: P2[], y1: number, st: Style, b: Bld, vols: Vol[], self: number) {
   if (poly.length !== 4) return;
   const D = C.detail;
   // the front face (or the first street face)
@@ -828,6 +939,7 @@ function fireEscape(C: Ctx, poly: P2[], y1: number, st: Style, b: Bld) {
     uz = dz / fw;
   const nx = dz / fw,
     nz = -dx / fw;
+  if (inSibling(vols, self, (p[0] + q[0]) / 2 + nx, 2, (p[1] + q[1]) / 2 + nz)) return;
   const rot = Math.atan2(nx, nz);
   const t = fw * (0.3 + st.r() * 0.4);
   const cx = p[0] + ux * t;
@@ -974,8 +1086,9 @@ function building(b: Bld, C: Ctx) {
     case "garage":
       return garage(b, st, C);
   }
-  const tops: { poly: P2[]; y: number; p: Part }[] = [];
-  for (const p of b.parts) {
+  const tops: { poly: P2[]; y: number; p: Part; i: number }[] = [];
+  const vols = volsOf(b);
+  for (const [pi, p] of b.parts.entries()) {
     if (p.role === "bridge") {
       // glass sky bridge between the twins
       const poly = rectPoly(p.x0, p.z0, p.x1, p.z1);
@@ -1007,19 +1120,27 @@ function building(b: Bld, C: Ctx) {
           }
         : st;
     const top = massPart(C, p, pst, b, store);
-    tops.push({ ...top, p });
-    if (store && p.shape !== "cyl") shopfronts(C, outline(p), st, b);
-    if (st.balcony && p.h > 9 && (p.shape ?? "box") === "box" && b.t !== "tower")
-      balconies(C, outline(p), p.y0, p.y0 + p.h, st, b, store);
+    tops.push({ ...top, p, i: pi });
+    if (store && p.shape !== "cyl") shopfronts(C, outline(p), st, b, vols, pi);
+    if (
+      st.balcony &&
+      st.layer === L.resid &&
+      p.h > 9 &&
+      (p.shape ?? "box") === "box" &&
+      b.t !== "tower"
+    )
+      balconies(C, outline(p), p.y0, p.y0 + p.h, st, b, store, vols, pi);
     if (st.fire && p.y0 < 0.1 && (p.shape ?? "box") === "box")
-      fireEscape(C, outline(p), p.y0 + p.h, st, b);
+      fireEscape(C, outline(p), p.y0 + p.h, st, b, vols, pi);
   }
   // roofs on everything but the tallest part, the crown on the tallest
   let hi = 0;
   for (let k = 1; k < tops.length; k++) if (tops[k]!.y > tops[hi]!.y) hi = k;
   tops.forEach((t, k) => {
     if (k === hi) return;
-    const inner = roof(G, t.poly, t.y + k * 0.03, st, 0.9);
+    const inner = roof(G, t.poly, t.y + k * 0.03, st, 0.9, 0.35, st.roof, (p, q, ya, yb) =>
+      openSpans(vols, t.i, p, q, ya, yb),
+    );
     if (t.p.role === "podium" && st.r() < 0.35) {
       // podium roof garden
       G.mat(L.plain, st.seed, 0).col("#6a8f45");
@@ -1498,7 +1619,17 @@ function civic(b: Bld, st: Style, C: Ctx) {
   walls(G, poly, 0, p.h, st, 0, false, L.stone, st.tint, 7);
   // cornice + roof + a green copper dome on a drum
   G.mat(L.plain, st.seed, 1).col(st.tint, 1.06);
-  G.box((p.x0 + p.x1) / 2, p.h - 0.8, (p.z0 + p.z1) / 2, p.x1 - p.x0 + 1.2, 1.2, p.z1 - p.z0 + 1.2);
+  G.box(
+    (p.x0 + p.x1) / 2,
+    p.h - 0.8,
+    (p.z0 + p.z1) / 2,
+    p.x1 - p.x0 + 1.2,
+    1.2,
+    p.z1 - p.z0 + 1.2,
+    false,
+  );
+  // cornice top as a rim round the roof (a full top would sit in the roof's plane)
+  ring(G, rectPoly(p.x0 - 0.6, p.z0 - 0.6, p.x1 + 0.6, p.z1 + 0.6), poly, p.h + 0.4);
   G.mat(L.plain, st.seed, 0).col("#8a8780");
   G.cap(poly, p.h + 0.4);
   const cx = (p.x0 + p.x1) / 2;
@@ -2163,7 +2294,7 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
     case "tree": {
       const s = p.s ?? 1;
       D.mat(L.plain, 0.5, 0).col("#2a2622");
-      D.flat(p.x - 0.7, p.z - 0.7, p.x + 0.7, p.z + 0.7, y + 0.01);
+      D.flat(p.x - 0.7, p.z - 0.7, p.x + 0.7, p.z + 0.7, y + 0.03);
       D.stamp(T.trunk, p.x, y, p.z, p.rot, s, s, s);
       tint.set(TREE_T[Math.floor(Math.abs(p.x * 7 + p.z * 13)) % TREE_T.length]!);
       D.stamp(T.canopy, p.x, y, p.z, p.rot, s, s, s, tint);
