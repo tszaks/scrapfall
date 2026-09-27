@@ -4110,3 +4110,83 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+/** tiny pistol silhouette shown on pistol-mod shop cards */
+function PistolBadge() {
+  return (
+    <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
+      <path
+        d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z"
+        fill="#2b2118"
+      />
+      <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
+    </svg>
+  );
+}
+
+type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
+
+/** Brotato-style stat sheet: green above baseline, red below */
+export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
+  const [tab, setTab] = useState<"combat" | "survival">("combat");
+  const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
+  const combat: StatRow[] = [
+    { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
+    { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
+    { label: "Crit Protocol", value: `${Math.round(d.crit * 100)}%`, tone: pct(d.crit, 0) },
+    { label: "Piercing", value: `${d.pierce}`, tone: pct(d.pierce, 0) },
+    { label: "Ricochet", value: `${Math.round(d.ricochet * 100)}%`, tone: pct(d.ricochet, 0) },
+    { label: "Combustion", value: `${Math.round(d.boom * 100)}%`, tone: pct(d.boom, 0) },
+    { label: "Impact Force", value: `${Math.round(d.knock * 100)}%`, tone: pct(d.knock, 0) },
+    { label: "Ammo Capacity", value: `${Math.round(d.ammoMul * 100)}%`, tone: pct(d.ammoMul) },
+  ];
+  const survival: StatRow[] = [
+    { label: "Hull Integrity", value: `${d.maxHp}`, tone: pct(d.maxHp, 10) },
+    { label: "Armor Plating", value: `${Math.round(d.armor * 100)}%`, tone: pct(d.armor, 0) },
+    { label: "Phase Shift", value: `${Math.round(d.dodge * 100)}%`, tone: pct(d.dodge, 0) },
+    { label: "Life Siphon", value: `${Math.round(d.steal * 100)}%`, tone: pct(d.steal, 0) },
+    { label: "Nano-Regen", value: d.regen ? `x${d.regen}` : "0", tone: d.regen ? 1 : 0 },
+    { label: "Shock Thorns", value: `${Math.round(d.thorns * 100)}%`, tone: pct(d.thorns, 0) },
+    { label: "Thruster Speed", value: `${Math.round(d.speed * 100)}%`, tone: pct(d.speed) },
+    { label: "Flux Magnet", value: `${d.magnet.toFixed(1)}m`, tone: pct(d.magnet, 2) },
+    { label: "Salvage Yield", value: `${Math.round(d.greed * 100)}%`, tone: pct(d.greed) },
+    { label: "Recharge Haste", value: `${Math.round(d.haste * 100)}%`, tone: pct(d.haste, 0) },
+    { label: "Free Rerolls", value: `${d.freeRerolls}`, tone: pct(d.freeRerolls, 0) },
+  ];
+  const rows = tab === "combat" ? combat : survival;
+  return (
+    <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
+      <div className="flex items-center justify-between">
+        <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
+        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+          {CLASSES[cls].name}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {(["combat", "survival"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`pointer-events-auto flex-1 rounded px-2 py-1 text-[10px] font-bold tracking-widest ${
+              tab === t ? "bg-[#f3e6cf] text-[#2b2118]" : "bg-[#f3e6cf]/10 text-[#f3e6cf]/70"
+            }`}
+          >
+            {t === "combat" ? "COMBAT" : "SURVIVAL"}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between">
+            <span className={r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : "text-[#f3e6cf]/75"}>
+              {r.label}
+            </span>
+            <span className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}>
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
