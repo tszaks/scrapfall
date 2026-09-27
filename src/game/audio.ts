@@ -185,6 +185,37 @@ export function setSiren(slot: number, freq: number, gain: number, pan: number, 
   if (v.pan) v.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), now, 0.03);
 }
 
+/** Enemy telegraph cues (newer enemy types). `vol` fades them with distance. */
+export type EnemySfx = "aim" | "lock" | "snipe" | "click" | "throw" | "charge" | "spin" | "launch" | "boom" | "heal" | "cloak" | "buzz" | "block";
+export function playEnemySfx(kind: EnemySfx, vol = 1) {
+  if (!ctx || vol <= 0.02) return;
+  const v = Math.min(1, vol);
+  const at = ctx.currentTime;
+  const t = (x: Tone, delay = 0) => tone({ ...x, gain: x.gain * v }, sfxGain, delay ? at + delay : 0);
+  if (kind === "aim") t({ wave: "sine", f0: 880, f1: 900, dur: 0.12, gain: 0.12, noise: 0, cut: 6000 });
+  if (kind === "lock") {
+    t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 });
+    t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 }, 0.12);
+  }
+  if (kind === "snipe") t({ wave: "sawtooth", f0: 1800, f1: 90, dur: 0.5, gain: 0.4, noise: 0.8, cut: 7000, q: 4 });
+  if (kind === "click") {
+    t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 });
+    t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 }, 0.14);
+  }
+  if (kind === "throw") t({ wave: "triangle", f0: 300, f1: 700, dur: 0.18, gain: 0.18, noise: 0.4, cut: 3000 });
+  if (kind === "charge") t({ wave: "sawtooth", f0: 70, f1: 240, dur: 0.95, gain: 0.3, noise: 0.5, cut: 1200, q: 3 });
+  if (kind === "spin") t({ wave: "sawtooth", f0: 60, f1: 420, dur: 1.1, gain: 0.2, noise: 0.2, cut: 2000, q: 6 });
+  if (kind === "launch") t({ wave: "sawtooth", f0: 200, f1: 60, dur: 0.5, gain: 0.3, noise: 1.2, cut: 2500 });
+  if (kind === "boom") {
+    t({ wave: "sine", f0: 90, f1: 30, dur: 0.7, gain: 0.8, noise: 1.3, cut: 1100 });
+    t({ wave: "square", f0: 55, f1: 35, dur: 0.3, gain: 0.3, noise: 0, cut: 500 });
+  }
+  if (kind === "heal") t({ wave: "sine", f0: 660, f1: 1320, dur: 0.35, gain: 0.14, noise: 0, cut: 7000 });
+  if (kind === "cloak") t({ wave: "sine", f0: 2400, f1: 600, dur: 0.5, gain: 0.12, noise: 0.15, cut: 9000, q: 12 });
+  if (kind === "buzz") t({ wave: "sawtooth", f0: 190, f1: 230, dur: 0.35, gain: 0.12, noise: 0.1, cut: 2400, q: 5 });
+  if (kind === "block") t({ wave: "triangle", f0: 1500, f1: 700, dur: 0.08, gain: 0.12, noise: 0.2, cut: 7000, q: 6 });
+}
+
 // ---- music: tiny lookahead step sequencer, one style per map ----
 type Style = {
   roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;

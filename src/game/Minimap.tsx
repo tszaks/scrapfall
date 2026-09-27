@@ -28,7 +28,7 @@ export type MapItem = {
   active: boolean;
 };
 export type MapFeed = { x: number; z: number; yaw: number; items: MapItem[] };
-type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number };
+type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number; vis?: number };
 type MapRemote = { x: number; z: number; color: string; hp: number; last: number };
 
 const SIZE = 184; // css px
@@ -141,6 +141,7 @@ export function Minimap({
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;
+        if (e.kind === "cloaker" && ((e.vis ?? 0) >> 6) === 1) continue; // cloaked: off the radar too
         const x = wx(e.x);
         const z = wz(e.z);
         if (x * x + z * z > R * R) continue;
