@@ -3334,6 +3334,10 @@ export function Game() {
     setLocked(true);
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
+    if (touchUi) {
+      resetTouchInput();
+      return; // touch devices steer with the on-screen controls, no pointer lock
+    }
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
