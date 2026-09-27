@@ -7,7 +7,8 @@ import * as THREE from "three";
 
 import { mapEvent } from "./events/mapEvents";
 import { playDowned, playPing, playRevive } from "./events/sfx";
-import { colorFor, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { colorFor, type NetHandle, type RemoteState } from "./net";
+import { groundY } from "./terrain";
 import { aimPing, pingFromMsg, pingMsg, pings, tickPings, type PingWorld } from "./ping";
 import {
   DOWN,
@@ -286,7 +287,7 @@ export function HudOverlay({
           if (!s || s.st !== DOWN || k >= MAX_DOWN) return;
           const el = downEls.current[k++];
           if (!el) return;
-          project(cam, r.x, 0.9 + (cam.position.y - 1.6) * 0, r.z, W, H, P);
+          project(cam, r.x, groundY(r.x, r.z) + 0.8, r.z, W, H, P);
           el.style.display = "flex";
           // off screen: pinned to the edge, kept whole
           const px = P.on ? P.x : Math.min(W - 130, Math.max(130, P.x));

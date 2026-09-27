@@ -17,6 +17,7 @@ import { AVALANCHE_EVENT, AV_WARN, avState, avalanchePlan, runAt } from "./avala
 import { BLACKOUT_EVENT } from "./blackout";
 import { TRAIN_ROBBERY_EVENT, WAVE_SURGE_EVENT } from "./mapHooks";
 import {
+  forceMapEvent,
   forceRequests,
   hostSchedule,
   mapEvent,
@@ -102,9 +103,13 @@ export function MapEvents({
   }, [ctx, matchSeed]);
 
   useEffect(() => {
-    // test handle (?debug=1)
-    if (new URLSearchParams(window.location.search).get("debug") === "1")
+    // test handle (?debug=1); `&event=blackout` fires an event as the match starts
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("debug") === "1") {
       (window as unknown as { __events?: unknown }).__events = { avState, power, mapEvent, avalanchePlan, runAt };
+      const ev = q.get("event");
+      if (ev) forceMapEvent(ev);
+    }
   }, []);
   const announce = useRef(0);
   const ambPower = useRef(1);

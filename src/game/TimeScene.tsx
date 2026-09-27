@@ -8,6 +8,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { power } from "./events/power";
 import { skyFog } from "./skyFog";
 import type { Theme } from "./themes";
 import {
@@ -59,9 +60,12 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
     };
   }, [scene, fog]);
   useFrame(() => {
-    if (seen.current === todFrame.version) return;
-    seen.current = todFrame.version;
+    // re-apply when the time moved or the city's power changed (a blackout dims the sky glow)
+    const v = todFrame.version + power.version * 1e6;
+    if (seen.current === v) return;
+    seen.current = v;
     const L = liveLook;
+    const dim = 1 - 0.4 * power.darkness;
     if (!ownFog) {
       fog.color.copy(L.fogColor);
       fog.near = L.fogNear;
@@ -71,12 +75,12 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
     if (h) {
       h.color.copy(L.hemiSky);
       h.groundColor.copy(L.hemiGround);
-      h.intensity = L.hemiI;
+      h.intensity = L.hemiI * dim;
     }
     const a = amb.current;
     if (a) {
       a.color.copy(L.ambientColor);
-      a.intensity = L.ambient;
+      a.intensity = L.ambient * dim;
     }
     const s = sun.current;
     if (s) {
