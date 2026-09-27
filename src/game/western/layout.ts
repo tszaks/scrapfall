@@ -470,6 +470,60 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       rock[k] = terrace(h, 8);
     }
   }
+  // no slot canyons: open ground squeezed between rock less than 6 m apart is filled in
+  // (a 2-4 m crack reads as a path, but it is a trap for the player and no enemy can follow)
+  for (let pass = 0; pass < 3; pass++) {
+    const fill: [number, number][] = [];
+    const rk = (i: number, j: number) => (inside(i, j) ? rock[idx(i, j)]! : 0);
+    for (let i = 2; i < cells - 2; i++)
+      for (let j = 2; j < cells - 2; j++) {
+        if (rock[idx(i, j)]! > 0) continue;
+        const x = cc(i);
+        const z = cc(j);
+        if (inClear(x, z) || inRiver(x, z, 1)) continue;
+        const ax = Math.max(rk(i - 1, j), rk(i - 2, j));
+        const bx = Math.max(rk(i + 1, j), rk(i + 2, j));
+        const az = Math.max(rk(i, j - 1), rk(i, j - 2));
+        const bz = Math.max(rk(i, j + 1), rk(i, j + 2));
+        if (ax > 0 && bx > 0) fill.push([idx(i, j), Math.min(ax, bx)]);
+        else if (az > 0 && bz > 0) fill.push([idx(i, j), Math.min(az, bz)]);
+      }
+    if (!fill.length) break;
+    for (const [k, h] of fill) rock[k] = h;
+  }
+  // the rail is either in a real tunnel or in the open: a rock stretch shorter than 12 m
+  // along the line would get no portal (the train would ghost through a lump of cliff), so
+  // it is cut away; and in the open, no rock may reach into the 10 m wide cutting the train
+  // runs through (a spur clipping the cars)
+  {
+    const railCell = (z: number) => at(RAIL_X, z);
+    const onRock = (z: number) => (rock[railCell(z)] ?? 0) > 0;
+    for (let z = -half + 1; z < half; ) {
+      if (!onRock(z)) {
+        z += 2;
+        continue;
+      }
+      let e = z;
+      while (e < half && onRock(e)) e += 2;
+      if (e - z < 12) for (let zz = z; zz < e; zz += 2) rock[railCell(zz)] = 0;
+      z = e;
+    }
+    for (let z = -half + 1; z < half; z += 2) {
+      if (onRock(z)) {
+        // inside a tunnel the rock covers the whole cutting, so no car shows through a side
+        const h = rock[railCell(z)]!;
+        for (let dx = -5; dx <= 5; dx += 2) {
+          const k = at(RAIL_X + dx, z);
+          if (k >= 0) rock[k] = Math.max(rock[k]!, h);
+        }
+        continue;
+      }
+      for (let dx = -5; dx <= 5; dx += 2) {
+        const k = at(RAIL_X + dx, z);
+        if (k >= 0) rock[k] = 0;
+      }
+    }
+  }
   // the rail runs through the rock in tunnels: find the portal faces on the line
   const railRock = (z: number) => rock[at(RAIL_X, z)] ?? 0;
   let portalN = -200;
@@ -672,7 +726,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     stairs: WesternLayout["saloonStairs"];
     lot: { x0: number; x1: number; zf: number; north: boolean } | null;
   } = { stairs: null, lot: null };
-  const row = (north: boolean, x0: number, x1: number, fixed: Plan[]) => {
+  const row = (north: boolean, x0: number, x1: number, fixed: Plan[], abut?: number) => {
     const zf = north ? -STREET_HALF - BOARD_D : STREET_HALF + BOARD_D; // building front line
     const front = north ? 2 : 0;
     let x = x0;
@@ -707,6 +761,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       if (k < 0) break;
       order = order.filter((_, i) => i !== k);
       gaps.splice(k, 1);
+    }
+    // a row that ends just short of a neighbour (the station) would leave a 2-4 m slot:
+    // the last shop is widened to stand shoulder to shoulder with it instead
+    if (abut !== undefined && order.length) {
+      const end = x0 + order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - gaps[gaps.length - 1]!;
+      const slack = abut - end;
+      const last = order[order.length - 1]!;
+      if (slack > 0 && slack < 6 && !fixed.includes(last))
+        order[order.length - 1] = { ...last, w: last.w + slack };
     }
     for (let oi = 0; oi < order.length; oi++) {
       const p = order[oi]!;
@@ -779,23 +842,25 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         if (rand() < 0.45)
           solidProp("trough", hx + 3.2, edge - (north ? -0.1 : 0.1), 0, 2.4, 0.8, 0.8);
       }
-      if (rand() < 0.5)
-        prop(
-          rand() < 0.5 ? "barrels" : "crates",
-          x + 1 + rand() * (p.w - 2),
-          clutterZ,
-          rand() * 6.28,
-          0.8 + rand() * 0.4,
-        );
-      if (rand() < 0.55)
-        prop(
-          "bench",
-          x + p.w / 2 + (rand() - 0.5) * 3,
-          clutterZ,
-          north ? Math.PI : 0,
-        );
-      if (rand() < 0.3)
-        prop("sacks", x + 1 + rand() * (p.w - 2), clutterZ, rand() * 6.28, 1);
+      // porch-row clutter: each piece takes its own stretch of the row (nothing stacked
+      // inside anything else)
+      const taken: [number, number][] = [];
+      const place = (k: WPropKind, w: number, want: number, rot: number, s = 1) => {
+        for (let t = 0; t < 6; t++) {
+          const cx = t === 0 ? want : x + w / 2 + 0.3 + rand() * (p.w - w - 0.6);
+          if (cx - w / 2 < x + 0.3 || cx + w / 2 > x + p.w - 0.3) continue;
+          if (taken.some(([a, b]) => cx + w / 2 + 0.3 > a && cx - w / 2 - 0.3 < b)) continue;
+          taken.push([cx - w / 2, cx + w / 2]);
+          prop(k, cx, clutterZ, rot, s);
+          return;
+        }
+      };
+      if (rand() < 0.55) place("bench", 1.8, x + p.w / 2 + (rand() - 0.5) * 3, north ? Math.PI : 0);
+      if (rand() < 0.5) {
+        const sc = 0.8 + rand() * 0.4;
+        place(rand() < 0.5 ? "barrels" : "crates", 1.6 * sc, x + 1 + rand() * (p.w - 2), rand() * 6.28, sc);
+      }
+      if (rand() < 0.3) place("sacks", 1.2, x + 1 + rand() * (p.w - 2), rand() * 6.28);
       // porch lanterns
       if (porch > 0)
         prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
@@ -828,7 +893,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     { w: 16, t: "opera", sign: W["OPERA HOUSE"], storeys: 2, mat: "brick", porch: 0, ff: 3, d: 20 },
     { w: 10, t: "store", sign: W["TELEGRAPH"], storeys: 1, porch: 1 },
     { w: 10, t: "store", sign: W["UNDERTAKER"], storeys: 1, mat: "board", porch: 1 },
-  ]);
+  ], 124);
   row(false, -124, -32, [
     { w: 14, t: "store", sign: W["DRY GOODS"], storeys: 2, porch: 1 },
     { w: 10, t: "store", sign: W["ASSAY OFFICE"], storeys: 1, mat: "board", porch: 1 },
@@ -973,18 +1038,32 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       2.8,
     );
   // horses in the livery corral
-  for (let n = 0; n < 5; n++)
-    prop(
-      "horse",
-      stable.x0 + 2 + rand() * (stable.x1 - stable.x0 + 4),
-      stable.z1 + 8 + rand() * 18,
-      rand() * 6.28,
-      0.95 + rand() * 0.1,
-      Math.floor(rand() * 6),
-    );
+  // (each keeps 2.5 m from the hay, the trough and the other horses)
+  for (let n = 0, placed = 0; n < 30 && placed < 5; n++) {
+    const hx = stable.x0 + 2 + rand() * (stable.x1 - stable.x0 + 4);
+    const hz = stable.z1 + 8 + rand() * 18;
+    const rot = rand() * 6.28;
+    const s = 0.95 + rand() * 0.1;
+    const coat = Math.floor(rand() * 6);
+    if (props.some((q) => (q.k === "hay" || q.k === "horse" || q.k === "trough") && Math.hypot(q.x - hx, q.z - hz) < 2.5))
+      continue;
+    prop("horse", hx, hz, rot, s, coat);
+    placed++;
+  }
   // the blacksmith's yard: anvil, wagon wheels, a quench barrel
   const smithy = buildings.find((b) => b.t === "smithy")!;
-  prop("anvil", (smithy.x0 + smithy.x1) / 2, smithy.z0 - BOARD_D + 1, 0.3, 1);
+  {
+    // the smith's yard owns this stretch of the porch row: clear any bench or barrels first
+    const ax = (smithy.x0 + smithy.x1) / 2;
+    const az = smithy.z0 - BOARD_D + 1;
+    for (let i = props.length - 1; i >= 0; i--) {
+      const q = props[i]!;
+      if (q.x > smithy.x0 - 0.5 && q.x < smithy.x1 + 0.5 && Math.abs(q.z - az) < 1.5)
+        if (q.k === "bench" || q.k === "barrels" || q.k === "crates" || q.k === "sacks")
+          props.splice(i, 1);
+    }
+    prop("anvil", ax, az, 0.3, 1);
+  }
   prop("wheel", smithy.x0 + 1.2, smithy.z0 - BOARD_D + 1, 0, 1);
   prop("wheel", smithy.x1 - 1.4, smithy.z0 - BOARD_D + 1.1, 0.3, 1);
 
@@ -1001,6 +1080,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     solidProp(n % 2 === 0 ? "covered" : "wagon", x, z, r + Math.PI / 2, 2.2, 5.2, 2.6),
   );
   solidProp("well", -22, 0, 0, 2.6, 2.6, 1.2);
+  // (a horse tied at the rail right there is led away first)
+  for (const [cx, cz] of [
+    [-40, -9.5],
+    [64, 9.4],
+  ] as const)
+    for (let i = props.length - 1; i >= 0; i--)
+      if (props[i]!.k === "horse" && Math.hypot(props[i]!.x - cx, props[i]!.z - cz) < 2.2) props.splice(i, 1);
   solidProp("barrels", -40, -9.5, 0.3, 1.4, 1.4, 1.1);
   solidProp("crates", 64, 9.4, 0.4, 1.6, 1.6, 1.4);
   solidProp("barrels", 96, 9.6, 1.2, 1.4, 1.4, 1.1);
@@ -1111,15 +1197,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     markSolid(x1 - 1, z0, x1 + 1, z1, 1.3);
     prop("hay", -210, 124, 0.3, 1);
     solidProp("trough", -190, 126, 0, 3, 1, 0.8);
-    for (let n = 0; n < 4; n++)
-      prop(
-        "horse",
-        x0 + 5 + rand() * (x1 - x0 - 10),
-        z0 + 4 + rand() * (z1 - z0 - 8),
-        rand() * 6.28,
-        1,
-        Math.floor(rand() * 6),
-      );
+    for (let n = 0; n < 4; n++) {
+      const hx = x0 + 5 + rand() * (x1 - x0 - 10);
+      const hz = z0 + 4 + rand() * (z1 - z0 - 8);
+      const rot = rand() * 6.28;
+      const coat = Math.floor(rand() * 6);
+      if (props.some((q) => (q.k === "hay" || q.k === "horse" || q.k === "trough") && Math.hypot(q.x - hx, q.z - hz) < 2.5))
+        continue;
+      prop("horse", hx, hz, rot, 1, coat);
+    }
   }
 
   // the mine: a timbered portal in the north canyon face, ore-cart rails down to a tipple
@@ -1324,6 +1410,33 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   };
   const townish = (x: number, z: number) => x > -165 && x < 160 && z > -100 && z < 110;
   const core = (x: number, z: number) => x > -132 && x < 126 && z > -48 && z < 48;
+  // scatter props don't block until the end, so remember where each plant went (one per
+  // 2 m cell, and a saguaro or dead tree keeps its neighbours clear too)
+  const taken = new Uint8Array(N);
+  const free = (x: number, z: number, pad: number) => {
+    for (let dx = -pad; dx <= pad; dx += 2)
+      for (let dz = -pad; dz <= pad; dz += 2) if (taken[at(x + dx, z + dz)]) return false;
+    return true;
+  };
+  // no solid prop in a narrow lane: along each axis at least one side must stay open for
+  // 6 m (a cactus against a cliff is fine, a cactus in the middle of a 8 m gap is a choke)
+  const hardAt = (x: number, z: number) => {
+    const k = at(x, z);
+    return k < 0 || solid[k] === 1 || rock[k]! > 0 || taken[k] === 1;
+  };
+  const pinched = (x: number, z: number, r: number) => {
+    const open = (dx: number, dz: number) => {
+      for (let d = r + 1; d <= r + 6; d += 1) if (hardAt(x + dx * d, z + dz * d)) return false;
+      return true;
+    };
+    return (!open(1, 0) && !open(-1, 0)) || (!open(0, 1) && !open(0, -1));
+  };
+  const plant = (k: WPropKind, x: number, z: number, s: number, pad: number) => {
+    if (!free(x, z, pad)) return;
+    if (k !== "bush" && pinched(x, z, 1)) return;
+    taken[at(x, z)] = 1;
+    prop(k, x, z, rand() * 6.28, s);
+  };
   for (let n = 0; n < 5200; n++) {
     const x = (rand() - 0.5) * (half * 2 - 20);
     const z = (rand() - 0.5) * (half * 2 - 20);
@@ -1335,16 +1448,16 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const g = ground[k]!;
     if (g === WK.RIVER) {
       if (r < 0.2 && desertCell(x, z, 0))
-        prop(r < 0.1 ? "boulder" : "bush", x, z, rand() * 6.28, 0.5 + rand() * 0.7);
+        plant(r < 0.1 ? "boulder" : "bush", x, z, 0.5 + rand() * 0.7, 0);
       continue;
     }
     if (g === WK.TRAIL || g === WK.YARD) continue;
     if (r < 0.1 + dens * 0.18) {
-      if (desertCell(x, z, 2)) prop("saguaro", x, z, rand() * 6.28, 0.7 + rand() * 0.75);
+      if (desertCell(x, z, 2)) plant("saguaro", x, z, 0.7 + rand() * 0.75, 2);
     } else if (r < 0.38) {
-      if (desertCell(x, z, 0)) prop("pear", x, z, rand() * 6.28, 0.6 + rand() * 0.8);
+      if (desertCell(x, z, 0)) plant("pear", x, z, 0.6 + rand() * 0.8, 0);
     } else if (r < 0.46) {
-      if (desertCell(x, z, 0)) prop("barrelcactus", x, z, rand() * 6.28, 0.7 + rand() * 0.6);
+      if (desertCell(x, z, 0)) plant("barrelcactus", x, z, 0.7 + rand() * 0.6, 0);
     } else if (r < 0.82) {
       if (desertCell(x, z, 0)) prop("bush", x, z, rand() * 6.28, 0.6 + rand() * 0.9);
     } else if (r < 0.9) {
@@ -1352,7 +1465,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     } else if (r < 0.905) {
       if (desertCell(x, z, 0)) prop("bones", x, z, rand() * 6.28, 1);
     } else if (r < 0.915) {
-      if (desertCell(x, z, 2)) prop("deadtree", x, z, rand() * 6.28, 0.8 + rand() * 0.6);
+      if (desertCell(x, z, 2)) plant("deadtree", x, z, 0.8 + rand() * 0.6, 2);
     }
   }
   // boulders: real cover out in the open (solid)
@@ -1371,6 +1484,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (!desertCell(x, z, big ? 4 : 2)) continue;
     const g = ground[at(x, z)]!;
     if (g === WK.TRAIL) continue;
+    if (pinched(x, z, w / 2) || !free(x, z, big ? 4 : 2)) continue;
     solidProp(
       "boulder",
       x,
@@ -1412,6 +1526,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     orecart: [1.3, 2.0],
     trough: [2.4, 0.8],
   };
+  // loose boulders (the riverbed's) block like the big ones; those already blocked are unchanged
+  FOOT.boulder = [1.4, 1.4];
   for (const pr of props) {
     if (pr.k === "fence") {
       markSolid(pr.x - (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 - 0.1, pr.z - (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 - 0.1, pr.x + (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 + 0.1, pr.z + (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 + 0.1, 1.3);
