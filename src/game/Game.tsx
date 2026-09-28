@@ -3,10 +3,38 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
-  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
-  solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
-  closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
-  BEACH_SIZE, setPosts, jumpBody, shotBlocked, shotStop, clearShot,
+  ARENA,
+  HALF,
+  BLOCK,
+  blocked,
+  generateLevel,
+  randomSpawn,
+  pushOut,
+  type Block,
+  solidGrid,
+  flowField,
+  navTarget,
+  fineField,
+  fineStep,
+  toCell,
+  type FineField,
+  nextWaypoint,
+  clearLine,
+  toNav,
+  spawnNear,
+  closeRaised,
+  setNavWalls,
+  setArenaSize,
+  SOLO_ARENA,
+  COOP_ARENA,
+  CITY_COOP,
+  PLAY_HALF,
+  BEACH_SIZE,
+  setPosts,
+  jumpBody,
+  shotBlocked,
+  shotStop,
+  clearShot,
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
@@ -22,6 +50,7 @@ import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./so
 import type { WesternLayout } from "./western/layout";
 import { WesternScene, WesternSun } from "./western/Western";
 import { WesternTrain } from "./western/Train";
+import { WesternRiders } from "./western/Riders";
 import { WesternWeather } from "./western/Weather";
 import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
@@ -33,8 +62,33 @@ import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
 import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
-import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, jumpClimb, raised, strictNav, groundOwnsHits, groundSpeed, groundY, setTerrain, wind, worldFx } from "./terrain";
+import {
+  beginMatchTime,
+  cycleTimeMode,
+  initialMode,
+  pinTime,
+  resetMatchTime,
+  setTimeMode,
+  setWaveClock,
+  tod,
+  toggleTimeLock,
+  useTodMode,
+  useTodNearest,
+  waveStage,
+} from "./timeOfDay";
+import {
+  climbable,
+  ghostOK,
+  jumpClimb,
+  raised,
+  strictNav,
+  groundOwnsHits,
+  groundSpeed,
+  groundY,
+  setTerrain,
+  wind,
+  worldFx,
+} from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
@@ -47,16 +101,59 @@ import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
 import {
-  accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
-  encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
-  pressCarButton, roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz, ROOF_KEY,
+  accessActive,
+  accessList,
+  accessMarkers,
+  azBuilding,
+  bulletBlocked,
+  debugState as accessDebug,
+  decodeCars,
+  doorstep,
+  encodeCars,
+  installAccess,
+  patchNav,
+  player as accPlayer,
+  playerAz,
+  playerBlocked,
+  playerZoneKey,
+  pressCarButton,
+  roofCount,
+  roofSpot,
+  stepCars,
+  stepDoors,
+  stepPlayer,
+  zoneAt,
+  zoneKeyOfAz,
+  ROOF_KEY,
 } from "./access/world";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
-import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
 import {
-  MAX_ORD, MELEE_DY, blast, damageMul, drainShield, newOrd, packOrds, rocketAt, shieldBlocks, stepNewKind, stepOrds, unpackOrds,
-  type AICtx, type Ord,
+  ENEMY_INFO,
+  FLYERS,
+  HEAVY_NEW,
+  NEW_KINDS,
+  NEW_STATS,
+  hitBand,
+  isNewKind,
+  packVis,
+  type NewKind,
+} from "./enemyKinds";
+import {
+  MAX_ORD,
+  MELEE_DY,
+  blast,
+  damageMul,
+  drainShield,
+  newOrd,
+  packOrds,
+  rocketAt,
+  shieldBlocks,
+  stepNewKind,
+  stepOrds,
+  unpackOrds,
+  type AICtx,
+  type Ord,
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import { RobotModel } from "./art/RobotModel";
@@ -65,14 +162,31 @@ import { hasArtBoss } from "./art/robots/bosses";
 import { hasArtSpecial } from "./art/robots/specials";
 import { GunView } from "./art/GunView";
 import { gunKick, gunReload } from "./art/gunFx";
-import { bomberInputs, classicRobot, shooterInputs, specterInputs, swingInputs } from "./art/robots/classic";
+import {
+  bomberInputs,
+  classicRobot,
+  shooterInputs,
+  specterInputs,
+  swingInputs,
+} from "./art/robots/classic";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
 import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
 import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
-import { clearControls, installControls, padHooks, padLook, padOut, rumbleFor, sprintPose, stepMove, stepPadActions, takeJump } from "./input/controls";
+import {
+  clearControls,
+  installControls,
+  padHooks,
+  padLook,
+  padOut,
+  rumbleFor,
+  sprintPose,
+  stepMove,
+  stepPadActions,
+  takeJump,
+} from "./input/controls";
 import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
 import { ControlsHelp, KeyHint } from "./input/Glyph";
@@ -82,10 +196,46 @@ import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
-import { visOf, aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import {
+  visOf,
+  aimDir,
+  fxBounce,
+  fxBurst,
+  fxChain,
+  fxDie,
+  fxEnv,
+  fxFired,
+  fxFrame,
+  fxGuns,
+  fxHit,
+  fxKick,
+  fxNetStats,
+  fxRemoteFire,
+  fxReset,
+  fxShot,
+  fxStyle,
+  rng,
+} from "./projectiles";
 import { BOOMER_R, FLAK_R, FX, VF, VK, type VisKind } from "./impacts";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
-import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
+import {
+  hookAudioUnlock,
+  initAudio,
+  playGun,
+  playSfx,
+  setMusicIntensity,
+  setMusicMenu,
+  setMusicProgress,
+  setMusicTheme,
+  setVolumes,
+  startMusic,
+  stopMusic,
+} from "./audio";
+import {
+  setAmbienceActive,
+  setAmbienceHazard,
+  setAmbienceScene,
+  setAmbienceTime,
+} from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { MapEvents } from "./events/EventsLayer";
@@ -94,48 +244,358 @@ import { power } from "./events/power";
 import { HudOverlay, SquadDriver } from "./Squad";
 import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, type PingWorld } from "./ping";
-import { DOWN, REVIVE_HP, REVIVE_RANGE, me as squadMe, reviveInterrupted, squad, squad as downTable } from "./revive";
-import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import {
+  DOWN,
+  REVIVE_HP,
+  REVIVE_RANGE,
+  me as squadMe,
+  reviveInterrupted,
+  squad,
+  squad as downTable,
+} from "./revive";
+import {
+  NO_PERKS,
+  PERK_IDS,
+  PERK_INFO,
+  MOD_SLOTS,
+  PISTOL_MODS,
+  derive,
+  modsEquipped,
+  perkAvailable,
+  perkBadge,
+  perkCost,
+  type Derived,
+  type PerkId,
+  type Perks,
+} from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 
-
-
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
+type Kind =
+  | "drifter"
+  | "brute"
+  | "shooter"
+  | "runner"
+  | "boss"
+  | "specter"
+  | "bomber"
+  | "vanguard"
+  | "special"
+  | NewKind;
 type Weapon =
-  | "pistol" | "scatter" | "smg" | "rail" | "cannon"
-  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla"
-  | "revolver" | "minigun" | "crossbow" | "plasma" | "voidorb" | "shatter";
+  | "pistol"
+  | "scatter"
+  | "smg"
+  | "rail"
+  | "cannon"
+  | "rebound"
+  | "harpoon"
+  | "cryo"
+  | "flak"
+  | "tesla"
+  | "revolver"
+  | "minigun"
+  | "crossbow"
+  | "plasma"
+  | "voidorb"
+  | "shatter";
 type Gun = {
-  name: string; wave: number; cooldown: number; count: number; spread: number;
-  speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
-  bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
+  name: string;
+  wave: number;
+  cooldown: number;
+  count: number;
+  spread: number;
+  speed: number;
+  life: number;
+  damage: number;
+  size: number;
+  color: string;
+  body: string;
+  ammo: number;
+  bounce?: number;
+  pierce?: number;
+  slow?: number;
+  cluster?: number;
+  chain?: number;
   /** splash radius (m): the round explodes on impact with anything, or at max range */
   blast?: number;
   /** splash damage as a share of the round's damage (full at the centre, 35% at the edge) */
   blastMul?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
-  pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
-  scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
-  smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
-  rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
-  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6, blast: BOOMER_R, blastMul: 1 },
-  rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
-  harpoon: { name: "HARPOON", wave: 6, cooldown: 0.8, count: 1, spread: 0, speed: 40, life: 2, damage: 3, size: 0.1, color: "#f2ead6", body: "#4a4238", ammo: 12, pierce: 3 },
-  cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
-  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4, blast: FLAK_R, blastMul: 0.5 },
-  tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
-  revolver: { name: "HAND CANNON", wave: 3, cooldown: 0.55, count: 1, spread: 0, speed: 30, life: 2, damage: 4, size: 0.13, color: "#ffcf6b", body: "#5a4a3a", ammo: 24, pierce: 1 },
-  minigun: { name: "SHREDDER", wave: 7, cooldown: 0.05, count: 1, spread: 0.06, speed: 28, life: 1.3, damage: 1, size: 0.08, color: "#ffe14f", body: "#3a3a3a", ammo: 220 },
-  crossbow: { name: "CROSSBOW", wave: 5, cooldown: 0.75, count: 1, spread: 0, speed: 44, life: 2, damage: 4, size: 0.09, color: "#c8f07a", body: "#6b4a2c", ammo: 14, pierce: 2, slow: 1 },
-  plasma: { name: "PLASMA FAN", wave: 6, cooldown: 0.45, count: 3, spread: 0.05, speed: 24, life: 1.6, damage: 2, size: 0.15, color: "#ff4fd8", body: "#3a2050", ammo: 30, bounce: 1 },
-  voidorb: { name: "VOID ORB", wave: 8, cooldown: 1.1, count: 1, spread: 0, speed: 8, life: 4, damage: 3, size: 0.36, color: "#b06bff", body: "#1c1030", ammo: 10, chain: 4, pierce: 4 },
-  shatter: { name: "SHATTERGUN", wave: 9, cooldown: 0.9, count: 1, spread: 0, speed: 18, life: 1.8, damage: 3, size: 0.25, color: "#b8f4ff", body: "#2a4a5a", ammo: 12, cluster: 5, slow: 2 },
+  pistol: {
+    name: "PISTOL",
+    wave: 0,
+    cooldown: 0.28,
+    count: 1,
+    spread: 0,
+    speed: 22,
+    life: 2,
+    damage: 1,
+    size: 0.14,
+    color: "#ff8a1f",
+    body: "#3a2f26",
+    ammo: 140,
+  },
+  scatter: {
+    name: "SCATTER",
+    wave: 3,
+    cooldown: 0.7,
+    count: 5,
+    spread: 0.07,
+    speed: 22,
+    life: 0.8,
+    damage: 1,
+    size: 0.12,
+    color: "#ffd23f",
+    body: "#6b4a2c",
+    ammo: 16,
+  },
+  smg: {
+    name: "BUZZER",
+    wave: 5,
+    cooldown: 0.08,
+    count: 1,
+    spread: 0.03,
+    speed: 26,
+    life: 1.4,
+    damage: 1,
+    size: 0.09,
+    color: "#4fe3ff",
+    body: "#2c4a5c",
+    ammo: 120,
+  },
+  rail: {
+    name: "LANCE",
+    wave: 7,
+    cooldown: 0.9,
+    count: 1,
+    spread: 0,
+    speed: 48,
+    life: 1.5,
+    damage: 5,
+    size: 0.1,
+    color: "#e04bff",
+    body: "#e8e2d4",
+    ammo: 10,
+  },
+  cannon: {
+    name: "BOOMER",
+    wave: 9,
+    cooldown: 1.1,
+    count: 1,
+    spread: 0,
+    speed: 13,
+    life: 3,
+    damage: 8,
+    size: 0.38,
+    color: "#ff3b2a",
+    body: "#1e1e1e",
+    ammo: 6,
+    blast: BOOMER_R,
+    blastMul: 1,
+  },
+  rebound: {
+    name: "REBOUNDER",
+    wave: 4,
+    cooldown: 0.5,
+    count: 1,
+    spread: 0,
+    speed: 20,
+    life: 3,
+    damage: 2,
+    size: 0.17,
+    color: "#7cff4f",
+    body: "#2f4a22",
+    ammo: 20,
+    bounce: 3,
+  },
+  harpoon: {
+    name: "HARPOON",
+    wave: 6,
+    cooldown: 0.8,
+    count: 1,
+    spread: 0,
+    speed: 40,
+    life: 2,
+    damage: 3,
+    size: 0.1,
+    color: "#f2ead6",
+    body: "#4a4238",
+    ammo: 12,
+    pierce: 3,
+  },
+  cryo: {
+    name: "GLACIER",
+    wave: 4,
+    cooldown: 0.25,
+    count: 1,
+    spread: 0.02,
+    speed: 28,
+    life: 1.5,
+    damage: 1,
+    size: 0.12,
+    color: "#9fe8ff",
+    body: "#2a5f6e",
+    ammo: 30,
+    slow: 2.5,
+  },
+  flak: {
+    name: "FLAK",
+    wave: 8,
+    cooldown: 1,
+    count: 1,
+    spread: 0,
+    speed: 16,
+    life: 2,
+    damage: 3,
+    size: 0.3,
+    color: "#ff9d3b",
+    body: "#3c3a2a",
+    ammo: 8,
+    cluster: 4,
+    blast: FLAK_R,
+    blastMul: 0.5,
+  },
+  tesla: {
+    name: "TESLA",
+    wave: 6,
+    cooldown: 0.35,
+    count: 1,
+    spread: 0,
+    speed: 34,
+    life: 1.2,
+    damage: 2,
+    size: 0.14,
+    color: "#5f9bff",
+    body: "#20304f",
+    ammo: 40,
+    chain: 2,
+  },
+  revolver: {
+    name: "HAND CANNON",
+    wave: 3,
+    cooldown: 0.55,
+    count: 1,
+    spread: 0,
+    speed: 30,
+    life: 2,
+    damage: 4,
+    size: 0.13,
+    color: "#ffcf6b",
+    body: "#5a4a3a",
+    ammo: 24,
+    pierce: 1,
+  },
+  minigun: {
+    name: "SHREDDER",
+    wave: 7,
+    cooldown: 0.05,
+    count: 1,
+    spread: 0.06,
+    speed: 28,
+    life: 1.3,
+    damage: 1,
+    size: 0.08,
+    color: "#ffe14f",
+    body: "#3a3a3a",
+    ammo: 220,
+  },
+  crossbow: {
+    name: "CROSSBOW",
+    wave: 5,
+    cooldown: 0.75,
+    count: 1,
+    spread: 0,
+    speed: 44,
+    life: 2,
+    damage: 4,
+    size: 0.09,
+    color: "#c8f07a",
+    body: "#6b4a2c",
+    ammo: 14,
+    pierce: 2,
+    slow: 1,
+  },
+  plasma: {
+    name: "PLASMA FAN",
+    wave: 6,
+    cooldown: 0.45,
+    count: 3,
+    spread: 0.05,
+    speed: 24,
+    life: 1.6,
+    damage: 2,
+    size: 0.15,
+    color: "#ff4fd8",
+    body: "#3a2050",
+    ammo: 30,
+    bounce: 1,
+  },
+  voidorb: {
+    name: "VOID ORB",
+    wave: 8,
+    cooldown: 1.1,
+    count: 1,
+    spread: 0,
+    speed: 8,
+    life: 4,
+    damage: 3,
+    size: 0.36,
+    color: "#b06bff",
+    body: "#1c1030",
+    ammo: 10,
+    chain: 4,
+    pierce: 4,
+  },
+  shatter: {
+    name: "SHATTERGUN",
+    wave: 9,
+    cooldown: 0.9,
+    count: 1,
+    spread: 0,
+    speed: 18,
+    life: 1.8,
+    damage: 3,
+    size: 0.25,
+    color: "#b8f4ff",
+    body: "#2a4a5a",
+    ammo: 12,
+    cluster: 5,
+    slow: 2,
+  },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter"];
+const ORDER: Weapon[] = [
+  "pistol",
+  "scatter",
+  "smg",
+  "rail",
+  "cannon",
+  "rebound",
+  "harpoon",
+  "cryo",
+  "flak",
+  "tesla",
+  "revolver",
+  "minigun",
+  "crossbow",
+  "plasma",
+  "voidorb",
+  "shatter",
+];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 // wire order for co-op snapshots: only ever append (index 9 on are the newer types)
-const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special", ...NEW_KINDS];
+const KINDS: Kind[] = [
+  "drifter",
+  "brute",
+  "shooter",
+  "runner",
+  "boss",
+  "specter",
+  "bomber",
+  "vanguard",
+  "special",
+  ...NEW_KINDS,
+];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
 const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
@@ -192,12 +652,27 @@ type Enemy = {
   burnFrom?: string | null;
 };
 type Bullet = {
-  pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
-  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
-  blast: number; blastMul: number;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  life: number;
+  active: boolean;
+  damage: number;
+  color: string;
+  size: number;
+  bounce: number;
+  pierce: number;
+  slow: number;
+  cluster: number;
+  chain: number;
+  burn: number;
+  knock: number;
+  mods: number;
+  blast: number;
+  blastMul: number;
 };
-const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
-
+const M_SHRED = 1,
+  M_EXEC = 2,
+  M_BOUNTY = 4;
 
 const BOSS_HP = 450; // 1.5x tougher arena boss
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
@@ -223,14 +698,140 @@ const WAVES: WaveSpec[] = [
   { drifter: 5, shooter: 1, runner: 1, hornet: 3 },
   { drifter: 5, brute: 1, shooter: 1, specter: 1, special: 1, flanker: 1, grenadier: 1 },
   { drifter: 4, brute: 2, shooter: 2, runner: 2, bomber: 1, special: 1, hornet: 3, sniper: 1 },
-  { drifter: 5, brute: 1, shooter: 2, runner: 2, specter: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, charger: 1, hornet: 3 },
-  { drifter: 5, brute: 1, shooter: 2, runner: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, medic: 1, hornet: 3 },
-  { drifter: 5, brute: 2, shooter: 2, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, bulwark: 1, medic: 1, cloaker: 2, hornet: 3 },
-  { drifter: 5, brute: 2, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
-  { drifter: 5, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, grenadier: 1, sniper: 2, bulwark: 1, medic: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
-  { drifter: 5, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 1, special: 2, flanker: 2, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 1, cloaker: 2, gatling: 1, rocketeer: 1, hornet: 4 },
-  { drifter: 6, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 2, special: 2, flanker: 3, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 2, cloaker: 2, gatling: 1, rocketeer: 2, hornet: 5 },
-  { boss: 1, drifter: 4, brute: 2, shooter: 2, runner: 2, specter: 1, bomber: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, sniper: 1, medic: 1, hornet: 3 },
+  {
+    drifter: 5,
+    brute: 1,
+    shooter: 2,
+    runner: 2,
+    specter: 1,
+    vanguard: 1,
+    special: 1,
+    flanker: 1,
+    bulwark: 1,
+    charger: 1,
+    hornet: 3,
+  },
+  {
+    drifter: 5,
+    brute: 1,
+    shooter: 2,
+    runner: 2,
+    bomber: 1,
+    vanguard: 1,
+    special: 2,
+    grenadier: 1,
+    sniper: 1,
+    charger: 1,
+    medic: 1,
+    hornet: 3,
+  },
+  {
+    drifter: 5,
+    brute: 2,
+    shooter: 2,
+    runner: 3,
+    specter: 2,
+    bomber: 1,
+    vanguard: 1,
+    special: 2,
+    flanker: 2,
+    bulwark: 1,
+    medic: 1,
+    cloaker: 2,
+    hornet: 3,
+  },
+  {
+    drifter: 5,
+    brute: 2,
+    shooter: 3,
+    runner: 3,
+    specter: 2,
+    bomber: 1,
+    vanguard: 1,
+    special: 2,
+    grenadier: 1,
+    sniper: 1,
+    charger: 1,
+    cloaker: 1,
+    gatling: 1,
+    rocketeer: 1,
+    hornet: 4,
+  },
+  {
+    drifter: 5,
+    brute: 3,
+    shooter: 3,
+    runner: 3,
+    specter: 2,
+    bomber: 1,
+    vanguard: 1,
+    special: 2,
+    flanker: 2,
+    grenadier: 1,
+    sniper: 2,
+    bulwark: 1,
+    medic: 1,
+    cloaker: 1,
+    gatling: 1,
+    rocketeer: 1,
+    hornet: 4,
+  },
+  {
+    drifter: 5,
+    brute: 3,
+    shooter: 3,
+    runner: 4,
+    specter: 2,
+    bomber: 2,
+    vanguard: 1,
+    special: 2,
+    flanker: 2,
+    grenadier: 2,
+    sniper: 2,
+    bulwark: 1,
+    charger: 1,
+    medic: 1,
+    cloaker: 2,
+    gatling: 1,
+    rocketeer: 1,
+    hornet: 4,
+  },
+  {
+    drifter: 6,
+    brute: 3,
+    shooter: 3,
+    runner: 4,
+    specter: 2,
+    bomber: 2,
+    vanguard: 2,
+    special: 2,
+    flanker: 3,
+    grenadier: 2,
+    sniper: 2,
+    bulwark: 1,
+    charger: 1,
+    medic: 2,
+    cloaker: 2,
+    gatling: 1,
+    rocketeer: 2,
+    hornet: 5,
+  },
+  {
+    boss: 1,
+    drifter: 4,
+    brute: 2,
+    shooter: 2,
+    runner: 2,
+    specter: 1,
+    bomber: 1,
+    vanguard: 1,
+    special: 1,
+    flanker: 1,
+    bulwark: 1,
+    sniper: 1,
+    medic: 1,
+    hornet: 3,
+  },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
@@ -239,8 +840,6 @@ const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
 /** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
 const GAME_VERSION = "1.0.2";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
-
-
 
 const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
@@ -289,14 +888,24 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
       <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
         <mesh position-y={b.h / 2} castShadow receiveShadow>
           <cylinderGeometry args={[0.8, 1.1, b.h, 5]} />
-          <meshLambertMaterial color={color} flatShading emissive={color} emissiveIntensity={0.15} />
+          <meshLambertMaterial
+            color={color}
+            flatShading
+            emissive={color}
+            emissiveIntensity={0.15}
+          />
         </mesh>
         <mesh position-y={b.h + 0.5}>
           <coneGeometry args={[0.8, 1, 5]} />
           <meshLambertMaterial color="#f4fbff" flatShading />
         </mesh>
         {[0, 1].map((i) => (
-          <mesh key={i} position={[Math.sin(i * 2.2) * 0.9, b.h * 0.3, Math.cos(i * 2.2) * 0.9]} rotation-z={0.3 - i * 0.6} castShadow>
+          <mesh
+            key={i}
+            position={[Math.sin(i * 2.2) * 0.9, b.h * 0.3, Math.cos(i * 2.2) * 0.9]}
+            rotation-z={0.3 - i * 0.6}
+            castShadow
+          >
             <coneGeometry args={[0.28, b.h * 0.7, 5]} />
             <meshLambertMaterial color={theme.blocks[1]} flatShading />
           </mesh>
@@ -335,8 +944,17 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   if (shape === "basalt") {
     return (
       <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI}>
-        {[[-0.45, -0.3, 1], [0.5, 0.35, 0.78], [0.1, -0.6, 0.6]].map(([dx, dz, f], i) => (
-          <mesh key={i} position={[dx as number, (b.h * (f as number)) / 2, dz as number]} castShadow receiveShadow>
+        {[
+          [-0.45, -0.3, 1],
+          [0.5, 0.35, 0.78],
+          [0.1, -0.6, 0.6],
+        ].map(([dx, dz, f], i) => (
+          <mesh
+            key={i}
+            position={[dx as number, (b.h * (f as number)) / 2, dz as number]}
+            castShadow
+            receiveShadow
+          >
             <cylinderGeometry args={[0.55, 0.6, b.h * (f as number), 6]} />
             <meshLambertMaterial color={i === 1 ? theme.blocks[1] : color} flatShading />
           </mesh>
@@ -432,7 +1050,12 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
         {[0, 1, 2].map((i) => {
           const a = (i / 3) * Math.PI * 2 + b.tone;
           return (
-            <group key={i} position={[Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4]} rotation-z={Math.cos(a) * 0.3} rotation-x={-Math.sin(a) * 0.3}>
+            <group
+              key={i}
+              position={[Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4]}
+              rotation-z={Math.cos(a) * 0.3}
+              rotation-x={-Math.sin(a) * 0.3}
+            >
               <mesh position-y={b.h * 0.45} castShadow>
                 <cylinderGeometry args={[0.13, 0.26, b.h * 0.9, 6]} />
                 <meshLambertMaterial color={color} flatShading />
@@ -516,13 +1139,15 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
     if (i % 2 === 1) return [];
     const a = (i * 2.399) % (Math.PI * 2);
     const r = 1.5 + ((i * 37) % 9) * 0.12;
-    return [{
-      key: `d${i}`,
-      x: b.x + Math.cos(a) * r,
-      z: b.z + Math.sin(a) * r,
-      s: 0.22 + ((i * 13) % 5) * 0.06,
-      rot: a,
-    }];
+    return [
+      {
+        key: `d${i}`,
+        x: b.x + Math.cos(a) * r,
+        z: b.z + Math.sin(a) * r,
+        s: 0.22 + ((i * 13) % 5) * 0.06,
+        rot: a,
+      },
+    ];
   });
   const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
@@ -537,7 +1162,12 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
       ))}
       {/* loose rubble around the cover, so the floor is not a bare plane */}
       {debris.map((d) => (
-        <mesh key={d.key} position={[d.x, d.s * 0.5, d.z]} rotation={[d.rot, d.rot * 2, 0]} receiveShadow>
+        <mesh
+          key={d.key}
+          position={[d.x, d.s * 0.5, d.z]}
+          rotation={[d.rot, d.rot * 2, 0]}
+          receiveShadow
+        >
           <dodecahedronGeometry args={[d.s, 0]} />
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
@@ -555,12 +1185,14 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
           </mesh>
         </group>
       ))}
-      {([
-        [0, -HALF, ARENA, 1],
-        [0, HALF, ARENA, 1],
-        [-HALF, 0, 1, ARENA],
-        [HALF, 0, 1, ARENA],
-      ] as const).map(([x, z, w, d], i) => (
+      {(
+        [
+          [0, -HALF, ARENA, 1],
+          [0, HALF, ARENA, 1],
+          [-HALF, 0, 1, ARENA],
+          [HALF, 0, 1, ARENA],
+        ] as const
+      ).map(([x, z, w, d], i) => (
         <group key={`w${i}`}>
           <mesh position={[x, 2, z]}>
             <boxGeometry args={[w, 4, d]} />
@@ -578,7 +1210,14 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
         </group>
       ))}
       {/* corner beacons */}
-      {([[-HALF + 1.2, -HALF + 1.2], [HALF - 1.2, -HALF + 1.2], [-HALF + 1.2, HALF - 1.2], [HALF - 1.2, HALF - 1.2]] as const).map(([x, z], i) => (
+      {(
+        [
+          [-HALF + 1.2, -HALF + 1.2],
+          [HALF - 1.2, -HALF + 1.2],
+          [-HALF + 1.2, HALF - 1.2],
+          [HALF - 1.2, HALF - 1.2],
+        ] as const
+      ).map(([x, z], i) => (
         <group key={`c${i}`} position={[x, 0, z]}>
           <mesh position-y={1.4} castShadow>
             <cylinderGeometry args={[0.18, 0.3, 2.8, 6]} />
@@ -602,57 +1241,135 @@ function BossBody({ theme }: { theme: Theme }) {
   return (
     <group>
       {/* torso + head shared by every boss, dressed differently per map */}
-      <mesh position-y={1.35} castShadow><boxGeometry args={[1.7, 2, 1.2]} />{skin}</mesh>
-      <mesh position-y={2.75} castShadow><boxGeometry args={[1, 0.8, 0.9]} />{skin}</mesh>
-      <mesh position={[-0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
-      <mesh position={[0.24, 2.8, 0.47]}><boxGeometry args={[0.22, 0.14, 0.06]} />{glow}</mesh>
-      <mesh position={[-0.95, 1.2, 0]} castShadow><boxGeometry args={[0.35, 1.6, 0.4]} />{limb}</mesh>
-      <mesh position={[0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
-      <mesh position={[-0.45, 0.2, 0]} castShadow><boxGeometry args={[0.45, 0.6, 0.5]} />{limb}</mesh>
+      <mesh position-y={1.35} castShadow>
+        <boxGeometry args={[1.7, 2, 1.2]} />
+        {skin}
+      </mesh>
+      <mesh position-y={2.75} castShadow>
+        <boxGeometry args={[1, 0.8, 0.9]} />
+        {skin}
+      </mesh>
+      <mesh position={[-0.24, 2.8, 0.47]}>
+        <boxGeometry args={[0.22, 0.14, 0.06]} />
+        {glow}
+      </mesh>
+      <mesh position={[0.24, 2.8, 0.47]}>
+        <boxGeometry args={[0.22, 0.14, 0.06]} />
+        {glow}
+      </mesh>
+      <mesh position={[-0.95, 1.2, 0]} castShadow>
+        <boxGeometry args={[0.35, 1.6, 0.4]} />
+        {limb}
+      </mesh>
+      <mesh position={[0.45, 0.2, 0]} castShadow>
+        <boxGeometry args={[0.45, 0.6, 0.5]} />
+        {limb}
+      </mesh>
+      <mesh position={[-0.45, 0.2, 0]} castShadow>
+        <boxGeometry args={[0.45, 0.6, 0.5]} />
+        {limb}
+      </mesh>
 
-      {b.shape === "yeti" && (<>
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={x} position={[x, 3.15, 0]} rotation-z={x * 0.4}><coneGeometry args={[0.14, 0.7, 5]} />{glow}</mesh>
-        ))}
-        <mesh position-y={1.5} castShadow><sphereGeometry args={[1.05, 8, 6]} />{skin}</mesh>
-      </>)}
-      {b.shape === "golem" && (<>
-        <mesh position-y={2.2} rotation-y={0.4} castShadow><boxGeometry args={[2, 0.35, 1.4]} />{limb}</mesh>
-        <mesh position={[0, 3.35, 0]}><coneGeometry args={[0.5, 0.7, 4]} />{glow}</mesh>
-      </>)}
-      {b.shape === "treant" && (<>
-        <mesh position-y={3.3} castShadow><sphereGeometry args={[1.2, 7, 5]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
-        {[0, 1, 2].map((i) => (
-          <mesh key={i} position={[Math.sin(i * 2) * 0.8, 3.9, Math.cos(i * 2) * 0.8]}><sphereGeometry args={[0.22, 6, 6]} />{glow}</mesh>
-        ))}
-      </>)}
-      {b.shape === "magma" && (<>
-        <mesh position={[0, 1.5, 0.62]}><boxGeometry args={[0.7, 0.9, 0.1]} />{glow}</mesh>
-        {[-0.6, 0, 0.6].map((x) => (
-          <mesh key={x} position={[x, 3.2, -0.2]}><coneGeometry args={[0.16, 0.6, 4]} />{glow}</mesh>
-        ))}
-      </>)}
-      {b.shape === "mech" && (<>
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={x} position={[x, 3.3, -0.35]} rotation-x={0.2}><cylinderGeometry args={[0.13, 0.16, 0.8, 8]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
-        ))}
-        <mesh position={[0, 1.6, 0.64]} rotation-x={Math.PI / 2}><torusGeometry args={[0.35, 0.08, 6, 14]} />{glow}</mesh>
-      </>)}
-      {b.shape === "ronin" && (<>
-        <mesh position={[0, 3.25, -0.1]} rotation-x={-0.25}><coneGeometry args={[0.75, 0.45, 6]} /><meshLambertMaterial color={b.weapon} flatShading /></mesh>
-        <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
-        <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
-      </>)}
-      {b.shape === "drake" && (<>
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
-            <boxGeometry args={[1.8, 0.12, 1.1]} /><meshLambertMaterial color={b.weapon} flatShading />
+      {b.shape === "yeti" && (
+        <>
+          {[-0.5, 0.5].map((x) => (
+            <mesh key={x} position={[x, 3.15, 0]} rotation-z={x * 0.4}>
+              <coneGeometry args={[0.14, 0.7, 5]} />
+              {glow}
+            </mesh>
+          ))}
+          <mesh position-y={1.5} castShadow>
+            <sphereGeometry args={[1.05, 8, 6]} />
+            {skin}
           </mesh>
-        ))}
-        {[0.4, 1.1, 1.8].map((y) => (
-          <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
-        ))}
-      </>)}
+        </>
+      )}
+      {b.shape === "golem" && (
+        <>
+          <mesh position-y={2.2} rotation-y={0.4} castShadow>
+            <boxGeometry args={[2, 0.35, 1.4]} />
+            {limb}
+          </mesh>
+          <mesh position={[0, 3.35, 0]}>
+            <coneGeometry args={[0.5, 0.7, 4]} />
+            {glow}
+          </mesh>
+        </>
+      )}
+      {b.shape === "treant" && (
+        <>
+          <mesh position-y={3.3} castShadow>
+            <sphereGeometry args={[1.2, 7, 5]} />
+            <meshLambertMaterial color={b.weapon} flatShading />
+          </mesh>
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[Math.sin(i * 2) * 0.8, 3.9, Math.cos(i * 2) * 0.8]}>
+              <sphereGeometry args={[0.22, 6, 6]} />
+              {glow}
+            </mesh>
+          ))}
+        </>
+      )}
+      {b.shape === "magma" && (
+        <>
+          <mesh position={[0, 1.5, 0.62]}>
+            <boxGeometry args={[0.7, 0.9, 0.1]} />
+            {glow}
+          </mesh>
+          {[-0.6, 0, 0.6].map((x) => (
+            <mesh key={x} position={[x, 3.2, -0.2]}>
+              <coneGeometry args={[0.16, 0.6, 4]} />
+              {glow}
+            </mesh>
+          ))}
+        </>
+      )}
+      {b.shape === "mech" && (
+        <>
+          {[-0.5, 0.5].map((x) => (
+            <mesh key={x} position={[x, 3.3, -0.35]} rotation-x={0.2}>
+              <cylinderGeometry args={[0.13, 0.16, 0.8, 8]} />
+              <meshLambertMaterial color={b.weapon} flatShading />
+            </mesh>
+          ))}
+          <mesh position={[0, 1.6, 0.64]} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[0.35, 0.08, 6, 14]} />
+            {glow}
+          </mesh>
+        </>
+      )}
+      {b.shape === "ronin" && (
+        <>
+          <mesh position={[0, 3.25, -0.1]} rotation-x={-0.25}>
+            <coneGeometry args={[0.75, 0.45, 6]} />
+            <meshLambertMaterial color={b.weapon} flatShading />
+          </mesh>
+          <mesh position={[0, 3.6, -0.1]}>
+            <coneGeometry args={[0.12, 0.6, 4]} />
+            {glow}
+          </mesh>
+          <mesh position={[0, 1.45, 0.63]}>
+            <boxGeometry args={[1.2, 0.18, 0.08]} />
+            {glow}
+          </mesh>
+        </>
+      )}
+      {b.shape === "drake" && (
+        <>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
+              <boxGeometry args={[1.8, 0.12, 1.1]} />
+              <meshLambertMaterial color={b.weapon} flatShading />
+            </mesh>
+          ))}
+          {[0.4, 1.1, 1.8].map((y) => (
+            <mesh key={y} position={[0, y + 0.6, -0.65]}>
+              <coneGeometry args={[0.16, 0.5, 4]} />
+              {glow}
+            </mesh>
+          ))}
+        </>
+      )}
     </group>
   );
 }
@@ -677,137 +1394,366 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
   const G = <meshBasicMaterial color={sp.glow} />;
   return (
     <group>
-      {sp.type === "stalker" && (<group>
-        <mesh position-y={0.45} castShadow><boxGeometry args={[0.9, 0.35, 1.3]} />{B}</mesh>
-        <mesh position={[0, 0.65, 0.2]}><boxGeometry args={[0.6, 0.2, 0.7]} />{A}</mesh>
-        {[-0.55, 0.55].map((x) => [-0.4, 0, 0.4].map((z) => (
-          <mesh key={`${x}${z}`} position={[x, 0.25, z]} rotation-z={x > 0 ? -0.8 : 0.8}><boxGeometry args={[0.5, 0.07, 0.07]} />{A}</mesh>
-        )))}
-        {[-0.35, 0.35].map((x) => (
-          <group key={`p${x}`} position={[x, 0.45, 0.75]}>
-            <mesh><boxGeometry args={[0.14, 0.14, 0.4]} />{A}</mesh>
-            <mesh position={[x * 0.3, 0, 0.25]} rotation-y={x * 1.2}><coneGeometry args={[0.08, 0.3, 4]} />{B}</mesh>
-          </group>
-        ))}
-        <group ref={part} position={[0, 0.6, -0.6]}>
-          {[0, 1, 2].map((i) => (
-            <mesh key={i} position={[0, 0.25 + i * 0.3, -0.1 * i]}><sphereGeometry args={[0.16 - i * 0.02, 6, 5]} />{B}</mesh>
-          ))}
-          <mesh position={[0, 1.2, 0.15]} rotation-x={1.2}><coneGeometry args={[0.08, 0.35, 5]} />{G}</mesh>
-        </group>
-        {[-0.15, 0.15].map((x) => <mesh key={`e${x}`} position={[x, 0.7, 0.58]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
-      </group>)}
-      {sp.type === "mite" && (<group>
-        <mesh position-y={0.55} castShadow><octahedronGeometry args={[0.5, 0]} />{B}</mesh>
-        <mesh position-y={0.55}><octahedronGeometry args={[0.22, 0]} />{G}</mesh>
-        {[0, 1, 2, 3, 4, 5].map((i) => {
-          const a = (i / 6) * Math.PI * 2;
-          return (
-            <mesh key={i} position={[Math.sin(a) * 0.55, 0.3, Math.cos(a) * 0.55]} rotation={[Math.cos(a) * 0.9, 0, -Math.sin(a) * 0.9]}>
-              <coneGeometry args={[0.06, 0.7, 4]} />{A}
-            </mesh>
-          );
-        })}
-        {[-0.2, 0, 0.2].map((x) => <mesh key={`c${x}`} position={[x, 0.95, 0]} rotation-z={x * 2}><coneGeometry args={[0.07, 0.35, 4]} />{B}</mesh>)}
-        {[-0.12, 0.12].map((x) => <mesh key={`e${x}`} position={[x, 0.62, 0.42]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
-      </group>)}
-      {sp.type === "spore" && (<group>
-        {[0, 1, 2, 3, 4].map((i) => {
-          const a = (i / 5) * Math.PI * 2;
-          return <mesh key={i} position={[Math.sin(a) * 0.5, 0.1, Math.cos(a) * 0.5]} rotation={[Math.cos(a) * 1.2, 0, -Math.sin(a) * 1.2]}><cylinderGeometry args={[0.04, 0.1, 0.8, 5]} />{A}</mesh>;
-        })}
-        <mesh position-y={0.6} castShadow><cylinderGeometry args={[0.25, 0.4, 0.8, 7]} />{A}</mesh>
-        <group ref={part} position-y={1.2}>
-          <mesh><sphereGeometry args={[0.45, 9, 7]} />{B}</mesh>
-          {[0, 1, 2, 3, 4, 5].map((i) => {
-            const a = (i / 6) * Math.PI * 2;
-            return <mesh key={i} position={[Math.sin(a) * 0.42, 0.1, Math.cos(a) * 0.42]} rotation={[Math.cos(a) * 0.8, 0, -Math.sin(a) * 0.8]}><coneGeometry args={[0.16, 0.5, 4]} />{A}</mesh>;
-          })}
-          {[0, 1, 2, 3].map((i) => <mesh key={`g${i}`} position={[Math.sin(i * 1.6) * 0.3, 0.3, Math.cos(i * 1.6) * 0.3]}><sphereGeometry args={[0.07, 6, 6]} />{G}</mesh>)}
-        </group>
-      </group>)}
-      {sp.type === "pyre" && (<group position-y={1.2}>
-        <mesh castShadow><sphereGeometry args={[0.45, 12, 10]} />{G}</mesh>
-        <group ref={spin}>
-          {[0, 1, 2, 3].map((i) => {
-            const a = (i / 4) * Math.PI * 2;
-            return <mesh key={i} position={[Math.sin(a) * 0.6, 0, Math.cos(a) * 0.6]} rotation-y={a}><boxGeometry args={[0.5, 0.8, 0.12]} />{B}</mesh>;
-          })}
-        </group>
-        <group ref={part}>
-          {[-1, 1].map((y) => <mesh key={y} position-y={y * 0.55} rotation-x={Math.PI / 2}><torusGeometry args={[0.35, 0.06, 5, 10]} />{A}</mesh>)}
-        </group>
-        <mesh position-y={-0.9}><coneGeometry args={[0.2, 0.5, 6]} />{G}</mesh>
-      </group>)}
-      {sp.type === "shinobi" && (<group>
-        <mesh position-y={0.9} castShadow><cylinderGeometry args={[0.2, 0.32, 1.1, 7]} />{B}</mesh>
-        <mesh position-y={0.9}><torusGeometry args={[0.26, 0.05, 4, 10]} />{A}</mesh>
-        <mesh position-y={1.65}><sphereGeometry args={[0.25, 8, 7]} />{B}</mesh>
-        <mesh position={[0, 1.66, 0.2]}><boxGeometry args={[0.36, 0.08, 0.1]} />{A}</mesh>
-        {[-0.08, 0.08].map((x) => <mesh key={x} position={[x, 1.68, 0.26]}><boxGeometry args={[0.05, 0.03, 0.02]} />{G}</mesh>)}
-        {[-0.12, 0.12].map((x) => <mesh key={`r${x}`} position={[x, 1.95, -0.15]} rotation-x={-0.6}><boxGeometry args={[0.04, 0.6, 0.02]} />{A}</mesh>)}
-        {[-0.3, 0.3].map((x) => <mesh key={`l${x}`} position={[x * 0.5, 0.25, 0]}><cylinderGeometry args={[0.06, 0.05, 0.5, 5]} />{A}</mesh>)}
-        <group ref={spin} position-y={1.1}>
-          {[-1, 1].map((sd) => (
-            <mesh key={sd} position={[sd * 0.6, 0, 0]} rotation-x={Math.PI / 2}><coneGeometry args={[0.07, 0.45, 4]} />{G}</mesh>
-          ))}
-        </group>
-      </group>)}
-      {sp.type === "wyrm" && (<group ref={part} position-y={1.6}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <mesh key={i} position={[Math.sin(i * 0.9) * 0.25, -i * 0.05, -i * 0.38]}><icosahedronGeometry args={[0.3 - i * 0.04, 0]} />{i === 0 ? B : A}</mesh>
-        ))}
-        {[0, 1, 2, 3].map((i) => <mesh key={`f${i}`} position={[Math.sin(i * 0.9) * 0.25, 0.25 - i * 0.05, -i * 0.38]}><coneGeometry args={[0.07, 0.3, 4]} />{B}</mesh>)}
-        {[-0.12, 0.12].map((x) => <mesh key={x} position={[x, 0.08, 0.26]}><sphereGeometry args={[0.05, 6, 6]} />{G}</mesh>)}
-        <mesh position={[0, -0.05, 0.3]} rotation-x={Math.PI / 2}><coneGeometry args={[0.1, 0.25, 6]} />{G}</mesh>
-      </group>)}
-      {sp.type === "nautilus" && (<group position-y={1.1}>
-        <mesh castShadow><sphereGeometry args={[0.6, 12, 10]} />{B}</mesh>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <mesh key={i} rotation-y={Math.PI / 2} rotation-x={i * 0.5} position-z={-0.05}><torusGeometry args={[0.6, 0.05, 4, 16, Math.PI]} />{A}</mesh>
-        ))}
-        <mesh position={[0, 0, 0.55]}><sphereGeometry args={[0.18, 10, 8]} />{G}</mesh>
-        <group ref={part}>
-          {[0, 1, 2, 3].map((i) => {
-            const a = (i / 4) * Math.PI * 2;
-            return <mesh key={i} position={[Math.sin(a) * 0.35, -0.6, 0.3 + Math.cos(a) * 0.15]}><cylinderGeometry args={[0.04, 0.07, 0.6, 5]} />{A}</mesh>;
-          })}
-        </group>
-      </group>)}
-      {sp.type === "hacker" && (<group position-y={1.7}>
-        <mesh castShadow><octahedronGeometry args={[0.4, 0]} />{B}</mesh>
-        <mesh position-z={0.3}><boxGeometry args={[0.3, 0.1, 0.1]} />{G}</mesh>
-        <group ref={spin}>
-          {[-0.65, 0.65].map((x) => (
-            <group key={x} position-x={x}>
-              <mesh rotation-x={Math.PI / 2}><torusGeometry args={[0.28, 0.04, 4, 14]} />{A}</mesh>
-              <mesh><boxGeometry args={[0.5, 0.02, 0.06]} />{A}</mesh>
+      {sp.type === "stalker" && (
+        <group>
+          <mesh position-y={0.45} castShadow>
+            <boxGeometry args={[0.9, 0.35, 1.3]} />
+            {B}
+          </mesh>
+          <mesh position={[0, 0.65, 0.2]}>
+            <boxGeometry args={[0.6, 0.2, 0.7]} />
+            {A}
+          </mesh>
+          {[-0.55, 0.55].map((x) =>
+            [-0.4, 0, 0.4].map((z) => (
+              <mesh key={`${x}${z}`} position={[x, 0.25, z]} rotation-z={x > 0 ? -0.8 : 0.8}>
+                <boxGeometry args={[0.5, 0.07, 0.07]} />
+                {A}
+              </mesh>
+            )),
+          )}
+          {[-0.35, 0.35].map((x) => (
+            <group key={`p${x}`} position={[x, 0.45, 0.75]}>
+              <mesh>
+                <boxGeometry args={[0.14, 0.14, 0.4]} />
+                {A}
+              </mesh>
+              <mesh position={[x * 0.3, 0, 0.25]} rotation-y={x * 1.2}>
+                <coneGeometry args={[0.08, 0.3, 4]} />
+                {B}
+              </mesh>
             </group>
           ))}
-        </group>
-        <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
-        <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
-      </group>)}
-      {sp.type === "bile" && (<group>
-        <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
-        <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
-        <mesh position={[0, 1.55, 0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.1, 0.22, 0.4, 8]} />{A}</mesh>
-        <mesh position={[0, 1.55, 0.66]} rotation-x={Math.PI / 2}><torusGeometry args={[0.2, 0.04, 4, 10]} />{G}</mesh>
-        {[-0.22, 0.22].map((x) => (
-          <group key={x} position={[x, 1.2, -0.5]}>
-            <mesh><cylinderGeometry args={[0.16, 0.16, 0.8, 8]} /><meshLambertMaterial color={sp.glow} transparent opacity={0.8} /></mesh>
-            <mesh position-y={0.45}><cylinderGeometry args={[0.1, 0.16, 0.12, 8]} />{A}</mesh>
+          <group ref={part} position={[0, 0.6, -0.6]}>
+            {[0, 1, 2].map((i) => (
+              <mesh key={i} position={[0, 0.25 + i * 0.3, -0.1 * i]}>
+                <sphereGeometry args={[0.16 - i * 0.02, 6, 5]} />
+                {B}
+              </mesh>
+            ))}
+            <mesh position={[0, 1.2, 0.15]} rotation-x={1.2}>
+              <coneGeometry args={[0.08, 0.35, 5]} />
+              {G}
+            </mesh>
           </group>
-        ))}
-        {[0.8, 1.2].map((y) => <mesh key={y} position={[0, y, 0.36]}><boxGeometry args={[0.82, 0.08, 0.02]} />{A}</mesh>)}
-        {[-0.25, 0.25].map((x) => <mesh key={`l${x}`} position={[x, 0.3, 0]}><boxGeometry args={[0.22, 0.6, 0.3]} />{A}</mesh>)}
-      </group>)}
+          {[-0.15, 0.15].map((x) => (
+            <mesh key={`e${x}`} position={[x, 0.7, 0.58]}>
+              <sphereGeometry args={[0.05, 6, 6]} />
+              {G}
+            </mesh>
+          ))}
+        </group>
+      )}
+      {sp.type === "mite" && (
+        <group>
+          <mesh position-y={0.55} castShadow>
+            <octahedronGeometry args={[0.5, 0]} />
+            {B}
+          </mesh>
+          <mesh position-y={0.55}>
+            <octahedronGeometry args={[0.22, 0]} />
+            {G}
+          </mesh>
+          {[0, 1, 2, 3, 4, 5].map((i) => {
+            const a = (i / 6) * Math.PI * 2;
+            return (
+              <mesh
+                key={i}
+                position={[Math.sin(a) * 0.55, 0.3, Math.cos(a) * 0.55]}
+                rotation={[Math.cos(a) * 0.9, 0, -Math.sin(a) * 0.9]}
+              >
+                <coneGeometry args={[0.06, 0.7, 4]} />
+                {A}
+              </mesh>
+            );
+          })}
+          {[-0.2, 0, 0.2].map((x) => (
+            <mesh key={`c${x}`} position={[x, 0.95, 0]} rotation-z={x * 2}>
+              <coneGeometry args={[0.07, 0.35, 4]} />
+              {B}
+            </mesh>
+          ))}
+          {[-0.12, 0.12].map((x) => (
+            <mesh key={`e${x}`} position={[x, 0.62, 0.42]}>
+              <sphereGeometry args={[0.05, 6, 6]} />
+              {G}
+            </mesh>
+          ))}
+        </group>
+      )}
+      {sp.type === "spore" && (
+        <group>
+          {[0, 1, 2, 3, 4].map((i) => {
+            const a = (i / 5) * Math.PI * 2;
+            return (
+              <mesh
+                key={i}
+                position={[Math.sin(a) * 0.5, 0.1, Math.cos(a) * 0.5]}
+                rotation={[Math.cos(a) * 1.2, 0, -Math.sin(a) * 1.2]}
+              >
+                <cylinderGeometry args={[0.04, 0.1, 0.8, 5]} />
+                {A}
+              </mesh>
+            );
+          })}
+          <mesh position-y={0.6} castShadow>
+            <cylinderGeometry args={[0.25, 0.4, 0.8, 7]} />
+            {A}
+          </mesh>
+          <group ref={part} position-y={1.2}>
+            <mesh>
+              <sphereGeometry args={[0.45, 9, 7]} />
+              {B}
+            </mesh>
+            {[0, 1, 2, 3, 4, 5].map((i) => {
+              const a = (i / 6) * Math.PI * 2;
+              return (
+                <mesh
+                  key={i}
+                  position={[Math.sin(a) * 0.42, 0.1, Math.cos(a) * 0.42]}
+                  rotation={[Math.cos(a) * 0.8, 0, -Math.sin(a) * 0.8]}
+                >
+                  <coneGeometry args={[0.16, 0.5, 4]} />
+                  {A}
+                </mesh>
+              );
+            })}
+            {[0, 1, 2, 3].map((i) => (
+              <mesh
+                key={`g${i}`}
+                position={[Math.sin(i * 1.6) * 0.3, 0.3, Math.cos(i * 1.6) * 0.3]}
+              >
+                <sphereGeometry args={[0.07, 6, 6]} />
+                {G}
+              </mesh>
+            ))}
+          </group>
+        </group>
+      )}
+      {sp.type === "pyre" && (
+        <group position-y={1.2}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.45, 12, 10]} />
+            {G}
+          </mesh>
+          <group ref={spin}>
+            {[0, 1, 2, 3].map((i) => {
+              const a = (i / 4) * Math.PI * 2;
+              return (
+                <mesh key={i} position={[Math.sin(a) * 0.6, 0, Math.cos(a) * 0.6]} rotation-y={a}>
+                  <boxGeometry args={[0.5, 0.8, 0.12]} />
+                  {B}
+                </mesh>
+              );
+            })}
+          </group>
+          <group ref={part}>
+            {[-1, 1].map((y) => (
+              <mesh key={y} position-y={y * 0.55} rotation-x={Math.PI / 2}>
+                <torusGeometry args={[0.35, 0.06, 5, 10]} />
+                {A}
+              </mesh>
+            ))}
+          </group>
+          <mesh position-y={-0.9}>
+            <coneGeometry args={[0.2, 0.5, 6]} />
+            {G}
+          </mesh>
+        </group>
+      )}
+      {sp.type === "shinobi" && (
+        <group>
+          <mesh position-y={0.9} castShadow>
+            <cylinderGeometry args={[0.2, 0.32, 1.1, 7]} />
+            {B}
+          </mesh>
+          <mesh position-y={0.9}>
+            <torusGeometry args={[0.26, 0.05, 4, 10]} />
+            {A}
+          </mesh>
+          <mesh position-y={1.65}>
+            <sphereGeometry args={[0.25, 8, 7]} />
+            {B}
+          </mesh>
+          <mesh position={[0, 1.66, 0.2]}>
+            <boxGeometry args={[0.36, 0.08, 0.1]} />
+            {A}
+          </mesh>
+          {[-0.08, 0.08].map((x) => (
+            <mesh key={x} position={[x, 1.68, 0.26]}>
+              <boxGeometry args={[0.05, 0.03, 0.02]} />
+              {G}
+            </mesh>
+          ))}
+          {[-0.12, 0.12].map((x) => (
+            <mesh key={`r${x}`} position={[x, 1.95, -0.15]} rotation-x={-0.6}>
+              <boxGeometry args={[0.04, 0.6, 0.02]} />
+              {A}
+            </mesh>
+          ))}
+          {[-0.3, 0.3].map((x) => (
+            <mesh key={`l${x}`} position={[x * 0.5, 0.25, 0]}>
+              <cylinderGeometry args={[0.06, 0.05, 0.5, 5]} />
+              {A}
+            </mesh>
+          ))}
+          <group ref={spin} position-y={1.1}>
+            {[-1, 1].map((sd) => (
+              <mesh key={sd} position={[sd * 0.6, 0, 0]} rotation-x={Math.PI / 2}>
+                <coneGeometry args={[0.07, 0.45, 4]} />
+                {G}
+              </mesh>
+            ))}
+          </group>
+        </group>
+      )}
+      {sp.type === "wyrm" && (
+        <group ref={part} position-y={1.6}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <mesh key={i} position={[Math.sin(i * 0.9) * 0.25, -i * 0.05, -i * 0.38]}>
+              <icosahedronGeometry args={[0.3 - i * 0.04, 0]} />
+              {i === 0 ? B : A}
+            </mesh>
+          ))}
+          {[0, 1, 2, 3].map((i) => (
+            <mesh key={`f${i}`} position={[Math.sin(i * 0.9) * 0.25, 0.25 - i * 0.05, -i * 0.38]}>
+              <coneGeometry args={[0.07, 0.3, 4]} />
+              {B}
+            </mesh>
+          ))}
+          {[-0.12, 0.12].map((x) => (
+            <mesh key={x} position={[x, 0.08, 0.26]}>
+              <sphereGeometry args={[0.05, 6, 6]} />
+              {G}
+            </mesh>
+          ))}
+          <mesh position={[0, -0.05, 0.3]} rotation-x={Math.PI / 2}>
+            <coneGeometry args={[0.1, 0.25, 6]} />
+            {G}
+          </mesh>
+        </group>
+      )}
+      {sp.type === "nautilus" && (
+        <group position-y={1.1}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.6, 12, 10]} />
+            {B}
+          </mesh>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <mesh key={i} rotation-y={Math.PI / 2} rotation-x={i * 0.5} position-z={-0.05}>
+              <torusGeometry args={[0.6, 0.05, 4, 16, Math.PI]} />
+              {A}
+            </mesh>
+          ))}
+          <mesh position={[0, 0, 0.55]}>
+            <sphereGeometry args={[0.18, 10, 8]} />
+            {G}
+          </mesh>
+          <group ref={part}>
+            {[0, 1, 2, 3].map((i) => {
+              const a = (i / 4) * Math.PI * 2;
+              return (
+                <mesh key={i} position={[Math.sin(a) * 0.35, -0.6, 0.3 + Math.cos(a) * 0.15]}>
+                  <cylinderGeometry args={[0.04, 0.07, 0.6, 5]} />
+                  {A}
+                </mesh>
+              );
+            })}
+          </group>
+        </group>
+      )}
+      {sp.type === "hacker" && (
+        <group position-y={1.7}>
+          <mesh castShadow>
+            <octahedronGeometry args={[0.4, 0]} />
+            {B}
+          </mesh>
+          <mesh position-z={0.3}>
+            <boxGeometry args={[0.3, 0.1, 0.1]} />
+            {G}
+          </mesh>
+          <group ref={spin}>
+            {[-0.65, 0.65].map((x) => (
+              <group key={x} position-x={x}>
+                <mesh rotation-x={Math.PI / 2}>
+                  <torusGeometry args={[0.28, 0.04, 4, 14]} />
+                  {A}
+                </mesh>
+                <mesh>
+                  <boxGeometry args={[0.5, 0.02, 0.06]} />
+                  {A}
+                </mesh>
+              </group>
+            ))}
+          </group>
+          <mesh position-y={-0.55} rotation-x={Math.PI}>
+            <coneGeometry args={[0.35, 0.5, 8, 1, true]} />
+            <meshBasicMaterial color={sp.glow} transparent opacity={0.35} />
+          </mesh>
+          <mesh position-y={-0.8} rotation-x={Math.PI / 2}>
+            <ringGeometry args={[0.25, 0.32, 16]} />
+            {G}
+          </mesh>
+        </group>
+      )}
+      {sp.type === "bile" && (
+        <group>
+          <mesh position-y={1} castShadow>
+            <boxGeometry args={[0.8, 0.9, 0.7]} />
+            {B}
+          </mesh>
+          <mesh position={[0, 1.6, 0.1]}>
+            <sphereGeometry args={[0.3, 8, 7]} />
+            {A}
+          </mesh>
+          <mesh position={[0, 1.55, 0.45]} rotation-x={Math.PI / 2}>
+            <cylinderGeometry args={[0.1, 0.22, 0.4, 8]} />
+            {A}
+          </mesh>
+          <mesh position={[0, 1.55, 0.66]} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[0.2, 0.04, 4, 10]} />
+            {G}
+          </mesh>
+          {[-0.22, 0.22].map((x) => (
+            <group key={x} position={[x, 1.2, -0.5]}>
+              <mesh>
+                <cylinderGeometry args={[0.16, 0.16, 0.8, 8]} />
+                <meshLambertMaterial color={sp.glow} transparent opacity={0.8} />
+              </mesh>
+              <mesh position-y={0.45}>
+                <cylinderGeometry args={[0.1, 0.16, 0.12, 8]} />
+                {A}
+              </mesh>
+            </group>
+          ))}
+          {[0.8, 1.2].map((y) => (
+            <mesh key={y} position={[0, y, 0.36]}>
+              <boxGeometry args={[0.82, 0.08, 0.02]} />
+              {A}
+            </mesh>
+          ))}
+          {[-0.25, 0.25].map((x) => (
+            <mesh key={`l${x}`} position={[x, 0.3, 0]}>
+              <boxGeometry args={[0.22, 0.6, 0.3]} />
+              {A}
+            </mesh>
+          ))}
+        </group>
+      )}
     </group>
   );
 }
 
 const NO_ENEMIES: Enemy[] = [];
-const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; theme: Theme; all?: Enemy[] }) {
+const EnemyMesh = memo(function EnemyMesh({
+  data,
+  theme,
+  all,
+}: {
+  data: Enemy;
+  theme: Theme;
+  all?: Enemy[];
+}) {
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
@@ -825,17 +1771,37 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "runner" || k === "special" || k === "shooter" || k === "bomber" || k === "boss" || k === "vanguard" || isNewKind(k); // walkers: feet stay on the ground
+    const heavy =
+      k === "brute" ||
+      k === "runner" ||
+      k === "special" ||
+      k === "shooter" ||
+      k === "bomber" ||
+      k === "boss" ||
+      k === "vanguard" ||
+      isNewKind(k); // walkers: feet stay on the ground
     const bob = heavy ? 0 : Math.sin(t * 4 + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
-    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : k === "hornet" ? 1.3 : 1;
+    const base =
+      k === "special"
+        ? 1
+        : k === "boss"
+          ? 1.6
+          : k === "runner"
+            ? 0.6
+            : k === "vanguard"
+              ? 1.05
+              : k === "hornet"
+                ? 1.3
+                : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
-    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > performance.now();
+    if (ice.current)
+      ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > performance.now();
     if (flame.current) {
       const burning = data.burn > 0;
       flame.current.visible = burning;
@@ -870,7 +1836,15 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
       {/* burning: flame tongues shown only while incendiary damage ticks */}
       <mesh ref={ice} visible={false} position-y={0.9}>
         <icosahedronGeometry args={[0.95, 0]} />
-        <meshStandardMaterial color="#bff4ff" emissive="#5fd8ff" emissiveIntensity={0.5} transparent opacity={0.45} flatShading roughness={0.1} />
+        <meshStandardMaterial
+          color="#bff4ff"
+          emissive="#5fd8ff"
+          emissiveIntensity={0.5}
+          transparent
+          opacity={0.45}
+          flatShading
+          roughness={0.1}
+        />
       </mesh>
       <group ref={flame} visible={false} position-y={0.75}>
         {[
@@ -882,66 +1856,108 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
         ].map(([x, y, z, r, h, col], i) => (
           <mesh key={i} position={[x as number, y as number, z as number]}>
             <coneGeometry args={[r as number, h as number, 6]} />
-            <meshBasicMaterial color={col as string} transparent opacity={0.8} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+            <meshBasicMaterial
+              color={col as string}
+              transparent
+              opacity={0.8}
+              fog={false}
+              depthWrite={false}
+              blending={THREE.AdditiveBlending}
+            />
           </mesh>
         ))}
       </group>
 
       {/* the regular robots (art/robots): detailed skinned models, one draw call each */}
       {kind === "drifter" && <RobotModel kind={classicRobot("drifter", theme)} data={data} />}
-      {kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
-      {kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
-      {(kind==="boss") && (<group ref={bossGrp}>
-        {hasArtBoss(theme) ? <ArtBoss theme={theme} data={data} /> : <BossBody theme={theme} />}
-        <group ref={bossArm} position={[1.05, 1.9, 0]} visible={!hasArtBoss(theme)}>
-          <mesh position={[0, 0.9, 0]}>
-            <boxGeometry args={[0.24, 1.8, 0.24]} />
-            <meshLambertMaterial color={theme.boss.limb} flatShading />
+      {kind === "runner" && (
+        <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />
+      )}
+      {kind === "brute" && (
+        <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />
+      )}
+      {kind === "boss" && (
+        <group ref={bossGrp}>
+          {hasArtBoss(theme) ? <ArtBoss theme={theme} data={data} /> : <BossBody theme={theme} />}
+          <group ref={bossArm} position={[1.05, 1.9, 0]} visible={!hasArtBoss(theme)}>
+            <mesh position={[0, 0.9, 0]}>
+              <boxGeometry args={[0.24, 1.8, 0.24]} />
+              <meshLambertMaterial color={theme.boss.limb} flatShading />
+            </mesh>
+            <mesh position={[0, 0.5, 0]}>
+              <boxGeometry args={[0.36, 0.3, 0.36]} />
+              <meshLambertMaterial color={theme.boss.weapon} flatShading />
+            </mesh>
+            <mesh position={[0, 1.95, 0]}>
+              <boxGeometry args={[0.6, 0.6, 0.6]} />
+              <meshLambertMaterial color={theme.boss.weapon} flatShading />
+            </mesh>
+            <mesh position={[0, 1.95, 0]}>
+              <boxGeometry args={[0.66, 0.12, 0.66]} />
+              <meshBasicMaterial color={theme.boss.glow} fog={false} />
+            </mesh>
+            <mesh position={[0, 2.42, 0]}>
+              <coneGeometry args={[0.24, 0.45, 5]} />
+              <meshLambertMaterial color={theme.boss.weapon} flatShading />
+            </mesh>
+          </group>
+        </group>
+      )}
+      {kind === "shooter" && (
+        <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />
+      )}
+      {kind === "bomber" && (
+        <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />
+      )}
+      {/* SPECTER: a skeletal wraith-drone inside a see-through energy shroud that blinks toward you */}
+      {kind === "specter" && (
+        <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />
+      )}
+      {kind === "specter" && (
+        <group ref={specter} position-y={1.5}>
+          <mesh>
+            <coneGeometry args={[0.6, 1.8, 10, 1, true]} />
+            <meshBasicMaterial
+              color={c.drifter.body}
+              transparent
+              opacity={0.22}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+              blending={THREE.AdditiveBlending}
+            />
           </mesh>
-          <mesh position={[0, 0.5, 0]}>
-            <boxGeometry args={[0.36, 0.3, 0.36]} />
-            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          <mesh position-y={-0.75} rotation-x={Math.PI}>
+            <coneGeometry args={[0.45, 1.1, 10, 1, true]} />
+            <meshBasicMaterial
+              color={c.drifter.body}
+              transparent
+              opacity={0.16}
+              depthWrite={false}
+              side={THREE.DoubleSide}
+              blending={THREE.AdditiveBlending}
+            />
           </mesh>
-          <mesh position={[0, 1.95, 0]}>
-            <boxGeometry args={[0.6, 0.6, 0.6]} />
-            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          <mesh position-y={0.1} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[0.72, 0.03, 5, 20]} />
+            <meshBasicMaterial color={c.shooter.eye} />
           </mesh>
-          <mesh position={[0, 1.95, 0]}>
-            <boxGeometry args={[0.66, 0.12, 0.66]} />
-            <meshBasicMaterial color={theme.boss.glow} fog={false} />
-          </mesh>
-          <mesh position={[0, 2.42, 0]}>
-            <coneGeometry args={[0.24, 0.45, 5]} />
-            <meshLambertMaterial color={theme.boss.weapon} flatShading />
+          <mesh position-y={-0.3} rotation-x={Math.PI / 2}>
+            <torusGeometry args={[0.5, 0.025, 5, 16]} />
+            <meshBasicMaterial color={c.drifter.eye} />
           </mesh>
         </group>
-      </group> )}
-      {kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
-      {kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
-      {/* SPECTER: a skeletal wraith-drone inside a see-through energy shroud that blinks toward you */}
-      {kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
-      {(kind==="specter") && (<group ref={specter} position-y={1.5}>
-        <mesh>
-          <coneGeometry args={[0.6, 1.8, 10, 1, true]} />
-          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
-        </mesh>
-        <mesh position-y={-0.75} rotation-x={Math.PI}>
-          <coneGeometry args={[0.45, 1.1, 10, 1, true]} />
-          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.16} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
-        </mesh>
-        <mesh position-y={0.1} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.72, 0.03, 5, 20]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        <mesh position-y={-0.3} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.5, 0.025, 5, 16]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-      </group> )}
+      )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && (hasArtSpecial(theme) ? <ArtSpecial theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
+      {kind === "special" &&
+        (hasArtSpecial(theme) ? (
+          <ArtSpecial theme={theme} data={data} />
+        ) : (
+          <SpecialModel theme={theme} data={data} />
+        ))}
       {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
-      {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
+      {kind === "vanguard" && (
+        <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />
+      )}
     </group>
   );
 });
@@ -949,8 +1965,14 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
 // A real bullet silhouette: straight casing with a tapered nose, lathed as one
 // mesh so the pool stays one draw call per slot and keeps per-shot tinting.
 const BULLET_PROFILE = [
-  [0, -1.35], [0.52, -1.35], [0.56, -0.55], [0.56, 0.25],
-  [0.48, 0.7], [0.32, 1.05], [0.14, 1.28], [0, 1.35],
+  [0, -1.35],
+  [0.52, -1.35],
+  [0.56, -0.55],
+  [0.56, 0.25],
+  [0.48, 0.7],
+  [0.32, 1.05],
+  [0.14, 1.28],
+  [0, 1.35],
 ] as const;
 const BULLET_GEO = new THREE.LatheGeometry(
   BULLET_PROFILE.map(([x, y]) => new THREE.Vector2(x * 0.14, y * 0.14)),
@@ -959,7 +1981,6 @@ const BULLET_GEO = new THREE.LatheGeometry(
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
-
 
 const BulletPool = memo(function BulletPool({
   meshes,
@@ -977,7 +1998,9 @@ const BulletPool = memo(function BulletPool({
       {Array.from({ length: MAX_BULLETS }, (_, i) => (
         <mesh
           key={i}
-          ref={(m) => { meshes.current[i] = m; }}
+          ref={(m) => {
+            meshes.current[i] = m;
+          }}
           visible={false}
           {...(shape === "bullet" ? { geometry: BULLET_GEO } : {})}
         >
@@ -995,13 +2018,44 @@ function shieldUp(e: Enemy, host: boolean) {
   return host ? (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 : (((e.vis ?? 0) >> 6) & 1) === 1;
 }
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number; blast?: number; blastMul?: number };
-function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
+type Fx = {
+  bounce?: number;
+  pierce?: number;
+  slow?: number;
+  cluster?: number;
+  chain?: number;
+  burn?: number;
+  knock?: number;
+  mods?: number;
+  blast?: number;
+  blastMul?: number;
+};
+function fireInto(
+  pool: Bullet[],
+  pos: THREE.Vector3,
+  vel: THREE.Vector3,
+  life: number,
+  damage = 1,
+  color = "",
+  size = 0,
+  fx: Fx = {},
+) {
   const base = {
-    life, active: true, damage, color, size,
-    bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
-    burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
-    blast: fx.blast ?? 0, blastMul: fx.blastMul ?? 0,
+    life,
+    active: true,
+    damage,
+    color,
+    size,
+    bounce: fx.bounce ?? 0,
+    pierce: fx.pierce ?? 0,
+    slow: fx.slow ?? 0,
+    cluster: fx.cluster ?? 0,
+    chain: fx.chain ?? 0,
+    burn: fx.burn ?? 0,
+    knock: fx.knock ?? 0,
+    mods: fx.mods ?? 0,
+    blast: fx.blast ?? 0,
+    blastMul: fx.blastMul ?? 0,
   };
   const i = pool.findIndex((b) => !b.active);
   const slot = pool[i];
@@ -1017,16 +2071,34 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
   return -1;
 }
 
-
 /** Simple blocky gun model, different silhouette per weapon. */
-type ModLooks = Partial<Record<"burst" | "incend" | "magnum" | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty", boolean>>;
+type ModLooks = Partial<
+  Record<
+    | "burst"
+    | "incend"
+    | "magnum"
+    | "extmag"
+    | "shred"
+    | "laser"
+    | "comp"
+    | "suppr"
+    | "exec"
+    | "holster"
+    | "bounty",
+    boolean
+  >
+>;
 /**
  * A modest rim and fill light on the first-person gun's lit materials, so a dark gun still
  * reads against a bright sunset or a dark night: a soft edge highlight where its surfaces turn
  * away from the eye, and a small lift of its own colour. Patched once per material.
  */
 function addGunRim(m: THREE.Material) {
-  if (m.userData["gunRim"] || !(m instanceof THREE.MeshLambertMaterial || m instanceof THREE.MeshStandardMaterial)) return;
+  if (
+    m.userData["gunRim"] ||
+    !(m instanceof THREE.MeshLambertMaterial || m instanceof THREE.MeshStandardMaterial)
+  )
+    return;
   m.userData["gunRim"] = true;
   const prev = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
@@ -1141,8 +2213,6 @@ function World({
   /** what pings can hit (filled here, read by the SquadDriver) */
   pingWorld: React.MutableRefObject<PingWorld | null>;
 }) {
-
-
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
   const meleeCooldown = useRef(0);
@@ -1161,9 +2231,19 @@ function World({
   const fireCd = useRef(0);
   const viewModel = useRef<THREE.Group>(null);
   const recoil = useRef(0);
-  const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
+  const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({
+    x: 0,
+    z: 0,
+    active: false,
+    gun: "scatter",
+  });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>(Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<Weapon, number>);
+  const ammo = useRef<Record<Weapon, number>>(
+    Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<
+      Weapon,
+      number
+    >,
+  );
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
@@ -1175,7 +2255,12 @@ function World({
   const lastHealWave = useRef(-99);
   const healMesh = useRef<THREE.Group>(null);
   // supply crates: turret kit, overshield, cryo mine, ammo cache
-  const crate = useRef<{ x: number; z: number; active: boolean; kind: CrateKind }>({ x: 0, z: 0, active: false, kind: "turret" });
+  const crate = useRef<{ x: number; z: number; active: boolean; kind: CrateKind }>({
+    x: 0,
+    z: 0,
+    active: false,
+    kind: "turret",
+  });
   const crateMesh = useRef<THREE.Group>(null);
   const [crateKind, setCrateKind] = useState<CrateKind>("turret");
   const crateKindRef = useRef<CrateKind>("turret");
@@ -1210,12 +2295,21 @@ function World({
   const strikeFlash = useRef({ t: 0 });
   // (big maps: the ring sits on the ground there, or at your feet on a roof / in a car)
   const fxFloor = (x: number, z: number) =>
-    Math.hypot(x - camera.position.x, z - camera.position.z) < 0.5 ? camera.position.y - EYE : groundY(x, z);
-  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = fxFloor(x, z) + 0.12) => {
+    Math.hypot(x - camera.position.x, z - camera.position.z) < 0.5
+      ? camera.position.y - EYE
+      : groundY(x, z);
+  const playFx = (
+    color: string,
+    r0: number,
+    r1: number,
+    dur: number,
+    x: number,
+    z: number,
+    y = fxFloor(x, z) + 0.12,
+  ) => {
     ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
   };
   const cdReport = useRef(0);
-
 
   // armour soaks damage; getting hit can discharge a shock ring
   // knocked back by a ram / blast: same decaying push as a car bump
@@ -1265,20 +2359,88 @@ function World({
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
-      const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
-      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
+      const handle = {
+        gl,
+        scene,
+        camera,
+        look,
+        liveCars,
+        knock,
+        city,
+        western,
+        gaps,
+        traffic,
+        remotes,
+      };
+      Object.assign(handle, {
+        enemies,
+        turrets,
+        mines,
+        remoteDeps,
+        spawnWave,
+        groundAt: groundY,
+        blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r),
+      });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
-      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy, blastAt });
+      Object.assign(handle, {
+        ords,
+        hitLog,
+        packLead,
+        blocks,
+        keys,
+        pending,
+        wave,
+        nextWaveTimer,
+        hurtEnemy,
+        blastAt,
+      });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
-        for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
+        for (const w of ORDER) {
+          owned.current.add(w);
+          ammo.current[w] = 9999;
+        }
         syncInv();
       };
-      Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
+      Object.assign(handle, {
+        giveAll,
+        equip,
+        trigger,
+        weapon,
+        invuln,
+        stats,
+        bullets,
+        fxNetStats,
+        net: netRef,
+        fx: FX,
+      });
       // building access: the buildings, the local player's zone state, cars and doors
-      Object.assign(handle, { access: { list: accessList, markers: accessMarkers, state: accessDebug, player: accPlayer, zoneAt, solid, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1), blocked: (x: number, z: number, r: number) => blocked(blocks, x, z, r) } });
+      Object.assign(handle, {
+        access: {
+          list: accessList,
+          markers: accessMarkers,
+          state: accessDebug,
+          player: accPlayer,
+          zoneAt,
+          solid,
+          los: (ax: number, az: number, bx: number, bz: number) =>
+            clearLine(blocks, ax, az, bx, bz, 0.1),
+          blocked: (x: number, z: number, r: number) => blocked(blocks, x, z, r),
+        },
+      });
       // gameplay testing: the time of day, map events, the power grid, pings and revives
-      Object.assign(handle, { tod, mapEvent, forceMapEvent, power, pings, squad, waveTotal, healthRef, owned, downedRef });
+      Object.assign(handle, {
+        tod,
+        mapEvent,
+        forceMapEvent,
+        power,
+        pings,
+        squad,
+        waveTotal,
+        healthRef,
+        owned,
+        downedRef,
+      });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
   }, [gl, scene, camera, city, western, gaps, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
@@ -1288,7 +2450,8 @@ function World({
     const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
     fxEnv({
       // (with a height: the same world test the bullets use, so holes land where rounds stop)
-      solid: (x, z, y) => (y === undefined ? blocked(blocks, x, z, 0.05) : shotStop(blocks, x, y, z)),
+      solid: (x, z, y) =>
+        y === undefined ? blocked(blocks, x, z, 0.05) : shotStop(blocks, x, y, z),
       car: (x, y, z) => (city !== null || western !== null) && hitsTraffic(x, y, z),
       half: () => HALF,
       waterZ: city ? city.waterZ : null,
@@ -1313,16 +2476,61 @@ function World({
     pingWorld.current = {
       enemies,
       items: [
-        { get x() { return pickup.current.x; }, get z() { return pickup.current.z; }, get active() { return pickup.current.active; }, kind: "gun", get label() { return GUNS[pickup.current.gun].name; } },
-        { get x() { return heal.current.x; }, get z() { return heal.current.z; }, get active() { return heal.current.active; }, kind: "heal", label: "HEALTH" },
-        { get x() { return crate.current.x; }, get z() { return crate.current.z; }, get active() { return crate.current.active; }, kind: "crate", get label() { return CRATE_INFO[crate.current.kind].name; } },
+        {
+          get x() {
+            return pickup.current.x;
+          },
+          get z() {
+            return pickup.current.z;
+          },
+          get active() {
+            return pickup.current.active;
+          },
+          kind: "gun",
+          get label() {
+            return GUNS[pickup.current.gun].name;
+          },
+        },
+        {
+          get x() {
+            return heal.current.x;
+          },
+          get z() {
+            return heal.current.z;
+          },
+          get active() {
+            return heal.current.active;
+          },
+          kind: "heal",
+          label: "HEALTH",
+        },
+        {
+          get x() {
+            return crate.current.x;
+          },
+          get z() {
+            return crate.current.z;
+          },
+          get active() {
+            return crate.current.active;
+          },
+          kind: "crate",
+          get label() {
+            return CRATE_INFO[crate.current.kind].name;
+          },
+        },
       ],
       solid: (x, z) => blocked(blocks, x, z, 0),
       ground: groundY,
       los: (ax, az, bx, bz) => clearLine(blocks, ax, az, bx, bz, 0.05),
       band: (k) => hitBand(k),
       radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
-      enemyLabel: (e) => (e.kind === "boss" ? theme.boss.name : e.kind === "special" ? theme.special.name : (ENEMY_INFO[e.kind]?.name ?? e.kind.toUpperCase())),
+      enemyLabel: (e) =>
+        e.kind === "boss"
+          ? theme.boss.name
+          : e.kind === "special"
+            ? theme.special.name
+            : (ENEMY_INFO[e.kind]?.name ?? e.kind.toUpperCase()),
     };
   }, [blocks, enemies, theme, pingWorld]);
 
@@ -1382,8 +2590,14 @@ function World({
     enemies,
     // cars treat enemies at their drawn size: elites (bounty champion, mini-boss) are 1.6x
     // fliers (hornets, medic drones) pass over traffic: a hugely negative radius never touches
-    radiusOf: (e) => (FLYERS.has(e.kind) ? -99 : (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1)),
-    isBig: (e) => !!e.elite || e.kind === "boss" || e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind),
+    radiusOf: (e) =>
+      FLYERS.has(e.kind) ? -99 : (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1),
+    isBig: (e) =>
+      !!e.elite ||
+      e.kind === "boss" ||
+      e.kind === "brute" ||
+      e.kind === "vanguard" ||
+      HEAVY_NEW.has(e.kind),
     hurtEnemy: null,
     hitPlayer: () => {},
   });
@@ -1432,9 +2646,18 @@ function World({
     let r = remotes.current.get(id);
     if (!r) {
       r = {
-        id, x: 0, z: 0, yaw: 0, hp: MAX_HP, weapon: "pistol",
-        num, color: colorFor(num),
-        last: 0, rx: Number(m.x ?? 0), rz: Number(m.z ?? 0), ry: 0,
+        id,
+        x: 0,
+        z: 0,
+        yaw: 0,
+        hp: MAX_HP,
+        weapon: "pistol",
+        num,
+        color: colorFor(num),
+        last: 0,
+        rx: Number(m.x ?? 0),
+        rz: Number(m.z ?? 0),
+        ry: 0,
       };
       remotes.current.set(id, r);
     }
@@ -1486,7 +2709,25 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0, blast: 0, blastMul: 0 };
+        b = {
+          pos: new THREE.Vector3(),
+          vel: new THREE.Vector3(),
+          life: 1,
+          active: false,
+          damage: 1,
+          color: "",
+          size: 0,
+          bounce: 0,
+          pierce: 0,
+          slow: 0,
+          cluster: 0,
+          chain: 0,
+          burn: 0,
+          knock: 0,
+          mods: 0,
+          blast: 0,
+          blastMul: 0,
+        };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -1526,8 +2767,14 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (onMapEventMsg(m)) return;
-      if (m.type === "t") { upsertRemote(m); return; }
-      if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
+      if (m.type === "t") {
+        upsertRemote(m);
+        return;
+      }
+      if (m.type === "fire") {
+        fxRemoteFire(m, remotes.current);
+        return;
+      } // visual-only replay
       if (m.type === "left") {
         remotes.current.delete(String(m.from));
         remoteDeps.current.delete(String(m.from));
@@ -1548,22 +2795,47 @@ function World({
           const i = Number(m.i);
           const e = enemies[i];
           if (e?.alive) {
-            applyHit(e, i, Number(m.dmg) || 0, {
-              slow: Number(m.slow ?? 0), burn: Number(m.burn ?? 0), kb: Number(m.kb ?? 0),
-              kx: Number(m.kx ?? 0), kz: Number(m.kz ?? 0), direct: m.d === 1,
-              shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1, freeze: Number(m.fz ?? 0),
-            }, String(m.from));
+            applyHit(
+              e,
+              i,
+              Number(m.dmg) || 0,
+              {
+                slow: Number(m.slow ?? 0),
+                burn: Number(m.burn ?? 0),
+                kb: Number(m.kb ?? 0),
+                kx: Number(m.kx ?? 0),
+                kz: Number(m.kz ?? 0),
+                direct: m.d === 1,
+                shred: m.sh === 1,
+                exec: m.ex === 1,
+                bounty: m.bo === 1,
+                freeze: Number(m.fz ?? 0),
+              },
+              String(m.from),
+            );
           }
         } else if (m.type === "blast") {
           // a guest's BOOMER / FLAK exploded: the host resolves the splash and credits the guest
-          applyBlast(Number(m.x), Number(m.y), Number(m.z), Math.min(8, Number(m.r) || 0), Number(m.d) || 0,
-            Number(m.vx) || 0, Number(m.vz) || 0, Number(m.s ?? -1), String(m.from));
+          applyBlast(
+            Number(m.x),
+            Number(m.y),
+            Number(m.z),
+            Math.min(8, Number(m.r) || 0),
+            Number(m.d) || 0,
+            Number(m.vx) || 0,
+            Number(m.vz) || 0,
+            Number(m.s ?? -1),
+            String(m.from),
+          );
         } else if (m.type === "shield") {
           const e = enemies[Number(m.i)];
           if (e?.alive && e.kind === "bulwark") drainShield(e, Number(m.dmg));
         } else if (m.type === "odhit") {
           const o = ords.current[Number(m.i)];
-          if (o?.on && o.tp === 1) { o.on = false; blast(ords.current, o.x, o.z, 0.8, o.y); }
+          if (o?.on && o.tp === 1) {
+            o.on = false;
+            blast(ords.current, o.x, o.z, 0.8, o.y);
+          }
         } else if (m.type === "ebhit") {
           const b = enemyBullets.current[Number(m.i)];
           if (b) b.active = false;
@@ -1578,7 +2850,13 @@ function World({
             heal.current.active = false;
           }
         } else if (m.type === "joined") {
-          n?.sendTo(String(m.from), { type: "status", w: Math.max(1, wave.current), rem: enemies.filter((e) => e.alive).length, won: false, banner: true });
+          n?.sendTo(String(m.from), {
+            type: "status",
+            w: Math.max(1, wave.current),
+            rem: enemies.filter((e) => e.alive).length,
+            won: false,
+            banner: true,
+          });
         }
       } else {
         if (m.type === "snap") applySnap(m);
@@ -1586,31 +2864,35 @@ function World({
           onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
           if (m.banner) {
             // a new wave: guests get the same fresh sidearm magazine the host's spawnWave hands out
-            ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
+            ammo.current.pistol = Math.round(
+              (stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul,
+            );
+            gunReload();
             onAmmo(ammo.current[weapon.current]);
             syncInv();
           }
-        }
-        else if (m.type === "boss") onBoss(Number(m.hp));
+        } else if (m.type === "boss") onBoss(Number(m.hp));
         else if (m.type === "kill") {
           const e = enemies[Number(m.i)];
           if (e) creditKill(e, m.el === 1, m.bo === 1); // I landed the killing blow
-        }
-        else if (m.type === "hurt") {
+        } else if (m.type === "hurt") {
           if (m.kx !== undefined && invuln.current <= 0) shove(Number(m.kx), Number(m.kz));
           takeHit(Number(m.dmg) || 1);
         }
       }
     };
-  }); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-
+  });
 
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
     look.current = {
-      yaw: western ? western.spawnYaw : isBeach(city) ? city.spawnYaw : alpineMap ? alpineMap.alpine.spawnYaw : 0,
+      yaw: western
+        ? western.spawnYaw
+        : isBeach(city)
+          ? city.spawnYaw
+          : alpineMap
+            ? alpineMap.alpine.spawnYaw
+            : 0,
       pitch: city ? 0.12 : 0,
     };
     placeAtSpawn();
@@ -1643,7 +2925,10 @@ function World({
     }
     dropOrder.current = pool;
     // a full sidearm from the first frame (the HUD used to flash "PISTOL 0" until wave 1)
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
+    ammo.current.pistol = Math.round(
+      (stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul,
+    );
+    gunReload();
     onAmmo(ammo.current.pistol);
     syncInv();
     bullets.current.forEach((b) => (b.active = false));
@@ -1668,9 +2953,28 @@ function World({
       const rz = -Math.sin(yaw);
       const bx = Math.sin(yaw);
       const bz = Math.cos(yaw);
-      const offs: [number, number][] = num === 2 ? [[2.4, 0], [-2.4, 0], [0, 2.4]] : num === 3 ? [[-2.4, 0], [2.4, 0], [0, 2.4]] : [[0, 2.4], [2.4, 2.4], [-2.4, 2.4]];
+      const offs: [number, number][] =
+        num === 2
+          ? [
+              [2.4, 0],
+              [-2.4, 0],
+              [0, 2.4],
+            ]
+          : num === 3
+            ? [
+                [-2.4, 0],
+                [2.4, 0],
+                [0, 2.4],
+              ]
+            : [
+                [0, 2.4],
+                [2.4, 2.4],
+                [-2.4, 2.4],
+              ];
       for (const r of [1, 1.6, 2.2]) {
-        const hit = offs.find(([a, b]) => !blocked(blocks, sx + (rx * a + bx * b) * r, sz + (rz * a + bz * b) * r, 0.5));
+        const hit = offs.find(
+          ([a, b]) => !blocked(blocks, sx + (rx * a + bx * b) * r, sz + (rz * a + bz * b) * r, 0.5),
+        );
         if (hit) {
           x = sx + (rx * hit[0] + bx * hit[1]) * r;
           z = sz + (rz * hit[0] + bz * hit[1]) * r;
@@ -1693,13 +2997,16 @@ function World({
       }
     }, 300);
     return () => window.clearInterval(id);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!document.pointerLockElement) return;
       look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
-      look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensYRef.current));
+      look.current.pitch = Math.max(
+        -1.2,
+        Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensYRef.current),
+      );
     };
     document.addEventListener("mousemove", onMove);
     return () => document.removeEventListener("mousemove", onMove);
@@ -1737,13 +3044,15 @@ function World({
       out.push({ x: camera.position.x, z: camera.position.z });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000 && ok(r.x, r.z, (r.rc ?? -1) >= 0)) out.push({ x: r.x, z: r.z });
+      if (r.hp > 0 && now - r.last < 4000 && ok(r.x, r.z, (r.rc ?? -1) >= 0))
+        out.push({ x: r.x, z: r.z });
     });
     if (out.length === 0) out.push({ x: camera.position.x, z: camera.position.z });
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
-  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
+  const navOpen = (x: number, z: number) =>
+    !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
   /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
   const liveZones = () => {
     const z = new Set<number>();
@@ -1769,10 +3078,12 @@ function World({
   /** building access: every live player with their zone */
   const zonePlayers = () => {
     const out: { x: number; z: number; zn: number; b: number }[] = [];
-    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z, zn: myZone(), b: accPlayer.b });
+    if (!deadRef.current)
+      out.push({ x: camera.position.x, z: camera.position.z, zn: myZone(), b: accPlayer.b });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z, zn: remoteZone(r), b: r.az ? azBuilding(r.az) : -1 });
+      if (r.hp > 0 && now - r.last < 4000)
+        out.push({ x: r.x, z: r.z, zn: remoteZone(r), b: r.az ? azBuilding(r.az) : -1 });
     });
     return out;
   };
@@ -1787,15 +3098,24 @@ function World({
     if (!big) return randomSpawn(blocks, rand);
     if (!accessActive()) {
       const q = spawnNear(
-        blocks, rand, livePlayers(zone), rMin, rMax, hidden, 1,
-        alpineMap && zone !== undefined ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone : navOpen,
+        blocks,
+        rand,
+        livePlayers(zone),
+        rMin,
+        rMax,
+        hidden,
+        1,
+        alpineMap && zone !== undefined
+          ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone
+          : navOpen,
       );
       // the alpine summit is a small open island where the ring search often finds nothing out
       // of sight: fall back to any open island cell no player can see (behind the lodge or the
       // top station), before ever appearing in view
       if (hidden && alpineMap && alpineZone(q.x, q.z) === 1) {
         const ps = livePlayers(1);
-        const seen = (x: number, z: number) => ps.some((p) => clearLine(blocks, p.x, p.z, x, z, 0.1));
+        const seen = (x: number, z: number) =>
+          ps.some((p) => clearLine(blocks, p.x, p.z, x, z, 0.1));
         if (seen(q.x, q.z)) {
           const isl = alpineMap.alpine.island;
           for (let k = 0; k < 120; k++) {
@@ -1811,12 +3131,22 @@ function World({
     }
     const zp = zonePlayers();
     const standing = zp.filter((p) => p.zn >= 0);
-    const zn = zone ?? (standing.length ? standing[Math.floor(rand() * standing.length)]!.zn : baseZone(camera.position.x, camera.position.z));
+    const zn =
+      zone ??
+      (standing.length
+        ? standing[Math.floor(rand() * standing.length)]!.zn
+        : baseZone(camera.position.x, camera.position.z));
     if (zn >= ROOF_KEY) {
       const b = zn - ROOF_KEY;
       // (`already`: the caller is an enemy on that roof, re-placing itself: it has a place)
       if (already || roofCount(b, enemies, pending.current) < (accessList()[b]?.cap ?? 0))
-        return roofSpot(b, blocks, standing.filter((p) => p.zn === zn), rand, hidden);
+        return roofSpot(
+          b,
+          blocks,
+          standing.filter((p) => p.zn === zn),
+          rand,
+          hidden,
+        );
       const ds = doorstep(b);
       return spawnNear(blocks, rand, [ds], rMin, rMax, hidden, 1, streetIn(baseZone(ds.x, ds.z)));
     }
@@ -1829,8 +3159,13 @@ function World({
   /** snipers take to the rooftops: a roof with a player on it (and room), if there is one */
   const sniperZone = () => {
     if (!accessActive()) return undefined;
-    const roofs = zonePlayers().filter((p) => p.zn >= ROOF_KEY).map((p) => p.zn);
-    const ok = roofs.filter((z) => roofCount(z - ROOF_KEY, enemies, pending.current) < (accessList()[z - ROOF_KEY]?.cap ?? 0));
+    const roofs = zonePlayers()
+      .filter((p) => p.zn >= ROOF_KEY)
+      .map((p) => p.zn);
+    const ok = roofs.filter(
+      (z) =>
+        roofCount(z - ROOF_KEY, enemies, pending.current) < (accessList()[z - ROOF_KEY]?.cap ?? 0),
+    );
     return ok.length ? ok[Math.floor(rand() * ok.length)] : undefined;
   };
 
@@ -1849,7 +3184,8 @@ function World({
     if (w !== "pistol") return g;
     const s = stats.current;
     let out: Gun = g;
-    if (s.magnum) out = { ...out, damage: out.damage + 1, speed: out.speed * 1.5, pierce: 1, color: "#ffd9a0" };
+    if (s.magnum)
+      out = { ...out, damage: out.damage + 1, speed: out.speed * 1.5, pierce: 1, color: "#ffd9a0" };
     if (s.comp) out = { ...out, speed: out.speed * 1.3 };
     return out;
   };
@@ -1863,7 +3199,18 @@ function World({
   // knockback, shred / executioner / bounty flags, shot direction) and the host runs
   // applyHit exactly as for its own shots. Kill credit and kill rewards go back to the
   // shooter, so nothing is lost and nothing is counted twice.
-  type HitFx = { slow?: number; burn?: number; kb?: number; kx?: number; kz?: number; direct?: boolean; shred?: boolean; exec?: boolean; bounty?: boolean; freeze?: number };
+  type HitFx = {
+    slow?: number;
+    burn?: number;
+    kb?: number;
+    kx?: number;
+    kz?: number;
+    direct?: boolean;
+    shred?: boolean;
+    exec?: boolean;
+    bounty?: boolean;
+    freeze?: number;
+  };
   /** kill credit and kill rewards, on the client of whoever landed the blow */
   const creditKill = (e: Enemy, elite: boolean, bounty: boolean) => {
     onScore();
@@ -1892,16 +3239,26 @@ function World({
       for (let s = 0; s < 8; s++) {
         const a = (s / 8) * Math.PI * 2;
         const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-        fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+        fireInto(
+          enemyBullets.current,
+          new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6),
+          v.multiplyScalar(9),
+          0.9,
+          1,
+          "",
+          0.14,
+        );
       }
     }
     const elite = !!e.elite;
     e.elite = 0;
     // elites, mini-bosses and bosses always leave a medkit behind (Toby); only on open ground
     // (not up on a roof, where the pack would drop into the building below)
-    if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5)) heal.current = { x: e.x, z: e.z, active: true };
+    if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5))
+      heal.current = { x: e.x, z: e.z, active: true };
     if (from === null) creditKill(e, elite, bounty);
-    else netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
+    else
+      netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
   };
   /** host only: apply one hit with all its effects */
   const applyHit = (e: Enemy, idx: number, dmg: number, h: HitFx, from: string | null) => {
@@ -1922,7 +3279,8 @@ function World({
       const kx = h.kx ?? 0;
       const kz = h.kz ?? 0;
       const len = Math.hypot(kx, kz) || 1;
-      const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
+      const push =
+        kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
       // walk the push in small steps so a shove never drives anyone into cover (Toby), and
       // never lifts it onto a balcony or up the tower's face (climbable)
       const er = Math.min(STATS[e.kind].radius, 0.8);
@@ -1944,25 +3302,46 @@ function World({
     e.hitT = 2; // cloakers flicker into view when hurt
     if ((h.slow ?? 0) > 0) e.slow = h.slow!;
     if ((h.freeze ?? 0) > 0) e.frozen = Math.max(e.frozen ?? 0, h.freeze!); // cryo nova
-    if ((h.burn ?? 0) > 0) { e.burn = h.burn!; e.burnTick = 1; e.burnFrom = from; }
+    if ((h.burn ?? 0) > 0) {
+      e.burn = h.burn!;
+      e.burnTick = 1;
+      e.burnFrom = from;
+    }
     if (h.shred) e.shredUntil = now + 3000;
     if (e.kind === "boss") onBoss(Math.max(0, e.hp));
     if (e.hp <= 0) killEnemy(e, idx, from, !!h.bounty);
   };
   /** this client's player deals damage: applied on the host, sent to the host from a guest */
-  const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0, fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {}) => {
+  const hurtEnemy = (
+    e: Enemy,
+    dmg: number,
+    idx: number,
+    slow = 0,
+    burn = 0,
+    kb = 0,
+    kx = 0,
+    kz = 0,
+    fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {},
+  ) => {
     // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the damage
     if (stats.current.steal > 0 && dmg > 0 && e.alive) {
       stealBank.current += dmg * stats.current.steal;
-      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+      if (stealBank.current >= 1) {
+        stealBank.current -= 1;
+        onLeech();
+      }
     }
     if (!isHostRef.current) {
       netRef.current?.broadcast({
-        type: "hit", i: idx, dmg,
+        type: "hit",
+        i: idx,
+        dmg,
         ...(slow ? { slow } : {}),
         ...(burn ? { burn } : {}),
         ...(kb ? { kb } : {}),
-        ...(kb || fx.direct ? { kx: Math.round(kx * 100) / 100, kz: Math.round(kz * 100) / 100 } : {}),
+        ...(kb || fx.direct
+          ? { kx: Math.round(kx * 100) / 100, kz: Math.round(kz * 100) / 100 }
+          : {}),
         ...(fx.direct ? { d: 1 } : {}),
         ...(fx.shred ? { sh: 1 } : {}),
         ...(fx.exec ? { ex: 1 } : {}),
@@ -1981,7 +3360,17 @@ function World({
    * direct hit from the blast's direction, so a bulwark facing the blast blocks it, and the
    * kill credit goes to the shooter (`from`).
    */
-  const applyBlast = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip: number, from: string | null) => {
+  const applyBlast = (
+    x: number,
+    y: number,
+    z: number,
+    r: number,
+    dmg: number,
+    vx: number,
+    vz: number,
+    skip: number,
+    from: string | null,
+  ) => {
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i]!;
       if (!e.alive || i === skip) continue;
@@ -2007,12 +3396,24 @@ function World({
     }
   };
   /** this client's round exploded: resolved on the host (a guest sends one "blast" message) */
-  const blastAt = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip = -1) => {
+  const blastAt = (
+    x: number,
+    y: number,
+    z: number,
+    r: number,
+    dmg: number,
+    vx: number,
+    vz: number,
+    skip = -1,
+  ) => {
     onStat("hit", 1);
     onStat("dmg", dmg);
     if (stats.current.steal > 0) {
       stealBank.current += dmg * stats.current.steal;
-      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+      if (stealBank.current >= 1) {
+        stealBank.current -= 1;
+        onLeech();
+      }
     }
     // no friendly fire, but a close blast gives your own player a gentle push
     const c = camera.position;
@@ -2026,7 +3427,18 @@ function World({
     const q = (v: number) => Math.round(v * 100) / 100;
     const vl = Math.hypot(vx, vz) || 1;
     if (isHostRef.current) applyBlast(x, y, z, r, dmg, vx / vl, vz / vl, skip, null);
-    else netRef.current?.broadcast({ type: "blast", x: q(x), y: q(y), z: q(z), r: q(r), d: q(dmg), vx: q(vx / vl), vz: q(vz / vl), s: skip });
+    else
+      netRef.current?.broadcast({
+        type: "blast",
+        x: q(x),
+        y: q(y),
+        z: q(z),
+        r: q(r),
+        d: q(dmg),
+        vx: q(vx / vl),
+        vz: q(vz / vl),
+        s: skip,
+      });
   };
   const burstTimer = useRef(0);
 
@@ -2059,11 +3471,19 @@ function World({
         // Combustion (perks, the Bio-Siphon class, Cluster Charge) widens the blast a little
         blast: g.blast ? g.blast * (1 + 0.5 * s2.boom) : 0,
         blastMul: g.blastMul ?? 0,
-        mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
+        mods: isP
+          ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0)
+          : 0,
       };
       const slot = fireInto(
-        bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
-        crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
+        bullets.current,
+        pos,
+        dir.normalize().multiplyScalar(g.speed),
+        g.life,
+        dmg,
+        crit ? "#ffffff" : g.color,
+        crit ? g.size * 1.4 : g.size,
+        fx,
       );
       if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
@@ -2110,11 +3530,12 @@ function World({
       ammo.current[w] = 0;
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
+    ammo.current.pistol = Math.round(
+      (stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul,
+    );
+    gunReload();
     equip("pistol");
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -2171,7 +3592,10 @@ function World({
 
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
+    ammo.current.pistol = Math.round(
+      (stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul,
+    );
+    gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
@@ -2183,19 +3607,37 @@ function World({
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
-    const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
+    const event =
+      n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
     // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
-    const surprisePool: Kind[] = n >= 5 ? ["brute", "specter", "bomber", "vanguard", "special"] : n >= 3 ? ["brute", "shooter", "specter", "special"] : ["brute", "shooter", "runner"];
-    const surprises = Array<Kind>(1 + Math.floor(rand() * 2)).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
+    const surprisePool: Kind[] =
+      n >= 5
+        ? ["brute", "specter", "bomber", "vanguard", "special"]
+        : n >= 3
+          ? ["brute", "shooter", "specter", "special"]
+          : ["brute", "shooter", "runner"];
+    const surprises = Array<Kind>(1 + Math.floor(rand() * 2))
+      .fill("drifter")
+      .map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
     const roster: Kind[] = ([] as Kind[])
-      .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .concat(
+        ...KINDS.map((k) =>
+          Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k),
+        ),
+      )
       .concat(surprises)
-      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
+      .concat(
+        event === "DRIFTER HORDE"
+          ? Array<Kind>(scale(8))
+              .fill("drifter")
+              .concat(Array<Kind>(scale(4)).fill("runner"))
+          : [],
+      );
     // arrival order: the boss first, then a shuffled mix, so the newer types turn up through
     // the wave instead of all at the end; hornets arrive as one pack of 3-5 from one spot
     const units: Kind[][] = roster.filter((k) => k !== "hornet" && k !== "boss").map((k) => [k]);
     const hornets = roster.filter((k) => k === "hornet");
-    for (let h = 0; h < hornets.length; ) {
+    for (let h = 0; h < hornets.length;) {
       const left = hornets.length - h;
       const size = left <= 5 ? left : 4;
       units.push(hornets.slice(h, h + size));
@@ -2207,10 +3649,18 @@ function World({
     }
     const kinds: Kind[] = [];
     const leadOf: number[] = [];
-    roster.filter((k) => k === "boss").forEach((k) => { kinds.push(k); leadOf.push(-1); });
+    roster
+      .filter((k) => k === "boss")
+      .forEach((k) => {
+        kinds.push(k);
+        leadOf.push(-1);
+      });
     for (const unit of units) {
       const first = kinds.length;
-      unit.forEach((k, m) => { kinds.push(k); leadOf.push(m === 0 ? -1 : first); });
+      unit.forEach((k, m) => {
+        kinds.push(k);
+        leadOf.push(m === 0 ? -1 : first);
+      });
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
     waveTotal.current = Math.max(1, kinds.length); // the time of day follows how much is cleared
@@ -2235,8 +3685,14 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
-        max: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        hp:
+          kind === "boss"
+            ? Math.round(BOSS_HP + 100 * extra)
+            : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        max:
+          kind === "boss"
+            ? Math.round(BOSS_HP + 100 * extra)
+            : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         shredUntil: 0,
         aux: 0,
         alive: false,
@@ -2266,12 +3722,15 @@ function World({
         tgt: -1,
       });
       e.elite = 0;
-      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay + (kind === "boss" ? bossTrain : 0) };
+      pending.current[i] = {
+        x: p.x,
+        z: p.z,
+        t: MARK_TIME + delay + (kind === "boss" ? bossTrain : 0),
+      };
       // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag.
       // A hornet pack lands together, a beat apart.
       const nextLead = leadOf[i + 1] ?? -1;
       delay += nextLead >= 0 ? 0.12 : i < 2 ? 0.4 : big ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
-
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
     if (event === "ELITE BOUNTY" || event === "RECON ENFORCER") {
@@ -2300,7 +3759,8 @@ function World({
     }
 
     // supply crate: turret kit, barrier, cryo mine or ammo cache
-    if (!crate.current.active) { // exactly one supply drop per wave
+    if (!crate.current.active) {
+      // exactly one supply drop per wave
       const c = spot(8, 28, false);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
@@ -2323,7 +3783,6 @@ function World({
     }
   };
 
-
   const outOfBounds = (p: THREE.Vector3) =>
     bulletBlocked(p.x, p.y, p.z) ??
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
@@ -2331,11 +3790,12 @@ function World({
     // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
     // (level.ts shotStop: one height-aware test; low cover stops only what is below its top)
     (shotStop(blocks, p.x, p.y, p.z) ||
-    Math.abs(p.x) > HALF ||
-    Math.abs(p.z) > HALF ||
-    (big !== null && hitsTraffic(p.x, p.y, p.z)));
+      Math.abs(p.x) > HALF ||
+      Math.abs(p.z) > HALF ||
+      (big !== null && hitsTraffic(p.x, p.y, p.z)));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
-  const pBlocked = (x: number, z: number, r: number) => playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
+  const pBlocked = (x: number, z: number, r: number) =>
+    playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
   // controller aim assist: the middle of each live robot's body, and a clear line to it
   const aimPt = { x: 0, y: 0, z: 0 };
   function* aimTargets() {
@@ -2348,7 +3808,8 @@ function World({
       yield aimPt;
     }
   }
-  const aimVisible = (t: { x: number; z: number }) => clearLine(blocks, camera.position.x, camera.position.z, t.x, t.z, 0.1);
+  const aimVisible = (t: { x: number; z: number }) =>
+    clearLine(blocks, camera.position.x, camera.position.z, t.x, t.z, 0.1);
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -2366,15 +3827,27 @@ function World({
     } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
-      look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
+      look.current.yaw +=
+        ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
       look.current.pitch = Math.max(
         -1.2,
-        Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sensY * 0.7 * delta),
+        Math.min(
+          1.2,
+          look.current.pitch +
+            ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) *
+              TURN_SPEED *
+              sensY *
+              0.7 *
+              delta,
+        ),
       );
       // touch drag look (right thumb)
       if (touchInput.lookX || touchInput.lookY) {
         look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current;
-        look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current));
+        look.current.pitch = Math.max(
+          -1.2,
+          Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current),
+        );
         touchInput.lookX = 0;
         touchInput.lookY = 0;
       }
@@ -2386,7 +3859,11 @@ function World({
     kn.shake = Math.max(0, kn.shake - delta * 2.2);
     const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
     const kick = fxKick(); // per-weapon camera kick + explosion shake
-    cam.rotation.set(look.current.pitch + roll * 0.4 + kick.pitch, look.current.yaw + kick.yaw, roll);
+    cam.rotation.set(
+      look.current.pitch + roll * 0.4 + kick.pitch,
+      look.current.yaw + kick.yaw,
+      roll,
+    );
 
     if (gameOver || !locked) return;
 
@@ -2421,7 +3898,6 @@ function World({
       if (owned.current.has(want)) equip(want);
     }
 
-
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
       burstTimer.current -= delta;
@@ -2436,13 +3912,19 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if ((trigger.current || touchInput.fire || padOut.fire) && canFire() && !spectating && fireCd.current <= 0) {
+    } else if (
+      (trigger.current || touchInput.fire || padOut.fire) &&
+      canFire() &&
+      !spectating &&
+      fireCd.current <= 0
+    ) {
       const w = weapon.current;
       fire();
       rumbleFor.fire(GUNS[w].damage, GUNS[w].count, !!GUNS[w].blast);
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
-      fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
-        * (overdrive.current > 0 ? 0.5 : 1);
+      fireCd.current =
+        (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate) *
+        (overdrive.current > 0 ? 0.5 : 1);
     }
 
     // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
@@ -2451,17 +3933,24 @@ function World({
     // body instead of being frozen in place)
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
-      !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
+      !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
+      (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX;
+    const strafe =
+      (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX;
     // sprint / tactical sprint (input/movement.ts): not while down, seated on the lift, in an
     // elevator car, spectating or holding revive
     const runMul = stepMove(
       delta,
       Math.max(-1, Math.min(1, fwd)),
       trigger.current || touchInput.fire || padOut.fire,
-      spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar) || touchInput.revive || k.has("KeyR"),
+      spectating ||
+        downedRef.current ||
+        ride.chair >= 0 ||
+        (accessActive() && accPlayer.inCar) ||
+        touchInput.revive ||
+        k.has("KeyR"),
     );
     // mid-jump, low props (benches, barrels) and flat ledges under the feet don't block
     jumpBody.lift = moveState.airborne ? moveState.lift : 0;
@@ -2478,19 +3967,23 @@ function World({
     alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
     worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
-    const spd = SPEED * stats.current.speed
-      * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1)
-      * groundSpeed(cam.position.x, cam.position.z) // deep snow off the paths
-      * runMul // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
-      * (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
+    const spd =
+      SPEED *
+      stats.current.speed *
+      (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1) *
+      (overdrive.current > 0 ? 1.3 : 1) *
+      groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
+      runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
+      (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
-      if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
+      if (walkTo(nx, cam.position.z)) cam.position.x = nx;
+      else slide.current.x = 0;
+      if (walkTo(cam.position.x, nz)) cam.position.z = nz;
+      else slide.current.z = 0;
     }
     // mid-jump into a roof's parapet: over the edge and down (input/fall.ts)
     if (accPlayer.zone === 2 && moving && !spectating) {
@@ -2538,7 +4031,10 @@ function World({
       for (let pass = 0; pass < 2; pass++) {
         for (const e of enemies) {
           if (!e.alive || FLYERS.has(e.kind)) continue;
-          const r = (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1)) + PLAYER_R;
+          const r =
+            (e.kind === "boss" && theme.boss.shape === "kraken"
+              ? KRAKEN_R
+              : STATS[e.kind].radius * (e.elite ? 1.6 : 1)) + PLAYER_R;
           const ox = cam.position.x - e.x;
           const oz = cam.position.z - e.z;
           const dd = ox * ox + oz * oz;
@@ -2570,14 +4066,18 @@ function World({
       // stairs, the car and the roof decide the floor under you
       // (falling past a building from its roof: the street / lower roof is the floor, no doors)
       const falling = moveState.airborne && accPlayer.zone === 0 && moveState.lift > 1.5;
-      const gy = accessActive() && !falling
-        ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
-        : groundY(cam.position.x, cam.position.z);
+      const gy =
+        accessActive() && !falling
+          ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
+          : groundY(cam.position.x, cam.position.z);
       const dg = gy - camGround.current;
       camGround.current =
-        !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+        !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3
+          ? gy
+          : camGround.current + dg * Math.min(1, delta * 16);
       // jump (Space / A / JUMP): not in an elevator car, on the chairlift, down or spectating
-      const noJump = spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar);
+      const noJump =
+        spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar);
       if (takeJump()) tryJump(!noJump);
       if (noJump && moveState.airborne) cancelJump(gy);
       stepJump(delta, gy);
@@ -2587,7 +4087,9 @@ function World({
         if (accessActive()) landZone(cam.position.x, cam.position.z); // a lower roof, or the street
         slideOffFace(cam.position, blocks); // never left standing on a ledge's face
         // fall damage by the drop (input/fall.ts FALL_TABLE); a downing fall downs you
-        const fd = spectating ? 0 : fallDamage(moveState.landed, stats.current.maxHp, healthRef.current, !netRef.current);
+        const fd = spectating
+          ? 0
+          : fallDamage(moveState.landed, stats.current.maxHp, healthRef.current, !netRef.current);
         if (moveState.landed > 2.5) {
           kn.shake = Math.max(kn.shake, Math.min(1, moveState.landed / 12));
           playSfx("thud");
@@ -2600,13 +4102,27 @@ function World({
       }
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
-    cam.position.y = (moveState.airborne ? moveState.feet : camGround.current) + (downedRef.current ? 0.45 : EYE) - moveState.dip + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    cam.position.y =
+      (moveState.airborne ? moveState.feet : camGround.current) +
+      (downedRef.current ? 0.45 : EYE) -
+      moveState.dip +
+      Math.sin(bob.current) * 0.03 * bobAmt.current;
     if (accessActive()) {
       // elevator cars (the host decides, guests follow the snapshot) and the auto doors
-      const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
+      const people = [
+        {
+          x: cam.position.x,
+          z: cam.position.z,
+          az: spectating ? 0 : playerAz(),
+          y: camGround.current,
+          id: "me",
+          press: accPlayer.press,
+        },
+      ];
       const now = performance.now();
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) people.push({ x: r.x, z: r.z, az: r.az ?? 0, y: r.ay ?? 0, id: r.id, press: r.ap ?? 0 });
+        if (r.hp > 0 && now - r.last < 4000)
+          people.push({ x: r.x, z: r.z, az: r.az ?? 0, y: r.ay ?? 0, id: r.id, press: r.ap ?? 0 });
       });
       stepCars(delta, people, isH);
       stepDoors(delta, people);
@@ -2615,11 +4131,16 @@ function World({
     const inCarNow = accessActive() && accPlayer.inCar;
     if (inCarNow !== inCarHud) {
       inCarHud = inCarNow;
-      if (typeof document !== "undefined") document.documentElement.classList.toggle("rs-incar", inCarNow);
+      if (typeof document !== "undefined")
+        document.documentElement.classList.toggle("rs-incar", inCarNow);
     }
     // alpine chairlift: stand on a loading line to board; seated, the chair carries you
     if (alpineMap && spectating && ride.chair >= 0) leaveRide(cam, alpineMap.alpine); // died on the chair
-    if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current, ridersTaken())) {
+    if (
+      alpineMap &&
+      !spectating &&
+      stepRide(cam, alpineMap.alpine, delta, look.current, ridersTaken())
+    ) {
       slide.current.x = 0;
       slide.current.z = 0;
     }
@@ -2652,9 +4173,15 @@ function World({
       if (tTimer.current <= 0) {
         tTimer.current = 0.05;
         n.broadcast({
-          type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
-          hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
-          ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press } : {}),
+          type: "t",
+          x: cam.position.x,
+          z: cam.position.z,
+          yaw: look.current.yaw,
+          hp: spectating ? 0 : Math.max(1, healthRef.current),
+          w: weapon.current,
+          ...(accPlayer.zone !== 0
+            ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press }
+            : {}),
           ...(alpineMap ? { rc: ride.chair } : {}),
           ...(moveState.airborne ? { jy: Math.round(moveState.lift * 100) / 100 } : {}),
         });
@@ -2668,11 +4195,20 @@ function World({
     if (pickupMesh.current) {
       pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
-        pickupMesh.current.position.set(pk.x, groundY(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.position.set(
+          pk.x,
+          groundY(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15,
+          pk.z,
+        );
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
-    if (pk.active && canTake && !spectating && Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3) {
+    if (
+      pk.active &&
+      canTake &&
+      !spectating &&
+      Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3
+    ) {
       pk.active = false;
       owned.current.add(pk.gun);
       ammo.current[pk.gun] = Math.round(GUNS[pk.gun].ammo * stats.current.ammoMul);
@@ -2689,11 +4225,19 @@ function World({
     if (healMesh.current) {
       healMesh.current.visible = hp.active;
       if (hp.active) {
-        healMesh.current.position.set(hp.x, groundY(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.position.set(
+          hp.x,
+          groundY(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15,
+          hp.z,
+        );
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
-    if (hp.active && !spectating && Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3) {
+    if (
+      hp.active &&
+      !spectating &&
+      Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3
+    ) {
       hp.active = false;
       onHeal();
       if (!isH) n?.broadcast({ type: "take", what: "heal" });
@@ -2708,14 +4252,24 @@ function World({
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
-        crateMesh.current.position.set(ck.x, groundY(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.position.set(
+          ck.x,
+          groundY(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12,
+          ck.z,
+        );
         crateMesh.current.rotation.y += delta * 1.2;
       }
     }
-    if (ck.active && !spectating && Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4) {
+    if (
+      ck.active &&
+      !spectating &&
+      Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4
+    ) {
       ck.active = false;
-      if (ck.kind === "turret" && turrets.current.length < 6) turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
-      if (ck.kind === "mine" && mines.current.length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "turret" && turrets.current.length < 6)
+        turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
+      if (ck.kind === "mine" && mines.current.length < 6)
+        mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
           if (w === "pistol") return;
@@ -2740,29 +4294,46 @@ function World({
         mesh.visible = t.t > 0;
         mesh.position.set(t.x, groundY(t.x, t.z), t.z);
       }
-      if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
+      if (t.t <= 0) {
+        turrets.current.splice(ti, 1);
+        continue;
+      }
       t.cd -= delta;
       let best: Enemy | null = null;
       let bd = 5.5;
       for (const e of enemies) {
         if (!e.alive) continue;
         const d2 = Math.hypot(e.x - t.x, e.z - t.z);
-        if (d2 < bd) { bd = d2; best = e; }
+        if (d2 < bd) {
+          bd = d2;
+          best = e;
+        }
       }
       if (best && t.cd <= 0) {
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
         const from = new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z);
-        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(from.y - 0.2);
-        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        const tip = from
+          .clone()
+          .addScaledVector(v, 0.85 / 30)
+          .setY(from.y - 0.2);
+        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, {
+          knock: stats.current.knock,
+        });
         if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
         fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
-    for (let i = turrets.current.length; i < 6; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
-    for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
+    for (let i = turrets.current.length; i < 6; i++) {
+      const m2 = turretMeshes.current[i];
+      if (m2) m2.visible = false;
+    }
+    for (let i = mines.current.length; i < 6; i++) {
+      const m2 = mineMeshes.current[i];
+      if (m2) m2.visible = false;
+    }
 
     // keep the HUD status panel in sync with what's deployed
     // share my turrets / mines with the room: on change, and a 1 s heartbeat
@@ -2790,9 +4361,6 @@ function World({
         onDeploys({ turret: secs, mines: mc });
       }
     }
-
-
-
 
     // ---- guests: play back the host's world, then handle their own bullets ----
     if (!isH) {
@@ -2856,7 +4424,11 @@ function World({
     }
     if (poolTicks.current > 0) {
       poolTimer.current -= delta;
-      if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
+      if (poolTimer.current <= 0) {
+        poolTimer.current = 1;
+        poolTicks.current--;
+        onLeech();
+      }
     }
     // --- orbital strike: targeting marker, then a beam crashing out of the sky ---
     if (flareTimer.current > 0) {
@@ -2864,7 +4436,8 @@ function World({
       if (flareTimer.current <= 0) {
         for (let ei = 0; ei < enemies.length; ei++) {
           const e = enemies[ei]!;
-          if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5) hurtEnemy(e, 7, ei);
+          if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5)
+            hurtEnemy(e, 7, ei);
         }
         strikeFlash.current.t = 0.5;
         playFx("#ffd46a", 1, 10, 0.5, strikeAt.current.x, strikeAt.current.z);
@@ -2875,10 +4448,15 @@ function World({
       strikeRing.current.visible = aiming;
       if (aiming) {
         const p = 1 - flareTimer.current / 1.2;
-        strikeRing.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 0.08, strikeAt.current.z);
+        strikeRing.current.position.set(
+          strikeAt.current.x,
+          groundY(strikeAt.current.x, strikeAt.current.z) + 0.08,
+          strikeAt.current.z,
+        );
         strikeRing.current.rotation.z = state.clock.elapsedTime * 3;
         strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
-        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
+        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity =
+          0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
       }
     }
     if (strikeBeam.current) {
@@ -2887,7 +4465,11 @@ function World({
       strikeBeam.current.visible = f.t > 0;
       if (f.t > 0) {
         const k = f.t / 0.5;
-        strikeBeam.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 22, strikeAt.current.z);
+        strikeBeam.current.position.set(
+          strikeAt.current.x,
+          groundY(strikeAt.current.x, strikeAt.current.z) + 22,
+          strikeAt.current.z,
+        );
         strikeBeam.current.scale.set(1 + (1 - k) * 1.6, 1, 1 + (1 - k) * 1.6);
         (strikeBeam.current.material as THREE.MeshBasicMaterial).opacity = Math.min(1, k * 1.2);
       }
@@ -2915,7 +4497,10 @@ function World({
         for (let bi = 0; bi < 6; bi++) {
           const m = boltMeshes.current[bi];
           if (!m || !m.visible) continue;
-          if (b.t <= 0) { m.visible = false; continue; }
+          if (b.t <= 0) {
+            m.visible = false;
+            continue;
+          }
           m.rotateOnAxis(BULLET_UP, delta * 24);
           (m.material as THREE.MeshBasicMaterial).opacity = flick;
         }
@@ -2934,7 +4519,8 @@ function World({
         const near = (radius: number, fn: (e: Enemy, i: number) => void) => {
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
-            if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < radius) fn(e, ei);
+            if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < radius)
+              fn(e, ei);
           }
         };
         if (id === "dash") {
@@ -2945,24 +4531,34 @@ function World({
           invuln.current = 0.7;
           playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
-          const cx = cam.position.x + FORWARD.x * 6, cz = cam.position.z + FORWARD.z * 6;
+          const cx = cam.position.x + FORWARD.x * 6,
+            cz = cam.position.z + FORWARD.z * 6;
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             const d = Math.hypot(cx - e.x, cz - e.z);
-            if (e.alive && d < 13) hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
+            if (e.alive && d < 13)
+              hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
           }
           // collapsing vortex ring at the well's centre
           playFx("#a55cff", 13, 0.6, 0.9, cx, cz);
         } else if (id === "repulse") {
-          near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+          near(9, (e, ei) =>
+            hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z),
+          );
           playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
           // frozen solid on the host (guests send the freeze with the hit); the ice shows here at once
-          near(8, (e, ei) => { e.iceUntil = performance.now() + 3500; hurtEnemy(e, 1, ei, 3.5, 0, 0, 0, 0, { freeze: 3.5 }); });
+          near(8, (e, ei) => {
+            e.iceUntil = performance.now() + 3500;
+            hurtEnemy(e, 1, ei, 3.5, 0, 0, 0, 0, { freeze: 3.5 });
+          });
           playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
-          const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
-            .filter((o) => o.e.alive && o.d < 20).sort((a, b) => a.d - b.d).slice(0, 6);
+          const list = enemies
+            .map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
+            .filter((o) => o.e.alive && o.d < 20)
+            .sort((a, b) => a.d - b.d)
+            .slice(0, 6);
           list.forEach((o) => hurtEnemy(o.e, 4, o.i));
           // draw a lightning arc from the player to every zapped enemy
           boltFx.current = { t: 0.42, dur: 0.42 };
@@ -2972,8 +4568,12 @@ function World({
             const tgt = list[bi];
             m.visible = !!tgt;
             if (!tgt) continue;
-            const ax = cam.position.x, az = cam.position.z, ay = cam.position.y - 0.4;
-            const bx = tgt.e.x, bz = tgt.e.z, by = groundY(bx, bz) + 1.1;
+            const ax = cam.position.x,
+              az = cam.position.z,
+              ay = cam.position.y - 0.4;
+            const bx = tgt.e.x,
+              bz = tgt.e.z,
+              by = groundY(bx, bz) + 1.1;
             const len = Math.hypot(bx - ax, bz - az, by - ay);
             m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
             m.scale.set(1, len, 1);
@@ -2985,13 +4585,15 @@ function World({
           near(9999, (e, ei) => hurtEnemy(e, 0, ei, 5));
           playFx("#c9a6ff", 0.6, 40, 0.8, cam.position.x, cam.position.z);
         } else if (id === "strike") {
-          strikeAt.current = { x: cam.position.x + FORWARD.x * 10, z: cam.position.z + FORWARD.z * 10 };
+          strikeAt.current = {
+            x: cam.position.x + FORWARD.x * 10,
+            z: cam.position.z + FORWARD.z * 10,
+          };
           flareTimer.current = 1.2;
         } else if (id === "barrier") {
           invuln.current = 6;
           playFx("#7ad7ff", 0.6, 3.2, 0.5, cam.position.x, cam.position.z);
         }
-
       } else if (abilCd.current > 0) {
         playSfx("deny");
       }
@@ -3006,19 +4608,24 @@ function World({
     for (let mi = mines.current.length - 1; mi >= 0; mi--) {
       const mn = mines.current[mi]!;
       const mesh = mineMeshes.current[mi];
-      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, groundY(mn.x, mn.z) + 0.2, mn.z); }
+      if (mesh) {
+        mesh.visible = true;
+        mesh.position.set(mn.x, groundY(mn.x, mn.z) + 0.2, mn.z);
+      }
       let hit = false;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) { hurtEnemy(e, 2, ei, 4); hit = true; }
+        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) {
+          hurtEnemy(e, 2, ei, 4);
+          hit = true;
+        }
       }
       if (hit) {
         mines.current.splice(mi, 1);
         if (mesh) mesh.visible = false;
       }
     }
-
 
     if (isH) {
       // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
@@ -3031,11 +4638,15 @@ function World({
           const lead = packLead.current[i]!;
           const lp = lead >= 0 ? pending.current[lead] : null;
           const le = lead >= 0 ? enemies[lead] : undefined;
-          const q = lp ? besides(lp.x, lp.z)
-            : le?.alive && le.kind === "hornet" ? besides(le.x, le.z)
-            : enemies[i]!.kind === "boss" ? bossSpot()
-            : enemies[i]!.kind === "sniper" ? spot(30, 55, true, sniperZone())
-            : spot(25, 45, true);
+          const q = lp
+            ? besides(lp.x, lp.z)
+            : le?.alive && le.kind === "hornet"
+              ? besides(le.x, le.z)
+              : enemies[i]!.kind === "boss"
+                ? bossSpot()
+                : enemies[i]!.kind === "sniper"
+                  ? spot(30, 55, true, sniperZone())
+                  : spot(25, 45, true);
           // (alpine: spot() only anchors on players standing in a zone, never riders)
           pd.x = q.x;
           pd.z = q.z;
@@ -3052,8 +4663,12 @@ function World({
         }
       });
       // waves
-      const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
-      setWaveClock(wave.current, wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current);
+      const remaining =
+        enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      setWaveClock(
+        wave.current,
+        wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
+      );
       if (remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
@@ -3082,17 +4697,55 @@ function World({
       const now = performance.now();
       // fx/fz: which way each player faces (the camera looks down -z at yaw 0); flankers use it
       // zn: building-access zone (0 street, 1 + b roof b, -1 inside a building: untargetable)
-      type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; zn?: number; air?: boolean };
+      type Target = {
+        id: string | null;
+        x: number;
+        z: number;
+        y: number;
+        fx: number;
+        fz: number;
+        zn?: number;
+        air?: boolean;
+      };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone(), air: ride.chair >= 0 });
+      if (!spectating)
+        targets.push({
+          id: null,
+          x: cam.position.x,
+          z: cam.position.z,
+          y: cam.position.y,
+          ...lf,
+          zn: myZone(),
+          air: ride.chair >= 0,
+        });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
-          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
-          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: remoteZone(r), air: (r.rc ?? -1) >= 0 });
+          const ry =
+            alpineMap && (r.rc ?? -1) >= 0
+              ? riderEye(alpineMap.alpine.lift, r.rc!).y
+              : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
+          targets.push({
+            id: r.id,
+            x: r.x,
+            z: r.z,
+            y: ry,
+            fx: -Math.sin(r.yaw),
+            fz: -Math.cos(r.yaw),
+            zn: remoteZone(r),
+            air: (r.rc ?? -1) >= 0,
+          });
         }
       });
-      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone() });
+      if (targets.length === 0)
+        targets.push({
+          id: null,
+          x: cam.position.x,
+          z: cam.position.z,
+          y: cam.position.y,
+          ...lf,
+          zn: myZone(),
+        });
       const accOn = accessActive();
 
       const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0) => {
@@ -3113,7 +4766,15 @@ function World({
         fineFor: (t) => fines.current.get(fineKey(t)),
         hurtTarget,
         shoot: (x, y, z, vx, vy, vz, life, dmg, size) =>
-          fireInto(enemyBullets.current, TMP_A.set(x, y, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
+          fireInto(
+            enemyBullets.current,
+            TMP_A.set(x, y, z),
+            TMP_B.set(vx, vy, vz),
+            life,
+            dmg,
+            "",
+            size,
+          ),
         ords: ords.current,
         hornetCd: hornetCd.current,
         navOpen,
@@ -3130,7 +4791,9 @@ function World({
           fields.current.set(key, flowField(solid, ni, nj, big ? 70 : Infinity));
       }
       if (fields.current.size > 12) {
-        fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
+        fields.current.forEach((_, key) => {
+          if (!used.has(key)) fields.current.delete(key);
+        });
       }
       if (strictNav()) {
         const usedF = new Set<number>();
@@ -3139,7 +4802,10 @@ function World({
           usedF.add(key);
           if (!fines.current.has(key)) fines.current.set(key, fineField(blocks, t.x, t.z));
         }
-        if (fines.current.size > 12) fines.current.forEach((_, key) => { if (!usedF.has(key)) fines.current.delete(key); });
+        if (fines.current.size > 12)
+          fines.current.forEach((_, key) => {
+            if (!usedF.has(key)) fines.current.delete(key);
+          });
       }
 
       // the city is huge: enemies stranded far from every player get recycled nearby
@@ -3174,7 +4840,10 @@ function World({
           // enemy stays in its own zone
           // (with building access on, its zone rule above covers the alpine zones too)
           const zones = alpineMap && !accOn ? liveZones() : null;
-          const anyRiding = !!alpineMap && (ride.chair >= 0 || [...remotes.current.values()].some((r) => (r.rc ?? -1) >= 0 && r.hp > 0));
+          const anyRiding =
+            !!alpineMap &&
+            (ride.chair >= 0 ||
+              [...remotes.current.values()].some((r) => (r.rc ?? -1) >= 0 && r.hp > 0));
           const zoneFor = (x: number, z: number) => {
             if (!zones || zones.size === 0) return undefined;
             const ez = alpineZone(x, z);
@@ -3211,7 +4880,10 @@ function World({
             } else if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
               const home = accOn ? zoneOf(e.x, e.z) : zoneFor(e.x, e.z); // stays in its own zone
               const onRoof = accOn && (home ?? 0) >= ROOF_KEY;
-              const q = e.kind === "boss" ? spot(25, 40, false, home, onRoof) : spot(25, 45, true, home, onRoof);
+              const q =
+                e.kind === "boss"
+                  ? spot(25, 40, false, home, onRoof)
+                  : spot(25, 45, true, home, onRoof);
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -3221,8 +4893,13 @@ function World({
               // (the boss too: a wedged boss is a turret, and a sealed-in one never dies)
               const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
               // (a melee type standing still short of its target is stuck too, even in plain sight)
-              const melee = e.kind === "drifter" || e.kind === "runner" || e.kind === "brute" || e.kind === "vanguard";
-              e.stuckFor = moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
+              const melee =
+                e.kind === "drifter" ||
+                e.kind === "runner" ||
+                e.kind === "brute" ||
+                e.kind === "vanguard";
+              e.stuckFor =
+                moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
                 const hidden = e.kind !== "boss";
@@ -3250,7 +4927,9 @@ function World({
         if ((e.frozen ?? 0) > 0) {
           // frozen solid: no moving, no attacking, attack timers paused
           e.frozen! -= delta;
-          if (e.burn > 0) { e.burn -= delta; }
+          if (e.burn > 0) {
+            e.burn -= delta;
+          }
           e.cooldown += delta;
           e.shot += delta;
           continue;
@@ -3263,7 +4942,10 @@ function World({
             e.hp -= 1;
             e.flash = 0.1;
             if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { killEnemy(e, ei, e.burnFrom ?? null, false); continue; }
+            if (e.hp <= 0) {
+              killEnemy(e, ei, e.burnFrom ?? null, false);
+              continue;
+            }
           }
         }
         const st = STATS[e.kind];
@@ -3278,7 +4960,10 @@ function World({
           if (accOn && (t.zn ?? 0) !== ez) continue;
           if (alpineMap && !accOn && same && alpineZone(t.x, t.z) !== ez) continue;
           const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
-          if (dd < d) { d = dd; target = t; }
+          if (dd < d) {
+            d = dd;
+            target = t;
+          }
         }
         if (!target) continue;
         const dx = target.x - e.x;
@@ -3327,7 +5012,10 @@ function World({
         const spType = e.kind === "special" ? theme.special.type : null;
         let spMul = 1;
         if (spType) {
-          if (spType === "stalker") { dir = d > 7 ? 1 : 0; spMul = 1.3; }
+          if (spType === "stalker") {
+            dir = d > 7 ? 1 : 0;
+            spMul = 1.3;
+          }
           if (spType === "mite") spMul = 1.6;
           if (spType === "spore") dir = d > 14 ? 1 : d < 8 ? -1 : 0;
           if (spType === "pyre" || spType === "wyrm") dir = d > 12 ? 1 : d < 7 ? -1 : 0;
@@ -3338,28 +5026,51 @@ function World({
           if (spType === "bile") dir = d > 5 ? 1 : 0;
           if (spType === "desperado") dir = desperadoDir(e, d);
           // RIDGE RAIDER: carves in fast on skis, quicker still in a whiteout
-          if (spType === "skier") { dir = d > 6 ? 1 : 0; spMul = 1.5 + alpine.blizzard * 0.5; }
-          if (spType === "crawler") { dir = d > 1.3 ? 1 : 0; spMul = 1.45; }
+          if (spType === "skier") {
+            dir = d > 6 ? 1 : 0;
+            spMul = 1.5 + alpine.blizzard * 0.5;
+          }
+          if (spType === "crawler") {
+            dir = d > 1.3 ? 1 : 0;
+            spMul = 1.45;
+          }
         }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir
-          * (groundOwnsHits() ? 0.5 + 0.5 * groundSpeed(e.x, e.z) : 1); // beach sand drags a little
+        const step =
+          st.speed *
+          spMul *
+          (e.slow > 0 ? 0.5 : 1) *
+          delta *
+          dir *
+          (groundOwnsHits() ? 0.5 + 0.5 * groundSpeed(e.x, e.z) : 1); // beach sand drags a little
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
-        if (spType === "stalker" || spType === "shinobi" || spType === "skier" || spType === "crawler") {
+        if (
+          spType === "stalker" ||
+          spType === "shinobi" ||
+          spType === "skier" ||
+          spType === "crawler"
+        ) {
           // flanking arcs / zig-zag dash-steps / a crab's sideways scuttle
           const now = performance.now() / 1000;
-          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2
-            : spType === "crawler" ? Math.sign(Math.sin(now * 1.9 + (e.max ?? 1) * 1.7)) * 3.8
-            : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
+          const side =
+            spType === "shinobi"
+              ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2
+              : spType === "crawler"
+                ? Math.sign(Math.sin(now * 1.9 + (e.max ?? 1) * 1.7)) * 3.8
+                : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
           nx += (-dz / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
           nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
         }
         const r = Math.min(st.radius, 0.8);
         // ghosts drift through walls but never over ground no one could walk on (a cliff, the
         // mountain face under the chairlift, another zone, past a blockade)
-        if (ghost) { if (ghostOK(nx, nz)) { e.x = nx; e.z = nz; } }
-        else {
+        if (ghost) {
+          if (ghostOK(nx, nz)) {
+            e.x = nx;
+            e.z = nz;
+          }
+        } else {
           // arenas: if anything ever ends up wedged inside cover, slide it back out (Toby). The
           // big maps have roofs and raised ground; they keep their own unstick below.
           if (!big && blocked(blocks, e.x, e.z, r)) {
@@ -3370,7 +5081,8 @@ function World({
           const ox = e.x;
           const oz = e.z;
           // (and only steps it could walk: no hopping up a balcony edge or the tower's face)
-          const can = (fx: number, fz: number, tx: number, tz: number) => !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz);
+          const can = (fx: number, fz: number, tx: number, tz: number) =>
+            !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz);
           if (can(e.x, e.z, nx, e.z)) e.x = nx;
           if (can(e.x, e.z, e.x, nz)) e.z = nz;
           // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
@@ -3379,16 +5091,24 @@ function World({
           if (want > 1e-4 && Math.hypot(e.x - ox, e.z - oz) < want * 0.2) {
             const px = -(nz - oz);
             const pz = nx - ox;
-            const side = Math.sin(ei * 12.9898 + (performance.now() / 1500 | 0)) > 0 ? 1 : -1;
+            const side = Math.sin(ei * 12.9898 + ((performance.now() / 1500) | 0)) > 0 ? 1 : -1;
             for (const sgn of [side, -side]) {
               const sx = ox + px * sgn;
               const sz = oz + pz * sgn;
-              if (can(ox, oz, sx, sz)) { e.x = sx; e.z = sz; break; }
+              if (can(ox, oz, sx, sz)) {
+                e.x = sx;
+                e.z = sz;
+                break;
+              }
             }
           }
         }
 
-        if ((e.kind === "drifter" || e.kind === "runner") && dm < 1.3 && meleeCooldown.current <= 0) {
+        if (
+          (e.kind === "drifter" || e.kind === "runner") &&
+          dm < 1.3 &&
+          meleeCooldown.current <= 0
+        ) {
           meleeCooldown.current = 1;
           hurtTarget(target, st.dmg);
         }
@@ -3403,7 +5123,10 @@ function World({
             // only onto open, walkable ground near a target standing on it (never under a rider)
             const onGround = Math.abs(target.y - EYE - groundY(bx, bz)) < MELEE_DY;
             const sameZone = !alpineMap || alpineZone(bx, bz) === alpineZone(e.x, e.z);
-            if (onGround && sameZone && ghostOK(bx, bz) && !blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
+            if (onGround && sameZone && ghostOK(bx, bz) && !blocked(blocks, bx, bz, 0.6)) {
+              e.x = bx;
+              e.z = bz;
+            }
           }
           if (dm < 1.6 && e.cooldown <= 0) {
             e.cooldown = 1.4;
@@ -3411,7 +5134,14 @@ function World({
           }
         }
         if (e.kind === "brute" || e.kind === "boss" || e.kind === "vanguard") {
-          const reach = e.kind === "boss" ? (theme.boss.shape === "kraken" ? KRAKEN_R + 2.2 : 3.6) : e.kind === "vanguard" ? 2.6 : 2.4;
+          const reach =
+            e.kind === "boss"
+              ? theme.boss.shape === "kraken"
+                ? KRAKEN_R + 2.2
+                : 3.6
+              : e.kind === "vanguard"
+                ? 2.6
+                : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
@@ -3434,28 +5164,72 @@ function World({
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
             const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 3.2, e.z);
-            const vel = new THREE.Vector3(target.x - e.x, target.y - from.y, target.z - e.z).normalize();
+            const vel = new THREE.Vector3(
+              target.x - e.x,
+              target.y - from.y,
+              target.z - e.z,
+            ).normalize();
             from.addScaledVector(vel, 1.2);
-            fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
+            fireInto(
+              enemyBullets.current,
+              from,
+              vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8),
+              4.5,
+              st.dmg,
+              "",
+              0.36,
+            );
           }
         }
         if (spType) {
           e.shot -= delta;
-          const aim = (y0: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+          const aim = (
+            y0: number,
+            spd: number,
+            spread: number,
+            n: number,
+            dmg: number,
+            life = 3.5,
+            size = 0.2,
+          ) => {
             const y = y0 + groundY(e.x, e.z);
             const from = new THREE.Vector3(e.x, y, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = 0; s < n; s++) {
               const a = base + (n > 1 ? (s - (n - 1) / 2) * spread : 0);
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
-              fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 0.8), vel.multiplyScalar(spd), life, dmg, "", size);
+              const vel = new THREE.Vector3(
+                Math.sin(a),
+                (target.y - y) / d,
+                Math.cos(a),
+              ).normalize();
+              fireInto(
+                enemyBullets.current,
+                from.clone().addScaledVector(vel, 0.8),
+                vel.multiplyScalar(spd),
+                life,
+                dmg,
+                "",
+                size,
+              );
             }
           };
           const ready = e.shot <= 0;
-          if (spType === "stalker" && ready && d < 18) { e.shot = 2.4; aim(0.9, 16, 0.08, 3, 1, 2.5, 0.12); }
-          if ((spType === "mite") && dm < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
-          if (spType === "spore" && ready && d < 26) { e.shot = 3.2; aim(3, ENEMY_BULLET_SPEED * 0.7, 0, 1, 1, 5, 0.42); }
-          if (spType === "pyre" && ready && d < 24) { e.shot = 3; aim(1.1, 22, 0, 1, 2, 2.5, 0.34); }
+          if (spType === "stalker" && ready && d < 18) {
+            e.shot = 2.4;
+            aim(0.9, 16, 0.08, 3, 1, 2.5, 0.12);
+          }
+          if (spType === "mite" && dm < 1.2 && e.cooldown <= 0) {
+            e.cooldown = 1;
+            hurtTarget(target, 1);
+          }
+          if (spType === "spore" && ready && d < 26) {
+            e.shot = 3.2;
+            aim(3, ENEMY_BULLET_SPEED * 0.7, 0, 1, 1, 5, 0.42);
+          }
+          if (spType === "pyre" && ready && d < 24) {
+            e.shot = 3;
+            aim(1.1, 22, 0, 1, 2, 2.5, 0.34);
+          }
           if (spType === "leaper") {
             if ((e.aux ?? 0) > 0) {
               e.aux = (e.aux ?? 0) - delta;
@@ -3463,49 +5237,106 @@ function World({
               const lz = e.z + (dz / d) * 14 * delta;
               if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z)) e.x = lx;
               if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz)) e.z = lz;
-              if (dm < 1.4) { e.aux = 0; hurtTarget(target, 2); }
-            } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
+              if (dm < 1.4) {
+                e.aux = 0;
+                hurtTarget(target, 2);
+              }
+            } else if (ready && d < 10) {
+              e.shot = 4;
+              e.aux = 0.5;
+            }
           }
-          if (spType === "shinobi" && ready && d < 16) { e.shot = 2; aim(1.3, 15, 0.25, 2, 1, 2, 0.16); }
+          if (spType === "shinobi" && ready && d < 16) {
+            e.shot = 2;
+            aim(1.3, 15, 0.25, 2, 1, 2, 0.16);
+          }
           if (spType === "wyrm") {
             if ((e.aux ?? 0) > 0) {
               e.aux = (e.aux ?? 0) - delta;
-              if (e.cooldown <= 0) { e.cooldown = 0.15; aim(1.8, 20, 0, 1, 1, 2, 0.1); }
-            } else if (ready && d < 20) { e.shot = 4; e.aux = 0.6; }
+              if (e.cooldown <= 0) {
+                e.cooldown = 0.15;
+                aim(1.8, 20, 0, 1, 1, 2, 0.1);
+              }
+            } else if (ready && d < 20) {
+              e.shot = 4;
+              e.aux = 0.6;
+            }
           }
-          if (spType === "nautilus" && ready && d < 22) { e.shot = 2.8; aim(1.2, 8, 0.3, 2, 1, 4.5, 0.3); }
+          if (spType === "nautilus" && ready && d < 22) {
+            e.shot = 2.8;
+            aim(1.2, 8, 0.3, 2, 1, 4.5, 0.3);
+          }
           if (spType === "hacker" && ready) {
             // overcharge pulse: nearby enemies shake off slows, fire right away and patch up
             e.shot = 5;
             for (const o of enemies) {
               if (!o.alive || o === e || Math.hypot(o.x - e.x, o.z - e.z) > 9) continue;
-              o.cooldown = 0; o.slow = 0; o.hp = Math.min(o.max ?? o.hp, o.hp + 1);
+              o.cooldown = 0;
+              o.slow = 0;
+              o.hp = Math.min(o.max ?? o.hp, o.hp + 1);
             }
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
-          if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          if (spType === "bile" && ready && d < 9) {
+            e.shot = 2.2;
+            aim(1, 12, 0.14, 6, 1, 0.9, 0.16);
+          }
           if (spType === "desperado") desperadoTick(e, d, delta, ready, aim);
           if (spType === "skier") {
             // a fan of thrown ice picks at mid range, a pole jab up close
-            if (ready && d < 20 && d > 4) { e.shot = 2.3; aim(1.3, 17, 0.12, 3, 1, 2, 0.12); }
-            if (dm < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
+            if (ready && d < 20 && d > 4) {
+              e.shot = 2.3;
+              aim(1.3, 17, 0.12, 3, 1, 2, 0.12);
+            }
+            if (dm < 1.7 && e.cooldown <= 0) {
+              e.cooldown = 1.1;
+              hurtTarget(target, 1);
+            }
           }
           // TIDE CRAWLER: pincer snaps up close, a fan of sea-foam bubbles from mid range
-          if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 2); }
-          if (spType === "crawler" && ready && d > 5 && d < 14) { e.shot = 3.4; aim(0.6, 11, 0.22, 5, 1, 1.3, 0.18); }
+          if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) {
+            e.cooldown = 1.2;
+            hurtTarget(target, 2);
+          }
+          if (spType === "crawler" && ready && d > 5 && d < 14) {
+            e.shot = 3.4;
+            aim(0.6, 11, 0.22, 5, 1, 1.3, 0.18);
+          }
         }
         if (e.kind === "boss" && theme.boss.shape === "marshal") {
           // THE IRON MARSHAL: Gatling bursts and a lasso that drags you in
-          const aimB = (y: number, spd: number, spread: number, nb: number, dmg: number, life = 3.5, size = 0.2) => {
+          const aimB = (
+            y: number,
+            spd: number,
+            spread: number,
+            nb: number,
+            dmg: number,
+            life = 3.5,
+            size = 0.2,
+          ) => {
             const from = new THREE.Vector3(e.x + (dz / d) * 1.4, y, e.z - (dx / d) * 1.4);
             for (let s = 0; s < nb; s++) {
               const a = Math.atan2(dx, dz) + (Math.random() - 0.5) * spread * 2;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
-              fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 1.8), vel.multiplyScalar(spd), life, dmg, "", size);
+              const vel = new THREE.Vector3(
+                Math.sin(a),
+                (target.y - y) / d,
+                Math.cos(a),
+              ).normalize();
+              fireInto(
+                enemyBullets.current,
+                from.clone().addScaledVector(vel, 1.8),
+                vel.multiplyScalar(spd),
+                life,
+                dmg,
+                "",
+                size,
+              );
             }
           };
           // the lasso lands: 1 damage and a yank toward him (a shove, synced like any hit)
-          marshalTick(e, inReach ? d : Math.max(d, 3.5), dx, dz, delta, aimB, (kx, kz) => hurtTarget(target, 1, kx, kz));
+          marshalTick(e, inReach ? d : Math.max(d, 3.5), dx, dz, delta, aimB, (kx, kz) =>
+            hurtTarget(target, 1, kx, kz),
+          );
         } else if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
@@ -3514,9 +5345,21 @@ function World({
             const base = Math.atan2(dx, dz);
             for (let s = -3; s <= 3; s++) {
               const a = base + s * 0.16;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - from.y) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(
+                Math.sin(a),
+                (target.y - from.y) / d,
+                Math.cos(a),
+              ).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
-              fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
+              fireInto(
+                enemyBullets.current,
+                p,
+                vel.multiplyScalar(ENEMY_BULLET_SPEED),
+                4,
+                st.dmg - 1,
+                "",
+                0.3,
+              );
             }
           }
           // THE AVALANCHE ENGINE: every few seconds it drops the blade and ploughs straight at you
@@ -3527,7 +5370,10 @@ function World({
               const cz = e.z + (dz / d) * 10 * delta;
               if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
               if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
-              if (dm < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
+              if (dm < 3.2 && e.cooldown <= 0) {
+                e.cooldown = 1.2;
+                hurtTarget(target, 3);
+              }
             } else if (e.aux <= -1.4) e.aux = d > 5 && d < 28 ? 5 + rand() * 3 : 1;
           }
           // THE KRAKEN RIG: every few seconds its tentacles sweep a ring of shots all round
@@ -3538,7 +5384,15 @@ function World({
               for (let s = 0; s < 14; s++) {
                 const a = (s / 14) * Math.PI * 2 + rand();
                 const vel = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-                fireInto(enemyBullets.current, new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + groundY(e.x, e.z), e.z + vel.z * 2.6), vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 3.2, 1, "", 0.26);
+                fireInto(
+                  enemyBullets.current,
+                  new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + groundY(e.x, e.z), e.z + vel.z * 2.6),
+                  vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8),
+                  3.2,
+                  1,
+                  "",
+                  0.26,
+                );
               }
             }
           }
@@ -3555,8 +5409,12 @@ function World({
       if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
       grid.forEach((cell) => (cell.length = 0));
       const CELL = 2.5;
-      const keyOf = (x: number, z: number) => Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
-      const bodyR = (e: Enemy) => (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1));
+      const keyOf = (x: number, z: number) =>
+        Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
+      const bodyR = (e: Enemy) =>
+        e.kind === "boss" && theme.boss.shape === "kraken"
+          ? KRAKEN_R
+          : STATS[e.kind].radius * (e.elite ? 1.6 : 1);
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive || FLYERS.has(e.kind)) continue;
@@ -3569,8 +5427,18 @@ function World({
         const rr = Math.min(STATS[e.kind].radius, 0.8);
         const ghost = e.kind === "specter";
         // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
-        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)) e.x += px;
-        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)) e.z += pz;
+        if (
+          ghost
+            ? ghostOK(e.x + px, e.z)
+            : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)
+        )
+          e.x += px;
+        if (
+          ghost
+            ? ghostOK(e.x, e.z + pz)
+            : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)
+        )
+          e.z += pz;
       };
       for (let ei = 0; ei < enemies.length; ei++) {
         const a = enemies[ei]!;
@@ -3645,7 +5513,16 @@ function World({
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
-        const fs = fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        const fs = fireInto(
+          bullets.current,
+          b.pos,
+          v,
+          0.45,
+          Math.max(1, Math.round(b.damage / 2)),
+          b.color,
+          b.size * 0.45,
+          { cluster: 0 },
+        );
         if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
       }
     };
@@ -3692,7 +5569,13 @@ function World({
               const rz = b.pos.z - e.z;
               const fwd = rx * fx + rz * fz;
               const lat = rx * fz - rz * fx;
-              if (fwd > 0.2 && fwd < 1.6 && Math.abs(lat) < 1.15 && b.pos.y - groundY(e.x, e.z) < 2.5 && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
+              if (
+                fwd > 0.2 &&
+                fwd < 1.6 &&
+                Math.abs(lat) < 1.15 &&
+                b.pos.y - groundY(e.x, e.z) < 2.5 &&
+                shieldBlocks(e, b.vel.x, b.vel.z, true)
+              ) {
                 if (isH) drainShield(e, b.damage);
                 else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
                 burst(b);
@@ -3703,7 +5586,11 @@ function World({
             }
             const [lo, hi] = hitBand(e.kind);
             const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
+            if (
+              Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 &&
+              by < hi &&
+              by > lo
+            ) {
               if (b.blast > 0 && b.blastMul >= 1) {
                 // BOOMER: the shell detonates on the robot; the blast does all the damage
                 fxHit(i, b, e);
@@ -3712,10 +5599,16 @@ function World({
                 break;
               }
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
-              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              const dmg =
+                e.kind === "vanguard" && b.pierce <= 0
+                  ? Math.max(1, Math.round(b.damage * 0.34))
+                  : b.damage;
               // executioner / shredder / bounty are judged on the host (it has the true health)
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
-                direct: true, shred: !!(b.mods & M_SHRED), exec: !!(b.mods & M_EXEC), bounty: !!(b.mods & M_BOUNTY),
+                direct: true,
+                shred: !!(b.mods & M_SHRED),
+                exec: !!(b.mods & M_EXEC),
+                bounty: !!(b.mods & M_BOUNTY),
               });
               fxHit(i, b, e);
               onStat("hit", 1);
@@ -3758,9 +5651,7 @@ function World({
           fxStyle(i, m, b); // per-weapon round (projectiles.tsx)
         }
       }
-
     });
-
 
     // enemy bullets (host simulates them for everyone)
     if (isH) {
@@ -3773,7 +5664,6 @@ function World({
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
             takeHit(b.damage);
-
           }
         }
         if (m) {
@@ -3791,11 +5681,22 @@ function World({
           for (const en of enemies) e.push(...packEnemy(en, KINDS));
           const b: number[] = [];
           for (const bu of enemyBullets.current) {
-            if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
+            if (bu.active)
+              b.push(
+                Math.round(bu.pos.x * 100) / 100,
+                Math.round(bu.pos.y * 100) / 100,
+                Math.round(bu.pos.z * 100) / 100,
+              );
           }
           const mk: number[] = [];
           pending.current.forEach((pd, i) => {
-            if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
+            if (pd && pd.t <= MARK_TIME)
+              mk.push(
+                i,
+                Math.round(pd.x * 100) / 100,
+                Math.round(pd.z * 100) / 100,
+                Math.round(pd.t * 100) / 100,
+              );
           });
           const tr = traffic.current.encode?.();
           const al = encodeAlpine();
@@ -3803,21 +5704,33 @@ function World({
           const rn = encodeWeather();
           const od = packOrds(ords.current);
           n.broadcast({
-            type: "snap", e, b, mk,
+            type: "snap",
+            e,
+            b,
+            mk,
             tk: Math.round(waveStage(tod.wave, tod.progress) * 1000), // the host's time of day
             ...(od.length ? { od } : {}),
             ...(tr ? { tr } : {}),
             ...(al ? { al } : {}),
             ...(ac ? { ac } : {}),
             ...(rn !== null ? { rn } : {}),
-            p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
+            p: [
+              pickup.current.x,
+              pickup.current.z,
+              pickup.current.active ? 1 : 0,
+              ORDER.indexOf(pickup.current.gun),
+            ],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
-            c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
+            c: [
+              crate.current.x,
+              crate.current.z,
+              crate.current.active ? 1 : 0,
+              CRATE_KINDS.indexOf(crate.current.kind),
+            ],
           });
         }
       }
     }
-
   });
 
   // runs after the main frame so the gun uses this frame's final camera pose
@@ -3840,7 +5753,9 @@ function World({
     v.quaternion.copy(cam.quaternion);
     const sway = bobAmt.current;
     v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
-    v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
+    v.translateY(
+      -0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03,
+    );
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
     sprintPose(v); // lowered while sprinting, raised for a tactical sprint
@@ -3859,7 +5774,12 @@ function World({
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
-      {!big && <SkyDome sunset={arenaSunsetSky(theme.name, theme.sky, ARENA_SUN.sunset)} night={arenaNight} />}
+      {!big && (
+        <SkyDome
+          sunset={arenaSunsetSky(theme.name, theme.sky, ARENA_SUN.sunset)}
+          night={arenaNight}
+        />
+      )}
       {!alpineMap && (
         <NightStars
           radius={big ? 900 : 90}
@@ -3890,6 +5810,7 @@ function World({
         <>
           <WesternScene layout={western} time={time} />
           <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
+          <WesternRiders layout={western} seed={seed} link={traffic} />
           <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
           {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
@@ -3936,10 +5857,38 @@ function World({
             const p = besides(x, z);
             const hp = Math.max(1, Math.round(STATS[kind].hp * hpMul));
             Object.assign(e, {
-              kind, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false,
-              cooldown: 1 + rand() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0,
-              vis: 0, st: 0, t1: 0, ax: undefined, az: undefined, side: undefined, plan: 0, shots: 0,
-              stuck: 0, gd0: 99, detour: 0, shield: 0, shieldMax: 0, shieldT: 0, blockT: 0, hitT: 0, tgt: -1,
+              kind,
+              x: p.x,
+              z: p.z,
+              hp,
+              max: hp,
+              shredUntil: 0,
+              aux: 0,
+              alive: false,
+              cooldown: 1 + rand() * 2,
+              swing: 0,
+              flash: 0,
+              shot: 2,
+              slow: 0,
+              burn: 0,
+              burnTick: 0,
+              vis: 0,
+              st: 0,
+              t1: 0,
+              ax: undefined,
+              az: undefined,
+              side: undefined,
+              plan: 0,
+              shots: 0,
+              stuck: 0,
+              gd0: 99,
+              detour: 0,
+              shield: 0,
+              shieldMax: 0,
+              shieldT: 0,
+              blockT: 0,
+              hitT: 0,
+              tgt: -1,
             });
             e.elite = 0;
             packLead.current[i] = -1;
@@ -3954,7 +5903,13 @@ function World({
         <EnemyMesh key={i} data={e} theme={theme} all={enemies} />
       ))}
       {enemies.map((_, i) => (
-        <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
+        <group
+          key={`x${i}`}
+          ref={(g) => {
+            markMeshes.current[i] = g;
+          }}
+          visible={false}
+        >
           <mesh position-y={0.04} rotation-x={-Math.PI / 2} rotation-z={Math.PI / 4}>
             <planeGeometry args={[2, 0.4]} />
             <meshBasicMaterial color="#e8221a" fog={false} />
@@ -3968,26 +5923,61 @@ function World({
       {/* ability shockwave ring (unit radius, scaled per effect) */}
       <mesh ref={ringMesh} visible={false} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[0.86, 1, 48]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.8} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color="#ffffff"
+          transparent
+          opacity={0.8}
+          fog={false}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       {/* chain storm arcs */}
       {Array.from({ length: 6 }, (_, i) => (
-        <mesh key={`bolt${i}`} ref={(m) => { boltMeshes.current[i] = m; }} visible={false}>
+        <mesh
+          key={`bolt${i}`}
+          ref={(m) => {
+            boltMeshes.current[i] = m;
+          }}
+          visible={false}
+        >
           <cylinderGeometry args={[0.05, 0.05, 1, 3, 1, true]} />
-          <meshBasicMaterial color="#9fe8ff" transparent opacity={0.9} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+          <meshBasicMaterial
+            color="#9fe8ff"
+            transparent
+            opacity={0.9}
+            fog={false}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
         </mesh>
       ))}
       {/* orbital strike: ground marker + falling beam */}
       <mesh ref={strikeRing} visible={false} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[0.72, 1, 6]} />
-        <meshBasicMaterial color="#ff5a28" transparent opacity={0.7} fog={false} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          color="#ff5a28"
+          transparent
+          opacity={0.7}
+          fog={false}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
       </mesh>
       <mesh ref={strikeBeam} visible={false}>
         <cylinderGeometry args={[4.4, 2.6, 44, 20, 1, true]} />
-        <meshBasicMaterial color="#ffd77a" transparent opacity={0.9} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+        <meshBasicMaterial
+          color="#ffd77a"
+          transparent
+          opacity={0.9}
+          fog={false}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+        />
       </mesh>
       <group ref={pickupMesh} visible={false}>
-
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
           <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
@@ -3997,26 +5987,71 @@ function World({
         </group>
       </group>
       <group ref={healMesh} visible={false}>
-        <mesh><boxGeometry args={[0.7, 0.22, 0.22]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
-        <mesh><boxGeometry args={[0.22, 0.7, 0.22]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
-        <mesh position-y={-0.8} rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.65, 20]} /><meshBasicMaterial color="#e8322a" fog={false} /></mesh>
+        <mesh>
+          <boxGeometry args={[0.7, 0.22, 0.22]} />
+          <meshBasicMaterial color="#e8322a" fog={false} />
+        </mesh>
+        <mesh>
+          <boxGeometry args={[0.22, 0.7, 0.22]} />
+          <meshBasicMaterial color="#e8322a" fog={false} />
+        </mesh>
+        <mesh position-y={-0.8} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.5, 0.65, 20]} />
+          <meshBasicMaterial color="#e8322a" fog={false} />
+        </mesh>
       </group>
       <group ref={crateMesh} visible={false}>
-        <mesh><boxGeometry args={[0.8, 0.8, 0.8]} /><meshStandardMaterial color="#2a2a2a" /></mesh>
-        <mesh scale={1.02}><boxGeometry args={[0.82, 0.3, 0.82]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
-        <mesh position-y={-0.6} rotation-x={-Math.PI / 2}><ringGeometry args={[0.6, 0.78, 20]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
+        <mesh>
+          <boxGeometry args={[0.8, 0.8, 0.8]} />
+          <meshStandardMaterial color="#2a2a2a" />
+        </mesh>
+        <mesh scale={1.02}>
+          <boxGeometry args={[0.82, 0.3, 0.82]} />
+          <meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} />
+        </mesh>
+        <mesh position-y={-0.6} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[0.6, 0.78, 20]} />
+          <meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} />
+        </mesh>
       </group>
       {Array.from({ length: 6 }, (_, i) => (
-        <group key={`turret${i}`} ref={(g) => { turretMeshes.current[i] = g; }} visible={false}>
-          <mesh position-y={0.35}><cylinderGeometry args={[0.28, 0.36, 0.7, 8]} /><meshStandardMaterial color="#39424d" /></mesh>
-          <mesh position-y={0.85}><sphereGeometry args={[0.28, 10, 8]} /><meshStandardMaterial color="#1f2731" /></mesh>
-          <mesh position={[0, 0.9, 0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.8, 8]} /><meshBasicMaterial color="#4fe3ff" fog={false} /></mesh>
+        <group
+          key={`turret${i}`}
+          ref={(g) => {
+            turretMeshes.current[i] = g;
+          }}
+          visible={false}
+        >
+          <mesh position-y={0.35}>
+            <cylinderGeometry args={[0.28, 0.36, 0.7, 8]} />
+            <meshStandardMaterial color="#39424d" />
+          </mesh>
+          <mesh position-y={0.85}>
+            <sphereGeometry args={[0.28, 10, 8]} />
+            <meshStandardMaterial color="#1f2731" />
+          </mesh>
+          <mesh position={[0, 0.9, 0.45]} rotation-x={Math.PI / 2}>
+            <cylinderGeometry args={[0.07, 0.07, 0.8, 8]} />
+            <meshBasicMaterial color="#4fe3ff" fog={false} />
+          </mesh>
         </group>
       ))}
       {Array.from({ length: 6 }, (_, i) => (
-        <group key={`mine${i}`} ref={(g) => { mineMeshes.current[i] = g; }} visible={false}>
-          <mesh rotation-x={-Math.PI / 2}><cylinderGeometry args={[0.35, 0.35, 0.12, 10]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
-          <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
+        <group
+          key={`mine${i}`}
+          ref={(g) => {
+            mineMeshes.current[i] = g;
+          }}
+          visible={false}
+        >
+          <mesh rotation-x={-Math.PI / 2}>
+            <cylinderGeometry args={[0.35, 0.35, 0.12, 10]} />
+            <meshBasicMaterial color="#9fe8ff" fog={false} />
+          </mesh>
+          <mesh rotation-x={-Math.PI / 2}>
+            <ringGeometry args={[0.5, 0.6, 18]} />
+            <meshBasicMaterial color="#9fe8ff" fog={false} />
+          </mesh>
         </group>
       ))}
       <RemoteDeployables deps={remoteDeps} enemies={enemies} />
@@ -4117,7 +6152,8 @@ export function Game() {
       pinTime(null);
       const inMatch = phase.current.started && !phase.current.ended;
       toggleTimeLock(inMatch);
-      if (inMatch) showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
+      if (inMatch)
+        showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -4137,7 +6173,7 @@ export function Game() {
   const [crateMsg, setCrateMsg] = useState<string | null>(null);
   const [deploys, setDeploys] = useState({ turret: 0, mines: 0 });
 
-  const [ammoLeft, setAmmoLeft] = useState(0);
+  const [ammoLeft, setAmmoLeft] = useState(GUNS.pistol.ammo); // (not 0: the HUD showed "PISTOL 0" until the first wave)
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -4190,7 +6226,9 @@ export function Game() {
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
   const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
-  const [squad, setSquad] = useState<Record<number, { kills: number; dmg: number; acc: number; shards: number; taken: number }>>({});
+  const [squad, setSquad] = useState<
+    Record<number, { kills: number; dmg: number; acc: number; shards: number; taken: number }>
+  >({});
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
@@ -4201,7 +6239,6 @@ export function Game() {
   statsRef.current = derive(perks, clsMods);
 
   const maxHp = statsRef.current.maxHp;
-
 
   // ---------- co-op room ----------
   const [net, setNet] = useState<NetHandle | null>(null);
@@ -4269,8 +6306,14 @@ export function Game() {
       setBossHp(0);
       return;
     }
-    if (m.type === "over") { setAllDown(true); return; }
-    if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "over") {
+      setAllDown(true);
+      return;
+    }
+    if (m.type === "event") {
+      setEventMsg(String(m.name));
+      return;
+    }
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
@@ -4282,7 +6325,16 @@ export function Game() {
 
     if (m.type === "statline") {
       const num = Number(m.num);
-      setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
+      setSquad((q) => ({
+        ...q,
+        [num]: {
+          kills: Number(m.kills),
+          dmg: Number(m.dmg),
+          acc: Number(m.acc),
+          shards: Number(m.shards),
+          taken: Number(m.taken),
+        },
+      }));
       return;
     }
     if (m.type === "pause") {
@@ -4290,24 +6342,36 @@ export function Game() {
       if (document.pointerLockElement) document.exitPointerLock();
       return;
     }
-    if (m.type === "resume") { startRef.current(true); return; }
-    if (m.type === "begin") { startRef.current(true); return; }
+    if (m.type === "resume") {
+      startRef.current(true);
+      return;
+    }
+    if (m.type === "begin") {
+      startRef.current(true);
+      return;
+    }
     if (m.type === "joined") {
       const id = String(m.from);
       if (!slots.current[id]) {
         const used = new Set(Object.values(slots.current));
-        for (let n = 2; n <= 4; n++) if (!used.has(n)) { slots.current[id] = n; break; }
+        for (let n = 2; n <= 4; n++)
+          if (!used.has(n)) {
+            slots.current[id] = n;
+            break;
+          }
       }
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
       publishRoster();
       // a match is already running: the newcomer drops straight into it
-      if (phase.current.started && !phase.current.ended) netHolder.current?.sendTo(id, { type: "begin" });
+      if (phase.current.started && !phase.current.ended)
+        netHolder.current?.sendTo(id, { type: "begin" });
     }
     if (m.type === "left") {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
+    if (m.type === "status" && m.banner)
+      setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -4315,7 +6379,9 @@ export function Game() {
     isHost: () => !netHolder.current || netHolder.current.role === "host",
     numOf: (id: string) => (id === "host" ? 1 : (slots.current[id] ?? 2)),
     onRevived: () => {
-      setHealth((h) => (h > 0 ? h : Math.max(1, Math.round(derive(perksRef.current).maxHp * REVIVE_HP))));
+      setHealth((h) =>
+        h > 0 ? h : Math.max(1, Math.round(derive(perksRef.current).maxHp * REVIVE_HP)),
+      );
     },
     onBleedOut: () => setBledOut(true),
   };
@@ -4340,7 +6406,10 @@ export function Game() {
 
   const startJoin = async () => {
     const code = joinCode.trim().toUpperCase();
-    if (code.length < 4) { setNetError("Enter the 4-letter code."); return; }
+    if (code.length < 4) {
+      setNetError("Enter the 4-letter code.");
+      return;
+    }
     setNetError("");
     setJoining(true);
     try {
@@ -4393,7 +6462,12 @@ export function Game() {
     const id = window.setInterval(() => {
       const list = [...remotes.current.values()].filter((r) => performance.now() - r.last < 5000);
       // nobody left standing, including nobody left at all (the teammates quit): the run ends
-      if (phase.current.started && !phase.current.ended && healthRef.current <= 0 && list.every((r) => r.hp <= 0)) {
+      if (
+        phase.current.started &&
+        !phase.current.ended &&
+        healthRef.current <= 0 &&
+        list.every((r) => r.hp <= 0)
+      ) {
         net.broadcast({ type: "over" });
         setAllDown(true);
       }
@@ -4404,7 +6478,11 @@ export function Game() {
   useEffect(() => {
     try {
       // (the key was "dustfield-settings" before the Scrapfall rename: carry those over)
-      const v = JSON.parse(localStorage.getItem("scrapfall-settings") ?? localStorage.getItem("dustfield-settings") ?? "{}");
+      const v = JSON.parse(
+        localStorage.getItem("scrapfall-settings") ??
+          localStorage.getItem("dustfield-settings") ??
+          "{}",
+      );
       if (typeof v.fov === "number") setFov(v.fov);
       if (typeof v.sensX === "number") setSensX(v.sensX);
       else if (typeof v.sens === "number") setSensX(v.sens);
@@ -4413,10 +6491,15 @@ export function Game() {
       if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
       if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
       if (typeof v.ambVol === "number") setAmbVol(v.ambVol);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
   useEffect(() => {
-    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+    localStorage.setItem(
+      "scrapfall-settings",
+      JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }),
+    );
   }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
@@ -4466,11 +6549,19 @@ export function Game() {
     // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
     // Gulch's boardwalks, balconies and riverbed, or flat
     setTerrain(
-      alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : level.western ? level.western.terrain : null,
+      alp
+        ? alp.terrain
+        : isBeach(level.city)
+          ? beachTerrain(level.city)
+          : level.western
+            ? level.western.terrain
+            : null,
     );
     // building access (elevators, stairwells, walkable roofs): Vice Heights today. Solo only
     // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
-    const accessOn = typeof window === "undefined" || new URLSearchParams(window.location.search).get("access") !== "0";
+    const accessOn =
+      typeof window === "undefined" ||
+      new URLSearchParams(window.location.search).get("access") !== "0";
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
     // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
     // the access adapters keep their doors clear of them
@@ -4502,6 +6593,8 @@ export function Game() {
       (x, z) => blocked(level.blocks, x, z, 0.35),
     );
     setPosts(mapPosts(level.city, level.western ?? null));
+    // Dry Gulch's walk-in buildings: their thin walls, for the enemies' route planner
+    setNavWalls(level.western?.navWalls ?? null, level.western?.navDoors ?? null);
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
@@ -4528,7 +6621,15 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city, western: level.western, gaps };
+    return {
+      blocks: level.blocks,
+      enemies: list,
+      rand: level.rand,
+      theme,
+      city: level.city,
+      western: level.western,
+      gaps,
+    };
   }, [seed, coop, mapChoice]);
   // the HUD radar for the big maps (solo dims everything beyond the blockades)
   const miniSrc = useMemo(
@@ -4543,7 +6644,6 @@ export function Game() {
     [city, western, blocks],
   );
 
-
   useEffect(() => {
     // pausing puts the whole squad on hold
     // closing the tab releases the pointer lock too: that must not pause everyone else
@@ -4553,7 +6653,8 @@ export function Game() {
     window.addEventListener("pagehide", onUnload);
     const pauseAll = () => {
       if (unloading || document.visibilityState === "hidden") return;
-      if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+      if (phase.current.started && !phase.current.ended)
+        netHolder.current?.broadcast({ type: "pause" });
     };
     const wasLocked = { v: false };
     const onChange = () => {
@@ -4613,7 +6714,11 @@ export function Game() {
     if (health > 0) setBledOut(false);
   }, [health]);
   const selfRef = useRef({ hp: 1, bledOut: false, playing: false });
-  selfRef.current = { hp: health, bledOut, playing: started && locked && !(multiplayer ? allDown : dead) };
+  selfRef.current = {
+    hp: health,
+    bledOut,
+    playing: started && locked && !(multiplayer ? allDown : dead),
+  };
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
@@ -4648,8 +6753,13 @@ export function Game() {
     if (!ended) return;
     const r = run.current;
     netHolder.current?.broadcast({
-      type: "statline", num: myNum, kills: score, dmg: Math.round(r.dmg),
-      acc: r.shots ? Math.round((r.hits / r.shots) * 100) : 0, shards: r.shards, taken: r.taken,
+      type: "statline",
+      num: myNum,
+      kills: score,
+      dmg: Math.round(r.dmg),
+      acc: r.shots ? Math.round((r.hits / r.shots) * 100) : 0,
+      shards: r.shards,
+      taken: r.taken,
     });
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -4687,14 +6797,24 @@ export function Game() {
     setLocked(true);
     clearControls(); // no jump / sprint press queued from the menus
     // the whole squad starts and resumes together
-    if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
+    if (!fromNet && net && (resuming || isHost))
+      net.broadcast({ type: resuming ? "resume" : "begin" });
     if (touchUi) {
       resetTouchInput();
       try {
-        const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+        const el = document.documentElement as HTMLElement & {
+          webkitRequestFullscreen?: () => void;
+        };
         if (!document.fullscreenElement) {
-          const r = el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.();
-          (r as Promise<void> | undefined)?.then?.(() => (screen.orientation as unknown as { lock?: (o: string) => Promise<void> }).lock?.("landscape").catch(() => {})).catch?.(() => {});
+          const r =
+            el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.();
+          (r as Promise<void> | undefined)
+            ?.then?.(() =>
+              (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })
+                .lock?.("landscape")
+                .catch(() => {}),
+            )
+            .catch?.(() => {});
         }
       } catch {
         /* fullscreen not supported (iPhone Safari) */
@@ -4719,7 +6839,13 @@ export function Game() {
   // ---- shop: open during the break after a cleared wave ----
   // NOTE: the break itself does not depend on pointer lock, so pausing and
   // resuming keeps the same cards and remembers the ones already bought.
-  const shopBreak = started && !ended && !dead && status.remaining === 0 && fought === status.wave && status.wave < WAVES.length;
+  const shopBreak =
+    started &&
+    !ended &&
+    !dead &&
+    status.remaining === 0 &&
+    fought === status.wave &&
+    status.wave < WAVES.length;
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
@@ -4735,7 +6861,8 @@ export function Game() {
   };
   const freeRerolls = statsRef.current.freeRerolls;
   const freeLeft = Math.max(0, freeRerolls - rerolls);
-  const rerollCost = freeLeft > 0 ? 0 : rerollBase(status.wave) * Math.pow(2, Math.max(0, rerolls - freeRerolls));
+  const rerollCost =
+    freeLeft > 0 ? 0 : rerollBase(status.wave) * Math.pow(2, Math.max(0, rerolls - freeRerolls));
   const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
@@ -4752,13 +6879,18 @@ export function Game() {
     setShopLeft(15);
     setRerolls(0);
     // the countdown holds while the game is paused
-    const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
+    const id = setInterval(() => {
+      if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1));
+    }, 1000);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
   const rerollRef = useRef<() => void>(() => {});
   rerollRef.current = () => {
     if (!shopOpen) return;
-    if (shards < rerollCost) { playSfx("deny"); return; }
+    if (shards < rerollCost) {
+      playSfx("deny");
+      return;
+    }
     setShards((s) => s - rerollCost);
     setRerolls((r) => r + 1);
     setBought([]);
@@ -4769,13 +6901,21 @@ export function Game() {
   const reviveNearbyRef = useRef<() => boolean>(() => false);
   reviveNearbyRef.current = () =>
     [...remotes.current.values()].some(
-      (r) => downTable.get(r.id)?.st === DOWN && Math.hypot(r.x - squadMe.x, r.z - squadMe.z) <= REVIVE_RANGE,
+      (r) =>
+        downTable.get(r.id)?.st === DOWN &&
+        Math.hypot(r.x - squadMe.x, r.z - squadMe.z) <= REVIVE_RANGE,
     );
   const patchRef = useRef<() => void>(() => {});
   patchRef.current = () => {
     if (!shopOpen) return;
-    if (shards < PATCH_COST) { playSfx("deny"); return; }
-    if (health >= maxHp) { playSfx("deny"); return; }
+    if (shards < PATCH_COST) {
+      playSfx("deny");
+      return;
+    }
+    if (health >= maxHp) {
+      playSfx("deny");
+      return;
+    }
     setShards((s) => s - PATCH_COST);
     setHealth((h) => Math.min(maxHp, h + 5));
     playSfx("buy");
@@ -4785,11 +6925,17 @@ export function Game() {
     const id = offers[i];
     if (!shopOpen || !id || bought.includes(i)) return;
     const cost = perkCost(id, perks[id]);
-    if (shards < cost) { playSfx("deny"); return; }
+    if (shards < cost) {
+      playSfx("deny");
+      return;
+    }
     setShards((s) => s - cost);
     setBought((b) => [...b, i]);
     playSfx("buy");
-    if (id === "heal") { setHealth((h) => Math.min(maxHp, h + 5)); return; }
+    if (id === "heal") {
+      setHealth((h) => Math.min(maxHp, h + 5));
+      return;
+    }
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
     if (id === "maxhp") setHealth((h) => h + 2);
   };
@@ -4803,20 +6949,24 @@ export function Game() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-
   }, []);
 
   // regen perk
   const regenRate = statsRef.current.regen;
   useEffect(() => {
     if (!regenRate || !started || !locked || ended || dead) return;
-    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / regenRate);
+    const id = window.setInterval(
+      () => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)),
+      14000 / regenRate,
+    );
     return () => window.clearInterval(id);
   }, [regenRate, started, locked, ended, dead, maxHp]);
 
   // soundtrack: Toby's menu march plays on the menus (muffled); the map's track opens up in
   // combat, and the background soundscape plays (and pauses) with the match
-  useEffect(() => { hookAudioUnlock(); }, []);
+  useEffect(() => {
+    hookAudioUnlock();
+  }, []);
   const inCombat = started && locked && !ended;
   useEffect(() => {
     setMusicMenu(!inCombat);
@@ -4825,7 +6975,10 @@ export function Game() {
   }, [inCombat]);
   // if the browser blocked sound until now, the next click/keypress starts it
   useEffect(() => {
-    const retry = () => { initAudio(); startMusic(); };
+    const retry = () => {
+      initAudio();
+      startMusic();
+    };
     retry();
     window.addEventListener("pointerdown", retry);
     window.addEventListener("keydown", retry);
@@ -4845,28 +6998,46 @@ export function Game() {
     setAmbienceHazard(boss);
   }, [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name, layoutOf(theme)), [theme]);
-  useEffect(() => setAmbienceScene(theme.name, layoutOf(theme), city ?? western), [theme, city, western]);
+  useEffect(
+    () => setAmbienceScene(theme.name, layoutOf(theme), city ?? western),
+    [theme, city, western],
+  );
   useEffect(() => setAmbienceTime(time), [time]);
   useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
   // the time of day runs with the match; a new arena opens straight onto its wave-1 sunset
-  useEffect(() => { tod.playing = started; }, [started]);
-  useEffect(() => { resetMatchTime(); tod.snap = true; resetSquad(); setBledOut(false); }, [seed]);
+  useEffect(() => {
+    tod.playing = started;
+  }, [started]);
+  useEffect(() => {
+    resetMatchTime();
+    tod.snap = true;
+    resetSquad();
+    setBledOut(false);
+  }, [seed]);
 
   // HUD status lists
   const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
-  const activePerks = PERK_IDS.filter((id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0)
+  const activePerks = PERK_IDS.filter(
+    (id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0,
+  )
     .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
     .filter((p): p is { id: PerkId; label: string } => p.label !== null);
 
-
-
   return (
-    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
+    <div
+      ref={wrapRef}
+      className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none"
+    >
       {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
       <PadLayer menus={!locked || ended} />
-      <Canvas shadows="percentage" dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas
+        shadows="percentage"
+        dpr={[1, 1.6]}
+        gl={{ powerPreference: "high-performance", antialias: true }}
+        camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}
+      >
         <World
           blocks={blocks}
           enemies={enemies}
@@ -4885,7 +7056,8 @@ export function Game() {
             setStatus({ wave, remaining, won });
             if (showBanner) {
               setBanner(true);
-              if (perksRef.current.mend > 0 && wave > 1) setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
+              if (perksRef.current.mend > 0 && wave > 1)
+                setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
               if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
             }
           }}
@@ -4911,7 +7083,10 @@ export function Game() {
           slots={slots}
           stats={statsRef}
           onShard={(v) => {
-            const gain = Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)));
+            const gain = Math.max(
+              1,
+              Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)),
+            );
             run.current.shards += gain;
             setShards((s) => s + gain);
             playSfx("shard");
@@ -4932,7 +7107,9 @@ export function Game() {
           seed={seed}
           time={time}
           ability={ability}
-          onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
+          onAbilityCd={(left, max) =>
+            setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))
+          }
           onStat={(k, n) => {
             const r = run.current;
             if (k === "shot") r.shots += n;
@@ -4945,14 +7122,11 @@ export function Game() {
           downed={downed}
           pingWorld={pingWorld}
 
-
-
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
           onInv={setInv}
-
         />
         <SquadDriver
           net={net}
@@ -4965,7 +7139,12 @@ export function Game() {
         />
         <AmbienceListener />
       </Canvas>
-      <HudOverlay remotes={remotes} active={started && locked && !ended} coop={multiplayer} numOf={squadCb.numOf} />
+      <HudOverlay
+        remotes={remotes}
+        active={started && locked && !ended}
+        coop={multiplayer}
+        numOf={squadCb.numOf}
+      />
 
       {hurtFlash > 0 && (
         <div
@@ -4987,8 +7166,6 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               KILLS {score}
             </div>
-
-
           </div>
           <div className={`flex flex-col items-end gap-2`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
@@ -4998,37 +7175,54 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
-        {multiplayer && locked && !ended && (
-          <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
-            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}</div>
-            {[...remotes.current.values()].map((r) => (
-              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
-                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
-                {r.hp > 0 ? (
-                  <span>
-                    {/* (a class can lift max health past 10: Vanguard has 16) */}
-                    {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
-                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
-                  </span>
-                ) : (
-                  <span className="text-[#b3261e]">DOWN</span>
-                )}
+            {multiplayer && locked && !ended && (
+              <div
+                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}
+              >
+                <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">
+                  ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
+                </div>
+                {[...remotes.current.values()].map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1"
+                  >
+                    <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                    <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
+                    {r.hp > 0 ? (
+                      <span>
+                        {/* (a class can lift max health past 10: Vanguard has 16) */}
+                        {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
+                        <span className="opacity-30">
+                          {"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-[#b3261e]">DOWN</span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
           </div>
         </div>
 
-        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
+        <div
+          className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}
+        >
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
             return (
               <div
                 key={slot.w}
-                onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
+                onPointerDown={
+                  touchUi
+                    ? () => {
+                        touchInput.pick = slot.w;
+                      }
+                    : undefined
+                }
                 className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
@@ -5040,14 +7234,15 @@ export function Game() {
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
-
-
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
                 {slot.w === "pistol" && (
                   <div className="mt-0.5 flex justify-center gap-1">
                     {Array.from({ length: MOD_SLOTS }, (_, k) => (
-                      <span key={k} className={`h-1.5 w-1.5 rounded-full border border-[#2b2118] ${k < modsEquipped(perks) ? "bg-[#2b2118]" : ""}`} />
+                      <span
+                        key={k}
+                        className={`h-1.5 w-1.5 rounded-full border border-[#2b2118] ${k < modsEquipped(perks) ? "bg-[#2b2118]" : ""}`}
+                      />
                     ))}
                   </div>
                 )}
@@ -5063,10 +7258,12 @@ export function Game() {
 
         {bossHp > 0 && locked && !ended && (
           <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
-
             <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
-              <div className="h-full bg-[#b3261e]" style={{ width: `${Math.min(100, (bossHp / BOSS_HP) * 100)}%` }} />
+              <div
+                className="h-full bg-[#b3261e]"
+                style={{ width: `${Math.min(100, (bossHp / BOSS_HP) * 100)}%` }}
+              />
             </div>
           </div>
         )}
@@ -5075,7 +7272,9 @@ export function Game() {
             {status.wave === WAVES.length ? (
               <>
                 {theme.boss.name}
-                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">{theme.hazard.name}</div>
+                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">
+                  {theme.hazard.name}
+                </div>
               </>
             ) : (
               `WAVE ${status.wave}`
@@ -5085,7 +7284,14 @@ export function Game() {
 
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · {dev.kind === "pad" ? <><KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP</> : <>PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}</>}
+            {GUNS[weapon].name} ACQUIRED ·{" "}
+            {dev.kind === "pad" ? (
+              <>
+                <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP
+              </>
+            ) : (
+              <>PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}</>
+            )}
           </div>
         )}
         {crateMsg && locked && !ended && (
@@ -5094,12 +7300,22 @@ export function Game() {
           </div>
         )}
         {locked && !ended && (
-          <SprintMeter className={touchUi ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75" : "absolute bottom-[3.9rem] left-5"} />
+          <SprintMeter
+            className={
+              touchUi
+                ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
+                : "absolute bottom-[3.9rem] left-5"
+            }
+          />
         )}
         {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
             [<KeyHint action="ability" />] {ABILITIES[ability].name} ·{" "}
-            {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
+            {abilCd.left > 0 ? (
+              <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
+            ) : (
+              <b>READY</b>
+            )}
           </div>
         )}
 
@@ -5117,7 +7333,14 @@ export function Game() {
         {miniSrc && started && !ended && (
           // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
           // list sits under the shards, so a smaller map sits just left of the buttons
-          <div data-minimap className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
+          <div
+            data-minimap
+            className={
+              touchUi
+                ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]"
+                : "absolute bottom-5 right-5"
+            }
+          >
             <Minimap
               src={miniSrc}
               feed={mapFeed}
@@ -5130,36 +7353,52 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div data-pad-shop className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
+        <div
+          data-pad-shop
+          className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}
+        >
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
-            {dev.kind === "pad" && <> · <KeyHint action="shopPick" /> PICK · <KeyHint action="shopBuy" /> BUY</>}
+            {dev.kind === "pad" && (
+              <>
+                {" "}
+                · <KeyHint action="shopPick" /> PICK · <KeyHint action="shopBuy" /> BUY
+              </>
+            )}
           </div>
           <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
             <button
               onClick={() => patchRef.current()}
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
+                V
+              </span>
               <span className="font-bold tracking-widest">FIELD DRESSING</span>
-              <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
+              <span className="opacity-60">
+                +5 HP · {health}/{maxHp}
+              </span>
               <span className="font-bold">◆ {PATCH_COST}</span>
             </button>
             <button
               onClick={() => rerollRef.current()}
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
+                R
+              </span>
               <span className="font-bold tracking-widest">REROLL</span>
               <span className="opacity-60">
-                {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
+                {freeLeft > 0
+                  ? `${freeLeft} FREE LEFT`
+                  : rerolls > 0
+                    ? `USED ${rerolls}x`
+                    : "DOUBLES EACH USE"}
               </span>
               <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
             </button>
           </div>
           <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
-
-
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
@@ -5170,7 +7409,6 @@ export function Game() {
                   key={i}
                   onClick={() => buyRef.current(i)}
                   className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
-                  
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
@@ -5180,24 +7418,27 @@ export function Game() {
                   {info.pros ? (
                     <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
                       {info.pros.map((t) => (
-                        <div key={t} className="font-bold text-[#1d7a37]">▲ {t}</div>
+                        <div key={t} className="font-bold text-[#1d7a37]">
+                          ▲ {t}
+                        </div>
                       ))}
                       {info.cons?.map((t) => (
-                        <div key={t} className="font-bold text-[#b3261e]">▼ {t}</div>
+                        <div key={t} className="font-bold text-[#b3261e]">
+                          ▼ {t}
+                        </div>
                       ))}
                     </div>
                   ) : (
                     <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
                   )}
-                  {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
+                  {id !== "heal" && (
+                    <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>
+                  )}
                   <div className="mt-2 text-sm font-bold">◆ {cost}</div>
                 </button>
-
               );
             })}
           </div>
-
-
         </div>
       )}
 
@@ -5205,7 +7446,8 @@ export function Game() {
         <MobileControls
           onPause={() => {
             setLocked(false);
-            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+            if (phase.current.started && !phase.current.ended)
+              netHolder.current?.broadcast({ type: "pause" });
           }}
           abilityName={ABILITIES[ability].name}
           abilityLeft={abilCd.left}
@@ -5218,9 +7460,13 @@ export function Game() {
           onPointerDown={(e) => {
             e.preventDefault();
             setLocked(false);
-            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+            if (phase.current.started && !phase.current.ended)
+              netHolder.current?.broadcast({ type: "pause" });
           }}
-          style={{ left: "max(0.75rem, env(safe-area-inset-left))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+          style={{
+            left: "max(0.75rem, env(safe-area-inset-left))",
+            top: "max(0.75rem, env(safe-area-inset-top))",
+          }}
           className="fixed z-40 flex h-10 w-10 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 text-[#f3e6cf] shadow-lg backdrop-blur-sm active:scale-95 active:bg-[#2b2118]"
         >
           <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true">
@@ -5228,13 +7474,14 @@ export function Game() {
             <rect x="9" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
           </svg>
         </button>
-
       )}
       {touchUi && portrait && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
           <div>
             <div className="text-2xl font-bold tracking-[0.2em]">ROTATE YOUR DEVICE</div>
-            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">SCRAPFALL PLAYS IN LANDSCAPE</div>
+            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">
+              SCRAPFALL PLAYS IN LANDSCAPE
+            </div>
           </div>
         </div>
       )}
@@ -5246,15 +7493,22 @@ export function Game() {
       {multiplayer && dead && !downed && !ended && locked && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
-          <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
-          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · P TO PAUSE</div>
+          <div className="mt-2 text-xs tracking-[0.25em] opacity-80">
+            SPECTATING · YOU RESPAWN NEXT WAVE
+          </div>
+          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">
+            WALK AROUND FREELY · P TO PAUSE
+          </div>
         </div>
       )}
 
-
       {(!locked || ended) && picking && (
-        <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
-          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
+        <div
+          className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}
+        >
+          <div
+            className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}
+          >
             <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
             <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
 
@@ -5275,10 +7529,14 @@ export function Game() {
             <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
             <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
               {CLASSES[cls].pros.map((t) => (
-                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
+                <span key={t} className="text-[#1d7a37]">
+                  ▲ {t}
+                </span>
               ))}
               {CLASSES[cls].cons.map((t) => (
-                <span key={t} className="text-[#b3261e]">▼ {t}</span>
+                <span key={t} className="text-[#b3261e]">
+                  ▼ {t}
+                </span>
               ))}
             </div>
 
@@ -5295,12 +7553,21 @@ export function Game() {
                 </button>
               ))}
             </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">
+              {ABILITIES[ability].desc}
+            </div>
 
             {/* map: Tyler's four big maps + Random (themes.ts offered()); the host picks */}
-            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">{isHost ? "MAP" : "MAP · THE HOST PICKS"}</p>
+            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
+              {isHost ? "MAP" : "MAP · THE HOST PICKS"}
+            </p>
             <div className="mt-2 grid grid-cols-5 gap-1">
-              {([null, ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
+              {(
+                [
+                  null,
+                  ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i])),
+                ] as (number | null)[]
+              ).map((i) => {
                 const on = isHost ? mapChoice === i : i === seed % THEMES.length;
                 return (
                   <button
@@ -5317,7 +7584,10 @@ export function Game() {
               })}
             </div>
             <button
-              onClick={() => { pinTime(null); cycleTimeMode(); }}
+              onClick={() => {
+                pinTime(null);
+                cycleTimeMode();
+              }}
               title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
               className="pointer-events-auto mt-2 w-full rounded bg-[#2b2118]/10 px-2 py-1.5 text-[10px] font-bold tracking-wider"
             >
@@ -5334,9 +7604,16 @@ export function Game() {
                 <div className="mt-2 space-y-1 text-[11px] tracking-wider">
                   {connected.map((p) => (
                     <div key={p.id} className="flex items-center gap-2">
-                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>
+                        ■
+                      </span>
                       <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
+                      <span
+                        className="font-bold"
+                        style={{
+                          color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
+                        }}
+                      >
                         {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
                       </span>
                       <span className="opacity-60">
@@ -5348,7 +7625,6 @@ export function Game() {
                 </div>
               </div>
             )}
-
 
             {multiplayer && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
@@ -5377,13 +7653,17 @@ export function Game() {
       {(!locked || ended) && !picking && (
         <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-
-
             {!started && !ended && !paused && (
               <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
             )}
             <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
+              {gameOver
+                ? "You got swarmed"
+                : status.won
+                  ? "Arena cleared!"
+                  : paused
+                    ? "Paused"
+                    : theme.name}
             </h1>
             {(gameOver || status.won || paused) && (
               <p className="mt-2 text-sm opacity-70">
@@ -5403,10 +7683,15 @@ export function Game() {
             {multiplayer && !isHost && (ended || !started) ? (
               <div className="mt-6">
                 <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                  {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
+                  {ended
+                    ? "WAITING FOR THE HOST TO START A NEW ARENA"
+                    : "WAITING FOR THE HOST TO START"}
                 </div>
                 <button
-                  onClick={() => { initAudio(); setPicking(true); }}
+                  onClick={() => {
+                    initAudio();
+                    setPicking(true);
+                  }}
                   className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
                 >
                   CHOOSE LOADOUT
@@ -5415,7 +7700,10 @@ export function Game() {
             ) : (
               <button
                 onClick={() => {
-                  if (started && !ended) { start(); return; } // resume straight back in
+                  if (started && !ended) {
+                    start();
+                    return;
+                  } // resume straight back in
                   initAudio();
                   setPicking(true);
                 }}
@@ -5425,57 +7713,76 @@ export function Game() {
               </button>
             )}
 
-
-            {ended && (() => {
-              const r = run.current;
-              const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
-              const mine = { kills: score, dmg: Math.round(r.dmg), acc, shards: r.shards, taken: r.taken };
-              const rows = [{ num: myNum, ...mine }, ...Object.entries(squad)
-                .filter(([n]) => Number(n) !== myNum)
-                .map(([n, v]) => ({ num: Number(n), ...v }))]
-                .sort((a, b) => a.num - b.num);
-              const badges: string[] = [];
-              if (acc >= 60) badges.push("SHARPSHOOTER");
-              // best-in-squad badges need a squad (and something to be best at)
-              if (rows.length > 1) {
-                if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
-                if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
-                if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
-              }
-              if (status.won) badges.push("BOSS SLAYER");
-              return (
-                <div className="mt-5 text-left text-black">
-                  <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
-                  <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                    <div>WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}</div>
-                    <div>KILLS · {mine.kills}</div>
-                    <div>DAMAGE DEALT · {mine.dmg}</div>
-                    <div>ACCURACY · {acc}%</div>
-                    <div>SHARDS COLLECTED · {mine.shards}</div>
-                    <div>DAMAGE TAKEN · {mine.taken}</div>
+            {ended &&
+              (() => {
+                const r = run.current;
+                const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
+                const mine = {
+                  kills: score,
+                  dmg: Math.round(r.dmg),
+                  acc,
+                  shards: r.shards,
+                  taken: r.taken,
+                };
+                const rows = [
+                  { num: myNum, ...mine },
+                  ...Object.entries(squad)
+                    .filter(([n]) => Number(n) !== myNum)
+                    .map(([n, v]) => ({ num: Number(n), ...v })),
+                ].sort((a, b) => a.num - b.num);
+                const badges: string[] = [];
+                if (acc >= 60) badges.push("SHARPSHOOTER");
+                // best-in-squad badges need a squad (and something to be best at)
+                if (rows.length > 1) {
+                  if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg))
+                    badges.push("HEAVY GUNNER");
+                  if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards))
+                    badges.push("SCAVENGER");
+                  if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+                }
+                if (status.won) badges.push("BOSS SLAYER");
+                return (
+                  <div className="mt-5 text-left text-black">
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
+                    <div className="mt-2 space-y-1 text-[11px] tracking-wider">
+                      <div>
+                        WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}
+                      </div>
+                      <div>KILLS · {mine.kills}</div>
+                      <div>DAMAGE DEALT · {mine.dmg}</div>
+                      <div>ACCURACY · {acc}%</div>
+                      <div>SHARDS COLLECTED · {mine.shards}</div>
+                      <div>DAMAGE TAKEN · {mine.taken}</div>
+                    </div>
+                    {badges.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
+                        {badges.map((b) => (
+                          <span key={b}>{b}</span>
+                        ))}
+                      </div>
+                    )}
+                    {multiplayer && rows.length > 1 && (
+                      <div className="mt-3 space-y-1 text-[10px] tracking-wider">
+                        <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
+                        {rows.map((x) => (
+                          <div key={x.num} className="flex items-center gap-2">
+                            <span
+                              style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}
+                            >
+                              ■
+                            </span>
+                            <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
+                            <span className="opacity-60">
+                              {x.kills} kills · {x.dmg} dmg · {x.acc}%
+                            </span>
+                            {x.num === myNum && <span className="opacity-40">(YOU)</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {badges.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
-                      {badges.map((b) => <span key={b}>{b}</span>)}
-                    </div>
-                  )}
-                  {multiplayer && rows.length > 1 && (
-                    <div className="mt-3 space-y-1 text-[10px] tracking-wider">
-                      <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                      {rows.map((x) => (
-                        <div key={x.num} className="flex items-center gap-2">
-                          <span style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                          <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
-                          <span className="opacity-60">{x.kills} kills · {x.dmg} dmg · {x.acc}%</span>
-                          {x.num === myNum && <span className="opacity-40">(YOU)</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
+                );
+              })()}
 
             {paused && (
               <div className="w-full max-w-sm px-4">
@@ -5499,8 +7806,6 @@ export function Game() {
                 )}
               </div>
             )}
-
-
 
             {paused || (multiplayer && ended) ? (
               <div className="mt-3">
@@ -5541,14 +7846,22 @@ export function Game() {
                   </>
                 ) : (
                   <>
-                    <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
+                    <div className="opacity-60">
+                      {net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}
+                    </div>
                     <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
                     <div className="mt-3 space-y-1 text-left">
                       {connected.map((p) => (
                         <div key={p.id} className="flex items-center gap-2">
-                          <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                          <span
+                            style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}
+                          >
+                            ■
+                          </span>
                           <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">· {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}</span>
+                          <span className="opacity-50">
+                            · {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
+                          </span>
                           {p.num === myNum && <span className="opacity-50">(YOU)</span>}
                         </div>
                       ))}
@@ -5569,10 +7882,13 @@ export function Game() {
               </div>
             )}
 
-            {(
+            {
               <div>
                 <button
-                  onClick={() => { pinTime(null); cycleTimeMode(); }}
+                  onClick={() => {
+                    pinTime(null);
+                    cycleTimeMode();
+                  }}
                   title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
                   className={`pointer-events-auto mt-4 w-full rounded-md ${paused ? "block" : "hidden"} border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]`}
                 >
@@ -5584,7 +7900,9 @@ export function Game() {
                 </button>
                 {started && !ended && (
                   <div className="mt-1 text-[10px] tracking-wider opacity-50">
-                    {timeMode === "auto" ? "N LOCKS YOUR LOOK FOR THIS MATCH (AUTO OFF)" : "LOCKED FOR THIS MATCH · CLICK FOR AUTO"}
+                    {timeMode === "auto"
+                      ? "N LOCKS YOUR LOOK FOR THIS MATCH (AUTO OFF)"
+                      : "LOCKED FOR THIS MATCH · CLICK FOR AUTO"}
                   </div>
                 )}
                 <button
@@ -5594,22 +7912,28 @@ export function Game() {
                   SETTINGS
                 </button>
 
-                {!paused && <button
-                  onClick={() => setShowWeapons(true)}
-                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  WEAPONS
-                </button>}
-                {!paused && <button
-                  onClick={() => setShowEnemies(true)}
-                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  ENEMIES
-                </button>}
+                {!paused && (
+                  <button
+                    onClick={() => setShowWeapons(true)}
+                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                  >
+                    WEAPONS
+                  </button>
+                )}
+                {!paused && (
+                  <button
+                    onClick={() => setShowEnemies(true)}
+                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                  >
+                    ENEMIES
+                  </button>
+                )}
                 {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-                {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
+                {showEnemies && (
+                  <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />
+                )}
               </div>
-            )}
+            }
             {showSettings && (
               <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6] sm:items-center">
                 <div className="w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
@@ -5625,39 +7949,75 @@ export function Game() {
                   <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
                     <label className="block">
                       FIELD OF VIEW · {fov}°
-                      <input type="range" min={50} max={110} step={1} value={fov}
+                      <input
+                        type="range"
+                        min={50}
+                        max={110}
+                        step={1}
+                        value={fov}
                         onChange={(e) => setFov(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <label className="block">
                       LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                      <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={3}
+                        step={0.1}
+                        value={sensX}
                         onChange={(e) => setSensX(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <label className="block">
                       LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                      <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                      <input
+                        type="range"
+                        min={0.2}
+                        max={3}
+                        step={0.1}
+                        value={sensY}
                         onChange={(e) => setSensY(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <label className="block">
                       MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                      <input type="range" min={0} max={1} step={0.05} value={musicVol}
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={musicVol}
                         onChange={(e) => setMusicVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <label className="block">
                       EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                      <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={sfxVol}
                         onChange={(e) => setSfxVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <label className="block">
                       AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
-                      <input type="range" min={0} max={1} step={0.05} value={ambVol}
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={ambVol}
                         onChange={(e) => setAmbVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
+                      />
                     </label>
                     <PadSettingsPanel />
                   </div>
@@ -5669,12 +8029,13 @@ export function Game() {
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
                     SCRAPFALL · v{GAME_VERSION} · TS BUILD
-                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER</div>
+                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">
+                      BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-
           </div>
         </div>
       )}
@@ -5703,7 +8064,9 @@ const GUN_INFO: Record<Weapon, string> = {
 
 function Spin({ children }: { children: React.ReactNode }) {
   const g = useRef<THREE.Group>(null);
-  useFrame((_, d) => { if (g.current) g.current.rotation.y += d * 0.8; });
+  useFrame((_, d) => {
+    if (g.current) g.current.rotation.y += d * 0.8;
+  });
   return <group ref={g}>{children}</group>;
 }
 
@@ -5715,8 +8078,11 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
       <div className="flex max-h-full w-full max-w-3xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
         <div className="grid grid-cols-2 gap-1 md:w-56 md:grid-cols-1">
           {ORDER.map((w, i) => (
-            <button key={w} onClick={() => setSel(w)}
-              className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === w ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+            <button
+              key={w}
+              onClick={() => setSel(w)}
+              className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === w ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+            >
               <span className="opacity-60">{i + 1}</span> {GUNS[w].name}
             </button>
           ))}
@@ -5728,17 +8094,43 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
               <hemisphereLight args={["#e8ecf4", "#3a3028", 1.1]} />
               <directionalLight position={[2, 3, 2]} intensity={2.2} color="#fff2e0" />
               <directionalLight position={[-2, 1, -2.5]} intensity={1.6} color="#9fc0ff" />
-              <Spin><group position={[0, -0.05, 0.15]}><GunModel w={sel} /></group></Spin>
+              <Spin>
+                <group position={[0, -0.05, 0.15]}>
+                  <GunModel w={sel} />
+                </group>
+              </Spin>
             </Canvas>
           </div>
-          <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: g.color }}>{g.name}</h2>
+          <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: g.color }}>
+            {g.name}
+          </h2>
           <p className="mt-2 text-sm opacity-90">{GUN_INFO[sel]}</p>
           <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] tracking-widest opacity-80">
-            <div>DAMAGE<br /><b className="text-base">{g.damage}{g.count > 1 ? `×${g.count}` : ""}</b></div>
-            <div>AMMO<br /><b className="text-base">{g.ammo || "∞"}</b></div>
-            <div>FIRE RATE<br /><b className="text-base">{(1 / g.cooldown).toFixed(1)}/s</b></div>
+            <div>
+              DAMAGE
+              <br />
+              <b className="text-base">
+                {g.damage}
+                {g.count > 1 ? `×${g.count}` : ""}
+              </b>
+            </div>
+            <div>
+              AMMO
+              <br />
+              <b className="text-base">{g.ammo || "∞"}</b>
+            </div>
+            <div>
+              FIRE RATE
+              <br />
+              <b className="text-base">{(1 / g.cooldown).toFixed(1)}/s</b>
+            </div>
           </div>
-          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
+          <button
+            onClick={onClose}
+            className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90"
+          >
+            CLOSE
+          </button>
         </div>
       </div>
     </div>
@@ -5749,10 +8141,7 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
 function PistolBadge() {
   return (
     <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
-      <path
-        d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z"
-        fill="#2b2118"
-      />
+      <path d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z" fill="#2b2118" />
       <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
     </svg>
   );
@@ -5763,7 +8152,8 @@ type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
 /** Brotato-style stat sheet: green above baseline, red below */
 export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
   const [tab, setTab] = useState<"combat" | "survival">("combat");
-  const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
+  const pct = (v: number, base = 1): StatRow["tone"] =>
+    v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0;
   const combat: StatRow[] = [
     { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
     { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
@@ -5812,10 +8202,20 @@ export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
       <div className="mt-2 space-y-0.5 text-[11px]">
         {rows.map((r) => (
           <div key={r.label} className="flex items-center justify-between">
-            <span className={r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : "text-[#f3e6cf]/75"}>
+            <span
+              className={
+                r.tone === 1
+                  ? "text-[#7cff4f]"
+                  : r.tone === -1
+                    ? "text-[#ff6b5e]"
+                    : "text-[#f3e6cf]/75"
+              }
+            >
               {r.label}
             </span>
-            <span className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}>
+            <span
+              className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}
+            >
               {r.value}
             </span>
           </div>
@@ -5826,9 +8226,24 @@ export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
 }
 
 // ---------------------------------------------------------------- enemy reference
-const PANEL_KINDS = Object.keys(ENEMY_INFO).filter((k): k is Kind => (KINDS as string[]).includes(k));
+const PANEL_KINDS = Object.keys(ENEMY_INFO).filter((k): k is Kind =>
+  (KINDS as string[]).includes(k),
+);
 const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
-  kind, x, z, hp: 1, alive: true, cooldown: 0, swing: 0, flash: 0, shot: 0, slow: 0, burn: 0, burnTick: 0, yaw: 0, vis: 0,
+  kind,
+  x,
+  z,
+  hp: 1,
+  alive: true,
+  cooldown: 0,
+  swing: 0,
+  flash: 0,
+  shot: 0,
+  slow: 0,
+  burn: 0,
+  burnTick: 0,
+  yaw: 0,
+  vis: 0,
 });
 
 function LookAt({ y, z }: { y: number; z: number }) {
@@ -5880,21 +8295,36 @@ export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => 
     <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
       <div className="flex max-h-full w-full max-w-5xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
         <div className="grid grid-cols-2 gap-1 md:w-60 md:grid-cols-1">
-          <button onClick={() => setSel("lineup")}
-            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+          <button
+            onClick={() => setSel("lineup")}
+            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+          >
             ALL · LINEUP
           </button>
           {PANEL_KINDS.map((k) => (
-            <button key={k} onClick={() => setSel(k)}
-              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
-              <span style={{ color: ENEMY_INFO[k]!.accent }}>■</span> {k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}
+            <button
+              key={k}
+              onClick={() => setSel(k)}
+              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+            >
+              <span style={{ color: ENEMY_INFO[k]!.accent }}>■</span>{" "}
+              {k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}
               <span className="float-right opacity-50">W{ENEMY_INFO[k]!.wave}</span>
             </button>
           ))}
         </div>
         <div className="flex-1">
-          <div className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}>
-            <Canvas key={sel === "lineup" ? "lineup" : "one"} camera={sel === "lineup" ? { position: [0, 6, 25], fov: 28 } : { position: [2.6, 2.4, 4.6], fov: 42 }}>
+          <div
+            className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}
+          >
+            <Canvas
+              key={sel === "lineup" ? "lineup" : "one"}
+              camera={
+                sel === "lineup"
+                  ? { position: [0, 6, 25], fov: 28 }
+                  : { position: [2.6, 2.4, 4.6], fov: 42 }
+              }
+            >
               <LookAt y={sel === "lineup" ? 0.5 : 0} z={sel === "lineup" ? -1.5 : 0} />
               <ambientLight intensity={0.9} />
               <hemisphereLight args={["#ffe7c4", "#3a3028", 0.6]} />
@@ -5902,42 +8332,84 @@ export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => 
               <TelegraphDemo list={list} still={sel === "lineup"} />
               {sel === "lineup" ? (
                 <group position={[0, -1.4, 0]}>
-                  {list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}
+                  {list.map((e) => (
+                    <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />
+                  ))}
                 </group>
               ) : (
-                <Spin><group position={[0, -1.1, 0]}>{list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}</group></Spin>
+                <Spin>
+                  <group position={[0, -1.1, 0]}>
+                    {list.map((e) => (
+                      <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />
+                    ))}
+                  </group>
+                </Spin>
               )}
             </Canvas>
           </div>
           {info && st ? (
             <>
-              <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: info.accent }}>
+              <h2
+                className="mt-3 text-2xl font-bold tracking-[0.3em]"
+                style={{ color: info.accent }}
+              >
                 {sel === "special" ? theme.special.name : info.name}
               </h2>
               <p className="mt-2 text-sm opacity-90">{info.tactic}</p>
               <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] tracking-widest opacity-80">
-                <div>HEALTH<br /><b className="text-base">{sel === "boss" ? BOSS_HP : st.hp}</b></div>
-                <div>SPEED<br /><b className="text-base">{st.speed} m/s</b></div>
-                <div>WEAPON<br /><b className="text-xs">{info.weapon}</b></div>
-                <div>FIRST WAVE<br /><b className="text-base">{info.wave}</b></div>
+                <div>
+                  HEALTH
+                  <br />
+                  <b className="text-base">{sel === "boss" ? BOSS_HP : st.hp}</b>
+                </div>
+                <div>
+                  SPEED
+                  <br />
+                  <b className="text-base">{st.speed} m/s</b>
+                </div>
+                <div>
+                  WEAPON
+                  <br />
+                  <b className="text-xs">{info.weapon}</b>
+                </div>
+                <div>
+                  FIRST WAVE
+                  <br />
+                  <b className="text-base">{info.wave}</b>
+                </div>
               </div>
             </>
           ) : (
             <div className="mt-3 space-y-1 text-[11px] tracking-wider">
-              {[["BACK ROW", false], ["FRONT ROW", true]].map(([label, fresh]) => (
+              {[
+                ["BACK ROW", false],
+                ["FRONT ROW", true],
+              ].map(([label, fresh]) => (
                 <div key={String(label)}>
                   <span className="opacity-50">{label} · </span>
-                  {lineup.map((e) => e.kind).filter((k) => isNewKind(k) === fresh).map((k, i) => (
-                    <span key={k} style={{ color: ENEMY_INFO[k]!.accent }}>{i ? " · " : ""}{k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}</span>
-                  ))}
+                  {lineup
+                    .map((e) => e.kind)
+                    .filter((k) => isNewKind(k) === fresh)
+                    .map((k, i) => (
+                      <span key={k} style={{ color: ENEMY_INFO[k]!.accent }}>
+                        {i ? " · " : ""}
+                        {k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}
+                      </span>
+                    ))}
                 </div>
               ))}
               <p className="pt-1 text-sm opacity-80">
-                Every attack is telegraphed: watch for the glow, the laser, the lit lane or the red ring, then move.
+                Every attack is telegraphed: watch for the glow, the laser, the lit lane or the red
+                ring, then move.
               </p>
             </div>
           )}
-          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
+          <button
+            onClick={onClose}
+            className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90"
+          >
+            CLOSE
+          </button>
         </div>
       </div>
     </div>

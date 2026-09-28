@@ -12,6 +12,7 @@ import * as THREE from "three";
 
 import { Geo, type Tmpl } from "../cityGeo";
 import {
+  LEAN_D,
   BALCONY_Y,
   SALOON_BALCONY,
   BELFRY_Y,
@@ -28,12 +29,18 @@ import {
   type WProp,
 } from "./layout";
 import { FAC_COLS, FAC_ROWS, MODULE_W, TILE_M, WL, signUV } from "./textures";
+import { tumbleweedGeometry } from "./tumbleweed";
+import { roomPlan, saloonBalcony, type RoomItem, type RoomPlan } from "./rooms";
 
 export const CHUNK = 200;
 export const DETAIL_RANGE = 280;
 
 /** aFac.z flags: +1 windows light up at night (random), +2 always lit (saloon), +10 ground AO */
 const LIT = 1;
+/** always softly lit (the church's stained glass by candlelight) */
+const CANDLE = 3;
+/** inside a walk-in building: warm lamplight fill (materials.ts) */
+const INT = 4;
 const BRIGHT = 2;
 const AO = 10;
 
@@ -598,6 +605,22 @@ function falseFront(
     G.col(trimC);
     G.mat(WL.TIMBER);
     G.quad(ax, ay, 0.12, bx, by, 0.12, bx, by, -t, ax, ay, -t, [0, 0, 1, 0.1]);
+    // (the lip it overhangs the face by, seen from the street below)
+    G.quad(
+      ax,
+      ay - 0.001,
+      0,
+      bx,
+      by - 0.001,
+      0,
+      bx,
+      by - 0.001,
+      0.12,
+      ax,
+      ay - 0.001,
+      0.12,
+      [0, 0, 1, 0.1],
+    );
     G.col(paint, 1);
   }
   // side edges of the slab
@@ -622,6 +645,1357 @@ function falseFront(
   }
   void facL;
   void r;
+}
+
+// ---------------------------------------------------------------------------------------
+// walk-in interiors (rooms.ts holds the plans; this draws them)
+
+const _tint = new THREE.Color();
+
+/** ground-floor window columns in each facade tile (the other columns hold doors) */
+const WIN_COLS: Record<WBld["mat"], number[]> = {
+  clap: [1, 2],
+  board: [0, 2],
+  brick: [0, 2, 3],
+  stone: [1, 2, 3],
+  barn: [0, 3],
+  adobe: [1, 3],
+  white: [1, 2],
+  log: [1, 2],
+};
+
+type Hole = { u0: number; u1: number; y0: number; y1: number };
+/** a wall quad from a to b (face to the left of a -> b, see wallq) with rectangular holes
+ * cut out; u runs from a (m), holes may overlap the ends */
+function holedWall(
+  G: Geo,
+  layer: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  y0: number,
+  y1: number,
+  holes: Hole[],
+  uvOf: (ua: number, ub: number, ya: number, yb: number) => readonly number[],
+) {
+  const len = Math.hypot(bx - ax, bz - az);
+  const ux = (bx - ax) / len;
+  const uz = (bz - az) / len;
+  const hs = holes
+    .map((h) => ({
+      ...h,
+      u0: Math.max(0, h.u0),
+      u1: Math.min(len, h.u1),
+      y0: Math.max(y0, h.y0),
+      y1: Math.min(y1, h.y1),
+    }))
+    .filter((h) => h.u1 > h.u0 && h.y1 > h.y0)
+    .sort((a, b) => a.u0 - b.u0);
+  const piece = (ua: number, ub: number, ya: number, yb: number) => {
+    if (ub - ua < 1e-3 || yb - ya < 1e-3) return;
+    G.mat(layer);
+    wallq(G, ax + ux * ua, az + uz * ua, ax + ux * ub, az + uz * ub, ya, yb, uvOf(ua, ub, ya, yb));
+  };
+  let u = 0;
+  for (const h of hs) {
+    piece(u, h.u0, y0, y1);
+    piece(h.u0, h.u1, y0, h.y0);
+    piece(h.u0, h.u1, h.y1, y1);
+    u = Math.max(u, h.u1);
+  }
+  piece(u, len, y0, y1);
+}
+
+/** the interior of a walk-in building, and its real doorways in the outer walls */
+function walkIn(
+  B: BGeo,
+  b: WBld,
+  plan: RoomPlan,
+  W: number,
+  D: number,
+  H: number,
+  facL: number,
+  plainL: number,
+  uOff: number,
+  paint: string,
+  lit: number,
+  seed: number,
+  r: () => number,
+) {
+  const G = B.main;
+  const D2 = B.detail;
+  const x0 = -W / 2;
+  const x1 = W / 2;
+  const z0 = -D;
+  const T = 0.12; // wall thickness
+  const fl = plan.floor;
+  const ceil = plan.ceil;
+  const mods = Math.max(1, Math.round(W / (MODULE_W[facL] ?? 3)));
+  const mw = W / mods;
+  const facUV = (ua: number, ub: number, ya: number, yb: number) =>
+    [
+      (uOff + ua / mw) / FAC_COLS,
+      ya / STOREY / FAC_ROWS,
+      (uOff + ub / mw) / FAC_COLS,
+      yb / STOREY / FAC_ROWS,
+    ] as const;
+  const [ptu, ptv] = TILE_M[plainL] ?? [4, 4];
+  const plainUV = (ua: number, ub: number, ya: number, yb: number) =>
+    [ua / ptu, ya / ptv, ub / ptu, yb / ptv] as const;
+  const front = plan.doors.filter((d) => d.wall === "front");
+  const back = plan.doors.filter((d) => d.wall === "back");
+  const ud = plan.upperDoor;
+
+  // ---- the outer front wall: upper storeys from the facade tile, the ground storey module
+  // by module (display windows, and the doorway cut through for real) ----
+  G.col(paint, 1).mat(facL, seed, lit + AO);
+  if (H > STOREY) {
+    const holes: Hole[] = ud ? [{ u0: ud.a - x0, u1: ud.b - x0, y0: ud.y, y1: ud.y + 2.3 }] : [];
+    holedWall(G, facL, x0, 0, x1, 0, STOREY, H, holes, facUV);
+  }
+  const cols = WIN_COLS[b.mat];
+  let wk = 0;
+  for (let m = 0; m < mods; m++) {
+    const xa = x0 + m * mw;
+    const xb = xa + mw;
+    const door = front.find((d) => d.b > xa && d.a < xb);
+    if (!door) {
+      const c = cols[wk++ % cols.length]!;
+      G.col(paint, 1).mat(facL, seed, lit + AO);
+      wallq(G, xa, 0, xb, 0, 0, STOREY, [c / FAC_COLS, 0, (c + 1) / FAC_COLS, 1 / FAC_ROWS]);
+      continue;
+    }
+    // the doorway's module: plain wall round the opening (the facade's own base colour)
+    G.col(paint, 1).mat(plainL, seed, AO);
+    holedWall(
+      G,
+      plainL,
+      xa,
+      0,
+      xb,
+      0,
+      0,
+      STOREY,
+      front.map((d) => ({ u0: d.a - xa, u1: d.b - xa, y0: 0, y1: d.h })),
+      (ua, ub, ya, yb) => plainUV(ua + (xa - x0), ub + (xa - x0), ya, yb),
+    );
+  }
+  // ---- the outer back wall, with its doorway ----
+  G.col(paint, 1).mat(plainL, seed, AO);
+  holedWall(
+    G,
+    plainL,
+    x1,
+    z0,
+    x0,
+    z0,
+    0,
+    H,
+    back.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h })),
+    plainUV,
+  );
+
+  // ---- door frames, reveals and leaves ----
+  const reveal = (a: number, bb: number, h: number, zf: number, dir: 1 | -1) => {
+    // zf = the outer face, dir = into the building (-1 for the front wall, +1 for the back)
+    const zi = zf + dir * T;
+    G.col("#6a5038").mat(WL.TIMBER);
+    // jambs and head, inside and out
+    for (const [zz, s2] of [
+      [zf, -dir],
+      [zi, dir],
+    ] as const) {
+      const za = zz;
+      const zb = zz + s2 * 0.07;
+      boxP(G, WL.TIMBER, a - 0.13, 0, Math.min(za, zb), a, h + 0.14, Math.max(za, zb));
+      boxP(G, WL.TIMBER, bb, 0, Math.min(za, zb), bb + 0.13, h + 0.14, Math.max(za, zb));
+      boxP(G, WL.TIMBER, a - 0.13, h, Math.min(za, zb), bb + 0.13, h + 0.14, Math.max(za, zb));
+    }
+    // the reveal (the wall's thickness) round the opening
+    G.col("#8a7258").mat(WL.P_BOARD);
+    const lo = Math.min(zf, zi);
+    const hi = Math.max(zf, zi);
+    G.quad(a, 0, lo, a, 0, hi, a, h, hi, a, h, lo, [0, 0, 0.1, 1]);
+    G.quad(bb, 0, hi, bb, 0, lo, bb, h, lo, bb, h, hi, [0, 0, 0.1, 1]);
+    G.quad(a, h, lo, a, h, hi, bb, h, hi, bb, h, lo, [0, 0, 1, 0.1]);
+    // threshold
+    G.col("#5a4636").mat(WL.DECK);
+    boxP(G, WL.DECK, a, 0, lo, bb, fl + 0.02, hi);
+  };
+  for (const d of front) {
+    reveal(d.a, d.b, d.h, 0, -1);
+    if (d.kind === "batwing") {
+      // the batwing doors, swinging half open
+      D2.col("#7a3a22");
+      const w = (d.b - d.a) / 2;
+      oboxP(
+        D2,
+        WL.TIMBER,
+        d.a + 0.1 + Math.cos(0.5) * w * 0.5,
+        0.9,
+        -0.08 - Math.sin(0.5) * w * 0.5,
+        w,
+        1.1,
+        0.05,
+        -0.5,
+      );
+      oboxP(
+        D2,
+        WL.TIMBER,
+        d.b - 0.1 - Math.cos(0.5) * w * 0.5,
+        0.9,
+        -0.08 - Math.sin(0.5) * w * 0.5,
+        w,
+        1.1,
+        0.05,
+        0.5,
+      );
+    } else if (d.kind === "barn") {
+      // the big doors, slid open along the outside of the wall
+      G.col("#8a2a1c").mat(WL.P_BOARD);
+      const w = (d.b - d.a) / 2;
+      boxP(G, WL.P_BOARD, d.a - w - 0.1, 0, 0.08, d.a - 0.1, d.h, 0.16);
+      boxP(G, WL.P_BOARD, d.b + 0.1, 0, 0.08, d.b + w + 0.1, d.h, 0.16);
+      G.col("#eee6d6");
+      for (const [pa, pb] of [
+        [d.a - w - 0.1, d.a - 0.1],
+        [d.b + 0.1, d.b + w + 0.1],
+      ] as const) {
+        beam(G, pa + 0.1, 0.1, 0.17, pb - 0.1, d.h - 0.1, 0.17, 0.12, WL.PAINT);
+        beam(G, pb - 0.1, 0.1, 0.17, pa + 0.1, d.h - 0.1, 0.17, 0.12, WL.PAINT);
+      }
+      G.col("#3a3634");
+      boxP(G, WL.IRON, d.a - w - 0.3, d.h + 0.05, 0.06, d.b + w + 0.3, d.h + 0.15, 0.18);
+    } else {
+      // a panelled door standing open, back against the inside wall
+      D2.col(pick(["#5a2e1c", "#3a4a3a", "#4a3a2a"], r)).mat(WL.P_BOARD, 0, 0);
+      boxP(
+        D2,
+        WL.P_BOARD,
+        d.a + 0.02,
+        fl,
+        -T - (d.b - d.a) + 0.02,
+        d.a + 0.07,
+        d.h - 0.02,
+        -T - 0.02,
+      );
+    }
+  }
+  for (const d of back) {
+    reveal(d.a, d.b, d.h, z0, 1);
+    if (d.kind === "barn") {
+      G.col("#8a2a1c").mat(WL.P_BOARD);
+      const w = (d.b - d.a) / 2;
+      boxP(G, WL.P_BOARD, d.a - w - 0.1, 0, z0 - 0.16, d.a - 0.1, d.h, z0 - 0.08);
+      boxP(G, WL.P_BOARD, d.b + 0.1, 0, z0 - 0.16, d.b + w + 0.1, d.h, z0 - 0.08);
+    } else {
+      D2.col("#5a4636").mat(WL.P_BOARD, 0, 0);
+      boxP(
+        D2,
+        WL.P_BOARD,
+        d.b - 0.07,
+        fl,
+        z0 + T + 0.02,
+        d.b - 0.02,
+        d.h - 0.02,
+        z0 + T + (d.b - d.a) - 0.02,
+      );
+    }
+  }
+  if (ud) {
+    // the balcony door: a frame, and the door itself standing open onto the landing
+    G.col("#6a5038").mat(WL.TIMBER);
+    boxP(G, WL.TIMBER, ud.a - 0.13, ud.y, -T - 0.05, ud.a, ud.y + 2.44, 0.07);
+    boxP(G, WL.TIMBER, ud.b, ud.y, -T - 0.05, ud.b + 0.13, ud.y + 2.44, 0.07);
+    boxP(G, WL.TIMBER, ud.a - 0.13, ud.y + 2.3, -T - 0.05, ud.b + 0.13, ud.y + 2.44, 0.07);
+    D2.col("#5a2e1c").mat(WL.P_BOARD, 0, 0);
+    boxP(
+      D2,
+      WL.P_BOARD,
+      ud.b - 0.07,
+      ud.y + 0.02,
+      -T - (ud.b - ud.a),
+      ud.b - 0.02,
+      ud.y + 2.26,
+      -T - 0.02,
+    );
+  }
+
+  // ---- inside: the walls' inner faces, with the windows seen from within ----
+  // (everything in here takes the interior's lamplight fill)
+  G.mat(WL.PAINT, 0, INT);
+  D2.mat(WL.TIMBER, 0.5, INT);
+  const finishLayer =
+    plan.finish === "stone" ? WL.P_STONE : plan.finish === "boards" ? WL.P_BOARD : WL.PAINT;
+  const [ftu, ftv] = TILE_M[finishLayer] ?? [2, 2];
+  const finUV = (ua: number, ub: number, ya: number, yb: number) =>
+    [ua / ftu, ya / ftv, ub / ftu, yb / ftv] as const;
+  const winHoles = (len: number, skipLastBay: boolean): Hole[] => {
+    const nWin = Math.floor((len - 1.2) / 3.6);
+    const out: Hole[] = [];
+    for (let k = 0; k < nWin; k++) {
+      if (skipLastBay && k === nWin - 1) continue;
+      const tc = ((k + 0.5) / nWin) * len;
+      out.push({ u0: tc - 0.75, u1: tc + 0.75, y0: 0.8, y1: 2.8 });
+    }
+    return out;
+  };
+  const yb = fl;
+  const yt = ceil;
+  // (inner faces run T inside the outer ones; a -> b so the faces point into the room)
+  type IW = { ax: number; az: number; bx: number; bz: number; holes: Hole[]; win: Hole[] };
+  const iw: IW[] = [];
+  // front: from the right corner to the left (u from x1)
+  {
+    const holes: Hole[] = front.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h }));
+    const win: Hole[] = [];
+    for (let m = 0; m < mods; m++) {
+      const xa = x0 + m * mw;
+      const xb = xa + mw;
+      if (front.some((d) => d.b > xa && d.a < xb)) continue;
+      const c = (xa + xb) / 2;
+      win.push({ u0: x1 - c - 0.7, u1: x1 - c + 0.7, y0: 0.9, y1: 2.6 });
+    }
+    iw.push({ ax: x1 - T, az: -T, bx: x0 + T, bz: -T, holes: [...holes, ...win], win });
+  }
+  // back: from the left corner to the right (u from x0)
+  {
+    const holes: Hole[] = back.map((d) => ({ u0: d.a - x0 - T, u1: d.b - x0 - T, y0: 0, y1: d.h }));
+    // the outer back wall's windows run from x1 to x0: mirror them
+    const lenB = W;
+    const win = winHoles(lenB, back.length > 0).map((h) => ({
+      ...h,
+      u0: lenB - h.u1 - T,
+      u1: lenB - h.u0 - T,
+    }));
+    iw.push({ ax: x0 + T, az: z0 + T, bx: x1 - T, bz: z0 + T, holes: [...holes, ...win], win });
+  }
+  // the sides (outer windows run from the front corner back along x1, and from the back along x0)
+  {
+    // (both side walls' outer windows sit at D - tc from the inner walls' start)
+    const win = winHoles(D, false).map((h) => ({ ...h, u0: D - h.u1 - T, u1: D - h.u0 - T }));
+    iw.push({ ax: x0 + T, az: -T, bx: x0 + T, bz: z0 + T, holes: win, win });
+    iw.push({ ax: x1 - T, az: z0 + T, bx: x1 - T, bz: -T, holes: win, win });
+  }
+  for (const w of iw) {
+    if (plan.finish === "paper" || plan.finish === "plaster") {
+      // a board wainscot to the dado, paper or plaster above
+      G.col("#4a3020").mat(WL.P_BOARD, 0, INT);
+      holedWall(
+        G,
+        WL.P_BOARD,
+        w.ax,
+        w.az,
+        w.bx,
+        w.bz,
+        yb,
+        yb + 1.05,
+        w.holes,
+        (ua, ub, ya, ybb) => [ua / 4, ya / 4, ub / 4, ybb / 4],
+      );
+      G.col(plan.wallColor, 1).mat(finishLayer, 0, INT);
+      holedWall(G, finishLayer, w.ax, w.az, w.bx, w.bz, yb + 1.05, yt, w.holes, finUV);
+      // the dado rail
+      const len = Math.hypot(w.bx - w.ax, w.bz - w.az);
+      const nx = -(w.bz - w.az) / len;
+      const nz = (w.bx - w.ax) / len;
+      D2.col("#3a2418");
+      beam(
+        D2,
+        w.ax + nx * 0.03,
+        yb + 1.08,
+        w.az + nz * 0.03,
+        w.bx + nx * 0.03,
+        yb + 1.08,
+        w.bz + nz * 0.03,
+        0.06,
+      );
+    } else {
+      G.col(plan.wallColor, 1).mat(finishLayer, 0, INT);
+      holedWall(G, finishLayer, w.ax, w.az, w.bx, w.bz, yb, yt, w.holes, finUV);
+    }
+    // windows from inside: a frame, glazing bars and the glass (daylight through it)
+    const len = Math.hypot(w.bx - w.ax, w.bz - w.az);
+    const ux = (w.bx - w.ax) / len;
+    const uz = (w.bz - w.az) / len;
+    const nx = -uz;
+    const nz = ux;
+    for (const h of w.win) {
+      const pa = [w.ax + ux * h.u0, w.az + uz * h.u0] as const;
+      const pb = [w.ax + ux * h.u1, w.az + uz * h.u1] as const;
+      const ya = Math.max(yb + 0.3, h.y0);
+      // the glass sits in the middle of the wall's thickness
+      // (the view through old wavy glass: the dusty street low, pale sky above the far roofs)
+      const ym = ya + (h.y1 - ya) * 0.42;
+      G.col("#a08466").mat(WL.PAINT, 0, INT);
+      wallq(
+        G,
+        pa[0] - nx * 0.06,
+        pa[1] - nz * 0.06,
+        pb[0] - nx * 0.06,
+        pb[1] - nz * 0.06,
+        ya,
+        ym,
+        [0, 0, 1, 0.42],
+      );
+      G.col("#98aab4");
+      wallq(
+        G,
+        pa[0] - nx * 0.06,
+        pa[1] - nz * 0.06,
+        pb[0] - nx * 0.06,
+        pb[1] - nz * 0.06,
+        ym,
+        h.y1,
+        [0, 0.42, 1, 1],
+      );
+      // reveals
+      G.col("#8a7258").mat(WL.P_BOARD);
+      G.quad(
+        pa[0],
+        ya,
+        pa[1],
+        pa[0] - nx * 0.06,
+        ya,
+        pa[1] - nz * 0.06,
+        pa[0] - nx * 0.06,
+        h.y1,
+        pa[1] - nz * 0.06,
+        pa[0],
+        h.y1,
+        pa[1],
+        [0, 0, 0.1, 1],
+      );
+      G.quad(
+        pb[0] - nx * 0.06,
+        ya,
+        pb[1] - nz * 0.06,
+        pb[0],
+        ya,
+        pb[1],
+        pb[0],
+        h.y1,
+        pb[1],
+        pb[0] - nx * 0.06,
+        h.y1,
+        pb[1] - nz * 0.06,
+        [0, 0, 0.1, 1],
+      );
+      // frame, sill and bars
+      D2.col("#e8dcc0");
+      const mid = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2] as const;
+      beam(
+        D2,
+        pa[0] + nx * 0.02,
+        ya,
+        pa[1] + nz * 0.02,
+        pb[0] + nx * 0.02,
+        ya,
+        pb[1] + nz * 0.02,
+        0.08,
+      );
+      beam(
+        D2,
+        pa[0] + nx * 0.02,
+        h.y1,
+        pa[1] + nz * 0.02,
+        pb[0] + nx * 0.02,
+        h.y1,
+        pb[1] + nz * 0.02,
+        0.08,
+      );
+      beam(
+        D2,
+        mid[0] - nx * 0.04,
+        ya,
+        mid[1] - nz * 0.04,
+        mid[0] - nx * 0.04,
+        h.y1,
+        mid[1] - nz * 0.04,
+        0.04,
+      );
+      beam(
+        D2,
+        pa[0] - nx * 0.04,
+        (ya + h.y1) / 2,
+        pa[1] - nz * 0.04,
+        pb[0] - nx * 0.04,
+        (ya + h.y1) / 2,
+        pb[1] - nz * 0.04,
+        0.04,
+      );
+    }
+  }
+
+  // ---- floor and ceiling ----
+  const stair = plan.items.find((it) => it.k === "stair") as
+    Extract<RoomItem, { k: "stair" }> | undefined;
+  const landing = plan.items.find((it) => it.k === "landing") as
+    Extract<RoomItem, { k: "landing" }> | undefined;
+  if (b.t === "stable") {
+    G.col("#8a6a44").mat(WL.YARD);
+    G.flat(x0 + T, z0 + T, x1 - T, -T, fl + 0.01, [0, 0, W / 8, D / 8]);
+  } else {
+    G.col(plan.finish === "stone" ? "#9a8e7a" : "#b8966e").mat(
+      plan.finish === "stone" ? WL.P_STONE : WL.DECK,
+    );
+    G.flat(x0 + T, z0 + T, x1 - T, -T, fl + 0.01, [0, 0, W / 4, D / 4]);
+  }
+  // the ceiling: boards on joists; the stair well is open above the saloon's stair (which
+  // climbs the left wall to a landing in the front-left corner)
+  const hole =
+    stair && landing
+      ? { x0: x0 + T, x1: Math.max(stair.x1, landing.r.x1), z0: stair.zLow, z1: -T }
+      : null;
+  const cy = ceil - 0.02;
+  const ceilRect = (ax: number, az: number, bx: number, bz: number) => {
+    if (bx - ax < 1e-3 || bz - az < 1e-3) return;
+    G.col("#6a5038").mat(WL.DECK);
+    G.quad(ax, cy, az, bx, cy, az, bx, cy, bz, ax, cy, bz, [az / 4, ax / 4, bz / 4, bx / 4]);
+  };
+  if (hole) {
+    ceilRect(x0 + T, z0 + T, x1 - T, hole.z0);
+    ceilRect(hole.x1, hole.z0, x1 - T, -T);
+  } else ceilRect(x0 + T, z0 + T, x1 - T, -T);
+  D2.col("#5a4030");
+  for (let x = x0 + 1; x < x1 - 0.5; x += 1.4) {
+    const inWell = hole && x < hole.x1 + 0.1;
+    boxP(
+      D2,
+      WL.TIMBER,
+      x - 0.08,
+      cy - 0.22,
+      z0 + T,
+      x + 0.08,
+      cy,
+      inWell ? hole!.z0 : -T,
+      false,
+      true,
+    );
+  }
+  if (hole && stair && landing) {
+    // the stair hall above: the landing's floor, partitions round the well, a ceiling
+    const up = landing.y;
+    const top = Math.min(H - 0.1, up + 3.1);
+    const lx1 = landing.r.x1;
+    G.col("#b89a78").mat(WL.DECK);
+    boxP(G, WL.DECK, x0 + T, up - 0.2, landing.r.z0, lx1, up, 0.02, true, true);
+    G.col(plan.wallColor, 1).mat(WL.PAINT, 0, INT);
+    // (walls facing into the hall, which lies to their west: a -> b with the hall on the left)
+    wallP(G, WL.PAINT, lx1, landing.r.z0, lx1, -T, up, top); // the landing's east side
+    wallP(G, WL.PAINT, stair.x1, landing.r.z0, lx1, landing.r.z0, up, top); // behind the landing, beside the well
+    wallP(G, WL.PAINT, stair.x1, stair.zLow, stair.x1, landing.r.z0, cy, top); // the well's east side
+    wallP(G, WL.PAINT, x0 + T, stair.zLow, stair.x1, stair.zLow, cy, top); // the well's back end
+    // the partitions' far faces (toward the rest of the upper floor, never reached but closed)
+    wallP(G, WL.PAINT, lx1 + 0.1, -T, lx1 + 0.1, landing.r.z0, up, top);
+    wallP(G, WL.PAINT, stair.x1 + 0.1, landing.r.z0, stair.x1 + 0.1, stair.zLow, cy, top);
+    // the outer walls' inner faces up the hall (the balcony door in the front one)
+    wallP(G, WL.PAINT, x0 + T, -T, x0 + T, stair.zLow, up, top);
+    holedWall(
+      G,
+      WL.PAINT,
+      lx1,
+      -T,
+      x0 + T,
+      -T,
+      up,
+      top,
+      ud ? [{ u0: lx1 - ud.b, u1: lx1 - ud.a, y0: up, y1: up + 2.3 }] : [],
+      finUV,
+    );
+    G.col("#8a6a4a").mat(WL.P_BOARD);
+    G.quad(
+      x0 + T,
+      top,
+      stair.zLow,
+      lx1,
+      top,
+      stair.zLow,
+      lx1,
+      top,
+      -T,
+      x0 + T,
+      top,
+      -T,
+      [0, 0, 1, 2],
+    );
+    lantern(B, lx1 - 0.3, up + 2.2, landing.r.z0 + 0.6, 3);
+    // the landing's rail along the well
+    D2.col("#6a4a30");
+    boxP(
+      D2,
+      WL.TIMBER,
+      stair.x1,
+      up + 0.95,
+      landing.r.z0 - 0.04,
+      lx1,
+      up + 1.02,
+      landing.r.z0 + 0.04,
+    );
+  }
+
+  // ---- the furniture ----
+  const lampAt = (x: number, y: number, z: number, hang: boolean) => {
+    if (hang) {
+      D2.col("#2a2420");
+      beam(D2, x, y + 0.4, z, x, ceil - 0.02, z, 0.025, WL.IRON);
+    }
+    lantern(B, x, fl + y - 0.2, z, 0);
+    B.pools.col("#ffb060").mat(0, 0, INT);
+    B.pools.flat(x - 2.4, z - 2.4, x + 2.4, z + 2.4, fl + 0.03);
+  };
+  for (const it of plan.items) roomItem(B, it, fl, ceil, r, lampAt);
+  // (back to the outside's flags for whatever the building draws next)
+  G.mat(plainL, seed, AO);
+  D2.mat(WL.TIMBER, 0.5, 0);
+  void yb;
+}
+
+/** one piece of furniture (local frame, floor height fl) */
+function roomItem(
+  B: BGeo,
+  it: RoomItem,
+  fl: number,
+  ceil: number,
+  r: () => number,
+  lampAt: (x: number, y: number, z: number, hang: boolean) => void,
+) {
+  const G = B.main;
+  const D2 = B.detail;
+  G.mat(WL.P_BOARD, 0, INT);
+  D2.mat(WL.TIMBER, 0.5, INT);
+  switch (it.k) {
+    case "bar": {
+      // a long mahogany counter with a brass foot rail and a zinc top
+      const R2 = it.r;
+      G.col("#4a2416").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0, R2.x1, fl + 1.05, R2.z1);
+      G.col("#6a3a22").mat(WL.TIMBER);
+      boxP(
+        G,
+        WL.TIMBER,
+        R2.x0 - 0.08,
+        fl + 1.05,
+        R2.z0 - 0.08,
+        R2.x1 + 0.1,
+        fl + 1.12,
+        R2.z1 + 0.08,
+      );
+      // panels on the customer side
+      D2.col("#3a1c10");
+      for (let z = R2.z0 + 0.3; z < R2.z1 - 0.2; z += 0.8)
+        boxP(D2, WL.TIMBER, R2.x1, fl + 0.2, z, R2.x1 + 0.03, fl + 0.85, z + 0.6);
+      D2.col("#c8a040");
+      beam(D2, R2.x1 + 0.25, fl + 0.2, R2.z0, R2.x1 + 0.25, fl + 0.2, R2.z1, 0.05, WL.PAINT);
+      // spittoons, glasses and a bottle on the bar
+      for (let z = R2.z0 + 1; z < R2.z1 - 0.5; z += 1.6 + r()) {
+        D2.col("#b8c8c8");
+        cylP(D2, WL.PAINT, R2.x0 + 0.35 + r() * 0.2, fl + 1.12, z, 0.04, 0.1, 6);
+        if (r() < 0.5) {
+          D2.col(pick(["#3a5a2a", "#6a3a1a", "#2a2a3a"], r));
+          cylP(D2, WL.PAINT, R2.x0 + 0.5, fl + 1.12, z + 0.3, 0.05, 0.28, 6, 0.03);
+        }
+      }
+      D2.col("#8a7a4a");
+      cylP(D2, WL.IRON, R2.x1 + 0.5, fl, R2.z0 + 1.5, 0.16, 0.22, 8, 0.12, false);
+      break;
+    }
+    case "backbar": {
+      // shelves of bottles either side of a tall mirror
+      const R2 = it.r;
+      G.col("#3a1c10").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0, R2.x1, fl + 0.95, R2.z1);
+      boxP(G, WL.P_BOARD, R2.x0, fl + 0.95, R2.z0, R2.x0 + 0.25, fl + 2.9, R2.z1);
+      G.col("#5a2e1a");
+      boxP(G, WL.TIMBER, R2.x0, fl + 2.9, R2.z0 - 0.1, R2.x1 + 0.05, fl + 3.05, R2.z1 + 0.1);
+      const mz0 = (R2.z0 + R2.z1) / 2 - 1.6;
+      const mz1 = mz0 + 3.2;
+      // the mirror: pale silver catching the room's light
+      G.col("#c8ccd0").mat(WL.PAINT, 0, INT);
+      G.quad(
+        R2.x0 + 0.26,
+        fl + 1.2,
+        mz1,
+        R2.x0 + 0.26,
+        fl + 1.2,
+        mz0,
+        R2.x0 + 0.26,
+        fl + 2.7,
+        mz0,
+        R2.x0 + 0.26,
+        fl + 2.7,
+        mz1,
+        [0, 0, 1, 1],
+      );
+      D2.col("#c8a040");
+      boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + 1.15, mz0 - 0.08, R2.x0 + 0.32, fl + 2.75, mz0);
+      boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + 1.15, mz1, R2.x0 + 0.32, fl + 2.75, mz1 + 0.08);
+      boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + 2.7, mz0, R2.x0 + 0.32, fl + 2.78, mz1);
+      // shelves with bottles either side
+      for (const [za, zb] of [
+        [R2.z0 + 0.1, mz0 - 0.15],
+        [mz1 + 0.15, R2.z1 - 0.1],
+      ] as const) {
+        for (const y of [1.35, 1.85, 2.35]) {
+          D2.col("#5a2e1a");
+          boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + y - 0.04, za, R2.x0 + 0.55, fl + y, zb);
+          for (let z = za + 0.1; z < zb - 0.05; z += 0.12 + r() * 0.08) {
+            D2.col(pick(["#2a4a2a", "#6a3a14", "#3a2a1a", "#8a6a2a", "#2a2a4a", "#9a3a2a"], r));
+            const h = 0.22 + r() * 0.12;
+            cylP(D2, WL.PAINT, R2.x0 + 0.4, fl + y, z, 0.035, h, 5, 0.02);
+          }
+        }
+      }
+      break;
+    }
+    case "table": {
+      // a round card table, its chairs pulled up; cards and chips on some
+      D2.col("#5a3a22");
+      cylP(D2, WL.TIMBER, it.x, fl + 0.72, it.z, 0.55, 0.05, 12);
+      cylP(D2, WL.TIMBER, it.x, fl, it.z, 0.06, 0.72, 6);
+      cylP(D2, WL.TIMBER, it.x, fl, it.z, 0.3, 0.05, 8, 0.25);
+      if (it.cards) {
+        D2.col("#2a5a2a").mat(WL.PAINT, 0, INT);
+        D2.flat(it.x - 0.35, it.z - 0.35, it.x + 0.35, it.z + 0.35, fl + 0.775, [0, 0, 1, 1]);
+        for (let i = 0; i < 6; i++) {
+          D2.col(pick(["#f2eee4", "#c83a2a", "#2a4a8a"], r));
+          cylP(
+            D2,
+            WL.PAINT,
+            it.x + (r() - 0.5) * 0.5,
+            fl + 0.77,
+            it.z + (r() - 0.5) * 0.5,
+            0.025,
+            0.02 + r() * 0.05,
+            6,
+          );
+        }
+      }
+      for (let c = 0; c < it.chairs; c++) {
+        const a = (c / it.chairs) * Math.PI * 2 + r() * 0.5;
+        const cx = it.x + Math.cos(a) * 0.95;
+        const cz = it.z + Math.sin(a) * 0.95;
+        D2.col("#6a4428");
+        oboxP(D2, WL.TIMBER, cx, fl + 0.44, cz, 0.42, 0.05, 0.42, -a);
+        for (const [lx, lz] of [
+          [-0.17, -0.17],
+          [0.17, -0.17],
+          [-0.17, 0.17],
+          [0.17, 0.17],
+        ] as const) {
+          const px = cx + lx * Math.cos(a) - lz * Math.sin(a);
+          const pz = cz + lx * Math.sin(a) + lz * Math.cos(a);
+          boxC(D2, WL.TIMBER, px, fl, pz, 0.04, 0.44, 0.04);
+        }
+        const bx = cx + Math.cos(a) * 0.2;
+        const bz = cz + Math.sin(a) * 0.2;
+        oboxP(D2, WL.TIMBER, bx, fl + 0.46, bz, 0.04, 0.5, 0.4, -a);
+      }
+      break;
+    }
+    case "piano": {
+      // an upright piano against the wall, lid open, a stool before it
+      G.col("#2a1810").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, it.x - 0.8, fl, it.z - 0.35, it.x + 0.8, fl + 1.3, it.z + 0.1);
+      boxP(G, WL.P_BOARD, it.x - 0.8, fl + 0.7, it.z + 0.1, it.x + 0.8, fl + 0.78, it.z + 0.35);
+      D2.col("#f2eee4").mat(WL.PAINT, 0, INT);
+      D2.flat(it.x - 0.72, it.z + 0.12, it.x + 0.72, it.z + 0.3, fl + 0.785, [0, 0, 1, 1]);
+      D2.col("#1a1210");
+      for (let x = it.x - 0.7; x < it.x + 0.7; x += 0.055)
+        if (Math.floor((x - it.x) / 0.055 + 100) % 7 !== 2)
+          boxP(D2, WL.PAINT, x, fl + 0.785, it.z + 0.12, x + 0.025, fl + 0.81, it.z + 0.22);
+      D2.col("#e8dcc0");
+      D2.quad(
+        it.x - 0.5,
+        fl + 0.85,
+        it.z + 0.11,
+        it.x + 0.5,
+        fl + 0.85,
+        it.z + 0.11,
+        it.x + 0.5,
+        fl + 1.2,
+        it.z + 0.02,
+        it.x - 0.5,
+        fl + 1.2,
+        it.z + 0.02,
+        [0, 0, 1, 1],
+      );
+      D2.col("#3a2418");
+      cylP(D2, WL.TIMBER, it.x, fl, it.z + 0.85, 0.2, 0.5, 8);
+      break;
+    }
+    case "stair": {
+      // treads and risers, a boarded side toward the room, a newel post and a banister
+      const n = Math.max(8, Math.round((it.y - fl) / 0.19));
+      const run = it.zHigh - it.zLow;
+      for (let i = 0; i < n; i++) {
+        const za = it.zLow + (run * i) / n;
+        const zb = it.zLow + (run * (i + 1)) / n;
+        const h = fl + ((it.y - fl) * (i + 1)) / n;
+        G.col("#8a6a48").mat(WL.DECK);
+        boxP(G, WL.DECK, it.x0, h - 0.05, za, it.x1, h, zb + 0.03, true, false);
+        G.col("#5a4030");
+        wallq(G, it.x1, za, it.x0, za, h - (it.y - fl) / n, h - 0.05, [0, 0, 1, 0.2]);
+      }
+      // the closed side toward the room: a sloped stringer and boards under it, to the floor
+      const side = it.x0 < 0 ? it.x1 : it.x0; // (the room side: away from the wall it climbs)
+      const sn = it.x0 < 0 ? 1 : -1;
+      G.col("#5a3a24").mat(WL.P_BOARD);
+      if (sn > 0) {
+        G.v(side, fl, it.zHigh, 1, 0, 0, run / 4, 0);
+        G.v(side, fl, it.zLow, 1, 0, 0, 0, INT);
+        G.v(side, it.y, it.zHigh, 1, 0, 0, run / 4, (it.y - fl) / 4);
+      } else {
+        G.v(side, fl, it.zLow, -1, 0, 0, 0, INT);
+        G.v(side, fl, it.zHigh, -1, 0, 0, run / 4, 0);
+        G.v(side, it.y, it.zHigh, -1, 0, 0, run / 4, (it.y - fl) / 4);
+      }
+      // the banister
+      D2.col("#3a2418");
+      boxP(D2, WL.TIMBER, side - 0.06, fl, it.zLow - 0.06, side + 0.06, fl + 1.2, it.zLow + 0.06);
+      beam(D2, side, fl + 1.1, it.zLow, side, it.y + 0.95, it.zHigh, 0.07);
+      for (let i = 1; i < n; i += 2) {
+        const z = it.zLow + (run * i) / n;
+        const h = fl + ((it.y - fl) * i) / n;
+        boxP(D2, WL.TIMBER, side - 0.02, h, z - 0.02, side + 0.02, h + 0.95, z + 0.02);
+      }
+      break;
+    }
+    case "cells": {
+      // the jail: cells along the back wall behind iron bars, each with a cot and a bucket
+      const R2 = it.r;
+      const cw = (R2.x1 - R2.x0) / it.n;
+      D2.col("#2a2826");
+      for (let x = R2.x0; x <= R2.x1 + 1e-3; x += 0.2)
+        boxP(D2, WL.IRON, x - 0.02, fl, R2.z1 - 0.02, x + 0.02, ceil - 0.05, R2.z1 + 0.02);
+      for (const y of [0.15, 1.2, 2.2])
+        boxP(D2, WL.IRON, R2.x0, fl + y, R2.z1 - 0.04, R2.x1, fl + y + 0.06, R2.z1 + 0.04);
+      for (let c = 1; c < it.n; c++) {
+        const x = R2.x0 + c * cw;
+        G.col("#9a8e7a").mat(WL.P_STONE);
+        boxP(G, WL.P_STONE, x - 0.1, fl, R2.z0, x + 0.1, ceil - 0.02, R2.z1 - 0.03);
+      }
+      for (let c = 0; c < it.n; c++) {
+        const cx = R2.x0 + (c + 0.5) * cw;
+        // the cell door's hinge band and lock box
+        D2.col("#3a3432");
+        boxP(D2, WL.IRON, cx + 0.3, fl + 0.9, R2.z1 - 0.06, cx + 0.5, fl + 1.2, R2.z1 + 0.06);
+        // a cot against the back wall, a grey blanket, a bucket
+        D2.col("#5a4430");
+        boxP(
+          D2,
+          WL.TIMBER,
+          cx - cw / 2 + 0.3,
+          fl + 0.35,
+          R2.z0 + 0.1,
+          cx + 0.5,
+          fl + 0.45,
+          R2.z0 + 0.9,
+        );
+        for (const x of [cx - cw / 2 + 0.35, cx + 0.45])
+          boxP(D2, WL.TIMBER, x - 0.03, fl, R2.z0 + 0.12, x + 0.03, fl + 0.35, R2.z0 + 0.88);
+        D2.col("#7a7468").mat(WL.CANVAS);
+        boxP(
+          D2,
+          WL.CANVAS,
+          cx - cw / 2 + 0.35,
+          fl + 0.45,
+          R2.z0 + 0.15,
+          cx + 0.3,
+          fl + 0.52,
+          R2.z0 + 0.85,
+        );
+        D2.col("#6a6460");
+        cylP(D2, WL.IRON, cx + cw / 2 - 0.45, fl, R2.z0 + 0.5, 0.14, 0.3, 8, 0.16);
+      }
+      break;
+    }
+    case "desk": {
+      // a rolltop desk with a chair, papers and a lamp
+      const c = Math.cos(it.rot);
+      const s = Math.sin(it.rot);
+      G.col("#5a3a22").mat(WL.P_BOARD);
+      oboxP(G, WL.P_BOARD, it.x, fl, it.z, 1.5, 0.78, 0.7, it.rot);
+      oboxP(G, WL.P_BOARD, it.x - s * 0.25, fl + 0.78, it.z - c * 0.25, 1.5, 0.45, 0.25, it.rot);
+      D2.col("#f2eadc").mat(WL.PAINT, 0, INT);
+      oboxP(
+        D2,
+        WL.PAINT,
+        it.x + s * 0.05,
+        fl + 0.78,
+        it.z + c * 0.05,
+        0.3,
+        0.01,
+        0.22,
+        it.rot + 0.3,
+      );
+      D2.col("#6a4428");
+      oboxP(D2, WL.TIMBER, it.x + s * 0.75, fl + 0.44, it.z + c * 0.75, 0.45, 0.05, 0.45, it.rot);
+      oboxP(D2, WL.TIMBER, it.x + s * 0.95, fl + 0.46, it.z + c * 0.95, 0.45, 0.5, 0.05, it.rot);
+      lampAt(it.x + c * 0.5, 1.05, it.z - s * 0.5, false);
+      break;
+    }
+    case "stove": {
+      // a pot-bellied stove on a tin sheet, its pipe up through the ceiling
+      D2.col("#2a2624");
+      cylP(D2, WL.IRON, it.x, fl + 0.12, it.z, 0.22, 0.2, 10, 0.32, false);
+      cylP(D2, WL.IRON, it.x, fl + 0.32, it.z, 0.32, 0.4, 10, 0.24, false);
+      cylP(D2, WL.IRON, it.x, fl + 0.72, it.z, 0.24, 0.12, 10, 0.2);
+      cylP(D2, WL.IRON, it.x, fl + 0.84, it.z, 0.07, ceil - fl - 0.86, 6);
+      for (const [dx, dz] of [
+        [-0.2, -0.2],
+        [0.2, -0.2],
+        [-0.2, 0.2],
+        [0.2, 0.2],
+      ] as const)
+        boxC(D2, WL.IRON, it.x + dx, fl, it.z + dz, 0.05, 0.12, 0.05);
+      D2.col("#8a8a86").mat(WL.IRON);
+      D2.flat(it.x - 0.6, it.z - 0.6, it.x + 0.6, it.z + 0.6, fl + 0.035, [0, 0, 1, 1]);
+      B.glow.col("#ff7a2a");
+      B.glow.box(it.x, fl + 0.42, it.z + 0.3, 0.16, 0.1, 0.02);
+      break;
+    }
+    case "rack": {
+      // a gun rack on the wall: three rifles standing in it
+      const c = Math.cos(it.rot);
+      const s = Math.sin(it.rot);
+      D2.col("#5a3a22");
+      oboxP(D2, WL.TIMBER, it.x + s * 0.05, fl + 0.3, it.z + c * 0.05, 1.2, 0.08, 0.12, it.rot);
+      oboxP(D2, WL.TIMBER, it.x + s * 0.05, fl + 1.5, it.z + c * 0.05, 1.2, 0.08, 0.12, it.rot);
+      for (let i = -1; i <= 1; i++) {
+        const px = it.x + c * i * 0.35 + s * 0.08;
+        const pz = it.z - s * i * 0.35 + c * 0.08;
+        D2.col("#4a2c18");
+        beam(D2, px, fl + 0.3, pz, px, fl + 0.9, pz, 0.08);
+        D2.col("#2a2826");
+        beam(D2, px, fl + 0.9, pz, px, fl + 1.7, pz, 0.035, WL.IRON);
+      }
+      break;
+    }
+    case "board": {
+      // a notice board: WANTED posters pinned up
+      const c = Math.cos(it.rot);
+      const s = Math.sin(it.rot);
+      D2.col("#6a4a30");
+      oboxP(D2, WL.TIMBER, it.x + s * 0.03, fl + 1.1, it.z + c * 0.03, 1.4, 1.0, 0.05, it.rot);
+      for (let i = 0; i < 4; i++) {
+        const lx = -0.45 + (i % 2) * 0.62 + (r() - 0.5) * 0.08;
+        const ly = 1.35 + Math.floor(i / 2) * 0.45;
+        const px = it.x + c * lx + s * 0.07;
+        const pz = it.z - s * lx + c * 0.07;
+        D2.col("#ffffff", 0.9).mat(WL.SIGNS, 0, INT);
+        const uv = signUV(26);
+        const hw = 0.24;
+        D2.quad(
+          px - c * hw,
+          fl + ly - 0.18,
+          pz + s * hw,
+          px + c * hw,
+          fl + ly - 0.18,
+          pz - s * hw,
+          px + c * hw,
+          fl + ly + 0.18,
+          pz - s * hw,
+          px - c * hw,
+          fl + ly + 0.18,
+          pz + s * hw,
+          uv,
+        );
+      }
+      break;
+    }
+    case "counter": {
+      const R2 = it.r;
+      G.col("#6a4a2a").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0, R2.x1, fl + 1.0, R2.z1);
+      G.col("#8a6a44").mat(WL.TIMBER);
+      boxP(
+        G,
+        WL.TIMBER,
+        R2.x0 - 0.05,
+        fl + 1.0,
+        R2.z0 - 0.05,
+        R2.x1 + 0.05,
+        fl + 1.06,
+        R2.z1 + 0.05,
+      );
+      const mx = (R2.x0 + R2.x1) / 2;
+      const mz = (R2.z0 + R2.z1) / 2;
+      if (it.top === "till") {
+        // a brass cash register
+        D2.col("#b8903a");
+        boxP(D2, WL.PAINT, mx - 0.22, fl + 1.06, mz - 0.2, mx + 0.22, fl + 1.36, mz + 0.2);
+        boxP(D2, WL.PAINT, mx - 0.2, fl + 1.36, mz - 0.15, mx + 0.2, fl + 1.5, mz + 0.05);
+      } else if (it.top === "scale") {
+        // a balance scale and big glass candy jars
+        D2.col("#8a8a86");
+        boxP(D2, WL.IRON, mx - 0.18, fl + 1.06, mz - 0.12, mx + 0.18, fl + 1.12, mz + 0.12);
+        beam(D2, mx, fl + 1.12, mz, mx, fl + 1.42, mz, 0.03, WL.IRON);
+        beam(D2, mx - 0.25, fl + 1.42, mz, mx + 0.25, fl + 1.42, mz, 0.02, WL.IRON);
+        for (const dx of [-0.25, 0.25]) cylP(D2, WL.IRON, mx + dx, fl + 1.3, mz, 0.1, 0.03, 8);
+      }
+      for (let k = 0; k < 3; k++) {
+        const jz = R2.z0 + 0.4 + k * 0.45;
+        D2.col("#c8d8d8", 0.6);
+        cylP(D2, WL.PAINT, R2.x0 + 0.35, fl + 1.06, jz, 0.1, 0.28, 8);
+        D2.col(pick(["#c83a2a", "#e8c83a", "#3a8a3a"], r));
+        cylP(D2, WL.PAINT, R2.x0 + 0.35, fl + 1.07, jz, 0.08, 0.18, 8);
+      }
+      break;
+    }
+    case "cage": {
+      // the teller cage: brass bars from the counter top to above head height, two windows
+      const R2 = it.r;
+      const zf = R2.z1;
+      D2.col("#b89040");
+      for (let x = R2.x0; x <= R2.x1 + 1e-3; x += 0.12) {
+        const win =
+          Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.3)) < 0.35 ||
+          Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.7)) < 0.35;
+        boxP(
+          D2,
+          WL.PAINT,
+          x - 0.012,
+          fl + (win ? 1.55 : 1.06),
+          zf - 0.01,
+          x + 0.012,
+          fl + 2.4,
+          zf + 0.01,
+        );
+      }
+      boxP(D2, WL.PAINT, R2.x0, fl + 2.4, zf - 0.03, R2.x1, fl + 2.46, zf + 0.03);
+      boxP(D2, WL.PAINT, R2.x0, fl + 1.55, zf - 0.02, R2.x1, fl + 1.58, zf + 0.02);
+      break;
+    }
+    case "vault": {
+      // the vault: a great iron door set in the back wall, with its dial and handle
+      G.col("#3a3a3c").mat(WL.IRON);
+      boxP(
+        G,
+        WL.IRON,
+        it.x - it.w / 2 - 0.25,
+        fl,
+        it.z,
+        it.x + it.w / 2 + 0.25,
+        fl + 2.7,
+        it.z + 0.12,
+      );
+      G.col("#5a5a5e");
+      boxP(
+        G,
+        WL.IRON,
+        it.x - it.w / 2,
+        fl + 0.1,
+        it.z + 0.12,
+        it.x + it.w / 2,
+        fl + 2.45,
+        it.z + 0.22,
+      );
+      D2.col("#c8a040");
+      boxC(D2, WL.PAINT, it.x, fl + 1.2, it.z + 0.26, 0.34, 0.34, 0.06);
+      beam(D2, it.x + 0.5, fl + 1.0, it.z + 0.3, it.x + 0.9, fl + 1.0, it.z + 0.3, 0.06, WL.PAINT);
+      for (const y of [0.5, 2.0])
+        boxP(
+          D2,
+          WL.IRON,
+          it.x - it.w / 2 - 0.1,
+          fl + y,
+          it.z + 0.2,
+          it.x - it.w / 2 + 0.25,
+          fl + y + 0.25,
+          it.z + 0.28,
+        );
+      break;
+    }
+    case "shelves": {
+      // floor-to-ceiling shelves of goods: tins, bolts of cloth, crocks, boxes
+      const R2 = it.r;
+      const fx = it.face > 0 ? R2.x1 : R2.x0;
+      const bx = it.face > 0 ? R2.x0 : R2.x1;
+      G.col("#6a4a2a").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, Math.min(fx, bx), fl, R2.z0, Math.max(fx, bx), fl + 2.8, R2.z0 + 0.06);
+      boxP(G, WL.P_BOARD, Math.min(fx, bx), fl, R2.z1 - 0.06, Math.max(fx, bx), fl + 2.8, R2.z1);
+      for (const y of [0.05, 0.6, 1.15, 1.7, 2.25, 2.75]) {
+        G.col("#7a5a36");
+        boxP(G, WL.TIMBER, Math.min(fx, bx), fl + y, R2.z0, Math.max(fx, bx), fl + y + 0.04, R2.z1);
+        if (y > 2.6) continue;
+        for (let z = R2.z0 + 0.1; z < R2.z1 - 0.15;) {
+          const w = 0.12 + r() * 0.3;
+          const h = 0.15 + r() * 0.3;
+          const kind = r();
+          const col =
+            kind < 0.3
+              ? pick(["#c83a2a", "#3a6a9a", "#e8c83a", "#4a8a4a"], r)
+              : kind < 0.55
+                ? pick(["#8a3a5a", "#3a4a7a", "#c8b88a", "#6a8a6a"], r)
+                : pick(["#c8b898", "#a88a5a", "#e8e0cc"], r);
+          D2.col(col);
+          const x = (fx + bx) / 2;
+          if (kind < 0.3) {
+            for (let k = 0; k < 3; k++)
+              cylP(D2, WL.PAINT, x + (k - 1) * 0.12, fl + y + 0.04, z + w / 2, 0.045, 0.12, 6);
+          } else boxP(D2, WL.PAINT, x - 0.2, fl + y + 0.04, z, x + 0.2, fl + y + 0.04 + h, z + w);
+          z += w + 0.04;
+        }
+      }
+      break;
+    }
+    case "goods": {
+      if (it.kind === "barrel") {
+        D2.col("#8a5a32");
+        cylP(D2, WL.TIMBER, it.x, fl, it.z, 0.3, 0.45, 10, 0.34, false);
+        cylP(D2, WL.TIMBER, it.x, fl + 0.45, it.z, 0.34, 0.45, 10, 0.3);
+        D2.col("#e8dcc0");
+        cylP(D2, WL.PAINT, it.x, fl + 0.9, it.z, 0.27, 0.06, 10);
+      } else if (it.kind === "sacks") {
+        for (let k = 0; k < 4; k++) {
+          D2.col(pick(["#d8ccb0", "#c8b898", "#e2d8c0"], r)).mat(WL.CANVAS);
+          oboxP(
+            D2,
+            WL.CANVAS,
+            it.x + (k % 2) * 0.5 - 0.25,
+            fl + Math.floor(k / 2) * 0.3,
+            it.z + (r() - 0.5) * 0.2,
+            0.45,
+            0.3,
+            0.7,
+            r() * 0.4,
+          );
+        }
+      } else {
+        for (let k = 0; k < 4; k++) {
+          D2.col(pick(["#b89468", "#a8845a", "#c4a070"], r));
+          oboxP(
+            D2,
+            WL.TIMBER,
+            it.x + (k % 2) * 0.62 - 0.31,
+            fl + Math.floor(k / 2) * 0.55,
+            it.z,
+            0.55,
+            0.55,
+            0.55,
+            r() * 0.3,
+          );
+        }
+      }
+      break;
+    }
+    case "stall": {
+      // a horse stall: board sides chest high, a manger, straw, a horse in some
+      const R2 = it.r;
+      const back = it.open > 0 ? R2.x0 : R2.x1;
+      G.col("#7a5a3a").mat(WL.P_BOARD);
+      boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0 - 0.04, R2.x1, fl + 1.5, R2.z0 + 0.04);
+      D2.col("#5a4030");
+      boxP(D2, WL.TIMBER, R2.x0, fl + 1.5, R2.z0 - 0.06, R2.x1, fl + 1.58, R2.z0 + 0.06);
+      const post = it.open > 0 ? R2.x1 : R2.x0;
+      boxP(D2, WL.TIMBER, post - 0.08, fl, R2.z0 - 0.08, post + 0.08, ceil - 0.02, R2.z0 + 0.08);
+      // manger at the back
+      D2.col("#6a4a2e");
+      const mx = back + (it.open > 0 ? 0.35 : -0.35);
+      boxP(D2, WL.TIMBER, mx - 0.3, fl + 0.7, R2.z0 + 0.5, mx + 0.3, fl + 1.1, R2.z1 - 0.5);
+      D2.col("#c8a85a").mat(WL.CANVAS);
+      boxP(D2, WL.CANVAS, mx - 0.25, fl + 1.0, R2.z0 + 0.55, mx + 0.25, fl + 1.2, R2.z1 - 0.55);
+      // straw on the floor
+      G.col("#c8a860").mat(WL.CANVAS);
+      G.flat(
+        Math.min(R2.x0, R2.x1) + 0.1,
+        R2.z0 + 0.1,
+        Math.max(R2.x0, R2.x1) - 0.1,
+        R2.z1 - 0.1,
+        fl + 0.025,
+        [0, 0, 2, 2],
+      );
+      if (it.horse) {
+        const hx = (R2.x0 + R2.x1) / 2;
+        const hz = (R2.z0 + R2.z1) / 2;
+        const horse = templates().horse;
+        if (horse)
+          D2.stamp(
+            horse.d,
+            hx,
+            fl,
+            hz,
+            it.open > 0 ? Math.PI / 2 : -Math.PI / 2,
+            1,
+            1,
+            1,
+            _tint.set(pick(COATS, r)),
+          );
+      }
+      break;
+    }
+    case "bench": {
+      const c = Math.cos(it.rot);
+      const s = Math.sin(it.rot);
+      D2.col("#6a4a2e");
+      oboxP(D2, WL.TIMBER, it.x, fl + 0.42, it.z, 1.4, 0.05, 0.38, it.rot);
+      for (const lx of [-0.6, 0.6])
+        oboxP(D2, WL.TIMBER, it.x + c * lx, fl, it.z - s * lx, 0.06, 0.42, 0.3, it.rot);
+      break;
+    }
+    case "lamp":
+      lampAt(it.x, it.y, it.z, it.hang);
+      break;
+    default:
+      break;
+  }
+}
+
+/** a round roof ventilator (freight shed, livery) */
+function D2vent(B: BGeo, x: number, y: number, z: number) {
+  B.detail.col("#6a6460");
+  cylP(B.detail, WL.IRON, x, y - 0.3, z, 0.35, 0.7, 10, 0.35, false);
+  cylP(B.detail, WL.IRON, x, y + 0.4, z, 0.55, 0.25, 10, 0.05);
+}
+
+/** Main Street kinds: false-front businesses with a back lot */
+const STREET_KINDS = new Set(["store", "hotel", "saloon", "opera", "bank", "sheriff"]);
+/**
+ * The parts a building's back and base need to look built rather than extruded: a stone
+ * or timber sill round the foot of frame walls, a framed back door with a stoop, a stove pipe
+ * through the roof, and on some Main Street buildings a lean-to on the back wall.
+ */
+function backWorks(
+  B: BGeo,
+  b: WBld,
+  W: number,
+  D: number,
+  H: number,
+  paint: string,
+  plainL: number,
+  seed: number,
+  r: () => number,
+) {
+  const G = B.main;
+  const x0 = -W / 2;
+  const x1 = W / 2;
+  const z0 = -D;
+  const frame =
+    b.mat === "clap" ||
+    b.mat === "board" ||
+    b.mat === "barn" ||
+    b.mat === "log" ||
+    b.mat === "white";
+  // footing: fieldstone under the sill on three sides (the boardwalk or porch covers the front)
+  if (frame) {
+    G.col(b.mat === "log" ? "#8a8272" : "#9a9080");
+    // (0.1 m proud: clear of the corner boards, which stand 0.06 off the wall)
+    boxP(G, WL.P_STONE, x0 - 0.1, 0, z0 - 0.1, x1 + 0.1, 0.32, z0 + 0.12, false);
+    boxP(G, WL.P_STONE, x0 - 0.1, 0, z0 + 0.12, x0 + 0.05, 0.32, -0.02, false);
+    boxP(G, WL.P_STONE, x1 - 0.05, 0, z0 + 0.12, x1 + 0.1, 0.32, -0.02, false);
+    G.col("#6a5038");
+    boxP(G, WL.TIMBER, x0 - 0.04, 0.32, z0 - 0.04, x1 + 0.04, 0.44, z0 + 0.1, true, false);
+  }
+  const street = STREET_KINDS.has(b.t);
+  const home = b.t === "house" || b.t === "shack" || b.t === "ranch";
+  if (!street && !home) return;
+  // (a walk-in building's back door is a real doorway, drawn with its interior; a bank or a
+  // jail has none)
+  if (b.walkIn) {
+    if (b.t === "saloon" || b.t === "store") {
+      G.col("#8a6a4a");
+      boxP(G, WL.DECK, x0 + 1.25 - 0.8, 0, z0 - 0.9, x0 + 1.25 + 0.8, 0.2, z0);
+    }
+    return;
+  }
+  // the back door, near the left corner of the back wall, framed, with a plank stoop
+  const dxc = x0 + 1.25;
+  const dw = 0.95;
+  const dh = 2.1;
+  G.col("#5a4030");
+  boxP(G, WL.TIMBER, dxc - dw / 2 - 0.12, 0, z0 - 0.08, dxc - dw / 2, dh + 0.12, z0);
+  boxP(G, WL.TIMBER, dxc + dw / 2, 0, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.12, z0);
+  boxP(G, WL.TIMBER, dxc - dw / 2 - 0.12, dh, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.14, z0);
+  G.col(pick(["#6a3a2a", "#3a4a3a", "#5a5048", "#7a5a3a"], r)).mat(WL.P_BOARD, 0, 0);
+  G.quad(
+    dxc + dw / 2,
+    0.05,
+    z0 - 0.03,
+    dxc - dw / 2,
+    0.05,
+    z0 - 0.03,
+    dxc - dw / 2,
+    dh,
+    z0 - 0.03,
+    dxc + dw / 2,
+    dh,
+    z0 - 0.03,
+    [0, 0, 0.5, 1],
+  );
+  G.col("#2a2420");
+  boxP(G, WL.IRON, dxc + dw / 2 - 0.16, 1.0, z0 - 0.07, dxc + dw / 2 - 0.1, 1.08, z0 - 0.03);
+  G.col("#8a6a4a");
+  boxP(G, WL.DECK, dxc - 0.8, 0, z0 - 0.9, dxc + 0.8, 0.2, z0);
+  // a stove pipe up the back of the roof, with its rain cap
+  if (street || r() < 0.5) {
+    const px = x0 + W * (0.55 + r() * 0.3);
+    const pz = z0 + 1.2;
+    B.detail.col("#34302c");
+    cylP(B.detail, WL.IRON, px, H - 0.5, pz, 0.11, 2.4 + (b.roof === "gable" ? W * 0.25 : 1), 7);
+    const top = H - 0.5 + 2.4 + (b.roof === "gable" ? W * 0.25 : 1);
+    cylP(B.detail, WL.IRON, px, top, pz, 0.24, 0.06, 7, 0.02);
+  }
+  // a lean-to on the back wall (a kitchen or store room): board walls, a shed roof, a window
+  // and a door of its own
+  if (b.lean) {
+    const s = b.front === 2 ? 1 : -1;
+    const lc = ((b.leanAt ?? 0.5) - 0.5) * W * s;
+    const la = Math.max(x0 + 0.3, lc - b.lean / 2);
+    const lb = Math.min(x1 - 0.3, lc + b.lean / 2);
+    const lz = z0 - LEAN_D;
+    const hi = Math.min(H - 0.3, 3.0);
+    const lo = 2.2;
+    G.col("#a08a6c").mat(WL.P_BOARD, seed, AO);
+    wallP(G, WL.P_BOARD, lb, lz, la, lz, 0, lo);
+    G.quad(la, 0, lz, la, 0, z0, la, hi, z0, la, lo, lz, [0, 0, LEAN_D / 2, hi / 2]);
+    G.quad(lb, 0, z0, lb, 0, lz, lb, lo, lz, lb, hi, z0, [0, 0, LEAN_D / 2, hi / 2]);
+    G.col("#b8b0a4");
+    slope(G, WL.TIN, lb + 0.2, z0, la - 0.2, z0, hi + 0.08, 0, -LEAN_D - 0.3, lo - 0.08);
+    // its window (a small four-pane sash) and a plank door
+    const wx = (la + lb) / 2 + 0.8;
+    G.col("#3a2a1c");
+    boxP(G, WL.TIMBER, wx - 0.5, 0.9, lz - 0.06, wx + 0.5, 1.75, lz);
+    G.col("#6a8090").mat(WL.PAINT, 0, 0);
+    G.quad(
+      wx + 0.42,
+      0.97,
+      lz - 0.07,
+      wx - 0.42,
+      0.97,
+      lz - 0.07,
+      wx - 0.42,
+      1.68,
+      lz - 0.07,
+      wx + 0.42,
+      1.68,
+      lz - 0.07,
+      [0, 0, 1, 1],
+    );
+    G.col("#3a2a1c");
+    boxP(G, WL.TIMBER, wx - 0.02, 0.97, lz - 0.09, wx + 0.02, 1.68, lz - 0.07);
+    boxP(G, WL.TIMBER, wx - 0.42, 1.31, lz - 0.09, wx + 0.42, 1.35, lz - 0.07);
+    const ldx = la + 0.9;
+    G.col("#5a4636").mat(WL.P_BOARD, 0, 0);
+    G.quad(
+      ldx + 0.45,
+      0.05,
+      lz - 0.03,
+      ldx - 0.45,
+      0.05,
+      lz - 0.03,
+      ldx - 0.45,
+      1.95,
+      lz - 0.03,
+      ldx + 0.45,
+      1.95,
+      lz - 0.03,
+      [0, 0, 0.5, 1],
+    );
+  }
+  void paint;
+  void plainL;
 }
 
 function building(b: WBld, r: () => number): BGeo {
@@ -652,6 +2026,8 @@ function building(b: WBld, r: () => number): BGeo {
         ? 0
         : LIT;
   const H = b.storeys * STOREY;
+  // this building's own boardwalk height (they step up and down along the street)
+  const DY = b.deck ?? DECK_Y;
   const uOff = Math.floor(r() * FAC_COLS);
   const x0 = -W / 2;
   const x1 = W / 2;
@@ -664,17 +2040,20 @@ function building(b: WBld, r: () => number): BGeo {
   if (b.t === "tipple") return tipple(B, b, W, D, r);
 
   // ---- the walls ----
+  const plan = roomPlan(b, DY, STOREY);
   G.col(paint, 1).mat(facL, seed, lit + AO);
-  wallF(G, facL, x0, 0, x1, 0, 0, H, uOff); // front
+  if (!plan) wallF(G, facL, x0, 0, x1, 0, 0, H, uOff); // front
   G.mat(plainL, seed, AO);
   wallP(G, plainL, x1, 0, x1, z0, 0, H); // right side
-  wallP(G, plainL, x1, z0, x0, z0, 0, H); // back
+  if (!plan) wallP(G, plainL, x1, z0, x0, z0, 0, H); // back
   wallP(G, plainL, x0, z0, x0, 0, 0, H); // left side
+  // walk-in: the front and back with real doorways, and the rooms inside
+  if (plan) walkIn(B, b, plan, W, D, H, facL, plainL, uOff, paint, lit, seed, r);
   // windows on the side and back walls, one per bay and storey, cut from the facade tile's
   // upper-storey row (so they match the front)
   {
     const winCol = (k: number) => (b.mat === "barn" ? (k % 2 ? 3 : 0) : (k + uOff) % FAC_COLS);
-    const wallWindows = (ax: number, az: number, bx: number, bz: number) => {
+    const wallWindows = (ax: number, az: number, bx: number, bz: number, skipLast = false) => {
       const len = Math.hypot(bx - ax, bz - az);
       const nWin = Math.floor((len - 1.2) / 3.6);
       if (nWin < 1) return;
@@ -687,6 +2066,8 @@ function building(b: WBld, r: () => number): BGeo {
         const y0 = st * STOREY + 0.8;
         const y1 = y0 + 2.0;
         for (let k = 0; k < nWin; k++) {
+          // (the ground-floor bay by the back door has the door instead)
+          if (skipLast && st === 0 && k === nWin - 1) continue;
           const tc = ((k + 0.5) / nWin) * len;
           const c = winCol(k + st);
           const uv = [c * 0.25 + 0.05, 0.295, c * 0.25 + 0.2, 0.465] as const;
@@ -697,7 +2078,15 @@ function building(b: WBld, r: () => number): BGeo {
       }
     };
     wallWindows(x1, 0, x1, z0);
-    wallWindows(x1, z0, x0, z0);
+    wallWindows(
+      x1,
+      z0,
+      x0,
+      z0,
+      plan
+        ? plan.doors.some((d) => d.wall === "back")
+        : STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch",
+    );
     wallWindows(x0, z0, x0, 0);
     // a painted advertisement on one tall side wall of the bigger stores
     if (b.storeys >= 2 && D >= 14 && b.sign >= 0 && b.mat !== "adobe") {
@@ -725,7 +2114,17 @@ function building(b: WBld, r: () => number): BGeo {
       // land on exactly the same faces (identical boxes flicker against each other)
       // each board stays on its own side of the corner, so two buildings sharing a wall never
       // put boards in the same place
-      boxP(G, WL.PAINT, cx === x0 ? x0 - 0.03 : x1 - cb, 0, cz - dz, cx === x0 ? x0 + cb : x1 + 0.03, H, cz + dz, false);
+      boxP(
+        G,
+        WL.PAINT,
+        cx === x0 ? x0 - 0.03 : x1 - cb,
+        0,
+        cz - dz,
+        cx === x0 ? x0 + cb : x1 + 0.03,
+        H,
+        cz + dz,
+        false,
+      );
   }
   if (b.mat === "brick" || b.mat === "stone") {
     G.col(b.mat === "brick" ? "#d8ccb4" : "#b8ac94");
@@ -733,6 +2132,9 @@ function building(b: WBld, r: () => number): BGeo {
       boxP(G, WL.P_STONE, cx - 0.35, 0, -0.1, cx + 0.35, H, 0.22); // pilasters
     boxP(G, WL.P_STONE, x0 - 0.13, 0, -0.13, x1 + 0.13, 0.5, 0.25); // plinth, proud of the pilasters
   }
+
+  // ---- the lived-in back and the footings ----
+  backWorks(B, b, W, D, H, paint, plainL, seed, r);
 
   // ---- the roof ----
   const eave = 0.45;
@@ -829,9 +2231,21 @@ function building(b: WBld, r: () => number): BGeo {
     // flat roof with a parapet (adobe): vigas poke out under the roofline
     ridgeY = H + 0.6;
     G.col(paint, 1).mat(plainL, seed, 0);
-    boxP(G, plainL, x0, H, z0, x1, H + 0.6, 0, false);
+    boxP(G, plainL, x0, H, z0, x1, H + 0.6, 0, true);
+    // the parapet's inner faces round the roof (seen from anywhere higher)
+    wallP(G, plainL, x0 + 0.3, -0.3, x1 - 0.3, -0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x1 - 0.3, z0 + 0.3, x0 + 0.3, z0 + 0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x1 - 0.3, -0.3, x1 - 0.3, z0 + 0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x0 + 0.3, z0 + 0.3, x0 + 0.3, -0.3, H + 0.35, H + 0.6);
     G.col("#b8966e");
     G.flat(x0 + 0.3, z0 + 0.3, x1 - 0.3, -0.3, H + 0.35, [0, 0, W / 5, D / 5]);
+    // canales: wooden spouts through the parapet that throw the rain off the roof
+    B.detail.col("#5a3e28");
+    for (const f of [0.3, 0.7]) {
+      const zc = z0 * f;
+      beam(B.detail, x1 - 0.4, H + 0.42, zc, x1 + 0.7, H + 0.36, zc, 0.16);
+      beam(B.detail, x0 + 0.4, H + 0.42, zc * 0.9 - 0.4, x0 - 0.7, H + 0.36, zc * 0.9 - 0.4, 0.16);
+    }
     B.detail.col("#6a4a30");
     for (let x = x0 + 0.8; x < x1 - 0.5; x += 1.3)
       cylP(B.detail, WL.TIMBER, x, H - 0.35, 0.3, 0.12, 0.01, 6, 0.12, false);
@@ -855,10 +2269,12 @@ function building(b: WBld, r: () => number): BGeo {
     const postC = r() < 0.5 ? "#efe6d2" : WOOD;
     const D2 = B.detail;
     D2.col(postC);
-    const n = Math.max(2, Math.round(W / 3.2));
+    const n0 = Math.max(2, Math.round(W / 3.2));
+    // (a walk-in's doorway is in the middle: no post right in front of it)
+    const n = b.walkIn && b.t !== "saloon" && n0 % 2 === 0 ? n0 + 1 : n0;
     for (let i = 0; i <= n; i++) {
       const x = x0 + 0.15 + ((W - 0.3) * i) / n;
-      boxP(D2, WL.TIMBER, x - 0.09, DECK_Y, pz - 0.09, x + 0.09, py, pz + 0.09);
+      boxP(D2, WL.TIMBER, x - 0.09, DY, pz - 0.09, x + 0.09, py, pz + 0.09);
       // curved brackets
       beam(D2, x, py - 0.55, pz, x + (i === n ? -0.4 : 0.4), py - 0.02, pz, 0.07);
     }
@@ -866,24 +2282,43 @@ function building(b: WBld, r: () => number): BGeo {
     boxP(G, WL.TIMBER, x0, py - 0.25, pz - 0.1, x1, py, pz + 0.1); // beam
     if (b.porch === 1) {
       const roofL2 = r() < 0.6 ? WL.TIN : WL.SHINGLE;
-      G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff");
-      slope(G, roofL2, x0 + 0.01, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py, false);
-      G.col("#ffffff", 0.55).mat(WL.DECK);
-      G.quad(
-        x1 - 0.01,
-        py - 0.02,
-        pz + 0.35,
-        x0 + 0.01,
-        py - 0.02,
-        pz + 0.35,
-        x0 + 0.01,
-        py + 0.53,
-        0,
-        x1 - 0.01,
-        py + 0.53,
-        0,
-        [0, 0, W / 4, 1],
-      ); // underside
+      // the awning sags a little between its posts (years of sun and snow), top and underside
+      const nSpan = Math.max(2, Math.round(W / 3.2));
+      const sagAmt = 0.04 + r() * 0.05;
+      const sagAt = (x: number) =>
+        sagAmt * Math.abs(Math.sin((Math.PI * (x - x0 - 0.15)) / ((W - 0.3) / nSpan)));
+      const [tu, tv] = TILE_M[roofL2] ?? [4, 4];
+      const run = Math.hypot(pz + 0.35, 0.55);
+      const steps = nSpan * 4;
+      for (let i = 0; i < steps; i++) {
+        const xa = x0 + 0.01 + ((W - 0.02) * i) / steps;
+        const xb = x0 + 0.01 + ((W - 0.02) * (i + 1)) / steps;
+        const ya = py - sagAt(xa);
+        const yb = py - sagAt(xb);
+        G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff").mat(roofL2);
+        G.quad(xa, ya, pz + 0.35, xb, yb, pz + 0.35, xb, py + 0.55, 0, xa, py + 0.55, 0, [
+          xa / tu,
+          0,
+          xb / tu,
+          run / tv,
+        ]);
+        G.col("#ffffff", 0.55).mat(WL.DECK);
+        G.quad(
+          xb,
+          yb - 0.02,
+          pz + 0.35,
+          xa,
+          ya - 0.02,
+          pz + 0.35,
+          xa,
+          py + 0.53,
+          0,
+          xb,
+          py + 0.53,
+          0,
+          [xb / 4, 0, xa / 4, 1],
+        );
+      }
       lantern(B, x0 + W * 0.3, py - 0.6, pz - 0.35);
       if (W > 10) lantern(B, x1 - W * 0.3, py - 0.6, pz - 0.35);
     } else {
@@ -892,39 +2327,89 @@ function building(b: WBld, r: () => number): BGeo {
       D2.col(postC);
       const ry = py + 0.18;
       const rail = (xa: number, xb: number, z: number) => {
-        boxP(D2, WL.TIMBER, xa - 0.1, ry + 0.95, z - 0.07, xb + 0.1, ry + 1.05, z + 0.07, true, true);
-        boxP(D2, WL.TIMBER, xa - 0.1, ry + 0.1, z - 0.05, xb + 0.1, ry + 0.16, z + 0.05, true, true);
+        boxP(
+          D2,
+          WL.TIMBER,
+          xa - 0.1,
+          ry + 0.95,
+          z - 0.07,
+          xb + 0.1,
+          ry + 1.05,
+          z + 0.07,
+          true,
+          true,
+        );
+        boxP(
+          D2,
+          WL.TIMBER,
+          xa - 0.1,
+          ry + 0.1,
+          z - 0.05,
+          xb + 0.1,
+          ry + 0.16,
+          z + 0.05,
+          true,
+          true,
+        );
         for (let x = xa; x <= xb; x += 0.42)
           boxP(D2, WL.TIMBER, x - 0.03, ry, z - 0.03, x + 0.03, ry + 0.96, z + 0.03, false);
       };
       const endRail = (sx: number, z0: number, z1: number) => {
         for (let z = z0; z < z1; z += 0.42)
           boxP(D2, WL.TIMBER, sx - 0.03, ry, z - 0.03, sx + 0.03, ry + 0.96, z + 0.03, false);
-        boxP(D2, WL.TIMBER, sx - 0.07, ry + 0.95, z0 - 0.1, sx + 0.07, ry + 1.05, z1 + 0.1, true, true);
+        boxP(
+          D2,
+          WL.TIMBER,
+          sx - 0.07,
+          ry + 0.95,
+          z0 - 0.1,
+          sx + 0.07,
+          ry + 1.05,
+          z1 + 0.1,
+          true,
+          true,
+        );
       };
       if (b.t === "saloon") {
-        // the saloon: a short balcony across its front, the width of the building, on its own
-        // posts, railed on the front and the west end (the east end meets the alley stair's
-        // landing). The porch in front of it keeps a plain lean-to roof on the porch posts.
+        // the saloon: a balcony over the left part of its front, on its own posts, railed on
+        // its three open sides (the balcony door opens onto it from the stair hall inside);
+        // the batwing doors open under a plain porch roof on the right
         const bd = SALOON_BALCONY;
+        const bal = saloonBalcony(W);
+        const ba = bal.a;
+        const bb = bal.b;
         G.col("#ffffff", 0.9);
-        boxP(G, WL.DECK, x0 + 0.01, py, -0.1, x1 - 0.01, py + 0.18, bd, true, true);
-        rail(x0, x1, bd - 0.07);
-        endRail(x0 + 0.07, 0.2, bd - 0.07);
-        // its posts and a rail between them at ground level (the space under it is the saloon's
-        // front, not a walkway)
-        const nb = Math.max(2, Math.round(W / 3.2));
+        boxP(G, WL.DECK, ba + 0.01, py, -0.1, bb, py + 0.18, bd, true, true);
+        rail(ba, bb, bd - 0.07);
+        endRail(ba + 0.07, 0.2, bd - 0.07);
+        endRail(bb - 0.07, 0.2, bd - 0.07);
+        const nb = Math.max(2, Math.round((bb - ba) / 3.2));
         for (let i = 0; i <= nb; i++) {
-          const x = x0 + 0.15 + ((W - 0.3) * i) / nb;
-          boxP(D2, WL.TIMBER, x - 0.09, DECK_Y, bd - 0.2, x + 0.09, py, bd - 0.02);
+          const x = ba + 0.15 + ((bb - ba - 0.3) * i) / nb;
+          boxP(D2, WL.TIMBER, x - 0.09, DY, bd - 0.2, x + 0.09, py, bd - 0.02);
         }
+        // the ground rail between them (under the balcony is the saloon's front, not a walk)
         for (const y of [0.75, 1.15])
-          boxP(D2, WL.TIMBER, x0, DECK_Y + y, bd - 0.15, x1, DECK_Y + y + 0.08, bd - 0.07, true, true);
-        for (let x = x0 + 0.4; x < x1; x += 0.5)
-          boxP(D2, WL.TIMBER, x - 0.03, DECK_Y, bd - 0.14, x + 0.03, DECK_Y + 1.2, bd - 0.08, false);
-        // the lean-to over the rest of the porch, shingled on top and boarded underneath
+          boxP(D2, WL.TIMBER, ba, DY + y, bd - 0.15, bb, DY + y + 0.08, bd - 0.07, true, true);
+        for (let x = ba + 0.4; x < bb; x += 0.5)
+          boxP(D2, WL.TIMBER, x - 0.03, DY, bd - 0.14, x + 0.03, DY + 1.2, bd - 0.08, false);
+        // the porch roof over the rest of the front (and in front of the balcony)
         G.col("#ffffff");
-        slope(G, WL.SHINGLE, x0 + 0.01, bd + 0.02, x1 - 0.01, bd + 0.02, py - 0.02, 0, pz + 0.35 - (bd + 0.02), py - 0.35);
+        slope(
+          G,
+          WL.SHINGLE,
+          ba + 0.01,
+          bd + 0.02,
+          bb,
+          bd + 0.02,
+          py - 0.02,
+          0,
+          pz + 0.35 - (bd + 0.02),
+          py - 0.35,
+        );
+        G.col("#bdb6aa");
+        slope(G, WL.TIN, bb, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py);
+        lantern(B, (bb + x1) / 2, py - 0.6, pz - 0.35);
       } else {
         G.col("#ffffff", 0.9);
         boxP(G, WL.DECK, x0 + 0.01, py, -0.1, x1 - 0.01, py + 0.18, pz + 0.3, true, true);
@@ -956,15 +2441,35 @@ function building(b: WBld, r: () => number): BGeo {
     const dx1 = x1;
     G.col("#ffffff", 0.95);
     G.mat(WL.DECK);
-    G.quad(dx0, DECK_Y, BOARD_D, dx1, DECK_Y, BOARD_D, dx1, DECK_Y, 0, dx0, DECK_Y, 0, [
+    G.quad(dx0, DY, BOARD_D, dx1, DY, BOARD_D, dx1, DY, 0, dx0, DY, 0, [
       0,
       0,
       (dx1 - dx0) / 4,
       BOARD_D / 4,
     ]);
     G.col(DARK_WOOD);
-    boxP(G, WL.TIMBER, dx0, 0, BOARD_D - 0.12, dx1, DECK_Y, BOARD_D, false); // edge beam
-    boxP(G, WL.TIMBER, dx0, 0, 0, dx0 + 0.1, DECK_Y, BOARD_D, false);
+    boxP(G, WL.TIMBER, dx0, 0, BOARD_D - 0.12, dx1, DY, BOARD_D, false); // edge beam
+    boxP(G, WL.TIMBER, dx0, 0, 0, dx0 + 0.1, DY, BOARD_D, false);
+    boxP(G, WL.TIMBER, dx1 - 0.1, 0, 0, dx1, DY, BOARD_D, false);
+    // a plank step down to the street in front of the door when the walk stands high
+    if (DY > 0.34) {
+      G.col("#8a6a4a");
+      boxP(G, WL.DECK, -1.1, 0, BOARD_D, 1.1, DY * 0.5, BOARD_D + 0.45);
+    }
+  } else if (b.porch > 0 && b.t === "adobe") {
+    // an adobe's ramada: peeled pole posts, round vigas across, a roof of laid sticks
+    // (latillas) under packed brush
+    const D2 = B.detail;
+    const pd = 2.4;
+    D2.col("#8a6a48");
+    for (const x of [x0 + 0.4, x1 - 0.4]) cylP(D2, WL.TIMBER, x, 0, pd, 0.1, 2.5, 6, 0.09);
+    beam(D2, x0 + 0.2, 2.5, pd, x1 - 0.2, 2.5, pd, 0.18);
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 0.9) beam(D2, x, 2.62, -0.1, x, 2.62, pd + 0.3, 0.12);
+    G.col("#9a7a52");
+    for (let z = 0.1; z < pd + 0.2; z += 0.12)
+      boxP(G, WL.TIMBER, x0 + 0.2, 2.68, z, x1 - 0.2, 2.72, z + 0.08, true, true);
+    G.col("#a88a5a").mat(WL.SAND);
+    G.flat(x0 + 0.25, 0.05, x1 - 0.25, pd + 0.25, 2.76, [0, 0, W / 3, 1]);
   } else if (b.porch > 0) {
     // houses: a small porch on posts
     G.col("#ffffff", 0.9);
@@ -997,29 +2502,99 @@ function building(b: WBld, r: () => number): BGeo {
     }
   }
   // ---- per-type extras ----
-  if (b.t === "saloon") {
+  if (b.t === "shed") {
+    // the freight shed: a plank loading dock along its track side at wagon-bed height, big
+    // sliding doors, freight waiting on the dock, a roof ventilator
+    G.col("#8a6a48").mat(WL.DECK);
+    boxP(G, WL.DECK, x0 + 0.3, 0, 0, x1 - 0.3, 1.05, 2.5, true, false);
+    G.col("#5a4030");
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.8)
+      boxP(G, WL.TIMBER, x - 0.1, 0, 2.3, x + 0.1, 1.0, 2.5, false);
+    boxP(G, WL.TIMBER, x0 + 0.3, 0.83, 2.44, x1 - 0.3, 1.03, 2.56); // edge beam, just under the planks' top
+    // wooden steps down at one end
+    for (let k = 0; k < 4; k++)
+      boxP(G, WL.DECK, x1 - 1.6, 0, 2.56 + k * 0.3, x1 - 0.4, 1.02 - k * 0.26, 2.86 + k * 0.3);
+    // the doors: plank leaves on an iron rail, one slid half open
+    G.col("#7a5a3e").mat(WL.P_BOARD);
+    for (const [xa, xb] of [
+      [-W * 0.3 - 1.6, -W * 0.3 + 1.6],
+      [W * 0.3 - 1.6 + 1.2, W * 0.3 + 1.6 + 1.2],
+    ] as const)
+      boxP(G, WL.P_BOARD, xa, 1.05, 0.04, xb, 3.2, 0.14);
+    G.col("#1a1410").mat(WL.PAINT, 0, 0);
+    G.quad(
+      W * 0.3 - 1.6,
+      1.05,
+      0.03,
+      W * 0.3 - 0.4,
+      1.05,
+      0.03,
+      W * 0.3 - 0.4,
+      3.15,
+      0.03,
+      W * 0.3 - 1.6,
+      3.15,
+      0.03,
+      [0, 0, 1, 1],
+    );
+    G.col("#2a2826");
+    boxP(G, WL.IRON, x0 + 0.5, 3.25, 0.04, x1 - 0.5, 3.35, 0.18);
+    // freight on the dock
+    const T2 = templates();
+    for (let i = 0; i < 4; i++) {
+      const k = ["crates", "barrels", "sacks", "crate"][i]! as
+        "crates" | "barrels" | "sacks" | "crate";
+      const t = T2[k];
+      if (t)
+        B.detail.stamp(
+          t.d,
+          x0 + 2 + (i * (W - 4)) / 3.2,
+          1.05,
+          1.3 + (r() - 0.5) * 0.6,
+          r() * 3,
+          0.9,
+          0.9,
+          0.9,
+          _tint.setRGB(1, 1, 1),
+        );
+    }
+    // ventilator on the ridge
+    D2vent(B, 0, H + W * 0.25 + 0.2, D * -0.5);
+  }
+  if (b.t === "adobe") {
+    // by the door: a string of red chiles drying and clay ollas
+    const D2 = B.detail;
+    const rx = 1.0 + r() * 0.3;
+    for (let i = 0; i < 9; i++) {
+      D2.col(pick(["#a8281c", "#c0301e", "#8a2016"], r)).mat(WL.PAINT, 0, 0);
+      oboxP(
+        D2,
+        WL.PAINT,
+        rx + (r() - 0.5) * 0.05,
+        2.2 - i * 0.13,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        r() * 3,
+        true,
+      );
+    }
+    D2.col("#5a4a30");
+    beam(D2, rx, 2.35, 0.12, rx, 1.05, 0.12, 0.02, WL.PAINT);
+    D2.col("#a8643a");
+    cylP(D2, WL.P_ADOBE, -1.4, 0, 0.45, 0.2, 0.28, 8, 0.28, false);
+    cylP(D2, WL.P_ADOBE, -1.4, 0.28, 0.45, 0.28, 0.24, 8, 0.12);
+  }
+  if (b.t === "saloon" && !b.walkIn) {
     // batwing doors in the middle bay, a big lit glow spilling out at night
     B.detail.col("#7a3a22");
     boxP(B.detail, WL.TIMBER, -0.75, 0.9, 0.06, -0.04, 2.0, 0.12);
     boxP(B.detail, WL.TIMBER, 0.04, 0.9, 0.06, 0.75, 2.0, 0.12);
     G.col("#1c140e").mat(WL.PAINT, 0, 0);
-    G.quad(
-      -0.85,
-      DECK_Y,
-      0.03,
-      0.85,
-      DECK_Y,
-      0.03,
-      0.85,
-      2.5,
-      0.03,
-      -0.85,
-      2.5,
-      0.03,
-      [0, 0, 0.1, 0.1],
-    );
+    G.quad(-0.85, DY, 0.03, 0.85, DY, 0.03, 0.85, 2.5, 0.03, -0.85, 2.5, 0.03, [0, 0, 0.1, 0.1]);
     B.glow.col("#ff9a40", 0.55);
-    B.glow.quad(-0.8, DECK_Y, 0.08, 0.8, DECK_Y, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
+    B.glow.quad(-0.8, DY, 0.08, 0.8, DY, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
     B.pools.col("#ffa050").mat(0, 0, 0);
     B.pools.flat(-4, 0.2, 4, 9, 0.07);
   }
@@ -1164,7 +2739,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   const x0 = -W / 2;
   const x1 = W / 2;
   const z0 = -D;
-  G.col("#f6f2ea").mat(WL.F_CHURCH, seed, LIT + AO);
+  G.col("#f6f2ea").mat(WL.F_CHURCH, seed, CANDLE + AO);
   wallF(G, WL.F_CHURCH, x1, 0, x1, z0, 0, H, 0);
   wallF(G, WL.F_CHURCH, x0, z0, x0, 0, 0, H, 0);
   G.mat(WL.P_CLAP, seed, AO);
@@ -1179,14 +2754,23 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   gable(G, WL.P_CLAP, x1, z0, x0, z0, H, ridge);
   // the back (the side players reach from the yard): two tall windows, a rose window in the
   // gable, a vestry door, corner boards and a stone sill, so it is not a blank slab
-  G.col("#ffffff").mat(WL.F_CHURCH, seed, LIT);
+  G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   const win = (cx: number, y0: number, y1: number, hw: number) =>
-    G.quad(cx + hw, y0, z0 - 0.03, cx - hw, y0, z0 - 0.03, cx - hw, y1, z0 - 0.03, cx + hw, y1, z0 - 0.03, [
-      0.33 / 4,
-      0.3 / 4,
-      0.67 / 4,
-      1.7 / 4,
-    ]);
+    G.quad(
+      cx + hw,
+      y0,
+      z0 - 0.03,
+      cx - hw,
+      y0,
+      z0 - 0.03,
+      cx - hw,
+      y1,
+      z0 - 0.03,
+      cx + hw,
+      y1,
+      z0 - 0.03,
+      [0.33 / 4, 0.3 / 4, 0.67 / 4, 1.7 / 4],
+    );
   win(-3.2, 1.4, 4.6, 0.7);
   win(3.2, 1.4, 4.6, 0.7);
   win(0, H + 1.2, H + 3.4, 0.9);
@@ -1194,7 +2778,21 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   for (const cx of [-3.2, 3.2]) boxP(G, WL.PAINT, cx - 0.95, 1.2, z0 - 0.14, cx + 0.95, 1.4, z0);
   boxP(G, WL.PAINT, -1.15, H + 1.0, z0 - 0.14, 1.15, H + 1.2, z0);
   G.col("#5a2e1c").mat(WL.PAINT, 0, 0);
-  G.quad(0.7, 0, z0 - 0.03, -0.7, 0, z0 - 0.03, -0.7, 2.4, z0 - 0.03, 0.7, 2.4, z0 - 0.03, [0, 0, 1, 1]);
+  G.quad(
+    0.7,
+    0,
+    z0 - 0.03,
+    -0.7,
+    0,
+    z0 - 0.03,
+    -0.7,
+    2.4,
+    z0 - 0.03,
+    0.7,
+    2.4,
+    z0 - 0.03,
+    [0, 0, 1, 1],
+  );
   G.col("#f4efe4");
   boxP(G, WL.PAINT, -0.95, 2.4, z0 - 0.14, 0.95, 2.62, z0);
   for (const [cx, cz] of [
@@ -1238,7 +2836,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   );
   G.col("#f4efe4");
   boxP(G, WL.PAINT, -1.1, 2.9, tz1, 1.1, 3.2, tz1 + 0.12);
-  G.col("#ffffff").mat(WL.F_CHURCH, seed, LIT);
+  G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   G.quad(-0.8, 6.2, tz1 + 0.02, 0.8, 6.2, tz1 + 0.02, 0.8, 9.6, tz1 + 0.02, -0.8, 9.6, tz1 + 0.02, [
     0.33 / 4 + 0.0,
     0.3 / 4,
@@ -1419,7 +3017,15 @@ function tipple(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
 // ---------------------------------------------------------------------------------------
 // prop templates (local space, origin at the base centre, +z = front)
 
-type PKey = WProp["k"] | "wheelL";
+type PKey =
+  | WProp["k"]
+  | "wheelL"
+  | "pebble"
+  | "horsebody"
+  | "horseleg"
+  | "riderTorso"
+  | "riderHat"
+  | "riderLegs";
 let TM: Partial<Record<PKey, { d: Tmpl; g?: Tmpl; p?: Tmpl }>> | null = null;
 
 function templates() {
@@ -1614,6 +3220,22 @@ function templates() {
     addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0), WL.SAND);
     ico.dispose();
   });
+  make("pebble", (d) => {
+    // a cheap stone (20 faces) for the scree at the cliffs' feet
+    const ico = new THREE.IcosahedronGeometry(1, 0);
+    const pos = ico.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const k = 0.8 + fbm(x * 2 + 1, z * 2 + y, 3) * 0.4;
+      pos.setXYZ(i, x * k, Math.max(-0.3, y) * k, z * k);
+    }
+    ico.computeVertexNormals();
+    d.col("#c8a080");
+    addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.3, 0), WL.SAND);
+    ico.dispose();
+  });
   make("deadtree", (d) => {
     d.col("#7a6a5a");
     const limb = (
@@ -1651,6 +3273,205 @@ function templates() {
     boxP(d, WL.TIMBER, -0.08, 0, -0.08, 0.08, 1.35, 0.08);
     d.col("#9a8266");
     for (const y of [0.4, 0.8, 1.2]) beam(d, -1.25, y, 0, 1.25, y + (r() - 0.5) * 0.06, 0, 0.1);
+  });
+  make("straw", (d) => {
+    // loose straw kicked about on the ground: a scatter of thin pale stalks and a few tufts
+    for (let i = 0; i < 70; i++) {
+      const a = r() * 6.28;
+      const rr = Math.sqrt(r()) * 1.4;
+      const x = Math.cos(a) * rr;
+      const z = Math.sin(a) * rr;
+      const ang = r() * 3.14;
+      const len = 0.15 + r() * 0.25;
+      d.col(pick(["#d8c07a", "#c8a860", "#e2cc88", "#b89a56"], r)).mat(WL.CANVAS);
+      oboxP(d, WL.CANVAS, x, 0.01 + r() * 0.02, z, len, 0.012, 0.02, ang, true);
+    }
+    for (let i = 0; i < 4; i++) {
+      d.col("#c8aa62").mat(WL.CANVAS);
+      oboxP(d, WL.CANVAS, (r() - 0.5) * 1.6, 0, (r() - 0.5) * 1.6, 0.35, 0.08, 0.25, r() * 3, true);
+    }
+  });
+  make("brokencrate", (d) => {
+    // a smashed crate: one side still standing, the rest of its boards scattered
+    d.col("#a8845a");
+    boxP(d, WL.TIMBER, -0.4, 0, -0.4, 0.4, 0.55, -0.34);
+    boxP(d, WL.TIMBER, -0.4, 0, -0.4, -0.34, 0.45, 0.2);
+    for (let i = 0; i < 6; i++) {
+      d.col(pick(["#b89468", "#9a7a4e", "#c4a070"], r));
+      oboxP(
+        d,
+        WL.TIMBER,
+        (r() - 0.3) * 1.2,
+        0.02 + i * 0.012,
+        (r() - 0.3) * 1.2,
+        0.75,
+        0.025,
+        0.12,
+        r() * 3,
+        true,
+      );
+    }
+  });
+  make("brokenbarrel", (d) => {
+    // a stove-in barrel on its side, staves sprung, hoops rusting
+    d.col("#8a5a32");
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      if (i === 3 || i === 4) continue;
+      const y = 0.32 + Math.sin(a) * 0.3;
+      const z = Math.cos(a) * 0.3;
+      oboxP(d, WL.TIMBER, 0, y, z, 0.85, 0.035, 0.18, 0, true);
+    }
+    d.col("#5a3a2a");
+    for (let i = 0; i < 3; i++)
+      oboxP(d, WL.TIMBER, 0.6 + r() * 0.5, 0.02, (r() - 0.5) * 0.8, 0.8, 0.03, 0.14, r() * 3, true);
+    d.col("#4a3a30");
+    for (const x of [-0.3, 0.3]) {
+      for (let i = 0; i < 10; i++) {
+        const a0 = (i / 10) * Math.PI * 2;
+        const a1 = ((i + 1) / 10) * Math.PI * 2;
+        if (i === 3) continue;
+        beam(
+          d,
+          x,
+          0.32 + Math.sin(a0) * 0.32,
+          Math.cos(a0) * 0.32,
+          x,
+          0.32 + Math.sin(a1) * 0.32,
+          Math.cos(a1) * 0.32,
+          0.03,
+          WL.IRON,
+        );
+      }
+    }
+  });
+  make("picket", (d) => {
+    // a picket fence section, 2 m along x: two posts, two rails, pointed pickets; whitewash
+    // gone grey and patchy
+    d.col("#aaa290");
+    // (the right-hand post is a touch stouter and lower: where sections meet it encloses the
+    // next section's left post instead of sharing its faces)
+    boxP(d, WL.TIMBER, -1.05, 0, -0.05, -0.95, 1.05, 0.05);
+    boxP(d, WL.TIMBER, 0.935, 0, -0.065, 1.065, 1.0, 0.065);
+    d.col("#a49c8a");
+    for (const y of [0.25, 0.75]) boxP(d, WL.PAINT, -1, y, 0.05, 1, y + 0.07, 0.09);
+    for (let x = -0.93; x < 0.95; x += 0.13) {
+      const h = 0.92 + (r() - 0.5) * 0.04;
+      d.col(r() < 0.25 ? "#8e8676" : r() < 0.5 ? "#b8b0a0" : "#c8c2b2");
+      boxP(d, WL.TIMBER, x - 0.035, 0.05, 0.09, x + 0.035, h, 0.12, false);
+      // the point
+      d.v(x - 0.035, h, 0.12, 0, 0.3, 1, 0, 0);
+      d.v(x + 0.035, h, 0.12, 0, 0.3, 1, 1, 0);
+      d.v(x, h + 0.07, 0.12, 0, 0.3, 1, 0.5, 1);
+      d.v(x + 0.035, h, 0.09, 0, 0.3, -1, 0, 0);
+      d.v(x - 0.035, h, 0.09, 0, 0.3, -1, 1, 0);
+      d.v(x, h + 0.07, 0.09, 0, 0.3, -1, 0.5, 1);
+    }
+  });
+  make("clothesline", (d) => {
+    // two T-posts 4.8 m apart, a sagging line, washing pegged out on it
+    d.col("#8a7258");
+    for (const x of [-2.4, 2.4]) {
+      boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 2.1, 0.05);
+      boxP(d, WL.TIMBER, x - 0.04, 1.95, -0.35, x + 0.04, 2.03, 0.35);
+    }
+    d.col("#d8d0c0");
+    for (const z of [-0.28, 0.28]) {
+      for (let i = 0; i < 8; i++) {
+        const xa = -2.4 + (4.8 * i) / 8;
+        const xb = -2.4 + (4.8 * (i + 1)) / 8;
+        const sag = (x: number) => 1.98 - (1 - (x / 2.4) ** 2) * 0.12;
+        beam(d, xa, sag(xa), z, xb, sag(xb), z, 0.015, WL.PAINT);
+      }
+    }
+    const cloths = ["#e8e2d4", "#b84a3a", "#4a6a8a", "#d8c89a", "#f2eee4", "#7a8a5a"];
+    for (let i = 0; i < 5; i++) {
+      const x = -1.9 + i * 0.95 + (r() - 0.5) * 0.3;
+      const w = 0.45 + r() * 0.35;
+      const h = 0.5 + r() * 0.5;
+      const z = r() < 0.5 ? -0.28 : 0.28;
+      d.col(cloths[Math.floor(r() * cloths.length)]!).mat(WL.CANVAS);
+      const top = 1.98 - (1 - (x / 2.4) ** 2) * 0.12;
+      d.quad(
+        x - w / 2,
+        top - h,
+        z,
+        x + w / 2,
+        top - h,
+        z,
+        x + w / 2,
+        top,
+        z,
+        x - w / 2,
+        top,
+        z,
+        [0, 0, 1, 1],
+      );
+      d.quad(
+        x + w / 2,
+        top - h,
+        z,
+        x - w / 2,
+        top - h,
+        z,
+        x - w / 2,
+        top,
+        z,
+        x + w / 2,
+        top,
+        z,
+        [0, 0, 1, 1],
+      );
+    }
+  });
+  make("garden", (d) => {
+    // a vegetable patch: a board edge round furrowed earth and rows of greens and bean poles
+    d.col("#6a4a30").mat(WL.MUD);
+    d.flat(-1.6, -2, 1.6, 2, 0.04, [0, 0, 0.8, 1]);
+    d.col("#7a5a3a");
+    boxP(d, WL.TIMBER, -1.7, 0, -2.1, 1.7, 0.14, -1.95, false);
+    boxP(d, WL.TIMBER, -1.7, 0, 1.95, 1.7, 0.14, 2.1, false);
+    boxP(d, WL.TIMBER, -1.7, 0, -2.1, -1.55, 0.14, 2.1, false);
+    boxP(d, WL.TIMBER, 1.55, 0, -2.1, 1.7, 0.14, 2.1, false);
+    const leaf = new THREE.IcosahedronGeometry(1, 0);
+    for (let row = 0; row < 4; row++) {
+      const x = -1.15 + row * 0.77;
+      // a hilled furrow of darker soil under each row
+      d.col("#5a3e28");
+      boxP(d, WL.MUD, x - 0.2, 0.04, -1.85, x + 0.2, 0.1, 1.5, false);
+      for (let z = -1.7; z < 1.4; z += 0.36) {
+        const s = 0.13 + r() * 0.09;
+        // a leafy clump: a squashed, lumpy ball of bright greens (not a cube)
+        d.col(pick(["#7aa048", "#8ab050", "#6a9440", "#a0b858"], r));
+        addUV(
+          d,
+          leaf,
+          new THREE.Matrix4()
+            .makeTranslation(x + (r() - 0.5) * 0.08, 0.1 + s * 0.45, z)
+            .multiply(new THREE.Matrix4().makeRotationY(r() * 3))
+            .multiply(new THREE.Matrix4().makeScale(s * 1.3, s * 0.75, s * 1.3)),
+          WL.CANVAS,
+        );
+      }
+    }
+    // bean poles at one end, with vines twining up them
+    for (const x of [-1.15, -0.38, 0.39, 1.16]) {
+      d.col("#8a7258");
+      beam(d, x - 0.1, 0, 1.85, x, 1.5, 1.7, 0.03);
+      d.col(pick(["#5a8a3a", "#6a9a44"], r));
+      for (let k = 0; k < 5; k++) {
+        const t = 0.15 + k * 0.18;
+        addUV(
+          d,
+          leaf,
+          new THREE.Matrix4()
+            .makeTranslation(x - 0.1 + 0.1 * t, t * 1.5, 1.85 - 0.15 * t)
+            .multiply(new THREE.Matrix4().makeScale(0.11, 0.13, 0.11)),
+          WL.CANVAS,
+        );
+      }
+    }
+    leaf.dispose();
   });
   make("grave", (d) => {
     d.col("#a8a090");
@@ -1754,17 +3575,11 @@ function templates() {
     for (const x of [-0.7, 0.7]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.2, x + 0.05, 0.42, 0.2);
   });
   make("tumble", (d) => {
-    d.col("#a8905e");
-    const ico = new THREE.IcosahedronGeometry(0.45, 1);
-    d.mat(WL.PAINT);
-    d.add(ico, new THREE.Matrix4().makeTranslation(0, 0.42, 0));
-    ico.dispose();
-    d.col("#8a7448");
-    for (let i = 0; i < 8; i++) {
-      const a = r() * 6.28;
-      const e = (r() - 0.5) * 2;
-      beam(d, 0, 0.42, 0, Math.cos(a) * 0.55, 0.42 + e * 0.3, Math.sin(a) * 0.55, 0.03);
-    }
+    // a dry tumbleweed fetched up against something: a loose ball of curling twigs
+    d.col("#b49c68").mat(WL.PAINT);
+    const tw = tumbleweedGeometry(0.45, 40, 3, 5);
+    d.add(tw, new THREE.Matrix4().makeTranslation(0, 0.4, 0));
+    tw.dispose();
   });
   make("bones", (d) => {
     d.col("#ece4d2").mat(WL.PAINT);
@@ -1775,10 +3590,15 @@ function templates() {
       beam(d, -0.3, 0.05, 0.5 + i * 0.18, 0.3, 0.15, 0.5 + i * 0.18, 0.04);
   });
   make("tank", (d) => {
-    d.col("#7a7a78");
-    cylP(d, WL.IRON, 0, 0, 0, 2.2, 0.9, 16, 2.2, false);
-    d.col("#4a6a70").mat(WL.PAINT);
-    d.flat(-1.5, -1.5, 1.5, 1.5, 0.8, [0, 0, 1, 1]);
+    // a galvanised stock tank: pale corrugated steel with rolled rims, water to the brim
+    d.col("#b4b8b8");
+    cylP(d, WL.PAINT, 0, 0, 0, 2.2, 0.9, 20, 2.2, false);
+    d.col("#8e9494");
+    for (const y of [0.05, 0.3, 0.55]) cylP(d, WL.PAINT, 0, y, 0, 2.23, 0.07, 20, 2.23, false);
+    d.col("#d0d4d2");
+    cylP(d, WL.PAINT, 0, 0.86, 0, 2.26, 0.08, 20, 2.26, false);
+    d.col("#6a98a2");
+    cylP(d, WL.PAINT, 0, 0.72, 0, 2.18, 0.04, 20, 2.18, true);
   });
   make("crossbuck", (d) => {
     d.col("#e8e2d4");
@@ -1790,10 +3610,18 @@ function templates() {
     beam(d, -0.8, 3.35, 0.13, 0.8, 2.65, 0.13, 0.26, WL.PAINT);
   });
   make("orecart", (d) => {
-    d.col("#4a4440");
-    boxP(d, WL.IRON, -0.6, 0.35, -0.9, 0.6, 1.2, 0.9);
-    d.col("#6a5a50").mat(WL.ROCK);
+    // a plank ore car with iron corner straps, heaped with ore
+    d.col("#8a6644");
+    boxP(d, WL.TIMBER, -0.6, 0.35, -0.9, 0.6, 1.2, 0.9);
+    d.col("#5a5652");
+    for (const z of [-0.9, 0.9])
+      for (const x of [-0.6, 0.6])
+        boxP(d, WL.IRON, x - 0.05, 0.35, z - 0.05, x + 0.05, 1.22, z + 0.05);
+    boxP(d, WL.IRON, -0.62, 1.12, -0.92, 0.62, 1.22, 0.92, false);
+    d.col("#9a8270").mat(WL.ROCK);
     d.flat(-0.55, -0.85, 0.55, 0.85, 1.12, [0, 0, 0.1, 0.1]);
+    d.col("#8a7462");
+    boxP(d, WL.ROCK, -0.4, 1.12, -0.6, 0.4, 1.34, 0.6);
     d.col("#2a2420");
     for (const [x, z] of [
       [-0.6, -0.55],
@@ -1804,13 +3632,54 @@ function templates() {
       beam(d, x - 0.06, 0.22, z, x + 0.06, 0.22, z, 0.44, WL.IRON);
   });
   make("woodpile", (d) => {
-    d.col("#9a7a52");
-    for (let row = 0; row < 4; row++)
-      for (let i = 0; i < 7 - row; i++) {
-        const x = -1.05 + i * 0.32 + row * 0.16;
-        cylP(d, WL.TIMBER, x, 0, 0, 0.001, 0.001, 3, 0.001, false);
-        beam(d, x, 0.15 + row * 0.27, -0.5, x, 0.15 + row * 0.27, 0.5, 0.28);
+    // split firewood stacked between two end posts: round-ish logs with pale cut ends
+    const log = (x: number, y: number, rad: number, len: number) => {
+      const seg = 6;
+      const ends: [number, number][] = [];
+      for (let i = 0; i < seg; i++) {
+        const a = (i / seg) * Math.PI * 2 + r() * 0.3;
+        ends.push([x + Math.cos(a) * rad, y + Math.sin(a) * rad]);
       }
+      const bark = pick(["#6a5038", "#7a5a3e", "#5a4430"], r);
+      for (let i = 0; i < seg; i++) {
+        const [ax, ay] = ends[i]!;
+        const [bx, by] = ends[(i + 1) % seg]!;
+        d.col(bark).mat(WL.TIMBER);
+        d.quad(bx, by, -len / 2, ax, ay, -len / 2, ax, ay, len / 2, bx, by, len / 2, [
+          0,
+          0,
+          0.3,
+          len,
+        ]);
+      }
+      // the sawn ends: pale wood
+      d.col(pick(["#c8a878", "#d8b888", "#b89868"], r)).mat(WL.PAINT);
+      for (const [z, sgn] of [
+        [len / 2, 1],
+        [-len / 2, -1],
+      ] as const) {
+        for (let i = 0; i < seg; i++) {
+          const [ax, ay] = ends[i]!;
+          const [bx, by] = ends[(i + 1) % seg]!;
+          if (sgn > 0) {
+            d.v(x, y, z, 0, 0, 1, 0.5, 0.5);
+            d.v(ax, ay, z, 0, 0, 1, 0, 0);
+            d.v(bx, by, z, 0, 0, 1, 1, 0);
+          } else {
+            d.v(x, y, z, 0, 0, -1, 0.5, 0.5);
+            d.v(bx, by, z, 0, 0, -1, 1, 0);
+            d.v(ax, ay, z, 0, 0, -1, 0, 0);
+          }
+        }
+      }
+    };
+    for (let row = 0; row < 5; row++)
+      for (let i = 0; i < 8 - (row > 2 ? 1 : 0); i++) {
+        const x = -0.98 + i * 0.27 + (row % 2) * 0.13 + (r() - 0.5) * 0.03;
+        log(x, 0.12 + row * 0.22, 0.1 + r() * 0.03, 0.9 + r() * 0.12);
+      }
+    d.col("#6a5038");
+    for (const x of [-1.18, 1.1]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 1.3, 0.05);
   });
   make("outhouse", (d) => {
     d.col("#ffffff").mat(WL.P_BOARD);
@@ -1952,13 +3821,77 @@ function templates() {
     d.col("#2a2420");
     for (const x of [-0.33, 0.33]) beam(d, x, 1.6, 0.02, x, 1.2, 0.02, 0.03, WL.IRON);
   });
+  // ---- the moving riders' parts (Riders.tsx animates the legs; tints come per instance) ----
+  make("horsebody", (d) => {
+    // a saddled horse without its legs (they swing), nose toward +z
+    const coat = "#ffffff";
+    const dark = "#3a2a20";
+    d.col(coat);
+    boxP(d, WL.PAINT, -0.3, 0.98, -0.72, 0.3, 1.66, 0.7);
+    boxP(d, WL.PAINT, -0.26, 1.08, -0.82, 0.26, 1.58, -0.7);
+    boxP(d, WL.PAINT, -0.25, 1.08, 0.7, 0.25, 1.62, 0.82);
+    beam(d, 0, 1.45, 0.72, 0, 2.02, 1.12, 0.3, WL.PAINT);
+    beam(d, 0, 2.02, 1.05, 0, 1.72, 1.6, 0.24, WL.PAINT);
+    d.col(dark);
+    beam(d, 0, 1.6, 0.66, 0, 2.18, 1.08, 0.08, WL.PAINT);
+    beam(d, 0, 1.55, -0.82, 0, 0.8, -1.05, 0.11, WL.PAINT);
+    d.cone(-0.08, 2.1, 1.05, 0.05, 0.16, 4);
+    d.cone(0.08, 2.1, 1.05, 0.05, 0.16, 4);
+    d.col("#9a3a2a");
+    boxP(d, WL.CANVAS, -0.34, 1.52, -0.25, 0.34, 1.64, 0.3);
+    d.col("#5a3420");
+    boxP(d, WL.TIMBER, -0.24, 1.64, -0.2, 0.24, 1.78, 0.22);
+    boxP(d, WL.TIMBER, -0.1, 1.74, 0.16, 0.1, 1.92, 0.24);
+    d.col("#2a2420");
+    beam(d, -0.12, 1.85, 1.35, -0.25, 1.8, 0.2, 0.02, WL.IRON); // reins
+    beam(d, 0.12, 1.85, 1.35, 0.25, 1.8, 0.2, 0.02, WL.IRON);
+  });
+  make("horseleg", (d) => {
+    // one leg, hanging from its hip at the origin (swung by the instance matrix)
+    d.col("#ffffff");
+    beam(d, 0, 0.02, 0, 0, -0.93, 0.03, 0.13, WL.PAINT);
+    d.col("#1a1410");
+    boxC(d, WL.PAINT, 0, -1.05, 0.03, 0.15, 0.12, 0.17);
+  });
+  make("riderLegs", (d) => {
+    // trousers astride the saddle and boots in the stirrups (saddle seat at y 1.78)
+    d.col("#3a3430");
+    for (const s of [-1, 1]) {
+      beam(d, s * 0.14, 1.82, 0.02, s * 0.3, 1.66, 0.22, 0.17, WL.CANVAS);
+      beam(d, s * 0.3, 1.66, 0.22, s * 0.33, 1.25, 0.08, 0.14, WL.CANVAS);
+    }
+    d.col("#1e1612");
+    for (const s of [-1, 1])
+      boxP(d, WL.TIMBER, s * 0.33 - 0.07, 1.12, 0.02, s * 0.33 + 0.07, 1.27, 0.26);
+  });
+  make("riderTorso", (d) => {
+    // shirt and vest, arms forward to the reins, the head; tinted per rider
+    d.col("#ffffff");
+    boxP(d, WL.CANVAS, -0.2, 1.8, -0.12, 0.2, 2.42, 0.13);
+    beam(d, -0.22, 2.36, 0, -0.2, 2.02, 0.32, 0.1, WL.CANVAS);
+    beam(d, 0.22, 2.36, 0, 0.2, 2.02, 0.32, 0.1, WL.CANVAS);
+    d.col("#c8946a");
+    boxP(d, WL.PAINT, -0.11, 2.42, -0.1, 0.11, 2.7, 0.12);
+    boxC(d, WL.PAINT, -0.19, 1.99, 0.34, 0.07, 0.07, 0.08);
+    boxC(d, WL.PAINT, 0.19, 1.99, 0.34, 0.07, 0.07, 0.08);
+    d.col("#5a4a3a");
+    boxP(d, WL.CANVAS, -0.21, 1.95, -0.13, 0.21, 2.3, -0.1); // vest back
+  });
+  make("riderHat", (d) => {
+    // a wide-brimmed hat (tinted per rider: white for the posse, black for the outlaw)
+    d.col("#ffffff");
+    cylP(d, WL.CANVAS, 0, 2.68, 0.01, 0.3, 0.03, 12, 0.3);
+    cylP(d, WL.CANVAS, 0, 2.7, 0.01, 0.13, 0.17, 10, 0.12);
+    d.col("#2a2420");
+    cylP(d, WL.CANVAS, 0, 2.71, 0.01, 0.135, 0.04, 10, 0.135, false);
+  });
   make("stagecoach", (d) => {
     // a Concord stagecoach: a curved body slung between big wheels, the driver's box up front
     d.col("#7a2a22");
     boxP(d, WL.PAINT, -0.8, 1.1, -1.7, 0.8, 2.6, 1.6);
     d.col("#c8a040");
-    boxP(d, WL.PAINT, -0.82, 1.1, -1.72, 0.82, 1.22, 1.62);
-    boxP(d, WL.PAINT, -0.82, 2.5, -1.72, 0.82, 2.62, 1.62);
+    boxP(d, WL.PAINT, -0.82, 1.08, -1.72, 0.82, 1.22, 1.62);
+    boxP(d, WL.PAINT, -0.82, 2.5, -1.72, 0.82, 2.64, 1.62);
     d.col("#141210").mat(WL.PAINT);
     for (const s of [-1, 1]) {
       const x = s * 0.81;
@@ -2577,26 +4510,8 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     // cut-stone portal: jambs, a lintel and a parapet, with timber sets inside
     const o = dir * 0.7;
     G.col("#a89682");
-    boxP(
-      G,
-      WL.P_STONE,
-      RAIL_X - w / 2 - 1.8,
-      0,
-      face + o - 0.7,
-      RAIL_X - w / 2,
-      h,
-      face + o + 0.7,
-    );
-    boxP(
-      G,
-      WL.P_STONE,
-      RAIL_X + w / 2,
-      0,
-      face + o - 0.7,
-      RAIL_X + w / 2 + 1.8,
-      h,
-      face + o + 0.7,
-    );
+    boxP(G, WL.P_STONE, RAIL_X - w / 2 - 1.8, 0, face + o - 0.7, RAIL_X - w / 2, h, face + o + 0.7);
+    boxP(G, WL.P_STONE, RAIL_X + w / 2, 0, face + o - 0.7, RAIL_X + w / 2 + 1.8, h, face + o + 0.7);
     boxP(
       G,
       WL.P_STONE,
@@ -2650,10 +4565,31 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
       const za = st.zBottom + dir * i;
       const h = (BALCONY_Y * (i + 1)) / n;
       G.col("#a88660");
-      boxP(G, WL.DECK, xa, h - 0.08, Math.min(za, za + dir), xb, h, Math.max(za, za + dir), true, true);
+      boxP(
+        G,
+        WL.DECK,
+        xa,
+        h - 0.08,
+        Math.min(za, za + dir),
+        xb,
+        h,
+        Math.max(za, za + dir),
+        true,
+        true,
+      );
       // risers
       G.col("#7a5e44");
-      boxP(G, WL.TIMBER, xa, 0, Math.min(za, za + dir * 0.06), xb, h - 0.08, Math.max(za, za + dir * 0.06), false);
+      boxP(
+        G,
+        WL.TIMBER,
+        xa,
+        0,
+        Math.min(za, za + dir * 0.06),
+        xb,
+        h - 0.08,
+        Math.max(za, za + dir * 0.06),
+        false,
+      );
     }
     // the boarded side toward the open half of the alley, and a handrail
     G.col("#8a7258");
@@ -2678,9 +4614,29 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
     G.col("#6a4a30");
     boxP(G, WL.TIMBER, xb - 0.1, 0, edge - 0.1, xb + 0.1, BALCONY_Y, edge + 0.1);
     G.col("#e8dcc0");
-    boxP(G, WL.TIMBER, st.x0 - 0.1, BALCONY_Y + 0.95, edge - 0.06, xb + 0.1, BALCONY_Y + 1.05, edge + 0.06);
+    boxP(
+      G,
+      WL.TIMBER,
+      st.x0 - 0.1,
+      BALCONY_Y + 0.95,
+      edge - 0.06,
+      xb + 0.1,
+      BALCONY_Y + 1.05,
+      edge + 0.06,
+    );
     boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
-    for (let x = st.x0; x <= xb; x += 0.42) boxP(G, WL.TIMBER, x - 0.03, BALCONY_Y, edge - 0.03, x + 0.03, BALCONY_Y + 0.96, edge + 0.03, false);
+    for (let x = st.x0; x <= xb; x += 0.42)
+      boxP(
+        G,
+        WL.TIMBER,
+        x - 0.03,
+        BALCONY_Y,
+        edge - 0.03,
+        x + 0.03,
+        BALCONY_Y + 0.96,
+        edge + 0.03,
+        false,
+      );
   }
   // the church: a stair along the nave's north wall up to a landing beside the tower
   {
@@ -2821,7 +4777,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     const ch = chunkAt(p.x, p.z);
     // props stand on the walkable surface (boardwalk decks, the carved riverbed)
     const y = p.k === "lantern" ? (p.a ?? 2.8) : sampleTerrain(L.terrain, p.x, p.z);
-    if (p.k === "horse" || p.k === "stagecoach") void 0;
+    // (the parked stagecoach and buckboards draw through the vehicle batch: Riders.tsx)
+    if (p.k === "stagecoach" || p.k === "wagon") continue;
     // a light per-instance tint so repeated props don't read as clones
     const k = 0.9 + ((((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453) % 1) + 1) % 1) * 0.2;
     tint.setRGB(k, k, k);
@@ -2831,7 +4788,6 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
       p.k === "windmill" ||
       p.k === "arch" ||
       p.k === "covered" ||
-      p.k === "wagon" ||
       p.k === "well" ||
       p.k === "tank" ||
       p.k === "pole" ||
@@ -2839,7 +4795,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
       p.k === "outhouse";
     const target = big ? ch.main : ch.detail;
     // fences and hitching rails stretch along their length; everything else scales evenly
-    const stretch = p.k === "fence" ? 2.5 : p.k === "hitch" ? 1.1 : 0;
+    const stretch = p.k === "fence" ? 2.5 : p.k === "hitch" ? 1.1 : p.k === "picket" ? 2 : 0;
     const sx = stretch ? p.s / stretch : p.s;
     const sy = stretch ? 1 : p.s;
     target.stamp(t.d, p.x, y, p.z, p.rot, sx, sy, sy, tint);
@@ -2880,21 +4836,71 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
         ] as const) {
           if (rk(i + di, j + dj) > 0) continue;
           const r = hash(i * 4 + di + 2, j * 4 + dj + 2);
+          // a scatter of pebbles fanning out onto the ground at most foot edges (ankle-high,
+          // so they don't need collision), and the heavier talus at a third of them
+          const pr = hash(i * 4 + di + 7, j * 4 + dj + 3);
+          if (pr < 0.62) {
+            const n = 1 + Math.floor(pr * 4.5);
+            for (let q = 0; q < n; q++) {
+              const u = hash(i * 13 + q, j * 7 + di * 3 + dj);
+              const w = hash(j * 11 + q, i * 5 + dj * 3 + di);
+              const out = 0.9 + u * 1.1; // metres out from the rock cell's centre
+              const along = (w - 0.5) * 1.8;
+              const px = -half + 1 + i * 2 + di * out + (di === 0 ? along : 0);
+              const pz = -half + 1 + j * 2 + dj * out + (dj === 0 ? along : 0);
+              const sc = (0.18 + w * 0.22) * (1.3 - u * 0.5);
+              const kk = 0.78 + u * 0.25;
+              rubble.setRGB(kk * 1.05, kk * 0.72, kk * 0.6);
+              chunkAt(px, pz).detail.stamp(
+                T.pebble!.d,
+                px,
+                -0.08,
+                pz,
+                (u + w) * 20,
+                sc * 1.2,
+                sc * 0.45,
+                sc,
+                rubble,
+              );
+            }
+          }
           if (r > 0.34) continue;
-          const cx = -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
-          const cz = -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
+          const cx =
+            -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
+          const cz =
+            -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
           const ch = chunkAt(cx, cz);
           const k = 0.8 + hash(i + 3, j + 5) * 0.25;
           rubble.setRGB(k * 1.05, k * 0.72, k * 0.6);
           const big = r < 0.09;
           const sc = big ? 0.95 + hash(i, j) * 0.35 : 0.45 + hash(j, i) * 0.35;
           // a big fallen block, or a low heap of scree
-          ch.detail.stamp(T.boulder!.d, cx, -0.1, cz, r * 40, sc, big ? sc * 0.9 : sc * 0.45, sc * 1.2, rubble);
+          ch.detail.stamp(
+            T.boulder!.d,
+            cx,
+            -0.1,
+            cz,
+            r * 40,
+            sc,
+            big ? sc * 0.9 : sc * 0.45,
+            sc * 1.2,
+            rubble,
+          );
           if (!big && r < 0.2) {
             // a second, smaller stone beside it
             const ox = dj !== 0 ? 0.7 : 0;
             const oz = di !== 0 ? 0.7 : 0;
-            ch.detail.stamp(T.boulder!.d, cx + ox, -0.1, cz + oz, r * 70, sc * 0.55, sc * 0.4, sc * 0.6, rubble);
+            ch.detail.stamp(
+              T.boulder!.d,
+              cx + ox,
+              -0.1,
+              cz + oz,
+              r * 70,
+              sc * 0.55,
+              sc * 0.4,
+              sc * 0.6,
+              rubble,
+            );
           }
         }
       }

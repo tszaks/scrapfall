@@ -23,7 +23,7 @@ import {
   type WesternLayout,
 } from "./layout";
 import { WESTERN_LOOK, type WesternLook } from "./look";
-import { facadeMaterial, westernBackground, westernEnv } from "./materials";
+import { facadeMaterial, facadeTime, westernBackground, westernEnv } from "./materials";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
@@ -95,6 +95,14 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
     sh.uniforms["uArr"] = { value: arr.day };
     sh.uniforms["uSplat"] = { value: splat };
     sh.uniforms["uHalf"] = { value: L.half };
+    // wet ground: troughs and wells (x, z, radius), up to 16, nearest the town first
+    const wet = L.props
+      .filter((p) => p.k === "trough" || p.k === "well")
+      .sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))
+      .slice(0, 16)
+      .map((p) => new THREE.Vector3(p.x, p.z, p.k === "well" ? 2.6 : 2.0));
+    while (wet.length < 16) wet.push(new THREE.Vector3(0, 0, 0));
+    sh.uniforms["uWet"] = { value: wet };
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;")
       .replace(
@@ -109,6 +117,7 @@ precision highp sampler2DArray;
 uniform sampler2DArray uArr;
 uniform sampler2D uSplat;
 uniform float uHalf;
+uniform vec3 uWet[16];
 varying vec2 vGxz;
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
@@ -119,12 +128,16 @@ float gNoise(vec2 p) {
       .replace(
         "#include <map_fragment>",
         `vec2 wp = vGxz;
-${cutRiver ? `// the riverbed corridor is drawn by its own carved mesh
+${
+  cutRiver
+    ? `// the riverbed corridor is drawn by its own carved mesh
 if (abs(wp.x) < uHalf - ${RIVER_END.toFixed(1)}) {
   float rz = 172.0 + 24.0 * sin(wp.x / 88.0) + 9.0 * sin(wp.x / 37.0 + 1.3);
   float rw = 21.0 + 5.0 * sin(wp.x / 61.0 + 0.4);
   if (abs(wp.y - rz) < rw * 0.5 + ${(RIVER_EDGE - 0.3).toFixed(2)}) discard;
-}` : ""}
+}`
+    : ""
+}
 float n1 = gNoise(wp * 0.02) * 0.6 + gNoise(wp * 0.09) * 0.4;
 vec2 jitter = vec2(gNoise(wp * 0.35), gNoise(wp * 0.35 + 17.0)) - 0.5;
 vec4 w = texture2D(uSplat, (wp + jitter * 2.2 + uHalf) / (2.0 * uHalf));
@@ -143,10 +156,47 @@ col = mix(col, dirt, smoothstep(0.15, 0.6, w.r + (n1 - 0.5) * 0.25));
 col = mix(col, mud, smoothstep(0.2, 0.6, w.g + (n1 - 0.5) * 0.2));
 col = mix(col, yard, smoothstep(0.2, 0.6, w.b));
 col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
+// ---- a street people use: wheel ruts down each lane, hoof-churned dirt between them ----
+{
+  float street = smoothstep(0.35, 0.8, w.r);
+  if (street > 0.0) {
+    // which way the traffic runs here: Main Street and the back streets east-west, the cross
+    // street north-south
+    bool ns = wp.x > -31.0 && wp.x < -13.0 && abs(wp.y) > 13.0;
+    float along = ns ? wp.y : wp.x;
+    float across = ns ? wp.x + 22.0 : (abs(wp.y) < 14.0 ? wp.y : (wp.y < 0.0 ? wp.y + 64.0 : wp.y - 78.0));
+    float wob = gNoise(vec2(along * 0.03, 3.0)) * 0.9 + gNoise(vec2(along * 0.11, 7.0)) * 0.25;
+    float rut = 0.0;
+    // two lanes each way on Main Street, one lane each way on the side streets
+    for (int k = 0; k < 4; k++) {
+      float lane = abs(wp.y) < 14.0 && !ns ? (k < 2 ? -2.6 : 2.6) + (k == 1 || k == 3 ? 0.0 : 0.0) : (k < 2 ? -1.6 : 1.6);
+      float wheel = (k % 2 == 0 ? -0.78 : 0.78);
+      float d = abs(across - lane - wheel - wob);
+      rut = max(rut, 1.0 - smoothstep(0.08, 0.26, d));
+    }
+    // hoofprints: small dark crescents scattered down the middle of the lanes
+    vec2 hc = floor(wp * 2.2);
+    vec2 hf = fract(wp * 2.2) - vec2(gHash(hc), gHash(hc + 7.0));
+    float hoof = (1.0 - smoothstep(0.06, 0.14, length(hf * vec2(1.0, 1.4)))) * step(0.55, gHash(hc + 3.0));
+    float laneMid = 1.0 - smoothstep(0.6, 1.4, min(abs(abs(across) - 2.6), abs(abs(across) - 1.6)) );
+    col *= 1.0 - street * (rut * 0.2 + hoof * laneMid * 0.22);
+    // compacted crowns between the ruts read a touch lighter
+    col *= 1.0 + street * 0.05 * (1.0 - rut) * laneMid;
+  }
+}
+// ---- wet mud round the troughs and the town well ----
+for (int i = 0; i < 16; i++) {
+  vec3 tq = uWet[i];
+  if (tq.z <= 0.0) continue;
+  float d = length(wp - tq.xy);
+  float edge = tq.z * (0.8 + 0.4 * gNoise(wp * 1.3 + float(i)));
+  float wet = 1.0 - smoothstep(edge * 0.5, edge, d);
+  col = mix(col, col * vec3(0.52, 0.46, 0.42), wet * 0.85);
+}
 diffuseColor.rgb *= col;`,
       );
   };
-  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v1" : "western-ground-v1");
+  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v2" : "western-ground-v2");
   return { mat, splat };
 }
 
@@ -303,7 +353,11 @@ export const WesternScene = memo(function WesternScene({
     const sunsetSrc = westernBackground("sunset");
     const sunset = pm.fromEquirectangular(sunsetSrc);
     // same width as the sunset so both PMREMs share one size (no shader change at the swap)
-    const nightSrc = resized(westernSky("night"), (sunsetSrc.image as { width: number }).width, (sunsetSrc.image as { height: number }).height);
+    const nightSrc = resized(
+      westernSky("night"),
+      (sunsetSrc.image as { width: number }).width,
+      (sunsetSrc.image as { height: number }).height,
+    );
     const nightRT = pm.fromEquirectangular(nightSrc);
     nightSrc.dispose();
     pm.dispose();
@@ -341,7 +395,10 @@ export const WesternScene = memo(function WesternScene({
     const disc = mode === "night" ? mats.moon : mats.disc;
     disc.opacity = mode === "night" ? todSmooth(0.5, 0.75, nk) : 1 - todSmooth(0.25, 0.5, nk);
   }, [nk, mode, mats, nightK, look, ground]);
-  const skies = useMemo(() => ({ sunset: westernBackground("sunset"), night: westernBackground("night") }), []);
+  const skies = useMemo(
+    () => ({ sunset: westernBackground("sunset"), night: westernBackground("night") }),
+    [],
+  );
 
   useEffect(
     () => () => {
@@ -408,6 +465,7 @@ export const WesternScene = memo(function WesternScene({
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
+    facadeTime.value = t;
     const cam = state.camera;
     // the disc: always straight toward the sun/moon, far away, facing the camera
     const disc = discRef.current;
@@ -472,6 +530,7 @@ export const WesternScene = memo(function WesternScene({
   return (
     <group>
       <SkyDome sunset={skies.sunset} night={skies.night} />
+      <InteriorLights lamps={layout.lamps} />
       {/* the desert floor, out to the horizon */}
       <mesh rotation-x={-Math.PI / 2} position-y={0} material={ground.mat} receiveShadow>
         <planeGeometry args={[ext * 2, ext * 2]} />
@@ -532,6 +591,44 @@ export const WesternScene = memo(function WesternScene({
     </group>
   );
 });
+
+/** Lamplight inside the walk-in buildings: a few warm point lights that follow the camera
+ * to the nearest interior lamps (a fixed count, so no shader ever recompiles). */
+function InteriorLights({ lamps }: { lamps: { x: number; y: number; z: number }[] }) {
+  const refs = useRef<(THREE.PointLight | null)[]>([]);
+  const near = useMemo(() => lamps.map((l, i) => ({ ...l, i, d: 0 })), [lamps]);
+  useFrame(({ camera }) => {
+    const c = camera.position;
+    for (const l of near) l.d = Math.hypot(l.x - c.x, l.z - c.z);
+    near.sort((a, b) => a.d - b.d);
+    refs.current.forEach((pl, k) => {
+      if (!pl) return;
+      const l = near[k];
+      if (!l || l.d > 45) {
+        pl.intensity = 0;
+        return;
+      }
+      pl.position.set(l.x, l.y - 0.3, l.z);
+      pl.intensity = 9 * (1 - Math.max(0, (l.d - 28) / 17));
+    });
+  });
+  return (
+    <>
+      {[0, 1, 2].map((k) => (
+        <pointLight
+          key={k}
+          ref={(p) => {
+            refs.current[k] = p;
+          }}
+          color="#ffb070"
+          distance={11}
+          decay={1.4}
+          intensity={0}
+        />
+      ))}
+    </>
+  );
+}
 
 function DiscTint({ mat, color }: { mat: THREE.MeshBasicMaterial; color: string }) {
   useEffect(() => {
