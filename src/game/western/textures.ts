@@ -135,6 +135,41 @@ function grain(P: Painter, amt: number, blot = 0) {
   }
 }
 
+/** paint gone: ragged patches where the whitewash has flaked off the bare grey boards,
+ * a lighter lip of lifting paint round each, and rust-brown drips below nail heads */
+function peel(c: Ctx, x: number, y: number, w: number, h: number, r: () => number, n: number) {
+  for (let i = 0; i < n; i++) {
+    const cx = x + r() * w;
+    const cy = y + r() * h;
+    const rw = 6 + r() * 26;
+    const rh = 3 + r() * 10;
+    c.beginPath();
+    const pts = 9;
+    for (let k = 0; k <= pts; k++) {
+      const a = (k / pts) * Math.PI * 2;
+      const f = 0.6 + r() * 0.5;
+      const px = cx + Math.cos(a) * rw * f;
+      const py = cy + Math.sin(a) * rh * f;
+      if (k === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.fillStyle = rgba(128 + r() * 20, 116 + r() * 16, 100 + r() * 12, 0.85);
+    c.fill();
+    c.strokeStyle = rgba(255, 250, 240, 0.35);
+    c.lineWidth = 1;
+    c.stroke();
+    // bare wood grain inside
+    for (let g = 0; g < 3; g++) rect(c, rgba(90, 78, 64, 0.35), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
+  }
+  // rust drips from nail heads
+  for (let i = 0; i < n * 1.5; i++) {
+    const nx = x + r() * w;
+    const ny = y + r() * h;
+    rect(c, rgba(120, 70, 40, 0.18 + r() * 0.2), nx, ny, 1.2, 4 + r() * 18);
+  }
+}
+
 /** horizontal lap siding: `exp` px per board, shadow under each lap */
 function clapboard(
   c: Ctx,
@@ -158,6 +193,7 @@ function clapboard(
     const sx = x + r() * w;
     rect(c, rgba(120, 100, 80, 0.05 + r() * 0.08), sx, y + r() * h, 1 + r() * 2, 6 + r() * 40);
   }
+  peel(c, x, y, w, h, r, Math.round((w * h) / 9000));
   for (let i = 0; i < (w * h) / 5000; i++)
     rect(
       c,

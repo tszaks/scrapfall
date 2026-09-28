@@ -269,8 +269,34 @@ export let NAV_CELLS = CELLS;
 
 /** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level.
  * `playHalf` fences play into a smaller central square (solo on the big maps). */
+/** Thin walls the route planner must respect (walk-in buildings' walls are posts, which the
+ * nav grid can't see): segments, and the doorways that stay open through them. */
+let navWallSegs: { ax: number; az: number; bx: number; bz: number }[] = [];
+let navWallDoors: { x: number; z: number }[] = [];
+export function setNavWalls(walls: typeof navWallSegs | null, doors: typeof navWallDoors | null) {
+  navWallSegs = walls ?? [];
+  navWallDoors = doors ?? [];
+}
+function closeNavWalls(nav: NavGrid) {
+  if (!navWallSegs.length) return;
+  const cs = BLOCK * NAV_SCALE;
+  for (const w of navWallSegs) {
+    const len = Math.hypot(w.bx - w.ax, w.bz - w.az);
+    for (let d = 0; d <= len; d += cs * 0.25) {
+      const x = w.ax + ((w.bx - w.ax) * d) / len;
+      const z = w.az + ((w.bz - w.az) * d) / len;
+      if (navWallDoors.some((q) => Math.hypot(q.x - x, q.z - z) < cs * 0.6)) continue;
+      const i = Math.floor((x + HALF) / cs);
+      const j = Math.floor((z + HALF) / cs);
+      if (i < 0 || j < 0 || i >= nav.n || j >= nav.n) continue;
+      nav.g[i * nav.n + j] = 1;
+    }
+  }
+}
+
 /** Nav cells over raised stair-only ground (see terrain.ts raised) are solid for enemies. */
 export function closeRaised(nav: NavGrid): NavGrid {
+  closeNavWalls(nav);
   const cs = BLOCK * NAV_SCALE;
   for (let i = 0; i < nav.n; i++)
     for (let j = 0; j < nav.n; j++) {

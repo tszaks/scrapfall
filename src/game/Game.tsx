@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
-  closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
+  closeRaised, setNavWalls, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
   BEACH_SIZE, setPosts,
 } from "./level";
 
@@ -4922,6 +4922,8 @@ export function Game() {
       (x, z) => blocked(level.blocks, x, z, 0.35),
     );
     setPosts(mapPosts(level.city, level.western ?? null));
+    // Dry Gulch's walk-in buildings: their thin walls, for the enemies' route planner
+    setNavWalls(level.western?.navWalls ?? null, level.western?.navDoors ?? null);
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);

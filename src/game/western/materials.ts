@@ -169,7 +169,10 @@ if (rockBump.x != 0.0 || rockBump.y != 0.0) {
       )
       .replace(
         "#include <emissivemap_fragment>",
-        `if (uNightK > 0.0 && litMode > 0.5) {
+        `if (litMode > 3.5 && litMode < 4.5) {
+  // inside a walk-in building: warm lamplight fill (brighter once it's dark outside)
+  totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.78, 0.55) * (0.42 + 0.3 * smoothstep(0.5, 1.0, uNightK));
+} else if (uNightK > 0.0 && litMode > 0.5) {
   vec4 nt = texture(uNight, vec3(vFuv, vFac.x));
   float hf = wHash(floor(vFuv * 4.0) + vec2(vFac.y * 97.0, vFac.y * 13.0));
   float on = litMode > 1.5 ? 1.0 : step(0.42, hf);
@@ -183,7 +186,7 @@ if (rockBump.x != 0.0 || rockBump.y != 0.0) {
 totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.66, 0.95) * 0.3 * rockFill * smoothstep(0.5, 1.0, uNightK);`,
       );
   };
-  mat.customProgramCacheKey = () => "western-facade-v5";
+  mat.customProgramCacheKey = () => "western-facade-v6";
   return mat;
 }
 

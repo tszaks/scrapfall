@@ -472,6 +472,7 @@ export const WesternScene = memo(function WesternScene({
   return (
     <group>
       <SkyDome sunset={skies.sunset} night={skies.night} />
+      <InteriorLights lamps={layout.lamps} />
       {/* the desert floor, out to the horizon */}
       <mesh rotation-x={-Math.PI / 2} position-y={0} material={ground.mat} receiveShadow>
         <planeGeometry args={[ext * 2, ext * 2]} />
@@ -532,6 +533,44 @@ export const WesternScene = memo(function WesternScene({
     </group>
   );
 });
+
+/** Lamplight inside the walk-in buildings: a few warm point lights that follow the camera
+ * to the nearest interior lamps (a fixed count, so no shader ever recompiles). */
+function InteriorLights({ lamps }: { lamps: { x: number; y: number; z: number }[] }) {
+  const refs = useRef<(THREE.PointLight | null)[]>([]);
+  const near = useMemo(() => lamps.map((l, i) => ({ ...l, i, d: 0 })), [lamps]);
+  useFrame(({ camera }) => {
+    const c = camera.position;
+    for (const l of near) l.d = Math.hypot(l.x - c.x, l.z - c.z);
+    near.sort((a, b) => a.d - b.d);
+    refs.current.forEach((pl, k) => {
+      if (!pl) return;
+      const l = near[k];
+      if (!l || l.d > 45) {
+        pl.intensity = 0;
+        return;
+      }
+      pl.position.set(l.x, l.y - 0.3, l.z);
+      pl.intensity = 9 * (1 - Math.max(0, (l.d - 28) / 17));
+    });
+  });
+  return (
+    <>
+      {[0, 1, 2].map((k) => (
+        <pointLight
+          key={k}
+          ref={(p) => {
+            refs.current[k] = p;
+          }}
+          color="#ffb070"
+          distance={11}
+          decay={1.4}
+          intensity={0}
+        />
+      ))}
+    </>
+  );
+}
 
 function DiscTint({ mat, color }: { mat: THREE.MeshBasicMaterial; color: string }) {
   useEffect(() => {

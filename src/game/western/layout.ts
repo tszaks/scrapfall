@@ -15,6 +15,7 @@
 import type { Block } from "../level";
 import type { Terrain } from "../terrain";
 import { soloHalf } from "../soloBounds";
+import { frameWD, roomCollision, roomPlan, saloonBalcony, toWorld } from "./rooms";
 
 // ---- cell kinds (minimap, ground splat, collision) ----
 export const WK = {
@@ -117,6 +118,8 @@ export type WBld = {
   coop?: boolean;
   /** a lean-to annex on the back wall: its width (m), 0 or absent for none */
   lean?: number;
+  /** you can walk in: real doorways, an interior (rooms.ts); walls are thin collision */
+  walkIn?: boolean;
   /** boardwalk deck height in front (Main Street), m */
   deck?: number;
   /** the lean-to's centre along the back wall, as a fraction of the width from the left */
@@ -208,6 +211,13 @@ export type WesternLayout = {
   terrain: Terrain;
   /** the saloon's outside staircase: the alley strip it climbs, bottom to top */
   saloonStairs: { x0: number; x1: number; zBottom: number; zTop: number; zEdge: number } | null;
+  /** the foot of every stair the access markers show (minimap badge, pings) */
+  stairFeet: { x: number; z: number; label: string }[];
+  /** interior lamps (world, floor-relative height added) */
+  lamps: { x: number; y: number; z: number }[];
+  /** walls of walk-in buildings, for the enemies' route planner (posts are invisible to it) */
+  navWalls: { ax: number; az: number; bx: number; bz: number }[];
+  navDoors: { x: number; z: number }[];
   /** thin collision circles for small props and porch posts (see level.ts setPosts) */
   posts: { x: number; z: number; r: number; shot?: boolean }[];
   extent: number;
@@ -312,6 +322,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const posts: { x: number; z: number; r: number; shot?: boolean }[] = [];
   /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
   const boardY = new Map<string, number>();
+  const stairFeet: { x: number; z: number; label: string }[] = [{ x: -150, z: -7.15, label: "STAIRS · BELFRY" }];
+  const lamps: { x: number; y: number; z: number }[] = [];
+  const navWalls: { ax: number; az: number; bx: number; bz: number }[] = [];
+  const navDoors: { x: number; z: number }[] = [];
+  const pt = (p: [number, number]) => ({ x: p[0], z: p[1] });
   const S = soloHalf(half);
   const RING = S + 1; // centre of the ring cells
   const seedN = Math.floor(rand() * 1e6);
@@ -676,7 +691,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const bld = (b: Omit<WBld, "seed" | "tone"> & { tone?: number }) => {
     const full: WBld = { ...b, seed: Math.floor(rand() * 1e9), tone: b.tone ?? rand() };
     buildings.push(full);
-    markSolid(b.x0, b.z0, b.x1, b.z1, b.storeys * STOREY + 2);
+    // (a walk-in building's walls are thin posts, laid once its floor height is known)
+    if (!b.walkIn) markSolid(b.x0, b.z0, b.x1, b.z1, b.storeys * STOREY + 2);
     setGround(b.x0, b.z0, b.x1, b.z1, WK.LOT);
     // an adobe's ramada: its two pole posts are thin collision
     if (b.porch > 0 && b.t === "adobe") {
@@ -749,6 +765,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     porch?: 0 | 1 | 2;
     ff?: 0 | 1 | 2 | 3;
     d?: number;
+    walkIn?: boolean;
   };
   // (held in an object: TypeScript does not track assignments made inside closures)
   const sal: {
@@ -821,11 +838,12 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         porch,
         ff: p.ff ?? (mat === "adobe" ? 0 : ((1 + Math.floor(rand() * 3)) as 1 | 2 | 3)),
         roof: mat === "adobe" ? "flat" : rand() < 0.7 ? "gable" : "shed",
+        ...(p.walkIn ? { walkIn: true } : {}),
       });
       // a lean-to on the back of some (a kitchen, a store room): collision behind the lot
       {
         const made = buildings[buildings.length - 1]!;
-        if (p.t !== "saloon" && p.t !== "stable" && p.w >= 10 && rand() < 0.5) {
+        if (!p.walkIn && p.t !== "saloon" && p.t !== "stable" && p.w >= 10 && rand() < 0.5) {
           const lw = Math.min(p.w - 2, 4 + Math.round(rand() * 4));
           const lat = 0.2 + rand() * 0.6;
           made.lean = lw;
@@ -856,7 +874,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const postZ = north ? zf + BOARD_D - 0.15 : zf - BOARD_D + 0.15;
       const clutterZ = north ? zf + BOARD_D - 1 : zf - BOARD_D + 1;
       if (porch > 0) {
-        const n = Math.max(2, Math.round(p.w / 3.2));
+        const n0 = Math.max(2, Math.round(p.w / 3.2));
+        const n = p.walkIn && p.t !== "saloon" && n0 % 2 === 0 ? n0 + 1 : n0;
         for (let i = 0; i <= n; i++) {
           const px = x + 0.15 + ((p.w - 0.3) * i) / n;
           posts.push({ x: px, z: postZ, r: 0.14 });
@@ -894,10 +913,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       // porch-row clutter: each piece takes its own stretch of the row (nothing stacked
       // inside anything else)
       const taken: [number, number][] = [];
+      // (a walk-in's doorway stays clear)
+      const doorLX = p.t === "saloon" ? p.w / 2 - 4.5 : 0;
+      const doorWX = x + p.w / 2 + (north ? doorLX : -doorLX);
       const place = (k: WPropKind, w: number, want: number, rot: number, s = 1) => {
         for (let t = 0; t < 6; t++) {
           const cx = t === 0 ? want : x + w / 2 + 0.3 + rand() * (p.w - w - 0.6);
           if (cx - w / 2 < x + 0.3 || cx + w / 2 > x + p.w - 0.3) continue;
+          if (p.walkIn && Math.abs(cx - doorWX) < w / 2 + 1.4) continue;
           if (taken.some(([a, b]) => cx + w / 2 + 0.3 > a && cx - w / 2 - 0.3 < b)) continue;
           taken.push([cx - w / 2, cx + w / 2]);
           prop(k, cx, clutterZ, rot, s);
@@ -948,11 +971,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // north row, west block and east block
   row(true, -124, -32, [
     { w: 18, t: "hotel", sign: W["HOTEL"], storeys: 3, mat: "clap", porch: 2, ff: 1, d: 18 },
-    { w: 14, t: "store", sign: W["GENERAL STORE"], storeys: 2, mat: "board", porch: 1, ff: 2 },
+    { w: 14, t: "store", sign: W["GENERAL STORE"], storeys: 2, mat: "board", porch: 1, ff: 2, walkIn: true },
     { w: 8, t: "store", sign: W["BARBER"], storeys: 1, porch: 1 },
   ]);
   row(true, -12, 120, [
-    { w: 22, t: "saloon", sign: W["SALOON"], storeys: 2, mat: "clap", porch: 2, ff: 3, d: 20 },
+    { w: 22, t: "saloon", sign: W["SALOON"], storeys: 2, mat: "clap", porch: 2, ff: 3, d: 20, walkIn: true },
     { w: 16, t: "opera", sign: W["OPERA HOUSE"], storeys: 2, mat: "brick", porch: 0, ff: 3, d: 20 },
     { w: 10, t: "store", sign: W["TELEGRAPH"], storeys: 1, porch: 1 },
     { w: 10, t: "store", sign: W["UNDERTAKER"], storeys: 1, mat: "board", porch: 1 },
@@ -960,12 +983,12 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   row(false, -124, -32, [
     { w: 14, t: "store", sign: W["DRY GOODS"], storeys: 2, porch: 1 },
     { w: 10, t: "store", sign: W["ASSAY OFFICE"], storeys: 1, mat: "board", porch: 1 },
-    { w: 16, t: "bank", sign: W["BANK"], storeys: 2, mat: "brick", porch: 0, ff: 1, d: 16 },
+    { w: 16, t: "bank", sign: W["BANK"], storeys: 2, mat: "brick", porch: 0, ff: 1, d: 16, walkIn: true },
   ]);
   row(false, -12, 118, [
-    { w: 16, t: "sheriff", sign: W["SHERIFF"], storeys: 1, mat: "stone", porch: 1, ff: 1 },
+    { w: 16, t: "sheriff", sign: W["SHERIFF"], storeys: 1, mat: "stone", porch: 1, ff: 1, d: 16, walkIn: true },
     { w: 12, t: "smithy", sign: W["BLACKSMITH"], storeys: 1, mat: "board", porch: 0, ff: 0 },
-    { w: 24, t: "stable", sign: W["LIVERY"], storeys: 2, mat: "barn", porch: 0, ff: 0, d: 20 },
+    { w: 24, t: "stable", sign: W["LIVERY"], storeys: 2, mat: "barn", porch: 0, ff: 0, d: 20, walkIn: true },
   ]);
 
   // the church closes the west end of Main Street; the sun sets behind its bell tower
@@ -1852,27 +1875,92 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     for (let x = Math.ceil(x0); x <= Math.floor(x1); x++)
       for (let z = Math.ceil(z0); z <= Math.floor(z1); z++) tset(x, z, h(x, z));
   };
-  if (sal.stairs && sal.lot) {
-    const st = sal.stairs;
-    const sl = sal.lot;
-    const dir = sl.north ? 1 : -1; // toward the street
-    // the balcony across the saloon's front (exact edges: a deck, not heightfield samples),
-    // and the stair's landing in the alley at its east end
-    const ze = sl.zf + dir * SALOON_BALCONY;
-    platforms.push({ x0: sl.x0, x1: st.x0, z0: Math.min(sl.zf, ze), z1: Math.max(sl.zf, ze), y: BALCONY_Y });
-    // the stair's boarded side and handrail: thin posts, so nobody stands outside the rail
-    for (let z = Math.min(st.zBottom, st.zTop); z <= Math.max(st.zBottom, st.zTop); z += 0.35)
-      posts.push({ x: st.x1 - 0.25, z, r: 0.08 });
-    platforms.push({
-      x0: st.x0,
-      x1: st.x1,
-      z0: Math.min(sl.zf - dir * 0.4, ze),
-      z1: Math.max(sl.zf - dir * 0.4, ze),
-      y: BALCONY_Y,
-    });
-    tbox(st.x0, Math.min(st.zBottom, st.zTop), st.x1, Math.max(st.zBottom, st.zTop), (_x, z) =>
-      BALCONY_Y * Math.min(1, Math.max(0, (z - st.zBottom) / (st.zTop - st.zBottom))),
-    );
+  {
+    // the saloon's balcony over the left part of its front (exact edges: a deck, not
+    // heightfield samples), reached from inside up the saloon's own stair; the doors open
+    // under the plain porch roof beside it
+    const sb = buildings.find((q) => q.t === "saloon");
+    if (sb) {
+      const { W } = frameWD(sb);
+      const bal = saloonBalcony(W);
+      const a0 = toWorld(sb, bal.a, 0);
+      const a1 = toWorld(sb, bal.b, SALOON_BALCONY);
+      platforms.push({ x0: Math.min(a0[0], a1[0]), z0: Math.min(a0[1], a1[1]), x1: Math.max(a0[0], a1[0]), z1: Math.max(a0[1], a1[1]), y: BALCONY_Y });
+    }
+  }
+  // ---- the walk-in interiors: floors at the boardwalk's height, stairs, landings, lamps ----
+  for (const b of buildings) {
+    const plan = roomPlan(b, b.deck ?? DECK_Y, STOREY);
+    if (!plan) continue;
+    const { W, D } = plan;
+    // the floor (samples just inside the walls; the walls themselves are posts)
+    const c0 = toWorld(b, -W / 2 + 0.2, -0.2);
+    const c1 = toWorld(b, W / 2 - 0.2, -D + 0.2);
+    tbox(Math.min(c0[0], c1[0]), Math.min(c0[1], c1[1]), Math.max(c0[0], c1[0]), Math.max(c0[1], c1[1]), () => plan.floor);
+    for (const it of plan.items) {
+      if (it.k === "stair") {
+        // rises from the floor at zLow to the landing at zHigh
+        const a0 = toWorld(b, it.x0, it.zLow);
+        const a1 = toWorld(b, it.x1, it.zHigh);
+        const xa = Math.min(a0[0], a1[0]);
+        const xb = Math.max(a0[0], a1[0]);
+        const za = Math.min(a0[1], a1[1]);
+        const zb = Math.max(a0[1], a1[1]);
+        const lowW = toWorld(b, 0, it.zLow);
+        const highW = toWorld(b, 0, it.zHigh);
+        const alongZ = b.front === 0 || b.front === 2;
+        tbox(xa, za, xb, zb, (x, z) => {
+          const t = alongZ ? (z - lowW[1]) / (highW[1] - lowW[1]) : (x - lowW[0]) / (highW[0] - lowW[0]);
+          return plan.floor + (it.y - plan.floor) * Math.min(1, Math.max(0, t));
+        });
+        // the stair's open side toward the room: a balustrade (thin posts) above knee height
+        const roomSide = it.x0 < 0 ? it.x1 + 0.05 : it.x0 - 0.05;
+        for (let lz = it.zLow + 1.6; lz <= it.zHigh; lz += 0.3) {
+          const [px, pz] = toWorld(b, roomSide, lz);
+          posts.push({ x: px, z: pz, r: 0.06 });
+        }
+        stairFeet.push({ ...pt(toWorld(b, (it.x0 + it.x1) / 2, it.zLow - 0.6)), label: "STAIRS · BALCONY" });
+      } else if (it.k === "landing") {
+        const a0 = toWorld(b, it.r.x0, it.r.z0);
+        const a1 = toWorld(b, it.r.x1, it.r.z1 + 0.25); // (runs under the wall onto the balcony)
+        platforms.push({ x0: Math.min(a0[0], a1[0]), z0: Math.min(a0[1], a1[1]), x1: Math.max(a0[0], a1[0]), z1: Math.max(a0[1], a1[1]), y: it.y });
+      } else if (it.k === "lamp") {
+        const [lx, lz] = toWorld(b, it.x, it.z);
+        lamps.push({ x: lx, y: plan.floor + it.y, z: lz });
+      }
+      // everything solid in the room: thin collision round its outline
+      for (const c of roomCollision(it)) {
+        const [px, pz] = toWorld(b, c.x, c.z);
+        posts.push(c.shot ? { x: px, z: pz, r: c.r, shot: true } : { x: px, z: pz, r: c.r });
+      }
+    }
+    // the four walls, as posts, with the doorways left open
+    const gaps = (wall: "front" | "back") => plan.doors.filter((d) => d.wall === wall).map((d) => [d.a - 0.05, d.b + 0.05] as const);
+    const upper = plan.upperDoor ? [[plan.upperDoor.a - 0.05, plan.upperDoor.b + 0.05] as const] : [];
+    const wallLine = (ax: number, az: number, bx: number, bz: number, holes: readonly (readonly [number, number])[], alongX: boolean) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      for (let d = 0; d <= len + 1e-6; d += 0.25) {
+        const lx = ax + ((bx - ax) * d) / len;
+        const lz = az + ((bz - az) * d) / len;
+        const u = alongX ? lx : lz;
+        if (holes.some(([h0, h1]) => u > h0 && u < h1)) continue;
+        const [px, pz] = toWorld(b, lx, lz);
+        posts.push({ x: px, z: pz, r: 0.14, shot: true });
+      }
+    };
+    wallLine(-W / 2, 0, W / 2, 0, [...gaps("front"), ...upper], true);
+    wallLine(-W / 2, -D, W / 2, -D, gaps("back"), true);
+    wallLine(-W / 2, 0, -W / 2, -D, [], false);
+    wallLine(W / 2, 0, W / 2, -D, [], false);
+    // the enemies' route planner can't see posts: tell it where the walls are
+    const doorsW = plan.doors.map((d) => pt(toWorld(b, (d.a + d.b) / 2, d.wall === "front" ? 0 : -D)));
+    const corners = [toWorld(b, -W / 2, 0), toWorld(b, W / 2, 0), toWorld(b, W / 2, -D), toWorld(b, -W / 2, -D)];
+    for (let i = 0; i < 4; i++) {
+      const [ax, az] = corners[i]!;
+      const [bx, bz] = corners[(i + 1) % 4]!;
+      navWalls.push({ ax, az, bx, bz });
+    }
+    for (const dw of doorsW) navDoors.push(dw);
   }
   // church: stair (west end at the bottom), landing beside the tower, the belfry floor
   // (the treads run z -7.95..-6.1 against the nave wall at z -6, so the samples at z -6 carry
@@ -1903,7 +1991,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     spawnYaw: Math.PI / 2, // looking west, down Main Street at the church and the sunset
     campfire,
     terrain,
-    saloonStairs: sal.stairs,
+    saloonStairs: null,
+    stairFeet,
+    lamps,
+    navWalls,
+    navDoors,
     posts,
     extent: half + 3000,
   };
