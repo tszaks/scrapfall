@@ -606,7 +606,21 @@ function falseFront(
     G.mat(WL.TIMBER);
     G.quad(ax, ay, 0.12, bx, by, 0.12, bx, by, -t, ax, ay, -t, [0, 0, 1, 0.1]);
     // (the lip it overhangs the face by, seen from the street below)
-    G.quad(ax, ay - 0.001, 0, bx, by - 0.001, 0, bx, by - 0.001, 0.12, ax, ay - 0.001, 0.12, [0, 0, 1, 0.1]);
+    G.quad(
+      ax,
+      ay - 0.001,
+      0,
+      bx,
+      by - 0.001,
+      0,
+      bx,
+      by - 0.001,
+      0.12,
+      ax,
+      ay - 0.001,
+      0.12,
+      [0, 0, 1, 0.1],
+    );
     G.col(paint, 1);
   }
   // side edges of the slab
@@ -669,7 +683,13 @@ function holedWall(
   const ux = (bx - ax) / len;
   const uz = (bz - az) / len;
   const hs = holes
-    .map((h) => ({ ...h, u0: Math.max(0, h.u0), u1: Math.min(len, h.u1), y0: Math.max(y0, h.y0), y1: Math.min(y1, h.y1) }))
+    .map((h) => ({
+      ...h,
+      u0: Math.max(0, h.u0),
+      u1: Math.min(len, h.u1),
+      y0: Math.max(y0, h.y0),
+      y1: Math.min(y1, h.y1),
+    }))
     .filter((h) => h.u1 > h.u0 && h.y1 > h.y0)
     .sort((a, b) => a.u0 - b.u0);
   const piece = (ua: number, ub: number, ya: number, yb: number) => {
@@ -714,9 +734,15 @@ function walkIn(
   const mods = Math.max(1, Math.round(W / (MODULE_W[facL] ?? 3)));
   const mw = W / mods;
   const facUV = (ua: number, ub: number, ya: number, yb: number) =>
-    [(uOff + ua / mw) / FAC_COLS, ya / STOREY / FAC_ROWS, (uOff + ub / mw) / FAC_COLS, yb / STOREY / FAC_ROWS] as const;
+    [
+      (uOff + ua / mw) / FAC_COLS,
+      ya / STOREY / FAC_ROWS,
+      (uOff + ub / mw) / FAC_COLS,
+      yb / STOREY / FAC_ROWS,
+    ] as const;
   const [ptu, ptv] = TILE_M[plainL] ?? [4, 4];
-  const plainUV = (ua: number, ub: number, ya: number, yb: number) => [ua / ptu, ya / ptv, ub / ptu, yb / ptv] as const;
+  const plainUV = (ua: number, ub: number, ya: number, yb: number) =>
+    [ua / ptu, ya / ptv, ub / ptu, yb / ptv] as const;
   const front = plan.doors.filter((d) => d.wall === "front");
   const back = plan.doors.filter((d) => d.wall === "back");
   const ud = plan.upperDoor;
@@ -742,13 +768,33 @@ function walkIn(
     }
     // the doorway's module: plain wall round the opening (the facade's own base colour)
     G.col(paint, 1).mat(plainL, seed, AO);
-    holedWall(G, plainL, xa, 0, xb, 0, 0, STOREY, front.map((d) => ({ u0: d.a - xa, u1: d.b - xa, y0: 0, y1: d.h })), (ua, ub, ya, yb) =>
-      plainUV(ua + (xa - x0), ub + (xa - x0), ya, yb),
+    holedWall(
+      G,
+      plainL,
+      xa,
+      0,
+      xb,
+      0,
+      0,
+      STOREY,
+      front.map((d) => ({ u0: d.a - xa, u1: d.b - xa, y0: 0, y1: d.h })),
+      (ua, ub, ya, yb) => plainUV(ua + (xa - x0), ub + (xa - x0), ya, yb),
     );
   }
   // ---- the outer back wall, with its doorway ----
   G.col(paint, 1).mat(plainL, seed, AO);
-  holedWall(G, plainL, x1, z0, x0, z0, 0, H, back.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h })), plainUV);
+  holedWall(
+    G,
+    plainL,
+    x1,
+    z0,
+    x0,
+    z0,
+    0,
+    H,
+    back.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h })),
+    plainUV,
+  );
 
   // ---- door frames, reveals and leaves ----
   const reveal = (a: number, bb: number, h: number, zf: number, dir: 1 | -1) => {
@@ -783,8 +829,28 @@ function walkIn(
       // the batwing doors, swinging half open
       D2.col("#7a3a22");
       const w = (d.b - d.a) / 2;
-      oboxP(D2, WL.TIMBER, d.a + 0.1 + Math.cos(0.5) * w * 0.5, 0.9, -0.08 - Math.sin(0.5) * w * 0.5, w, 1.1, 0.05, -0.5);
-      oboxP(D2, WL.TIMBER, d.b - 0.1 - Math.cos(0.5) * w * 0.5, 0.9, -0.08 - Math.sin(0.5) * w * 0.5, w, 1.1, 0.05, 0.5);
+      oboxP(
+        D2,
+        WL.TIMBER,
+        d.a + 0.1 + Math.cos(0.5) * w * 0.5,
+        0.9,
+        -0.08 - Math.sin(0.5) * w * 0.5,
+        w,
+        1.1,
+        0.05,
+        -0.5,
+      );
+      oboxP(
+        D2,
+        WL.TIMBER,
+        d.b - 0.1 - Math.cos(0.5) * w * 0.5,
+        0.9,
+        -0.08 - Math.sin(0.5) * w * 0.5,
+        w,
+        1.1,
+        0.05,
+        0.5,
+      );
     } else if (d.kind === "barn") {
       // the big doors, slid open along the outside of the wall
       G.col("#8a2a1c").mat(WL.P_BOARD);
@@ -804,7 +870,16 @@ function walkIn(
     } else {
       // a panelled door standing open, back against the inside wall
       D2.col(pick(["#5a2e1c", "#3a4a3a", "#4a3a2a"], r)).mat(WL.P_BOARD, 0, 0);
-      boxP(D2, WL.P_BOARD, d.a + 0.02, fl, -T - (d.b - d.a) + 0.02, d.a + 0.07, d.h - 0.02, -T - 0.02);
+      boxP(
+        D2,
+        WL.P_BOARD,
+        d.a + 0.02,
+        fl,
+        -T - (d.b - d.a) + 0.02,
+        d.a + 0.07,
+        d.h - 0.02,
+        -T - 0.02,
+      );
     }
   }
   for (const d of back) {
@@ -816,7 +891,16 @@ function walkIn(
       boxP(G, WL.P_BOARD, d.b + 0.1, 0, z0 - 0.16, d.b + w + 0.1, d.h, z0 - 0.08);
     } else {
       D2.col("#5a4636").mat(WL.P_BOARD, 0, 0);
-      boxP(D2, WL.P_BOARD, d.b - 0.07, fl, z0 + T + 0.02, d.b - 0.02, d.h - 0.02, z0 + T + (d.b - d.a) - 0.02);
+      boxP(
+        D2,
+        WL.P_BOARD,
+        d.b - 0.07,
+        fl,
+        z0 + T + 0.02,
+        d.b - 0.02,
+        d.h - 0.02,
+        z0 + T + (d.b - d.a) - 0.02,
+      );
     }
   }
   if (ud) {
@@ -826,16 +910,27 @@ function walkIn(
     boxP(G, WL.TIMBER, ud.b, ud.y, -T - 0.05, ud.b + 0.13, ud.y + 2.44, 0.07);
     boxP(G, WL.TIMBER, ud.a - 0.13, ud.y + 2.3, -T - 0.05, ud.b + 0.13, ud.y + 2.44, 0.07);
     D2.col("#5a2e1c").mat(WL.P_BOARD, 0, 0);
-    boxP(D2, WL.P_BOARD, ud.b - 0.07, ud.y + 0.02, -T - (ud.b - ud.a), ud.b - 0.02, ud.y + 2.26, -T - 0.02);
+    boxP(
+      D2,
+      WL.P_BOARD,
+      ud.b - 0.07,
+      ud.y + 0.02,
+      -T - (ud.b - ud.a),
+      ud.b - 0.02,
+      ud.y + 2.26,
+      -T - 0.02,
+    );
   }
 
   // ---- inside: the walls' inner faces, with the windows seen from within ----
   // (everything in here takes the interior's lamplight fill)
   G.mat(WL.PAINT, 0, INT);
   D2.mat(WL.TIMBER, 0.5, INT);
-  const finishLayer = plan.finish === "stone" ? WL.P_STONE : plan.finish === "boards" ? WL.P_BOARD : WL.PAINT;
+  const finishLayer =
+    plan.finish === "stone" ? WL.P_STONE : plan.finish === "boards" ? WL.P_BOARD : WL.PAINT;
   const [ftu, ftv] = TILE_M[finishLayer] ?? [2, 2];
-  const finUV = (ua: number, ub: number, ya: number, yb: number) => [ua / ftu, ya / ftv, ub / ftu, yb / ftv] as const;
+  const finUV = (ua: number, ub: number, ya: number, yb: number) =>
+    [ua / ftu, ya / ftv, ub / ftu, yb / ftv] as const;
   const winHoles = (len: number, skipLastBay: boolean): Hole[] => {
     const nWin = Math.floor((len - 1.2) / 3.6);
     const out: Hole[] = [];
@@ -869,7 +964,11 @@ function walkIn(
     const holes: Hole[] = back.map((d) => ({ u0: d.a - x0 - T, u1: d.b - x0 - T, y0: 0, y1: d.h }));
     // the outer back wall's windows run from x1 to x0: mirror them
     const lenB = W;
-    const win = winHoles(lenB, back.length > 0).map((h) => ({ ...h, u0: lenB - h.u1 - T, u1: lenB - h.u0 - T }));
+    const win = winHoles(lenB, back.length > 0).map((h) => ({
+      ...h,
+      u0: lenB - h.u1 - T,
+      u1: lenB - h.u0 - T,
+    }));
     iw.push({ ax: x0 + T, az: z0 + T, bx: x1 - T, bz: z0 + T, holes: [...holes, ...win], win });
   }
   // the sides (outer windows run from the front corner back along x1, and from the back along x0)
@@ -883,7 +982,18 @@ function walkIn(
     if (plan.finish === "paper" || plan.finish === "plaster") {
       // a board wainscot to the dado, paper or plaster above
       G.col("#4a3020").mat(WL.P_BOARD, 0, INT);
-      holedWall(G, WL.P_BOARD, w.ax, w.az, w.bx, w.bz, yb, yb + 1.05, w.holes, (ua, ub, ya, ybb) => [ua / 4, ya / 4, ub / 4, ybb / 4]);
+      holedWall(
+        G,
+        WL.P_BOARD,
+        w.ax,
+        w.az,
+        w.bx,
+        w.bz,
+        yb,
+        yb + 1.05,
+        w.holes,
+        (ua, ub, ya, ybb) => [ua / 4, ya / 4, ub / 4, ybb / 4],
+      );
       G.col(plan.wallColor, 1).mat(finishLayer, 0, INT);
       holedWall(G, finishLayer, w.ax, w.az, w.bx, w.bz, yb + 1.05, yt, w.holes, finUV);
       // the dado rail
@@ -891,7 +1001,16 @@ function walkIn(
       const nx = -(w.bz - w.az) / len;
       const nz = (w.bx - w.ax) / len;
       D2.col("#3a2418");
-      beam(D2, w.ax + nx * 0.03, yb + 1.08, w.az + nz * 0.03, w.bx + nx * 0.03, yb + 1.08, w.bz + nz * 0.03, 0.06);
+      beam(
+        D2,
+        w.ax + nx * 0.03,
+        yb + 1.08,
+        w.az + nz * 0.03,
+        w.bx + nx * 0.03,
+        yb + 1.08,
+        w.bz + nz * 0.03,
+        0.06,
+      );
     } else {
       G.col(plan.wallColor, 1).mat(finishLayer, 0, INT);
       holedWall(G, finishLayer, w.ax, w.az, w.bx, w.bz, yb, yt, w.holes, finUV);
@@ -910,36 +1029,125 @@ function walkIn(
       // (the view through old wavy glass: the dusty street low, pale sky above the far roofs)
       const ym = ya + (h.y1 - ya) * 0.42;
       G.col("#a08466").mat(WL.PAINT, 0, INT);
-      wallq(G, pa[0] - nx * 0.06, pa[1] - nz * 0.06, pb[0] - nx * 0.06, pb[1] - nz * 0.06, ya, ym, [0, 0, 1, 0.42]);
+      wallq(
+        G,
+        pa[0] - nx * 0.06,
+        pa[1] - nz * 0.06,
+        pb[0] - nx * 0.06,
+        pb[1] - nz * 0.06,
+        ya,
+        ym,
+        [0, 0, 1, 0.42],
+      );
       G.col("#98aab4");
-      wallq(G, pa[0] - nx * 0.06, pa[1] - nz * 0.06, pb[0] - nx * 0.06, pb[1] - nz * 0.06, ym, h.y1, [0, 0.42, 1, 1]);
+      wallq(
+        G,
+        pa[0] - nx * 0.06,
+        pa[1] - nz * 0.06,
+        pb[0] - nx * 0.06,
+        pb[1] - nz * 0.06,
+        ym,
+        h.y1,
+        [0, 0.42, 1, 1],
+      );
       // reveals
       G.col("#8a7258").mat(WL.P_BOARD);
-      G.quad(pa[0], ya, pa[1], pa[0] - nx * 0.06, ya, pa[1] - nz * 0.06, pa[0] - nx * 0.06, h.y1, pa[1] - nz * 0.06, pa[0], h.y1, pa[1], [0, 0, 0.1, 1]);
-      G.quad(pb[0] - nx * 0.06, ya, pb[1] - nz * 0.06, pb[0], ya, pb[1], pb[0], h.y1, pb[1], pb[0] - nx * 0.06, h.y1, pb[1] - nz * 0.06, [0, 0, 0.1, 1]);
+      G.quad(
+        pa[0],
+        ya,
+        pa[1],
+        pa[0] - nx * 0.06,
+        ya,
+        pa[1] - nz * 0.06,
+        pa[0] - nx * 0.06,
+        h.y1,
+        pa[1] - nz * 0.06,
+        pa[0],
+        h.y1,
+        pa[1],
+        [0, 0, 0.1, 1],
+      );
+      G.quad(
+        pb[0] - nx * 0.06,
+        ya,
+        pb[1] - nz * 0.06,
+        pb[0],
+        ya,
+        pb[1],
+        pb[0],
+        h.y1,
+        pb[1],
+        pb[0] - nx * 0.06,
+        h.y1,
+        pb[1] - nz * 0.06,
+        [0, 0, 0.1, 1],
+      );
       // frame, sill and bars
       D2.col("#e8dcc0");
       const mid = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2] as const;
-      beam(D2, pa[0] + nx * 0.02, ya, pa[1] + nz * 0.02, pb[0] + nx * 0.02, ya, pb[1] + nz * 0.02, 0.08);
-      beam(D2, pa[0] + nx * 0.02, h.y1, pa[1] + nz * 0.02, pb[0] + nx * 0.02, h.y1, pb[1] + nz * 0.02, 0.08);
-      beam(D2, mid[0] - nx * 0.04, ya, mid[1] - nz * 0.04, mid[0] - nx * 0.04, h.y1, mid[1] - nz * 0.04, 0.04);
-      beam(D2, pa[0] - nx * 0.04, (ya + h.y1) / 2, pa[1] - nz * 0.04, pb[0] - nx * 0.04, (ya + h.y1) / 2, pb[1] - nz * 0.04, 0.04);
+      beam(
+        D2,
+        pa[0] + nx * 0.02,
+        ya,
+        pa[1] + nz * 0.02,
+        pb[0] + nx * 0.02,
+        ya,
+        pb[1] + nz * 0.02,
+        0.08,
+      );
+      beam(
+        D2,
+        pa[0] + nx * 0.02,
+        h.y1,
+        pa[1] + nz * 0.02,
+        pb[0] + nx * 0.02,
+        h.y1,
+        pb[1] + nz * 0.02,
+        0.08,
+      );
+      beam(
+        D2,
+        mid[0] - nx * 0.04,
+        ya,
+        mid[1] - nz * 0.04,
+        mid[0] - nx * 0.04,
+        h.y1,
+        mid[1] - nz * 0.04,
+        0.04,
+      );
+      beam(
+        D2,
+        pa[0] - nx * 0.04,
+        (ya + h.y1) / 2,
+        pa[1] - nz * 0.04,
+        pb[0] - nx * 0.04,
+        (ya + h.y1) / 2,
+        pb[1] - nz * 0.04,
+        0.04,
+      );
     }
   }
 
   // ---- floor and ceiling ----
-  const stair = plan.items.find((it) => it.k === "stair") as Extract<RoomItem, { k: "stair" }> | undefined;
-  const landing = plan.items.find((it) => it.k === "landing") as Extract<RoomItem, { k: "landing" }> | undefined;
+  const stair = plan.items.find((it) => it.k === "stair") as
+    Extract<RoomItem, { k: "stair" }> | undefined;
+  const landing = plan.items.find((it) => it.k === "landing") as
+    Extract<RoomItem, { k: "landing" }> | undefined;
   if (b.t === "stable") {
     G.col("#8a6a44").mat(WL.YARD);
     G.flat(x0 + T, z0 + T, x1 - T, -T, fl + 0.01, [0, 0, W / 8, D / 8]);
   } else {
-    G.col(plan.finish === "stone" ? "#9a8e7a" : "#b8966e").mat(plan.finish === "stone" ? WL.P_STONE : WL.DECK);
+    G.col(plan.finish === "stone" ? "#9a8e7a" : "#b8966e").mat(
+      plan.finish === "stone" ? WL.P_STONE : WL.DECK,
+    );
     G.flat(x0 + T, z0 + T, x1 - T, -T, fl + 0.01, [0, 0, W / 4, D / 4]);
   }
   // the ceiling: boards on joists; the stair well is open above the saloon's stair (which
   // climbs the left wall to a landing in the front-left corner)
-  const hole = stair && landing ? { x0: x0 + T, x1: Math.max(stair.x1, landing.r.x1), z0: stair.zLow, z1: -T } : null;
+  const hole =
+    stair && landing
+      ? { x0: x0 + T, x1: Math.max(stair.x1, landing.r.x1), z0: stair.zLow, z1: -T }
+      : null;
   const cy = ceil - 0.02;
   const ceilRect = (ax: number, az: number, bx: number, bz: number) => {
     if (bx - ax < 1e-3 || bz - az < 1e-3) return;
@@ -953,7 +1161,18 @@ function walkIn(
   D2.col("#5a4030");
   for (let x = x0 + 1; x < x1 - 0.5; x += 1.4) {
     const inWell = hole && x < hole.x1 + 0.1;
-    boxP(D2, WL.TIMBER, x - 0.08, cy - 0.22, z0 + T, x + 0.08, cy, inWell ? hole!.z0 : -T, false, true);
+    boxP(
+      D2,
+      WL.TIMBER,
+      x - 0.08,
+      cy - 0.22,
+      z0 + T,
+      x + 0.08,
+      cy,
+      inWell ? hole!.z0 : -T,
+      false,
+      true,
+    );
   }
   if (hole && stair && landing) {
     // the stair hall above: the landing's floor, partitions round the well, a ceiling
@@ -973,13 +1192,47 @@ function walkIn(
     wallP(G, WL.PAINT, stair.x1 + 0.1, landing.r.z0, stair.x1 + 0.1, stair.zLow, cy, top);
     // the outer walls' inner faces up the hall (the balcony door in the front one)
     wallP(G, WL.PAINT, x0 + T, -T, x0 + T, stair.zLow, up, top);
-    holedWall(G, WL.PAINT, lx1, -T, x0 + T, -T, up, top, ud ? [{ u0: lx1 - ud.b, u1: lx1 - ud.a, y0: up, y1: up + 2.3 }] : [], finUV);
+    holedWall(
+      G,
+      WL.PAINT,
+      lx1,
+      -T,
+      x0 + T,
+      -T,
+      up,
+      top,
+      ud ? [{ u0: lx1 - ud.b, u1: lx1 - ud.a, y0: up, y1: up + 2.3 }] : [],
+      finUV,
+    );
     G.col("#8a6a4a").mat(WL.P_BOARD);
-    G.quad(x0 + T, top, stair.zLow, lx1, top, stair.zLow, lx1, top, -T, x0 + T, top, -T, [0, 0, 1, 2]);
+    G.quad(
+      x0 + T,
+      top,
+      stair.zLow,
+      lx1,
+      top,
+      stair.zLow,
+      lx1,
+      top,
+      -T,
+      x0 + T,
+      top,
+      -T,
+      [0, 0, 1, 2],
+    );
     lantern(B, lx1 - 0.3, up + 2.2, landing.r.z0 + 0.6, 3);
     // the landing's rail along the well
     D2.col("#6a4a30");
-    boxP(D2, WL.TIMBER, stair.x1, up + 0.95, landing.r.z0 - 0.04, lx1, up + 1.02, landing.r.z0 + 0.04);
+    boxP(
+      D2,
+      WL.TIMBER,
+      stair.x1,
+      up + 0.95,
+      landing.r.z0 - 0.04,
+      lx1,
+      up + 1.02,
+      landing.r.z0 + 0.04,
+    );
   }
 
   // ---- the furniture ----
@@ -1019,10 +1272,20 @@ function roomItem(
       G.col("#4a2416").mat(WL.P_BOARD);
       boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0, R2.x1, fl + 1.05, R2.z1);
       G.col("#6a3a22").mat(WL.TIMBER);
-      boxP(G, WL.TIMBER, R2.x0 - 0.08, fl + 1.05, R2.z0 - 0.08, R2.x1 + 0.1, fl + 1.12, R2.z1 + 0.08);
+      boxP(
+        G,
+        WL.TIMBER,
+        R2.x0 - 0.08,
+        fl + 1.05,
+        R2.z0 - 0.08,
+        R2.x1 + 0.1,
+        fl + 1.12,
+        R2.z1 + 0.08,
+      );
       // panels on the customer side
       D2.col("#3a1c10");
-      for (let z = R2.z0 + 0.3; z < R2.z1 - 0.2; z += 0.8) boxP(D2, WL.TIMBER, R2.x1, fl + 0.2, z, R2.x1 + 0.03, fl + 0.85, z + 0.6);
+      for (let z = R2.z0 + 0.3; z < R2.z1 - 0.2; z += 0.8)
+        boxP(D2, WL.TIMBER, R2.x1, fl + 0.2, z, R2.x1 + 0.03, fl + 0.85, z + 0.6);
       D2.col("#c8a040");
       beam(D2, R2.x1 + 0.25, fl + 0.2, R2.z0, R2.x1 + 0.25, fl + 0.2, R2.z1, 0.05, WL.PAINT);
       // spittoons, glasses and a bottle on the bar
@@ -1050,7 +1313,21 @@ function roomItem(
       const mz1 = mz0 + 3.2;
       // the mirror: pale silver catching the room's light
       G.col("#c8ccd0").mat(WL.PAINT, 0, INT);
-      G.quad(R2.x0 + 0.26, fl + 1.2, mz1, R2.x0 + 0.26, fl + 1.2, mz0, R2.x0 + 0.26, fl + 2.7, mz0, R2.x0 + 0.26, fl + 2.7, mz1, [0, 0, 1, 1]);
+      G.quad(
+        R2.x0 + 0.26,
+        fl + 1.2,
+        mz1,
+        R2.x0 + 0.26,
+        fl + 1.2,
+        mz0,
+        R2.x0 + 0.26,
+        fl + 2.7,
+        mz0,
+        R2.x0 + 0.26,
+        fl + 2.7,
+        mz1,
+        [0, 0, 1, 1],
+      );
       D2.col("#c8a040");
       boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + 1.15, mz0 - 0.08, R2.x0 + 0.32, fl + 2.75, mz0);
       boxP(D2, WL.TIMBER, R2.x0 + 0.25, fl + 1.15, mz1, R2.x0 + 0.32, fl + 2.75, mz1 + 0.08);
@@ -1083,7 +1360,16 @@ function roomItem(
         D2.flat(it.x - 0.35, it.z - 0.35, it.x + 0.35, it.z + 0.35, fl + 0.775, [0, 0, 1, 1]);
         for (let i = 0; i < 6; i++) {
           D2.col(pick(["#f2eee4", "#c83a2a", "#2a4a8a"], r));
-          cylP(D2, WL.PAINT, it.x + (r() - 0.5) * 0.5, fl + 0.77, it.z + (r() - 0.5) * 0.5, 0.025, 0.02 + r() * 0.05, 6);
+          cylP(
+            D2,
+            WL.PAINT,
+            it.x + (r() - 0.5) * 0.5,
+            fl + 0.77,
+            it.z + (r() - 0.5) * 0.5,
+            0.025,
+            0.02 + r() * 0.05,
+            6,
+          );
         }
       }
       for (let c = 0; c < it.chairs; c++) {
@@ -1117,9 +1403,24 @@ function roomItem(
       D2.flat(it.x - 0.72, it.z + 0.12, it.x + 0.72, it.z + 0.3, fl + 0.785, [0, 0, 1, 1]);
       D2.col("#1a1210");
       for (let x = it.x - 0.7; x < it.x + 0.7; x += 0.055)
-        if (Math.floor((x - it.x) / 0.055 + 100) % 7 !== 2) boxP(D2, WL.PAINT, x, fl + 0.785, it.z + 0.12, x + 0.025, fl + 0.81, it.z + 0.22);
+        if (Math.floor((x - it.x) / 0.055 + 100) % 7 !== 2)
+          boxP(D2, WL.PAINT, x, fl + 0.785, it.z + 0.12, x + 0.025, fl + 0.81, it.z + 0.22);
       D2.col("#e8dcc0");
-      D2.quad(it.x - 0.5, fl + 0.85, it.z + 0.11, it.x + 0.5, fl + 0.85, it.z + 0.11, it.x + 0.5, fl + 1.2, it.z + 0.02, it.x - 0.5, fl + 1.2, it.z + 0.02, [0, 0, 1, 1]);
+      D2.quad(
+        it.x - 0.5,
+        fl + 0.85,
+        it.z + 0.11,
+        it.x + 0.5,
+        fl + 0.85,
+        it.z + 0.11,
+        it.x + 0.5,
+        fl + 1.2,
+        it.z + 0.02,
+        it.x - 0.5,
+        fl + 1.2,
+        it.z + 0.02,
+        [0, 0, 1, 1],
+      );
       D2.col("#3a2418");
       cylP(D2, WL.TIMBER, it.x, fl, it.z + 0.85, 0.2, 0.5, 8);
       break;
@@ -1166,8 +1467,10 @@ function roomItem(
       const R2 = it.r;
       const cw = (R2.x1 - R2.x0) / it.n;
       D2.col("#2a2826");
-      for (let x = R2.x0; x <= R2.x1 + 1e-3; x += 0.2) boxP(D2, WL.IRON, x - 0.02, fl, R2.z1 - 0.02, x + 0.02, ceil - 0.05, R2.z1 + 0.02);
-      for (const y of [0.15, 1.2, 2.2]) boxP(D2, WL.IRON, R2.x0, fl + y, R2.z1 - 0.04, R2.x1, fl + y + 0.06, R2.z1 + 0.04);
+      for (let x = R2.x0; x <= R2.x1 + 1e-3; x += 0.2)
+        boxP(D2, WL.IRON, x - 0.02, fl, R2.z1 - 0.02, x + 0.02, ceil - 0.05, R2.z1 + 0.02);
+      for (const y of [0.15, 1.2, 2.2])
+        boxP(D2, WL.IRON, R2.x0, fl + y, R2.z1 - 0.04, R2.x1, fl + y + 0.06, R2.z1 + 0.04);
       for (let c = 1; c < it.n; c++) {
         const x = R2.x0 + c * cw;
         G.col("#9a8e7a").mat(WL.P_STONE);
@@ -1180,10 +1483,29 @@ function roomItem(
         boxP(D2, WL.IRON, cx + 0.3, fl + 0.9, R2.z1 - 0.06, cx + 0.5, fl + 1.2, R2.z1 + 0.06);
         // a cot against the back wall, a grey blanket, a bucket
         D2.col("#5a4430");
-        boxP(D2, WL.TIMBER, cx - cw / 2 + 0.3, fl + 0.35, R2.z0 + 0.1, cx + 0.5, fl + 0.45, R2.z0 + 0.9);
-        for (const x of [cx - cw / 2 + 0.35, cx + 0.45]) boxP(D2, WL.TIMBER, x - 0.03, fl, R2.z0 + 0.12, x + 0.03, fl + 0.35, R2.z0 + 0.88);
+        boxP(
+          D2,
+          WL.TIMBER,
+          cx - cw / 2 + 0.3,
+          fl + 0.35,
+          R2.z0 + 0.1,
+          cx + 0.5,
+          fl + 0.45,
+          R2.z0 + 0.9,
+        );
+        for (const x of [cx - cw / 2 + 0.35, cx + 0.45])
+          boxP(D2, WL.TIMBER, x - 0.03, fl, R2.z0 + 0.12, x + 0.03, fl + 0.35, R2.z0 + 0.88);
         D2.col("#7a7468").mat(WL.CANVAS);
-        boxP(D2, WL.CANVAS, cx - cw / 2 + 0.35, fl + 0.45, R2.z0 + 0.15, cx + 0.3, fl + 0.52, R2.z0 + 0.85);
+        boxP(
+          D2,
+          WL.CANVAS,
+          cx - cw / 2 + 0.35,
+          fl + 0.45,
+          R2.z0 + 0.15,
+          cx + 0.3,
+          fl + 0.52,
+          R2.z0 + 0.85,
+        );
         D2.col("#6a6460");
         cylP(D2, WL.IRON, cx + cw / 2 - 0.45, fl, R2.z0 + 0.5, 0.14, 0.3, 8, 0.16);
       }
@@ -1197,7 +1519,17 @@ function roomItem(
       oboxP(G, WL.P_BOARD, it.x, fl, it.z, 1.5, 0.78, 0.7, it.rot);
       oboxP(G, WL.P_BOARD, it.x - s * 0.25, fl + 0.78, it.z - c * 0.25, 1.5, 0.45, 0.25, it.rot);
       D2.col("#f2eadc").mat(WL.PAINT, 0, INT);
-      oboxP(D2, WL.PAINT, it.x + s * 0.05, fl + 0.78, it.z + c * 0.05, 0.3, 0.01, 0.22, it.rot + 0.3);
+      oboxP(
+        D2,
+        WL.PAINT,
+        it.x + s * 0.05,
+        fl + 0.78,
+        it.z + c * 0.05,
+        0.3,
+        0.01,
+        0.22,
+        it.rot + 0.3,
+      );
       D2.col("#6a4428");
       oboxP(D2, WL.TIMBER, it.x + s * 0.75, fl + 0.44, it.z + c * 0.75, 0.45, 0.05, 0.45, it.rot);
       oboxP(D2, WL.TIMBER, it.x + s * 0.95, fl + 0.46, it.z + c * 0.95, 0.45, 0.5, 0.05, it.rot);
@@ -1255,7 +1587,21 @@ function roomItem(
         D2.col("#ffffff", 0.9).mat(WL.SIGNS, 0, INT);
         const uv = signUV(26);
         const hw = 0.24;
-        D2.quad(px - c * hw, fl + ly - 0.18, pz + s * hw, px + c * hw, fl + ly - 0.18, pz - s * hw, px + c * hw, fl + ly + 0.18, pz - s * hw, px - c * hw, fl + ly + 0.18, pz + s * hw, uv);
+        D2.quad(
+          px - c * hw,
+          fl + ly - 0.18,
+          pz + s * hw,
+          px + c * hw,
+          fl + ly - 0.18,
+          pz - s * hw,
+          px + c * hw,
+          fl + ly + 0.18,
+          pz - s * hw,
+          px - c * hw,
+          fl + ly + 0.18,
+          pz + s * hw,
+          uv,
+        );
       }
       break;
     }
@@ -1264,7 +1610,16 @@ function roomItem(
       G.col("#6a4a2a").mat(WL.P_BOARD);
       boxP(G, WL.P_BOARD, R2.x0, fl, R2.z0, R2.x1, fl + 1.0, R2.z1);
       G.col("#8a6a44").mat(WL.TIMBER);
-      boxP(G, WL.TIMBER, R2.x0 - 0.05, fl + 1.0, R2.z0 - 0.05, R2.x1 + 0.05, fl + 1.06, R2.z1 + 0.05);
+      boxP(
+        G,
+        WL.TIMBER,
+        R2.x0 - 0.05,
+        fl + 1.0,
+        R2.z0 - 0.05,
+        R2.x1 + 0.05,
+        fl + 1.06,
+        R2.z1 + 0.05,
+      );
       const mx = (R2.x0 + R2.x1) / 2;
       const mz = (R2.z0 + R2.z1) / 2;
       if (it.top === "till") {
@@ -1295,8 +1650,19 @@ function roomItem(
       const zf = R2.z1;
       D2.col("#b89040");
       for (let x = R2.x0; x <= R2.x1 + 1e-3; x += 0.12) {
-        const win = Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.3)) < 0.35 || Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.7)) < 0.35;
-        boxP(D2, WL.PAINT, x - 0.012, fl + (win ? 1.55 : 1.06), zf - 0.01, x + 0.012, fl + 2.4, zf + 0.01);
+        const win =
+          Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.3)) < 0.35 ||
+          Math.abs(x - (R2.x0 + (R2.x1 - R2.x0) * 0.7)) < 0.35;
+        boxP(
+          D2,
+          WL.PAINT,
+          x - 0.012,
+          fl + (win ? 1.55 : 1.06),
+          zf - 0.01,
+          x + 0.012,
+          fl + 2.4,
+          zf + 0.01,
+        );
       }
       boxP(D2, WL.PAINT, R2.x0, fl + 2.4, zf - 0.03, R2.x1, fl + 2.46, zf + 0.03);
       boxP(D2, WL.PAINT, R2.x0, fl + 1.55, zf - 0.02, R2.x1, fl + 1.58, zf + 0.02);
@@ -1305,13 +1671,41 @@ function roomItem(
     case "vault": {
       // the vault: a great iron door set in the back wall, with its dial and handle
       G.col("#3a3a3c").mat(WL.IRON);
-      boxP(G, WL.IRON, it.x - it.w / 2 - 0.25, fl, it.z, it.x + it.w / 2 + 0.25, fl + 2.7, it.z + 0.12);
+      boxP(
+        G,
+        WL.IRON,
+        it.x - it.w / 2 - 0.25,
+        fl,
+        it.z,
+        it.x + it.w / 2 + 0.25,
+        fl + 2.7,
+        it.z + 0.12,
+      );
       G.col("#5a5a5e");
-      boxP(G, WL.IRON, it.x - it.w / 2, fl + 0.1, it.z + 0.12, it.x + it.w / 2, fl + 2.45, it.z + 0.22);
+      boxP(
+        G,
+        WL.IRON,
+        it.x - it.w / 2,
+        fl + 0.1,
+        it.z + 0.12,
+        it.x + it.w / 2,
+        fl + 2.45,
+        it.z + 0.22,
+      );
       D2.col("#c8a040");
       boxC(D2, WL.PAINT, it.x, fl + 1.2, it.z + 0.26, 0.34, 0.34, 0.06);
       beam(D2, it.x + 0.5, fl + 1.0, it.z + 0.3, it.x + 0.9, fl + 1.0, it.z + 0.3, 0.06, WL.PAINT);
-      for (const y of [0.5, 2.0]) boxP(D2, WL.IRON, it.x - it.w / 2 - 0.1, fl + y, it.z + 0.2, it.x - it.w / 2 + 0.25, fl + y + 0.25, it.z + 0.28);
+      for (const y of [0.5, 2.0])
+        boxP(
+          D2,
+          WL.IRON,
+          it.x - it.w / 2 - 0.1,
+          fl + y,
+          it.z + 0.2,
+          it.x - it.w / 2 + 0.25,
+          fl + y + 0.25,
+          it.z + 0.28,
+        );
       break;
     }
     case "shelves": {
@@ -1326,15 +1720,21 @@ function roomItem(
         G.col("#7a5a36");
         boxP(G, WL.TIMBER, Math.min(fx, bx), fl + y, R2.z0, Math.max(fx, bx), fl + y + 0.04, R2.z1);
         if (y > 2.6) continue;
-        for (let z = R2.z0 + 0.1; z < R2.z1 - 0.15; ) {
+        for (let z = R2.z0 + 0.1; z < R2.z1 - 0.15;) {
           const w = 0.12 + r() * 0.3;
           const h = 0.15 + r() * 0.3;
           const kind = r();
-          const col = kind < 0.3 ? pick(["#c83a2a", "#3a6a9a", "#e8c83a", "#4a8a4a"], r) : kind < 0.55 ? pick(["#8a3a5a", "#3a4a7a", "#c8b88a", "#6a8a6a"], r) : pick(["#c8b898", "#a88a5a", "#e8e0cc"], r);
+          const col =
+            kind < 0.3
+              ? pick(["#c83a2a", "#3a6a9a", "#e8c83a", "#4a8a4a"], r)
+              : kind < 0.55
+                ? pick(["#8a3a5a", "#3a4a7a", "#c8b88a", "#6a8a6a"], r)
+                : pick(["#c8b898", "#a88a5a", "#e8e0cc"], r);
           D2.col(col);
           const x = (fx + bx) / 2;
           if (kind < 0.3) {
-            for (let k = 0; k < 3; k++) cylP(D2, WL.PAINT, x + (k - 1) * 0.12, fl + y + 0.04, z + w / 2, 0.045, 0.12, 6);
+            for (let k = 0; k < 3; k++)
+              cylP(D2, WL.PAINT, x + (k - 1) * 0.12, fl + y + 0.04, z + w / 2, 0.045, 0.12, 6);
           } else boxP(D2, WL.PAINT, x - 0.2, fl + y + 0.04, z, x + 0.2, fl + y + 0.04 + h, z + w);
           z += w + 0.04;
         }
@@ -1351,12 +1751,32 @@ function roomItem(
       } else if (it.kind === "sacks") {
         for (let k = 0; k < 4; k++) {
           D2.col(pick(["#d8ccb0", "#c8b898", "#e2d8c0"], r)).mat(WL.CANVAS);
-          oboxP(D2, WL.CANVAS, it.x + (k % 2) * 0.5 - 0.25, fl + Math.floor(k / 2) * 0.3, it.z + (r() - 0.5) * 0.2, 0.45, 0.3, 0.7, r() * 0.4);
+          oboxP(
+            D2,
+            WL.CANVAS,
+            it.x + (k % 2) * 0.5 - 0.25,
+            fl + Math.floor(k / 2) * 0.3,
+            it.z + (r() - 0.5) * 0.2,
+            0.45,
+            0.3,
+            0.7,
+            r() * 0.4,
+          );
         }
       } else {
         for (let k = 0; k < 4; k++) {
           D2.col(pick(["#b89468", "#a8845a", "#c4a070"], r));
-          oboxP(D2, WL.TIMBER, it.x + (k % 2) * 0.62 - 0.31, fl + Math.floor(k / 2) * 0.55, it.z, 0.55, 0.55, 0.55, r() * 0.3);
+          oboxP(
+            D2,
+            WL.TIMBER,
+            it.x + (k % 2) * 0.62 - 0.31,
+            fl + Math.floor(k / 2) * 0.55,
+            it.z,
+            0.55,
+            0.55,
+            0.55,
+            r() * 0.3,
+          );
         }
       }
       break;
@@ -1379,12 +1799,30 @@ function roomItem(
       boxP(D2, WL.CANVAS, mx - 0.25, fl + 1.0, R2.z0 + 0.55, mx + 0.25, fl + 1.2, R2.z1 - 0.55);
       // straw on the floor
       G.col("#c8a860").mat(WL.CANVAS);
-      G.flat(Math.min(R2.x0, R2.x1) + 0.1, R2.z0 + 0.1, Math.max(R2.x0, R2.x1) - 0.1, R2.z1 - 0.1, fl + 0.025, [0, 0, 2, 2]);
+      G.flat(
+        Math.min(R2.x0, R2.x1) + 0.1,
+        R2.z0 + 0.1,
+        Math.max(R2.x0, R2.x1) - 0.1,
+        R2.z1 - 0.1,
+        fl + 0.025,
+        [0, 0, 2, 2],
+      );
       if (it.horse) {
         const hx = (R2.x0 + R2.x1) / 2;
         const hz = (R2.z0 + R2.z1) / 2;
         const horse = templates().horse;
-        if (horse) D2.stamp(horse.d, hx, fl, hz, it.open > 0 ? Math.PI / 2 : -Math.PI / 2, 1, 1, 1, _tint.set(pick(COATS, r)));
+        if (horse)
+          D2.stamp(
+            horse.d,
+            hx,
+            fl,
+            hz,
+            it.open > 0 ? Math.PI / 2 : -Math.PI / 2,
+            1,
+            1,
+            1,
+            _tint.set(pick(COATS, r)),
+          );
       }
       break;
     }
@@ -1393,7 +1831,8 @@ function roomItem(
       const s = Math.sin(it.rot);
       D2.col("#6a4a2e");
       oboxP(D2, WL.TIMBER, it.x, fl + 0.42, it.z, 1.4, 0.05, 0.38, it.rot);
-      for (const lx of [-0.6, 0.6]) oboxP(D2, WL.TIMBER, it.x + c * lx, fl, it.z - s * lx, 0.06, 0.42, 0.3, it.rot);
+      for (const lx of [-0.6, 0.6])
+        oboxP(D2, WL.TIMBER, it.x + c * lx, fl, it.z - s * lx, 0.06, 0.42, 0.3, it.rot);
       break;
     }
     case "lamp":
@@ -1433,7 +1872,12 @@ function backWorks(
   const x0 = -W / 2;
   const x1 = W / 2;
   const z0 = -D;
-  const frame = b.mat === "clap" || b.mat === "board" || b.mat === "barn" || b.mat === "log" || b.mat === "white";
+  const frame =
+    b.mat === "clap" ||
+    b.mat === "board" ||
+    b.mat === "barn" ||
+    b.mat === "log" ||
+    b.mat === "white";
   // footing: fieldstone under the sill on three sides (the boardwalk or porch covers the front)
   if (frame) {
     G.col(b.mat === "log" ? "#8a8272" : "#9a9080");
@@ -1465,7 +1909,21 @@ function backWorks(
   boxP(G, WL.TIMBER, dxc + dw / 2, 0, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.12, z0);
   boxP(G, WL.TIMBER, dxc - dw / 2 - 0.12, dh, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.14, z0);
   G.col(pick(["#6a3a2a", "#3a4a3a", "#5a5048", "#7a5a3a"], r)).mat(WL.P_BOARD, 0, 0);
-  G.quad(dxc + dw / 2, 0.05, z0 - 0.03, dxc - dw / 2, 0.05, z0 - 0.03, dxc - dw / 2, dh, z0 - 0.03, dxc + dw / 2, dh, z0 - 0.03, [0, 0, 0.5, 1]);
+  G.quad(
+    dxc + dw / 2,
+    0.05,
+    z0 - 0.03,
+    dxc - dw / 2,
+    0.05,
+    z0 - 0.03,
+    dxc - dw / 2,
+    dh,
+    z0 - 0.03,
+    dxc + dw / 2,
+    dh,
+    z0 - 0.03,
+    [0, 0, 0.5, 1],
+  );
   G.col("#2a2420");
   boxP(G, WL.IRON, dxc + dw / 2 - 0.16, 1.0, z0 - 0.07, dxc + dw / 2 - 0.1, 1.08, z0 - 0.03);
   G.col("#8a6a4a");
@@ -1500,13 +1958,41 @@ function backWorks(
     G.col("#3a2a1c");
     boxP(G, WL.TIMBER, wx - 0.5, 0.9, lz - 0.06, wx + 0.5, 1.75, lz);
     G.col("#6a8090").mat(WL.PAINT, 0, 0);
-    G.quad(wx + 0.42, 0.97, lz - 0.07, wx - 0.42, 0.97, lz - 0.07, wx - 0.42, 1.68, lz - 0.07, wx + 0.42, 1.68, lz - 0.07, [0, 0, 1, 1]);
+    G.quad(
+      wx + 0.42,
+      0.97,
+      lz - 0.07,
+      wx - 0.42,
+      0.97,
+      lz - 0.07,
+      wx - 0.42,
+      1.68,
+      lz - 0.07,
+      wx + 0.42,
+      1.68,
+      lz - 0.07,
+      [0, 0, 1, 1],
+    );
     G.col("#3a2a1c");
     boxP(G, WL.TIMBER, wx - 0.02, 0.97, lz - 0.09, wx + 0.02, 1.68, lz - 0.07);
     boxP(G, WL.TIMBER, wx - 0.42, 1.31, lz - 0.09, wx + 0.42, 1.35, lz - 0.07);
     const ldx = la + 0.9;
     G.col("#5a4636").mat(WL.P_BOARD, 0, 0);
-    G.quad(ldx + 0.45, 0.05, lz - 0.03, ldx - 0.45, 0.05, lz - 0.03, ldx - 0.45, 1.95, lz - 0.03, ldx + 0.45, 1.95, lz - 0.03, [0, 0, 0.5, 1]);
+    G.quad(
+      ldx + 0.45,
+      0.05,
+      lz - 0.03,
+      ldx - 0.45,
+      0.05,
+      lz - 0.03,
+      ldx - 0.45,
+      1.95,
+      lz - 0.03,
+      ldx + 0.45,
+      1.95,
+      lz - 0.03,
+      [0, 0, 0.5, 1],
+    );
   }
   void paint;
   void plainL;
@@ -1597,7 +2083,9 @@ function building(b: WBld, r: () => number): BGeo {
       z0,
       x0,
       z0,
-      plan ? plan.doors.some((d) => d.wall === "back") : STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch",
+      plan
+        ? plan.doors.some((d) => d.wall === "back")
+        : STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch",
     );
     wallWindows(x0, z0, x0, 0);
     // a painted advertisement on one tall side wall of the bigger stores
@@ -1626,7 +2114,17 @@ function building(b: WBld, r: () => number): BGeo {
       // land on exactly the same faces (identical boxes flicker against each other)
       // each board stays on its own side of the corner, so two buildings sharing a wall never
       // put boards in the same place
-      boxP(G, WL.PAINT, cx === x0 ? x0 - 0.03 : x1 - cb, 0, cz - dz, cx === x0 ? x0 + cb : x1 + 0.03, H, cz + dz, false);
+      boxP(
+        G,
+        WL.PAINT,
+        cx === x0 ? x0 - 0.03 : x1 - cb,
+        0,
+        cz - dz,
+        cx === x0 ? x0 + cb : x1 + 0.03,
+        H,
+        cz + dz,
+        false,
+      );
   }
   if (b.mat === "brick" || b.mat === "stone") {
     G.col(b.mat === "brick" ? "#d8ccb4" : "#b8ac94");
@@ -1787,7 +2285,8 @@ function building(b: WBld, r: () => number): BGeo {
       // the awning sags a little between its posts (years of sun and snow), top and underside
       const nSpan = Math.max(2, Math.round(W / 3.2));
       const sagAmt = 0.04 + r() * 0.05;
-      const sagAt = (x: number) => sagAmt * Math.abs(Math.sin((Math.PI * (x - x0 - 0.15)) / ((W - 0.3) / nSpan)));
+      const sagAt = (x: number) =>
+        sagAmt * Math.abs(Math.sin((Math.PI * (x - x0 - 0.15)) / ((W - 0.3) / nSpan)));
       const [tu, tv] = TILE_M[roofL2] ?? [4, 4];
       const run = Math.hypot(pz + 0.35, 0.55);
       const steps = nSpan * 4;
@@ -1797,9 +2296,28 @@ function building(b: WBld, r: () => number): BGeo {
         const ya = py - sagAt(xa);
         const yb = py - sagAt(xb);
         G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff").mat(roofL2);
-        G.quad(xa, ya, pz + 0.35, xb, yb, pz + 0.35, xb, py + 0.55, 0, xa, py + 0.55, 0, [xa / tu, 0, xb / tu, run / tv]);
+        G.quad(xa, ya, pz + 0.35, xb, yb, pz + 0.35, xb, py + 0.55, 0, xa, py + 0.55, 0, [
+          xa / tu,
+          0,
+          xb / tu,
+          run / tv,
+        ]);
         G.col("#ffffff", 0.55).mat(WL.DECK);
-        G.quad(xb, yb - 0.02, pz + 0.35, xa, ya - 0.02, pz + 0.35, xa, py + 0.53, 0, xb, py + 0.53, 0, [xb / 4, 0, xa / 4, 1]);
+        G.quad(
+          xb,
+          yb - 0.02,
+          pz + 0.35,
+          xa,
+          ya - 0.02,
+          pz + 0.35,
+          xa,
+          py + 0.53,
+          0,
+          xb,
+          py + 0.53,
+          0,
+          [xb / 4, 0, xa / 4, 1],
+        );
       }
       lantern(B, x0 + W * 0.3, py - 0.6, pz - 0.35);
       if (W > 10) lantern(B, x1 - W * 0.3, py - 0.6, pz - 0.35);
@@ -1809,15 +2327,48 @@ function building(b: WBld, r: () => number): BGeo {
       D2.col(postC);
       const ry = py + 0.18;
       const rail = (xa: number, xb: number, z: number) => {
-        boxP(D2, WL.TIMBER, xa - 0.1, ry + 0.95, z - 0.07, xb + 0.1, ry + 1.05, z + 0.07, true, true);
-        boxP(D2, WL.TIMBER, xa - 0.1, ry + 0.1, z - 0.05, xb + 0.1, ry + 0.16, z + 0.05, true, true);
+        boxP(
+          D2,
+          WL.TIMBER,
+          xa - 0.1,
+          ry + 0.95,
+          z - 0.07,
+          xb + 0.1,
+          ry + 1.05,
+          z + 0.07,
+          true,
+          true,
+        );
+        boxP(
+          D2,
+          WL.TIMBER,
+          xa - 0.1,
+          ry + 0.1,
+          z - 0.05,
+          xb + 0.1,
+          ry + 0.16,
+          z + 0.05,
+          true,
+          true,
+        );
         for (let x = xa; x <= xb; x += 0.42)
           boxP(D2, WL.TIMBER, x - 0.03, ry, z - 0.03, x + 0.03, ry + 0.96, z + 0.03, false);
       };
       const endRail = (sx: number, z0: number, z1: number) => {
         for (let z = z0; z < z1; z += 0.42)
           boxP(D2, WL.TIMBER, sx - 0.03, ry, z - 0.03, sx + 0.03, ry + 0.96, z + 0.03, false);
-        boxP(D2, WL.TIMBER, sx - 0.07, ry + 0.95, z0 - 0.1, sx + 0.07, ry + 1.05, z1 + 0.1, true, true);
+        boxP(
+          D2,
+          WL.TIMBER,
+          sx - 0.07,
+          ry + 0.95,
+          z0 - 0.1,
+          sx + 0.07,
+          ry + 1.05,
+          z1 + 0.1,
+          true,
+          true,
+        );
       };
       if (b.t === "saloon") {
         // the saloon: a balcony over the left part of its front, on its own posts, railed on
@@ -1844,7 +2395,18 @@ function building(b: WBld, r: () => number): BGeo {
           boxP(D2, WL.TIMBER, x - 0.03, DY, bd - 0.14, x + 0.03, DY + 1.2, bd - 0.08, false);
         // the porch roof over the rest of the front (and in front of the balcony)
         G.col("#ffffff");
-        slope(G, WL.SHINGLE, ba + 0.01, bd + 0.02, bb, bd + 0.02, py - 0.02, 0, pz + 0.35 - (bd + 0.02), py - 0.35);
+        slope(
+          G,
+          WL.SHINGLE,
+          ba + 0.01,
+          bd + 0.02,
+          bb,
+          bd + 0.02,
+          py - 0.02,
+          0,
+          pz + 0.35 - (bd + 0.02),
+          py - 0.35,
+        );
         G.col("#bdb6aa");
         slope(G, WL.TIN, bb, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py);
         lantern(B, (bb + x1) / 2, py - 0.6, pz - 0.35);
@@ -1904,7 +2466,8 @@ function building(b: WBld, r: () => number): BGeo {
     beam(D2, x0 + 0.2, 2.5, pd, x1 - 0.2, 2.5, pd, 0.18);
     for (let x = x0 + 0.5; x < x1 - 0.3; x += 0.9) beam(D2, x, 2.62, -0.1, x, 2.62, pd + 0.3, 0.12);
     G.col("#9a7a52");
-    for (let z = 0.1; z < pd + 0.2; z += 0.12) boxP(G, WL.TIMBER, x0 + 0.2, 2.68, z, x1 - 0.2, 2.72, z + 0.08, true, true);
+    for (let z = 0.1; z < pd + 0.2; z += 0.12)
+      boxP(G, WL.TIMBER, x0 + 0.2, 2.68, z, x1 - 0.2, 2.72, z + 0.08, true, true);
     G.col("#a88a5a").mat(WL.SAND);
     G.flat(x0 + 0.25, 0.05, x1 - 0.25, pd + 0.25, 2.76, [0, 0, W / 3, 1]);
   } else if (b.porch > 0) {
@@ -1945,10 +2508,12 @@ function building(b: WBld, r: () => number): BGeo {
     G.col("#8a6a48").mat(WL.DECK);
     boxP(G, WL.DECK, x0 + 0.3, 0, 0, x1 - 0.3, 1.05, 2.5, true, false);
     G.col("#5a4030");
-    for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.8) boxP(G, WL.TIMBER, x - 0.1, 0, 2.3, x + 0.1, 1.0, 2.5, false);
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.8)
+      boxP(G, WL.TIMBER, x - 0.1, 0, 2.3, x + 0.1, 1.0, 2.5, false);
     boxP(G, WL.TIMBER, x0 + 0.3, 0.83, 2.44, x1 - 0.3, 1.03, 2.56); // edge beam, just under the planks' top
     // wooden steps down at one end
-    for (let k = 0; k < 4; k++) boxP(G, WL.DECK, x1 - 1.6, 0, 2.56 + k * 0.3, x1 - 0.4, 1.02 - k * 0.26, 2.86 + k * 0.3);
+    for (let k = 0; k < 4; k++)
+      boxP(G, WL.DECK, x1 - 1.6, 0, 2.56 + k * 0.3, x1 - 0.4, 1.02 - k * 0.26, 2.86 + k * 0.3);
     // the doors: plank leaves on an iron rail, one slid half open
     G.col("#7a5a3e").mat(WL.P_BOARD);
     for (const [xa, xb] of [
@@ -1957,15 +2522,41 @@ function building(b: WBld, r: () => number): BGeo {
     ] as const)
       boxP(G, WL.P_BOARD, xa, 1.05, 0.04, xb, 3.2, 0.14);
     G.col("#1a1410").mat(WL.PAINT, 0, 0);
-    G.quad(W * 0.3 - 1.6, 1.05, 0.03, W * 0.3 - 0.4, 1.05, 0.03, W * 0.3 - 0.4, 3.15, 0.03, W * 0.3 - 1.6, 3.15, 0.03, [0, 0, 1, 1]);
+    G.quad(
+      W * 0.3 - 1.6,
+      1.05,
+      0.03,
+      W * 0.3 - 0.4,
+      1.05,
+      0.03,
+      W * 0.3 - 0.4,
+      3.15,
+      0.03,
+      W * 0.3 - 1.6,
+      3.15,
+      0.03,
+      [0, 0, 1, 1],
+    );
     G.col("#2a2826");
     boxP(G, WL.IRON, x0 + 0.5, 3.25, 0.04, x1 - 0.5, 3.35, 0.18);
     // freight on the dock
     const T2 = templates();
     for (let i = 0; i < 4; i++) {
-      const k = ["crates", "barrels", "sacks", "crate"][i]! as "crates" | "barrels" | "sacks" | "crate";
+      const k = ["crates", "barrels", "sacks", "crate"][i]! as
+        "crates" | "barrels" | "sacks" | "crate";
       const t = T2[k];
-      if (t) B.detail.stamp(t.d, x0 + 2 + i * (W - 4) / 3.2, 1.05, 1.3 + (r() - 0.5) * 0.6, r() * 3, 0.9, 0.9, 0.9, _tint.setRGB(1, 1, 1));
+      if (t)
+        B.detail.stamp(
+          t.d,
+          x0 + 2 + (i * (W - 4)) / 3.2,
+          1.05,
+          1.3 + (r() - 0.5) * 0.6,
+          r() * 3,
+          0.9,
+          0.9,
+          0.9,
+          _tint.setRGB(1, 1, 1),
+        );
     }
     // ventilator on the ridge
     D2vent(B, 0, H + W * 0.25 + 0.2, D * -0.5);
@@ -1976,7 +2567,18 @@ function building(b: WBld, r: () => number): BGeo {
     const rx = 1.0 + r() * 0.3;
     for (let i = 0; i < 9; i++) {
       D2.col(pick(["#a8281c", "#c0301e", "#8a2016"], r)).mat(WL.PAINT, 0, 0);
-      oboxP(D2, WL.PAINT, rx + (r() - 0.5) * 0.05, 2.2 - i * 0.13, 0.12, 0.12, 0.12, 0.12, r() * 3, true);
+      oboxP(
+        D2,
+        WL.PAINT,
+        rx + (r() - 0.5) * 0.05,
+        2.2 - i * 0.13,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        r() * 3,
+        true,
+      );
     }
     D2.col("#5a4a30");
     beam(D2, rx, 2.35, 0.12, rx, 1.05, 0.12, 0.02, WL.PAINT);
@@ -1990,21 +2592,7 @@ function building(b: WBld, r: () => number): BGeo {
     boxP(B.detail, WL.TIMBER, -0.75, 0.9, 0.06, -0.04, 2.0, 0.12);
     boxP(B.detail, WL.TIMBER, 0.04, 0.9, 0.06, 0.75, 2.0, 0.12);
     G.col("#1c140e").mat(WL.PAINT, 0, 0);
-    G.quad(
-      -0.85,
-      DY,
-      0.03,
-      0.85,
-      DY,
-      0.03,
-      0.85,
-      2.5,
-      0.03,
-      -0.85,
-      2.5,
-      0.03,
-      [0, 0, 0.1, 0.1],
-    );
+    G.quad(-0.85, DY, 0.03, 0.85, DY, 0.03, 0.85, 2.5, 0.03, -0.85, 2.5, 0.03, [0, 0, 0.1, 0.1]);
     B.glow.col("#ff9a40", 0.55);
     B.glow.quad(-0.8, DY, 0.08, 0.8, DY, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
     B.pools.col("#ffa050").mat(0, 0, 0);
@@ -2168,12 +2756,21 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   // gable, a vestry door, corner boards and a stone sill, so it is not a blank slab
   G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   const win = (cx: number, y0: number, y1: number, hw: number) =>
-    G.quad(cx + hw, y0, z0 - 0.03, cx - hw, y0, z0 - 0.03, cx - hw, y1, z0 - 0.03, cx + hw, y1, z0 - 0.03, [
-      0.33 / 4,
-      0.3 / 4,
-      0.67 / 4,
-      1.7 / 4,
-    ]);
+    G.quad(
+      cx + hw,
+      y0,
+      z0 - 0.03,
+      cx - hw,
+      y0,
+      z0 - 0.03,
+      cx - hw,
+      y1,
+      z0 - 0.03,
+      cx + hw,
+      y1,
+      z0 - 0.03,
+      [0.33 / 4, 0.3 / 4, 0.67 / 4, 1.7 / 4],
+    );
   win(-3.2, 1.4, 4.6, 0.7);
   win(3.2, 1.4, 4.6, 0.7);
   win(0, H + 1.2, H + 3.4, 0.9);
@@ -2181,7 +2778,21 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   for (const cx of [-3.2, 3.2]) boxP(G, WL.PAINT, cx - 0.95, 1.2, z0 - 0.14, cx + 0.95, 1.4, z0);
   boxP(G, WL.PAINT, -1.15, H + 1.0, z0 - 0.14, 1.15, H + 1.2, z0);
   G.col("#5a2e1c").mat(WL.PAINT, 0, 0);
-  G.quad(0.7, 0, z0 - 0.03, -0.7, 0, z0 - 0.03, -0.7, 2.4, z0 - 0.03, 0.7, 2.4, z0 - 0.03, [0, 0, 1, 1]);
+  G.quad(
+    0.7,
+    0,
+    z0 - 0.03,
+    -0.7,
+    0,
+    z0 - 0.03,
+    -0.7,
+    2.4,
+    z0 - 0.03,
+    0.7,
+    2.4,
+    z0 - 0.03,
+    [0, 0, 1, 1],
+  );
   G.col("#f4efe4");
   boxP(G, WL.PAINT, -0.95, 2.4, z0 - 0.14, 0.95, 2.62, z0);
   for (const [cx, cz] of [
@@ -2406,7 +3017,15 @@ function tipple(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
 // ---------------------------------------------------------------------------------------
 // prop templates (local space, origin at the base centre, +z = front)
 
-type PKey = WProp["k"] | "wheelL" | "pebble" | "horsebody" | "horseleg" | "riderTorso" | "riderHat" | "riderLegs";
+type PKey =
+  | WProp["k"]
+  | "wheelL"
+  | "pebble"
+  | "horsebody"
+  | "horseleg"
+  | "riderTorso"
+  | "riderHat"
+  | "riderLegs";
 let TM: Partial<Record<PKey, { d: Tmpl; g?: Tmpl; p?: Tmpl }>> | null = null;
 
 function templates() {
@@ -2679,7 +3298,18 @@ function templates() {
     boxP(d, WL.TIMBER, -0.4, 0, -0.4, -0.34, 0.45, 0.2);
     for (let i = 0; i < 6; i++) {
       d.col(pick(["#b89468", "#9a7a4e", "#c4a070"], r));
-      oboxP(d, WL.TIMBER, (r() - 0.3) * 1.2, 0.02 + i * 0.012, (r() - 0.3) * 1.2, 0.75, 0.025, 0.12, r() * 3, true);
+      oboxP(
+        d,
+        WL.TIMBER,
+        (r() - 0.3) * 1.2,
+        0.02 + i * 0.012,
+        (r() - 0.3) * 1.2,
+        0.75,
+        0.025,
+        0.12,
+        r() * 3,
+        true,
+      );
     }
   });
   make("brokenbarrel", (d) => {
@@ -2693,14 +3323,25 @@ function templates() {
       oboxP(d, WL.TIMBER, 0, y, z, 0.85, 0.035, 0.18, 0, true);
     }
     d.col("#5a3a2a");
-    for (let i = 0; i < 3; i++) oboxP(d, WL.TIMBER, 0.6 + r() * 0.5, 0.02, (r() - 0.5) * 0.8, 0.8, 0.03, 0.14, r() * 3, true);
+    for (let i = 0; i < 3; i++)
+      oboxP(d, WL.TIMBER, 0.6 + r() * 0.5, 0.02, (r() - 0.5) * 0.8, 0.8, 0.03, 0.14, r() * 3, true);
     d.col("#4a3a30");
     for (const x of [-0.3, 0.3]) {
       for (let i = 0; i < 10; i++) {
         const a0 = (i / 10) * Math.PI * 2;
         const a1 = ((i + 1) / 10) * Math.PI * 2;
         if (i === 3) continue;
-        beam(d, x, 0.32 + Math.sin(a0) * 0.32, Math.cos(a0) * 0.32, x, 0.32 + Math.sin(a1) * 0.32, Math.cos(a1) * 0.32, 0.03, WL.IRON);
+        beam(
+          d,
+          x,
+          0.32 + Math.sin(a0) * 0.32,
+          Math.cos(a0) * 0.32,
+          x,
+          0.32 + Math.sin(a1) * 0.32,
+          Math.cos(a1) * 0.32,
+          0.03,
+          WL.IRON,
+        );
       }
     }
   });
@@ -2751,8 +3392,36 @@ function templates() {
       const z = r() < 0.5 ? -0.28 : 0.28;
       d.col(cloths[Math.floor(r() * cloths.length)]!).mat(WL.CANVAS);
       const top = 1.98 - (1 - (x / 2.4) ** 2) * 0.12;
-      d.quad(x - w / 2, top - h, z, x + w / 2, top - h, z, x + w / 2, top, z, x - w / 2, top, z, [0, 0, 1, 1]);
-      d.quad(x + w / 2, top - h, z, x - w / 2, top - h, z, x - w / 2, top, z, x + w / 2, top, z, [0, 0, 1, 1]);
+      d.quad(
+        x - w / 2,
+        top - h,
+        z,
+        x + w / 2,
+        top - h,
+        z,
+        x + w / 2,
+        top,
+        z,
+        x - w / 2,
+        top,
+        z,
+        [0, 0, 1, 1],
+      );
+      d.quad(
+        x + w / 2,
+        top - h,
+        z,
+        x - w / 2,
+        top - h,
+        z,
+        x - w / 2,
+        top,
+        z,
+        x + w / 2,
+        top,
+        z,
+        [0, 0, 1, 1],
+      );
     }
   });
   make("garden", (d) => {
@@ -2945,7 +3614,9 @@ function templates() {
     d.col("#8a6644");
     boxP(d, WL.TIMBER, -0.6, 0.35, -0.9, 0.6, 1.2, 0.9);
     d.col("#5a5652");
-    for (const z of [-0.9, 0.9]) for (const x of [-0.6, 0.6]) boxP(d, WL.IRON, x - 0.05, 0.35, z - 0.05, x + 0.05, 1.22, z + 0.05);
+    for (const z of [-0.9, 0.9])
+      for (const x of [-0.6, 0.6])
+        boxP(d, WL.IRON, x - 0.05, 0.35, z - 0.05, x + 0.05, 1.22, z + 0.05);
     boxP(d, WL.IRON, -0.62, 1.12, -0.92, 0.62, 1.22, 0.92, false);
     d.col("#9a8270").mat(WL.ROCK);
     d.flat(-0.55, -0.85, 0.55, 0.85, 1.12, [0, 0, 0.1, 0.1]);
@@ -2974,7 +3645,12 @@ function templates() {
         const [ax, ay] = ends[i]!;
         const [bx, by] = ends[(i + 1) % seg]!;
         d.col(bark).mat(WL.TIMBER);
-        d.quad(bx, by, -len / 2, ax, ay, -len / 2, ax, ay, len / 2, bx, by, len / 2, [0, 0, 0.3, len]);
+        d.quad(bx, by, -len / 2, ax, ay, -len / 2, ax, ay, len / 2, bx, by, len / 2, [
+          0,
+          0,
+          0.3,
+          len,
+        ]);
       }
       // the sawn ends: pale wood
       d.col(pick(["#c8a878", "#d8b888", "#b89868"], r)).mat(WL.PAINT);
@@ -3185,7 +3861,8 @@ function templates() {
       beam(d, s * 0.3, 1.66, 0.22, s * 0.33, 1.25, 0.08, 0.14, WL.CANVAS);
     }
     d.col("#1e1612");
-    for (const s of [-1, 1]) boxP(d, WL.TIMBER, s * 0.33 - 0.07, 1.12, 0.02, s * 0.33 + 0.07, 1.27, 0.26);
+    for (const s of [-1, 1])
+      boxP(d, WL.TIMBER, s * 0.33 - 0.07, 1.12, 0.02, s * 0.33 + 0.07, 1.27, 0.26);
   });
   make("riderTorso", (d) => {
     // shirt and vest, arms forward to the reins, the head; tinted per rider
@@ -3833,26 +4510,8 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     // cut-stone portal: jambs, a lintel and a parapet, with timber sets inside
     const o = dir * 0.7;
     G.col("#a89682");
-    boxP(
-      G,
-      WL.P_STONE,
-      RAIL_X - w / 2 - 1.8,
-      0,
-      face + o - 0.7,
-      RAIL_X - w / 2,
-      h,
-      face + o + 0.7,
-    );
-    boxP(
-      G,
-      WL.P_STONE,
-      RAIL_X + w / 2,
-      0,
-      face + o - 0.7,
-      RAIL_X + w / 2 + 1.8,
-      h,
-      face + o + 0.7,
-    );
+    boxP(G, WL.P_STONE, RAIL_X - w / 2 - 1.8, 0, face + o - 0.7, RAIL_X - w / 2, h, face + o + 0.7);
+    boxP(G, WL.P_STONE, RAIL_X + w / 2, 0, face + o - 0.7, RAIL_X + w / 2 + 1.8, h, face + o + 0.7);
     boxP(
       G,
       WL.P_STONE,
@@ -3906,10 +4565,31 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
       const za = st.zBottom + dir * i;
       const h = (BALCONY_Y * (i + 1)) / n;
       G.col("#a88660");
-      boxP(G, WL.DECK, xa, h - 0.08, Math.min(za, za + dir), xb, h, Math.max(za, za + dir), true, true);
+      boxP(
+        G,
+        WL.DECK,
+        xa,
+        h - 0.08,
+        Math.min(za, za + dir),
+        xb,
+        h,
+        Math.max(za, za + dir),
+        true,
+        true,
+      );
       // risers
       G.col("#7a5e44");
-      boxP(G, WL.TIMBER, xa, 0, Math.min(za, za + dir * 0.06), xb, h - 0.08, Math.max(za, za + dir * 0.06), false);
+      boxP(
+        G,
+        WL.TIMBER,
+        xa,
+        0,
+        Math.min(za, za + dir * 0.06),
+        xb,
+        h - 0.08,
+        Math.max(za, za + dir * 0.06),
+        false,
+      );
     }
     // the boarded side toward the open half of the alley, and a handrail
     G.col("#8a7258");
@@ -3934,9 +4614,29 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
     G.col("#6a4a30");
     boxP(G, WL.TIMBER, xb - 0.1, 0, edge - 0.1, xb + 0.1, BALCONY_Y, edge + 0.1);
     G.col("#e8dcc0");
-    boxP(G, WL.TIMBER, st.x0 - 0.1, BALCONY_Y + 0.95, edge - 0.06, xb + 0.1, BALCONY_Y + 1.05, edge + 0.06);
+    boxP(
+      G,
+      WL.TIMBER,
+      st.x0 - 0.1,
+      BALCONY_Y + 0.95,
+      edge - 0.06,
+      xb + 0.1,
+      BALCONY_Y + 1.05,
+      edge + 0.06,
+    );
     boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
-    for (let x = st.x0; x <= xb; x += 0.42) boxP(G, WL.TIMBER, x - 0.03, BALCONY_Y, edge - 0.03, x + 0.03, BALCONY_Y + 0.96, edge + 0.03, false);
+    for (let x = st.x0; x <= xb; x += 0.42)
+      boxP(
+        G,
+        WL.TIMBER,
+        x - 0.03,
+        BALCONY_Y,
+        edge - 0.03,
+        x + 0.03,
+        BALCONY_Y + 0.96,
+        edge + 0.03,
+        false,
+      );
   }
   // the church: a stair along the nave's north wall up to a landing beside the tower
   {
@@ -4151,24 +4851,56 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
               const sc = (0.18 + w * 0.22) * (1.3 - u * 0.5);
               const kk = 0.78 + u * 0.25;
               rubble.setRGB(kk * 1.05, kk * 0.72, kk * 0.6);
-              chunkAt(px, pz).detail.stamp(T.pebble!.d, px, -0.08, pz, (u + w) * 20, sc * 1.2, sc * 0.45, sc, rubble);
+              chunkAt(px, pz).detail.stamp(
+                T.pebble!.d,
+                px,
+                -0.08,
+                pz,
+                (u + w) * 20,
+                sc * 1.2,
+                sc * 0.45,
+                sc,
+                rubble,
+              );
             }
           }
           if (r > 0.34) continue;
-          const cx = -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
-          const cz = -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
+          const cx =
+            -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
+          const cz =
+            -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
           const ch = chunkAt(cx, cz);
           const k = 0.8 + hash(i + 3, j + 5) * 0.25;
           rubble.setRGB(k * 1.05, k * 0.72, k * 0.6);
           const big = r < 0.09;
           const sc = big ? 0.95 + hash(i, j) * 0.35 : 0.45 + hash(j, i) * 0.35;
           // a big fallen block, or a low heap of scree
-          ch.detail.stamp(T.boulder!.d, cx, -0.1, cz, r * 40, sc, big ? sc * 0.9 : sc * 0.45, sc * 1.2, rubble);
+          ch.detail.stamp(
+            T.boulder!.d,
+            cx,
+            -0.1,
+            cz,
+            r * 40,
+            sc,
+            big ? sc * 0.9 : sc * 0.45,
+            sc * 1.2,
+            rubble,
+          );
           if (!big && r < 0.2) {
             // a second, smaller stone beside it
             const ox = dj !== 0 ? 0.7 : 0;
             const oz = di !== 0 ? 0.7 : 0;
-            ch.detail.stamp(T.boulder!.d, cx + ox, -0.1, cz + oz, r * 70, sc * 0.55, sc * 0.4, sc * 0.6, rubble);
+            ch.detail.stamp(
+              T.boulder!.d,
+              cx + ox,
+              -0.1,
+              cz + oz,
+              r * 70,
+              sc * 0.55,
+              sc * 0.4,
+              sc * 0.6,
+              rubble,
+            );
           }
         }
       }

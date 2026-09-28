@@ -187,7 +187,15 @@ export function newSim(seed: number): Sim {
     });
   for (const a of agents) pose(net, a);
   for (const a of agents) if (a.hold === Infinity) a.x = a.z = 1e4;
-  return { net, agents, t: 0, r, chase: { next: 70 + r() * 40, start: -1, caught: -1, end: -1, x: 0, z: 0 }, shots: [], events: [] };
+  return {
+    net,
+    agents,
+    t: 0,
+    r,
+    chase: { next: 70 + r() * 40, start: -1, caught: -1, end: -1, x: 0, z: 0 },
+    shots: [],
+    events: [],
+  };
 }
 
 /** an obstacle the riders brake for (players), or knock aside (enemies) */
@@ -278,7 +286,8 @@ export function stepSim(sim: Sim, dt: number, players: Body[]) {
         const dz = p.z - a.z;
         const along = dx * hx + dz * hz;
         const lat = Math.abs(dx * hz - dz * hx);
-        if (along > 0 && along < look && lat < BOX[a.kind].hw + p.r + 0.3) block = Math.min(block, along);
+        if (along > 0 && along < look && lat < BOX[a.kind].hw + p.r + 0.3)
+          block = Math.min(block, along);
       }
       for (const o of A) {
         if (o === a || !onStage(o)) continue;
@@ -288,7 +297,11 @@ export function stepSim(sim: Sim, dt: number, players: Body[]) {
         const dz = o.z - a.z;
         const along = dx * hx + dz * hz;
         const lat = Math.abs(dx * hz - dz * hx);
-        if (along > 0 && along < look + BOX[o.kind].hl && lat < BOX[a.kind].hw + BOX[o.kind].hw + 0.2) {
+        if (
+          along > 0 &&
+          along < look + BOX[o.kind].hl &&
+          lat < BOX[a.kind].hw + BOX[o.kind].hw + 0.2
+        ) {
           // a chase rider doesn't queue behind a buckboard: he swings out and passes
           if (a.role !== ROLE_TOWN && o.role === ROLE_TOWN) {
             a.pass = t + 3;
@@ -310,10 +323,20 @@ export function stepSim(sim: Sim, dt: number, players: Body[]) {
       a.s -= ed.len;
       if (a.role === ROLE_POSSE && outlaw.hold !== Infinity) {
         // the posse take the way the outlaw went
-        nextEdge(sim, a, (e, far) => (e === outlaw.e ? 1000 : -Math.hypot(sim.net.nodes[far]!.x - outlaw.x, sim.net.nodes[far]!.z - outlaw.z)));
+        nextEdge(sim, a, (e, far) =>
+          e === outlaw.e
+            ? 1000
+            : -Math.hypot(sim.net.nodes[far]!.x - outlaw.x, sim.net.nodes[far]!.z - outlaw.z),
+        );
       } else if (a.role === ROLE_OUTLAW) {
         // the outlaw runs for the far side of town
-        nextEdge(sim, a, (_e, far) => Math.hypot(sim.net.nodes[far]!.x - posse[0]!.x, sim.net.nodes[far]!.z - posse[0]!.z) * 0.02);
+        nextEdge(
+          sim,
+          a,
+          (_e, far) =>
+            Math.hypot(sim.net.nodes[far]!.x - posse[0]!.x, sim.net.nodes[far]!.z - posse[0]!.z) *
+            0.02,
+        );
       } else nextEdge(sim, a);
       // carry the old position into the turn and let it ease out
       a.ox = 0;
@@ -337,11 +360,14 @@ export function stepSim(sim: Sim, dt: number, players: Body[]) {
     if (C.caught < 0) {
       for (const p of posse) {
         const d = Math.hypot(p.x - outlaw.x, p.z - outlaw.z);
-        if (d < 38 && sim.r() < dt * 0.9) sim.shots.push({ x: p.x, z: p.z, tx: outlaw.x, tz: outlaw.z });
+        if (d < 38 && sim.r() < dt * 0.9)
+          sim.shots.push({ x: p.x, z: p.z, tx: outlaw.x, tz: outlaw.z });
       }
       // caught: run down after a while, or trapped at the end of a street
       const lead = Math.min(...posse.map((p) => Math.hypot(p.x - outlaw.x, p.z - outlaw.z)));
-      const trapped = sim.net.nodes[outlaw.dir > 0 ? sim.net.edges[outlaw.e]!.b : sim.net.edges[outlaw.e]!.a]!.e.length === 1 && sim.net.edges[outlaw.e]!.len - outlaw.s < 8;
+      const trapped =
+        sim.net.nodes[outlaw.dir > 0 ? sim.net.edges[outlaw.e]!.b : sim.net.edges[outlaw.e]!.a]!.e
+          .length === 1 && sim.net.edges[outlaw.e]!.len - outlaw.s < 8;
       if ((t - C.start > 42 && lead < 14) || trapped || t - C.start > 75) {
         C.caught = t;
         C.x = outlaw.x;
@@ -367,7 +393,14 @@ export function stepSim(sim: Sim, dt: number, players: Body[]) {
 export function encodeSim(sim: Sim): number[] {
   const out: number[] = [Math.round(sim.t * 100)];
   for (const a of sim.agents) {
-    out.push(a.e, a.dir, Math.round(a.s * 100), Math.round(a.speed * 100), Math.round(a.lat * 100), a.hold === Infinity ? -1 : a.hold > sim.t ? 1 : 0);
+    out.push(
+      a.e,
+      a.dir,
+      Math.round(a.s * 100),
+      Math.round(a.speed * 100),
+      Math.round(a.lat * 100),
+      a.hold === Infinity ? -1 : a.hold > sim.t ? 1 : 0,
+    );
   }
   return out;
 }

@@ -10,7 +10,10 @@ import { westernArrays, westernSky, type WMode } from "./textures";
 
 /** The reflection / sky-light env map the scene built for the current time of day. The
  * train and the barricades pick it up so their shaded sides get the same sky light. */
-export const westernEnv: { map: THREE.Texture | null; intensity: number } = { map: null, intensity: 1 };
+export const westernEnv: { map: THREE.Texture | null; intensity: number } = {
+  map: null,
+  intensity: 1,
+};
 /** keep a material's env map in step with the scene's (call every frame; cheap) */
 export function syncEnv(mat: THREE.MeshStandardMaterial) {
   if (mat.envMap === westernEnv.map && mat.envMapIntensity === westernEnv.intensity) return;

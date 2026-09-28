@@ -263,7 +263,9 @@ export function NightStars({
     const inc = depth / count;
     for (let i = 0; i < count; i++) {
       r -= inc * Math.random();
-      v.setFromSpherical(new THREE.Spherical(r, Math.acos(1 - Math.random() * 2), Math.random() * Math.PI * 2));
+      v.setFromSpherical(
+        new THREE.Spherical(r, Math.acos(1 - Math.random() * 2), Math.random() * Math.PI * 2),
+      );
       pos.set([v.x, v.y, v.z], i * 3);
       c.setHSL(i / count, 0, 0.9);
       colr.set([c.r, c.g, c.b], i * 3);

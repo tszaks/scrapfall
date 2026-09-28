@@ -268,7 +268,11 @@ export function WesternWeather({
           // soft, fist-to-person sized wisps, never right in the player's face (or over the gun)
           const near = Math.hypot(d.x - cam.x, d.z - cam.z);
           const fade = Math.min(1, Math.max(0, (near - 2.5) / 3));
-          _m.compose(_p.set(d.x, groundY(d.x, d.z) + d.y * 0.5 + 0.4, d.z), camera.quaternion, _s.set(d.s, d.s, d.s));
+          _m.compose(
+            _p.set(d.x, groundY(d.x, d.z) + d.y * 0.5 + 0.4, d.z),
+            camera.quaternion,
+            _s.set(d.s, d.s, d.s),
+          );
           dm.setMatrixAt(i, _m);
           alpha.setX(i, (0.28 + 0.2 * d.a) * k * fade);
         }
@@ -320,7 +324,7 @@ export function WesternWeather({
         w.hop += w.vy * dt;
         if (w.hop <= 0) {
           w.hop = 0;
-          w.vy = Math.random() < (0.02 + k * 0.08) ? 1.2 + Math.random() * (1 + k * 2.5) : 0;
+          w.vy = Math.random() < 0.02 + k * 0.08 ? 1.2 + Math.random() * (1 + k * 2.5) : 0;
         }
         const gy = groundY(w.x, w.z);
         _m.compose(_p.set(w.x, gy + r * 0.92 + w.hop, w.z), w.q, _s.set(w.s, w.s, w.s));

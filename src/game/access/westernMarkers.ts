@@ -8,6 +8,7 @@ import type { AccessMarker } from "./world";
 export function westernMarkers(w: WesternLayout): AccessMarker[] {
   const out: AccessMarker[] = [];
   // every way up the layout built: the saloon's inside stair, the church stair to the belfry
-  for (const f of w.stairFeet) out.push({ x: f.x, z: f.z, y: groundY(f.x, f.z), kind: "stairs", label: f.label });
+  for (const f of w.stairFeet)
+    out.push({ x: f.x, z: f.z, y: groundY(f.x, f.z), kind: "stairs", label: f.label });
   return out;
 }

@@ -44,7 +44,14 @@ const SPEC: Record<HorseKind, { len: number; wid: number }> = {
 };
 
 /** a side profile (z, y) extruded across x (width w), centred on x */
-function side(m: Model, pts: [number, number][], w: number, color: THREE.ColorRepresentation, surf: Surf, bevel = 0.03) {
+function side(
+  m: Model,
+  pts: [number, number][],
+  w: number,
+  color: THREE.ColorRepresentation,
+  surf: Surf,
+  bevel = 0.03,
+) {
   // extrude runs along local z; turn it so it runs along car x and the outline's x is car z
   m.extrude(pts, w, [0, 0, 0], color, surf, { rot: [0, -PI / 2, 0], bevel, curve: 8 });
 }
@@ -93,7 +100,9 @@ function stagecoach(far: boolean) {
   m.box(1.62, 0.07, 2.4, [0, 2.42, -0.03], "#2e2622", SURF.leather, { bevel: 0.02 });
   m.both((s) => {
     m.box(0.035, 0.035, 2.2, [s * 0.76, 2.66, -0.05], IRON, SURF.darkSteel);
-    if (!far) for (const z of [-1.0, -0.35, 0.3, 0.95]) m.box(0.025, 0.22, 0.025, [s * 0.76, 2.55, z], IRON, SURF.darkSteel, { lod: 1 });
+    if (!far)
+      for (const z of [-1.0, -0.35, 0.3, 0.95])
+        m.box(0.025, 0.22, 0.025, [s * 0.76, 2.55, z], IRON, SURF.darkSteel, { lod: 1 });
   });
   m.box(0.6, 0.34, 0.45, [-0.3, 2.62, -0.55], "#5a3a22", SURF.leather, { bevel: 0.03 }); // trunk
   m.box(0.5, 0.26, 0.4, [0.3, 2.58, -0.7], "#6a4a2a", SURF.wood, { bevel: 0.03 });
@@ -160,7 +169,9 @@ function buckboard(far: boolean) {
   m.both((s) => {
     m.box(0.05, 0.3, 2.6, [s * 0.66, 1.15, 0], "#ffffff", PAINT, { bevel: 0.01 });
     m.box(0.06, 0.05, 2.62, [s * 0.67, 1.3, 0], "#3a2a1e", SURF.wood);
-    if (!far) for (const z of [-1.0, -0.2, 0.6]) m.box(0.07, 0.3, 0.05, [s * 0.68, 1.15, z], IRON, SURF.darkSteel, { lod: 1 });
+    if (!far)
+      for (const z of [-1.0, -0.2, 0.6])
+        m.box(0.07, 0.3, 0.05, [s * 0.68, 1.15, z], IRON, SURF.darkSteel, { lod: 1 });
   });
   m.box(1.3, 0.3, 0.05, [0, 1.15, -1.3], "#ffffff", PAINT, { bevel: 0.01 }); // tailgate
   m.box(1.3, 0.4, 0.05, [0, 1.2, 1.3], "#ffffff", PAINT, { bevel: 0.01 }); // front board
@@ -198,7 +209,9 @@ export function woodWheelGeometry() {
   m.tubeX(0.2, 0.9, [0, 0, 0], IRON, SURF.darkSteel, { seg: 10 });
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * PI * 2;
-    m.box(0.45, 0.06, 0.8, [0, Math.sin(a) * 0.52, Math.cos(a) * 0.52], WOOD, SURF.wood, { rot: [-a, 0, 0] });
+    m.box(0.45, 0.06, 0.8, [0, Math.sin(a) * 0.52, Math.cos(a) * 0.52], WOOD, SURF.wood, {
+      rot: [-a, 0, 0],
+    });
   }
   m.torus(0.9, 0.08, [0, 0, 0], WOOD, SURF.wood, { rot: [0, PI / 2, 0], seg: 20 });
   m.torus(0.985, 0.03, [0, 0, 0], IRON, SURF.darkSteel, { rot: [0, PI / 2, 0], seg: 20 });
@@ -222,7 +235,16 @@ export function registerCoaches() {
       wheels: () => [], // drawn by Riders.tsx's spinning wooden wheels
       lamps: () =>
         k === "stagecoach"
-          ? [1, -1].map((s) => ({ kind: "head" as const, x: s * 0.74, y: 2.3, z: 1.29, sx: 0.08, sy: 0.1, sz: 0.02, color: 0xffd890 }))
+          ? [1, -1].map((s) => ({
+              kind: "head" as const,
+              x: s * 0.74,
+              y: 2.3,
+              z: 1.29,
+              sx: 0.08,
+              sy: 0.1,
+              sz: 0.02,
+              color: 0xffd890,
+            }))
           : [],
     });
   }
@@ -230,7 +252,15 @@ export function registerCoaches() {
 
 /** a Vehicle for the batch (type cast: the batch only needs the registry key) */
 export function horseVehicle(k: HorseKind, color: number): Vehicle {
-  return { type: k as unknown as VehicleType, len: SPEC[k].len, wid: SPEC[k].wid, wheel: 0.6, color, extras: 0, mass: 900 };
+  return {
+    type: k as unknown as VehicleType,
+    len: SPEC[k].len,
+    wid: SPEC[k].wid,
+    wheel: 0.6,
+    color,
+    extras: 0,
+    mass: 900,
+  };
 }
 
 /** the material the spinning wheels use (plain art material, no paint) */

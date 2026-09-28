@@ -44,18 +44,18 @@ export function tumbleweedGeometry(r = 0.45, twigs = 60, segs = 4, seed = 7) {
     const corners: THREE.Vector3[] = [];
     for (let i = 0; i < 3; i++) {
       const t = (i / 3) * Math.PI * 2;
-      corners.push(u.clone().multiplyScalar(Math.cos(t) * w).addScaledVector(v, Math.sin(t) * w));
+      corners.push(
+        u
+          .clone()
+          .multiplyScalar(Math.cos(t) * w)
+          .addScaledVector(v, Math.sin(t) * w),
+      );
     }
     for (let i = 0; i < 3; i++) {
       const o0 = corners[i]!;
       const o1 = corners[(i + 1) % 3]!;
       const n = o0.clone().add(o1).normalize();
-      const quad = [
-        a.clone().add(o0),
-        a.clone().add(o1),
-        b.clone().add(o1),
-        b.clone().add(o0),
-      ];
+      const quad = [a.clone().add(o0), a.clone().add(o1), b.clone().add(o1), b.clone().add(o0)];
       for (const idx of [0, 1, 2, 0, 2, 3]) {
         const p = quad[idx]!;
         pos.push(p.x, p.y, p.z);
@@ -86,11 +86,16 @@ export function tumbleweedGeometry(r = 0.45, twigs = 60, segs = 4, seed = 7) {
       // curl: the heading bends round the ball
       const n = a.clone().normalize();
       heading.addScaledVector(n, -heading.dot(n));
-      heading.add(new THREE.Vector3(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(0.9)).normalize();
+      heading
+        .add(new THREE.Vector3(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(0.9))
+        .normalize();
       if (R() < 0.35) {
         // a short fork off this point
         const fa = a.clone();
-        const fb = onShell(a.clone().addScaledVector(n.cross(heading).normalize(), step * 0.6), rr * 0.95);
+        const fb = onShell(
+          a.clone().addScaledVector(n.cross(heading).normalize(), step * 0.6),
+          rr * 0.95,
+        );
         const saveA = a.clone();
         const saveB = b.clone();
         a.copy(fa);

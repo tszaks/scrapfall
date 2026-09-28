@@ -325,7 +325,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[] = [];
   /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
   const boardY = new Map<string, number>();
-  const stairFeet: { x: number; z: number; label: string }[] = [{ x: -150, z: -7.15, label: "STAIRS · BELFRY" }];
+  const stairFeet: { x: number; z: number; label: string }[] = [
+    { x: -150, z: -7.15, label: "STAIRS · BELFRY" },
+  ];
   const lamps: { x: number; y: number; z: number }[] = [];
   const navWalls: { ax: number; az: number; bx: number; bz: number }[] = [];
   const navDoors: { x: number; z: number }[] = [];
@@ -537,7 +539,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   {
     const railCell = (z: number) => at(RAIL_X, z);
     const onRock = (z: number) => (rock[railCell(z)] ?? 0) > 0;
-    for (let z = -half + 1; z < half; ) {
+    for (let z = -half + 1; z < half;) {
       if (!onRock(z)) {
         z += 2;
         continue;
@@ -705,7 +707,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       for (const lx of [-W / 2 + 0.4, W / 2 - 0.4]) {
         const lz = 2.4;
         const [wx, wz] =
-          b.front === 2 ? [cx + lx, b.z1 + lz] : b.front === 0 ? [cx - lx, b.z0 - lz] : b.front === 1 ? [b.x1 + lz, cz - lx] : [b.x0 - lz, cz + lx];
+          b.front === 2
+            ? [cx + lx, b.z1 + lz]
+            : b.front === 0
+              ? [cx - lx, b.z0 - lz]
+              : b.front === 1
+                ? [b.x1 + lz, cz - lx]
+                : [b.x0 - lz, cz + lx];
         posts.push({ x: wx, z: wz, r: 0.14 });
       }
     }
@@ -814,7 +822,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     // a row that ends just short of a neighbour (the station) would leave a 2-4 m slot:
     // the last shop is widened to stand shoulder to shoulder with it instead
     if (abut !== undefined && order.length) {
-      const end = x0 + order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - gaps[gaps.length - 1]!;
+      const end =
+        x0 + order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - gaps[gaps.length - 1]!;
       const slack = abut - end;
       const last = order[order.length - 1]!;
       if (slack > 0 && slack < 6 && last.t !== "saloon" && last.t !== "opera" && !last.walkIn)
@@ -861,15 +870,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       // keeps the standard height: its balcony and stair are measured from it)
       const deck = p.t === "saloon" ? DECK_Y : 0.2 + Math.round(rand() * 5) * 0.05; // (0.2-0.45: under the bank's 0.5 m plinth)
       buildings[buildings.length - 1]!.deck = deck;
-      setGround(
-        x,
-        north ? zf : zf - BOARD_D,
-        x + p.w,
-        north ? zf + BOARD_D : zf,
-        WK.BOARD,
-      );
+      setGround(x, north ? zf : zf - BOARD_D, x + p.w, north ? zf + BOARD_D : zf, WK.BOARD);
       for (let bx = Math.ceil(x); bx <= Math.floor(x + p.w); bx++)
-        for (let bzz = Math.ceil(north ? zf : zf - BOARD_D); bzz <= Math.floor(north ? zf + BOARD_D : zf); bzz++)
+        for (
+          let bzz = Math.ceil(north ? zf : zf - BOARD_D);
+          bzz <= Math.floor(north ? zf + BOARD_D : zf);
+          bzz++
+        )
           boardY.set(`${bx},${bzz}`, deck);
       const edge = north ? -STREET_HALF + 0.6 : STREET_HALF - 0.6;
       // the porch row (between the street and the walkway along the shopfronts): posts and
@@ -932,10 +939,17 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       };
       // (none on the saloon's porch: its gallery runs overhead there, and collision is flat)
       const clutter = p.t !== "saloon";
-      if (clutter && rand() < 0.55) place("bench", 1.8, x + p.w / 2 + (rand() - 0.5) * 3, north ? Math.PI : 0);
+      if (clutter && rand() < 0.55)
+        place("bench", 1.8, x + p.w / 2 + (rand() - 0.5) * 3, north ? Math.PI : 0);
       if (clutter && rand() < 0.5) {
         const sc = 0.8 + rand() * 0.4;
-        place(rand() < 0.5 ? "barrels" : "crates", 1.6 * sc, x + 1 + rand() * (p.w - 2), rand() * 6.28, sc);
+        place(
+          rand() < 0.5 ? "barrels" : "crates",
+          1.6 * sc,
+          x + 1 + rand() * (p.w - 2),
+          rand() * 6.28,
+          sc,
+        );
       }
       if (clutter && rand() < 0.3) place("sacks", 1.2, x + 1 + rand() * (p.w - 2), rand() * 6.28);
       // porch lanterns
@@ -963,7 +977,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         prop("barrel", bxw, wz, rand() * 6.28, 1);
         if (p.t === "store" && rand() < 0.6) {
           const cxw = x + p.w * (0.35 + rand() * 0.3);
-          const czw = north ? bz0 - (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1) : bz1 + (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1);
+          const czw = north
+            ? bz0 - (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1)
+            : bz1 + (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1);
           prop(rand() < 0.5 ? "crates" : "crate", cxw, czw, rand() * 0.6, 0.9);
         }
       }
@@ -991,24 +1007,88 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // north row, west block and east block
   row(true, -124, -32, [
     { w: 18, t: "hotel", sign: W["HOTEL"], storeys: 3, mat: "clap", porch: 2, ff: 1, d: 18 },
-    { w: 14, t: "store", sign: W["GENERAL STORE"], storeys: 2, mat: "board", porch: 1, ff: 2, walkIn: true },
+    {
+      w: 14,
+      t: "store",
+      sign: W["GENERAL STORE"],
+      storeys: 2,
+      mat: "board",
+      porch: 1,
+      ff: 2,
+      walkIn: true,
+    },
     { w: 8, t: "store", sign: W["BARBER"], storeys: 1, porch: 1 },
   ]);
-  row(true, -12, 120, [
-    { w: 22, t: "saloon", sign: W["SALOON"], storeys: 2, mat: "clap", porch: 2, ff: 3, d: 20, walkIn: true },
-    { w: 16, t: "opera", sign: W["OPERA HOUSE"], storeys: 2, mat: "brick", porch: 0, ff: 3, d: 20 },
-    { w: 10, t: "store", sign: W["TELEGRAPH"], storeys: 1, porch: 1 },
-    { w: 10, t: "store", sign: W["UNDERTAKER"], storeys: 1, mat: "board", porch: 1 },
-  ], 124);
+  row(
+    true,
+    -12,
+    120,
+    [
+      {
+        w: 22,
+        t: "saloon",
+        sign: W["SALOON"],
+        storeys: 2,
+        mat: "clap",
+        porch: 2,
+        ff: 3,
+        d: 20,
+        walkIn: true,
+      },
+      {
+        w: 16,
+        t: "opera",
+        sign: W["OPERA HOUSE"],
+        storeys: 2,
+        mat: "brick",
+        porch: 0,
+        ff: 3,
+        d: 20,
+      },
+      { w: 10, t: "store", sign: W["TELEGRAPH"], storeys: 1, porch: 1 },
+      { w: 10, t: "store", sign: W["UNDERTAKER"], storeys: 1, mat: "board", porch: 1 },
+    ],
+    124,
+  );
   row(false, -124, -32, [
     { w: 14, t: "store", sign: W["DRY GOODS"], storeys: 2, porch: 1 },
     { w: 10, t: "store", sign: W["ASSAY OFFICE"], storeys: 1, mat: "board", porch: 1 },
-    { w: 16, t: "bank", sign: W["BANK"], storeys: 2, mat: "brick", porch: 0, ff: 1, d: 16, walkIn: true },
+    {
+      w: 16,
+      t: "bank",
+      sign: W["BANK"],
+      storeys: 2,
+      mat: "brick",
+      porch: 0,
+      ff: 1,
+      d: 16,
+      walkIn: true,
+    },
   ]);
   row(false, -12, 118, [
-    { w: 16, t: "sheriff", sign: W["SHERIFF"], storeys: 1, mat: "stone", porch: 1, ff: 1, d: 16, walkIn: true },
+    {
+      w: 16,
+      t: "sheriff",
+      sign: W["SHERIFF"],
+      storeys: 1,
+      mat: "stone",
+      porch: 1,
+      ff: 1,
+      d: 16,
+      walkIn: true,
+    },
     { w: 12, t: "smithy", sign: W["BLACKSMITH"], storeys: 1, mat: "board", porch: 0, ff: 0 },
-    { w: 24, t: "stable", sign: W["LIVERY"], storeys: 2, mat: "barn", porch: 0, ff: 0, d: 20, walkIn: true },
+    {
+      w: 24,
+      t: "stable",
+      sign: W["LIVERY"],
+      storeys: 2,
+      mat: "barn",
+      porch: 0,
+      ff: 0,
+      d: 20,
+      walkIn: true,
+    },
   ]);
 
   // the church closes the west end of Main Street; the sun sets behind its bell tower
@@ -1153,7 +1233,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const rot = rand() * 6.28;
     const s = 0.95 + rand() * 0.1;
     const coat = Math.floor(rand() * 6);
-    if (props.some((q) => (q.k === "hay" || q.k === "horse" || q.k === "trough") && Math.hypot(q.x - hx, q.z - hz) < 2.5))
+    if (
+      props.some(
+        (q) =>
+          (q.k === "hay" || q.k === "horse" || q.k === "trough") &&
+          Math.hypot(q.x - hx, q.z - hz) < 2.5,
+      )
+    )
       continue;
     prop("horse", hx, hz, rot, s, coat);
     placed++;
@@ -1194,7 +1280,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     [64, 9.4],
   ] as const)
     for (let i = props.length - 1; i >= 0; i--)
-      if (props[i]!.k === "horse" && Math.hypot(props[i]!.x - cx, props[i]!.z - cz) < 2.2) props.splice(i, 1);
+      if (props[i]!.k === "horse" && Math.hypot(props[i]!.x - cx, props[i]!.z - cz) < 2.2)
+        props.splice(i, 1);
   solidProp("barrels", -40, -9.5, 0.3, 1.4, 1.4, 1.1);
   solidProp("crates", 64, 9.4, 0.4, 1.6, 1.6, 1.4);
   solidProp("barrels", 96, 9.6, 1.2, 1.4, 1.4, 1.1);
@@ -1220,14 +1307,18 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const t = (i + 0.5) / n;
       prop("picket", xa + dx * t, za + dz * t, rot, len / n);
     }
-    for (let d = 0; d <= len; d += 0.35) posts.push({ x: xa + (dx * d) / len, z: za + (dz * d) / len, r: 0.07 });
+    for (let d = 0; d <= len; d += 0.35)
+      posts.push({ x: xa + (dx * d) / len, z: za + (dz * d) / len, r: 0.07 });
   };
   /** the back yard behind a house (bx, bz: the middle of its back wall, (ox, oz) outward) */
   const backYard = (bx: number, bz: number, ox: number, oz: number, w: number) => {
     // across the yard: (px, pz)
     const px = -oz;
     const pz = ox;
-    const at2 = (a: number, d: number): [number, number] => [bx + px * a + ox * d, bz + pz * a + oz * d];
+    const at2 = (a: number, d: number): [number, number] => [
+      bx + px * a + ox * d,
+      bz + pz * a + oz * d,
+    ];
     const rot = Math.atan2(-oz, ox);
     const side = rand() < 0.5 ? 1 : -1;
     const [ohx, ohz] = at2(side * (w / 2 - 0.4), 6.5 + rand() * 1.5);
@@ -1238,7 +1329,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const [clx, clz] = at2(-side * 1, 4 + rand() * 1.5);
       prop("clothesline", clx, clz, rot + Math.PI / 2, 1, Math.floor(rand() * 4));
       const cr = Math.atan2(-pz, px);
-      for (const e of [-2.4, 2.4]) posts.push({ x: clx + Math.cos(cr) * e, z: clz - Math.sin(cr) * e, r: 0.1 });
+      for (const e of [-2.4, 2.4])
+        posts.push({ x: clx + Math.cos(cr) * e, z: clz - Math.sin(cr) * e, r: 0.1 });
     }
     const [rbx, rbz] = at2(side * (w / 2 - 0.5), 0.6);
     prop("barrel", rbx, rbz, rand() * 6.28, 1);
@@ -1250,7 +1342,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   /** a row of house lots along a street edge. side -1: the lots lie at smaller z than the
    * edge (their houses face +z, the street); +1: they lie beyond it and face -z */
   const houseLots = (x0: number, x1: number, edgeZ: number, side: -1 | 1, mats: WMat[]) => {
-    for (let x = x0; x < x1 - 11; ) {
+    for (let x = x0; x < x1 - 11;) {
       const lw = 12 + Math.floor(rand() * 4) * 1.5;
       const w = Math.round(6.5 + rand() * 3.5);
       const d = Math.round(6 + rand() * 3);
@@ -1330,19 +1422,19 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         roof: "flat",
       });
     // north side, facing the plaza
-    for (let x = px0 + 1; x < px1 - 8; ) {
+    for (let x = px0 + 1; x < px1 - 8;) {
       const w = 8 + Math.round(rand() * 4);
       if (isFree(x, pz0 - 12, x + w, pz0 - 1)) adobeAt(x, pz0 - 3 - 7, w, 7, 2);
       x += w + (rand() < 0.4 ? 3 : 0.5);
     }
     // south side
-    for (let x = px0 + 1; x < px1 - 8; ) {
+    for (let x = px0 + 1; x < px1 - 8;) {
       const w = 8 + Math.round(rand() * 4);
       if (isFree(x, pz1 + 1, x + w, pz1 + 12)) adobeAt(x, pz1 + 3, w, 7, 0);
       x += w + (rand() < 0.4 ? 3 : 0.5);
     }
     // west side
-    for (let z = pz0 + 2; z < pz1 - 8; ) {
+    for (let z = pz0 + 2; z < pz1 - 8;) {
       const d = 8 + Math.round(rand() * 3);
       if (isFree(px0 - 12, z, px0 - 1, z + d)) adobeAt(px0 - 3 - 7, z, 7, d, 1);
       z += d + 1;
@@ -1362,7 +1454,20 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const w = 4 + Math.round(rand());
       const d = 5 + Math.round(rand());
       if (!isFree(x - 1, z - 1, x + w + 1, z + d + 1)) continue;
-      bld({ t: "tent", x0: x, z0: z, x1: x + w, z1: z + d, front, storeys: 1, mat: "board", sign: -1, porch: 0, ff: 0, roof: "gable" });
+      bld({
+        t: "tent",
+        x0: x,
+        z0: z,
+        x1: x + w,
+        z1: z + d,
+        front,
+        storeys: 1,
+        mat: "board",
+        sign: -1,
+        porch: 0,
+        ff: 0,
+        roof: "gable",
+      });
     }
   }
   prop("campfire", 117, -80, 0, 1);
@@ -1433,7 +1538,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const hz = z0 + 4 + rand() * (z1 - z0 - 8);
       const rot = rand() * 6.28;
       const coat = Math.floor(rand() * 6);
-      if (props.some((q) => (q.k === "hay" || q.k === "horse" || q.k === "trough") && Math.hypot(q.x - hx, q.z - hz) < 2.5))
+      if (
+        props.some(
+          (q) =>
+            (q.k === "hay" || q.k === "horse" || q.k === "trough") &&
+            Math.hypot(q.x - hx, q.z - hz) < 2.5,
+        )
+      )
         continue;
       prop("horse", hx, hz, rot, 1, coat);
     }
@@ -1733,7 +1844,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // straw where the horses stand and the hay is forked about
   {
     const straw: [number, number][] = [];
-    for (const q of props) if ((q.k === "horse" && rand() < 0.55) || q.k === "hay") straw.push([q.x + (rand() - 0.5) * 1.5, q.z + (rand() - 0.5) * 1.5]);
+    for (const q of props)
+      if ((q.k === "horse" && rand() < 0.55) || q.k === "hay")
+        straw.push([q.x + (rand() - 0.5) * 1.5, q.z + (rand() - 0.5) * 1.5]);
     const sb = buildings.find((q) => q.t === "stable");
     if (sb) {
       const [fx, fz] = toWorld(sb, 0, 2.5);
@@ -1781,18 +1894,63 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // Small props are thin collision circles (level.ts setPosts), not whole 2 m cells: a cell
   // per barrel or porch post left invisible walls metres wide. Bigger ones keep their cells.
   const THIN = new Set<WPropKind>([
-    "saguaro", "pear", "barrelcactus", "deadtree", "pole", "streetlamp", "crossbuck", "horse",
-    "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross", "barrel", "crate", "brokencrate", "brokenbarrel",
+    "saguaro",
+    "pear",
+    "barrelcactus",
+    "deadtree",
+    "pole",
+    "streetlamp",
+    "crossbuck",
+    "horse",
+    "bench",
+    "barrels",
+    "crates",
+    "sacks",
+    "hay",
+    "anvil",
+    "wheel",
+    "grave",
+    "cross",
+    "barrel",
+    "crate",
+    "brokencrate",
+    "brokenbarrel",
   ]);
   // low props a jump clears (their height to clear, m; input/movement.ts): everything else
   // in THIN blocks at any height
   const LOW: Partial<Record<WPropKind, number>> = {
-    bench: 0.55, barrels: 0.8, crates: 0.8, sacks: 0.6, hay: 0.8, anvil: 0.55, grave: 0.6,
-    barrelcactus: 0.5, barrel: 0.9, crate: 0.75, brokencrate: 0.45, brokenbarrel: 0.5,
+    bench: 0.55,
+    barrels: 0.8,
+    crates: 0.8,
+    sacks: 0.6,
+    hay: 0.8,
+    anvil: 0.55,
+    grave: 0.6,
+    barrelcactus: 0.5,
+    barrel: 0.9,
+    crate: 0.75,
+    brokencrate: 0.45,
+    brokenbarrel: 0.5,
   };
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
-  const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks", "barrel", "crate"]);
-  const thin = (x: number, z: number, rot: number, w: number, d: number, shot = false, h?: number) => {
+  const SHOT_STOP = new Set<WPropKind>([
+    "horse",
+    "hay",
+    "barrels",
+    "crates",
+    "sacks",
+    "barrel",
+    "crate",
+  ]);
+  const thin = (
+    x: number,
+    z: number,
+    rot: number,
+    w: number,
+    d: number,
+    shot = false,
+    h?: number,
+  ) => {
     const long = Math.max(w, d);
     const short = Math.min(w, d);
     const r = short / 2;
@@ -1802,7 +1960,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const n = Math.max(1, Math.ceil(span / Math.max(0.3, r * 1.2)) + 1);
     for (let k = 0; k < n; k++) {
       const t = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
-      const p: { x: number; z: number; r: number; shot?: boolean; h?: number } = { x: x + ax * t, z: z + az * t, r };
+      const p: { x: number; z: number; r: number; shot?: boolean; h?: number } = {
+        x: x + ax * t,
+        z: z + az * t,
+        r,
+      };
       if (shot) p.shot = true;
       if (h !== undefined) p.h = h;
       posts.push(p);
@@ -1821,11 +1983,25 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const [fw, fd] = FOOT[pr.k]!;
       // (a big one stays a wall: a jump clears ~1 m at most)
       const lh = LOW[pr.k] !== undefined ? LOW[pr.k]! * pr.s : undefined;
-      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s, SHOT_STOP.has(pr.k), lh !== undefined && lh <= 0.95 ? lh : undefined);
+      thin(
+        pr.x,
+        pr.z,
+        pr.rot,
+        fw * pr.s,
+        fd * pr.s,
+        SHOT_STOP.has(pr.k),
+        lh !== undefined && lh <= 0.95 ? lh : undefined,
+      );
       continue;
     }
     if (pr.k === "fence") {
-      markSolid(pr.x - (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 - 0.1, pr.z - (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 - 0.1, pr.x + (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 + 0.1, pr.z + (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 + 0.1, 1.3);
+      markSolid(
+        pr.x - (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 - 0.1,
+        pr.z - (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 - 0.1,
+        pr.x + (Math.abs(Math.cos(pr.rot)) * pr.s) / 2 + 0.1,
+        pr.z + (Math.abs(Math.sin(pr.rot)) * pr.s) / 2 + 0.1,
+        1.3,
+      );
       continue;
     }
     if (pr.k === "arch") {
@@ -1901,7 +2077,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const tset = (x: number, z: number, h: number) => {
     const i = Math.round(x + half);
     const j = Math.round(z + half);
-    if (i >= 0 && j >= 0 && i <= tn && j <= tn) th[i * (tn + 1) + j] = Math.max(th[i * (tn + 1) + j]!, h);
+    if (i >= 0 && j >= 0 && i <= tn && j <= tn)
+      th[i * (tn + 1) + j] = Math.max(th[i * (tn + 1) + j]!, h);
   };
   for (let i = 0; i <= tn; i++)
     for (let j = 0; j <= tn; j++) {
@@ -1916,11 +2093,18 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         // the dry wash, carved below grade with gentle banks you can walk down
         const hw = riverW(x) / 2;
         const d = Math.abs(z - riverZ(x));
-        if (d < hw + RIVER_BANK - 2) th[i * (tn + 1) + j] = -RIVER_D * smooth(hw + RIVER_BANK - 2, hw - 2, d);
+        if (d < hw + RIVER_BANK - 2)
+          th[i * (tn + 1) + j] = -RIVER_D * smooth(hw + RIVER_BANK - 2, hw - 2, d);
       }
     }
   const platforms: { x0: number; z0: number; x1: number; z1: number; y: number }[] = [];
-  const tbox = (x0: number, z0: number, x1: number, z1: number, h: (x: number, z: number) => number) => {
+  const tbox = (
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    h: (x: number, z: number) => number,
+  ) => {
     for (let x = Math.ceil(x0); x <= Math.floor(x1); x++)
       for (let z = Math.ceil(z0); z <= Math.floor(z1); z++) tset(x, z, h(x, z));
   };
@@ -1934,7 +2118,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const bal = saloonBalcony(W);
       const a0 = toWorld(sb, bal.a, 0);
       const a1 = toWorld(sb, bal.b, SALOON_BALCONY);
-      platforms.push({ x0: Math.min(a0[0], a1[0]), z0: Math.min(a0[1], a1[1]), x1: Math.max(a0[0], a1[0]), z1: Math.max(a0[1], a1[1]), y: BALCONY_Y });
+      platforms.push({
+        x0: Math.min(a0[0], a1[0]),
+        z0: Math.min(a0[1], a1[1]),
+        x1: Math.max(a0[0], a1[0]),
+        z1: Math.max(a0[1], a1[1]),
+        y: BALCONY_Y,
+      });
     }
   }
   // ---- the walk-in interiors: floors at the boardwalk's height, stairs, landings, lamps ----
@@ -1945,7 +2135,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     // the floor (samples just inside the walls; the walls themselves are posts)
     const c0 = toWorld(b, -W / 2 + 0.2, -0.2);
     const c1 = toWorld(b, W / 2 - 0.2, -D + 0.2);
-    tbox(Math.min(c0[0], c1[0]), Math.min(c0[1], c1[1]), Math.max(c0[0], c1[0]), Math.max(c0[1], c1[1]), () => plan.floor);
+    tbox(
+      Math.min(c0[0], c1[0]),
+      Math.min(c0[1], c1[1]),
+      Math.max(c0[0], c1[0]),
+      Math.max(c0[1], c1[1]),
+      () => plan.floor,
+    );
     for (const it of plan.items) {
       if (it.k === "stair") {
         // rises from the floor at zLow to the landing at zHigh
@@ -1971,11 +2167,20 @@ export function generateWestern(rand: () => number, cells: number, half: number)
           const [px, pz] = toWorld(b, roomSide, lz);
           posts.push({ x: px, z: pz, r: 0.06 });
         }
-        stairFeet.push({ ...pt(toWorld(b, (it.x0 + it.x1) / 2, it.zLow - 0.6)), label: "STAIRS · BALCONY" });
+        stairFeet.push({
+          ...pt(toWorld(b, (it.x0 + it.x1) / 2, it.zLow - 0.6)),
+          label: "STAIRS · BALCONY",
+        });
       } else if (it.k === "landing") {
         const a0 = toWorld(b, it.r.x0, it.r.z0);
         const a1 = toWorld(b, it.r.x1, it.r.z1 + 0.25); // (runs under the wall onto the balcony)
-        platforms.push({ x0: Math.min(a0[0], a1[0]), z0: Math.min(a0[1], a1[1]), x1: Math.max(a0[0], a1[0]), z1: Math.max(a0[1], a1[1]), y: it.y });
+        platforms.push({
+          x0: Math.min(a0[0], a1[0]),
+          z0: Math.min(a0[1], a1[1]),
+          x1: Math.max(a0[0], a1[0]),
+          z1: Math.max(a0[1], a1[1]),
+          y: it.y,
+        });
       } else if (it.k === "lamp") {
         const [lx, lz] = toWorld(b, it.x, it.z);
         lamps.push({ x: lx, y: plan.floor + it.y, z: lz });
@@ -1987,9 +2192,19 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       }
     }
     // the four walls, as posts, with the doorways left open
-    const gaps = (wall: "front" | "back") => plan.doors.filter((d) => d.wall === wall).map((d) => [d.a - 0.05, d.b + 0.05] as const);
-    const upper = plan.upperDoor ? [[plan.upperDoor.a - 0.05, plan.upperDoor.b + 0.05] as const] : [];
-    const wallLine = (ax: number, az: number, bx: number, bz: number, holes: readonly (readonly [number, number])[], alongX: boolean) => {
+    const gaps = (wall: "front" | "back") =>
+      plan.doors.filter((d) => d.wall === wall).map((d) => [d.a - 0.05, d.b + 0.05] as const);
+    const upper = plan.upperDoor
+      ? [[plan.upperDoor.a - 0.05, plan.upperDoor.b + 0.05] as const]
+      : [];
+    const wallLine = (
+      ax: number,
+      az: number,
+      bx: number,
+      bz: number,
+      holes: readonly (readonly [number, number])[],
+      alongX: boolean,
+    ) => {
       const len = Math.hypot(bx - ax, bz - az);
       for (let d = 0; d <= len + 1e-6; d += 0.25) {
         const lx = ax + ((bx - ax) * d) / len;
@@ -2005,8 +2220,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     wallLine(-W / 2, 0, -W / 2, -D, [], false);
     wallLine(W / 2, 0, W / 2, -D, [], false);
     // the enemies' route planner can't see posts: tell it where the walls are
-    const doorsW = plan.doors.map((d) => pt(toWorld(b, (d.a + d.b) / 2, d.wall === "front" ? 0 : -D)));
-    const corners = [toWorld(b, -W / 2, 0), toWorld(b, W / 2, 0), toWorld(b, W / 2, -D), toWorld(b, -W / 2, -D)];
+    const doorsW = plan.doors.map((d) =>
+      pt(toWorld(b, (d.a + d.b) / 2, d.wall === "front" ? 0 : -D)),
+    );
+    const corners = [
+      toWorld(b, -W / 2, 0),
+      toWorld(b, W / 2, 0),
+      toWorld(b, W / 2, -D),
+      toWorld(b, -W / 2, -D),
+    ];
     for (let i = 0; i < 4; i++) {
       const [ax, az] = corners[i]!;
       const [bx, bz] = corners[(i + 1) % 4]!;

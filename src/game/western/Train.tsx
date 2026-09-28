@@ -593,7 +593,12 @@ export function WesternTrain({
   useEffect(() => {
     const L = link.current;
     // (the riders' state rides along after the train's three numbers, Riders.tsx)
-    L.encode = () => [q100(trainClock.t), q100(trainClock.bossAt), q100(trainClock.bossFrom), ...(riderSync.encode?.() ?? [])];
+    L.encode = () => [
+      q100(trainClock.t),
+      q100(trainClock.bossAt),
+      q100(trainClock.bossFrom),
+      ...(riderSync.encode?.() ?? []),
+    ];
     L.decode = (a) => {
       if (!Array.isArray(a) || a.length < 3) return;
       hostClock.current = { t: a[0]! / 100, at: performance.now() };
@@ -779,7 +784,12 @@ export function WesternTrain({
         if (onTrestle) return;
         if (sp < 0.05) {
           // standing still (the boss train at the platform): a wall, not a ghost
-          if (L.active && hitCd.current <= 0 && Math.abs(pz - zc) < car.len / 2 + 0.45 && Math.abs(px - RAIL_X) < car.w / 2 + 0.45) {
+          if (
+            L.active &&
+            hitCd.current <= 0 &&
+            Math.abs(pz - zc) < car.len / 2 + 0.45 &&
+            Math.abs(px - RAIL_X) < car.w / 2 + 0.45
+          ) {
             L.hitPlayer(0, (px >= RAIL_X ? 1 : -1) * 7, 0, 0);
             hitCd.current = 0.15;
           }

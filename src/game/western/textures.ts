@@ -160,7 +160,8 @@ function peel(c: Ctx, x: number, y: number, w: number, h: number, r: () => numbe
     c.lineWidth = 1;
     c.stroke();
     // bare wood grain inside
-    for (let g = 0; g < 3; g++) rect(c, rgba(90, 78, 64, 0.35), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
+    for (let g = 0; g < 3; g++)
+      rect(c, rgba(90, 78, 64, 0.35), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
   }
   // rust drips from nail heads
   for (let i = 0; i < n * 1.5; i++) {
@@ -678,7 +679,10 @@ const PAINT: Record<number, (P: Painter) => void> = {
               const cy = y - w * 0.4 + (j * dy) / 2;
               const [r, g, b] = jewels[picks[k++ % picks.length]!]!;
               // candle glow: brightest low and centred, dimmer toward the arch
-              const glow = lum * (0.55 + 0.45 * Math.min(1, (cy - y) / h)) * (1 - 0.35 * Math.abs(cx - (x + w / 2)) / (w / 2));
+              const glow =
+                lum *
+                (0.55 + 0.45 * Math.min(1, (cy - y) / h)) *
+                (1 - (0.35 * Math.abs(cx - (x + w / 2))) / (w / 2));
               c.fillStyle = `rgb(${Math.round(r * glow)},${Math.round(g * glow)},${Math.round(b * glow)})`;
               c.beginPath();
               c.moveTo(cx, cy - dy / 2);
@@ -1060,7 +1064,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
     const { d, r } = P;
     rect(d, "#b89a74", 0, 0, TEX, TEX);
     const pts: [number, number, number, number][] = [];
-    for (let i = 0; i < 110; i++) pts.push([r() * TEX, r() * TEX, 0.86 + r() * 0.2, 0.6 + r() * 2.2]);
+    for (let i = 0; i < 110; i++)
+      pts.push([r() * TEX, r() * TEX, 0.86 + r() * 0.2, 0.6 + r() * 2.2]);
     const img = d.getImageData(0, 0, TEX, TEX);
     const data = img.data;
     for (let y = 0; y < TEX; y += 1)
@@ -1092,7 +1097,8 @@ const PAINT: Record<number, (P: Painter) => void> = {
         if (edge < cw) {
           k = 0.48 + edge * 0.05; // the crack
           sand = edge < cw * 0.4 ? 0.35 : 0; // blown sand in the wide ones
-        } else if (edge < cw + 2.2) k = shade * 1.08; // the plate's curled, sunlit lip
+        } else if (edge < cw + 2.2)
+          k = shade * 1.08; // the plate's curled, sunlit lip
         else k = shade * (1 - Math.min(0.1, Math.sqrt(b1) / 420));
         data[o] = data[o]! * k + sand * 60;
         data[o + 1] = data[o + 1]! * k + sand * 45;

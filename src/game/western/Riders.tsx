@@ -14,13 +14,36 @@ import { mapEvent } from "../events/mapEvents";
 import { facadeMaterial, syncEnv } from "./materials";
 import { propTemplate } from "./mesh";
 import { CAR_NEAR, CarBatch } from "../art/cars";
-import { COACH_WHEELS, horseVehicle, registerCoaches, woodWheelGeometry, wheelMaterial, type HorseKind } from "./coaches";
-import { BOX, ROLE_OUTLAW, ROLE_POSSE, ROLE_TOWN, TOWNFOLK, coastSim, decodeSim, encodeSim, newSim, stepSim, type Agent, type Sim } from "./riderSim";
+import {
+  COACH_WHEELS,
+  horseVehicle,
+  registerCoaches,
+  woodWheelGeometry,
+  wheelMaterial,
+  type HorseKind,
+} from "./coaches";
+import {
+  BOX,
+  ROLE_OUTLAW,
+  ROLE_POSSE,
+  ROLE_TOWN,
+  TOWNFOLK,
+  coastSim,
+  decodeSim,
+  encodeSim,
+  newSim,
+  stepSim,
+  type Agent,
+  type Sim,
+} from "./riderSim";
 import { pistolShot } from "./sound";
 import type { WesternLayout } from "./layout";
 
 /** the train's snapshot carries the riders too (Train.tsx calls these) */
-export const riderSync: { encode: (() => number[]) | null; decode: ((a: number[]) => void) | null } = {
+export const riderSync: {
+  encode: (() => number[]) | null;
+  decode: ((a: number[]) => void) | null;
+} = {
   encode: null,
   decode: null,
 };
@@ -50,8 +73,17 @@ function geoOf(key: Parameters<typeof propTemplate>[0]) {
 /** horses of an agent: offsets (local x, z) of each horse from the agent's centre */
 function team(a: Agent): [number, number][] {
   if (a.kind === 0) return [[0, 0]];
-  if (a.kind === 1) return [[-0.45, 2.2], [0.45, 2.2]];
-  return [[-0.45, 1.5], [0.45, 1.5], [-0.45, 3.3], [0.45, 3.3]];
+  if (a.kind === 1)
+    return [
+      [-0.45, 2.2],
+      [0.45, 2.2],
+    ];
+  return [
+    [-0.45, 1.5],
+    [0.45, 1.5],
+    [-0.45, 3.3],
+    [0.45, 3.3],
+  ];
 }
 /** the rider's seat: local offset and height shift from a saddle */
 function seat(a: Agent): [number, number, number] {
@@ -95,14 +127,18 @@ export function WesternRiders({
       const k: HorseKind = a.kind === 2 ? "stagecoach" : "buckboard";
       slotOf.set(i, kinds.length);
       kinds.push(k);
-      return [horseVehicle(k, k === "stagecoach" ? 0x8a2a22 : [0x5a6a4a, 0x4a5a6a, 0x8a4a2a][i % 3]!)];
+      return [
+        horseVehicle(k, k === "stagecoach" ? 0x8a2a22 : [0x5a6a4a, 0x4a5a6a, 0x8a4a2a][i % 3]!),
+      ];
     });
     const movers = vs.length;
     const parked = layout.props.filter((p) => p.k === "stagecoach" || p.k === "wagon");
     parked.forEach((p, n) => {
       const k: HorseKind = p.k === "stagecoach" ? "stagecoach" : "buckboard";
       kinds.push(k);
-      vs.push(horseVehicle(k, k === "stagecoach" ? 0x2a4a3a : [0x7a6a4a, 0x6a3a2a, 0x3a4a5a][n % 3]!));
+      vs.push(
+        horseVehicle(k, k === "stagecoach" ? 0x2a4a3a : [0x7a6a4a, 0x6a3a2a, 0x3a4a5a][n % 3]!),
+      );
     });
     const batch = new CarBatch(vs, movers);
     parked.forEach((p, n) => batch.place(movers + n, p.x, groundY(p.x, p.z), p.z, p.rot));
@@ -159,7 +195,10 @@ export function WesternRiders({
     if (guest) coastSim(S, dt);
     else {
       acc.current += dt;
-      const players = [{ x: L.px, z: L.pz, r: 0.45 }, ...L.others.map((o) => ({ x: o.x, z: o.z, r: 0.45 }))];
+      const players = [
+        { x: L.px, z: L.pz, r: 0.45 },
+        ...L.others.map((o) => ({ x: o.x, z: o.z, r: 0.45 })),
+      ];
       let n = 0;
       while (acc.current >= 1 / 30 && n < 4) {
         acc.current -= 1 / 30;
@@ -170,10 +209,20 @@ export function WesternRiders({
       // the chase's news for the HUD
       for (const ev of S.events) {
         if (ev === "chase" && S.t - lastBanner.current > 5) {
-          mapEvent.banner = { title: "OUTLAW ON THE RUN", sub: "THE SHERIFF'S POSSE IS RIDING HIM DOWN", color: "#8a4a1c", at: performance.now() };
+          mapEvent.banner = {
+            title: "OUTLAW ON THE RUN",
+            sub: "THE SHERIFF'S POSSE IS RIDING HIM DOWN",
+            color: "#8a4a1c",
+            at: performance.now(),
+          };
           lastBanner.current = S.t;
         } else if (ev === "caught") {
-          mapEvent.banner = { title: "THE POSSE GOT HIM", sub: "THE OUTLAW IS UNDER ARREST", color: "#5a6a3a", at: performance.now() };
+          mapEvent.banner = {
+            title: "THE POSSE GOT HIM",
+            sub: "THE OUTLAW IS UNDER ARREST",
+            color: "#5a6a3a",
+            at: performance.now(),
+          };
         }
       }
       S.events.length = 0;
@@ -185,7 +234,11 @@ export function WesternRiders({
       if (d < 160) {
         const f = flash.current;
         if (f) {
-          f.position.set(sh.x + (sh.tx - sh.x) * 0.02, groundY(sh.x, sh.z) + 2.3, sh.z + (sh.tz - sh.z) * 0.02);
+          f.position.set(
+            sh.x + (sh.tx - sh.x) * 0.02,
+            groundY(sh.x, sh.z) + 2.3,
+            sh.z + (sh.tz - sh.z) * 0.02,
+          );
           flashT.current = 0.07;
         }
         const pan = Math.sin(Math.atan2(sh.x - cam.x, sh.z - cam.z) - state.camera.rotation.y);
@@ -218,7 +271,12 @@ export function WesternRiders({
         bumpCd.current.set(i, performance.now() + 900);
         const side = lt >= 0 ? 1 : -1;
         const push = 2.5 + a.speed * 0.6;
-        L.hitPlayer(a.kind === 2 ? 2 : 1, hx * a.speed * 0.6 + hz * side * push, hz * a.speed * 0.6 - hx * side * push, Math.min(1, a.speed / 8));
+        L.hitPlayer(
+          a.kind === 2 ? 2 : 1,
+          hx * a.speed * 0.6 + hz * side * push,
+          hz * a.speed * 0.6 - hx * side * push,
+          Math.min(1, a.speed / 8),
+        );
       }
       if (!guest)
         for (const e of L.enemies) {
@@ -236,7 +294,15 @@ export function WesternRiders({
       const B = BOX[a.kind];
       const hx = Math.sin(a.yaw);
       const hz = Math.cos(a.yaw);
-      liveCars.push({ x: a.x + hx * (a.kind === 0 ? 0 : 0.6), z: a.z + hz * (a.kind === 0 ? 0 : 0.6), sin: hx, cos: hz, hl: B.hl, hw: B.hw, h: B.h });
+      liveCars.push({
+        x: a.x + hx * (a.kind === 0 ? 0 : 0.6),
+        z: a.z + hz * (a.kind === 0 ? 0 : 0.6),
+        sin: hx,
+        cos: hz,
+        hl: B.hl,
+        hw: B.hw,
+        h: B.h,
+      });
     }
     // ---- the minimap's pursuit dots ----
     pursuitDots.length = 0;
@@ -280,7 +346,8 @@ export function WesternRiders({
       const hz = Math.cos(a.yaw);
       const rx = hz;
       const rz = -hx;
-      const at = (lx: number, lz: number, y: number) => _p.set(a.x + rx * lx + hx * lz, gy + y, a.z + rz * lx + hz * lz);
+      const at = (lx: number, lz: number, y: number) =>
+        _p.set(a.x + rx * lx + hx * lz, gy + y, a.z + rz * lx + hz * lz);
       // the gait: a walk, a trot, a gallop by speed; legs swing in diagonal pairs
       const sp = a.speed;
       const amp = Math.min(0.75, 0.15 + sp * 0.07);
@@ -288,7 +355,14 @@ export function WesternRiders({
       const coatAt = (k: number) => _c.set(COATS[(a.look + k) % COATS.length]!);
       team(a).forEach(([lx, lz], k) => {
         body.setMatrixAt(nh, _m.compose(at(lx, lz, bob), _q, _s));
-        body.setColorAt(nh, a.role === ROLE_POSSE ? _c.set("#8a5a32") : a.role === ROLE_OUTLAW ? _c.set("#1e1a18") : coatAt(k));
+        body.setColorAt(
+          nh,
+          a.role === ROLE_POSSE
+            ? _c.set("#8a5a32")
+            : a.role === ROLE_OUTLAW
+              ? _c.set("#1e1a18")
+              : coatAt(k),
+        );
         nh++;
         const hips: [number, number, number][] = [
           [-0.19, 0.55, 0],
@@ -300,7 +374,14 @@ export function WesternRiders({
           const sw = Math.sin(a.ph + off + k) * amp;
           _qa.setFromAxisAngle(_x, sw).premultiply(_q);
           leg.setMatrixAt(nl, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
-          leg.setColorAt(nl, a.role === ROLE_OUTLAW ? _c.set("#1e1a18") : a.role === ROLE_POSSE ? _c.set("#8a5a32") : coatAt(k));
+          leg.setColorAt(
+            nl,
+            a.role === ROLE_OUTLAW
+              ? _c.set("#1e1a18")
+              : a.role === ROLE_POSSE
+                ? _c.set("#8a5a32")
+                : coatAt(k),
+          );
           nl++;
         }
       });
@@ -309,9 +390,27 @@ export function WesternRiders({
       const riderPos = at(sx, sz, sy + (a.kind === 0 ? bob : 0));
       _m.compose(riderPos, _q, _s);
       torso.setMatrixAt(nr, _m);
-      torso.setColorAt(nr, _c.set(a.role === ROLE_POSSE ? "#b8a07a" : a.role === ROLE_OUTLAW ? "#6a1a14" : SHIRTS[a.look % SHIRTS.length]!));
+      torso.setColorAt(
+        nr,
+        _c.set(
+          a.role === ROLE_POSSE
+            ? "#b8a07a"
+            : a.role === ROLE_OUTLAW
+              ? "#6a1a14"
+              : SHIRTS[a.look % SHIRTS.length]!,
+        ),
+      );
       hat.setMatrixAt(nr, _m);
-      hat.setColorAt(nr, _c.set(a.role === ROLE_POSSE ? "#e8e0cc" : a.role === ROLE_OUTLAW ? "#141210" : HATS[a.look % HATS.length]!));
+      hat.setColorAt(
+        nr,
+        _c.set(
+          a.role === ROLE_POSSE
+            ? "#e8e0cc"
+            : a.role === ROLE_OUTLAW
+              ? "#141210"
+              : HATS[a.look % HATS.length]!,
+        ),
+      );
       legs.setMatrixAt(nr, _m);
       nr++;
       const si = C.slotOf.get(ai);
@@ -328,7 +427,8 @@ export function WesternRiders({
     // (a coach off stage or out of range is parked far off the map, where the batch culls it)
     S.agents.forEach((a, ai) => {
       const si = C.slotOf.get(ai);
-      if (si !== undefined && (a.hold === Infinity || Math.hypot(a.x - cam.x, a.z - cam.z) > 420)) C.batch.place(si, 1e5, 0, 1e5, 0);
+      if (si !== undefined && (a.hold === Infinity || Math.hypot(a.x - cam.x, a.z - cam.z) > 420))
+        C.batch.place(si, 1e5, 0, 1e5, 0);
     });
     C.parked.forEach((p, n) => wheels(C.movers + n, p.x, groundY(p.x, p.z), p.z, p.rot));
     C.batch.commit(state.camera);
@@ -366,7 +466,12 @@ export function WesternRiders({
       {inst("hat", TOWNFOLK + 4, true)}
       {inst("legs", TOWNFOLK + 4, false)}
       <primitive object={coaches.batch.group} />
-      <instancedMesh ref={refs.wheel} args={[wheelGeo, wheelMat, Math.max(1, coaches.kinds.length * 4)]} frustumCulled={false} castShadow />
+      <instancedMesh
+        ref={refs.wheel}
+        args={[wheelGeo, wheelMat, Math.max(1, coaches.kinds.length * 4)]}
+        frustumCulled={false}
+        castShadow
+      />
       <mesh ref={flash} visible={false}>
         <sphereGeometry args={[0.18, 8, 6]} />
         <meshBasicMaterial color="#ffe0a0" toneMapped={false} />

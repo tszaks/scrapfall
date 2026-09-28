@@ -115,9 +115,10 @@ function gridFor(blocks: Block[]): BlockGrid {
 
 /** Extra collision layered over the block grid: the building-access system (access/world.ts)
  * answers for points on a walkable roof (its parapet and rooftop props), `undefined` elsewhere. */
-export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | undefined) | null } = {
-  fn: null,
-};
+export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | undefined) | null } =
+  {
+    fn: null,
+  };
 
 /** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
  * that the 2 m block grid can't express. Each map installs its own list (or none). */
@@ -267,7 +268,15 @@ export function shotStop(blocks: Block[], x: number, y: number, z: number) {
 }
 
 /** a clear flight from a to b (3D, samples every 0.4 m): nothing shotStop()s it */
-export function clearShot(blocks: Block[], ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+export function clearShot(
+  blocks: Block[],
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+) {
   const len = Math.hypot(bx - ax, by - ay, bz - az);
   const steps = Math.ceil(len / 0.4);
   for (let s = 1; s < steps; s++) {
@@ -352,7 +361,12 @@ export function spawnNear(
     for (let i = 0; i < 80; i++) {
       const x = p.x + (rand() - 0.5) * rMax * 2;
       const z = p.z + (rand() - 0.5) * rMax * 2;
-      if (Math.abs(x) >= PLAY_HALF - 3 || Math.abs(z) >= PLAY_HALF - 3 || blocked(blocks, x, z, radius)) continue;
+      if (
+        Math.abs(x) >= PLAY_HALF - 3 ||
+        Math.abs(z) >= PLAY_HALF - 3 ||
+        blocked(blocks, x, z, radius)
+      )
+        continue;
       if (pass === 0 && (!ok(x, z) || Math.hypot(x - p.x, z - p.z) < rMin * 0.5)) continue;
       return { x, z };
     }
@@ -561,7 +575,8 @@ export function fineField(blocks: Block[], x: number, z: number, R = 24): FineFi
       if (!open[k]) continue;
       if (da && db && (!open[(a + da) * w + b] || !open[a * w + b + db])) continue;
       // out of the target's own cell only onto its level (not over a railing to the sand below)
-      if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2) continue;
+      if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2)
+        continue;
       const nd = dist[c]! + (da && db ? 1.414 : 1);
       if (nd < dist[k]!) {
         dist[k] = nd;

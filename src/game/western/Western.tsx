@@ -128,12 +128,16 @@ float gNoise(vec2 p) {
       .replace(
         "#include <map_fragment>",
         `vec2 wp = vGxz;
-${cutRiver ? `// the riverbed corridor is drawn by its own carved mesh
+${
+  cutRiver
+    ? `// the riverbed corridor is drawn by its own carved mesh
 if (abs(wp.x) < uHalf - ${RIVER_END.toFixed(1)}) {
   float rz = 172.0 + 24.0 * sin(wp.x / 88.0) + 9.0 * sin(wp.x / 37.0 + 1.3);
   float rw = 21.0 + 5.0 * sin(wp.x / 61.0 + 0.4);
   if (abs(wp.y - rz) < rw * 0.5 + ${(RIVER_EDGE - 0.3).toFixed(2)}) discard;
-}` : ""}
+}`
+    : ""
+}
 float n1 = gNoise(wp * 0.02) * 0.6 + gNoise(wp * 0.09) * 0.4;
 vec2 jitter = vec2(gNoise(wp * 0.35), gNoise(wp * 0.35 + 17.0)) - 0.5;
 vec4 w = texture2D(uSplat, (wp + jitter * 2.2 + uHalf) / (2.0 * uHalf));
@@ -349,7 +353,11 @@ export const WesternScene = memo(function WesternScene({
     const sunsetSrc = westernBackground("sunset");
     const sunset = pm.fromEquirectangular(sunsetSrc);
     // same width as the sunset so both PMREMs share one size (no shader change at the swap)
-    const nightSrc = resized(westernSky("night"), (sunsetSrc.image as { width: number }).width, (sunsetSrc.image as { height: number }).height);
+    const nightSrc = resized(
+      westernSky("night"),
+      (sunsetSrc.image as { width: number }).width,
+      (sunsetSrc.image as { height: number }).height,
+    );
     const nightRT = pm.fromEquirectangular(nightSrc);
     nightSrc.dispose();
     pm.dispose();
@@ -387,7 +395,10 @@ export const WesternScene = memo(function WesternScene({
     const disc = mode === "night" ? mats.moon : mats.disc;
     disc.opacity = mode === "night" ? todSmooth(0.5, 0.75, nk) : 1 - todSmooth(0.25, 0.5, nk);
   }, [nk, mode, mats, nightK, look, ground]);
-  const skies = useMemo(() => ({ sunset: westernBackground("sunset"), night: westernBackground("night") }), []);
+  const skies = useMemo(
+    () => ({ sunset: westernBackground("sunset"), night: westernBackground("night") }),
+    [],
+  );
 
   useEffect(
     () => () => {

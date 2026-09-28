@@ -7,7 +7,13 @@ import type { WBld } from "./layout";
 
 export type Rect = { x0: number; z0: number; x1: number; z1: number };
 /** a doorway in one of the four walls: x-range for front/back, z-range for the sides */
-export type Door = { wall: "front" | "back"; a: number; b: number; h: number; kind: "plain" | "batwing" | "barn" };
+export type Door = {
+  wall: "front" | "back";
+  a: number;
+  b: number;
+  h: number;
+  kind: "plain" | "batwing" | "barn";
+};
 
 export type RoomItem =
   | { k: "bar"; r: Rect } // the bar counter
@@ -102,7 +108,14 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
     const up = storey; // the landing and the balcony stand at the upper floor
     const sx1 = x0 + 0.15 + SALOON_STAIR.w;
     const landing: Rect = { x0: x0 + 0.15, z0: -2.3, x1: x0 + 2.6, z1: -0.15 };
-    items.push({ k: "stair", x0: x0 + 0.15, x1: sx1, zLow: landing.z0 - SALOON_STAIR.run, zHigh: landing.z0, y: up });
+    items.push({
+      k: "stair",
+      x0: x0 + 0.15,
+      x1: sx1,
+      zLow: landing.z0 - SALOON_STAIR.run,
+      zHigh: landing.z0,
+      y: up,
+    });
     items.push({ k: "landing", r: landing, y: up });
     // the bar down the right wall (clear of the doors), the backbar behind it
     items.push({ k: "bar", r: { x0: x1 - 3.0, z0: z0 + 3, x1: x1 - 2.3, z1: -6.2 } });
@@ -113,7 +126,13 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
     for (const x of tx)
       for (const z of tz) {
         if (R() < 0.12) continue;
-        items.push({ k: "table", x: x + (R() - 0.5) * 0.8, z: z + (R() - 0.5) * 0.8, chairs: 3 + Math.floor(R() * 2), cards: R() < 0.5 });
+        items.push({
+          k: "table",
+          x: x + (R() - 0.5) * 0.8,
+          z: z + (R() - 0.5) * 0.8,
+          chairs: 3 + Math.floor(R() * 2),
+          cards: R() < 0.5,
+        });
       }
     items.push({ k: "piano", x: x0 + 3.4, z: z0 + 0.75 });
     for (const x of tx) items.push({ k: "lamp", x, y: ceil - 0.5, z: -9.5, hang: true });
@@ -134,7 +153,11 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
   }
   if (b.t === "sheriff") {
     const cellD = 3.2;
-    items.push({ k: "cells", r: { x0: x0 + 0.15, z0: z0 + 0.15, x1: x1 - 0.15, z1: z0 + cellD }, n: W >= 15 ? 3 : 2 });
+    items.push({
+      k: "cells",
+      r: { x0: x0 + 0.15, z0: z0 + 0.15, x1: x1 - 0.15, z1: z0 + cellD },
+      n: W >= 15 ? 3 : 2,
+    });
     items.push({ k: "desk", x: x0 + 3.2, z: -4.2, rot: 0 });
     items.push({ k: "stove", x: x1 - 2.4, z: z0 + cellD + 2.2 });
     items.push({ k: "rack", x: x0 + 0.2, z: -2.8, rot: Math.PI / 2 });
@@ -171,10 +194,22 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
   }
   if (b.t === "store") {
     // the general store: shelves up both sides, the counter on the right, the stove at the back
-    items.push({ k: "shelves", r: { x0: x0 + 0.15, z0: z0 + 1.6, x1: x0 + 0.7, z1: -1.4 }, face: 1 });
-    items.push({ k: "shelves", r: { x0: x1 - 0.7, z0: z0 + 1.6, x1: x1 - 0.15, z1: -1.4 }, face: -1 });
+    items.push({
+      k: "shelves",
+      r: { x0: x0 + 0.15, z0: z0 + 1.6, x1: x0 + 0.7, z1: -1.4 },
+      face: 1,
+    });
+    items.push({
+      k: "shelves",
+      r: { x0: x1 - 0.7, z0: z0 + 1.6, x1: x1 - 0.15, z1: -1.4 },
+      face: -1,
+    });
     items.push({ k: "counter", r: { x0: x1 - 2.4, z0: -9, x1: x1 - 1.7, z1: -2.6 }, top: "till" });
-    items.push({ k: "counter", r: { x0: x0 + 1.7, z0: -7.5, x1: x0 + 2.4, z1: -3.2 }, top: "scale" });
+    items.push({
+      k: "counter",
+      r: { x0: x0 + 1.7, z0: -7.5, x1: x0 + 2.4, z1: -3.2 },
+      top: "scale",
+    });
     items.push({ k: "stove", x: 0, z: z0 + 3 });
     items.push({ k: "goods", x: -0.6, z: -3.4, kind: "barrel" });
     items.push({ k: "goods", x: 0.7, z: -3.9, kind: "barrel" });
@@ -202,10 +237,16 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
       const xa = side < 0 ? x0 + 0.15 : aisle;
       const xb = side < 0 ? -aisle : x1 - 0.15;
       for (let z = -2.4; z - sw > z0 + 1.2; z -= sw)
-        items.push({ k: "stall", r: { x0: xa, z0: z - sw, x1: xb, z1: z }, open: side < 0 ? 1 : -1, horse: R() < 0.55 });
+        items.push({
+          k: "stall",
+          r: { x0: xa, z0: z - sw, x1: xb, z1: z },
+          open: side < 0 ? 1 : -1,
+          horse: R() < 0.55,
+        });
     }
     items.push({ k: "goods", x: x0 + 1.4, z: -1.1, kind: "sacks" });
-    for (let z = -4; z > z0 + 2; z -= 6) items.push({ k: "lamp", x: 0, y: ceil - 0.4, z, hang: true });
+    for (let z = -4; z > z0 + 2; z -= 6)
+      items.push({ k: "lamp", x: 0, y: ceil - 0.4, z, hang: true });
     return {
       ...base,
       doors: [
@@ -227,7 +268,8 @@ function ring(r: Rect, rad: number, shot: boolean, out: Circle[]) {
   const edge = (ax: number, az: number, bx: number, bz: number) => {
     const len = Math.hypot(bx - ax, bz - az);
     const n = Math.max(1, Math.ceil(len / step));
-    for (let i = 0; i <= n; i++) out.push({ x: ax + ((bx - ax) * i) / n, z: az + ((bz - az) * i) / n, r: rad, shot });
+    for (let i = 0; i <= n; i++)
+      out.push({ x: ax + ((bx - ax) * i) / n, z: az + ((bz - az) * i) / n, r: rad, shot });
   };
   const x0 = r.x0 + rad;
   const x1 = r.x1 - rad;
