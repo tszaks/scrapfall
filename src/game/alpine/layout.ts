@@ -550,7 +550,7 @@ export function generateAlpine(seed: number, solo: boolean) {
     const b = hv(i + 1, j);
     const c = hv(i, j + 1);
     const d = hv(i + 1, j + 1);
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+    return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
   };
   /** blend every sample within `r + blend` of (fn distance) toward a target height */
   const shape = (
@@ -1493,7 +1493,8 @@ export function generateAlpine(seed: number, solo: boolean) {
         const sx = x - Math.sign(x) * 4 * (g.axis === "z" ? 1 : 0);
         const sz = z - Math.sign(z) * 4 * (g.axis === "x" ? 1 : 0);
         const steep =
-          Math.abs(hAt(sx + 2, sz) - hAt(sx - 2, sz)) + Math.abs(hAt(sx, sz + 2) - hAt(sx, sz - 2)) >
+          Math.abs(hAt(sx + 2, sz) - hAt(sx - 2, sz)) +
+            Math.abs(hAt(sx, sz + 2) - hAt(sx, sz - 2)) >
           2.4;
         const kind = steep ? S_ROCK : surf[S(ci(sx), ci(sz))];
         let style: PropKind = "deadfall";
@@ -1625,7 +1626,13 @@ export function generateAlpine(seed: number, solo: boolean) {
       const k = S(i, j);
       if (!solid[k] && !seen[k]) solid[k] = 1;
       if (solid[k])
-        blocks.push({ x: cc(i), z: cc(j), h: surf[k] === S_BLD ? 8 : 2, tone: surf[k]! / 16 });
+        blocks.push({
+          x: cc(i),
+          z: cc(j),
+          h: surf[k] === S_BLD ? 8 : 2,
+          tone: surf[k]! / 16,
+          boundary: tops[k]! < -1e8 || surf[k] === S_BLOCKADE,
+        });
     }
 
   // ---- 10. walking speed: deep snow off the paths slows you down ----
@@ -1639,6 +1646,7 @@ export function generateAlpine(seed: number, solo: boolean) {
     cell: CELL,
     n: N,
     h: H,
+    triangular: true,
     platforms: [
       {
         x0: BRIDGE.x0 - 1,

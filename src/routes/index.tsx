@@ -4,7 +4,7 @@ import { Game } from "../game/Game";
 export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
-    meta: [{ title: "Scrapfall · Vice Heights by Tyler Szakacs" }],
+    meta: [{ title: "Scrapfall" }],
   }),
   component: Game,
 });

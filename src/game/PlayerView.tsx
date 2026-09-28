@@ -1,3 +1,4 @@
+import { firstWorldHit } from "./enemyProjectiles";
 import { KeyHint } from "./input/Glyph";
 import { actionLabel } from "./input/labels";
 import { subscribeActions } from "./input/remap";
@@ -65,12 +66,13 @@ export function updateViewCamera(camera: THREE.Camera, stop: Stop) {
   viewCamera.getWorldDirection(shoulderView.direction);
   return viewCamera;
 }
-const muzzleEnd = new THREE.Vector3(), muzzleProbe = new THREE.Vector3();
+const muzzleEnd = new THREE.Vector3(),
+  muzzleProbe = new THREE.Vector3();
 export function playerMuzzle(camera: THREE.Camera, out: THREE.Vector3, stop?: Stop) {
-  muzzleEnd.set(.24, -.36, -.7).applyQuaternion(camera.quaternion).add(camera.position);
+  muzzleEnd.set(0.24, -0.36, -0.7).applyQuaternion(camera.quaternion).add(camera.position);
   if (!stop) return out.copy(muzzleEnd);
   out.copy(camera.position);
-  const n = Math.ceil(muzzleEnd.distanceTo(camera.position) / .06);
+  const n = Math.ceil(muzzleEnd.distanceTo(camera.position) / 0.06);
   for (let i = 1; i <= n; i++) {
     muzzleProbe.lerpVectors(camera.position, muzzleEnd, i / n);
     if (stop(muzzleProbe)) break;
@@ -90,14 +92,8 @@ export function shoulderAim(
   updateViewCamera(camera, stop);
   const o = shoulderView.origin,
     d = shoulderView.direction;
-  let distance = 180;
-  for (let t = 0; t < distance; t += 0.25) {
-    test.copy(o).addScaledVector(d, t);
-    if (stop(test)) {
-      distance = t;
-      break;
-    }
-  }
+  target.copy(o).addScaledVector(d, 180);
+  let distance = (firstWorldHit(o, target, (p) => stop(test.set(p.x, p.y, p.z))) ?? 1) * 180;
   const a = d.x * d.x + d.z * d.z;
   for (const e of bodies) {
     const x = o.x - e.x,
@@ -124,7 +120,7 @@ export function shoulderAim(
   camera.getWorldDirection(direction);
   // A close obstruction can sit behind the muzzle's reticle intersection: fire into it,
   // never turn the projectile back toward the player.
-  if (out.dot(direction) <= .05) out.copy(direction);
+  if (out.dot(direction) <= 0.05) out.copy(direction);
   return out;
 }
 
@@ -134,7 +130,8 @@ export function PlayerView({
   look,
   recoil,
   downed,
-  seated, airborne,
+  seated,
+  airborne,
   stop,
   children,
 }: {
@@ -150,10 +147,17 @@ export function PlayerView({
 }) {
   const rig = useMemo(newPlayerRig, []);
   useEffect(() => () => rig.dispose(), [rig]);
-  useEffect(() => subscribeActions((a,down,repeat) => {
-    if(!active || a !== "camera" || !down || repeat)return;
-    toggleView();showToast(`${getViewMode() === "third" ? "THIRD" : "FIRST"} PERSON · ${actionLabel("camera")} TO SWITCH`);
-  }), [active]);
+  useEffect(
+    () =>
+      subscribeActions((a, down, repeat) => {
+        if (!active || a !== "camera" || !down || repeat) return;
+        toggleView();
+        showToast(
+          `${getViewMode() === "third" ? "THIRD" : "FIRST"} PERSON · ${actionLabel("camera")} TO SWITCH`,
+        );
+      }),
+    [active],
+  );
 
   useFrame(({ camera, gl, scene, clock }, dt) => {
     artFrame();
@@ -198,7 +202,9 @@ export function ViewSettings() {
   const mode = useViewMode();
   return (
     <div className="space-y-2 border-t border-white/10 pt-4">
-      <div className="text-[11px] font-bold tracking-[0.3em]">CAMERA · <KeyHint action="camera" /></div>
+      <div className="text-[11px] font-bold tracking-[0.3em]">
+        CAMERA · <KeyHint action="camera" />
+      </div>
       <div className="flex gap-2">
         {(["first", "third"] as const).map((v) => (
           <button

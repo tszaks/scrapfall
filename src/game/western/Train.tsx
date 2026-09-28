@@ -1,3 +1,10 @@
+import {
+  boundsMayTouchBody,
+  geometryBody,
+  geometryPoint,
+  geometryBounds,
+  geometryRayContact,
+} from "../staticCollision";
 // The Dry Gulch freight on screen: a 4-4-0 American with a balloon stack, a tender, a string
 // of boxcars, flats of lumber, tank cars, stock cars and gondolas, and a red caboose. Every
 // car kind is one InstancedMesh (the western facade material), the wheels one more, the
@@ -56,6 +63,7 @@ const _s = new THREE.Vector3();
 const _x = new THREE.Vector3(1, 0, 0);
 const _y = new THREE.Vector3(0, 1, 0);
 const _c = new THREE.Color();
+const _partBounds = new THREE.Box3();
 
 // ---------------------------------------------------------------------------------------
 // car geometry (local: y = 0 on the rail head, +z = front, centred)
@@ -497,6 +505,9 @@ export function WesternTrain({
     for (const k of KINDS) out[k] = carGeo(k);
     return out;
   }, []);
+  const collisionFrames = useRef(
+    new Map<string, { body: THREE.Matrix4; wheels: THREE.Matrix4[]; bounds: THREE.Box3 }>(),
+  );
   const wheelGeo = useMemo(() => {
     const g = new THREE.CylinderGeometry(1, 1, 1, 14);
     g.rotateZ(Math.PI / 2);
@@ -730,6 +741,15 @@ export function WesternTrain({
         _car.compose(_p.set(RAIL_X, y0, zc), _q, _s.set(1, 1, 1));
         const i = counts[car.kind]!++;
         mesh.setMatrixAt(i, _car);
+        const contactKey = `${car.kind}:${i}`;
+        let contact = collisionFrames.current.get(contactKey);
+        if (!contact) {
+          contact = { body: new THREE.Matrix4(), wheels: [], bounds: new THREE.Box3() };
+          collisionFrames.current.set(contactKey, contact);
+        }
+        contact.body.copy(_car);
+        geometryBounds(geos[car.kind].geo, _car, contact.bounds);
+        let contactWheel = 0;
         const tints = TINTS[car.kind];
         mesh.setColorAt(i, _c.set(tints[Math.floor(car.tint * tints.length) % tints.length]!));
         // wheels
@@ -743,6 +763,9 @@ export function WesternTrain({
               _m.compose(_p.set(s * 0.72, r, wz), _q2, _s.set(0.14, r, r));
               _m.premultiply(_car);
               wm.setMatrixAt(wheelN, _m);
+              (contact.wheels[contactWheel] ??= new THREE.Matrix4()).copy(_m);
+              contactWheel++;
+              contact.bounds.union(geometryBounds(wheelGeo, _m, _partBounds));
               wm.setColorAt(wheelN, _c.set(car.kind === "loco" && r > 0.8 ? "#8a2a1c" : "#2a2624"));
               wheelN++;
             }
@@ -769,41 +792,73 @@ export function WesternTrain({
           }
           lamps.push({ x: RAIL_X, y: y0 + 3.55, z: zc + run.dir * 5.35, dir: run.dir });
         }
-        // bullets stop on the cars (not up on the trestle, where they pass underneath)
-        const onTrestle = y0 > 1.6;
-        if (!onTrestle)
-          liveCars.push({
-            x: RAIL_X,
-            z: zc,
-            sin: 0,
-            cos: run.dir,
-            hl: car.len / 2,
-            hw: car.w / 2,
-            h: y0 + car.h,
-          });
-        if (onTrestle) return;
+        const bodyMatrix = contact.body,
+          wheelMatrices = contact.wheels;
+        const point = (x: number, y: number, z: number) =>
+          geometryPoint(geos[car.kind].geo, bodyMatrix, x, y, z) ||
+          wheelMatrices.some((m) => geometryPoint(wheelGeo, m, x, y, z));
+        const bodyHit = () =>
+          boundsMayTouchBody(
+            contact.bounds,
+            px,
+            pz,
+            0.4,
+            L.feet ?? (L.py ?? 1.6) - 1.6,
+            L.bodyHeight ?? 1.8,
+          ) &&
+          (geometryBody(
+            geos[car.kind].geo,
+            bodyMatrix,
+            px,
+            pz,
+            0.4,
+            L.feet ?? (L.py ?? 1.6) - 1.6,
+            L.bodyHeight ?? 1.8,
+          ) ||
+            wheelMatrices.some((m) =>
+              geometryBody(
+                wheelGeo,
+                m,
+                px,
+                pz,
+                0.4,
+                L.feet ?? (L.py ?? 1.6) - 1.6,
+                L.bodyHeight ?? 1.8,
+              ),
+            ));
+        const swept = (
+          a: { x: number; y: number; z: number },
+          b: { x: number; y: number; z: number },
+        ) => {
+          let t = geometryRayContact(geos[car.kind].geo, bodyMatrix, a, b) ?? Infinity;
+          for (const m of wheelMatrices)
+            t = Math.min(t, geometryRayContact(wheelGeo, m, a, b) ?? Infinity);
+          return Number.isFinite(t) ? t : undefined;
+        };
+        // Height-aware real geometry also works on the trestle: air below stays clear.
+        liveCars.push({
+          x: RAIL_X,
+          z: zc,
+          sin: 0,
+          cos: run.dir,
+          hl: car.len / 2,
+          hw: car.w / 2,
+          h: y0 + car.h,
+          base: y0,
+          bounds: contact.bounds,
+          rayContact: swept,
+          contact: point,
+        });
         if (sp < 0.05) {
           // standing still (the boss train at the platform): a wall, not a ghost
-          if (
-            L.active &&
-            hitCd.current <= 0 &&
-            Math.abs(pz - zc) < car.len / 2 + 0.45 &&
-            Math.abs(px - RAIL_X) < car.w / 2 + 0.45
-          ) {
+          if (L.active && hitCd.current <= 0 && bodyHit()) {
             L.hitPlayer(0, (px >= RAIL_X ? 1 : -1) * 7, 0, 0);
             hitCd.current = 0.15;
           }
           return;
         }
         // ---- bumping the local player: hard, and it never stops ----
-        const hl = car.len / 2 + 0.55;
-        const hw = car.w / 2 + 0.5;
-        if (
-          L.active &&
-          hitCd.current <= 0 &&
-          Math.abs(pz - zc) < hl &&
-          Math.abs(px - RAIL_X) < hw
-        ) {
+        if (L.active && hitCd.current <= 0 && bodyHit()) {
           const side = px >= RAIL_X ? 1 : -1;
           const k = Math.min(1, sp / TRAIN_SPEED_HINT);
           L.hitPlayer(
@@ -816,7 +871,7 @@ export function WesternTrain({
           if (debugLog.length < 200) debugLog.push({ t, kind: "bump", k: run.k });
         }
         // ---- small enemies are thrown clear and broken, big ones knocked aside (host) ----
-        if (L.isHost && L.hurtEnemy) {
+        if (y0 <= 1.6 && L.isHost && L.hurtEnemy) {
           L.enemies.forEach((e, idx) => {
             if (!e.alive) return;
             const r = L.radiusOf(e);

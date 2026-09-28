@@ -409,3 +409,9 @@ export function roomPlan(
 
   return p;
 }
+
+export function circleTouches(rect: Rect, x: number, z: number, r: number) {
+  const dx = Math.max(rect.x0 - x, 0, x - rect.x1),
+    dz = Math.max(rect.z0 - z, 0, z - rect.z1);
+  return dx * dx + dz * dz < r * r;
+}

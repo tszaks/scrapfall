@@ -39,6 +39,13 @@ export type CarBox = {
   hw: number;
   h: number;
   base?: number;
+  /** Rendered shape narrow phase; the box is only a cheap candidate filter. */
+  bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  rayContact?: (
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+  ) => number | undefined;
+  contact?: (x: number, y: number, z: number) => boolean;
 };
 export const liveCars: CarBox[] = [];
 /**
@@ -49,16 +56,60 @@ export const pursuitDots: { x: number; z: number; kind: 1 | 2; i: number }[] = [
 
 export function hitsTraffic(x: number, y: number, z: number) {
   for (const c of liveCars) {
-    if (y > c.h || y < (c.base ?? 0)) continue;
+    if (c.bounds) {
+      const { min, max } = c.bounds;
+      if (
+        x >= min.x - 0.05 &&
+        x <= max.x + 0.05 &&
+        y >= min.y - 0.05 &&
+        y <= max.y + 0.05 &&
+        z >= min.z - 0.05 &&
+        z <= max.z + 0.05 &&
+        c.contact?.(x, y, z)
+      )
+        return true;
+      continue;
+    }
+    const pad = c.contact ? 0.5 : 0;
+    if (y > c.h + pad || y < (c.base ?? 0) - pad) continue;
     const dx = x - c.x;
     const dz = z - c.z;
     const along = dx * c.sin + dz * c.cos;
     const lat = dx * c.cos - dz * c.sin;
-    if (Math.abs(along) < c.hl && Math.abs(lat) < c.hw) return true;
+    if (
+      Math.abs(along) < c.hl + pad &&
+      Math.abs(lat) < c.hw + pad &&
+      (!c.contact || c.contact(x, y, z))
+    )
+      return true;
   }
   return false;
 }
 
+/** Earliest swept contact with a moving rendered model. */
+export function trafficRayContact(
+  a: { x: number; y: number; z: number },
+  b: { x: number; y: number; z: number },
+) {
+  let first = Infinity;
+  for (const c of liveCars) {
+    if (!c.rayContact) continue;
+    const bounds = c.bounds;
+    if (
+      bounds &&
+      (Math.max(a.x, b.x) < bounds.min.x ||
+        Math.min(a.x, b.x) > bounds.max.x ||
+        Math.max(a.y, b.y) < bounds.min.y ||
+        Math.min(a.y, b.y) > bounds.max.y ||
+        Math.max(a.z, b.z) < bounds.min.z ||
+        Math.min(a.z, b.z) > bounds.max.z)
+    )
+      continue;
+    const t = c.rayContact(a, b);
+    if (t !== undefined) first = Math.min(first, t);
+  }
+  return Number.isFinite(first) ? first : undefined;
+}
 /** What the traffic sim needs from the game world (filled in by World every frame). */
 export type TrafficLink = {
   /** hits only count while actually playing */
@@ -66,6 +117,9 @@ export type TrafficLink = {
   px: number;
   pz: number;
   py?: number;
+  /** Explicit body pose: camera height changes when downed or riding. */
+  feet?: number;
+  bodyHeight?: number;
   isHost: boolean;
   /** solo and host simulate traffic; guests only follow the host's snapshots */
   role: "solo" | "host" | "guest";

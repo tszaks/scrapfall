@@ -516,6 +516,7 @@ function templates(): Tmpls {
     tree: t((g) => {
       g.col("#5a4632");
       g.cyl(0, 0, 0, 0.2, 3.2, 6, false, 0.14);
+      const softStart = g.n;
       const ico = new THREE.IcosahedronGeometry(1, 0);
       g.col("#4f7a34");
       g.add(
@@ -536,6 +537,7 @@ function templates(): Tmpls {
         ),
       );
       ico.dispose();
+      g.excludeSince(softStart);
     }),
     shrub: t((g) => {
       const ico = new THREE.IcosahedronGeometry(1, 0);
@@ -558,6 +560,7 @@ function templates(): Tmpls {
         ),
       );
       ico.dispose();
+      g.excludeSince(0);
     }),
     rock: t((g) => {
       const ico = new THREE.IcosahedronGeometry(1, 0);
@@ -1680,7 +1683,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
         const x = cx(i);
         const z = cx(j);
         if (x > X.bluff - 6) continue; // the bluff stairs have their own cheek walls
-        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        for (const [di, dj] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
           const k = (i + di) * n + (j + dj);
           if (regionOf[k]! >= 0 || beach.deep[k]) continue;
           const ex = x + di;
@@ -1998,26 +2006,27 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     G.col("#c8c4bc");
     G.obox(w.x, DECK, w.z, 20, 1.8, 9, w.rot);
     // The rendered treads use the same rise/run as wheelGround.
-    for (let i=0;i<10;i++) {
-      const p=WP(0,DECK,9.3-(i+.5)*.48);
-      G.obox(p[0],DECK,p[2],4,(i+1)*.18,.48,w.rot);
+    for (let i = 0; i < 10; i++) {
+      const p = WP(0, DECK, 9.3 - (i + 0.5) * 0.48);
+      G.obox(p[0], DECK, p[2], 4, (i + 1) * 0.18, 0.48, w.rot);
     }
     G.col("#d8d5cb");
-    for (const [u0,n0,u1,n1] of wheelRails()) {
-      const a=WP(u0,0,n0),b=WP(u1,0,n1);
-      a[1]=(wheelGround(w,a[0],a[2]) ?? DECK)+1.05;
-      b[1]=(wheelGround(w,b[0],b[2]) ?? DECK)+1.05;
-      legQuad(G,a,b,.065);
-      const count=Math.ceil(Math.hypot(u1-u0,n1-n0)/1.5);
-      for(let i=0;i<=count;i++) {
-        const p=WP(u0+(u1-u0)*i/count,0,n0+(n1-n0)*i/count);
-        const y=wheelGround(w,p[0],p[2]) ?? DECK;
-        G.cyl(p[0],y,p[2],.045,1.05,6);
+    for (const [u0, n0, u1, n1] of wheelRails()) {
+      const a = WP(u0, 0, n0),
+        b = WP(u1, 0, n1);
+      a[1] = (wheelGround(w, a[0], a[2]) ?? DECK) + 1.05;
+      b[1] = (wheelGround(w, b[0], b[2]) ?? DECK) + 1.05;
+      legQuad(G, a, b, 0.065);
+      const count = Math.ceil(Math.hypot(u1 - u0, n1 - n0) / 1.5);
+      for (let i = 0; i <= count; i++) {
+        const p = WP(u0 + ((u1 - u0) * i) / count, 0, n0 + ((n1 - n0) * i) / count);
+        const y = wheelGround(w, p[0], p[2]) ?? DECK;
+        G.cyl(p[0], y, p[2], 0.045, 1.05, 6);
       }
     }
     // Loading line directly beside the next cabin, clear of the ticket booth.
-    const line=WP(0,DECK+1.81,2.1);
-    G.col("#e4c159").obox(line[0],line[1],line[2],2.4,.025,.18,w.rot);
+    const line = WP(0, DECK + 1.81, 2.1);
+    G.col("#e4c159").obox(line[0], line[1], line[2], 2.4, 0.025, 0.18, w.rot);
     G.col("#2f5f8a");
     const booth = WP(-6.2, DECK + 1.8, 3.5);
     G.obox(booth[0], booth[1], booth[2], 3.4, 2.6, 1.6, w.rot);
@@ -2160,7 +2169,8 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     G.box(t.x - 0.6, y + 2.5, t.z, 2.0, 2.3, 2.0);
     // clapboard: slightly proud, darker boards all the way round
     G.col(col, 0.86);
-    for (let yy = y + 2.62; yy < y + 4.75; yy += 0.27) G.box(t.x - 0.6, yy, t.z, 2.04, 0.04, 2.04, false);
+    for (let yy = y + 2.62; yy < y + 4.75; yy += 0.27)
+      G.box(t.x - 0.6, yy, t.z, 2.04, 0.04, 2.04, false);
     // the back door (what a climber sees at the top of the ladder), with a porthole and a number
     G.col("#2f5f8a");
     G.box(t.x + 0.43, y + 2.5, t.z, 0.06, 1.95, 0.9);
@@ -2305,13 +2315,25 @@ function quarterPipe(G: Geo, q: Rect & { face: number }, h: number, run: number)
     quad(P(a0, d0, y0), P(a1, d0, y0), P(a1, d1, y1), P(a0, d1, y1));
   }
   G.col("#b8b5ad");
-  quad(P(a0, run, h + 0.06), P(a1, run, h + 0.06), P(a1, depth - 2, h + 0.06), P(a0, depth - 2, h + 0.06));
+  quad(
+    P(a0, run, h + 0.06),
+    P(a1, run, h + 0.06),
+    P(a1, depth - 2, h + 0.06),
+    P(a0, depth - 2, h + 0.06),
+  );
   // back wall + parapet, cheeks (solid walls either side)
   G.col("#aaa79f");
   const box = (A0: number, A1: number, D0: number, D1: number, y1: number) => {
     const p0 = P(A0, D0, 0);
     const p1 = P(A1, D1, 0);
-    G.box((p0[0] + p1[0]) / 2, -0.3, (p0[2] + p1[2]) / 2, Math.abs(p1[0] - p0[0]), y1 + 0.3, Math.abs(p1[2] - p0[2]));
+    G.box(
+      (p0[0] + p1[0]) / 2,
+      -0.3,
+      (p0[2] + p1[2]) / 2,
+      Math.abs(p1[0] - p0[0]),
+      y1 + 0.3,
+      Math.abs(p1[2] - p0[2]),
+    );
   };
   box(a0 - 2, a1 + 2, depth - 2, depth, h + 1.0);
   box(a0 - 2, a0, 0, depth - 2, h + 0.35);
@@ -2474,8 +2496,15 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       tint.set(AWN[(p.c ?? 0) % AWN.length]![0]);
       D.stamp(T.cart, p.x, y, p.z, p.rot, 1, 1, 1, tint);
       C.glow.col(NEON[(p.c ?? 0) % NEON.length]!).mat(0);
-      C.glow.obox(p.x + Math.sin(p.rot) * 0.7, y + 2.37, p.z + Math.cos(p.rot) * 0.7,
-        2.2, 0.045, 0.035, p.rot);
+      C.glow.obox(
+        p.x + Math.sin(p.rot) * 0.7,
+        y + 2.37,
+        p.z + Math.cos(p.rot) * 0.7,
+        2.2,
+        0.045,
+        0.035,
+        p.rot,
+      );
       break;
     }
     case "table":

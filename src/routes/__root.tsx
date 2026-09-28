@@ -57,11 +57,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" },
-      { title: "Scrapfall · Vice Heights by Tyler Szakacs" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+      },
+      { title: "Scrapfall" },
       { name: "description", content: DESCRIPTION },
       { name: "author", content: "Tyler Szakacs" },
-      { property: "og:title", content: "Scrapfall · Vice Heights" },
+      { property: "og:title", content: "Scrapfall" },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

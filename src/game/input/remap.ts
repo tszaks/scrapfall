@@ -27,6 +27,7 @@ export const ACTIONS = {
   shop3: ["Buy shop item 3", "KeyC"],
   shopReroll: ["Reroll shop", "KeyR"],
   shopHeal: ["Field dressing", "KeyH"],
+  shopRevive: ["Buy self revive", "KeyJ"],
   slot1: ["Weapon slot 1", "Digit1"],
   slot2: ["Weapon slot 2", "Digit2"],
   slot3: ["Weapon slot 3", "Digit3"],

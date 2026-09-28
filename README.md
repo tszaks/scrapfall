@@ -1,4 +1,4 @@
-# Scrapfall · Vice Heights
+# Scrapfall
 
 Scrapfall is Toby Szakacs's arena shooter (this build is based on his 1.0.2 release:
 classes, loadouts, the shop, touch controls). This fork by Tyler Szakacs adds four
@@ -12,35 +12,51 @@ that stops at the lights, day and night, and up to four players in co-op.
 The map picker offers the four big maps (Vice Heights, Dry Gulch, Pacific Pier,
 Whiteout Pass) plus Random; add `?map=city` to the URL to go straight to the city.
 
-Play it at **https://tylerszakacs.com/game**.
+Play it at **https://szakacsmedia.com/game/**.
 
 ## Controls
 
-| Keyboard + mouse     | Controller (Xbox / PlayStation / Switch Pro) | Action |
-| -------------------- | -------------------------------------------- | ------ |
-| W A S D              | Left stick                                   | Move |
-| Mouse / arrows       | Right stick (aim assist, Settings)           | Look |
-| Hold left click (or Enter) | RT / R2 / ZR                           | Shoot |
-| Space                | A / ✕ / B                                    | Jump (A / ✕ presses the floor button in an elevator car) |
-| Hold Shift           | Click left stick                             | Sprint (1.5x; no shooting while sprinting) |
-| Double-tap Shift     | Double-click left stick                      | Tactical sprint (1.9x for 3 s, recharges in 6 s) |
-| F                    | B / ○ / A                                    | Ability |
-| 1-0, Q / E           | LB / RB, d-pad up / down                     | Switch weapon |
-| E (in an elevator car) | X / □ / Y                                  | Floor button |
-| G / middle mouse     | Y / △ / X                                    | Ping |
-| Hold R               | Hold right stick in                          | Revive a teammate |
-| Z X C, V, R          | D-pad left / right, then X / □ / Y           | Shop |
-| M                    | View / Create / −                            | Big map |
-| N                    |                                              | Day / night |
-| P / Esc              | Menu / Options / +                           | Pause |
+These are the defaults. In Settings, choose Auto, Keyboard + Mouse or Controller,
+then select an action and press the key, mouse button or controller button to bind it.
+Bindings and device preferences are saved; conflicts can be replaced and defaults restored.
+
+| Keyboard + mouse           | Controller (Xbox / PlayStation / Switch Pro) | Action                                           |
+| -------------------------- | -------------------------------------------- | ------------------------------------------------ |
+| W A S D                    | Left stick                                   | Move                                             |
+| Mouse / arrows             | Right stick (aim assist, Settings)           | Look                                             |
+| Hold left click (or Enter) | RT / R2 / ZR                                 | Shoot                                            |
+| Space                      | A / ✕ / B                                    | Jump                                             |
+| Hold Shift                 | Click left stick                             | Sprint (1.5x; no shooting while sprinting)       |
+| Double-tap Shift           | Double-click left stick                      | Tactical sprint (1.9x for 3 s, recharges in 6 s) |
+| F                          | B / ○ / A                                    | Ability                                          |
+| 1-0, Q / E                 | LB / RB, d-pad up / down                     | Switch weapon                                    |
+| E (in an elevator car)     | X / □ / Y                                    | Floor button                                     |
+| G / middle mouse           | Y / △ / X                                    | Ping                                             |
+| Hold R                     | Hold right stick in                          | Revive yourself in solo or a teammate in co-op   |
+| Z X C, H, R                | LB / RB, then X / □ / Y                      | Shop items, field dressing, reroll               |
+| J                          | Select in shop, then X / □ / Y               | Buy a replacement solo self-revive kit           |
+| V                          | LT / L2 / ZL                                 | First / third person                             |
+| M                          | View / Create / −                            | Big map                                          |
+| N                          |                                              | Day / night                                      |
+| P / Esc                    | Menu / Options / +                           | Pause                                            |
 
 Menus work with the d-pad or left stick, A to press and B to go back. On-screen hints
 switch to the controller's own glyphs when you use it, and back when you touch the
 keyboard. Phones get JUMP and SPRINT buttons (tap SPRINT twice for a tactical sprint).
 
-A jump clears low props (benches, barrels, bins, hydrants) but not walls, railings or
-blockades. Jumping over a roof's parapet drops you to the street: falls hurt by the
-number of floors (7+ floors downs you; solo, that is game over).
+Collision follows the visible solid geometry, including round props, wall edges and
+vehicle shapes. Jumps clear waist-high fences and props; higher barriers still block you.
+Roofs can be jumped off, with continuous falling onto lower roofs or the ground.
+Falls hurt by height, and a fall of seven or more floors downs you.
+
+Solo runs start with one self-revive kit. While down, hold Revive for three seconds
+before the twenty-second bleed-out ends. A revive restores half your class's health
+and grants three seconds of protection. Carry one kit at a time; replacements cost
+12 shards in the shop, with rare enemy drops from wave three onward (at most two finds
+per run, at least three waves apart). A new run resets the kit.
+
+Dry Gulch tumbleweeds roll when bumped and break when shot. Their fragments remain
+where they settle for the rest of the run, including for co-op players joining later.
 
 URL options: `?map=city`, `?night=1` / `?night=0`, `?shadows=0` / `?shadows=1`.
 
@@ -67,7 +83,7 @@ npm run serve:static   # serves dist/site like the deployment: http://localhost:
 - Output directory: `dist/site` (the game lives in `dist/site/game/`)
 - `vercel.json` sets the install / build commands and output directory, and rewrites
   `/game` and any unknown `/game/*` path to `/game/index.html`, so hard refreshes work.
-- tylerszakacs.com proxies `/game/*` to this project's deployment.
+- szakacsmedia.com proxies `/game/*` to this project's deployment; tylerszakacs.com redirects there.
 
 ## Code map
 

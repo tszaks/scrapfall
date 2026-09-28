@@ -116,10 +116,10 @@ export function tryRoofExit(
 }
 
 /** landed (after a fall): the access zone is the roof under the feet, or the street */
-export function landZone(x: number, z: number) {
+export function landZone(x: number, z: number, y = moveState.feet) {
   if (accPlayer.zone === 1) return; // inside a building: its own system
   const k = roofAt(x, z);
-  if (k >= 0)
+  if (k >= 0 && Math.abs(accessList()[k]!.top - y) < 0.25)
     Object.assign(accPlayer, {
       zone: 2,
       b: k,

@@ -5,7 +5,7 @@
 //             no firing while sprinting (a short sprint-to-fire delay when you pull the trigger)
 //   TACTICAL  double-tap Shift / double-click the left stick / tap SPRINT twice: 1.9x for 3 s,
 //             then back to a normal sprint; the burst recharges over 6 s (HUD meter)
-//   JUMP      Space / A / the touch JUMP button: ~1.1 m apex, ~0.7 s in the air
+//   JUMP      Space / A / the touch JUMP button: 1.45 m apex, ~0.8 s in the air
 //
 // Pure state: the game loop feeds it the inputs and the ground each frame and reads the speed
 // multiplier, whether the trigger may fire, and the feet height. No React, no three.js.
@@ -22,11 +22,11 @@ export const MOVE = {
   tacToFire: 0.28,
   /** a sprint needs the stick / keys pushed mostly forward */
   forwardMin: 0.35,
-  // jump: v0 = 0.35 g gives 0.7 s airtime; apex v0^2 / 2g = 1.1 m -> g = 17.96 m/s^2
+  // A 1.45 m jump clears waist-height cover and the authored 1.3 m fences.
   gravity: 17.96,
-  jumpV: 6.286,
+  jumpV: Math.sqrt(2 * 17.96 * 1.45),
   /** how far a jump may climb onto (or drop off) a ledge the walk rules would refuse (m) */
-  ledge: 1.15,
+  ledge: 1.5,
 } as const;
 
 export const moveState = {
@@ -198,8 +198,11 @@ export function stepJump(dt: number, ground: number) {
     s.lift = 0;
     return ground;
   }
+  // Analytic constant-gravity integration: the same arc at 20, 30, 60 or 120 fps.
+  if (s.vy > 0 && s.vy <= MOVE.gravity * dt)
+    s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * MOVE.gravity));
+  s.feet += s.vy * dt - 0.5 * MOVE.gravity * dt * dt;
   s.vy -= MOVE.gravity * dt;
-  s.feet += s.vy * dt;
   s.fallTop = Math.max(s.fallTop, s.feet);
   if (s.feet <= ground && s.vy <= 0) {
     s.feet = ground;

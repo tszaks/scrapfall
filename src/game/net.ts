@@ -53,9 +53,9 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 
 // Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
 // big-map build speak different message sets, so they must not join each other's rooms.
-// v4 adds explicit stacked room floors. Older clients have different physical maps
-// and cannot interpret those player heights; keep their rooms separate.
-const PREFIX = "scrapfall-ts-arena-v4-";
+// v5 adds rendered-shape physics and persistent shared tumbleweeds. Older clients
+// have different physical maps and cannot interpret that state; keep rooms separate.
+const PREFIX = "scrapfall-ts-arena-v5-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

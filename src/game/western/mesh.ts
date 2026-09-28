@@ -3031,6 +3031,7 @@ function templates() {
     const p = new Geo();
     d.mat(WL.TIMBER, 0.5, 0);
     f(d, g, p);
+    if (["bush", "grass", "straw", "tumble", "garden"].includes(k)) d.excludeSince(0);
     T[k] = { d: d.freeze(), ...(g.n ? { g: g.freeze() } : {}), ...(p.n ? { p: p.freeze() } : {}) };
   };
   const barrel = (d: Geo, x: number, y: number, z: number) => {

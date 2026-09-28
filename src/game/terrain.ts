@@ -16,6 +16,8 @@ export type Terrain = {
   n: number;
   /** heights, row-major by x: h[i * (n + 1) + j] at (x = -half + i * cell, z = -half + j * cell) */
   h: Float32Array;
+  triangular?: boolean;
+  baseHeight?: (x: number, z: number) => number;
   /** optional walking-speed multiplier (deep snow off the paths) */
   speed?: (x: number, z: number) => number;
   /** optional climbing limit (rise per metre walked): steeper steps, up or down, are walls
@@ -39,6 +41,7 @@ export type Terrain = {
  */
 export type Ground = {
   height: (x: number, z: number) => number;
+  baseHeight?: (x: number, z: number) => number;
   speed?: (x: number, z: number) => number;
   hits?: (x: number, y: number, z: number) => boolean;
   strictNav?: boolean;
@@ -81,6 +84,8 @@ function sampler(t: Terrain) {
     const b = h[(i + 1) * s + j]!;
     const c = h[i * s + j + 1]!;
     const d = h[(i + 1) * s + j + 1]!;
+    if (t.triangular)
+      return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   };
 }
@@ -104,6 +109,7 @@ export function setTerrain(t: Terrain | Ground | null) {
       : bare;
     G = {
       height,
+      baseHeight: t.baseHeight ?? bare,
       ...(t.speed ? { speed: t.speed } : {}),
       ...(t.maxSlope !== undefined ? { maxSlope: t.maxSlope } : {}),
       ...(t.ghost ? { ghost: t.ghost } : {}),
@@ -135,6 +141,11 @@ export function groundY(x: number, z: number) {
     if (y !== undefined) return y;
   }
   return G ? G.height(x, z) : 0;
+}
+
+/** Map floor without the roof/interior hooks; callers select a reachable support by height. */
+export function baseGroundY(x: number, z: number) {
+  return G ? (G.baseHeight ?? G.height)(x, z) : 0;
 }
 
 /** Walking-speed multiplier at (x, z): 1 on flat maps, lower in deep snow, sand or surf. */
@@ -181,7 +192,7 @@ export function downhill(x: number, z: number): [number, number] | null {
   return m < 1e-4 ? null : [-gx / m, -gz / m];
 }
 /** how far a jump may climb onto, or drop off, a flat ledge the walk rules refuse (m) */
-const JUMP_LEDGE = 1.15;
+const JUMP_LEDGE = 1.5;
 
 /**
  * A jumping player may step onto (or off) a ledge the walk rules refuse (a porch deck, a
@@ -257,7 +268,7 @@ function walkable(g: Ground, maxSlope: number, x0: number, z0: number, x1: numbe
 
 /** The bare heightfield (what the terrain mesh draws), ignoring decks; groundY elsewhere. */
 export function terrainY(x: number, z: number) {
-  return HF ? HF.height(x, z) : groundY(x, z);
+  return HF ? HF.height(x, z) : baseGroundY(x, z);
 }
 
 /**

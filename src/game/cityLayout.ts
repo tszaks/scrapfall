@@ -113,7 +113,7 @@ export type Bld = {
   openFloors?: import("./structures/plan").Structure;
 };
 export type Spot = { x: number; z: number; rot: number };
-export type ParkedCar = Spot & { v: Vehicle };
+export type ParkedCar = Spot & { v: Vehicle; y?: number };
 export type PropKind =
   | "light"
   | "lightLED"
@@ -309,12 +309,19 @@ export function generateCity(rand: () => number, cells: number, half: number) {
   const props: Prop[] = [];
   const parked: ParkedCar[] = [];
   const blocksOut: Block[] = [];
-  const markSolid = (i0: number, j0: number, i1: number, j1: number, h: number) => {
+  const markSolid = (
+    i0: number,
+    j0: number,
+    i1: number,
+    j1: number,
+    h: number,
+    boundary = false,
+  ) => {
     for (let i = Math.max(0, i0); i < Math.min(cells, i1); i++)
       for (let j = Math.max(0, j0); j < Math.min(cells, j1); j++) {
         if (solid[idx(i, j)]) continue;
         solid[idx(i, j)] = 1;
-        blocksOut.push({ x: cc(i), z: cc(j), h, tone: 0 });
+        blocksOut.push({ x: cc(i), z: cc(j), h, tone: 0, boundary });
       }
   };
   const W = (i: number) => ce(i); // world edge of cell index
@@ -820,7 +827,13 @@ export function generateCity(rand: () => number, cells: number, half: number) {
             if (rand() < 0.35) continue;
             const v2 = makeVehicle(rand, 5.2);
             if (!v2) continue;
-            parked.push({ x: cc(i), z: cc(j) + 1, rot: rand() < 0.5 ? 0 : Math.PI, v: v2 });
+            parked.push({
+              x: cc(i),
+              z: cc(j) + 1,
+              y: 0.03,
+              rot: rand() < 0.5 ? 0 : Math.PI,
+              v: v2,
+            });
             markSolid(i, j, i + 1, j + 2, vehicleHeight(v2));
           }
         }
@@ -1114,6 +1127,8 @@ export function generateCity(rand: () => number, cells: number, half: number) {
           const ok = run.every((c) => kind[c] === K_PARKLANE && !solid[c]);
           if (ok && rand() < 0.6) {
             const v2 = makeVehicle(rand, 4.9);
+            // The bay is 2 m across: keep a real 8 cm gap to both sides of its curb.
+            if (v2) v2.wid = Math.min(v2.wid, 1.84);
             if (v2) {
               const x = alongZ ? cc(i) : cc(i) + 1;
               const z = alongZ ? cc(j) + 1 : cc(j);
@@ -1277,7 +1292,7 @@ export function generateCity(rand: () => number, cells: number, half: number) {
       if (seen[c] || solid[c]) continue;
       // unbuilt lot cells and enclosed courtyards: fill silently
       if (kind[c] !== K_LOT) sealed++;
-      markSolid(i, j, i + 1, j + 1, kind[c] === K_LOT ? 3 : 1);
+      markSolid(i, j, i + 1, j + 1, kind[c] === K_LOT ? 3 : 1, true);
     }
 
   const layout: CityLayout = {

@@ -1,3 +1,4 @@
+import { registerStaticGeometry, registerStaticInstances } from "../staticCollision";
 import { shelterUniforms, SHELTER_GLSL } from "../structures/weather";
 // Renders Whiteout Pass: the heightfield terrain and the endless land beyond, merged
 // chunks of chalets and props (one texture-array material), the instanced spruce forest,
@@ -903,6 +904,29 @@ export const AlpineScene = memo(function AlpineScene({
     );
     return b;
   }, [layout]);
+  useLayoutEffect(
+    () =>
+      registerStaticGeometry(
+        "map",
+        built.chunks.flatMap((c) => [c.main, c.detail]),
+      ),
+    [built],
+  );
+
+  useLayoutEffect(() => {
+    const geometry = spruceGeo(false, true);
+    const clear = registerStaticInstances(
+      "forest",
+      Array.from({ length: built.trees.n }, (_, i) => ({
+        geometry,
+        matrix: new THREE.Matrix4().fromArray(built.trees.mats, i * 16),
+      })),
+    );
+    return () => {
+      clear();
+      geometry.dispose();
+    };
+  }, [built]);
   const look: AlpineLook = alpineLookAt(nk);
   U.uLightMap.value = built.light;
   U.uGround.value = built.ground;

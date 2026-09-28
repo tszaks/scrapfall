@@ -1,10 +1,11 @@
+import { registerStaticGeometry, registerStaticInstances } from "../staticCollision";
 // Draws the access buildings: the merged exterior (entrances, penthouses, rooftop props),
 // and per building the interiors (lobby, vestibule, stairwell), the elevator car and every
 // sliding door, animated from the shared car state. Interiors are only drawn near the
 // player. While the local player rides a closed car the city is hidden (nothing outside the
 // car can be seen, and the shaft passes through roof planes of lower building parts).
 import { useFrame, useThree } from "@react-three/fiber";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useLayoutEffect, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { setIndoor } from "../ambience";
@@ -13,7 +14,14 @@ import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
 import { buildAccess, doorHeight, type DisplaySpot, type Interior } from "./build";
 import { CAR_H, type AccessBuilding } from "./layout";
-import { concreteTexture, CopPanel, Display, signTexture, steelTexture, woodTexture } from "./textures";
+import {
+  concreteTexture,
+  CopPanel,
+  Display,
+  signTexture,
+  steelTexture,
+  woodTexture,
+} from "./textures";
 import { POWER_GLSL, powerAt, powerUniforms } from "../events/power";
 import { addSkyFogUniforms } from "../skyFog";
 import { tod } from "../timeOfDay";
@@ -38,10 +46,16 @@ function powered<T extends THREE.Material>(m: T, off = 0.03): T {
     Object.assign(sh.uniforms, powerUniforms);
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vPwXZ;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPwXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvPwXZ = (modelMatrix * vec4(transformed, 1.0)).xz;",
+      );
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", `#include <common>\nvarying vec2 vPwXZ;\n${POWER_GLSL}`)
-      .replace("#include <opaque_fragment>", `#include <opaque_fragment>\ngl_FragColor.rgb *= mix(${off.toFixed(3)}, 1.0, gridPower(vPwXZ));`);
+      .replace(
+        "#include <opaque_fragment>",
+        `#include <opaque_fragment>\ngl_FragColor.rgb *= mix(${off.toFixed(3)}, 1.0, gridPower(vPwXZ));`,
+      );
   };
   m.customProgramCacheKey = () => "access-powered-" + off;
   return m;
@@ -57,17 +71,23 @@ function makeMats() {
   return {
     ext: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.05 }),
     glow: powered(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })),
-    sign: powered(new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }), 0.08),
-    pools: powered(new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      map: glowTexture(),
-      transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    }), 0),
+    sign: powered(
+      new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }),
+      0.08,
+    ),
+    pools: powered(
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        map: glowTexture(),
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      }),
+      0,
+    ),
     beacon: new THREE.MeshBasicMaterial({ color: "#ff2a1a", toneMapped: false }),
     // interiors: baked light in the vertex colours
     base: new THREE.MeshBasicMaterial({ vertexColors: true }),
@@ -75,7 +95,11 @@ function makeMats() {
     wood: new THREE.MeshBasicMaterial({ vertexColors: true, map: woodTexture() }),
     conc: new THREE.MeshBasicMaterial({ vertexColors: true, map: concreteTexture() }),
     iglow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
-    isign: new THREE.MeshBasicMaterial({ vertexColors: true, map: signTexture(), toneMapped: false }),
+    isign: new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      map: signTexture(),
+      toneMapped: false,
+    }),
     // doors
     glass: new THREE.MeshStandardMaterial({
       color: "#9fb7bf",
@@ -86,12 +110,27 @@ function makeMats() {
       emissive: "#3a3226",
       emissiveIntensity: 0.6,
     }),
-    doorSteel: new THREE.MeshStandardMaterial({ color: "#b9bdc2", roughness: 0.35, metalness: 0.75, map: steelTexture() }),
+    doorSteel: new THREE.MeshStandardMaterial({
+      color: "#b9bdc2",
+      roughness: 0.35,
+      metalness: 0.75,
+      map: steelTexture(),
+    }),
     innerSteel: new THREE.MeshBasicMaterial({ color: "#8b9096", map: steelTexture() }),
     frameDark: new THREE.MeshStandardMaterial({ color: "#2b2d31", roughness: 0.6 }),
-    doorPaint: new THREE.MeshStandardMaterial({ color: "#6a737c", roughness: 0.55, metalness: 0.2, emissive: "#2a2c30", emissiveIntensity: 1 }),
+    doorPaint: new THREE.MeshStandardMaterial({
+      color: "#6a737c",
+      roughness: 0.55,
+      metalness: 0.2,
+      emissive: "#2a2c30",
+      emissiveIntensity: 1,
+    }),
     window: new THREE.MeshBasicMaterial({ color: "#2a3a48" }),
-    doorWood: new THREE.MeshStandardMaterial({ color: "#6a4228", roughness: 0.7, map: woodTexture() }),
+    doorWood: new THREE.MeshStandardMaterial({
+      color: "#6a4228",
+      roughness: 0.7,
+      map: woodTexture(),
+    }),
     // depth-only, drawn over whatever is there: opens a doorway / roof hole in a host we can't cut
     punch: new THREE.MeshBasicMaterial({ colorWrite: false, depthFunc: THREE.AlwaysDepth }),
   };
@@ -207,10 +246,7 @@ function Building({
     () => (display ? new THREE.MeshBasicMaterial({ map: display.tex, toneMapped: false }) : null),
     [display],
   );
-  const copMat = useMemo(
-    () => (cop ? new THREE.MeshBasicMaterial({ map: cop.tex }) : null),
-    [cop],
-  );
+  const copMat = useMemo(() => (cop ? new THREE.MeshBasicMaterial({ map: cop.tex }) : null), [cop]);
   useEffect(() => () => dispMat?.dispose(), [dispMat]);
   useEffect(() => () => copMat?.dispose(), [copMat]);
   const disp = (s: DisplaySpot, i: number) =>
@@ -246,23 +282,90 @@ function Building({
         {/* street door leaves: glass for the city lobby, wood / steel where the host can't be cut */}
         {b.ladder ? null : elev && !punch ? (
           <>
-            <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={0} y0={gy} y1={b.groundY + hh - 0.02} d0={0.09} d1={0.13} mat={m.glass} />
-            <Panel refFn={(o) => (refs.street[1] = o)} a0={0} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.14} d1={0.18} mat={m.glass} />
+            <Panel
+              refFn={(o) => (refs.street[0] = o)}
+              a0={-q0.half}
+              a1={0}
+              y0={gy}
+              y1={b.groundY + hh - 0.02}
+              d0={0.09}
+              d1={0.13}
+              mat={m.glass}
+            />
+            <Panel
+              refFn={(o) => (refs.street[1] = o)}
+              a0={0}
+              a1={q0.half}
+              y0={gy}
+              y1={b.groundY + hh - 0.02}
+              d0={0.14}
+              d1={0.18}
+              mat={m.glass}
+            />
           </>
         ) : elev ? (
           <>
-            <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={0} y0={gy} y1={b.groundY + hh - 0.02} d0={0.09} d1={0.13} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
-            <Panel refFn={(o) => (refs.street[1] = o)} a0={0} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.14} d1={0.18} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
+            <Panel
+              refFn={(o) => (refs.street[0] = o)}
+              a0={-q0.half}
+              a1={0}
+              y0={gy}
+              y1={b.groundY + hh - 0.02}
+              d0={0.09}
+              d1={0.13}
+              mat={wood ? m.doorWood : m.doorPaint}
+              window={m.window}
+            />
+            <Panel
+              refFn={(o) => (refs.street[1] = o)}
+              a0={0}
+              a1={q0.half}
+              y0={gy}
+              y1={b.groundY + hh - 0.02}
+              d0={0.14}
+              d1={0.18}
+              mat={wood ? m.doorWood : m.doorPaint}
+              window={m.window}
+            />
           </>
         ) : (
-          <Panel refFn={(o) => (refs.street[0] = o)} a0={-q0.half} a1={q0.half} y0={gy} y1={b.groundY + hh - 0.02} d0={0.1} d1={0.15} mat={wood ? m.doorWood : m.doorPaint} window={m.window} />
+          <Panel
+            refFn={(o) => (refs.street[0] = o)}
+            a0={-q0.half}
+            a1={q0.half}
+            y0={gy}
+            y1={b.groundY + hh - 0.02}
+            d0={0.1}
+            d1={0.15}
+            mat={wood ? m.doorWood : m.doorPaint}
+            window={m.window}
+          />
         )}
         {/* roof door leaf (an open doorway in lookout rooms and on ladders has none) */}
         {q1.open ? null : q1.nd !== 0 ? (
-          <Panel refFn={(o) => (refs.roof = o)} a0={q1.a - q1.half} a1={q1.a + q1.half} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d + 0.07} d1={q1.d + 0.12} mat={m.doorPaint} window={m.window} />
+          <Panel
+            refFn={(o) => (refs.roof = o)}
+            a0={q1.a - q1.half}
+            a1={q1.a + q1.half}
+            y0={b.top + 0.03}
+            y1={b.top + 2.23}
+            d0={q1.d + 0.07}
+            d1={q1.d + 0.12}
+            mat={m.doorPaint}
+            window={m.window}
+          />
         ) : (
           <group ref={(o) => (refs.roof = o)}>
-            <Panel refFn={() => {}} a0={q1.a - 0.13} a1={q1.a - 0.08} y0={b.top + 0.03} y1={b.top + 2.23} d0={q1.d - q1.half} d1={q1.d + q1.half} mat={m.doorPaint} />
+            <Panel
+              refFn={() => {}}
+              a0={q1.a - 0.13}
+              a1={q1.a - 0.08}
+              y0={b.top + 0.03}
+              y1={b.top + 2.23}
+              d0={q1.d - q1.half}
+              d1={q1.d + q1.half}
+              mat={m.doorPaint}
+            />
           </group>
         )}
       </group>
@@ -270,13 +373,36 @@ function Building({
         <InteriorMeshes g={g.low} m={m} />
         {E && (
           <>
-            <Panel refFn={(o) => (refs.landing[0]![0] = o)} a0={-0.7} a1={0} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
-            <Panel refFn={(o) => (refs.landing[0]![1] = o)} a0={-0.008} a1={0.7} y0={gy} y1={gy + 2.3} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
+            <Panel
+              refFn={(o) => (refs.landing[0]![0] = o)}
+              a0={-0.7}
+              a1={0}
+              y0={gy}
+              y1={gy + 2.3}
+              d0={E.coreFront + 0.012}
+              d1={E.coreFront + 0.04}
+              mat={m.innerSteel}
+            />
+            <Panel
+              refFn={(o) => (refs.landing[0]![1] = o)}
+              a0={-0.008}
+              a1={0.7}
+              y0={gy}
+              y1={gy + 2.3}
+              d0={E.coreFront + 0.018}
+              d1={E.coreFront + 0.046}
+              mat={m.innerSteel}
+            />
           </>
         )}
         {g.displays.filter((s) => s.level === 0).map(disp)}
         {punch && !b.ladder && (
-          <mesh material={m.punch} renderOrder={-1} position={[0, b.groundY + hh / 2, -0.012 - (b.spec.plinth ?? 0)]} rotation-y={Math.PI}>
+          <mesh
+            material={m.punch}
+            renderOrder={-1}
+            position={[0, b.groundY + hh / 2, -0.012 - (b.spec.plinth ?? 0)]}
+            rotation-y={Math.PI}
+          >
             <planeGeometry args={[hw * 2, hh]} />
           </mesh>
         )}
@@ -286,8 +412,26 @@ function Building({
           <InteriorMeshes g={g.high} m={m} />
           {E && (
             <>
-              <Panel refFn={(o) => (refs.landing[1]![0] = o)} a0={-0.7} a1={0} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.012} d1={E.coreFront + 0.04} mat={m.innerSteel} />
-              <Panel refFn={(o) => (refs.landing[1]![1] = o)} a0={-0.008} a1={0.7} y0={b.top + 0.03} y1={b.top + 2.33} d0={E.coreFront + 0.018} d1={E.coreFront + 0.046} mat={m.innerSteel} />
+              <Panel
+                refFn={(o) => (refs.landing[1]![0] = o)}
+                a0={-0.7}
+                a1={0}
+                y0={b.top + 0.03}
+                y1={b.top + 2.33}
+                d0={E.coreFront + 0.012}
+                d1={E.coreFront + 0.04}
+                mat={m.innerSteel}
+              />
+              <Panel
+                refFn={(o) => (refs.landing[1]![1] = o)}
+                a0={-0.008}
+                a1={0.7}
+                y0={b.top + 0.03}
+                y1={b.top + 2.33}
+                d0={E.coreFront + 0.018}
+                d1={E.coreFront + 0.046}
+                mat={m.innerSteel}
+              />
             </>
           )}
           {g.displays.filter((s) => s.level === 1).map(disp)}
@@ -307,8 +451,26 @@ function Building({
       {g.car && E && (
         <group ref={(o) => (refs.car = o)} visible={false}>
           <InteriorMeshes g={g.car} m={m} />
-          <Panel refFn={(o) => (refs.carDoor[0] = o)} a0={-0.7} a1={0} y0={0.03} y1={2.25} d0={E.car.d0 - 0.045} d1={E.car.d0 - 0.012} mat={m.innerSteel} />
-          <Panel refFn={(o) => (refs.carDoor[1] = o)} a0={-0.008} a1={0.7} y0={0.03} y1={2.25} d0={E.car.d0 - 0.051} d1={E.car.d0 - 0.018} mat={m.innerSteel} />
+          <Panel
+            refFn={(o) => (refs.carDoor[0] = o)}
+            a0={-0.7}
+            a1={0}
+            y0={0.03}
+            y1={2.25}
+            d0={E.car.d0 - 0.045}
+            d1={E.car.d0 - 0.012}
+            mat={m.innerSteel}
+          />
+          <Panel
+            refFn={(o) => (refs.carDoor[1] = o)}
+            a0={-0.008}
+            a1={0.7}
+            y0={0.03}
+            y1={2.25}
+            d0={E.car.d0 - 0.051}
+            d1={E.car.d0 - 0.018}
+            mat={m.innerSteel}
+          />
           {/* the car's outside shell (seen only if something looks down the shaft) */}
           <mesh material={m.frameDark} position={[0, CAR_H + 0.08, (E.car.d0 + E.car.d1) / 2]}>
             <boxGeometry args={[E.car.a1 - E.car.a0 + 0.1, 0.12, E.car.d1 - E.car.d0 + 0.1]} />
@@ -322,7 +484,14 @@ function Building({
 
 // ---- sound: a chime on arrival, a hum and wind while riding, a door slide ----
 class ElevatorSound {
-  private hum: { osc: OscillatorNode; osc2: OscillatorNode; noise: AudioBufferSourceNode; g: GainNode; ng: GainNode; f: BiquadFilterNode } | null = null;
+  private hum: {
+    osc: OscillatorNode;
+    osc2: OscillatorNode;
+    noise: AudioBufferSourceNode;
+    g: GainNode;
+    ng: GainNode;
+    f: BiquadFilterNode;
+  } | null = null;
   chime() {
     const bus = sfxBus();
     if (!bus) return;
@@ -420,9 +589,28 @@ class ElevatorSound {
   }
 }
 
-export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: TimeOfDay; cityKey: unknown }) {
+export const AccessScene = memo(function AccessScene({
+  time,
+  cityKey,
+}: {
+  time: TimeOfDay;
+  cityKey: unknown;
+}) {
   const list = useMemo(() => accessList(), [cityKey]); // eslint-disable-line react-hooks/exhaustive-deps -- the installed list changes with the city
   const built = useMemo(() => buildAccess(list), [list]);
+  useLayoutEffect(() => registerStaticGeometry("access-exterior", [built.ext]), [built]);
+  useLayoutEffect(() => {
+    const instances: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = [];
+    built.per.forEach((g, i) => {
+      const b = list[i]!;
+      // Enclosed upper rooms have real floors, walls and window headers, not an outdoor roof.
+      if (!b.room || !g.high) return;
+      const matrix = new THREE.Matrix4().makeRotationY(g.theta).setPosition(b.ox, 0, b.oz);
+      for (const key of ["base", "steel", "wood", "conc"] as const)
+        instances.push({ geometry: g.high[key], matrix });
+    });
+    return registerStaticInstances("access-rooms", instances);
+  }, [built, list]);
   const mats = useMemo(makeMats, []);
   const displays = useMemo(() => list.map((b) => (b.elev ? new Display() : null)), [list]);
   const cops = useMemo(() => list.map((b) => (b.elev ? new CopPanel() : null)), [list]);
@@ -452,7 +640,6 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
     seen.current = list.map(() => ({ dep: 0, arr: 0, phase: IDLE }));
   }, [list]);
 
-
   useEffect(() => {
     const m = beaconRef.current;
     if (!m) return;
@@ -477,12 +664,15 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
   );
   useEffect(() => () => displays.forEach((d) => d?.dispose()), [displays]);
   useEffect(() => () => cops.forEach((d) => d?.dispose()), [cops]);
-  useEffect(() => () => {
-    Object.values(mats).forEach((m) => m.dispose());
-    beaconGeo.dispose();
-    sound.ride(0);
-    setIndoor(0);
-  }, [mats, beaconGeo, sound]);
+  useEffect(
+    () => () => {
+      Object.values(mats).forEach((m) => m.dispose());
+      beaconGeo.dispose();
+      sound.ride(0);
+      setIndoor(0);
+    },
+    [mats, beaconGeo, sound],
+  );
 
   const cityRoot = useRef<THREE.Object3D | null>(null);
   const preRefs = useRef<(THREE.Mesh | null)[]>([]);
@@ -557,7 +747,8 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       const dh = Math.hypot(dx, dz);
       // the ground floor reads through the glass doors from across the street
       if (r.doors) r.doors.visible = mine || dh < 150;
-      if (r.low) r.low.visible = (mine && player.zone === 1) || (dh < 130 && cam.y < b.groundY + 70);
+      if (r.low)
+        r.low.visible = (mine && player.zone === 1) || (dh < 130 && cam.y < b.groundY + 70);
       if (r.high) r.high.visible = mine || (dh < 45 && Math.abs(cam.y - b.top) < 30);
       if (r.hole) r.hole.visible = mine && player.zone === 1;
       const pre = preRefs.current[k];
@@ -567,8 +758,10 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       // doors
       const sd = portalDoor(k, 0);
       if (b.elev) {
-        if (r.street[0]) r.street[0].position.x = -b.portals[0].half / 2 - sd * b.portals[0].half * 0.96;
-        if (r.street[1]) r.street[1].position.x = b.portals[0].half / 2 + sd * b.portals[0].half * 0.96;
+        if (r.street[0])
+          r.street[0].position.x = -b.portals[0].half / 2 - sd * b.portals[0].half * 0.96;
+        if (r.street[1])
+          r.street[1].position.x = b.portals[0].half / 2 + sd * b.portals[0].half * 0.96;
       } else if (r.street[0]) r.street[0].position.x = sd * b.portals[0].half * 2;
       const rd = portalDoor(k, 1);
       const q1 = b.portals[1];
@@ -583,7 +776,11 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       if (r.car) {
         // the lobby floor is drawn 0.17 m up (over the lot paving), the vestibule 0.03 m
         r.car.position.y = y + 0.14 * (1 - (y - b.groundY) / Math.max(1, b.top - b.groundY));
-        r.car.visible = (r.low?.visible && c.level === 0 && c.phase !== MOVING) || (r.high?.visible && c.level === 1 && c.phase !== MOVING) || (mine && player.inCar) || false;
+        r.car.visible =
+          (r.low?.visible && c.level === 0 && c.phase !== MOVING) ||
+          (r.high?.visible && c.level === 1 && c.phase !== MOVING) ||
+          (mine && player.inCar) ||
+          false;
         r.carDoor[0]?.position.setX(-0.35 - open * 0.69);
         r.carDoor[1]?.position.setX(0.346 + open * 0.69);
       }
@@ -596,9 +793,19 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       if (disp) {
         const dir = c.phase === MOVING ? (c.level > c.from ? 1 : -1) : 0;
         const cap = c.phase === MOVING ? "" : c.level ? (b.room ? "TOP" : "ROOF") : "LOBBY";
-        disp.show(carFloor(b, c), dir, emergency && k === near ? (c.phase === MOVING ? "" : "BATTERY") : cap, emergency && k === near);
+        disp.show(
+          carFloor(b, c),
+          dir,
+          emergency && k === near ? (c.phase === MOVING ? "" : "BATTERY") : cap,
+          emergency && k === near,
+        );
       }
-      cops[k]?.show(carFloor(b, c), b.elev.floors, c.phase === MOVING ? c.level : c.level ? 0 : 1, emergency && k === near);
+      cops[k]?.show(
+        carFloor(b, c),
+        b.elev.floors,
+        c.phase === MOVING ? c.level : c.level ? 0 : 1,
+        emergency && k === near,
+      );
       // sounds for this client's own ride / landing
       const s = seen.current[k];
       if (s) {
@@ -622,7 +829,8 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
       }
     });
     sound.ride(riding);
-    if (!cityRoot.current || !cityRoot.current.parent) cityRoot.current = scene.getObjectByName("city-root") ?? null;
+    if (!cityRoot.current || !cityRoot.current.parent)
+      cityRoot.current = scene.getObjectByName("city-root") ?? null;
     if (cityRoot.current) cityRoot.current.visible = !hideCity;
   });
 
@@ -680,7 +888,15 @@ export const AccessScene = memo(function AccessScene({ time, cityKey }: { time: 
         );
       })}
       {list.map((b, k) => (
-        <Building key={k} b={b} m={mats} g={built.per[k]!} refs={refs[k]!} display={displays[k] ?? null} cop={cops[k] ?? null} />
+        <Building
+          key={k}
+          b={b}
+          m={mats}
+          g={built.per[k]!}
+          refs={refs[k]!}
+          display={displays[k] ?? null}
+          cop={cops[k] ?? null}
+        />
       ))}
     </group>
   );

@@ -1,3 +1,4 @@
+import { registerStaticGeometry } from "./staticCollision";
 // The city's palm trees, instanced by species (one draw call each, plus one shadow pass):
 //   washingtonia - Mexican fan palm down the boulevard median: 16-25 m, pencil-thin trunk,
 //                  a small head of round fan fronds over a skirt of dead ones
@@ -388,7 +389,7 @@ class PalmGeo {
 /** frond colours: fresh upper fronds, older lower ones going olive and yellow */
 const FROND = ["#3f7f34", "#4a8a3a", "#55923e", "#6a9440", "#8a9a48", "#a39a52"];
 
-function speciesGeo(sp: Species) {
+function speciesGeo(sp: Species, trunkOnly = false) {
   const G = new PalmGeo();
   const H = BASE_H[sp];
   let seed = sp.length * 977;
@@ -396,6 +397,7 @@ function speciesGeo(sp: Species) {
   const golden = 2.39996;
   if (sp === "washingtonia") {
     G.trunk(H - 1.4, 0.19, 0.13, 9, 7, "#a08a70");
+    if (trunkOnly) return G.build();
     G.skirt(H - 3.4, H - 1.0, 0.3, 0.42, 8);
     const top = new THREE.Vector3(0, H - 0.5, 0);
     for (let k = 0; k < 24; k++) {
@@ -411,6 +413,7 @@ function speciesGeo(sp: Species) {
     }
   } else if (sp === "royal") {
     G.trunk(H - 3, 0.28, 0.22, 8, 8, "#d4d0c6", 0.12);
+    if (trunkOnly) return G.build();
     // glossy green crownshaft
     G.color("#5e8c45");
     const y0 = H - 3;
@@ -448,6 +451,7 @@ function speciesGeo(sp: Species) {
     }
   } else {
     G.trunk(H - 0.4, 0.24, 0.16, 9, 7, "#a89a88");
+    if (trunkOnly) return G.build();
     // husk and a few coconuts under the crown
     G.color("#6a5a32");
     const top = new THREE.Vector3(0, H - 0.3, 0);
@@ -533,7 +537,15 @@ function speciesAt(city: CityLayout, x: number, z: number): Species {
 
 /** one palm: position (y = the ground under it, default the city sidewalk), heading, scale
  * of the modelled height, lean and a brightness tint */
-export type PalmInst = { x: number; y?: number; z: number; rot: number; s: number; lean: number; tint: number };
+export type PalmInst = {
+  x: number;
+  y?: number;
+  z: number;
+  rot: number;
+  s: number;
+  lean: number;
+  tint: number;
+};
 export type PalmSpecies = Species;
 type Inst = PalmInst;
 
@@ -602,6 +614,33 @@ export function PalmTrees({ groups }: { groups: Record<Species, Inst[]> }) {
     [res],
   );
 
+  useLayoutEffect(() => {
+    const geometries: THREE.BufferGeometry[] = [];
+    for (const sp of SPECIES) {
+      const trunk = speciesGeo(sp, true);
+      for (const p of groups[sp]) {
+        const g = trunk.clone(),
+          pos = g.getAttribute("position"),
+          bend = g.getAttribute("aBend");
+        for (let i = 0; i < pos.count; i++)
+          pos.setX(i, pos.getX(i) + p.lean * BASE_H[sp] * bend.getX(i) ** 2);
+        g.applyMatrix4(
+          new THREE.Matrix4().compose(
+            new THREE.Vector3(p.x, p.y ?? 0.15, p.z),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.rot),
+            new THREE.Vector3(p.s, p.s, p.s),
+          ),
+        );
+        geometries.push(g);
+      }
+      trunk.dispose();
+    }
+    const clear = registerStaticGeometry("palms", geometries);
+    return () => {
+      clear();
+      geometries.forEach((g) => g.dispose());
+    };
+  }, [groups]);
   const refs = useRef<Record<Species, THREE.InstancedMesh | null>>({
     washingtonia: null,
     royal: null,

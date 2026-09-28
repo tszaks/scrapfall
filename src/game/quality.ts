@@ -35,7 +35,7 @@ export type QualitySpec = {
   antialias: boolean;
 };
 
-const STORE_KEY = "gta-quality";
+const STORE_KEY = "scrapfall-quality";
 const PREFS: QualityPref[] = ["auto", "high", "medium", "low"];
 export const QUALITY_PREFS = PREFS;
 
@@ -96,7 +96,7 @@ function readPref(): QualityPref {
   const q = new URLSearchParams(window.location.search).get("quality");
   if (q && (PREFS as string[]).includes(q)) return q as QualityPref;
   try {
-    const v = localStorage.getItem(STORE_KEY);
+    const v = localStorage.getItem(STORE_KEY) ?? localStorage.getItem("gta-quality");
     if (v && (PREFS as string[]).includes(v)) return v as QualityPref;
   } catch {
     /* private mode */

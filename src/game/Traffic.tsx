@@ -1,3 +1,4 @@
+import { registerStaticInstances } from "./staticCollision";
 // Moving traffic for the city map, and the map's parked cars. Every vehicle draws through one
 // CarBatch (art/cars.ts): an InstancedMesh per vehicle type and LOD, plus shared wheel, glass
 // and lamp meshes, updated in one useFrame.
@@ -6,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { type CityLayout } from "./cityLayout";
-import { CarBatch } from "./art/cars";
+import { CarBatch, vehicleModel, vehicleModelKey, wheelGeometry } from "./art/cars";
 import { liveCars, pursuitDots, trafficClock, type TrafficLink } from "./trafficCore";
 import {
   ROLE_COP,
@@ -207,6 +208,29 @@ export function CityTraffic({
       batch.place(parkedCount + i, pc.x, (pc as { y?: number }).y ?? 0, pc.z, pc.rot),
     );
   }, [batch, parked, parkedCount]);
+  useLayoutEffect(() => {
+    const entries: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = [];
+    for (const pc of parked) {
+      const md = vehicleModel(vehicleModelKey(pc.v));
+      const transform = new THREE.Matrix4()
+        .makeRotationY(pc.rot)
+        .setPosition(pc.x, pc.y ?? 0, pc.z);
+      const body = transform
+        .clone()
+        .scale(new THREE.Vector3(pc.v.wid / md.spec.wid, 1, pc.v.len / md.spec.len));
+      entries.push({ geometry: md.near, matrix: body });
+      if (md.glass) entries.push({ geometry: md.glass, matrix: body });
+      for (const w of md.wheels(pc.v))
+        entries.push({
+          geometry: wheelGeometry(),
+          matrix: transform
+            .clone()
+            .multiply(new THREE.Matrix4().makeTranslation(w.x, w.y, w.z))
+            .scale(new THREE.Vector3(w.w, w.r, w.r)),
+        });
+    }
+    return registerStaticInstances("parked-cars", entries);
+  }, [parked]);
   const lastPos = useRef<Float32Array>(new Float32Array(0));
 
   const rand = useMemo(() => mulberry(seed ^ 0x7a11c), [seed]);
@@ -454,7 +478,18 @@ export function CityTraffic({
       batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: true, bar, roll: moved < 3 ? moved : 0 });
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
-      liveCars.push({ x: np.x, z: np.z, sin, cos, hl: half, hw: c.v.wid / 2, h: c.h });
+      liveCars.push({
+        x: np.x,
+        z: np.z,
+        sin,
+        cos,
+        hl: half,
+        hw: c.v.wid / 2,
+        h: c.h,
+        bounds: batch.contactBounds(ci),
+        rayContact: (a, b) => batch.rayContact(ci, a, b),
+        contact: (x, y, z) => batch.pointContact(ci, x, y, z),
+      });
       if (coneRef.current && poolRef.current) {
         _car.compose(
           _p.set(np.x + sin * half, 0.62, np.z + cos * half),
@@ -520,8 +555,7 @@ export function CityTraffic({
       if (
         L.active &&
         c.hitCd <= 0 &&
-        Math.abs(a) < half + 0.45 &&
-        Math.abs(lat) < c.v.wid / 2 + 0.45
+        batch.bodyContact(ci, L.px, L.pz, 0.4, L.feet ?? (L.py ?? 1.6) - 1.6, L.bodyHeight ?? 1.8)
       ) {
         const side = lat >= 0 ? 1 : -1;
         // (cos, -sin) is sideways across the car in world space

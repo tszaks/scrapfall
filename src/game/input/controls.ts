@@ -177,6 +177,7 @@ export function stepPadActions(env: { inCar: boolean }) {
     "shop3",
     "shopReroll",
     "shopHeal",
+    "shopRevive",
   ] as ControlAction[])
     if (hit(a)) emitControl(a, true, false, index(a));
   const rs = held("revive");

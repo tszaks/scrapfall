@@ -1,10 +1,18 @@
+import {
+  boundsMayTouchBody,
+  geometryBody,
+  geometryPoint,
+  geometryBounds,
+  geometryRayContact,
+  registerStaticInstances,
+} from "../staticCollision";
 // Dry Gulch's street life on screen: riders, buckboards and the stagecoach from riders.ts,
 // drawn as a handful of instanced meshes (horse bodies, swinging legs, riders' parts, coach and
 // wagon bodies), stepped on the host with the train's clock discipline and synced in its
 // snapshot. They bump you like cars, stop bullets like cars, and the posse's chase shows on
 // the minimap with Vice Heights' pursuit dots.
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { artMaterial } from "../art/kit";
@@ -15,7 +23,7 @@ import { DECK_Y, STOREY, sampleTerrain } from "./layout";
 import { groundY } from "../terrain";
 import { liveCars, pursuitDots, type TrafficLink } from "../trafficCore";
 import { mapEvent } from "../events/mapEvents";
-import { CAR_NEAR, CarBatch } from "../art/cars";
+import { CAR_NEAR, CarBatch, vehicleModel } from "../art/cars";
 import {
   COACH_WHEELS,
   horseVehicle,
@@ -64,6 +72,7 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _x = new THREE.Vector3(1, 0, 0);
 const _fr = new THREE.Matrix4();
 const _ws = new THREE.Vector3();
+const _partBounds = new THREE.Box3();
 
 /** horses of an agent: offsets (local x, z) of each horse from the agent's centre */
 function team(a: Agent): [number, number][] {
@@ -101,6 +110,16 @@ export function WesternRiders({
   const sim = useRef<Sim>(newSim(seed));
   const mat = useMemo(() => artMaterial({ paint: true, wear: 0.3 }), []);
   const geos = useMemo(horseArt, []);
+  const movingContacts = useRef(
+    new Map<
+      number,
+      {
+        count: number;
+        bounds: THREE.Box3;
+        parts: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[];
+      }
+    >(),
+  );
   const standing = useMemo(() => {
     const list = layout.props
       .filter((p) => p.k === "horse")
@@ -163,6 +182,43 @@ export function WesternRiders({
   }, [layout]);
   const wheelGeo = useMemo(() => woodWheelGeometry(), []);
   const wheelMat = useMemo(() => wheelMaterial(), []);
+  useLayoutEffect(() => {
+    const entries: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = [];
+    for (const h of standing) {
+      const frame = new THREE.Matrix4()
+        .makeRotationY(h.rot)
+        .setPosition(h.x, h.y, h.z)
+        .scale(new THREE.Vector3(h.s, h.s, h.s));
+      entries.push({ geometry: geos.body, matrix: frame });
+      for (const [x, z] of [
+        [-0.19, 0.55],
+        [0.19, 0.55],
+        [-0.19, -0.6],
+        [0.19, -0.6],
+      ])
+        entries.push({
+          geometry: geos.leg,
+          matrix: frame.clone().multiply(new THREE.Matrix4().makeTranslation(x!, 1.05, z!)),
+        });
+    }
+    for (const p of coaches.parked) {
+      const kind = p.k === "stagecoach" ? "stagecoach" : "buckboard",
+        model = vehicleModel(kind);
+      const frame = new THREE.Matrix4()
+        .makeRotationY(p.rot)
+        .setPosition(p.x, groundY(p.x, p.z), p.z);
+      entries.push({ geometry: model.near, matrix: frame });
+      for (const w of COACH_WHEELS[kind])
+        entries.push({
+          geometry: wheelGeo,
+          matrix: frame
+            .clone()
+            .multiply(new THREE.Matrix4().makeTranslation(w.x, w.y, w.z))
+            .scale(new THREE.Vector3(w.w, w.r, w.r)),
+        });
+    }
+    return registerStaticInstances("parked-horses-coaches", entries);
+  }, [standing, coaches, geos, wheelGeo]);
   useEffect(
     () => () => {
       Object.values(geos).forEach((g) => g.dispose());
@@ -266,60 +322,6 @@ export function WesternRiders({
       flash.current.visible = flashT.current > 0;
     }
     // ---- bumps: you get knocked like by a car; enemies are shoved aside ----
-    for (let i = 0; i < S.agents.length; i++) {
-      const a = S.agents[i]!;
-      if (a.hold === Infinity || a.speed < 0.8) continue;
-      const B = BOX[a.kind];
-      const hx = Math.sin(a.yaw);
-      const hz = Math.cos(a.yaw);
-      const cx = a.x + hx * (a.kind === 0 ? 0 : 0.6);
-      const cz = a.z + hz * (a.kind === 0 ? 0 : 0.6);
-      const inBox = (x: number, z: number, r: number) => {
-        const dx = x - cx;
-        const dz = z - cz;
-        const al = dx * hx + dz * hz;
-        const lt = dx * hz - dz * hx;
-        return Math.abs(al) < B.hl + r && Math.abs(lt) < B.hw + r ? lt : null;
-      };
-      const lt = inBox(L.px, L.pz, 0.4);
-      const cd = bumpCd.current.get(i) ?? 0;
-      if (lt !== null && L.active && performance.now() > cd) {
-        bumpCd.current.set(i, performance.now() + 900);
-        const side = lt >= 0 ? 1 : -1;
-        const push = 2.5 + a.speed * 0.6;
-        L.hitPlayer(
-          a.kind === 2 ? 2 : 1,
-          hx * a.speed * 0.6 + hz * side * push,
-          hz * a.speed * 0.6 - hx * side * push,
-          Math.min(1, a.speed / 8),
-        );
-      }
-      if (!guest)
-        for (const e of L.enemies) {
-          if (!e.alive) continue;
-          const el = inBox(e.x, e.z, L.radiusOf(e));
-          if (el === null) continue;
-          const side = el >= 0 ? 1 : -1;
-          e.x += hz * side * 0.25;
-          e.z -= hx * side * 0.25;
-        }
-    }
-    // ---- bullets stop on them (after the train has published its cars this frame) ----
-    for (const a of S.agents) {
-      if (a.hold === Infinity) continue;
-      const B = BOX[a.kind];
-      const hx = Math.sin(a.yaw);
-      const hz = Math.cos(a.yaw);
-      liveCars.push({
-        x: a.x + hx * (a.kind === 0 ? 0 : 0.6),
-        z: a.z + hz * (a.kind === 0 ? 0 : 0.6),
-        sin: hx,
-        cos: hz,
-        hl: B.hl,
-        hw: B.hw,
-        h: B.h,
-      });
-    }
     // ---- the minimap's pursuit dots ----
     pursuitDots.length = 0;
     S.agents.forEach((a, i) => {
@@ -338,15 +340,30 @@ export function WesternRiders({
     const C = coaches;
     const lit = tod.v > 0.45;
     let nwh = 0;
+    let collisionParts: {
+      count: number;
+      bounds: THREE.Box3;
+      parts: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[];
+    } | null = null;
+    const remember = (geometry: THREE.BufferGeometry, matrix: THREE.Matrix4) => {
+      if (!collisionParts) return;
+      const i = collisionParts.count++;
+      const part = (collisionParts.parts[i] ??= { geometry, matrix: new THREE.Matrix4() });
+      part.geometry = geometry;
+      part.matrix.copy(matrix);
+      collisionParts.bounds.union(geometryBounds(geometry, matrix, _partBounds));
+    };
     const near2 = CAR_NEAR * CAR_NEAR;
     /** the four wooden wheels of batch slot `si` at (x, y, z) facing yaw */
     const wheels = (si: number, x: number, y: number, z: number, yaw: number) => {
-      if ((x - cam.x) ** 2 + (z - cam.z) ** 2 > near2) return;
+      const draw = (x - cam.x) ** 2 + (z - cam.z) ** 2 <= near2;
       _fr.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, yaw), _s);
       for (const w of COACH_WHEELS[C.kinds[si]!]) {
         _qa.setFromAxisAngle(_x, C.roll[si]! / w.r);
         _m.compose(_p.set(w.x, w.y, w.z), _qa, _ws.set(w.w, w.r, w.r));
-        wheel.setMatrixAt(nwh++, _m.premultiply(_fr));
+        _m.premultiply(_fr);
+        remember(wheelGeo, _m);
+        if (draw) wheel.setMatrixAt(nwh++, _m);
       }
     };
     let nh = 0;
@@ -356,6 +373,14 @@ export function WesternRiders({
       const a = S.agents[ai]!;
       if (a.hold === Infinity) continue;
       if (Math.hypot(a.x - cam.x, a.z - cam.z) > 420) continue;
+      let parts = movingContacts.current.get(ai);
+      if (!parts) {
+        parts = { count: 0, bounds: new THREE.Box3(), parts: [] };
+        movingContacts.current.set(ai, parts);
+      }
+      collisionParts = parts;
+      parts.count = 0;
+      parts.bounds.makeEmpty();
       const gy = groundY(a.x, a.z);
       _q.setFromAxisAngle(_up, a.yaw);
       const hx = Math.sin(a.yaw);
@@ -371,6 +396,7 @@ export function WesternRiders({
       const coatAt = (k: number) => _c.set(COATS[(a.look + k) % COATS.length]!);
       team(a).forEach(([lx, lz], k) => {
         body.setMatrixAt(nh, _m.compose(at(lx, lz, bob), _q, _s));
+        remember(geos.body, _m);
         body.setColorAt(
           nh,
           a.role === ROLE_POSSE
@@ -390,6 +416,7 @@ export function WesternRiders({
           const sw = Math.sin(a.ph + off + k) * amp;
           _qa.setFromAxisAngle(_x, sw).premultiply(_q);
           leg.setMatrixAt(nl, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
+          remember(geos.leg, _m);
           leg.setColorAt(
             nl,
             a.role === ROLE_OUTLAW
@@ -406,6 +433,9 @@ export function WesternRiders({
       const riderPos = at(sx, sz, sy + (a.kind === 0 ? bob : 0));
       _m.compose(riderPos, _q, _s);
       torso.setMatrixAt(nr, _m);
+      remember(geos.torso, _m);
+      remember(geos.hat, _m);
+      remember(geos.legs, _m);
       torso.setColorAt(
         nr,
         _c.set(
@@ -436,10 +466,12 @@ export function WesternRiders({
         const pz = p.z;
         C.roll[si] = (C.roll[si]! + a.speed * dt) % 1e4;
         C.batch.place(si, px, groundY(px, pz), pz, a.yaw, { lit });
+        parts.bounds.union(C.batch.contactBounds(si));
         wheels(si, px, groundY(px, pz), pz, a.yaw);
         _q.setFromAxisAngle(_up, a.yaw);
       }
     }
+    collisionParts = null;
     // Tied and stable horses use the same art and footprints as the moving teams.
     for (const h of standing) {
       if (Math.hypot(h.x - cam.x, h.z - cam.z) > 420) continue;
@@ -466,6 +498,105 @@ export function WesternRiders({
         C.batch.place(si, 1e5, 0, 1e5, 0);
     });
     C.parked.forEach((p, n) => wheels(C.movers + n, p.x, groundY(p.x, p.z), p.z, p.rot));
+    const movingBody = (i: number) => {
+      const c = movingContacts.current.get(i),
+        si = C.slotOf.get(i),
+        feet = L.feet ?? (L.py ?? 1.6) - 1.6,
+        h = L.bodyHeight ?? 1.8;
+      if (!c || !boundsMayTouchBody(c.bounds, L.px, L.pz, 0.4, feet, h)) return false;
+      if (si !== undefined && C.batch.bodyContact(si, L.px, L.pz, 0.4, feet, h)) return true;
+      return (
+        !!c &&
+        c.parts.some(
+          (p, n) => n < c.count && geometryBody(p.geometry, p.matrix, L.px, L.pz, 0.4, feet, h),
+        )
+      );
+    };
+    const movingPoint = (i: number, x: number, y: number, z: number) => {
+      const c = movingContacts.current.get(i),
+        si = C.slotOf.get(i);
+      if (si !== undefined && C.batch.pointContact(si, x, y, z)) return true;
+      return (
+        !!c && c.parts.some((p, n) => n < c.count && geometryPoint(p.geometry, p.matrix, x, y, z))
+      );
+    };
+    const movingRay = (
+      i: number,
+      a: { x: number; y: number; z: number },
+      b: { x: number; y: number; z: number },
+    ) => {
+      const c = movingContacts.current.get(i),
+        si = C.slotOf.get(i);
+      let t = si === undefined ? Infinity : (C.batch.rayContact(si, a, b) ?? Infinity);
+      if (c)
+        for (let n = 0; n < c.count; n++) {
+          const p = c.parts[n]!;
+          t = Math.min(t, geometryRayContact(p.geometry, p.matrix, a, b) ?? Infinity);
+        }
+      return Number.isFinite(t) ? t : undefined;
+    };
+    for (let i = 0; i < S.agents.length; i++) {
+      const a = S.agents[i]!;
+      if (a.hold === Infinity || a.speed < 0.8 || Math.hypot(a.x - cam.x, a.z - cam.z) > 420)
+        continue;
+      const B = BOX[a.kind];
+      const hx = Math.sin(a.yaw);
+      const hz = Math.cos(a.yaw);
+      const cx = a.x + hx * (a.kind === 0 ? 0 : 0.6);
+      const cz = a.z + hz * (a.kind === 0 ? 0 : 0.6);
+      const inBox = (x: number, z: number, r: number) => {
+        const dx = x - cx;
+        const dz = z - cz;
+        const al = dx * hx + dz * hz;
+        const lt = dx * hz - dz * hx;
+        return Math.hypot(Math.max(0, Math.abs(al) - B.hl), Math.max(0, Math.abs(lt) - B.hw)) < r
+          ? lt
+          : null;
+      };
+      const lt = (L.px - cx) * hz - (L.pz - cz) * hx;
+      const cd = bumpCd.current.get(i) ?? 0;
+      if (L.active && movingBody(i) && performance.now() > cd) {
+        bumpCd.current.set(i, performance.now() + 900);
+        const side = lt >= 0 ? 1 : -1;
+        const push = 2.5 + a.speed * 0.6;
+        L.hitPlayer(
+          a.kind === 2 ? 2 : 1,
+          hx * a.speed * 0.6 + hz * side * push,
+          hz * a.speed * 0.6 - hx * side * push,
+          Math.min(1, a.speed / 8),
+        );
+      }
+      if (!guest)
+        for (const e of L.enemies) {
+          if (!e.alive) continue;
+          const el = inBox(e.x, e.z, L.radiusOf(e));
+          if (el === null) continue;
+          const side = el >= 0 ? 1 : -1;
+          e.x += hz * side * 0.25;
+          e.z -= hx * side * 0.25;
+        }
+    }
+    // ---- bullets stop on them (after the train has published its cars this frame) ----
+    for (let ai = 0; ai < S.agents.length; ai++) {
+      const a = S.agents[ai]!;
+      if (a.hold === Infinity || Math.hypot(a.x - cam.x, a.z - cam.z) > 420) continue;
+      const B = BOX[a.kind];
+      const hx = Math.sin(a.yaw);
+      const hz = Math.cos(a.yaw);
+      liveCars.push({
+        x: a.x + hx * (a.kind === 0 ? 0 : 0.6),
+        z: a.z + hz * (a.kind === 0 ? 0 : 0.6),
+        sin: hx,
+        cos: hz,
+        hl: B.hl,
+        hw: B.hw,
+        h: groundY(a.x, a.z) + B.h,
+        base: groundY(a.x, a.z),
+        bounds: movingContacts.current.get(ai)!.bounds,
+        rayContact: (a, b) => movingRay(ai, a, b),
+        contact: (x, y, z) => movingPoint(ai, x, y, z),
+      });
+    }
     C.batch.commit(state.camera);
     wheel.count = nwh;
     wheel.instanceMatrix.needsUpdate = true;

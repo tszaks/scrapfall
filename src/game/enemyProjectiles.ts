@@ -1,3 +1,5 @@
+import { trafficRayContact } from "./trafficCore";
+import { staticCollisionReady, staticRayContact, withoutStaticPoints } from "./staticCollision";
 /** Enemy projectiles are simulated and resolved once by the host. Guest snapshots are visual. */
 export type ShotTarget = { id: string | null; x: number; y: number; z: number };
 type Point = { x: number; y: number; z: number };
@@ -49,25 +51,37 @@ export function firstShotTarget(
 const probe: Point = { x: 0, y: 0, z: 0 };
 /** First sampled world contact along a round's whole movement, not only its endpoint. */
 export function firstWorldHit(from: Point, to: Point, stop: (p: Point) => boolean) {
-  const dx = to.x - from.x,
-    dy = to.y - from.y,
-    dz = to.z - from.z;
-  const n = Math.max(1, Math.ceil(Math.hypot(dx, dy, dz) / 0.1));
-  for (let i = 0; i <= n; i++) {
-    const t = i / n;
-    probe.x = from.x + dx * t;
-    probe.y = from.y + dy * t;
-    probe.z = from.z + dz * t;
-    if (stop(probe)) {
-      let lo=Math.max(0,(i-1)/n),hi=t;
-      for(let j=0;j<8;j++) {
-        const mid=(lo+hi)/2;probe.x=from.x+dx*mid;probe.y=from.y+dy*mid;probe.z=from.z+dz*mid;
-        if(stop(probe))hi=mid;else lo=mid;
+  const nearest = Math.min(
+    staticCollisionReady() ? (staticRayContact(from, to) ?? Infinity) : Infinity,
+    trafficRayContact(from, to) ?? Infinity,
+  );
+  const mesh = Number.isFinite(nearest) ? nearest : undefined;
+  return withoutStaticPoints(() => {
+    const dx = to.x - from.x,
+      dy = to.y - from.y,
+      dz = to.z - from.z;
+    const limit = mesh ?? 1,
+      n = Math.max(1, Math.ceil((Math.hypot(dx, dy, dz) * limit) / 0.1));
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * limit;
+      probe.x = from.x + dx * t;
+      probe.y = from.y + dy * t;
+      probe.z = from.z + dz * t;
+      if (!stop(probe)) continue;
+      let lo = Math.max(0, ((i - 1) / n) * limit),
+        hi = t;
+      for (let j = 0; j < 7; j++) {
+        const m = (lo + hi) / 2;
+        probe.x = from.x + dx * m;
+        probe.y = from.y + dy * m;
+        probe.z = from.z + dz * m;
+        if (stop(probe)) hi = m;
+        else lo = m;
       }
       return hi;
     }
-  }
-  return undefined;
+    return mesh;
+  });
 }
 /** Ordered player contact and sampled world sweep. `null` is cover, `undefined` is clear.
  * Only test the prefix before the earliest player, so a wall behind them cannot erase a hit.
@@ -80,16 +94,11 @@ export function firstShotImpact(
 ) {
   const hit = firstShotContact(from, to, targets);
   const limit = hit?.t ?? 1;
-  const dx = (to.x - from.x) * limit,
-    dy = (to.y - from.y) * limit,
-    dz = (to.z - from.z) * limit;
-  const count = Math.max(1, Math.ceil(Math.hypot(dx, dy, dz) / 0.1));
-  for (let i = 0; i <= count; i++) {
-    const t = i / count;
-    probe.x = from.x + dx * t;
-    probe.y = from.y + dy * t;
-    probe.z = from.z + dz * t;
-    if (stop(probe)) return null;
-  }
+  const end = {
+    x: from.x + (to.x - from.x) * limit,
+    y: from.y + (to.y - from.y) * limit,
+    z: from.z + (to.z - from.z) * limit,
+  };
+  if (firstWorldHit(from, end, stop) !== undefined) return null;
   return hit?.target;
 }

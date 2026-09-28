@@ -42,6 +42,7 @@ const PAD_ACTIONS: ControlAction[] = [
   "shop3",
   "shopReroll",
   "shopHeal",
+  "shopRevive",
 ];
 const names = Object.keys(BTN) as ButtonName[];
 export function ControlSettings() {
@@ -282,7 +283,7 @@ export function ControlSettings() {
               <p>
                 {tab === "kbm"
                   ? "Press a key or mouse button."
-                  : `Release the buttons, then press a controller button. On the next screen, confirm with ${glyph("A",dev.padType)} or cancel with ${glyph("B",dev.padType)}.`}
+                  : `Release the buttons, then press a controller button. On the next screen, confirm with ${glyph("A", dev.padType)} or cancel with ${glyph("B", dev.padType)}.`}
               </p>
             ) : (
               <p>

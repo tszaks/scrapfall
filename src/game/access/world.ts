@@ -1,3 +1,4 @@
+import { setStaticShotExemption } from "../staticCollision";
 import { spiralContains, spiralRegion, spiralRise, spiralPoint, TAU } from "./spiral";
 // The building-access runtime: one installed set of access buildings for the current map.
 //
@@ -18,15 +19,7 @@ import { spiralContains, spiralRegion, spiralRise, spiralPoint, TAU } from "./sp
 // (x, z) can be the lobby, the car at any height or the vestibule on the roof.
 import { blockHook, clearLine, type Block, type NavGrid, NAV_SCALE, BLOCK, HALF } from "../level";
 import { groundHook, groundY } from "../terrain";
-import {
-  BODY_R,
-  CAR_D,
-  CAR_W,
-  rideY,
-  toLocal,
-  toWorld,
-  type AccessBuilding,
-} from "./layout";
+import { BODY_R, CAR_D, CAR_W, rideY, toLocal, toWorld, type AccessBuilding } from "./layout";
 import type { LRect, Portal } from "./types";
 import { registerPingTarget } from "../ping";
 
@@ -96,7 +89,17 @@ type AccWorld = {
 };
 
 let W: AccWorld | null = null;
-export const player: PlayerAcc = { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0, press: 0 };
+export const player: PlayerAcc = {
+  zone: 0,
+  b: -1,
+  level: 0,
+  inCar: false,
+  lap: 0,
+  region: 0,
+  climb: 0,
+  y: 0,
+  press: 0,
+};
 
 export function accessList(): AccessBuilding[] {
   return W ? W.list : [];
@@ -112,12 +115,28 @@ export function portalDoor(b: number, which: 0 | 1) {
 }
 
 function newCar(): Car {
-  return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, armed: [true, true], carried: false, departs: 0, arrivals: 0 };
+  return {
+    phase: IDLE,
+    level: 0,
+    from: 0,
+    t: 0,
+    hold: 0,
+    armed: [true, true],
+    carried: false,
+    departs: 0,
+    arrivals: 0,
+  };
 }
 
 /** A way up a map built by hand (Dry Gulch's saloon and belfry stairs): pingable and on the
  * minimap, but not run by this system. */
-export type AccessMarker = { x: number; z: number; y: number; kind: AccessBuilding["kind"]; label: string };
+export type AccessMarker = {
+  x: number;
+  z: number;
+  y: number;
+  kind: AccessBuilding["kind"];
+  label: string;
+};
 let markers: AccessMarker[] = [];
 export function accessMarkers() {
   return markers;
@@ -129,7 +148,14 @@ function registerPings(targets: { x: number; y: number; z: number; label: string
   unping = null;
   if (!targets.length) return;
   unping = registerPingTarget((o, dir, maxDist) => {
-    let best: { x: number; y: number; z: number; kind: "elev"; label: string; dist: number } | null = null;
+    let best: {
+      x: number;
+      y: number;
+      z: number;
+      kind: "elev";
+      label: string;
+      dist: number;
+    } | null = null;
     for (const t of targets) {
       const vx = t.x - o.x;
       const vy = t.y - o.y;
@@ -138,7 +164,8 @@ function registerPings(targets: { x: number; y: number; z: number; label: string
       if (along < 0.5 || along > maxDist) continue;
       const perp = Math.hypot(vx - dir.x * along, vy - dir.y * along, vz - dir.z * along);
       if (perp > Math.max(1.3, along * Math.tan((4 * Math.PI) / 180))) continue;
-      if (!best || along < best.dist) best = { x: t.x, y: t.y, z: t.z, kind: "elev", label: t.label, dist: along };
+      if (!best || along < best.dist)
+        best = { x: t.x, y: t.y, z: t.z, kind: "elev", label: t.label, dist: along };
     }
     return best;
   });
@@ -152,19 +179,41 @@ const LABEL: Record<AccessBuilding["kind"], [string, string]> = {
 
 /** Install the access buildings for a new map (null / [] uninstalls every hook). */
 export function installAccess(list: AccessBuilding[] | null, extra: AccessMarker[] = []) {
+  setStaticShotExemption(
+    list?.length
+      ? (x, y, z) => {
+          for (let i = 0; i < list.length; i++) {
+            const b = list[i]!;
+            if (!b.spec.punch) continue;
+            for (const side of [0, 1] as const) {
+              const q = b.portals[side],
+                floor = side ? b.top : b.groundY;
+              if (!q.open && (W?.doors[i]?.[side] ?? 0) < 0.55) continue;
+              if (
+                y < floor + 0.03 ||
+                y > floor + (side ? 2.2 : (b.spec.doorH ?? (b.elev ? 2.9 : 2.45)))
+              )
+                continue;
+              const [a, d] = toLocal(b, x, z),
+                off = portalOffset(q, a, d);
+              if (Math.abs(off.lat) < q.half - 0.02 && Math.abs(off.out) < 0.65) return true;
+            }
+          }
+          return false;
+        }
+      : null,
+  );
   resetPlayer();
   markers = extra;
-  registerPings(
-    [
-      ...(list ?? []).flatMap((b) =>
-        b.portals.map((q, i) => {
-          const [x, z] = toWorld(b, q.a + q.na * 0.3, q.d + q.nd * 0.3);
-          return { x, y: (i ? b.top : b.groundY) + 1.3, z, label: LABEL[b.kind][i]! };
-        }),
-      ),
-      ...extra.map((m) => ({ x: m.x, y: m.y + 1.3, z: m.z, label: m.label })),
-    ],
-  );
+  registerPings([
+    ...(list ?? []).flatMap((b) =>
+      b.portals.map((q, i) => {
+        const [x, z] = toWorld(b, q.a + q.na * 0.3, q.d + q.nd * 0.3);
+        return { x, y: (i ? b.top : b.groundY) + 1.3, z, label: LABEL[b.kind][i]! };
+      }),
+    ),
+    ...extra.map((m) => ({ x: m.x, y: m.y + 1.3, z: m.z, label: m.label })),
+  ]);
   if (!list || list.length === 0) {
     W = null;
     blockHook.fn = null;
@@ -208,7 +257,16 @@ export function pressCarButton() {
 }
 
 export function resetPlayer() {
-  Object.assign(player, { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0 });
+  Object.assign(player, {
+    zone: 0,
+    b: -1,
+    level: 0,
+    inCar: false,
+    lap: 0,
+    region: 0,
+    climb: 0,
+    y: 0,
+  });
 }
 
 /** index of the roof whose walkable rectangle contains (x, z), or -1 */
@@ -236,7 +294,8 @@ export const zoneAt = (x: number, z: number) => {
 function roofBlocked(b: AccessBuilding, x: number, z: number, r: number) {
   const R = b.spec.roof;
   if (x < R.x0 + r || x > R.x1 - r || z < R.z0 + r || z > R.z1 - r) return true;
-  for (const o of b.obstacles) if (x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r) return true;
+  for (const o of b.obstacles)
+    if (x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r) return true;
   return false;
 }
 
@@ -271,7 +330,11 @@ type Who = { a: number; d: number; code: number };
  */
 /** host: each player's last seen button-press count (a higher count = a new press) */
 const pressSeen = new Map<string, number>();
-export function stepCars(dt: number, people: { x: number; z: number; az: number; id?: string; press?: number }[], host: boolean) {
+export function stepCars(
+  dt: number,
+  people: { x: number; z: number; az: number; id?: string; press?: number }[],
+  host: boolean,
+) {
   const w = W;
   if (!w) return;
   // new button presses this frame, by the building the presser rides in
@@ -280,7 +343,8 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number;
     if (p.id === undefined || p.press === undefined) continue;
     const seen = pressSeen.get(p.id);
     pressSeen.set(p.id, p.press);
-    if (seen !== undefined && p.press > seen && p.az > 0 && azCode(p.az) === AZ_CAR) pressedIn.add(azBuilding(p.az));
+    if (seen !== undefined && p.press > seen && p.az > 0 && azCode(p.az) === AZ_CAR)
+      pressedIn.add(azBuilding(p.az));
   }
   w.list.forEach((b, k) => {
     const E = b.elev;
@@ -303,10 +367,20 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number;
     }
     const inCar = here.filter((h) => h.code === AZ_CAR);
     const inDoor = here.some(
-      (h) => Math.abs(h.a) < CAR_W / 2 && h.d > E.coreFront - 0.45 && h.d < E.car.d0 + BODY_R + 0.05 && (h.code === AZ_CAR || h.code === (c.level ? AZ_UP : AZ_DOWN)),
+      (h) =>
+        Math.abs(h.a) < CAR_W / 2 &&
+        h.d > E.coreFront - 0.45 &&
+        h.d < E.car.d0 + BODY_R + 0.05 &&
+        (h.code === AZ_CAR || h.code === (c.level ? AZ_UP : AZ_DOWN)),
     );
     const atButton = (code: number) =>
-      here.some((h) => h.code === code && h.d > E.coreFront - CALL_DEPTH && h.d < E.coreFront + 0.05 && Math.abs(h.a - CALL_A) < CALL_HALF);
+      here.some(
+        (h) =>
+          h.code === code &&
+          h.d > E.coreFront - CALL_DEPTH &&
+          h.d < E.coreFront + 0.05 &&
+          Math.abs(h.a - CALL_A) < CALL_HALF,
+      );
     const callAt = [atButton(AZ_DOWN), atButton(AZ_UP)] as const;
     for (const f of [0, 1] as const) if (!callAt[f]) c.armed[f] = true; // stepped away: re-armed
     // standing at the button of the floor where the car is open: that call is served
@@ -430,7 +504,8 @@ export function remoteFloorY(az: number | undefined, ay: number | undefined, fal
 // ---------------------------------------------------------------- the local player
 
 const inRects = (rects: LRect[], a: number, d: number, r: number) => {
-  for (const q of rects) if (a >= q.a0 + r && a <= q.a1 - r && d >= q.d0 + r && d <= q.d1 - r) return true;
+  for (const q of rects)
+    if (a >= q.a0 + r && a <= q.a1 - r && d >= q.d0 + r && d <= q.d1 - r) return true;
   return false;
 };
 
@@ -517,20 +592,50 @@ function stairRects(b: AccessBuilding, st: PlayerAcc, doors: [number, number]): 
   return out;
 }
 
-function insideStair(b: AccessBuilding, st: PlayerAcc, rects: LRect[], a: number, d: number, r: number) {
+function insideStair(
+  b: AccessBuilding,
+  st: PlayerAcc,
+  rects: LRect[],
+  a: number,
+  d: number,
+  r: number,
+) {
   const s = b.stair;
-  return s?.spiral ? spiralContains(s.spiral, a, d, r, rects, st.lap, s.laps, st.region) : inRects(rects, a, d, r);
+  return s?.spiral
+    ? spiralContains(s.spiral, a, d, r, rects, st.lap, s.laps, st.region)
+    : inRects(rects, a, d, r);
 }
 
 /** interior collision for the local player, `undefined` outside (use the normal grid) */
-export function playerBlocked(x: number, z: number, r: number): boolean | undefined {
+export function playerBlocked(
+  x: number,
+  z: number,
+  r: number,
+  feet = player.y,
+): boolean | undefined {
   const w = W;
   const p = player;
-  if (!w || p.zone !== 1) return undefined;
+  if (!w) return undefined;
+  if (p.zone !== 1) {
+    // Punch-host facades and ladders need their narrow authored portal before the
+    // interior transition threshold. Height prevents this opening on other storeys.
+    for (const b of w.list)
+      for (const side of [0, 1] as const) {
+        if (Math.abs(feet - (side ? b.top : b.groundY)) > 0.3) continue;
+        const [a, d] = toLocal(b, x, z),
+          q = b.portals[side],
+          offset = portalOffset(q, a, d);
+        const half = b.ladder ? 0.5 : q.half - r - 0.02;
+        if (Math.abs(offset.lat) < half && offset.out > -0.25 && offset.out < 1.25) return false;
+      }
+    return undefined;
+  }
   const b = w.list[p.b]!;
   if (b.ladder) return true; // on a ladder the climb moves you (stepPlayer)
   const [a, d] = toLocal(b, x, z);
-  const rects = b.elev ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!) : stairRects(b, p, w.doors[p.b]!);
+  const rects = b.elev
+    ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!)
+    : stairRects(b, p, w.doors[p.b]!);
   return !insideStair(b, p, rects, a, d, r);
 }
 
@@ -655,10 +760,13 @@ export function stepPlayer(
       if (b.stair?.spiral) {
         const sp = b.stair.spiral;
         for (let i = 0; i < 120; i++) {
-          const [ca, cd] = spiralPoint(sp, i * TAU / 120, (sp.inner + sp.outer) / 2);
+          const [ca, cd] = spiralPoint(sp, (i * TAU) / 120, (sp.inner + sp.outer) / 2);
           if (!insideStair(b, p, rects, ca, cd, BODY_R)) continue;
           const dist = Math.hypot(ca - a, cd - d);
-          if (dist < bd) { bd = dist; best = [ca, cd]; }
+          if (dist < bd) {
+            bd = dist;
+            best = [ca, cd];
+          }
         }
       }
       if (best && bd < 1.5) {
@@ -709,12 +817,21 @@ export function stepPlayer(
   p.region = reg;
   p.level = p.lap >= s.laps ? 1 : 0;
   if (reg === 0) {
-    if (p.lap === 0 && portalOffset(b.portals[0], a, d).out > 0.72 && !streetBlocked(pos.x, pos.z, BODY_R)) {
+    if (
+      p.lap === 0 &&
+      portalOffset(b.portals[0], a, d).out > 0.72 &&
+      !streetBlocked(pos.x, pos.z, BODY_R)
+    ) {
       Object.assign(p, { zone: 0, b: -1 });
       p.y = groundY(pos.x, pos.z);
       return p.y;
     }
-    if (p.lap >= s.laps && portalOffset(b.portals[1], a, d).out > 0.72 && roofAt(pos.x, pos.z) === k && !roofBlocked(b, pos.x, pos.z, BODY_R)) {
+    if (
+      p.lap >= s.laps &&
+      portalOffset(b.portals[1], a, d).out > 0.72 &&
+      roofAt(pos.x, pos.z) === k &&
+      !roofBlocked(b, pos.x, pos.z, BODY_R)
+    ) {
       p.zone = 2;
       p.y = b.top;
       return p.y;
@@ -806,7 +923,11 @@ export function patchNav(nav: NavGrid) {
 }
 
 /** enemies (alive or about to land) on roof b */
-export function roofCount(b: number, enemies: { x: number; z: number; alive: boolean }[], pend: ({ x: number; z: number; placed?: boolean } | null)[] = []) {
+export function roofCount(
+  b: number,
+  enemies: { x: number; z: number; alive: boolean }[],
+  pend: ({ x: number; z: number; placed?: boolean } | null)[] = [],
+) {
   let n = 0;
   for (const e of enemies) if (e.alive && roofAt(e.x, e.z) === b) n++;
   for (const pd of pend) if (pd?.placed && roofAt(pd.x, pd.z) === b) n++;
@@ -862,7 +983,11 @@ export function doorstep(b: number) {
 
 /** for the test handle */
 export function debugState() {
-  return { player: { ...player }, cars: W?.cars.map((c) => ({ ...c })) ?? [], doors: W?.doors ?? [] };
+  return {
+    player: { ...player },
+    cars: W?.cars.map((c) => ({ ...c })) ?? [],
+    doors: W?.doors ?? [],
+  };
 }
 
 export { CAR_D };
@@ -880,7 +1005,8 @@ export function bulletBlocked(x: number, y: number, z: number): boolean | undefi
   const rk = roofAt(x, z);
   if (rk >= 0) {
     const rb = w.list[rk]!;
-    if (y >= rb.top - 0.05 && y <= rb.top + rb.roomH) return y < rb.top || roofBlocked(rb, x, z, 0.02) || (rb.room && y > rb.top + rb.roomH - 0.08);
+    if (y >= rb.top - 0.05 && y <= rb.top + rb.roomH)
+      return y < rb.top || roofBlocked(rb, x, z, 0.02) || (rb.room && y > rb.top + rb.roomH - 0.08);
   }
   if (p.zone !== 1 || w.list[p.b]!.ladder) return undefined;
   const I = w.list[p.b]!.interior;

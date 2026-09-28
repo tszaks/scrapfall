@@ -94,7 +94,7 @@ const RIM = "#b4c4c0";
 const RIM2 = "#8ea49c";
 
 /** near spruce, unit height, base radius ~0.22 */
-export function spruceGeo(narrow = false) {
+export function spruceGeo(narrow = false, trunkOnly = false) {
   const b: Build = { pos: [], col: [], nor: [] };
   // trunk
   const tr = 0.024;
@@ -109,6 +109,7 @@ export function spruceGeo(narrow = false) {
     tri(b, p0, q0, p1, "#4a3526");
     tri(b, p1, q0, q1, "#4a3526");
   }
+  if (trunkOnly) return toGeo(b);
   // branches right down to the snow (as real spruce grow): from below you see needles,
   // never a dark ceiling of undersides
   const n = narrow ? 8 : 7;

@@ -73,6 +73,42 @@ export function sampleTerrain(t: Terrain, x: number, z: number) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
+/** Exact barycentric height of the river strip rendered in Western.tsx. */
+export function riverSurface(t: Terrain, x: number, z: number): number | null {
+  const x0 = -t.half + RIVER_END,
+    x1 = t.half - RIVER_END;
+  if (x < x0 || x > x1) return null;
+  const ax = Math.min(x1 - 2, x0 + Math.floor((x - x0) / 2) * 2),
+    bx = ax + 2,
+    u = (x - ax) / 2;
+  const az = riverZ(ax),
+    bz = riverZ(bx),
+    aw = riverW(ax) / 2 + RIVER_EDGE,
+    bw = riverW(bx) / 2 + RIVER_EDGE;
+  const lo = (az - aw) * (1 - u) + (bz - bw) * u,
+    hi = (az + aw) * (1 - u) + (bz + bw) * u;
+  if (z < lo || z > hi) return null;
+  const k = Math.min(47, Math.floor(((z - lo) / (hi - lo)) * 48));
+  const vertex = (px: number, center: number, w: number, n: number): [number, number, number] => {
+    const pz = center - w + (2 * w * n) / 48;
+    return [px, n === 0 || n === 48 ? -0.03 : Math.min(sampleTerrain(t, px, pz), -0.01), pz];
+  };
+  const a = vertex(ax, az, aw, k),
+    b = vertex(ax, az, aw, k + 1),
+    c = vertex(bx, bz, bw, k + 1),
+    d = vertex(bx, bz, bw, k);
+  const triangle = z >= a[2] + u * (c[2] - a[2]) ? [a, b, c] : [a, c, d];
+  const [p, q, r] = triangle as [
+    [number, number, number],
+    [number, number, number],
+    [number, number, number],
+  ];
+  const det = (q[2] - r[2]) * (p[0] - r[0]) + (r[0] - q[0]) * (p[2] - r[2]);
+  const v = ((q[2] - r[2]) * (x - r[0]) + (r[0] - q[0]) * (z - r[2])) / det;
+  const w = ((r[2] - p[2]) * (x - r[0]) + (p[0] - r[0]) * (z - r[2])) / det;
+  return v * p[1] + w * q[1] + (1 - v - w) * r[1];
+}
+
 export type WMat = "clap" | "board" | "adobe" | "brick" | "stone" | "white" | "barn" | "log";
 export type WType =
   | "store"
@@ -2065,7 +2101,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       if (seen[c] || solid[c]) continue;
       sealed++;
       solid[c] = 1;
-      blocks.push({ x: cc(i), z: cc(j), h: 1, tone: 0 });
+      blocks.push({ x: cc(i), z: cc(j), h: 1, tone: 0, boundary: true });
     }
 
   // ======================================================================
@@ -2251,6 +2287,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     extraShot: shelves.hits,
   };
 
+  terrain.baseHeight = (x, z) => riverSurface(terrain, x, z) ?? 0;
   const layout: WesternLayout = {
     kind: "western",
     cells,

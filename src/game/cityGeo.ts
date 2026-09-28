@@ -12,11 +12,21 @@ const _c = new THREE.Color();
 export type P2 = [number, number];
 
 /** A frozen chunk of local-space vertices that can be stamped many times. */
-export type Tmpl = { data: Float32Array; count: number };
+export type Tmpl = { data: Float32Array; count: number; nonSolid?: [number, number][] };
 
 export class Geo {
   buf = new Float32Array(STRIDE * 2048);
   n = 0;
+  private nonSolid: [number, number][] = [];
+  decoration<T>(draw: () => T): T {
+    const start = this.n;
+    const out = draw();
+    this.excludeSince(start);
+    return out;
+  }
+  excludeSince(start: number) {
+    if (this.n > start) this.nonSolid.push([start, this.n - start]);
+  }
   private L = 0;
   private S = 0;
   private F = 0;
@@ -232,6 +242,7 @@ export class Geo {
     tint?: THREE.Color,
   ) {
     this.grow(t.count);
+    for (const [start, count] of t.nonSolid ?? []) this.nonSolid.push([this.n + start, count]);
     const s = Math.sin(rot);
     const c = Math.cos(rot);
     const src = t.data;
@@ -264,7 +275,11 @@ export class Geo {
     this.n += t.count;
   }
   freeze(): Tmpl {
-    return { data: this.buf.slice(0, this.n * STRIDE), count: this.n };
+    return {
+      data: this.buf.slice(0, this.n * STRIDE),
+      count: this.n,
+      nonSolid: this.nonSolid.slice(),
+    };
   }
   /** append a three.js geometry through a matrix (plain layer, current colour) */
   add(g: THREE.BufferGeometry, m: THREE.Matrix4) {
@@ -290,6 +305,7 @@ export class Geo {
     g.setAttribute("color", new THREE.InterleavedBufferAttribute(ib, 3, 6));
     g.setAttribute(uvName, new THREE.InterleavedBufferAttribute(ib, 2, 9));
     g.setAttribute("aFac", new THREE.InterleavedBufferAttribute(ib, 3, 11));
+    g.userData["nonSolid"] = this.nonSolid.slice();
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;

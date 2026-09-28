@@ -1,4 +1,4 @@
-import { contains, flightY, type Structure } from "./plan";
+import { circleTouches, contains, flightY, type Structure } from "./plan";
 
 let plans: Structure[] = [];
 const buckets = new Map<number, Structure[]>();
@@ -102,7 +102,7 @@ export function structureBody(
         p.floors.some((f) => Math.abs(f.y - v.y1) < 0.001 && contains(f, x, z, r))
       )
         continue;
-      if (contains(v, x, z, r)) return true;
+      if (circleTouches(v, x, z, r)) return true;
     }
     // Street enemies can enter furnished rooms, but have no navigation on player-only stairs.
     if (street && p.stairs.some((s) => contains(s, x, z, r))) return true;

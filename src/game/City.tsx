@@ -1,3 +1,4 @@
+import { registerStaticGeometry } from "./staticCollision";
 // Renders the "city" map from the merged chunk geometry built in cityMesh.ts.
 // One facade material (a texture array with every facade style) draws every building,
 // prop and road; glass reflects a small PMREM env map of the generated sky (night or sunset).
@@ -70,7 +71,11 @@ vec4 textureCubeUVMix( vec3 d, float r ) {
   return mix( textureCubeUV( envMap, d, r ), textureCubeUV( envMap2, d, r ), uEnvMix );
 }
 #endif
-` + THREE.ShaderChunk.envmap_physical_pars_fragment.replaceAll("textureCubeUV( envMap,", "textureCubeUVMix("),
+` +
+      THREE.ShaderChunk.envmap_physical_pars_fragment.replaceAll(
+        "textureCubeUV( envMap,",
+        "textureCubeUVMix(",
+      ),
   );
 }
 
@@ -412,6 +417,15 @@ export const CityScene = memo(function CityScene({
       );
     return m;
   }, [city]);
+  useLayoutEffect(
+    () =>
+      registerStaticGeometry(
+        "map",
+        built.chunks.flatMap((c) => [c.main, c.detail]),
+      ),
+    [built],
+  );
+
   const heights = useMemo(() => groundHeights(city), [city]);
 
   const nightK = useMemo(() => ({ value: 0 }), []);
@@ -495,7 +509,8 @@ export const CityScene = memo(function CityScene({
     mats.water.needsUpdate = true;
     setPowerArea(city.half + 40);
     power.nodePos.clear();
-    for (const l of built.lamps) if (!power.nodePos.has(l.node)) power.nodePos.set(l.node, [l.x, l.z]);
+    for (const l of built.lamps)
+      if (!power.nodePos.has(l.node)) power.nodePos.set(l.node, [l.x, l.z]);
     seenTod.current = -1;
   }, [envFor, mats, city, built]);
 

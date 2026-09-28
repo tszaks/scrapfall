@@ -1,3 +1,10 @@
+import {
+  boundsMayTouchBody,
+  geometryBody,
+  geometryPoint,
+  geometryBounds,
+  geometryRayContact,
+} from "../staticCollision";
 // Scrapfall vehicles: detailed car models and the instanced batch that draws them.
 //
 // SHARED VEHICLE-MODEL API (traffic, parked cars, and any other wheeled thing):
@@ -178,7 +185,10 @@ function frameOf(type: keyof typeof SPECS, look: Look): Frame {
   const zRf = cz + s.cabLen / 2 - look.rakeF * 0.35;
   const zWs = Math.min(F - 0.65, zRf + look.rakeF);
   const zRb = look.hatch ? R + 0.42 : cz - s.cabLen / 2 + look.rakeR * 0.35;
-  const zRw = look.hatch ? R + 0.14 : Math.max(R + 0.45, zRb - look.rakeR);
+  // End the rear window ahead of the wheel opening, including pillar thickness.
+  // A low sports beltline cannot carry a C-pillar through its rear tire.
+  const wheelZ = L / 2 - r - 0.45;
+  const zRw = look.hatch ? R + 0.14 : Math.max(R + 0.45, zRb - look.rakeR, -wheelZ + r + 0.24);
   return {
     L,
     W,
@@ -188,7 +198,7 @@ function frameOf(type: keyof typeof SPECS, look: Look): Frame {
     yb,
     yr,
     r,
-    ra: r + 0.07,
+    ra: r + 0.11,
     wz: L / 2 - r - (type === "bus" ? 1.1 : 0.45),
     zWs,
     zRf,
@@ -202,25 +212,48 @@ function frameOf(type: keyof typeof SPECS, look: Look): Frame {
 }
 
 /** the lower body outline: bumpers, hood, beltline, trunk, with both wheel arches cut out */
-function lowerShape(f: Frame, opts: { beltTo?: number } = {}) {
+function lowerShape(f: Frame, opts: { beltTo?: number; arches?: boolean; fenders?: boolean } = {}) {
   const { F, R, y0, yb, r, ra, wz, hf } = f;
   const a = Math.asin(Math.max(-0.99, Math.min(0.99, (y0 - r) / ra)));
   const dx = ra * Math.cos(a);
   const tailTop = yb - f.tail;
   return shapeOf((s) => {
     s.moveTo(R + 0.1, y0);
-    s.lineTo(-wz - dx, y0);
-    s.absarc(-wz, r, ra, PI - a, a, true);
-    s.lineTo(wz - dx, y0);
-    s.absarc(wz, r, ra, PI - a, a, true);
+    if (opts.arches !== false) {
+      s.lineTo(-wz - dx, y0);
+      s.absarc(-wz, r, ra, PI - a, a, true);
+      s.lineTo(wz - dx, y0);
+      s.absarc(wz, r, ra, PI - a, a, true);
+    }
     s.lineTo(F - 0.12, y0);
     s.quadraticCurveTo(F, y0, F, y0 + 0.12);
     s.lineTo(F, hf - 0.12);
     s.quadraticCurveTo(F, hf, F - 0.16, hf);
-    s.lineTo(f.zWs, yb);
     const back = opts.beltTo ?? (f.hatch ? R + 0.16 : f.zRw);
-    s.lineTo(back, yb);
-    if (!f.hatch && opts.beltTo === undefined) s.lineTo(R + 0.22, tailTop);
+    if (opts.arches !== false && opts.fenders !== false) {
+      // Separate quarter panels can rise around a wheel without lifting the center hood.
+      // The top contour always clears the arch, so extrusion never gets a crossed outline.
+      const outer = ra + 0.08;
+      for (let i = 0; i <= 64; i++) {
+        const z = F - 0.16 - ((F - R - 0.38) * i) / 64;
+        const base =
+          z > f.zWs
+            ? hf + ((yb - hf) * (F - 0.16 - z)) / (F - 0.16 - f.zWs)
+            : z < back
+              ? tailTop + ((yb - tailTop) * (z - (R + 0.22))) / (back - (R + 0.22))
+              : yb;
+        let top = base;
+        for (const axle of [-wz, wz]) {
+          const d = Math.abs(z - axle);
+          if (d < outer) top = Math.max(top, r + Math.sqrt(outer * outer - d * d));
+        }
+        s.lineTo(z, top);
+      }
+    } else {
+      s.lineTo(f.zWs, yb);
+      s.lineTo(back, yb);
+      if (!f.hatch && opts.beltTo === undefined) s.lineTo(R + 0.22, tailTop);
+    }
     s.quadraticCurveTo(R, tailTop, R, tailTop - 0.14);
     s.lineTo(R, y0 + 0.12);
     s.quadraticCurveTo(R, y0, R + 0.1, y0);
@@ -243,28 +276,35 @@ function cabinShape(f: Frame) {
 // ---------------------------------------------------------------- shared dressing
 function wheelWells(m: Model, f: Frame, far: boolean) {
   if (far) return; // the far wheels are solid blocks that fill the arches
-  // dark liners inside the arches (so you never see daylight through the body)
-  for (const z of [f.wz, -f.wz]) {
-    const g = new THREE.CylinderGeometry(
-      f.ra - 0.03,
-      f.ra - 0.03,
-      f.W - 0.1,
-      far ? 6 : 12,
-      1,
-      true,
-      PI / 2 - 1.3,
-      2.6,
-    );
-    m.geo(g, [0, f.r, z], [1, 1, 1], "#0c0c0d", SURF.rubber, { rot: [0, 0, PI / 2] });
-  }
+  // Four shallow wheel pockets. A full-width axle cylinder emerges through a low hood.
+  for (const z of [f.wz, -f.wz])
+    for (const side of [-1, 1]) {
+      const g = new THREE.CylinderGeometry(
+        f.ra - 0.02,
+        f.ra - 0.02,
+        0.24,
+        12,
+        1,
+        true,
+        PI / 2 - 1.3,
+        2.6,
+      );
+      m.geo(g, [side * (f.W / 2 - 0.24), f.r, z], [1, 1, 1], "#0c0c0d", SURF.rubber, {
+        rot: [0, 0, PI / 2],
+      });
+    }
   // underbody pan between the axles
-  m.box(f.W - 0.2, 0.06, f.L - 0.6, [0, f.y0 + 0.04, 0], "#101012", SURF.rubber);
+  m.box(f.W - 0.2, 0.06, 2 * (f.wz - f.ra) - 0.12, [0, f.y0 + 0.04, 0], "#101012", SURF.rubber);
 }
-/** far LOD wheels: one dark block per axle side (12 triangles), enough at 45 m+ */
+/** Low-detail round tires preserve the wheel opening at every distance. */
 function simpleWheels(m: Model, f: Frame, w = 0.26) {
   for (const z of [f.wz, -f.wz])
-    for (const sx of [1, -1])
-      m.box(w, f.r * 1.8, f.r * 1.8, [sx * (f.W / 2 - 0.13), f.r, z], RUBBER, SURF.tyre);
+    for (const sx of [1, -1]) {
+      const g = new THREE.CylinderGeometry(f.r, f.r, w, 12);
+      m.geo(g, [sx * (f.W / 2 - w / 2 - 0.02), f.r, z], [1, 1, 1], RUBBER, SURF.tyre, {
+        rot: [0, 0, PI / 2],
+      });
+    }
 }
 /** headlight / taillight housings and lenses (the lamp boxes light up in front of them) */
 function lenses(m: Model, f: Frame, headY: number, tailY: number, tailZ = f.R, far = false) {
@@ -428,10 +468,22 @@ function carBody(
   const f = frameOf(type, look);
   const m = new Model();
   const pickup = type === "pickup";
-  profile(m, lowerShape(f, pickup ? { beltTo: f.R + 0.14 } : {}), f.W, PAINT, CAR_PAINT, {
-    bevel: far ? 0 : 0.035,
-    seg: far ? 2 : 8,
-  });
+  const shapeOptions = pickup ? { beltTo: f.R + 0.14 } : {};
+  const pocket = 0.4;
+  profile(
+    m,
+    lowerShape(f, { ...shapeOptions, arches: false }),
+    f.W - 2 * pocket,
+    PAINT,
+    CAR_PAINT,
+    { bevel: far ? 0 : 0.02, seg: far ? 6 : 8 },
+  );
+  for (const side of [-1, 1])
+    profile(m, lowerShape(f, { ...shapeOptions, fenders: true }), pocket, PAINT, CAR_PAINT, {
+      bevel: far ? 0 : 0.025,
+      x: (side * (f.W - pocket)) / 2,
+      seg: far ? 6 : 8,
+    });
   wheelWells(m, f, far);
   const headY = f.hf - 0.13;
   const tailY = f.yb - f.tail - 0.2;
@@ -601,7 +653,7 @@ function vanBody(far: boolean) {
     yb,
     yr: top,
     r,
-    ra: r + 0.07,
+    ra: r + 0.11,
     wz: L / 2 - r - 0.45,
     zWs: F - 0.55,
     zRf: F - 1.2,
@@ -629,7 +681,7 @@ function vanBody(far: boolean) {
     sh.lineTo(F - 0.55, yb);
     sh.lineTo(split, yb);
   });
-  profile(m, cab, W * 0.96, PAINT, CAR_PAINT, { bevel: far ? 0 : 0.035, seg: far ? 2 : 8 });
+  profile(m, cab, W * 0.96, PAINT, CAR_PAINT, { bevel: far ? 0 : 0.035, seg: far ? 6 : 8 });
   const green = shapeOf((sh) => {
     sh.moveTo(F - 0.55, yb - 0.02);
     sh.lineTo(F - 1.15, cabTop - 0.05);
@@ -743,7 +795,7 @@ function busBody(far: boolean) {
     yb: y0 + 1.1,
     yr: top,
     r,
-    ra: r + 0.08,
+    ra: r + 0.11,
     wz: L / 2 - r - 1.1,
     zWs: F,
     zRf: F,
@@ -774,7 +826,7 @@ function busBody(far: boolean) {
     sh.lineTo(R, y0 + 0.1);
     sh.quadraticCurveTo(R, y0, R + 0.1, y0);
   });
-  profile(m, lower, W, PAINT, CAR_PAINT, { bevel: far ? 0 : 0.05, seg: far ? 2 : 8 });
+  profile(m, lower, W, PAINT, CAR_PAINT, { bevel: far ? 0 : 0.05, seg: far ? 6 : 8 });
   const cap = shapeOf((sh) => {
     sh.moveTo(R, winHi);
     sh.lineTo(F - 0.12, winHi);
@@ -863,7 +915,7 @@ function busBody(far: boolean) {
 // ---------------------------------------------------------------- the detailed wheel
 let WHEEL: THREE.BufferGeometry | null = null;
 /** unit wheel: radius 1, width 1, axle along x; tyre, alloy dish and five spokes on both faces */
-function wheelGeometry() {
+export function wheelGeometry() {
   if (WHEEL) return WHEEL;
   const m = new Model();
   m.push([0, 0, 0], [0, 0, PI / 2]); // lathe around y -> axle along x
@@ -993,10 +1045,11 @@ function stdWheels(f: Frame, w: number) {
   return (v: Vehicle): WheelSpot[] => {
     const kz = v.len / spec.len;
     const kx = v.wid / spec.wid;
-    const r = Math.min(v.wheel, f.r + 0.03);
+    const cavity = Math.min(f.ra, f.ra * kz) - 0.04;
+    const r = Math.min(v.wheel, (f.r + cavity) / 2);
     const out: WheelSpot[] = [];
     for (const z of [f.wz * kz, -f.wz * kz])
-      for (const sx of [1, -1]) out.push({ x: sx * (f.W / 2 - 0.13) * kx, y: r, z, r, w });
+      for (const sx of [1, -1]) out.push({ x: sx * (v.wid / 2 - w / 2 - 0.02), y: r, z, r, w });
     return out;
   };
 }
@@ -1137,7 +1190,9 @@ export function vehicleModel(type: string): VehicleModel {
           m.box(0.56, 0.12, 2.25, [0.3, 1.55, -1.3], "#f3d149", SURF.enamel, { bevel: 0.055 });
           for (const z of [-1.85, -0.7])
             m.box(0.59, 0.02, 0.06, [0.3, 1.62, z], "#303337", SURF.rubber);
-          m.box(0.55, 0.35, 0.55, [-0.45, 0.95, -1.65], "#e6e3d9", SURF.polymer, { bevel: 0.05 });
+          m.box(0.55, 0.35, 0.55, [-0.45, f.yb + 0.205, -1.65], "#e6e3d9", SURF.polymer, {
+            bevel: 0.05,
+          });
         }
       }
     const roofZ = (f.zRf + f.zRb) / 2;
@@ -1245,6 +1300,7 @@ const _c = new THREE.Color();
 const _frustum = new THREE.Frustum();
 const _proj = new THREE.Matrix4();
 const _sphere = new THREE.Sphere();
+const _boundsPart = new THREE.Box3();
 
 type Slot = {
   v: Vehicle;
@@ -1261,6 +1317,8 @@ type Slot = {
   lamps: Lamp[];
   extras: ExtraKey[];
   placed: boolean;
+  bounds: THREE.Box3;
+  boundsDirty: boolean;
   /** the type's meshes, and the paint colour (linear rgb) */
   group?: Group;
   rgb: [number, number, number];
@@ -1317,6 +1375,8 @@ export class CarBatch {
         lamps: ls,
         extras: ex,
         placed: false,
+        bounds: new THREE.Box3(),
+        boundsDirty: true,
         lit: false,
         bar: 0,
         rad: Math.hypot(v.len, v.wid) / 2 + 0.6,
@@ -1387,6 +1447,7 @@ export class CarBatch {
     const sl = this.slots[i];
     if (!sl) return;
     sl.placed = true;
+    sl.boundsDirty = true;
     if (i >= this.dynamic) this.cells = null; // a static vehicle moved: regrid
     sl.x = x;
     sl.y = y;
@@ -1399,6 +1460,57 @@ export class CarBatch {
     if (o.roll) sl.spin += o.roll / Math.max(0.2, sl.wheels[0]?.r ?? 0.33);
     sl.lit = !!o.lit;
     sl.bar = o.bar ?? 0;
+  }
+
+  /** Detailed collision remains stable across render LOD changes. */
+  private contact(
+    i: number,
+    test: (geometry: THREE.BufferGeometry, matrix: THREE.Matrix4) => boolean,
+  ) {
+    const sl = this.slots[i];
+    if (!sl?.placed) return false;
+    if (test(sl.model.near, sl.body) || (sl.model.glass && test(sl.model.glass, sl.body)))
+      return true;
+    for (const k of sl.extras) if (test(extraOf(k), sl.body)) return true;
+    for (const w of sl.wheels) {
+      _m.compose(_p.set(w.x, w.y, w.z), _q.setFromAxisAngle(_x, sl.spin), _s.set(w.w, w.r, w.r));
+      if (test(wheelGeometry(), _m2.multiplyMatrices(sl.frame, _m))) return true;
+    }
+    return false;
+  }
+  contactBounds(i: number) {
+    const sl = this.slots[i]!;
+    if (sl.boundsDirty) {
+      sl.bounds.makeEmpty();
+      this.contact(i, (g, m) => {
+        sl.bounds.union(geometryBounds(g, m, _boundsPart));
+        return false;
+      });
+      sl.boundsDirty = false;
+    }
+    return sl.bounds;
+  }
+  rayContact(
+    i: number,
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+  ) {
+    let t = Infinity;
+    this.contact(i, (g, m) => {
+      const h = geometryRayContact(g, m, a, b);
+      if (h !== undefined) t = Math.min(t, h);
+      return false;
+    });
+    return Number.isFinite(t) ? t : undefined;
+  }
+  bodyContact(i: number, x: number, z: number, r: number, feet: number, height = 1.8) {
+    return (
+      boundsMayTouchBody(this.contactBounds(i), x, z, r, feet, height) &&
+      this.contact(i, (g, m) => geometryBody(g, m, x, z, r, feet, height))
+    );
+  }
+  pointContact(i: number, x: number, y: number, z: number) {
+    return this.contact(i, (g, m) => geometryPoint(g, m, x, y, z));
   }
 
   /**

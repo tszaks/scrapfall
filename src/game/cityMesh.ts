@@ -463,7 +463,16 @@ function walls(
       cutWall(G, p, q, 0, 4.5, facadeUV(L.store, fw, 0, 4.5, 4.5, st.uOff, 0), cut, rooms);
       G.mat(layer, st.seed, 1).col(tint);
       const mods = Math.max(1, Math.round(fw / (MODULE_W[layer] ?? 3)));
-      cutWall(G, p, q, 4.5, y1, [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh], cut, rooms);
+      cutWall(
+        G,
+        p,
+        q,
+        4.5,
+        y1,
+        [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh],
+        cut,
+        rooms,
+      );
     } else {
       G.mat(layer, st.seed, 1).col(tint);
       cutWall(G, p, q, y0, y1, facadeUV(layer, fw, y0, y1, fh, st.uOff, st.vOff), cut, rooms);
@@ -478,13 +487,22 @@ type DoorCut = { x: number; z: number; facing: number; w: number; h: number };
  * pieces keep the whole wall's texture mapping (u runs q -> p across the full edge), so the
  * facade pattern doesn't shift around the opening.
  */
-function cutWall(G: Geo, p: P2, q: P2, y0: number, y1: number, uv: readonly number[], cut?: DoorCut, rooms: readonly Structure[] = []) {
+function cutWall(
+  G: Geo,
+  p: P2,
+  q: P2,
+  y0: number,
+  y1: number,
+  uv: readonly number[],
+  cut?: DoorCut,
+  rooms: readonly Structure[] = [],
+) {
   if (rooms.length) {
-    const U=(t:number)=>uv[2]!+(uv[0]!-uv[2]!)*t;
-    const V=(y:number)=>uv[1]!+(uv[3]!-uv[1]!)*(y-y0)/(y1-y0);
-    const at=(t:number):P2=>[p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t];
-    for(const r of facadePieces(p[0],p[1],q[0],q[1],y0,y1,rooms))
-      cutWall(G,at(r.t0),at(r.t1),r.y0,r.y1,[U(r.t1),V(r.y0),U(r.t0),V(r.y1)],cut);
+    const U = (t: number) => uv[2]! + (uv[0]! - uv[2]!) * t;
+    const V = (y: number) => uv[1]! + ((uv[3]! - uv[1]!) * (y - y0)) / (y1 - y0);
+    const at = (t: number): P2 => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    for (const r of facadePieces(p[0], p[1], q[0], q[1], y0, y1, rooms))
+      cutWall(G, at(r.t0), at(r.t1), r.y0, r.y1, [U(r.t1), V(r.y0), U(r.t0), V(r.y1)], cut);
     return;
   }
   if (!cut || cut.h <= y0 || sideOf(p, q) !== cut.facing) return G.wall(p, q, y0, y1, uv);
@@ -494,7 +512,8 @@ function cutWall(G: Geo, p: P2, q: P2, y0: number, y1: number, uv: readonly numb
   // the doorway centre must lie on this edge
   const off = Math.abs((cut.x - p[0]) * uz - (cut.z - p[1]) * ux);
   const t = (cut.x - p[0]) * ux + (cut.z - p[1]) * uz;
-  if (off > 0.05 || t - cut.w / 2 < 0.01 || t + cut.w / 2 > fw - 0.01) return G.wall(p, q, y0, y1, uv);
+  if (off > 0.05 || t - cut.w / 2 < 0.01 || t + cut.w / 2 > fw - 0.01)
+    return G.wall(p, q, y0, y1, uv);
   const [u0, v0, u1, v1] = uv as [number, number, number, number];
   const U = (s: number) => u1 + (u0 - u1) * (s / fw); // u at distance s from p
   const V = (y: number) => v0 + ((v1 - v0) * (y - y0)) / (y1 - y0);
@@ -1086,7 +1105,19 @@ function massPart(C: Ctx, p: Part, st: Style, b: Bld, store: boolean): { poly: P
     for (let k = 0; k < 4; k++) {
       const ya = y0 + p.h * fr[k]!;
       const yb = y0 + p.h * fr[k + 1]!;
-      walls(G, poly, ya, yb, st, b.street, store && k === 0 && y0 < 0.1, st.layer, st.tint, st.fh, k === 0 && y0 < 0.1 ? b.access?.door : undefined);
+      walls(
+        G,
+        poly,
+        ya,
+        yb,
+        st,
+        b.street,
+        store && k === 0 && y0 < 0.1,
+        st.layer,
+        st.tint,
+        st.fh,
+        k === 0 && y0 < 0.1 ? b.access?.door : undefined,
+      );
       const next = insetPoly(poly, ms * 0.1);
       if (k < 3) {
         G.mat(L.plain, st.seed, 1).col(st.tint, 1.08);
@@ -1101,7 +1132,20 @@ function massPart(C: Ctx, p: Part, st: Style, b: Bld, store: boolean): { poly: P
     return { poly, y: y1 };
   }
   const cut = b.access && y0 < 0.1 ? b.access.door : undefined;
-  walls(G, base, y0, y1, st, b.street, store && y0 < 0.1, st.layer, st.tint, st.fh, cut, b.grandWing ? [b.grandWing] : []);
+  walls(
+    G,
+    base,
+    y0,
+    y1,
+    st,
+    b.street,
+    store && y0 < 0.1,
+    st.layer,
+    st.tint,
+    st.fh,
+    cut,
+    b.grandWing ? [b.grandWing] : [],
+  );
   if (y0 > 0.1 && p.role !== "tower") {
     // overhanging upper block (cantilever): close its underside
     G.mat(L.plain, st.seed, 0).col(st.tint, 0.6);
@@ -1197,9 +1241,20 @@ function building(b: Bld, C: Ctx) {
   tops.forEach((t, k) => {
     if (k === hi) return;
     const shaft = b.access?.hole;
-    const hole = shaft && shaft.x0 >= t.p.x0 && shaft.x1 <= t.p.x1 && shaft.z0 >= t.p.z0 && shaft.z1 <= t.p.z1 ? shaft : undefined;
-    const inner = roof(G, t.poly, t.y + k * 0.03, st, 0.9, 0.35, st.roof, (p, q, ya, yb) =>
-      openSpans(vols, t.i, p, q, ya, yb), hole,
+    const hole =
+      shaft && shaft.x0 >= t.p.x0 && shaft.x1 <= t.p.x1 && shaft.z0 >= t.p.z0 && shaft.z1 <= t.p.z1
+        ? shaft
+        : undefined;
+    const inner = roof(
+      G,
+      t.poly,
+      t.y + k * 0.03,
+      st,
+      0.9,
+      0.35,
+      st.roof,
+      (p, q, ya, yb) => openSpans(vols, t.i, p, q, ya, yb),
+      hole,
     );
     if (hole) return; // no garden cap or randomly placed equipment across the continuous shaft
     if (t.p.role === "podium" && st.r() < 0.35) {
@@ -1549,17 +1604,17 @@ function construction(b: Bld, st: Style, C: Ctx) {
   )
     rows.push(z);
   if (!b.openFloors) {
-  G.mat(L.plain, st.seed, 1).col("#b8b4ac");
-  for (const x of cols) for (const z of rows) G.box(x, 0, z, 0.7, top, 0.7);
-  // floor slabs up to the built height, a concrete core to the top
-  G.col("#c8c4bc");
-  for (let k = 1; k <= built; k++) {
-    G.box((f.x0 + f.x1) / 2, k * 4 - 0.35, (f.z0 + f.z1) / 2, f.x1 - f.x0, 0.35, f.z1 - f.z0);
-    G.cap(rectPoly(f.x0, f.z0, f.x1, f.z1), k * 4 - 0.35, true);
-  }
-  G.col("#a8a49c");
-  const cw = Math.min(10, (f.x1 - f.x0) * 0.3);
-  G.box((f.x0 + f.x1) / 2, 0, (f.z0 + f.z1) / 2, cw, top + 4, cw);
+    G.mat(L.plain, st.seed, 1).col("#b8b4ac");
+    for (const x of cols) for (const z of rows) G.box(x, 0, z, 0.7, top, 0.7);
+    // floor slabs up to the built height, a concrete core to the top
+    G.col("#c8c4bc");
+    for (let k = 1; k <= built; k++) {
+      G.box((f.x0 + f.x1) / 2, k * 4 - 0.35, (f.z0 + f.z1) / 2, f.x1 - f.x0, 0.35, f.z1 - f.z0);
+      G.cap(rectPoly(f.x0, f.z0, f.x1, f.z1), k * 4 - 0.35, true);
+    }
+    G.col("#a8a49c");
+    const cw = Math.min(10, (f.x1 - f.x0) * 0.3);
+    G.box((f.x0 + f.x1) / 2, 0, (f.z0 + f.z1) / 2, cw, top + 4, cw);
   }
   // orange safety netting on the top built floors
   G.col("#e8742a");
@@ -1801,17 +1856,33 @@ function garage(b: Bld, st: Style, C: Ctx) {
   const G = C.main;
   const p = b.parts[0]!;
   const poly = rectPoly(p.x0, p.z0, p.x1, p.z1);
-  if(b.openFloors){
-    for(const c of b.openFloors.cars??[])car(C.detail,c.v,c.x,c.y+.02,c.z,c.rot);
+  if (b.openFloors) {
+    for (const c of b.openFloors.cars ?? []) car(C.detail, c.v, c.x, c.y + 0.02, c.z, c.rot);
     // Real entry bays stay open; the original parking symbol marks the street approach.
-    const f=b.front,nx=f===1?1:f===3?-1:0,nz=f===2?1:f===0?-1:0;
-    const x=nx>0?p.x1:nx<0?p.x0:(p.x0+p.x1)/2,z=nz>0?p.z1:nz<0?p.z0:(p.z0+p.z1)/2;
-    C.glow.col("#2a6ae8").mat(0).obox(x+nx*.3,4.2,z+nz*.3,1.6,1.6,.15,Math.atan2(nx,nz));
-    C.glow.col("#ffffff").obox(x+nx*.4,4.6,z+nz*.4,.3,.9,.05,Math.atan2(nx,nz));
+    const f = b.front,
+      nx = f === 1 ? 1 : f === 3 ? -1 : 0,
+      nz = f === 2 ? 1 : f === 0 ? -1 : 0;
+    const x = nx > 0 ? p.x1 : nx < 0 ? p.x0 : (p.x0 + p.x1) / 2,
+      z = nz > 0 ? p.z1 : nz < 0 ? p.z0 : (p.z0 + p.z1) / 2;
+    C.glow
+      .col("#2a6ae8")
+      .mat(0)
+      .obox(x + nx * 0.3, 4.2, z + nz * 0.3, 1.6, 1.6, 0.15, Math.atan2(nx, nz));
+    C.glow.col("#ffffff").obox(x + nx * 0.4, 4.6, z + nz * 0.4, 0.3, 0.9, 0.05, Math.atan2(nx, nz));
     return;
   }
   walls(G, poly, 0, p.h, st, 0, false, L.garage, st.tint, 3.1, b.access?.door);
-  roof(G, poly, p.h, st, b.access ? b.access.parapet : 1.1, b.access ? 0.35 : 0.3, "#8e8c86", undefined, b.access?.hole);
+  roof(
+    G,
+    poly,
+    p.h,
+    st,
+    b.access ? b.access.parapet : 1.1,
+    b.access ? 0.35 : 0.3,
+    "#8e8c86",
+    undefined,
+    b.access?.hole,
+  );
   // parked cars and light poles on the top deck, a blue P sign, an entry ramp opening
   const r = st.r;
   const D = C.detail;
@@ -2284,14 +2355,17 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
     }
 
   // ---- road markings (detail) ----
+  const paintStarts = chunks.map((c) => c.detail.n);
   markings(city, chunkAt);
+  chunks.forEach((c, i) => c.detail.excludeSince(paintStarts[i]!));
 
   // ---- props ----
   const T = templates();
   const tint = new THREE.Color();
   for (const p of city.props) {
     const ch = chunkAt(p.x, p.z);
-    prop(p, ch, T, tint);
+    if (p.k === "manhole" || p.k === "drain") ch.detail.decoration(() => prop(p, ch, T, tint));
+    else prop(p, ch, T, tint);
   }
   // ---- parked cars: drawn instanced with the traffic (Traffic.tsx / art/cars.ts) ----
 
@@ -2346,10 +2420,10 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
     case "tree": {
       const s = p.s ?? 1;
       D.mat(L.plain, 0.5, 0).col("#2a2622");
-      D.flat(p.x - 0.7, p.z - 0.7, p.x + 0.7, p.z + 0.7, y + 0.03);
+      D.decoration(() => D.flat(p.x - 0.7, p.z - 0.7, p.x + 0.7, p.z + 0.7, y + 0.03));
       D.stamp(T.trunk, p.x, y, p.z, p.rot, s, s, s);
       tint.set(TREE_T[Math.floor(Math.abs(p.x * 7 + p.z * 13)) % TREE_T.length]!);
-      D.stamp(T.canopy, p.x, y, p.z, p.rot, s, s, s, tint);
+      D.decoration(() => D.stamp(T.canopy, p.x, y, p.z, p.rot, s, s, s, tint));
       break;
     }
     case "palm":
@@ -2403,12 +2477,12 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
       D.mat(L.plain, 0.5, 0).col("#cfc8b8");
       D.cyl(p.x, 0, p.z, s, 0.7, 24);
       D.col("#6fb4d8");
-      D.cyl(p.x, 0.55, p.z, s - 0.35, 0.02, 24);
+      D.decoration(() => D.cyl(p.x, 0.55, p.z, s - 0.35, 0.02, 24));
       D.col("#cfc8b8");
       D.cyl(p.x, 0, p.z, 0.5, 1.8, 10);
       D.cyl(p.x, 1.8, p.z, s * 0.3, 0.3, 16);
       D.col("#8fd0f0");
-      D.cyl(p.x, 2.1, p.z, 0.12, 1.2, 6, true, 0.02);
+      D.decoration(() => D.cyl(p.x, 2.1, p.z, 0.12, 1.2, 6, true, 0.02));
       break;
     }
     case "manhole":

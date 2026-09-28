@@ -1,3 +1,4 @@
+import { registerStaticGeometry } from "../staticCollision";
 // Renders Dry Gulch from the merged chunk geometry built in mesh.ts. One facade material
 // (the western texture array) draws every building, prop, rock face and rail; the ground is
 // a single splat-blended plane; chunks cull by frustum and their prop layer by distance.
@@ -302,6 +303,14 @@ export const WesternScene = memo(function WesternScene({
       );
     return m;
   }, [layout]);
+  useLayoutEffect(
+    () =>
+      registerStaticGeometry(
+        "map",
+        built.chunks.flatMap((c) => [c.main, c.detail]),
+      ),
+    [built],
+  );
 
   const nightK = useMemo(() => ({ value: 0 }), []);
   const mats = useMemo(

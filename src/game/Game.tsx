@@ -1,11 +1,67 @@
-import { sourceIsBound, subscribeActions, subscribeInputReset, controlSettings, setInputActive, controlState, keyLabel, type ControlAction } from "./input/remap";
+import { Tumbleweeds } from "./western/Tumbleweeds";
+import {
+  weedWorld,
+  weedView,
+  stepWeedView,
+  WEED_COUNT,
+  resetWeeds,
+  stepWeeds,
+  weedContacts,
+  breakWeed,
+  encodeWeeds,
+  applyWeeds,
+} from "./western/tumbleweedSim";
+import { stormAt } from "./western/storm";
+import { SoloReviveDriver, SoloRevivePrompt, useSoloRevive } from "./SelfReviveView";
+import {
+  soloRevive,
+  resetSoloRevive,
+  replaceSoloKit,
+  rollSoloKit,
+  SELF_REVIVE_COST,
+} from "./soloRevive";
+import { boundaryBlocked } from "./level";
+import {
+  resetStaticCollision,
+  staticBody,
+  staticSegment,
+  staticCeiling,
+  staticCollisionReady,
+  staticSupport,
+} from "./staticCollision";
+import {
+  sourceIsBound,
+  subscribeActions,
+  subscribeInputReset,
+  controlSettings,
+  setInputActive,
+  controlState,
+  keyLabel,
+  type ControlAction,
+} from "./input/remap";
 import { ControlSettings } from "./input/ControlSettings";
 import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
-import { installStructures, structureList, structurePlayer, structureFloor, structureBody, structureShot } from "./structures/world";
+import {
+  installStructures,
+  structureList,
+  structurePlayer,
+  structureFloor,
+  structureBody,
+  structureShot,
+} from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
-import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
+import {
+  wheelRide,
+  wheelWorld,
+  wheelEye,
+  wheelSolid,
+  wheelLoading,
+  resetWheel,
+  stepWheel,
+  leaveWheel,
+} from "./beach/wheelRide";
 import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
 import { getViewMode } from "./viewMode";
 import { setWorldMuzzle } from "./projectiles";
@@ -98,6 +154,7 @@ import {
   groundOwnsHits,
   groundSpeed,
   groundY,
+  baseGroundY,
   setTerrain,
   wind,
   worldFx,
@@ -2482,7 +2539,15 @@ function World({
         net: netRef,
         fx: FX,
       });
-      Object.assign(handle,{structures:{list:structureList,player:structurePlayer,floor:structureFloor,body:structureBody,shot:structureShot}});
+      Object.assign(handle, {
+        structures: {
+          list: structureList,
+          player: structurePlayer,
+          floor: structureFloor,
+          body: structureBody,
+          shot: structureShot,
+        },
+      });
       // building access: the buildings, the local player's zone state, cars and doors
       Object.assign(handle, {
         access: {
@@ -2509,6 +2574,8 @@ function World({
         healthRef,
         owned,
         downedRef,
+        weedWorld,
+        weedView,
       });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
@@ -2752,6 +2819,8 @@ function World({
     r.last = performance.now();
   };
 
+  const weedRequests = useRef(new Map<string, number>());
+  const weedRequestSeq = useRef(0);
   const applySnap = (m: NetMsg) => {
     const arr = (m.e as number[]) ?? [];
     for (let i = 0; i < enemies.length; i++) {
@@ -2828,6 +2897,7 @@ function World({
     crate.current.z = c[1]!;
     crate.current.active = c[2] === 1;
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
+    if (m.from === "host" && m.tw) applyWeeds(m.tw);
     if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
     if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
     if (Array.isArray(m.ac)) decodeCars(m.ac as number[]);
@@ -2866,6 +2936,45 @@ function World({
         return;
       }
       if (isHostRef.current) {
+        if (m.type === "weed-hit") {
+          const remote = remotes.current.get(String(m.from));
+          const a = m.a,
+            b = m.b,
+            id = m.id,
+            seq = m.seq;
+          if (
+            !western ||
+            !lockedRef.current ||
+            m.seed !== seed ||
+            !remote ||
+            remote.hp <= 0 ||
+            performance.now() - remote.last > 5000 ||
+            !Number.isInteger(seq) ||
+            seq <= (weedRequests.current.get(String(m.from)) ?? -1) ||
+            !Number.isInteger(id) ||
+            !Array.isArray(a) ||
+            !Array.isArray(b) ||
+            a.length !== 3 ||
+            b.length !== 3 ||
+            ![...a, ...b].every((v) => typeof v === "number" && Number.isFinite(v))
+          )
+            return;
+          weedRequests.current.set(String(m.from), seq);
+          const from = { x: a[0], y: a[1], z: a[2] },
+            to = { x: b[0], y: b[1], z: b[2] };
+          if (
+            Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) > 25 ||
+            Math.hypot(from.x - remote.x, from.z - remote.z) > 250
+          )
+            return;
+          const wall = firstWorldHit(from, to, outOfBounds) ?? 1;
+          if (
+            Number.isInteger(m.seen) &&
+            weedContacts(from, to, wall, m.seen, m.previous, m.blend).some((h) => h.id === id)
+          )
+            breakWeed(id, { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z });
+          return;
+        }
         if (m.type === "hit") {
           // a guest's hit runs through exactly the same path as the host's own; a direct shot
           // into a raised shield is re-checked with the host's facing (the host has final say)
@@ -3081,7 +3190,13 @@ function World({
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!document.pointerLockElement || !controlState.active || controlState.capturing || controlSettings.mode === "pad") return;
+      if (
+        !document.pointerLockElement ||
+        !controlState.active ||
+        controlState.capturing ||
+        controlSettings.mode === "pad"
+      )
+        return;
       look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
       look.current.pitch = Math.max(
         -1.2,
@@ -3316,6 +3431,8 @@ function World({
   const killEnemy = (e: Enemy, idx: number, from: string | null, bounty: boolean) => {
     e.alive = false;
     e.burn = 0;
+    if (!netRef.current && !blocked(blocks, e.x, e.z, 0.4))
+      rollSoloKit(wave.current, Math.random(), { x: e.x, y: groundY(e.x, e.z), z: e.z });
     if (e.kind === "special" && theme.special.type === "mite") {
       // shell shatters into a ring of cold shrapnel
       for (let s = 0; s < 8; s++) {
@@ -3530,12 +3647,30 @@ function World({
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     const third = getViewMode() === "third";
-    const pos = third ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds) : camera.position.clone().addScaledVector(FORWARD, 0.6);
+    const pos = third
+      ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds)
+      : camera.position.clone().addScaledVector(FORWARD, 0.6);
     if (!third) pos.y -= 0.25;
-    if (third) shoulderAim(camera, pos, outOfBounds, enemies.filter(e => e.alive).map(e => {
-      const [lo, hi] = hitBand(e.kind), gy = groundY(e.x,e.z);
-      return {x:e.x,z:e.z,bottom:gy+lo,top:gy+hi,radius:STATS[e.kind].radius + .2};
-    }), FORWARD);
+    if (third)
+      shoulderAim(
+        camera,
+        pos,
+        outOfBounds,
+        enemies
+          .filter((e) => e.alive)
+          .map((e) => {
+            const [lo, hi] = hitBand(e.kind),
+              gy = groundY(e.x, e.z);
+            return {
+              x: e.x,
+              z: e.z,
+              bottom: gy + lo,
+              top: gy + hi,
+              radius: STATS[e.kind].radius + 0.2,
+            };
+          }),
+        FORWARD,
+      );
     setWorldMuzzle(third ? pos : null);
     // seeded spread so co-op viewers can replay the exact same pellets
     const seed = (Math.random() * 1e9) | 0;
@@ -3626,19 +3761,36 @@ function World({
     equip("pistol");
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(()=>subscribeInputReset(()=>{trigger.current=false;abilFire.current=false;burstQueue.current=0;}),[]);
-  useEffect(() => subscribeActions((action, down, repeat, source) => {
-    if (action === "fire") trigger.current = down;
-    if (!down || repeat) return;
-    if (action.startsWith("slot")) { const w=[...owned.current][Number(action.slice(4))-1]; if(w)equip(w); }
-    if (action === "ability") abilFire.current = true;
-    if (action === "use" && accessActive()) pressCarButton();
-    if (action === "prevGun" || action === "nextGun") {
-      if (action === "nextGun" && accPlayer.inCar && sourceIsBound("use",source)) return;
-      const list=[...owned.current],i=list.indexOf(weapon.current);
-      const next=list[(i+(action === "nextGun" ? 1 : list.length-1))%list.length];if(next)equip(next);
-    }
-  }), [camera]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () =>
+      subscribeInputReset(() => {
+        trigger.current = false;
+        abilFire.current = false;
+        burstQueue.current = 0;
+      }),
+    [],
+  );
+  useEffect(
+    () =>
+      subscribeActions((action, down, repeat, source) => {
+        if (action === "fire") trigger.current = down;
+        if (!down || repeat) return;
+        if (action.startsWith("slot")) {
+          const w = [...owned.current][Number(action.slice(4)) - 1];
+          if (w) equip(w);
+        }
+        if (action === "ability") abilFire.current = true;
+        if (action === "use" && accessActive()) pressCarButton();
+        if (action === "prevGun" || action === "nextGun") {
+          if (action === "nextGun" && accPlayer.inCar && sourceIsBound("use", source)) return;
+          const list = [...owned.current],
+            i = list.indexOf(weapon.current);
+          const next = list[(i + (action === "nextGun" ? 1 : list.length - 1)) % list.length];
+          if (next) equip(next);
+        }
+      }),
+    [camera],
+  );
 
   /** an open spot right next to (x, z): hornet pack members land around their leader */
   const besides = (x: number, z: number) => {
@@ -3655,7 +3807,8 @@ function World({
         zone >= ROOF_KEY &&
         roofCount(zone - ROOF_KEY, enemies, pending.current) >=
           (accessList()[zone - ROOF_KEY]?.cap ?? 0)
-      ) continue;
+      )
+        continue;
       if (big && ps.some((p) => clearLine(blocks, p.x, p.z, qx, qz, 0.1))) continue;
       return { x: qx, z: qz };
     }
@@ -3870,20 +4023,32 @@ function World({
   };
 
   const outOfBounds = (p: { x: number; y: number; z: number }) =>
-    wheelSolid(p) || (bulletBlocked(p.x, p.y, p.z) ??
-    // the beach's ground decides shots itself (they fly over railings, stop on decks and the
-    // sea); every other map: under the ground or into a solid cell
-    // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
-    // (level.ts shotStop: one height-aware test; low cover stops only what is below its top)
-    (shotStop(blocks, p.x, p.y, p.z) ||
-      Math.abs(p.x) > HALF ||
-      Math.abs(p.z) > HALF ||
-      (big !== null && hitsTraffic(p.x, p.y, p.z))));
+    wheelSolid(p) ||
+    ((staticCollisionReady() && accPlayer.zone !== 1 ? undefined : bulletBlocked(p.x, p.y, p.z)) ??
+      // the beach's ground decides shots itself (they fly over railings, stop on decks and the
+      // sea); every other map: under the ground or into a solid cell
+      // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
+      // (level.ts shotStop: one height-aware test; low cover stops only what is below its top)
+      (shotStop(blocks, p.x, p.y, p.z) ||
+        Math.abs(p.x) > HALF ||
+        Math.abs(p.z) > HALF ||
+        (big !== null && hitsTraffic(p.x, p.y, p.z))));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
-  const pBlocked = (x: number, z: number, r: number) =>
-    hitsPost(x,z,r,false,camGround.current+(moveState.airborne?moveState.lift:0)) || (structureBody(x, z, r,
-      Math.max(camGround.current, structureFloor(x,z,camGround.current)?.y ?? -Infinity) + (moveState.airborne ? moveState.lift : 0)) ??
-    playerBlocked(x, z, r) ?? blocked(blocks, x, z, r));
+  const pBlocked = (x: number, z: number, r: number) => {
+    const feet = moveState.feet;
+    if (staticCollisionReady()) {
+      if (boundaryBlocked(blocks, x, z, r)) return true;
+      const interior = playerBlocked(x, z, r, feet);
+      if (interior !== undefined) return interior;
+      return (
+        structureBody(x, z, r, feet) ?? staticBody(x, z, r, feet, 1.8, moveState.airborne ? 0 : 0.2)
+      );
+    }
+    return (
+      hitsPost(x, z, r, false, feet) ||
+      (structureBody(x, z, r, feet) ?? playerBlocked(x, z, r) ?? blocked(blocks, x, z, r))
+    );
+  };
   // controller aim assist: the middle of each live robot's body, and a clear line to it
   const aimPt = { x: 0, y: 0, z: 0 };
   function* aimTargets() {
@@ -3907,15 +4072,21 @@ function World({
     traffic.current.px = cam.position.x;
     traffic.current.pz = cam.position.z;
     traffic.current.py = cam.position.y;
+    traffic.current.feet = moveState.feet;
+    traffic.current.bodyHeight = downedRef.current ? 0.45 : 1.8;
     if (traffic.current.role === "host") {
       // the host's cars must brake for every live player in the lane, not just the host
       const now = performance.now();
       traffic.current.others = [...remotes.current.values()]
         .filter((r) => r.hp > 0 && now - r.last < 4000)
-         .map((r) => {
+        .map((r) => {
           if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
           if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
-          return { x: r.x, z: r.z, y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE };
+          return {
+            x: r.x,
+            z: r.z,
+            y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE,
+          };
         });
     } else if (traffic.current.others.length) traffic.current.others = [];
 
@@ -4027,7 +4198,14 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
-      (structureFloor(x,z,camGround.current) !== undefined || accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
+      (!staticCollisionReady() ||
+        baseGroundY(x, z) <= moveState.feet + 0.24 ||
+        accPlayer.zone !== 0 ||
+        !!structureFloor(x, z, moveState.feet)) &&
+      (staticCollisionReady() ||
+        structureFloor(x, z, camGround.current) !== undefined ||
+        accPlayer.zone !== 0 ||
+        climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
     const strafe =
@@ -4040,7 +4218,8 @@ function World({
       trigger.current || touchInput.fire || padOut.fire,
       spectating ||
         downedRef.current ||
-        ride.chair >= 0 || wheelRide.cabin >= 0 ||
+        ride.chair >= 0 ||
+        wheelRide.cabin >= 0 ||
         (accessActive() && accPlayer.inCar) ||
         touchInput.revive ||
         k.has("KeyR"),
@@ -4072,15 +4251,21 @@ function World({
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
-      const nx = cam.position.x + slide.current.x * delta;
-      const nz = cam.position.z + slide.current.z * delta;
-      if (walkTo(nx, cam.position.z)) cam.position.x = nx;
-      else slide.current.x = 0;
-      if (walkTo(cam.position.x, nz)) cam.position.z = nz;
-      else slide.current.z = 0;
+      const steps = Math.max(
+        1,
+        Math.ceil((Math.hypot(slide.current.x, slide.current.z) * delta) / 0.12),
+      );
+      for (let i = 0; i < steps; i++) {
+        const nx = cam.position.x + (slide.current.x * delta) / steps,
+          nz = cam.position.z + (slide.current.z * delta) / steps;
+        if (walkTo(nx, cam.position.z)) cam.position.x = nx;
+        else slide.current.x = 0;
+        if (walkTo(cam.position.x, nz)) cam.position.z = nz;
+        else slide.current.z = 0;
+      }
     }
     // mid-jump into a roof's parapet: over the edge and down (input/fall.ts)
-    if (accPlayer.zone === 2 && moving && !spectating) {
+    if (!staticCollisionReady() && accPlayer.zone === 2 && moving && !spectating) {
       const ml = Math.hypot(MOVE.x, MOVE.z) || 1;
       tryRoofExit(cam.position, MOVE.x / ml, MOVE.z / ml, blocks);
     }
@@ -4124,7 +4309,12 @@ function World({
     if (!spectating && !phasing && wheelRide.cabin < 0) {
       for (let pass = 0; pass < 2; pass++) {
         for (const e of enemies) {
-          if (!e.alive || FLYERS.has(e.kind) || Math.abs(cam.position.y - EYE - groundY(e.x,e.z)) > 1.8) continue;
+          if (
+            !e.alive ||
+            FLYERS.has(e.kind) ||
+            Math.abs(cam.position.y - EYE - groundY(e.x, e.z)) > 1.8
+          )
+            continue;
           const r =
             (e.kind === "boss" && theme.boss.shape === "kraken"
               ? KRAKEN_R
@@ -4160,14 +4350,45 @@ function World({
       // stairs, the car and the roof decide the floor under you
       // (falling past a building from its roof: the street / lower roof is the floor, no doors)
       const falling = moveState.airborne && accPlayer.zone === 0 && moveState.lift > 1.5;
-      const wasStructure=!!structurePlayer.id;
-      const roomFloor=structureFloor(cam.position.x,cam.position.z,moveState.airborne ? moveState.feet : camGround.current);
-      Object.assign(structurePlayer,roomFloor ? {id:roomFloor.id,floor:roomFloor.level,y:roomFloor.y} : {id:"",floor:0,y:0});
-      const gy = roomFloor?.y ?? (
-        accessActive() && !falling
+
+      const roomFloor = structureFloor(
+        cam.position.x,
+        cam.position.z,
+        moveState.airborne ? moveState.feet : camGround.current,
+      );
+      Object.assign(
+        structurePlayer,
+        roomFloor
+          ? { id: roomFloor.id, floor: roomFloor.level, y: roomFloor.y }
+          : { id: "", floor: 0, y: 0 },
+      );
+      let gy =
+        roomFloor?.y ??
+        (accessActive() && !falling
           ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
           : groundY(cam.position.x, cam.position.z));
-      if ((wasStructure || roomFloor) && !moveState.airborne && gy < camGround.current-.6) startFall();
+      if (
+        staticCollisionReady() &&
+        !accPlayer.inCar &&
+        ride.chair < 0 &&
+        wheelRide.cabin < 0 &&
+        accPlayer.zone !== 1
+      ) {
+        const bare = baseGroundY(cam.position.x, cam.position.z);
+        // Never select a roof merely because its footprint is above us.
+        gy = staticSupport(
+          cam.position.x,
+          cam.position.z,
+          moveState.feet,
+          bare <= moveState.feet + (moveState.airborne ? 0.02 : 0.24)
+            ? bare
+            : Math.min(bare, moveState.feet),
+          moveState.airborne ? 0 : 0.22,
+        );
+        if (roomFloor && roomFloor.y <= moveState.feet + (moveState.airborne ? 0.03 : 0.55))
+          gy = Math.max(gy, roomFloor.y);
+      }
+      if (!moveState.airborne && gy < moveState.feet - 0.24) startFall();
       const dg = gy - camGround.current;
       camGround.current =
         !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3
@@ -4175,20 +4396,46 @@ function World({
           : camGround.current + dg * Math.min(1, delta * 16);
       // jump (Space / A / JUMP): not in an elevator car, on the chairlift, down or spectating
       const noJump =
-        spectating || downedRef.current || ride.chair >= 0 || wheelRide.cabin >= 0 || (accessActive() && accPlayer.inCar);
+        spectating ||
+        downedRef.current ||
+        ride.chair >= 0 ||
+        wheelRide.cabin >= 0 ||
+        (accessActive() && accPlayer.inCar);
       if (takeJump()) tryJump(!noJump);
       if (noJump && moveState.airborne) cancelJump(gy);
-      const beforeFeet=moveState.feet;
+      const beforeFeet = moveState.feet;
       stepJump(delta, gy);
-      if (roomFloor && moveState.airborne && moveState.feet>beforeFeet) {
-        for(let y=beforeFeet; y<=moveState.feet+.05; y+=.05) if(structureShot(cam.position.x,y+1.85,cam.position.z)) {
-          moveState.feet=Math.max(gy,y-.05);moveState.vy=0;moveState.lift=Math.max(0,moveState.feet-gy);break;
+      if (
+        staticCollisionReady() &&
+        moveState.airborne &&
+        moveState.feet > beforeFeet &&
+        accPlayer.zone !== 1
+      ) {
+        const ceiling = staticCeiling(
+          cam.position.x,
+          cam.position.z,
+          beforeFeet + 1.8,
+          moveState.feet + 1.8,
+        );
+        if (ceiling !== null) {
+          moveState.feet = Math.max(beforeFeet, ceiling - 1.805);
+          moveState.vy = 0;
+          moveState.lift = Math.max(0, moveState.feet - gy);
         }
+      }
+      if (roomFloor && moveState.airborne && moveState.feet > beforeFeet) {
+        for (let y = beforeFeet; y <= moveState.feet + 0.05; y += 0.05)
+          if (structureShot(cam.position.x, y + 1.85, cam.position.z)) {
+            moveState.feet = Math.max(gy, y - 0.05);
+            moveState.vy = 0;
+            moveState.lift = Math.max(0, moveState.feet - gy);
+            break;
+          }
       }
       if (moveState.airborne) camGround.current = gy;
       if (moveState.landed >= 0) {
         camGround.current = gy;
-        if (accessActive()) landZone(cam.position.x, cam.position.z); // a lower roof, or the street
+        if (accessActive()) landZone(cam.position.x, cam.position.z, moveState.feet); // a lower roof, or the street
         slideOffFace(cam.position, blocks); // never left standing on a ledge's face
         // fall damage by the drop (input/fall.ts FALL_TABLE); a downing fall downs you
         const fd = spectating
@@ -4204,6 +4451,27 @@ function World({
           onHurt(fd);
         }
       }
+    }
+    if (western && !isHostRef.current) stepWeedView(delta);
+    if (western && isHostRef.current) {
+      const st = stormAt();
+      const players = [
+        ...(deadRef.current ? [] : [{ x: cam.position.x, y: moveState.feet, z: cam.position.z }]),
+        ...[...remotes.current.values()]
+          .filter((r) => r.hp > 0 && performance.now() - r.last < 5000)
+          .map((r) => ({
+            x: r.x,
+            y: (r.sy ?? r.ay ?? baseGroundY(r.x, r.z)) + (r.jy ?? 0),
+            z: r.z,
+          })),
+      ];
+      stepWeeds(delta, st.wx, st.wz, st.k, players, {
+        floor: (x, z, previous) => staticSupport(x, z, previous, baseGroundY(x, z), 0.25, 0.08),
+        body: (x, z, r, feet) =>
+          boundaryBlocked(blocks, x, z, r) || staticBody(x, z, r, feet, r * 2, 0.08),
+        clear: (a, b) => !staticSegment(a.x, a.y, a.z, b.x, b.y, b.z, 0.02),
+      });
+      weedWorld.send -= delta;
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
     cam.position.y =
@@ -4252,16 +4520,28 @@ function World({
     if (isBeach(city)) {
       const wasAboard = wheelRide.cabin >= 0;
       const line = wheelLoading(city.beach.wheel);
-      const near = Math.hypot(cam.position.x-line.x, cam.position.z-line.z)<4 && Math.abs(cam.position.y-line.y-EYE)<1;
-      if (near && !wheelHint.current && !wasAboard && !spectating) showToast("FERRIS WHEEL · WAIT ON THE YELLOW LINE TO RIDE");
+      const near =
+        Math.hypot(cam.position.x - line.x, cam.position.z - line.z) < 4 &&
+        Math.abs(cam.position.y - line.y - EYE) < 1;
+      if (near && !wheelHint.current && !wasAboard && !spectating)
+        showToast("FERRIS WHEEL · WAIT ON THE YELLOW LINE TO RIDE");
       wheelHint.current = near || wasAboard;
       if (spectating && wheelRide.cabin >= 0) {
         leaveWheel(cam.position, city.beach.wheel);
         camGround.current = cam.position.y - EYE;
         cancelJump(camGround.current);
-      } else if (!spectating && stepWheel(cam.position, city.beach.wheel, delta,
-        !n || n.role === "host" ? 1 : (slots.current[n.self] ?? 2), !!n)) {
-        slide.current.x = 0; slide.current.z = 0;
+      } else if (
+        !spectating &&
+        stepWheel(
+          cam.position,
+          city.beach.wheel,
+          delta,
+          !n || n.role === "host" ? 1 : (slots.current[n.self] ?? 2),
+          !!n,
+        )
+      ) {
+        slide.current.x = 0;
+        slide.current.z = 0;
       }
       if (!wasAboard && wheelRide.cabin >= 0) showToast("FERRIS WHEEL · ENJOY THE FULL CIRCUIT");
     }
@@ -4301,7 +4581,12 @@ function World({
           pt: look.current.pitch,
           hp: spectating ? 0 : Math.max(1, healthRef.current),
           w: weapon.current,
-          ...(structurePlayer.id ? { sy:Math.round(structurePlayer.y*100)/100, sn:structurePlayer.floor>0?1:0 } : {}),
+          ...(structurePlayer.id
+            ? {
+                sy: Math.round(structurePlayer.y * 100) / 100,
+                sn: structurePlayer.floor > 0 ? 1 : 0,
+              }
+            : {}),
           ...(accPlayer.zone !== 0
             ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press }
             : {}),
@@ -4331,7 +4616,7 @@ function World({
       pk.active &&
       canTake &&
       !spectating &&
-      Math.abs(camGround.current-groundY(pk.x,pk.z))<1.5 &&
+      Math.abs(camGround.current - groundY(pk.x, pk.z)) < 1.5 &&
       Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3
     ) {
       pk.active = false;
@@ -4361,7 +4646,7 @@ function World({
     if (
       hp.active &&
       !spectating &&
-      Math.abs(camGround.current-groundY(hp.x,hp.z))<1.5 &&
+      Math.abs(camGround.current - groundY(hp.x, hp.z)) < 1.5 &&
       Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3
     ) {
       hp.active = false;
@@ -4389,7 +4674,7 @@ function World({
     if (
       ck.active &&
       !spectating &&
-      Math.abs(camGround.current-groundY(ck.x,ck.z))<1.5 &&
+      Math.abs(camGround.current - groundY(ck.x, ck.z)) < 1.5 &&
       Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4
     ) {
       ck.active = false;
@@ -4527,10 +4812,14 @@ function World({
       if (e?.alive) hurtEnemy(e, dmg, idx, 0, 0, 1.6, kx, kz);
     };
 
-    const localEffectReaches=(e:Enemy,radius:number)=>{
-      const [lo,hi]=hitBand(e.kind), y=groundY(e.x,e.z)+(lo+hi)/2;
-      return Math.hypot(e.x-cam.position.x,y-(cam.position.y-.5),e.z-cam.position.z)<radius &&
-        clearShot(blocks,cam.position.x,cam.position.y-.5,cam.position.z,e.x,y,e.z);
+    const localEffectReaches = (e: Enemy, radius: number) => {
+      const [lo, hi] = hitBand(e.kind),
+        y = groundY(e.x, e.z) + (lo + hi) / 2;
+      return (
+        Math.hypot(e.x - cam.position.x, y - (cam.position.y - 0.5), e.z - cam.position.z) <
+          radius &&
+        clearShot(blocks, cam.position.x, cam.position.y - 0.5, cam.position.z, e.x, y, e.z)
+      );
     };
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
     if (thornsPending.current > 0) {
@@ -4538,7 +4827,7 @@ function World({
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (localEffectReaches(e,4)) hurtEnemy(e, 2, ei);
+        if (localEffectReaches(e, 4)) hurtEnemy(e, 2, ei);
       }
     }
 
@@ -4647,8 +4936,7 @@ function World({
         const near = (radius: number, fn: (e: Enemy, i: number) => void) => {
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
-            if (e.alive && (id==="warp" || localEffectReaches(e,radius)))
-              fn(e, ei);
+            if (e.alive && (id === "warp" || localEffectReaches(e, radius))) fn(e, ei);
           }
         };
         if (id === "dash") {
@@ -4664,7 +4952,7 @@ function World({
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             const d = Math.hypot(cx - e.x, cz - e.z);
-            if (e.alive && d < 13 && localEffectReaches(e,20))
+            if (e.alive && d < 13 && localEffectReaches(e, 20))
               hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
           }
           // collapsing vortex ring at the well's centre
@@ -4684,7 +4972,7 @@ function World({
         } else if (id === "storm") {
           const list = enemies
             .map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
-            .filter((o) => o.e.alive && o.d < 20 && localEffectReaches(o.e,20))
+            .filter((o) => o.e.alive && o.d < 20 && localEffectReaches(o.e, 20))
             .sort((a, b) => a.d - b.d)
             .slice(0, 6);
           list.forEach((o) => hurtEnemy(o.e, 4, o.i));
@@ -4744,7 +5032,10 @@ function World({
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3 && clearShot(blocks,mn.x,groundY(mn.x,mn.z)+.3,mn.z,e.x,groundY(e.x,e.z)+1,e.z)) {
+        if (
+          Math.hypot(e.x - mn.x, e.z - mn.z) < 3 &&
+          clearShot(blocks, mn.x, groundY(mn.x, mn.z) + 0.3, mn.z, e.x, groundY(e.x, e.z) + 1, e.z)
+        ) {
           hurtEnemy(e, 2, ei, 4);
           hit = true;
         }
@@ -4852,10 +5143,11 @@ function World({
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
           const ry =
-            isBeach(city) && (r.wr ?? -1) >= 0 ? wheelEye(city.beach.wheel,r.wr!).y :
-            alpineMap && (r.rc ?? -1) >= 0
-              ? riderEye(alpineMap.alpine.lift, r.rc!).y
-              : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
+            isBeach(city) && (r.wr ?? -1) >= 0
+              ? wheelEye(city.beach.wheel, r.wr!).y
+              : alpineMap && (r.rc ?? -1) >= 0
+                ? riderEye(alpineMap.alpine.lift, r.rc!).y
+                : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
           targets.push({
             id: r.id,
             x: r.x,
@@ -5615,7 +5907,7 @@ function World({
         }
         // keep out of the players: at most touching
         for (const t of targets) {
-          if(Math.abs(t.y-EYE-groundY(a.x,a.z))>1.8)continue;
+          if (Math.abs(t.y - EYE - groundY(a.x, a.z)) > 1.8) continue;
           const r = ra + PLAYER_R;
           const ox = a.x - t.x;
           const oz = a.z - t.z;
@@ -5629,7 +5921,7 @@ function World({
       for (const f of enemies) {
         if (!f.alive || !FLYERS.has(f.kind)) continue;
         for (const t of targets) {
-          if(Math.abs(t.y-EYE-groundY(f.x,f.z))>3)continue;
+          if (Math.abs(t.y - EYE - groundY(f.x, f.z)) > 3) continue;
           const r = STATS[f.kind].radius + PLAYER_R + 0.3;
           const ox = f.x - t.x;
           const oz = f.z - t.z;
@@ -5677,17 +5969,38 @@ function World({
         BLAST_AT.copy(b.pos); // a shell that hits a wall explodes just in front of it
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
-        const contact=firstWorldHit(BLAST_AT,b.pos,outOfBounds);
-        const hitWall=contact!==undefined;
-        if(contact!==undefined) {
-          WORLD_CONTACT.lerpVectors(BLAST_AT,b.pos,contact);
-          b.pos.lerpVectors(BLAST_AT,b.pos,Math.max(0,contact-.003/Math.max(.001,b.pos.distanceTo(BLAST_AT))));
+        const contact = firstWorldHit(BLAST_AT, b.pos, outOfBounds);
+        if (western)
+          for (const hit of weedContacts(BLAST_AT, b.pos, contact ?? 1)) {
+            if (isHostRef.current) breakWeed(hit.id, b.vel);
+            else
+              n?.broadcast({
+                type: "weed-hit",
+                seed,
+                seen: weedWorld.applied,
+                previous: weedView.fromSeq,
+                blend: weedView.blend,
+                id: hit.id,
+                seq: ++weedRequestSeq.current,
+                a: [BLAST_AT.x, BLAST_AT.y, BLAST_AT.z],
+                b: [b.pos.x, b.pos.y, b.pos.z],
+              });
+          }
+        const hitWall = contact !== undefined;
+        if (contact !== undefined) {
+          WORLD_CONTACT.lerpVectors(BLAST_AT, b.pos, contact);
+          b.pos.lerpVectors(
+            BLAST_AT,
+            b.pos,
+            Math.max(0, contact - 0.003 / Math.max(0.001, b.pos.distanceTo(BLAST_AT))),
+          );
         }
         if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
-          if (outOfBounds({x:WORLD_CONTACT.x,y:BLAST_AT.y,z:pz}) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
-          else if(outOfBounds({x:px,y:WORLD_CONTACT.y,z:pz})) b.vel.y *= -1;
+          if (outOfBounds({ x: WORLD_CONTACT.x, y: BLAST_AT.y, z: pz }) || Math.abs(b.pos.x) > HALF)
+            b.vel.x *= -1;
+          else if (outOfBounds({ x: px, y: WORLD_CONTACT.y, z: pz })) b.vel.y *= -1;
           else b.vel.z *= -1;
           fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
@@ -5812,7 +6125,12 @@ function World({
           b.life -= delta;
           if (b.life <= 0) b.active = false;
           else {
-            const hit = firstShotImpact(enemyShotFrom, b.pos, enemyShotTargets.current, outOfBounds);
+            const hit = firstShotImpact(
+              enemyShotFrom,
+              b.pos,
+              enemyShotTargets.current,
+              outOfBounds,
+            );
             if (hit !== undefined) b.active = false;
             if (hit) {
               if (hit.id === null) takeHit(b.damage, b.src || "shot");
@@ -5852,6 +6170,8 @@ function World({
                 Math.round(pd.t * 100) / 100,
               );
           });
+          const tw = western && weedWorld.send <= 0 ? encodeWeeds() : null;
+          if (tw) weedWorld.send = 0.2;
           const tr = traffic.current.encode?.();
           const al = encodeAlpine();
           const ac = encodeCars();
@@ -5866,6 +6186,7 @@ function World({
             mk,
             tk: Math.round(waveStage(tod.wave, tod.progress) * 1000), // the host's time of day
             ...(od.length ? { od } : {}),
+            ...(tw ? { tw } : {}),
             ...(tr ? { tr } : {}),
             ...(al ? { al } : {}),
             ...(ac ? { ac } : {}),
@@ -5962,8 +6283,15 @@ function World({
         <CitySun key="sun-city" />
       ) : null}
       {alpineMap ? (
-        <><AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
-        <AlpineLife layout={alpineMap} link={traffic} /></>
+        <>
+          <AlpineScene
+            layout={alpineMap}
+            time={time}
+            isHost={isHost}
+            playing={locked && !gameOver}
+          />
+          <AlpineLife layout={alpineMap} link={traffic} />
+        </>
       ) : isBeach(city) ? (
         <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
       ) : city ? (
@@ -5977,6 +6305,7 @@ function World({
           <WesternScene layout={western} time={time} />
           <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
           <WesternRiders layout={western} seed={seed} link={traffic} />
+          <Tumbleweeds />
           <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
           {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
@@ -6236,10 +6565,22 @@ function World({
         </mesh>
         <GunModel w={held} mods={renderStats} />
       </group>
-      <PlayerView active={locked && !gameOver} hidden={deadRef} look={look} recoil={recoil} downed={downedRef} seated={() => ride.chair >= 0} airborne={() => moveState.airborne} stop={outOfBounds}>
+      <PlayerView
+        active={locked && !gameOver}
+        hidden={deadRef}
+        look={look}
+        recoil={recoil}
+        downed={downedRef}
+        seated={() => ride.chair >= 0}
+        airborne={() => moveState.airborne}
+        stop={outOfBounds}
+      >
         <GunModel w={held} />
       </PlayerView>
-      <RemotePlayers remotes={remotes} renderGun={(w) => <GunModel w={w in GUNS ? w as Weapon : "pistol"} />} />
+      <RemotePlayers
+        remotes={remotes}
+        renderGun={(w) => <GunModel w={w in GUNS ? (w as Weapon) : "pistol"} />}
+      />
       <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
@@ -6362,6 +6703,10 @@ export function Game() {
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
   const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
+  const soloKit = useSoloRevive();
+  useEffect(() => {
+    resetSoloRevive();
+  }, [seed]);
   // time of day (timeOfDay.ts): AUTO follows the waves from sunset into night; N locks
   // this player's choice for the rest of the match. `?time=` overrides for testing.
   const time = useTodNearest();
@@ -6371,11 +6716,16 @@ export function Game() {
     setTimeMode(init.mode);
     if (init.k !== null) pinTime(init.k);
   }, []);
-  useEffect(() => subscribeActions((a, down, repeat) => {
-    if (a !== "time" || !down || repeat) return;
-    pinTime(null);toggleTimeLock(phase.current.started && !phase.current.ended);
-    showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
-  }), []);
+  useEffect(
+    () =>
+      subscribeActions((a, down, repeat) => {
+        if (a !== "time" || !down || repeat) return;
+        pinTime(null);
+        toggleTimeLock(phase.current.started && !phase.current.ended);
+        showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
+      }),
+    [],
+  );
 
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
@@ -6411,13 +6761,15 @@ export function Game() {
   const [shards, setShards] = useState(0);
   const [ability, setAbility] = useState<AbilityId>(() => {
     if (typeof window === "undefined") return "dash";
-    const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
+    const saved = (window.localStorage.getItem("scrapfall-ability") ??
+      window.localStorage.getItem("df-ability")) as AbilityId | null;
     return saved && ABILITIES[saved] ? saved : "dash";
   });
   /** starter class, chosen on the loadout screen alongside the ability */
   const [cls, setCls] = useState<ClassId>(() => {
     if (typeof window === "undefined") return "vanguard";
-    const saved = window.localStorage.getItem("df-class") as ClassId | null;
+    const saved = (window.localStorage.getItem("scrapfall-class") ??
+      window.localStorage.getItem("df-class")) as ClassId | null;
     return saved && CLASSES[saved] ? saved : "vanguard";
   });
   /** difficulty, picked on the loadout screen and remembered; in co-op the host's applies to all */
@@ -6777,6 +7129,7 @@ export function Game() {
     else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
     else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
+    resetStaticCollision();
     const level = generateLevel(seed, mode, !coop);
     const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
     // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
@@ -6797,8 +7150,9 @@ export function Game() {
       new URLSearchParams(window.location.search).get("access") !== "0";
     installStructures([]);
     installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
-    const cityOpen = mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout,PLAY_HALF) : [];
-    if(cityOpen.length) installStructures(cityOpen);
+    const cityOpen =
+      mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout, PLAY_HALF) : [];
+    if (cityOpen.length) installStructures(cityOpen);
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
     // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
     // the access adapters keep their doors clear of them
@@ -6816,9 +7170,13 @@ export function Game() {
                 level.blocks = level.blocks.concat(aa.blocks);
                 return aa.list;
               })()
-            : level.western ? westernBelfry() : null;
-    if(alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
-    if (mode === "city" && level.city) installStructures([...cityOpen,...cityRooms(level.city as CityLayout, PLAY_HALF)]);
+            : level.western
+              ? westernBelfry()
+              : null;
+    if (alp && level.city)
+      installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
+    if (mode === "city" && level.city)
+      installStructures([...cityOpen, ...cityRooms(level.city as CityLayout, PLAY_HALF)]);
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
@@ -6827,11 +7185,15 @@ export function Game() {
     // moves along the facade and stays solid (before the map's meshes are built from it)
     setPosts(null);
     // Close narrow plaza masonry gaps without relocating ordinary kerb furniture.
-    if (mode === "city" && level.city) snugPlazaProps(level.city as CityLayout, (accessList0 ?? []).map(b => b.spec.door));
+    if (mode === "city" && level.city)
+      snugPlazaProps(
+        level.city as CityLayout,
+        (accessList0 ?? []).map((b) => b.spec.door),
+      );
     movePropsFromDoors(
       level.city,
       level.western ?? null,
-      [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap(p=>p.doors)],
+      [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap((p) => p.doors)],
       (x, z) => blocked(level.blocks, x, z, 0.35),
     );
     setPosts(mapPosts(level.city, level.western ?? null));
@@ -6842,6 +7204,30 @@ export function Game() {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
       level.blocks = level.blocks.concat(sealGaps(gaps));
     }
+    const weedPositions: { x: number; y: number; z: number }[] = [];
+    if (level.western) {
+      let v = seed ^ 0x74eeda;
+      const random = () => {
+        v = (Math.imul(v, 1664525) + 1013904223) | 0;
+        return (v >>> 0) / 4294967296;
+      };
+      const origin = level.western.spawn;
+      for (let tries = 0; tries < 3000 && weedPositions.length < WEED_COUNT; tries++) {
+        const radius = weedPositions.length < 12 ? 8 + random() * 45 : 35 + random() * 160,
+          angle = random() * Math.PI * 2;
+        const x = origin.x + Math.cos(angle) * radius,
+          z = origin.z + Math.sin(angle) * radius;
+        if (
+          boundaryBlocked(level.blocks, x, z, 0.6) ||
+          blocked(level.blocks, x, z, 0.6) ||
+          groundY(x, z) > 2 ||
+          weedPositions.some((p) => Math.hypot(p.x - x, p.z - z) < 3)
+        )
+          continue;
+        weedPositions.push({ x, y: groundY(x, z), z });
+      }
+    }
+    resetWeeds(seed, weedPositions);
     // the city generator keeps its own spawn plaza clear and every cell reachable;
     // trimming its blocks here would leave buildings without collision
     if (!level.city && !level.western) {
@@ -6917,7 +7303,9 @@ export function Game() {
       // drops pointer lock on it anyway
       if (e.code === "Escape" && !controlState.capturing) pauseNow();
     };
-    const offPause=subscribeActions((a,down)=>{if(a === "pause" && down)pauseNow();});
+    const offPause = subscribeActions((a, down) => {
+      if (a === "pause" && down) pauseNow();
+    });
     padHooks.pause = pauseNow; // Start / Options / + on a controller
 
     document.addEventListener("pointerlockchange", onChange);
@@ -6933,10 +7321,10 @@ export function Game() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
+    if (typeof window !== "undefined") window.localStorage.setItem("scrapfall-ability", ability);
   }, [ability]);
   useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("df-class", cls);
+    if (typeof window !== "undefined") window.localStorage.setItem("scrapfall-class", cls);
   }, [cls]);
   /** the host (or solo player) picks the difficulty; it is saved and sent to the squad */
   const pickDifficulty = (d: DifficultyId) => {
@@ -6960,7 +7348,7 @@ export function Game() {
   const multiplayer = !!net;
   const dead = health <= 0;
   // co-op: out of health but still bleeding out, waiting for a revive
-  const downed = multiplayer && dead && !bledOut;
+  const downed = dead && !bledOut && (multiplayer || (soloKit.kit > 0 && !soloKit.expired));
   useEffect(() => {
     if (health > 0) setBledOut(false);
   }, [health]);
@@ -6968,9 +7356,9 @@ export function Game() {
   selfRef.current = {
     hp: health,
     bledOut,
-    playing: started && locked && !(multiplayer ? allDown : dead),
+    playing: started && locked && !(multiplayer ? allDown : dead && !downed),
   };
-  const gameOver = multiplayer ? allDown : dead;
+  const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
   // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
@@ -7024,7 +7412,10 @@ export function Game() {
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
     setPicking(false);
-    if (!resuming) beginMatchTime();
+    if (!resuming) {
+      beginMatchTime();
+      resetSoloRevive();
+    }
     setStarted(true);
     if (ended && !fromNet) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
@@ -7155,11 +7546,22 @@ export function Game() {
     [...remotes.current.values()].some(
       (r) =>
         downTable.get(r.id)?.st === DOWN &&
-        Math.hypot(r.x - squadMe.x, (r.sy ?? r.ay ?? groundY(r.x,r.z))-squadMe.y, r.z - squadMe.z) <= REVIVE_RANGE,
+        Math.hypot(
+          r.x - squadMe.x,
+          (r.sy ?? r.ay ?? groundY(r.x, r.z)) - squadMe.y,
+          r.z - squadMe.z,
+        ) <= REVIVE_RANGE,
     );
+  const buyKitRef = useRef<() => void>(() => {});
+  buyKitRef.current = () => {
+    if (multiplayer || !shopOpen || health <= 0 || shards < SELF_REVIVE_COST || !replaceSoloKit())
+      return;
+    setShards((v) => v - SELF_REVIVE_COST);
+    playSfx("buy");
+  };
   const patchRef = useRef<() => void>(() => {});
   patchRef.current = () => {
-    if (!shopOpen) return;
+    if (!shopOpen || health <= 0) return;
     if (shards < PATCH_COST) {
       playSfx("deny");
       return;
@@ -7191,12 +7593,21 @@ export function Game() {
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
     if (id === "maxhp") setHealth((h) => h + 2);
   };
-  useEffect(() => subscribeActions((a,down,repeat,source) => {
-    if (!down || repeat) return;
-    if (/^shop[123]$/.test(a)) buyRef.current(Number(a.slice(4))-1);
-    else if (a === "shopReroll" && !(sourceIsBound("revive",source)&&reviveNearbyRef.current())) rerollRef.current();
-    else if (a === "shopHeal") patchRef.current();
-  }), []);
+  useEffect(
+    () =>
+      subscribeActions((a, down, repeat, source) => {
+        if (!down || repeat) return;
+        if (/^shop[123]$/.test(a)) buyRef.current(Number(a.slice(4)) - 1);
+        else if (
+          a === "shopReroll" &&
+          !(sourceIsBound("revive", source) && reviveNearbyRef.current())
+        )
+          rerollRef.current();
+        else if (a === "shopHeal") patchRef.current();
+        else if (a === "shopRevive") buyKitRef.current();
+      }),
+    [],
+  );
 
   // regen perk
   const regenRate = statsRef.current.regen;
@@ -7215,7 +7626,10 @@ export function Game() {
     hookAudioUnlock();
   }, []);
   const inCombat = started && locked && !ended;
-  useEffect(()=>{setInputActive(inCombat && !showSettings);return()=>setInputActive(false);},[inCombat,showSettings]);
+  useEffect(() => {
+    setInputActive(inCombat && !showSettings);
+    return () => setInputActive(false);
+  }, [inCombat, showSettings]);
   useEffect(() => {
     setMusicMenu(!inCombat);
     startMusic();
@@ -7296,6 +7710,7 @@ export function Game() {
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
+            if (!multiplayer && soloRevive.grace > 0) return;
             setHealth((h) => Math.max(0, h - dmg));
             setHurtFlash((n) => n + 1);
             playSfx("hurt");
@@ -7317,7 +7732,7 @@ export function Game() {
           }}
           onAmmo={setAmmoLeft}
           onHeal={() => {
-            setHealth((h) => Math.min(maxHp, h + 3));
+            setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3) : h));
             playSfx("pickup");
             setHealMsg((n) => n + 1);
           }}
@@ -7380,6 +7795,17 @@ export function Game() {
           }}
           onInv={setInv}
         />
+        {!multiplayer && (
+          <SoloReviveDriver
+            active={started && locked && !ended && !showSettings}
+            hp={health}
+            onRevive={() => {
+              setBledOut(false);
+              setHealth(Math.max(1, Math.round(statsRef.current.maxHp * 0.5)));
+              setEventMsg("SELF REVIVED · KIT USED");
+            }}
+          />
+        )}
         <SquadDriver
           net={net}
           remotes={remotes}
@@ -7391,6 +7817,7 @@ export function Game() {
         />
         <AmbienceListener />
       </Canvas>
+      {!multiplayer && downed && locked && !showSettings && <SoloRevivePrompt />}
       <HudOverlay
         remotes={remotes}
         active={started && locked && !ended}
@@ -7484,7 +7911,11 @@ export function Game() {
                 <span
                   className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "min-h-3 min-w-3 px-1 text-[7px]" : "min-h-4 min-w-4 px-1 text-[10px]"}`}
                 >
-                  {i<10 ? keyLabel(`slot${i+1}` as ControlAction) : <KeyHint action="nextGun" />}
+                  {i < 10 ? (
+                    keyLabel(`slot${i + 1}` as ControlAction)
+                  ) : (
+                    <KeyHint action="nextGun" />
+                  )}
                 </span>
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
@@ -7544,13 +7975,27 @@ export function Game() {
                 <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP
               </>
             ) : (
-              <>PRESS <KeyHint action={slotOf(weapon)>10 ? "nextGun" : `slot${slotOf(weapon)||1}` as ControlAction} /></>
+              <>
+                PRESS{" "}
+                <KeyHint
+                  action={
+                    slotOf(weapon) > 10
+                      ? "nextGun"
+                      : (`slot${slotOf(weapon) || 1}` as ControlAction)
+                  }
+                />
+              </>
             )}
           </div>
         )}
         {crateMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
             {crateMsg} DEPLOYED
+          </div>
+        )}
+        {!multiplayer && locked && !ended && !downed && (
+          <div className="absolute left-5 top-[10.5rem] rounded bg-[#f3e6cf]/80 px-2 py-1 text-[10px] tracking-wider">
+            SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
           </div>
         )}
         {locked && !ended && (
@@ -7616,11 +8061,22 @@ export function Game() {
             {dev.kind === "pad" && (
               <>
                 {" "}
-                · <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> SELECT · <KeyHint action="shopBuy" /> BUY
+                · <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> SELECT ·{" "}
+                <KeyHint action="shopBuy" /> BUY
               </>
             )}
           </div>
           <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
+            {!multiplayer && (
+              <button
+                disabled={soloKit.kit > 0 || health <= 0 || shards < SELF_REVIVE_COST}
+                onClick={() => buyKitRef.current()}
+                className="pointer-events-auto rounded-md border border-black bg-[#f3e6cf]/95 px-3 py-2 text-[11px] disabled:opacity-45"
+              >
+                [<KeyHint action="shopRevive" />] <b>SELF REVIVE</b> ·{" "}
+                {soloKit.kit ? "KIT READY" : `◆ ${SELF_REVIVE_COST}`} · CARRY 1
+              </button>
+            )}
             <button
               onClick={() => patchRef.current()}
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
@@ -7665,7 +8121,7 @@ export function Game() {
                   className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
                 >
                   <span className="absolute -left-2 -top-2 flex min-h-6 min-w-6 px-1 items-center justify-center rounded bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
-                    <KeyHint action={`shop${i+1}` as ControlAction} />
+                    <KeyHint action={`shop${i + 1}` as ControlAction} />
                   </span>
                   {isMod && <PistolBadge />}
                   <div className="text-xs font-bold tracking-widest">{info.name}</div>
@@ -7930,7 +8386,7 @@ export function Game() {
         <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6">
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             {!started && !ended && !paused && (
-              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+              <div className="mb-2 text-[10px] tracking-[0.3em] opacity-50">{theme.name}</div>
             )}
             <h1 className="text-2xl font-bold tracking-tight">
               {gameOver
@@ -7939,7 +8395,7 @@ export function Game() {
                   ? "Arena cleared!"
                   : paused
                     ? "Paused"
-                    : theme.name}
+                    : "Scrapfall"}
             </h1>
             {(gameOver || status.won || paused) && (
               <p className="mt-2 text-sm opacity-70">

@@ -99,12 +99,26 @@ export type Mod =
   | { t: "cap"; ax: number; az: number; bx: number; bz: number; r: number; depth: number }
   | { t: "box"; x0: number; z0: number; x1: number; z1: number; h: number; ramp: number }
   /** a walkable quarter pipe: curves up from its open `face` side to a flat deck `h` high */
-  | { t: "qp"; x0: number; z0: number; x1: number; z1: number; face: 0 | 1 | 2 | 3; h: number; run: number };
+  | {
+      t: "qp";
+      x0: number;
+      z0: number;
+      x1: number;
+      z1: number;
+      face: 0 | 1 | 2 | 3;
+      h: number;
+      run: number;
+    };
 
 /** height of a quarter pipe's surface `d` metres in from its open edge */
-export const qpHeight = (h: number, run: number, d: number) => (d <= 0 ? 0 : d >= run ? h : h * Math.pow(d / run, 1.7));
+export const qpHeight = (h: number, run: number, d: number) =>
+  d <= 0 ? 0 : d >= run ? h : h * Math.pow(d / run, 1.7);
 /** distance in from a quarter pipe's open edge (negative outside it) */
-export function qpDepth(m: { x0: number; z0: number; x1: number; z1: number; face: number }, x: number, z: number) {
+export function qpDepth(
+  m: { x0: number; z0: number; x1: number; z1: number; face: number },
+  x: number,
+  z: number,
+) {
   return m.face === 3 ? x - m.x0 : m.face === 1 ? m.x1 - x : m.face === 2 ? m.z1 - z : z - m.z0;
 }
 
@@ -828,7 +842,9 @@ export function generateBeach(
     const byPier = (a: BBld, b: BBld) => Math.abs((a.z0 + a.z1) / 2) - Math.abs((b.z0 + b.z1) / 2);
     const pick =
       buildings.filter((b) => b.t === "hotel" && inSq(b)).sort(byPier)[0] ??
-      buildings.filter((b) => b.t === "shop" && b.front === 3 && inSq(b) && b.z1 - b.z0 >= 20).sort(byPier)[0];
+      buildings
+        .filter((b) => b.t === "shop" && b.front === 3 && inSq(b) && b.z1 - b.z0 >= 20)
+        .sort(byPier)[0];
     if (pick) {
       pick.t = "hotel";
       pick.floors = 10;
@@ -841,12 +857,13 @@ export function generateBeach(
   // the wheel's disc is turned 45 degrees so it reads from the beach, the boardwalk and the pier
   wheel = { x: -96, z: -20, y: DECK + 21.6, r: 17, rot: Math.PI / 4 };
   // Only the four A-frame feet and ticket booth are solid; the platform and approach work.
-  for (const u of [-9,9]) for (const n of [-4.4,4.4]) {
-    const p = wheelPoint(wheel,u,0,n);
-    solidify(rect(p.x-1,p.z-1,p.x+1,p.z+1),DECK,DECK+3.5);
-  }
-  const booth = wheelPoint(wheel,-6.2,0,3.5);
-  solidify(rect(booth.x-1.3,booth.z-1.3,booth.x+1.3,booth.z+1.3),DECK,DECK+4.4);
+  for (const u of [-9, 9])
+    for (const n of [-4.4, 4.4]) {
+      const p = wheelPoint(wheel, u, 0, n);
+      solidify(rect(p.x - 1, p.z - 1, p.x + 1, p.z + 1), DECK, DECK + 3.5);
+    }
+  const booth = wheelPoint(wheel, -6.2, 0, 3.5);
+  solidify(rect(booth.x - 1.3, booth.z - 1.3, booth.x + 1.3, booth.z + 1.3), DECK, DECK + 4.4);
   bld({ ...rect(-76, -30, -44, -14), t: "arcade", y0: DECK, h: 8.5, floors: 2, front: 2, sign: 8 });
   const drop = { x: -32, z: -24, h: 38 };
   solidify(rect(-36, -28, -28, -20), DECK - 8, DECK + drop.h);
@@ -1384,6 +1401,7 @@ export function generateBeach(
           x: cx(i),
           z: cx(j),
           h: real ? Math.max(0, pTop[c]! - Math.max(0, pBot[c]!)) : 0,
+          boundary: !real,
           tone: 0,
         });
         solid[c] = 1;

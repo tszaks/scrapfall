@@ -1,3 +1,4 @@
+import { registerStaticGeometry } from "../staticCollision";
 import { MarineLife } from "../life/MarineLife";
 import { wheelAngle, wheelCabin, CABINS } from "./wheelRide";
 import { trafficClock } from "../trafficCore";
@@ -325,6 +326,14 @@ const BeachScene = memo(function BeachScene({
       );
     return m;
   }, [city]);
+  useLayoutEffect(
+    () =>
+      registerStaticGeometry(
+        "map",
+        built.chunks.filter((c) => !c.far).flatMap((c) => [c.main, c.detail]),
+      ),
+    [built],
+  );
 
   const nightK = useMemo(() => ({ value: 0 }), []);
   const darkK = useMemo(() => ({ value: 0.2 }), []);
@@ -441,7 +450,10 @@ const BeachScene = memo(function BeachScene({
     mats.mist.color.set(B.hazardCol);
   }, [nk, mats, nightK, darkK, foamCol, moon]);
   const skies = useMemo(
-    () => ({ sunset: paletteSkyTextures(BEACH_SKY_KEY, BEACH_SUNSET).background, night: skyTexture("night") }),
+    () => ({
+      sunset: paletteSkyTextures(BEACH_SKY_KEY, BEACH_SUNSET).background,
+      night: skyTexture("night"),
+    }),
     [],
   );
 
@@ -537,7 +549,13 @@ const BeachScene = memo(function BeachScene({
       <points geometry={lightsGeo} material={mats.lights} />
       {/* the marine layer: a fog shell round the camera, drawn after the sky and the stars
           (anything nearer than its radius stays in front; the scene fog hazes that) */}
-      <mesh ref={mistRef} material={mats.mist} visible={false} renderOrder={10} frustumCulled={false}>
+      <mesh
+        ref={mistRef}
+        material={mats.mist}
+        visible={false}
+        renderOrder={10}
+        frustumCulled={false}
+      >
         <sphereGeometry args={[420, 16, 10]} />
       </mesh>
       {built.chunks.map((c, i) => (
@@ -807,12 +825,13 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
       gon.color(col).add(b, new THREE.Matrix4().makeTranslation(x, y, z));
       b.dispose();
     };
-    for (const x of [-.85,.85]) box(x, -.45, 0, .12, 1, .12, "#d8d8d8");
+    for (const x of [-0.85, 0.85]) box(x, -0.45, 0, 0.12, 1, 0.12, "#d8d8d8");
     // Hollow cabin: usable floor, waist-high panels and real headroom.
-    for (const x of [-.95,.95]) box(x,-2.32,0,.1,1,1.6,"#ffffff");
-    box(0,-2.32,-.75,1.9,1,.1,"#ffffff");
-    for (const x of [-.95,.95]) for (const z of [-.75,.75]) box(x,-1.7,z,.08,2.1,.08,"#d8d8d8");
-    box(0, -.67, 0, 2.3, 0.14, 1.9, "#ffffff");
+    for (const x of [-0.95, 0.95]) box(x, -2.32, 0, 0.1, 1, 1.6, "#ffffff");
+    box(0, -2.32, -0.75, 1.9, 1, 0.1, "#ffffff");
+    for (const x of [-0.95, 0.95])
+      for (const z of [-0.75, 0.75]) box(x, -1.7, z, 0.08, 2.1, 0.08, "#d8d8d8");
+    box(0, -0.67, 0, 2.3, 0.14, 1.9, "#ffffff");
     box(0, -2.85, 0, 1.9, 0.12, 1.5, "#2a2a2a");
     return {
       frame: frame.build(),
@@ -859,13 +878,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
       const p = wheelCabin(w, i);
       const sway = Math.sin(trafficClock.t * 0.9 + i) * 0.012;
       _e.set(0, w.rot, sway);
-      _m4.compose(
-        _v.set(
-          p.x, p.y, p.z,
-        ),
-        _q.setFromEuler(_e),
-        _s.set(1, 1, 1),
-      );
+      _m4.compose(_v.set(p.x, p.y, p.z), _q.setFromEuler(_e), _s.set(1, 1, 1));
       m.setMatrixAt(i, _m4);
     }
     m.instanceMatrix.needsUpdate = true;
