@@ -2551,6 +2551,11 @@ function World({
         if (e.elite) { onShard(15); e.elite = 0; }
         // elites, mini-bosses and bosses always leave a medkit behind
         if (e.kind === "boss" || e.kind === "vanguard") heal.current = { x: e.x, z: e.z, active: true };
+        // SOLAR FLARE round: every corpse pops in a small fire blast
+        if (mid === "flare") {
+          playFx("#ff9a3a", 0.4, 3.2, 0.3, e.x, e.z);
+          if (!spectating && Math.hypot(cam.position.x - e.x, cam.position.z - e.z) < 2.6) takeHit(1);
+        }
         onKill(e);
 
       }
