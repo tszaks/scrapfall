@@ -4158,19 +4158,27 @@ export function Game() {
             {paused && (
               <div className="w-full max-w-sm px-4">
                 <StatSheet d={statsRef.current} cls={cls} />
-                {(activeMods.length > 0 || activePerks.length > 0) && (
-                  <div className="mt-3 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {activeMods.map((id) => (
-                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                          {perkBadge(id, 1)}
-                        </span>
-                      ))}
-                      {activePerks.map(({ id, label }) => (
-                        <span key={id} className="text-[10px] tracking-wider text-black">
-                          {label}
-                        </span>
+                {boughtCards.length > 0 && (
+                  <div className="mt-3 text-left">
+                    <div className="text-[9px] tracking-[0.25em] text-black/50">UPGRADES BOUGHT</div>
+                    <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                      {boughtCards.map((c) => (
+                        <div
+                          key={c.id}
+                          className="relative rounded-md border p-1.5"
+                          style={{ borderColor: `${c.color}80`, background: `${c.color}14` }}
+                        >
+                          {c.mod && <PistolBadge />}
+                          <div className="pr-4 text-[9px] font-bold tracking-wider text-black">{c.name}</div>
+                          <div className="mt-0.5 space-y-0.5 text-[9px] leading-tight">
+                            {c.effects.map((e, i) => (
+                              <div key={i} className={e.bad ? "text-[#b3261e]" : "text-black/70"}>
+                                {e.text}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 text-[9px] font-bold tracking-widest text-black/60">{c.lvl}x</div>
+                        </div>
                       ))}
                     </div>
                   </div>
