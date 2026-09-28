@@ -2909,7 +2909,10 @@ function World({
           if (spType === "bile") dir = d > 5 ? 1 : 0;
         }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        // OVERDRIVE rounds make the swarm faster; BLOOD MOON knits their wounds back
+        const mutId2 = mutator.current?.id;
+        if (mutId2 === "blood" && e.max && e.hp < e.max) e.hp = Math.min(e.max, e.hp + delta * 0.8);
+        const step = st.speed * spMul * (mutId2 === "surge" ? 1.25 : 1) * (e.slow > 0 ? 0.5 : 1) * delta * dir;
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
         if (spType === "stalker" || spType === "shinobi") {
