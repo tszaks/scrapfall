@@ -24,6 +24,7 @@ import {
   applyPads,
   baseProfile,
   modHeight,
+  qpHeight,
   type BBld,
   type BeachLayout,
   type Blockade,
@@ -1794,10 +1795,30 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       for (let k = 0; k + 1 < rim.length; k++) {
         const [ax, az] = rim[k]!;
         const [bx, bz] = rim[k + 1]!;
-        railBar(D, [ax, gv(ax, az) + 0.04, az], [bx, gv(bx, bz) + 0.04, bz], 0.06);
+        D.col("#c8ccd2");
+        railBar(D, [ax, gv(ax, az) + 0.06, az], [bx, gv(bx, bz) + 0.06, bz], 0.09);
+        // a band of blue pool tile just under the lip
+        const cxm = m.t === "ell" ? m.x : (m.ax + m.bx) / 2;
+        const czm = m.t === "ell" ? m.z : (m.az + m.bz) / 2;
+        const inA = 0.45 / (Math.hypot(cxm - ax, czm - az) || 1);
+        const inB = 0.45 / (Math.hypot(cxm - bx, czm - bz) || 1);
+        const iax = ax + (cxm - ax) * inA;
+        const iaz = az + (czm - az) * inA;
+        const ibx = bx + (cxm - bx) * inB;
+        const ibz = bz + (czm - bz) * inB;
+        D.col("#2f6fa0");
+        const ya = gv(ax, az) + 0.03;
+        const yb2 = gv(bx, bz) + 0.03;
+        const yia = gv(iax, iaz) + 0.03;
+        const yib = gv(ibx, ibz) + 0.03;
+        D.quad(ax, ya, az, bx, yb2, bz, ibx, yib, ibz, iax, yia, iaz);
+        D.quad(bx, yb2, bz, ax, ya, az, iax, yia, iaz, ibx, yib, ibz);
       }
     }
-    for (const q of beach.qpipes) quarterPipe(D, q);
+    for (const m of beach.mods) {
+      if (m.t !== "qp") continue;
+      quarterPipe(D, { x0: m.x0, z0: m.z0, x1: m.x1, z1: m.z1, face: m.face }, m.h, m.run);
+    }
     const Cs = chunkAt(90, 76);
     for (const [x, z, rot] of [
       [58, 50, 0],
@@ -1807,12 +1828,12 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     ] as const)
       prop({ k: "streetlight", x, z, y: 0, rot }, Cs, T, gv);
     Cs.main.col("#3a3e44");
-    Cs.main.box(X.bike - 1, 0, 74, 0.2, 4.2, 0.2);
-    Cs.main.box(X.bike - 1, 0, 80, 0.2, 4.2, 0.2);
+    Cs.main.box(X.bike - 1, 0, 103, 0.2, 4.2, 0.2);
+    Cs.main.box(X.bike - 1, 0, 109, 0.2, 4.2, 0.2);
     Cs.main.col("#15121a");
-    Cs.main.box(X.bike - 1, 3.2, 77, 0.3, 1.6, 6.4);
-    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 0.84, 4.0, 77, 6, 1.5, 1);
-    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 1.16, 4.0, 77, 6, 1.5, 3);
+    Cs.main.box(X.bike - 1, 3.2, 106, 0.3, 1.6, 6.4);
+    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 0.84, 4.0, 106, 6, 1.5, 1);
+    signQuad(Cs.signs, W["SKATE PARK"], X.bike - 1.16, 4.0, 106, 6, 1.5, 3);
     // graffiti on the ledges and pipe backs
     const R = mulberry(31);
     for (let k = 0; k < 26; k++) {
@@ -2220,43 +2241,45 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
 }
 
 /** a skate quarter pipe: a curved ramp rising to a deck with coping, facing `face` */
-function quarterPipe(G: Geo, q: Rect & { face: number }) {
-  const R = 2.4;
-  const N = 7;
-  const along = q.face === 0 || q.face === 2;
-  const a0 = along ? q.x0 : q.z0;
-  const a1 = along ? q.x1 : q.z1;
-  // the curved face runs from the open side (ground) up to the deck edge
+function quarterPipe(G: Geo, q: Rect & { face: number }, h: number, run: number) {
+  // the walkable curve (the same profile the ground uses: beachLayout qpHeight), a flat deck,
+  // the back wall with a parapet, two cheek walls and steel coping along the lip
+  const along = q.face === 0 || q.face === 2; // the lip runs along x
+  const a0 = (along ? q.x0 : q.z0) + 2; // between the cheeks
+  const a1 = (along ? q.x1 : q.z1) - 2;
   const open = q.face === 3 ? q.x0 : q.face === 1 ? q.x1 : q.face === 2 ? q.z1 : q.z0;
   const back = q.face === 3 ? q.x1 : q.face === 1 ? q.x0 : q.face === 2 ? q.z0 : q.z1;
   const dir = Math.sign(back - open);
+  const depth = Math.abs(back - open);
   const P = (a: number, d: number, y: number): [number, number, number] =>
-    along ? [a, y, d] : [d, y, a];
-  G.mat(L.ground, 0.5, 0).col("#bdbab2");
+    along ? [a, y, open + dir * d] : [open + dir * d, y, a];
+  const N = 12;
+  const quad = (A: number[], B: number[], C: number[], D: number[]) => {
+    G.quad(A[0]!, A[1]!, A[2]!, B[0]!, B[1]!, B[2]!, C[0]!, C[1]!, C[2]!, D[0]!, D[1]!, D[2]!);
+    G.quad(B[0]!, B[1]!, B[2]!, A[0]!, A[1]!, A[2]!, D[0]!, D[1]!, D[2]!, C[0]!, C[1]!, C[2]!);
+  };
+  G.mat(L.ground, 0.5, 0).col("#c3c0b8");
   for (let k = 0; k < N; k++) {
-    const t0 = (k / N) * (Math.PI / 2);
-    const t1 = ((k + 1) / N) * (Math.PI / 2);
-    const d0 = open + dir * Math.sin(t0) * R;
-    const d1 = open + dir * Math.sin(t1) * R;
-    const y0 = R - Math.cos(t0) * R;
-    const y1 = R - Math.cos(t1) * R;
-    const A = P(a0, d0, y0);
-    const B = P(a1, d0, y0);
-    const C = P(a1, d1, y1);
-    const D = P(a0, d1, y1);
-    G.quad(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2], D[0], D[1], D[2]);
-    G.quad(B[0], B[1], B[2], A[0], A[1], A[2], D[0], D[1], D[2], C[0], C[1], C[2]);
+    const d0 = (k / N) * run;
+    const d1 = ((k + 1) / N) * run;
+    const y0 = qpHeight(h, run, d0) + 0.06;
+    const y1 = qpHeight(h, run, d1) + 0.06;
+    quad(P(a0, d0, y0), P(a1, d0, y0), P(a1, d1, y1), P(a0, d1, y1));
   }
-  // deck, back wall and coping
-  const e = open + dir * R;
-  G.col("#c9c6be");
-  if (along) {
-    G.box((a0 + a1) / 2, 0, (e + back) / 2, a1 - a0, R, Math.abs(back - e));
-  } else G.box((e + back) / 2, 0, (a0 + a1) / 2, Math.abs(back - e), R, a1 - a0);
-  G.col("#8a9096");
-  const c0 = P(a0, e, R + 0.03);
-  const c1 = P(a1, e, R + 0.03);
-  railBar(G, c0, c1, 0.07);
+  G.col("#b8b5ad");
+  quad(P(a0, run, h + 0.06), P(a1, run, h + 0.06), P(a1, depth - 2, h + 0.06), P(a0, depth - 2, h + 0.06));
+  // back wall + parapet, cheeks (solid walls either side)
+  G.col("#aaa79f");
+  const box = (A0: number, A1: number, D0: number, D1: number, y1: number) => {
+    const p0 = P(A0, D0, 0);
+    const p1 = P(A1, D1, 0);
+    G.box((p0[0] + p1[0]) / 2, -0.3, (p0[2] + p1[2]) / 2, Math.abs(p1[0] - p0[0]), y1 + 0.3, Math.abs(p1[2] - p0[2]));
+  };
+  box(a0 - 2, a1 + 2, depth - 2, depth, h + 1.0);
+  box(a0 - 2, a0, 0, depth - 2, h + 0.35);
+  box(a1, a1 + 2, 0, depth - 2, h + 0.35);
+  G.col("#c8ccd2");
+  railBar(G, P(a0, run, h + 0.1), P(a1, run, h + 0.1), 0.08);
 }
 
 /** the lower half of a globe (an inverted cone) */

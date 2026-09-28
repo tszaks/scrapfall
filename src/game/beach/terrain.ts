@@ -29,7 +29,9 @@ export function beachTerrain(city: BeachLayout): Ground {
             Math.max(m.ax, m.bx) + m.r,
             Math.max(m.az, m.bz) + m.r,
           ]
-        : [m.x0 - m.ramp, m.z0 - m.ramp, m.x1 + m.ramp, m.z1 + m.ramp],
+        : m.t === "qp"
+          ? [m.x0, m.z0, m.x1, m.z1]
+          : [m.x0 - m.ramp, m.z0 - m.ramp, m.x1 + m.ramp, m.z1 + m.ramp],
   );
   const cellOf = (x: number, z: number) => {
     const i = Math.floor((x + half) / 2);

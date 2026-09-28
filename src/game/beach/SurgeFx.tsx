@@ -12,6 +12,15 @@ import { SEA, X, baseProfile, type BeachLayout } from "./beachLayout";
 import { SURGE, surge } from "./waveSurge";
 
 const SPRAY = 220;
+const ROLL_N = 110;
+/** the foam bore's cross-section: [metres behind the front, height, shade] */
+const ROLL_P: [number, number, number][] = [
+  [-5.5, 0.12, 0.62],
+  [-2.6, 0.55, 0.82],
+  [-1.0, 0.95, 1.0],
+  [0.0, 0.62, 0.95],
+  [0.6, 0.08, 0.85],
+];
 const _v = new THREE.Vector3();
 
 export function SurgeFx({ city }: { city: BeachLayout }) {
@@ -104,8 +113,10 @@ export function SurgeFx({ city }: { city: BeachLayout }) {
     });
     const sheet = new THREE.MeshStandardMaterial({
       color: "#2c6a80",
-      roughness: 0.3,
-      metalness: 0.1,
+      roughness: 0.45,
+      metalness: 0.05,
+      // mostly its own sea-green, not a gold mirror of the sunset at grazing angles
+      envMapIntensity: 0.25,
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
@@ -149,11 +160,15 @@ if (edge < 0.0) discard;
 float n = sNoise(vW.xz * vec2(0.18, 0.5) + vec2(uTime * 0.6, 0.0));
 // the white leading edge, lace behind it, and foam streaks left on the wet sand
 float lead = smoothstep(7.0, 0.0, edge) * uRun;
-float lace = smoothstep(0.56, 0.74, n) * (0.4 + 0.6 * uRun);
+float lace = smoothstep(0.52, 0.7, n) * (0.5 + 0.5 * uRun);
+// bands of foam trailing behind the bore
+lace = max(lace, smoothstep(0.75, 1.0, sin((uFront - vW.x) * 0.9 - uTime * 4.0) * 0.5 + 0.5) * smoothstep(14.0, 2.0, edge) * uRun * 0.8);
 float foamK = clamp(max(lead, lace), 0.0, 1.0);
-vec3 water = mix(vec3(0.22, 0.52, 0.58), vec3(0.26, 0.21, 0.16), 1.0 - uRun);
+// running water: clear sea-green over the sand, deeper blue-green behind the front
+float deepK = clamp((uFront - vW.x) / 30.0, 0.0, 1.0);
+vec3 water = mix(mix(vec3(0.24, 0.6, 0.62), vec3(0.06, 0.3, 0.42), deepK), vec3(0.26, 0.21, 0.16), 1.0 - uRun);
 diffuseColor.rgb = mix(water, vec3(0.95, 0.96, 0.95), foamK);
-diffuseColor.a = mix(0.5, 0.72, uRun) * uWet * mix(0.8, 1.0, foamK);`,
+diffuseColor.a = mix(0.5, 0.85, uRun) * uWet * mix(0.85, 1.0, foamK);`,
         )
         .replace(
           "#include <roughnessmap_fragment>",
@@ -181,6 +196,53 @@ diffuseColor.a = mix(0.5, 0.72, uRun) * uWet * mix(0.8, 1.0, foamK);`,
     },
     [swellGeo, sheetGeo, mats],
   );
+
+  // ---- the foam roll: a white, tumbling bore riding the leading edge of the run-up (rebuilt
+  // along the beach every frame, so it hugs the sand wherever the front is) ----
+  const rollGeo = useMemo(() => {
+    const w = ROLL_P.length;
+    const pos = new Float32Array((ROLL_N + 1) * w * 3);
+    const col = new Float32Array((ROLL_N + 1) * w * 3);
+    const idx: number[] = [];
+    for (let j = 0; j <= ROLL_N; j++)
+      for (let k = 0; k < w; k++) {
+        const o = (j * w + k) * 3;
+        const sh = ROLL_P[k]![2] * (0.9 + 0.1 * Math.sin(j * 1.7));
+        col[o] = sh;
+        col[o + 1] = sh;
+        col[o + 2] = sh * 0.98;
+      }
+    for (let j = 0; j < ROLL_N; j++)
+      for (let k = 0; k + 1 < w; k++) {
+        const a = j * w + k;
+        idx.push(a, a + 1, a + w, a + 1, a + w + 1, a + w);
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    g.setIndex(idx);
+    return g;
+  }, []);
+  const rollMat = useMemo(
+    () =>
+      new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        emissive: "#9aa8b0",
+        emissiveIntensity: 0.35,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+      }),
+    [],
+  );
+  useEffect(
+    () => () => {
+      rollGeo.dispose();
+      rollMat.dispose();
+    },
+    [rollGeo, rollMat],
+  );
+  const rollRef = useRef<THREE.Mesh>(null);
 
   const sprayGeo = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -211,6 +273,31 @@ diffuseColor.a = mix(0.5, 0.72, uRun) * uWet * mix(0.8, 1.0, foamK);`,
     u.uRun.value = t < SURGE.hold ? 1 : Math.max(0, 1 - (t - SURGE.hold) / 3);
     u.uTime.value = time;
     sh.visible = on && surge.wet > 0.01;
+    // the bore: tall and white while the water runs, sinking into a foam line as it stops
+    const rl = rollRef.current;
+    const rollK = t < SURGE.breaks - 0.4 ? 0 : t < SURGE.peak ? 1 : Math.max(0, 1 - (t - SURGE.peak) / 2.5);
+    if (rl) {
+      rl.visible = on && rollK > 0.01;
+      if (rl.visible) {
+        const a = rollGeo.getAttribute("position") as THREE.BufferAttribute;
+        const cam = state.camera.position;
+        const w = ROLL_P.length;
+        for (let j = 0; j <= ROLL_N; j++) {
+          const z = cam.z + (j / ROLL_N - 0.5) * 300;
+          // the same ragged edge the water sheet draws
+          const fx = surge.front + Math.sin(z * 0.07 + time * 0.8) * 1.6 + Math.sin(z * 0.23 + time * 1.3) * 0.6;
+          for (let k = 0; k < w; k++) {
+            const [off, h] = ROLL_P[k]!;
+            const x = fx + off;
+            const bob = Math.sin(time * 5 + j * 0.9 + k) * 0.08;
+            a.setXYZ(j * w + k, x, Math.max(SEA, baseProfile(x, z)) + 0.05 + (h + bob) * rollK, z);
+          }
+        }
+        a.needsUpdate = true;
+        rollGeo.computeVertexNormals();
+        rollGeo.computeBoundingSphere();
+      }
+    }
     // small soft spray thrown up where the wave breaks and along the running front
     sp.visible = on && (running || (t > SURGE.breaks - 1.2 && t < SURGE.breaks + 0.5));
     if (sp.visible) {
@@ -239,6 +326,7 @@ diffuseColor.a = mix(0.5, 0.72, uRun) * uWet * mix(0.8, 1.0, foamK);`,
         visible={false}
         frustumCulled={false}
       />
+      <mesh ref={rollRef} geometry={rollGeo} material={rollMat} visible={false} frustumCulled={false} renderOrder={3} />
       <mesh
         ref={sheetRef}
         geometry={sheetGeo}

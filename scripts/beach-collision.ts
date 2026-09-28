@@ -39,7 +39,10 @@ for (const solo of [true, false])
     inside("ferris wheel base", w.x - 8, w.z - 3, w.x + 8, w.z + 3);
     inside("carousel", B.carousel.x - 5, B.carousel.z - 5, B.carousel.x + 5, B.carousel.z + 5);
     inside("drop tower", B.drop.x - 1.1, B.drop.z - 1.1, B.drop.x + 1.1, B.drop.z + 1.1, 0);
-    for (const q of B.qpipes) inside("quarter pipe", q.x0, q.z0, q.x1, q.z1);
+    // quarter pipes: the curve and deck are walkable, the back wall is solid
+    for (const q of B.qpipes)
+      if (q.face === 3) inside("quarter pipe back wall", q.x1 - 2, q.z0, q.x1, q.z1);
+      else inside("quarter pipe back wall", q.x0, q.z0, q.x1, q.z0 + 2);
     B.coaster.pts.forEach((a, k) => {
       if (k % 4 === 0 && a[1] > DECK + 2)
         add("coaster column", blocked(lv.blocks, a[0], a[2], 0.4));
