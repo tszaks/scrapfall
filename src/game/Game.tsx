@@ -2110,7 +2110,7 @@ function World({
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
-  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)];
+  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
   /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
   const liveZones = () => {
     const z = new Set<number>();
@@ -2287,8 +2287,13 @@ function World({
       const kz = h.kz ?? 0;
       const len = Math.hypot(kx, kz) || 1;
       const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
-      e.x += (kx / len) * push;
-      e.z += (kz / len) * push;
+      // (a shove never lifts it onto a balcony or up the tower's face)
+      const tx = e.x + (kx / len) * push;
+      const tz = e.z + (kz / len) * push;
+      if (climbable(e.x, e.z, tx, tz)) {
+        e.x = tx;
+        e.z = tz;
+      }
     }
     e.hp -= dmg;
     e.flash = 0.1;
@@ -2671,8 +2676,11 @@ function World({
 
     // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
     // (building access: interiors have their own walls, see pBlocked)
+    // (already overlapping something, e.g. dropped onto a thin post: step out with a slimmer
+    // body instead of being frozen in place)
+    const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
-      !pBlocked(x, z, 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
+      !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
@@ -3513,8 +3521,8 @@ function World({
               e.aux = (e.aux ?? 0) - delta;
               const lx = e.x + (dx / d) * 14 * delta;
               const lz = e.z + (dz / d) * 14 * delta;
-              if (!blocked(blocks, lx, e.z, 0.6)) e.x = lx;
-              if (!blocked(blocks, e.x, lz, 0.6)) e.z = lz;
+              if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z)) e.x = lx;
+              if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz)) e.z = lz;
               if (dm < 1.4) { e.aux = 0; hurtTarget(target, 2); }
             } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
           }
@@ -3620,8 +3628,9 @@ function World({
       const nudge = (e: Enemy, px: number, pz: number) => {
         const rr = Math.min(STATS[e.kind].radius, 0.8);
         const ghost = e.kind === "specter";
-        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr)) e.x += px;
-        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr)) e.z += pz;
+        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
+        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)) e.x += px;
+        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)) e.z += pz;
       };
       for (let ei = 0; ei < enemies.length; ei++) {
         const a = enemies[ei]!;

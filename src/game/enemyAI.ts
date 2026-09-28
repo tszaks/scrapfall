@@ -3,7 +3,7 @@
 // written to `e.vis` so co-op guests draw exactly the same telegraph (see enemyKinds.ts).
 
 import { HALF, NAV_SCALE, blocked, clearLine, toNav, type Block, type NavGrid } from "./level";
-import { groundY } from "./terrain";
+import { climbable, groundY } from "./terrain";
 import {
   NEW_STATS, FLYERS, PH_ACT, PH_AFTER, PH_IDLE, PH_WIND, packVis, type NewKind,
 } from "./enemyKinds";
@@ -130,8 +130,9 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   const nz = e.z + (mz / md) * s;
   const r = rad(e);
   let moved = false;
-  if (!blocked(ctx.blocks, nx, e.z, r)) { e.x = nx; moved = true; }
-  if (!blocked(ctx.blocks, e.x, nz, r)) { e.z = nz; moved = true; }
+  // (only steps it could walk: never up a balcony edge or the church tower's face)
+  if (!blocked(ctx.blocks, nx, e.z, r) && climbable(e.x, e.z, nx, e.z)) { e.x = nx; moved = true; }
+  if (!blocked(ctx.blocks, e.x, nz, r) && climbable(e.x, e.z, e.x, nz)) { e.z = nz; moved = true; }
   return moved;
 }
 
@@ -517,7 +518,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const step = Math.min(0.35, total - s);
           const nx = e.x + ux * step;
           const nz = e.z + uz * step;
-          if (blocked(ctx.blocks, nx, nz, rad(e))) { wall = true; break; }
+          if (blocked(ctx.blocks, nx, nz, rad(e)) || !climbable(e.x, e.z, nx, nz)) { wall = true; break; }
           e.x = nx;
           e.z = nz;
           const hitT = ctx.targets.find((t) => Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z));

@@ -862,12 +862,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
           return;
         }
       };
-      if (rand() < 0.55) place("bench", 1.8, x + p.w / 2 + (rand() - 0.5) * 3, north ? Math.PI : 0);
-      if (rand() < 0.5) {
+      // (none on the saloon's porch: its gallery runs overhead there, and collision is flat)
+      const clutter = p.t !== "saloon";
+      if (clutter && rand() < 0.55) place("bench", 1.8, x + p.w / 2 + (rand() - 0.5) * 3, north ? Math.PI : 0);
+      if (clutter && rand() < 0.5) {
         const sc = 0.8 + rand() * 0.4;
         place(rand() < 0.5 ? "barrels" : "crates", 1.6 * sc, x + 1 + rand() * (p.w - 2), rand() * 6.28, sc);
       }
-      if (rand() < 0.3) place("sacks", 1.2, x + 1 + rand() * (p.w - 2), rand() * 6.28);
+      if (clutter && rand() < 0.3) place("sacks", 1.2, x + 1 + rand() * (p.w - 2), rand() * 6.28);
       // porch lanterns
       if (porch > 0)
         prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
@@ -1678,6 +1680,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const zg = sl.zf + dir * SALOON_GALLERY;
     const ze = sl.zf + dir * (BOARD_D - 0.1);
     platforms.push({ x0: sl.x0, x1: st.x0, z0: Math.min(zg, ze), z1: Math.max(zg, ze), y: BALCONY_Y });
+    // the stair's boarded side and handrail: thin posts, so nobody stands outside the rail
+    for (let z = Math.min(st.zBottom, st.zTop); z <= Math.max(st.zBottom, st.zTop); z += 0.35)
+      posts.push({ x: st.x1 - 0.25, z, r: 0.08 });
     platforms.push({
       x0: st.x0,
       x1: st.x1,
@@ -1685,9 +1690,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       z1: Math.max(sl.zf - dir * 0.4, ze),
       y: BALCONY_Y,
     });
-    // (samples only across the treads' own width: the full-height strip used to reach the
-    // boarded side, so you could stand outside the handrail)
-    tbox(st.x0, Math.min(st.zBottom, st.zTop), st.x1 - 0.5, Math.max(st.zBottom, st.zTop), (_x, z) =>
+    tbox(st.x0, Math.min(st.zBottom, st.zTop), st.x1, Math.max(st.zBottom, st.zTop), (_x, z) =>
       BALCONY_Y * Math.min(1, Math.max(0, (z - st.zBottom) / (st.zTop - st.zBottom))),
     );
   }
