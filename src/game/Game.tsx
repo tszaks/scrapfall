@@ -6,7 +6,7 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
   closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
-  BEACH_SIZE, setPosts,
+  BEACH_SIZE, setPosts, jumpBody,
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
@@ -35,7 +35,7 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, jumpClimb, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
@@ -65,6 +65,13 @@ import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
+import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
+import { clearControls, installControls, padHooks, padLook, padOut, rumbleFor, sprintPose, stepMove, stepPadActions, takeJump } from "./input/controls";
+import { PadLayer } from "./input/PadLayer";
+import { useInputDevice } from "./input/useInputDevice";
+import { ControlsHelp, KeyHint } from "./input/Glyph";
+import { PadSettingsPanel } from "./input/PadSettings";
+import { SprintMeter } from "./input/SprintMeter";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -1736,6 +1743,7 @@ function World({
     const s2 = stats.current;
     if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    rumbleFor.hit();
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
@@ -1897,7 +1905,10 @@ function World({
     knock.current.x = kx;
     knock.current.z = kz;
     knock.current.shake = Math.max(knock.current.shake, shake);
-    if (shake > 0) playSfx("thud");
+    if (shake > 0) {
+      playSfx("thud");
+      rumbleFor.bump(shake);
+    }
     if (dmg > 0) takeHit(dmg);
   };
 
@@ -1948,6 +1959,7 @@ function World({
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
     r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
     r.rc = Number(m.rc ?? -1);
+    r.jy = Number(m.jy ?? 0) || 0; // mid-jump height (the avatar hops)
     r.last = performance.now();
   };
 
@@ -2178,6 +2190,7 @@ function World({
     }
     camera.position.set(x, EYE + (big ? groundY(x, z) : 0), z);
     camGround.current = camera.position.y - EYE;
+    cancelJump(camGround.current);
   };
   // the roster (my player number) can arrive just after the new arena: re-place before the match starts
   const lastSpawnNum = useRef(0);
@@ -2511,6 +2524,7 @@ function World({
     const pd = Math.hypot(c.x - x, c.z - z);
     if (pd < r && Math.abs(c.y - EYE - y) < r) {
       const push = 4 * (1 - pd / r);
+      rumbleFor.blast(1 - pd / r);
       knock.current.x += ((c.x - x) / (pd || 1)) * push;
       knock.current.z += ((c.z - z) / (pd || 1)) * push;
     }
@@ -2611,7 +2625,9 @@ function World({
       if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
     };
     const onUp = () => (trigger.current = false);
-    const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
+    // fire = hold the left mouse button (Space jumps: input/controls.ts); Enter still fires
+    // for keyboard-only players on the arrow keys
+    const isFire = (e: KeyboardEvent) => e.code === "Enter" || e.code === "NumpadEnter";
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
@@ -2824,6 +2840,19 @@ function World({
     (big !== null && hitsTraffic(p.x, p.y, p.z)));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) => playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
+  // controller aim assist: the middle of each live robot's body, and a clear line to it
+  const aimPt = { x: 0, y: 0, z: 0 };
+  function* aimTargets() {
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const [lo, hi] = hitBand(e.kind);
+      aimPt.x = e.x;
+      aimPt.z = e.z;
+      aimPt.y = groundY(e.x, e.z) + (lo + hi) / 2;
+      yield aimPt;
+    }
+  }
+  const aimVisible = (t: { x: number; z: number }) => clearLine(blocks, camera.position.x, camera.position.z, t.x, t.z, 0.1);
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -2853,6 +2882,8 @@ function World({
         touchInput.lookX = 0;
         touchInput.lookY = 0;
       }
+      // controller right stick (+ aim assist on the nearest robot in view)
+      padLook(delta, look.current, cam.position, aimTargets, aimVisible);
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -2867,6 +2898,9 @@ function World({
     const isH = isHostRef.current;
     const spectating = deadRef.current;
 
+    // controller buttons: one-shots go through touchInput below; A / X press the floor button
+    // in an elevator car
+    stepPadActions({ inCar: accessActive() && accPlayer.inCar });
     // on-screen controls
     if (touchInput.ability) {
       touchInput.ability = false;
@@ -2906,9 +2940,10 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if ((trigger.current || touchInput.fire) && !spectating && fireCd.current <= 0) {
+    } else if ((trigger.current || touchInput.fire || padOut.fire) && canFire() && !spectating && fireCd.current <= 0) {
       const w = weapon.current;
       fire();
+      rumbleFor.fire(GUNS[w].damage, GUNS[w].count, !!GUNS[w].blast);
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
         * (overdrive.current > 0 ? 0.5 : 1);
@@ -2922,8 +2957,19 @@ function World({
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
+    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
+    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX;
+    // sprint / tactical sprint (input/movement.ts): not while down, seated on the lift, in an
+    // elevator car, spectating or holding revive
+    const runMul = stepMove(
+      delta,
+      Math.max(-1, Math.min(1, fwd)),
+      trigger.current || touchInput.fire || padOut.fire,
+      spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar) || touchInput.revive || k.has("KeyR"),
+    );
+    // mid-jump, low props (benches, barrels) and flat ledges under the feet don't block
+    jumpBody.lift = moveState.airborne ? moveState.lift : 0;
+    jumpClimb.feet = moveState.airborne ? moveState.feet : -Infinity;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
@@ -2939,6 +2985,7 @@ function World({
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1)
       * groundSpeed(cam.position.x, cam.position.z) // deep snow off the paths
+      * runMul // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
       * (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
@@ -2976,6 +3023,8 @@ function World({
       kn.x *= decay;
       kn.z *= decay;
     }
+    jumpBody.lift = 0;
+    jumpClimb.feet = -Infinity;
 
     // enemies are solid: push the player back out of any body it walked into and let it slide
     // round. Walls win (an enemy can never shove you into a building). Every client resolves
@@ -3022,9 +3071,15 @@ function World({
       const dg = gy - camGround.current;
       camGround.current =
         !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+      // jump (Space / A / JUMP): not in an elevator car, on the chairlift, down or spectating
+      const noJump = spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar);
+      if (takeJump()) tryJump(!noJump);
+      if (noJump && moveState.airborne) cancelJump(gy);
+      stepJump(delta, gy);
+      if (moveState.airborne) camGround.current = gy;
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
-    cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    cam.position.y = (moveState.airborne ? moveState.feet : camGround.current) + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
     if (accessActive()) {
       // elevator cars (the host decides, guests follow the snapshot) and the auto doors
       const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
@@ -3080,6 +3135,7 @@ function World({
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
           ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press } : {}),
           ...(alpineMap ? { rc: ride.chair } : {}),
+          ...(moveState.airborne ? { jy: Math.round(moveState.lift * 100) / 100 } : {}),
         });
       }
     }
@@ -3511,7 +3567,7 @@ function World({
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone(), air: ride.chair >= 0 });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
-          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z));
+          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
           targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: remoteZone(r), air: (r.rc ?? -1) >= 0 });
         }
       });
@@ -4266,6 +4322,7 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    sprintPose(v); // lowered while sprinting, raised for a tactical sprint
     // the gun joins the transparent queue at the very end, after a depth clear (see below)
     v.traverse((o) => {
       if (o.renderOrder < 999) o.renderOrder = 1000;
@@ -4333,6 +4390,7 @@ function World({
           if (deadRef.current) return;
           if (kx || kz) shove(kx, kz);
           knock.current.shake = Math.max(knock.current.shake, shake);
+          if (shake > 0.2) rumbleFor.bump(shake);
           if (dmg > 0) takeHit(dmg);
         }}
         movePlayer={(dx, dz) => {
@@ -4562,6 +4620,7 @@ export function Game() {
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dev = useInputDevice(); // keyboard / controller / touch: which hints to show
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
@@ -4984,15 +5043,17 @@ export function Game() {
         pauseAll();
       }
     };
+    const pauseNow = () => {
+      setLocked(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+      pauseAll();
+    };
     const onKey = (e: KeyboardEvent) => {
       // P is the pause key on desktop; Escape still works since the browser
       // drops pointer lock on it anyway
-      if (e.code === "Escape" || e.code === "KeyP") {
-        setLocked(false);
-        if (document.pointerLockElement) document.exitPointerLock();
-        pauseAll();
-      }
+      if (e.code === "Escape" || e.code === "KeyP") pauseNow();
     };
+    padHooks.pause = pauseNow; // Start / Options / + on a controller
 
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
@@ -5001,6 +5062,7 @@ export function Game() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("beforeunload", onUnload);
       window.removeEventListener("pagehide", onUnload);
+      padHooks.pause = null;
     };
   }, []);
 
@@ -5102,6 +5164,7 @@ export function Game() {
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
     setLocked(true);
+    clearControls(); // no jump / sprint press queued from the menus
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
     if (touchUi) {
@@ -5280,6 +5343,8 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
+      {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
+      <PadLayer menus={!locked || ended} />
       <Canvas shadows="percentage" dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
@@ -5472,7 +5537,7 @@ export function Game() {
 
         {/* in an elevator car: how to ride (world.ts pressCarButton) */}
         <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
-          E · FLOOR BUTTON
+          <KeyHint action="use" /> · FLOOR BUTTON
         </div>
 
         {bossHp > 0 && locked && !ended && (
@@ -5499,7 +5564,7 @@ export function Game() {
 
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
+            {GUNS[weapon].name} ACQUIRED · {dev.kind === "pad" ? <><KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP</> : <>PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}</>}
           </div>
         )}
         {crateMsg && locked && !ended && (
@@ -5507,9 +5572,12 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
+        {locked && !ended && (
+          <SprintMeter className={touchUi ? "absolute left-5 top-44 scale-90 origin-top-left" : "absolute bottom-[3.9rem] left-5"} />
+        )}
         {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
-            [F] {ABILITIES[ability].name} ·{" "}
+            [<KeyHint action="ability" />] {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
           </div>
         )}
@@ -5528,7 +5596,7 @@ export function Game() {
         {miniSrc && started && !ended && (
           // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
           // list sits under the shards, so a smaller map sits just left of the buttons
-          <div className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
+          <div data-minimap className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
             <Minimap
               src={miniSrc}
               feed={mapFeed}
@@ -5541,9 +5609,10 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
+        <div data-pad-shop className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
+            {dev.kind === "pad" && <> · <KeyHint action="shopPick" /> PICK · <KeyHint action="shopBuy" /> BUY</>}
           </div>
           <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
             <button
@@ -5806,9 +5875,8 @@ export function Game() {
             )}
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                {touchUi
-                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · USE for elevators · PING · hold REVIVE by a downed teammate · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · E in an elevator car for the floor button · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · P to pause"}
+                {/* keys, controller glyphs or touch, whichever was used last (input/Glyph.tsx) */}
+                <ControlsHelp touch={touchUi} />
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -6070,6 +6138,7 @@ export function Game() {
                         onChange={(e) => setAmbVol(Number(e.target.value))}
                         className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                     </label>
+                    <PadSettingsPanel />
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}

@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { touchInput } from "./touch";
+import { moveState } from "./input/movement";
 
 const RADIUS = 52;
 
@@ -10,6 +11,7 @@ function Btn({
   onUp,
   onTap,
   dim,
+  lit,
   size = 64,
 }: {
   label: string;
@@ -18,6 +20,8 @@ function Btn({
   onUp?: () => void;
   onTap?: () => void;
   dim?: boolean;
+  /** latched on (the SPRINT toggle) */
+  lit?: boolean;
   size?: number;
 }) {
   return (
@@ -33,12 +37,42 @@ function Btn({
       onContextMenu={(e) => e.preventDefault()}
       style={{ width: size, height: size }}
       className={`pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 ${
-        dim ? "border-[#f3e6cf]/40 bg-[#2b2118]/35 text-[#f3e6cf]/60" : "border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70"
+        lit
+          ? "border-[#e7b25c] bg-[#b4653f]/80 text-[#f7eeda]"
+          : dim ? "border-[#f3e6cf]/40 bg-[#2b2118]/35 text-[#f3e6cf]/60" : "border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70"
       }`}
     >
       <span>{label}</span>
       {sub && <span className="mt-0.5 text-[8px] opacity-70">{sub}</span>}
     </button>
+  );
+}
+
+/** SPRINT: a toggle (tap to run, tap again to stop); two quick taps = tactical sprint */
+function SprintButton() {
+  const [st, setSt] = useState<"off" | "on" | "tac">("off");
+  useEffect(() => {
+    let raf = 0;
+    let last = "off";
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = moveState.tactical ? "tac" : moveState.sprinting ? "on" : "off";
+      if (now !== last) {
+        last = now;
+        setSt(now);
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <Btn
+      label={st === "tac" ? "TAC" : "SPRINT"}
+      {...(st === "off" ? { sub: "2× TAC" } : {})}
+      size={54}
+      lit={st !== "off"}
+      onTap={() => (touchInput.sprint = true)}
+    />
   );
 }
 
@@ -124,13 +158,19 @@ export function MobileControls({
         </div>
       )}
 
+      {/* SPRINT sits on the left edge above where the movement thumb rests */}
+      <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 150px)" }}>
+        <SprintButton />
+      </div>
+
       {/* squad and building buttons (the big maps): ping, hold to revive, and the elevator
           car's floor button, which only shows while you stand in a car (html.rs-incar) */}
       <div className="absolute flex flex-col items-end gap-2" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)" }}>
         <div className="hidden [.rs-incar_&]:block">
           <Btn label="USE" sub="FLOOR" size={56} onTap={() => (touchInput.use = true)} />
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
+          <Btn label="JUMP" size={60} onTap={() => (touchInput.jump = true)} />
           <Btn label="PING" size={48} onTap={() => (touchInput.ping = true)} />
           {coop && (
             <Btn

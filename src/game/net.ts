@@ -31,6 +31,8 @@ export type RemoteState = {
   /** building access: elevator button presses so far (the host compares counts) */
   ap?: number;
   ay?: number | undefined;
+  /** mid-jump: feet above the ground (m), 0 on foot (input/movement.ts) */
+  jy?: number;
   /** alpine: the chairlift chair this player is riding, -1 on foot */
   rc?: number;
   last: number;
