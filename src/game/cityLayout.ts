@@ -110,6 +110,7 @@ export type Bld = {
   /** set by the building-access system (access/cityAccess.ts): elevator or stairs to the roof */
   access?: BldAccess;
   grandWing?: import("./structures/plan").Structure;
+  openFloors?: import("./structures/plan").Structure;
 };
 export type Spot = { x: number; z: number; rot: number };
 export type ParkedCar = Spot & { v: Vehicle };

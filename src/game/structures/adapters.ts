@@ -1,3 +1,4 @@
+import { openBuilding, colonnade } from "./open";
 import type { BeachLayout } from "../beach/beachLayout";
 import { roomPlan, type Structure } from "./plan";
 
@@ -103,4 +104,24 @@ export function cityRooms(city: import("../cityLayout").CityLayout, limit: numbe
   const p = roomPlan("vice-grand-west-lobby", r, 0, 8, 2, "landmark", 2, true);
   b.grandWing = p;
   return [p];
+}
+
+export function cityOpenStructures(
+  city: import("../cityLayout").CityLayout,
+  limit: number,
+): Structure[] {
+  const out: Structure[] = [];
+  for (const b of city.buildings) {
+    if (
+      b.backdrop ||
+      Math.max(Math.abs(b.x0), Math.abs(b.x1), Math.abs(b.z0), Math.abs(b.z1)) >= limit - 10
+    )
+      continue;
+    const p = b.t === "garage" || b.t === "construction" ? openBuilding(b) : colonnade(b);
+    if (p) {
+      b.openFloors = p;
+      out.push(p);
+    }
+  }
+  return out;
 }

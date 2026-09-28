@@ -80,7 +80,7 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
   const stairs: Cand[] = [];
   const spirals: Cand[] = [];
   city.buildings.forEach((b, bi) => {
-    if (b.backdrop || b.access || !bInside(b)) return;
+    if (b.backdrop || b.access || b.openFloors || !bInside(b)) return;
     const okType =
       b.t === "tower" || b.t === "super" || b.t === "mid" || b.t === "slab" || b.t === "mall" ||
       b.t === "low" || b.t === "corner" || b.t === "warehouse" || b.t === "garage";

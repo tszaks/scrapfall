@@ -10,6 +10,7 @@ export function Structures({ seed }: { seed: number }) {
     const m = new Model(),
       g = new Model();
     const draw = (v: Volume) => {
+      if (v.hidden) return;
       const w = v.x1 - v.x0,
         h = v.y1 - v.y0,
         d = v.z1 - v.z0;

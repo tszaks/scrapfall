@@ -93,6 +93,15 @@ export function structureBody(
     owns = true;
     for (const v of p.solids) {
       if (v.y1 <= feet + 0.2 || v.y0 >= feet + 1.8) continue;
+      // A landing can meet the capsule rim before its centre reaches the last tread.
+      // Treat that thin, reachable support as a step; torso-height slabs still block.
+      if (
+        !street &&
+        v.y1 <= feet + 0.55 &&
+        v.y1 - v.y0 <= 0.181 &&
+        p.floors.some((f) => Math.abs(f.y - v.y1) < 0.001 && contains(f, x, z, r))
+      )
+        continue;
       if (contains(v, x, z, r)) return true;
     }
     // Street enemies can enter furnished rooms, but have no navigation on player-only stairs.
@@ -100,7 +109,7 @@ export function structureBody(
     for (const s of p.stairs)
       if (contains(s, x, z, r)) {
         const fy = flightY(s, x, z);
-        if (fy > feet + 0.65 && fy < feet + 1.8) return true;
+        if (fy > feet + 0.65 && fy - 0.25 < feet + 1.8) return true;
       }
   }
   return owns ? false : undefined;

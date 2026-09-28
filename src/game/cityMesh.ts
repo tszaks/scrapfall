@@ -1548,6 +1548,7 @@ function construction(b: Bld, st: Style, C: Ctx) {
     z += (f.z1 - f.z0 - 1) / Math.max(1, Math.round((f.z1 - f.z0) / 8))
   )
     rows.push(z);
+  if (!b.openFloors) {
   G.mat(L.plain, st.seed, 1).col("#b8b4ac");
   for (const x of cols) for (const z of rows) G.box(x, 0, z, 0.7, top, 0.7);
   // floor slabs up to the built height, a concrete core to the top
@@ -1559,6 +1560,7 @@ function construction(b: Bld, st: Style, C: Ctx) {
   G.col("#a8a49c");
   const cw = Math.min(10, (f.x1 - f.x0) * 0.3);
   G.box((f.x0 + f.x1) / 2, 0, (f.z0 + f.z1) / 2, cw, top + 4, cw);
+  }
   // orange safety netting on the top built floors
   G.col("#e8742a");
   const np = rectPoly(f.x0 - 0.3, f.z0 - 0.3, f.x1 + 0.3, f.z1 + 0.3);
@@ -1724,15 +1726,15 @@ function civic(b: Bld, st: Style, C: Ctx) {
   const span = (nz !== 0 ? p.x1 - p.x0 : p.z1 - p.z0) * 0.6;
   const rot = Math.atan2(nx, nz);
   G.mat(L.plain, st.seed, 1).col(st.tint, 1.04);
-  for (let s = 0; s < 3; s++)
+  for (let s = 0; s < (b.openFloors ? 0 : 3); s++)
     G.obox(fx + nx * (4 - s * 0.6), s * 0.3, fz + nz * (4 - s * 0.6), span + 2, 0.3, 1.2, rot);
   const n = 6;
   for (let k = 0; k < n; k++) {
     const t = -span / 2 + (k / (n - 1)) * span;
     G.cyl(
-      fx + nx * 3.6 + (nz !== 0 ? t : 0),
+      fx + nx * (b.openFloors ? 2.8 : 3.6) + (nz !== 0 ? t : 0),
       0.9,
-      fz + nz * 3.6 + (nx !== 0 ? t : 0),
+      fz + nz * (b.openFloors ? 2.8 : 3.6) + (nx !== 0 ? t : 0),
       0.55,
       12.5,
       10,
@@ -1799,6 +1801,15 @@ function garage(b: Bld, st: Style, C: Ctx) {
   const G = C.main;
   const p = b.parts[0]!;
   const poly = rectPoly(p.x0, p.z0, p.x1, p.z1);
+  if(b.openFloors){
+    for(const c of b.openFloors.cars??[])car(C.detail,c.v,c.x,c.y+.02,c.z,c.rot);
+    // Real entry bays stay open; the original parking symbol marks the street approach.
+    const f=b.front,nx=f===1?1:f===3?-1:0,nz=f===2?1:f===0?-1:0;
+    const x=nx>0?p.x1:nx<0?p.x0:(p.x0+p.x1)/2,z=nz>0?p.z1:nz<0?p.z0:(p.z0+p.z1)/2;
+    C.glow.col("#2a6ae8").mat(0).obox(x+nx*.3,4.2,z+nz*.3,1.6,1.6,.15,Math.atan2(nx,nz));
+    C.glow.col("#ffffff").obox(x+nx*.4,4.6,z+nz*.4,.3,.9,.05,Math.atan2(nx,nz));
+    return;
+  }
   walls(G, poly, 0, p.h, st, 0, false, L.garage, st.tint, 3.1, b.access?.door);
   roof(G, poly, p.h, st, b.access ? b.access.parapet : 1.1, b.access ? 0.35 : 0.3, "#8e8c86", undefined, b.access?.hole);
   // parked cars and light poles on the top deck, a blue P sign, an entry ramp opening

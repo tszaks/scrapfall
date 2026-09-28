@@ -7,6 +7,8 @@ export type Volume = Rect & {
   color: string;
   glass?: boolean;
   glow?: boolean;
+  /** Physical collider already drawn by its host art mesh. */
+  hidden?: boolean;
 };
 export type Surface = Rect & { y: number; holes: Rect[]; level: number };
 export type Flight = Rect & {
@@ -26,7 +28,18 @@ export type Structure = {
   solids: Volume[];
   decor: Volume[];
   doors: { x: number; z: number; facing: 0 | 1 | 2 | 3 }[];
-  kind: "arcade" | "shop" | "cafe" | "chalet" | "lodge" | "hotel" | "landmark" | "garage" | "frame";
+  cars?: { x: number; z: number; y: number; rot: number; v: import("../vehicles").Vehicle }[];
+  kind:
+    | "colonnade"
+    | "arcade"
+    | "shop"
+    | "cafe"
+    | "chalet"
+    | "lodge"
+    | "hotel"
+    | "landmark"
+    | "garage"
+    | "frame";
 };
 export const contains = (r: Rect, x: number, z: number, margin = 0) =>
   x >= r.x0 - margin && x <= r.x1 + margin && z >= r.z0 - margin && z <= r.z1 + margin;

@@ -1,5 +1,5 @@
 import { Structures } from "./structures/Structures";
-import { beachRooms, alpineRooms, cityRooms } from "./structures/adapters";
+import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
 import { installStructures, structureList, structurePlayer, structureFloor, structureBody, structureShot } from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
 import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
@@ -6822,6 +6822,8 @@ export function Game() {
       new URLSearchParams(window.location.search).get("access") !== "0";
     installStructures([]);
     installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
+    const cityOpen = mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout,PLAY_HALF) : [];
+    if(cityOpen.length) installStructures(cityOpen);
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
     // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
     // the access adapters keep their doors clear of them
@@ -6841,7 +6843,7 @@ export function Game() {
               })()
             : null;
     if(alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
-    if (mode === "city" && level.city) installStructures(cityRooms(level.city as CityLayout, PLAY_HALF));
+    if (mode === "city" && level.city) installStructures([...cityOpen,...cityRooms(level.city as CityLayout, PLAY_HALF)]);
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
