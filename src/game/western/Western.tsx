@@ -108,10 +108,10 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
     while (wet.length < 16) wet.push(new THREE.Vector3(0, 0, 0));
     sh.uniforms["uWet"] = { value: wet };
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;")
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;\nvarying float vGNy;")
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;",
+        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;\nvGNy = normal.y;",
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -123,6 +123,7 @@ uniform sampler2D uSplat;
 uniform float uHalf;
 uniform vec3 uWet[16];
 varying vec2 vGxz;
+varying float vGNy;
 ${riverGLSL}
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
@@ -157,9 +158,36 @@ vec3 mud = texture(uArr, vec3(wp / ${tl(WL.MUD)}, ${WL.MUD}.0)).rgb;
 vec3 yard = texture(uArr, vec3(wp / ${tl(WL.YARD)}, ${WL.YARD}.0)).rgb;
 vec3 bal = texture(uArr, vec3(wp / ${tl(WL.BALLAST)}, ${WL.BALLAST}.0)).rgb;
 vec3 col = sand;
+// wind ripples: parallel sand ridges ~40 cm apart, patchy (they live on the open flats,
+// die out where the ground is worked) so bare desert stops reading as smooth clay
+{
+  float field = smoothstep(0.35, 0.75, gNoise(wp * 0.045 + 31.0));
+  float worked = smoothstep(0.15, 0.5, w.r + w.g + w.b + w.a);
+  float ridge = sin(dot(wp, vec2(0.86, 0.51)) * 14.0 + gNoise(wp * 0.12) * 5.0);
+  col *= 1.0 + ridge * 0.045 * field * (1.0 - worked);
+}
 col = mix(col, dirt, smoothstep(0.15, 0.6, w.r + (n1 - 0.5) * 0.25));
 col = mix(col, mud, smoothstep(0.2, 0.6, w.g + (n1 - 0.5) * 0.2));
 col = mix(col, yard, smoothstep(0.2, 0.6, w.b));
+// the big packed yards are worked ground, not a slab: churn of dirt and gravel through
+// them, drifting stains, and a tone that breathes with the noise
+{
+  float inYard = smoothstep(0.25, 0.6, w.b);
+  float churn = gNoise(wp * 0.09 + 11.0) * 0.6 + gNoise(wp * 0.23 + 43.0) * 0.4;
+  col = mix(col, dirt, inYard * smoothstep(0.42, 0.72, churn) * 0.7);
+  col = mix(col, bal, inYard * smoothstep(0.5, 0.78, gNoise(wp * 0.14 + 23.0)) * 0.55);
+  col *= 1.0 - inYard * (0.1 + 0.16 * (gNoise(wp * 0.3 + 57.0) - 0.5));
+  // wheel ruts and hoof-churn wandering across the working yards
+  float track = abs(sin(wp.x * 0.9 + gNoise(wp * 0.05) * 9.0 + wp.y * 0.35));
+  col *= 1.0 - inYard * smoothstep(0.94, 0.99, track) * 0.16;
+}
+// cut faces (rail berms, banks, gully sides): the XZ-splatted texture smears down them,
+// so steep ground reads as darker rubble-and-stone instead of smeared sand
+{
+  float steep = smoothstep(0.86, 0.62, vGNy);
+  vec3 rubble = col * vec3(0.62, 0.55, 0.5) + vec3(0.05, 0.04, 0.035);
+  col = mix(col, rubble * (0.85 + 0.3 * gNoise(wp * 0.6)), steep);
+}
 col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
 // ---- a street people use: wheel ruts down each lane, hoof-churned dirt between them ----
 {

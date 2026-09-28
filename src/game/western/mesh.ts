@@ -3978,6 +3978,41 @@ function templates() {
     d.col("#2a2420");
     for (const x of [-0.33, 0.33]) beam(d, x, 1.6, 0.02, x, 1.2, 0.02, 0.03, WL.IRON);
   });
+  make("steer", (d) => {
+    // a range longhorn in the pens: heavy slab body, drooped head, the wide horn span
+    const hide = pick(["#6a4a34", "#4a332a", "#7a5a42", "#3a2c24", "#8a6a4c"], r);
+    const dark = "#241a14";
+    d.col(hide);
+    boxP(d, WL.PAINT, -0.36, 0.9, -0.85, 0.36, 1.62, 0.82);
+    boxP(d, WL.PAINT, -0.3, 0.96, 0.8, 0.3, 1.7, 1.0); // hump of the shoulders
+    beam(d, 0, 1.5, 0.9, 0, 1.1, 1.45, 0.26, WL.PAINT); // neck, carried low
+    d.col(hide);
+    boxP(d, WL.PAINT, -0.16, 0.92, 1.4, 0.16, 1.34, 1.85); // head
+    d.col("#d8cdb8");
+    // the span: a long upward-curved horn each side
+    beam(d, -0.14, 1.3, 1.5, -0.85, 1.62, 1.3, 0.07, WL.PAINT);
+    beam(d, 0.14, 1.3, 1.5, 0.85, 1.62, 1.3, 0.07, WL.PAINT);
+    beam(d, -0.85, 1.62, 1.3, -0.95, 1.8, 1.24, 0.05, WL.PAINT);
+    beam(d, 0.85, 1.62, 1.3, 0.95, 1.8, 1.24, 0.05, WL.PAINT);
+    d.col(dark);
+    beam(d, 0, 1.45, -0.85, 0, 0.55, -1.06, 0.09, WL.PAINT); // tail
+    d.col(hide);
+    for (const [x, z] of [
+      [-0.2, 0.6],
+      [0.2, 0.6],
+      [-0.2, -0.66],
+      [0.2, -0.66],
+    ] as const)
+      beam(d, x, 0.95, z, x, 0.1, z + 0.02, 0.14, WL.PAINT);
+    d.col("#1a1410");
+    for (const [x, z] of [
+      [-0.2, 0.62],
+      [0.2, 0.62],
+      [-0.2, -0.64],
+      [0.2, -0.64],
+    ] as const)
+      boxC(d, WL.PAINT, x, 0, z, 0.16, 0.11, 0.18);
+  });
   // ---- the moving riders' parts (Riders.tsx animates the legs; tints come per instance) ----
   make("horsebody", (d) => {
     // a saddled horse without its legs (they swing), nose toward +z
@@ -4108,6 +4143,64 @@ function templates() {
     d.col("#7a5a3a");
     boxP(d, WL.TIMBER, -0.08, 0, -0.08, 0.08, 2.2, 0.08);
   });
+  // rolling stock: freight cars on the yard sidings (rolled along +z, like wagonBed)
+  const car = (k: "boxcar" | "stockcar" | "flatcar", paint: string) =>
+    make(k, (d, g) => {
+      const LW = 1.5; // half-width
+      const L0 = -6.4;
+      const L1 = 6.4;
+      // trucks (bogies at either end, wheel blocks hanging at the rails)
+      d.col("#3a3430").mat(WL.IRON);
+      for (const tz of [-4.2, 4.2]) {
+        boxP(d, WL.IRON, -1.1, 0.35, tz - 1.0, 1.1, 0.95, tz + 1.0);
+        for (const wz of [tz - 0.6, tz + 0.6])
+          for (const wx of [-0.85, 0.85]) boxP(d, WL.IRON, wx - 0.1, 0.02, wz - 0.34, wx + 0.1, 0.72, wz + 0.34);
+      }
+      // underframe and end beams
+      boxP(d, WL.TIMBER, -LW + 0.2, 0.85, L0, LW - 0.2, 1.25, L1);
+      d.col("#4a3a2e");
+      boxP(d, WL.TIMBER, -LW, 1.15, L0, LW, 1.3, L0 + 0.4);
+      boxP(d, WL.TIMBER, -LW, 1.15, L1 - 0.4, LW, 1.3, L1);
+      d.col(paint);
+      if (k === "flatcar") {
+        // deck with stake pockets and a few crates aboard
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 1.5, L1);
+        d.col("#6a5240");
+        for (let z = L0 + 0.5; z < L1 - 0.4; z += 1.1) {
+          boxP(d, WL.TIMBER, -LW - 0.04, 1.5, z, -LW + 0.14, 2.0, z + 0.14);
+          boxP(d, WL.TIMBER, LW - 0.14, 1.5, z, LW + 0.04, 2.0, z + 0.14);
+        }
+      } else if (k === "stockcar") {
+        // slatted sides so the stock breathes
+        for (let z = L0 + 0.4; z < L1 - 0.3; z += 0.62) {
+          boxP(d, WL.P_BOARD, -LW, 1.3, z, -LW + 0.12, 3.5, z + 0.3);
+          boxP(d, WL.P_BOARD, LW - 0.12, 1.3, z, LW, 3.5, z + 0.3);
+        }
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 3.5, L0 + 0.4);
+        boxP(d, WL.P_BOARD, -LW, 1.3, L1 - 0.4, LW, 3.5, L1);
+        d.col("#7a6a56");
+        // shallow arched tin roof: ridge down the centreline, eaves over each side
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 3.9, -LW - 0.2, 0, 3.5);
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 3.9, LW + 0.2, 0, 3.5);
+      } else {
+        // boxcar: boarded body, sliding door, tin roof
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 3.6, L1, false);
+        d.col("#54402e");
+        boxP(d, WL.P_BOARD, -LW - 0.03, 1.5, -1.3, LW + 0.03, 3.4, 1.3);
+        d.col("#7a6a56");
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 4.0, -LW - 0.2, 0, 3.6);
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 4.0, LW + 0.2, 0, 3.6);
+      }
+      // couplers and a brake wheel on the B end
+      d.col("#3a3430").mat(WL.IRON);
+      boxP(d, WL.IRON, -0.15, 0.9, L0 - 0.9, 0.15, 1.1, L0 + 0.2);
+      boxP(d, WL.IRON, -0.15, 0.9, L1 - 0.2, 0.15, 1.1, L1 + 0.9);
+      cylP(d, WL.IRON, LW - 0.3, 3.0, L1 - 0.2, 0.25, 0.25, 0.08);
+      void g;
+    });
+  car("boxcar", "#8a4a34");
+  car("stockcar", "#6a5138");
+  car("flatcar", "#7a6248");
   TM = T;
   return T;
 }
@@ -4705,6 +4798,101 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       tz + 0.25,
     );
   }
+  // ---- the freight-yard siding: a second track at x = 162, laid at grade, with a
+  // turnout off the main at its north end and the parked cars left to props ----
+  {
+    const SX = 162;
+    for (let z = -120; z < 118; z += 0.62) {
+      const G = chunkAt(SX, z).detail;
+      G.col(pick(["#6a5646", "#5a4a3c", "#7a6450"], mulberry(Math.floor(z * 100 + 7))));
+      boxP(G, WL.TIMBER, SX - 1.3, 0.16, z - 0.11, SX + 1.3, 0.3, z + 0.11);
+    }
+    for (let z = -120; z < 118; z += 8) {
+      const G = chunkAt(SX, z + 4).main;
+      G.col("#8a8078");
+      for (const sd of [-1, 1]) {
+        const x = SX + (sd * gauge) / 2;
+        beam(G, x, 0.37, z, x, 0.37, Math.min(118, z + 8), 0.12, WL.IRON);
+      }
+      G.col("#9a8a78").mat(WL.BALLAST);
+      const ze = Math.min(118, z + 8);
+      G.quad(SX - 1.4, 0.2, ze, SX + 1.4, 0.2, ze, SX + 1.4, 0.2, z, SX - 1.4, 0.2, z, [
+        0, 0, 1, 3,
+      ]);
+    }
+    // the turnout: a switch panel and a short diverging lead tying into the main
+    const G = chunkAt(156, -60).detail;
+    G.col("#8a8078");
+    beam(G, RAIL_X + gauge / 2, y(-68) + 0.39, -68, SX - gauge / 2, 0.37, -50, 0.12, WL.IRON);
+    beam(G, RAIL_X + gauge / 2 + 1.2, y(-68) + 0.39, -68, SX - gauge / 2 + 1.2, 0.37, -50, 0.1, WL.IRON);
+    G.col("#5a4636");
+    boxP(G, WL.TIMBER, 158.6, 0.3, -56.8, 159.2, 0.42, -55.6);
+    G.col("#c8b8a0");
+    boxP(G, WL.TIMBER, 158.7, 0.42, -56.4, 159.1, 1.15, -56.2); // switch stand
+    G.col("#a83020");
+    boxP(G, WL.PAINT, 158.55, 1.15, -56.55, 159.25, 1.45, -56.05); // target
+  }
+}
+
+/** the crib-walled causeways (the river crossings and the stock chute's bank): plank
+ * tops, timber retaining faces on the downhill sides, and the rail fences town.ts posted */
+function decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+  for (const dk of L.decks) {
+    const G = chunkAt((dk.x0 + dk.x1) / 2, (dk.z0 + dk.z1) / 2).main;
+    // plank running surface: alternating board tones so the deck never reads as a flat
+    // plane (it used to turn into one dark slab at night)
+    {
+      const long = dk.axis === "x" ? "z" : "x"; // boards lie across the direction of travel
+      const tones = ["#a88968", "#988058", "#b09860"];
+      if (long === "z") {
+        let s = dk.z0, i = 0;
+        while (s < dk.z1 - 0.01) {
+          const e = Math.min(dk.z1, s + 0.42 + ((i * 7) % 5) * 0.09);
+          G.col(tones[i % 3]!).mat(WL.DECK);
+          G.quad(dk.x0, dk.y + 0.06, e, dk.x1, dk.y + 0.06, e, dk.x1, dk.y + 0.06, s,
+            dk.x0, dk.y + 0.06, s, [0, 0, (dk.x1 - dk.x0) / 3, 0.3]);
+          s = e;
+          i++;
+        }
+      } else {
+        let s = dk.x0, i = 0;
+        while (s < dk.x1 - 0.01) {
+          const e = Math.min(dk.x1, s + 0.42 + ((i * 7) % 5) * 0.09);
+          G.col(tones[i % 3]!).mat(WL.DECK);
+          G.quad(s, dk.y + 0.06, dk.z1, e, dk.y + 0.06, dk.z1, e, dk.y + 0.06, dk.z0,
+            s, dk.y + 0.06, dk.z0, [0, 0, 0.3, (dk.z1 - dk.z0) / 3]);
+          s = e;
+          i++;
+        }
+      }
+    }
+    G.col("#3a2d22").mat(WL.P_BOARD, 0.5, 0);
+    G.quad(dk.x0, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z1,
+      dk.x0, dk.y + 0.05, dk.z1, [0, 0, 1, 1]); // dark underside (visible from the gully)
+    G.col("#4a3a2c").mat(WL.P_BOARD, 0.5, 0);
+    // the timber deck edge: a fascia board round the rim
+    const fx = 0.16;
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x0, dk.y + 0.1, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x1, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, dk.y + 0.1, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, dk.y + 0.1, dk.z0);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z1, dk.x1 + fx, dk.y + 0.1, dk.z1 + fx);
+    // the crib walls: vertical plank faces where the berm meets the carved bed, on
+    // posts down into the channel
+    const sideX: number[] = dk.axis === "z" ? [dk.x0, dk.x1] : [];
+    const sideZ: number[] = dk.axis === "x" ? [dk.z0, dk.z1] : [];
+    for (const sx of sideX) {
+      const e = sx === dk.x0 ? -0.15 : 0.15;
+      boxP(G, WL.P_BOARD, sx - 0.15, dk.y - 1.7, dk.z0, sx + e, dk.y, dk.z1);
+      for (let z = dk.z0 + 1; z <= dk.z1 - 1; z += 4)
+        boxP(G, WL.TIMBER, sx - 0.22, dk.y - 1.9, z - 0.18, sx + e + 0.08, dk.y + 0.02, z + 0.18);
+    }
+    for (const sz of sideZ) {
+      const e = sz === dk.z0 ? -0.15 : 0.15;
+      boxP(G, WL.P_BOARD, dk.x0, dk.y - 1.7, sz - 0.15, dk.x1, dk.y, sz + e);
+      for (let x = dk.x0 + 1; x <= dk.x1 - 1; x += 4)
+        boxP(G, WL.TIMBER, x - 0.18, dk.y - 1.9, sz - 0.22, x + 0.18, dk.y + 0.02, sz + e + 0.08);
+    }
+  }
 }
 
 /** The saloon's alley stair to its balcony matches the layout terrain. The church uses
@@ -5066,6 +5254,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   }
   railroad(L, chunkAt);
   minePortal(L, chunkAt);
+  decks(L, chunkAt);
 
   // ---- the station platform and the level-crossing planks ----
   {
