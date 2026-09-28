@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
-  setArenaSize, SOLO_ARENA, COOP_ARENA,
+  setArenaSize, setBlockHalf, SOLO_ARENA, COOP_ARENA,
 } from "./level";
 
 import { THEMES, type Theme } from "./themes";
