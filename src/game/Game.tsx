@@ -433,17 +433,10 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
       ))}
-      {/* marker posts with a lit cap dotted through the arena */}
+      {/* small dressing props, chosen to match the map instead of generic posts */}
       {posts.map((b, i) => (
-        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
-          <mesh position-y={0.55} castShadow>
-            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
-            <meshLambertMaterial color={theme.wall} flatShading />
-          </mesh>
-          <mesh position-y={1.18}>
-            <sphereGeometry args={[0.13, 8, 6]} />
-            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
-          </mesh>
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]} rotation-y={b.tone * 6.28}>
+          <Decor theme={theme} seed={b.tone} />
         </group>
       ))}
       {([
