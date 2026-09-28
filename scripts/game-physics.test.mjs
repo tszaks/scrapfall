@@ -14,8 +14,27 @@ async function pureModule(path) {
 }
 const physics = await pureModule("../src/game/ballistics.ts");
 const weather = await pureModule("../src/game/matchEnvironment.ts");
+const { connectionTimedOut } = await pureModule("../src/game/netHeartbeat.ts");
 const close = (actual, expected, label) =>
   assert.ok(Math.abs(actual - expected) < 1e-8, `${label}: ${actual} vs ${expected}`);
+
+test("joining survives world construction but an absent peer still times out", () => {
+  // The recorded join blocked its event loop for4.6s; slightly slower devices
+  // cross the old5s limit before they can send their first heartbeat.
+  assert.equal(connectionTimedOut(6_000, 0, 0, 5_000), false);
+  assert.equal(connectionTimedOut(12_000, 0, 0, 8_000), false);
+  assert.equal(connectionTimedOut(15_000, 0, 0, 5_000), true);
+  assert.equal(connectionTimedOut(15_000, 14_000, 0, 5_000), false);
+});
+
+test("established connections retain host and guest silence limits", () => {
+  assert.equal(connectionTimedOut(30_000, 25_000, 0, 5_000), false);
+  assert.equal(connectionTimedOut(30_001, 25_000, 0, 5_000), true);
+  assert.equal(connectionTimedOut(33_000, 25_000, 0, 8_000), false);
+  assert.equal(connectionTimedOut(33_001, 25_000, 0, 8_000), true);
+  // A late join gets its own grace window, independent of the host's age.
+  assert.equal(connectionTimedOut(106_000, 100_000, 100_000, 5_000), false);
+});
 
 test("gravity integration preserves the same trajectory across frame rates", () => {
   for (const hz of [20, 30, 60, 120]) {

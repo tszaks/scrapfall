@@ -48,7 +48,6 @@ import {
   keyLabel,
   type ControlAction,
 } from "./input/remap";
-import { ControlSettings } from "./input/ControlSettings";
 import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
@@ -73,7 +72,6 @@ import {
 } from "./beach/wheelRide";
 import {
   PlayerView,
-  ViewSettings,
   shoulderAim,
   shoulderView,
   playerMuzzle,
@@ -242,7 +240,6 @@ import {
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import {
   DIFFICULTIES,
-  DIFFICULTY_IDS,
   DIFFICULTY_KEY,
   DEFAULT_DIFFICULTY,
   crowdMul,
@@ -285,9 +282,14 @@ import {
 } from "./input/controls";
 import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
-import { ControlsHelp, KeyHint } from "./input/Glyph";
-import { PadSettingsPanel } from "./input/PadSettings";
+import { KeyHint } from "./input/Glyph";
 import { SprintMeter } from "./input/SprintMeter";
+import { HudChip, UiStyles } from "./ui/kit";
+import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
+import { LoadoutScreen } from "./ui/LoadoutScreen";
+import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
+import { SettingsScreen } from "./ui/SettingsScreen";
+import { ShopBar } from "./ui/ShopBar";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -333,7 +335,7 @@ import {
   setAmbienceTime,
 } from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
-import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
+import { ABILITIES, type AbilityId } from "./abilities";
 import { MapEvents } from "./events/EventsLayer";
 import { forceMapEvent, mapEvent, onMapEventMsg } from "./events/mapEvents";
 import { power } from "./events/power";
@@ -352,7 +354,6 @@ import {
 import {
   NO_PERKS,
   PERK_IDS,
-  PERK_INFO,
   MOD_SLOTS,
   PISTOL_MODS,
   derive,
@@ -364,13 +365,12 @@ import {
   type PerkId,
   type Perks,
 } from "./perks";
-import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
+import { CLASSES, type ClassId } from "./classes";
 import { QualityGovernor } from "./QualityGovernor";
 import { PostFx } from "./PostFx";
 import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
 import { antialiasAtLoad, liveDpr } from "./quality";
-import { QualitySettings } from "./QualitySettings";
 
 // hidden subtrees skip the per-frame world-matrix walk (sceneOpt.ts)
 skipHiddenMatrixUpdates();
@@ -2300,6 +2300,7 @@ function World({
   mapFeed,
   downed,
   pingWorld,
+  menuCam,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -2349,9 +2350,15 @@ function World({
   downed: boolean;
   /** what pings can hit (filled here, read by the SquadDriver) */
   pingWorld: React.MutableRefObject<PingWorld | null>;
+  /** menus are up: the camera slowly pans across the arena as a live backdrop */
+  menuCam?: boolean;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
+  // menu backdrop: a slow pan from the arena's spawn look, restored when a match takes over
+  const menuBase = useRef({ yaw: 0, pitch: 0 });
+  const menuT = useRef(0);
+  const menuWasOn = useRef(false);
   const meleeCooldown = useRef(0);
   const { camera } = useThree();
   const lockedRef = useRef(locked);
@@ -3124,6 +3131,7 @@ function World({
             : 0,
       pitch: city ? 0.12 : 0,
     };
+    menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
     placeAtSpawn();
     resetRide();
     resetWheel(isBeach(city) ? city.beach.wheel : null);
@@ -4143,6 +4151,7 @@ function World({
     const v = viewModel.current;
     if (!v) return;
     v.visible =
+      !menuCam &&
       !deadRef.current &&
       (getViewMode() === "first" || aimState.scoped) &&
       !(weapon.current === "sniper" && aimState.blend > 0.96); // spectators carry no weapon
@@ -4169,6 +4178,7 @@ function World({
       if (m && !Array.isArray(m)) addGunRim(m);
     });
     const rig = playerPose.current?.(cam, state.clock.elapsedTime, delta) ?? null;
+    if (menuCam && rig) rig.visible = false;
     const source = getViewMode() === "third" && !aimState.scoped ? rig : v;
     if (!readGunMuzzle(source, shotMuzzle.current, weapon.current))
       shotMuzzle.current.copy(cam.position);
@@ -4245,6 +4255,21 @@ function World({
       }
       // controller right stick (+ aim assist on the nearest robot in view)
       padLook(delta, look.current, cam.position, aimTargets, aimVisible);
+    }
+    if (menuCam) {
+      // the title/recap backdrop: a slow surveyor's pan from wherever the camera rests
+      if (!menuWasOn.current) {
+        menuWasOn.current = true;
+        menuT.current = 0;
+        menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
+      }
+      menuT.current += delta;
+      look.current.yaw = menuBase.current.yaw + menuT.current * 0.045;
+      look.current.pitch = menuBase.current.pitch + Math.sin(menuT.current * 0.32) * 0.05;
+    } else if (menuWasOn.current) {
+      menuWasOn.current = false;
+      look.current.yaw = menuBase.current.yaw;
+      look.current.pitch = menuBase.current.pitch;
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -6899,6 +6924,9 @@ export function Game() {
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
+  // the lobby's READY flags ride along inside the pick broadcast (appended field)
+  const [ready, setReady] = useState(false);
+  const [readyMap, setReadyMap] = useState<Record<number, boolean>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   /** phones and tablets play with on-screen controls instead of mouse + keyboard */
   useEffect(() => {
@@ -7015,6 +7043,7 @@ export function Game() {
       const c = String(m.cls) as ClassId;
       if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
       if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
+      if (num >= 1) setReadyMap((p) => (p[num] === !!m.ready ? p : { ...p, [num]: !!m.ready }));
       return;
     }
 
@@ -7140,6 +7169,9 @@ export function Game() {
     setPeerCount(0);
     setAllDown(false);
     setPicks({});
+    setClsPicks({});
+    setReady(false);
+    setReadyMap({});
   };
 
   /** quit a match in progress and go back to the title screen */
@@ -7494,13 +7526,21 @@ export function Game() {
   };
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
+  const lobbyPlayers: LobbyPlayer[] = connected.map((p) => ({
+    num: p.num,
+    cls: clsPicks[p.num],
+    ability: picks[p.num],
+    ready: p.num === 1 || (readyMap[p.num] ?? false),
+    me: p.num === myNum,
+  }));
   const paused = started && !ended && !locked;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
     setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
-    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
-  }, [ability, cls, myNum, roster.length, picking]);
+    setReadyMap((p) => (p[myNum] === ready ? p : { ...p, [myNum]: ready }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls, ready });
+  }, [ability, cls, myNum, ready, roster.length, picking]);
 
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
@@ -7817,6 +7857,7 @@ export function Game() {
     >
       {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
       <PadLayer menus={!locked || ended} />
+      <UiStyles />
       <Canvas
         shadows="soft"
         dpr={liveDpr()}
@@ -7912,6 +7953,7 @@ export function Game() {
           difficulty={difficulty}
           downed={downed}
           pingWorld={pingWorld}
+          menuCam={!started || ended}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
@@ -7959,41 +8001,49 @@ export function Game() {
 
       <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              WAVE {status.wave}/{WAVES.length}
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              KILLS {score}
-            </div>
+          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[10px]" : "text-xs"}`}>
+            {started && !ended && (
+              <>
+                <HudChip className="font-bold">
+                  {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
+                </HudChip>
+                <HudChip>
+                  WAVE {status.wave}/{WAVES.length}
+                </HudChip>
+                <HudChip>
+                  KILLS <b>{score}</b>
+                </HudChip>
+              </>
+            )}
           </div>
-          <div className={`flex flex-col items-end gap-2`}>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {"♦".repeat(Math.max(0, health))}
-              <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              <span className="text-[#1aa6b8]">◆</span> {shards}
-            </div>
+          <div className={`flex flex-col items-end gap-1.5`}>
+            {started && !ended && (
+              <>
+                <HudChip className="text-sm tracking-[0.12em] text-[#b3261e]">
+                  {"♦".repeat(Math.max(0, health))}
+                  <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
+                </HudChip>
+                <HudChip>
+                  <span className="text-[#1aa6b8]">◆</span> <b>{shards}</b>
+                </HudChip>
+              </>
+            )}
             {multiplayer && locked && !ended && (
               <div
-                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}
+                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-[11px]"}`}
               >
-                <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <div className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-2 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
                   ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
                 </div>
                 {[...remotes.current.values()].map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1"
+                    className="flex items-center justify-end gap-2 rounded-md border border-[#2b2118]/50 bg-[#f3e6cf]/85 px-2 py-1 shadow-[2px_2px_0_0_rgba(43,33,24,0.25)]"
                   >
                     <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                     <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
                     {r.hp > 0 ? (
-                      <span>
+                      <span className="text-[#b3261e]">
                         {/* (a class can lift max health past 10: Vanguard has 16) */}
                         {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
                         <span className="opacity-30">
@@ -8001,7 +8051,7 @@ export function Game() {
                         </span>
                       </span>
                     ) : (
-                      <span className="text-[#b3261e]">DOWN</span>
+                      <span className="font-bold text-[#b3261e]">DOWN</span>
                     )}
                   </div>
                 ))}
@@ -8011,7 +8061,7 @@ export function Game() {
         </div>
 
         <div
-          className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}
+          className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"} ${started && !ended ? "" : "hidden"}`}
         >
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
@@ -8028,8 +8078,8 @@ export function Game() {
                 }
                 className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
                   active
-                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
-                    : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
+                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
+                    : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
@@ -8066,10 +8116,16 @@ export function Game() {
 
         {bossHp > 0 && locked && !ended && (
           <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
-            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
-            <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
+            <div className="mb-1 flex items-center justify-center gap-2">
+              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+              <span className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
+                {theme.boss.name}
+              </span>
+              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+            </div>
+            <div className="h-3 overflow-hidden rounded-md border border-[#2b2118] bg-[#2b2118]/70 shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
               <div
-                className="h-full bg-[#b3261e]"
+                className="h-full bg-gradient-to-r from-[#b3261e] to-[#e8654f]"
                 style={{
                   width: `${Math.min(100, (bossHp / Math.max(1, bossMax)) * 100)}%`,
                 }}
@@ -8078,22 +8134,29 @@ export function Game() {
           </div>
         )}
         {banner && locked && !ended && (
-          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-center text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
-            {status.wave === WAVES.length ? (
-              <>
-                {theme.boss.name}
-                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">
-                  {theme.hazard.name}
-                </div>
-              </>
-            ) : (
-              `WAVE ${status.wave}`
-            )}
+          <div
+            className="absolute left-1/2 top-[30%] -translate-x-1/2 text-center"
+            style={{ animation: "ui-banner 1.8s cubic-bezier(0.2,0.9,0.3,1) both" }}
+          >
+            <div
+              className="mb-2 h-[5px] w-56 rounded-sm sm:w-72"
+              style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
+            />
+            <div className="text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
+              {status.wave === WAVES.length ? theme.boss.name : `WAVE ${status.wave}`}
+            </div>
+            <div className="mt-1 text-[10px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
+              {status.wave === WAVES.length ? theme.hazard.name : `${status.wave} OF ${WAVES.length}`}
+            </div>
+            <div
+              className="mt-2 h-[5px] w-56 rounded-sm sm:w-72"
+              style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
+            />
           </div>
         )}
 
         {pickupMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
+          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-md border-2 border-[#2b2118] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {GUNS[weapon].name} ACQUIRED ·{" "}
             {dev.kind === "pad" ? (
               <>
@@ -8114,14 +8177,14 @@ export function Game() {
           </div>
         )}
         {crateMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
+          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-md border-2 border-[#1aa6b8] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#14646e] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {crateMsg} DEPLOYED
           </div>
         )}
         {!multiplayer && locked && !ended && !downed && (
-          <div className="absolute left-5 top-[10.5rem] rounded bg-[#f3e6cf]/80 px-2 py-1 text-[10px] tracking-wider">
+          <HudChip className="absolute left-5 top-[10.5rem] text-[10px] tracking-wider">
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
-          </div>
+          </HudChip>
         )}
         {locked && !ended && (
           <SprintMeter
@@ -8133,18 +8196,21 @@ export function Game() {
           />
         )}
         {locked && !ended && !touchUi && (
-          <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
-            [<KeyHint action="ability" />] {ABILITIES[ability].name} ·{" "}
+          <div className="absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
+            <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
+              <KeyHint action="ability" />
+            </span>{" "}
+            {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? (
               <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
             ) : (
-              <b>READY</b>
+              <b className="text-[#1d7a37]">READY</b>
             )}
           </div>
         )}
 
         {eventMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
+          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-md border-2 border-[#f3e6cf]/50 bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]">
             ⚠ {eventMsg} ⚠
           </div>
         )}
@@ -8177,104 +8243,26 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div
-          data-pad-shop
-          className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}
-        >
-          <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
-            SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
-            {dev.kind === "pad" && (
-              <>
-                {" "}
-                · <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> SELECT ·{" "}
-                <KeyHint action="shopBuy" /> BUY
-              </>
-            )}
-          </div>
-          <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
-            {!multiplayer && (
-              <button
-                disabled={soloKit.kit > 0 || health <= 0 || shards < SELF_REVIVE_COST}
-                onClick={() => buyKitRef.current()}
-                className="pointer-events-auto rounded-md border border-black bg-[#f3e6cf]/95 px-3 py-2 text-[11px] disabled:opacity-45"
-              >
-                [<KeyHint action="shopRevive" />] <b>SELF REVIVE</b> ·{" "}
-                {soloKit.kit ? "KIT READY" : `◆ ${SELF_REVIVE_COST}`} · CARRY 1
-              </button>
-            )}
-            <button
-              onClick={() => patchRef.current()}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
-            >
-              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                <KeyHint action="shopHeal" />
-              </span>
-              <span className="font-bold tracking-widest">FIELD DRESSING</span>
-              <span className="opacity-60">
-                +5 HP · {health}/{maxHp}
-              </span>
-              <span className="font-bold">◆ {PATCH_COST}</span>
-            </button>
-            <button
-              onClick={() => rerollRef.current()}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
-            >
-              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                <KeyHint action="shopReroll" />
-              </span>
-              <span className="font-bold tracking-widest">REROLL</span>
-              <span className="opacity-60">
-                {freeLeft > 0
-                  ? `${freeLeft} FREE LEFT`
-                  : rerolls > 0
-                    ? `USED ${rerolls}x`
-                    : "DOUBLES EACH USE"}
-              </span>
-              <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
-            </button>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
-            {offers.map((id, i) => {
-              const info = PERK_INFO[id];
-              const cost = perkCost(id, perks[id]);
-              if (bought.includes(i)) return null;
-              const isMod = PISTOL_MODS.includes(id);
-              return (
-                <button
-                  key={i}
-                  onClick={() => buyRef.current(i)}
-                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
-                >
-                  <span className="absolute -left-2 -top-2 flex min-h-6 min-w-6 px-1 items-center justify-center rounded bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
-                    <KeyHint action={`shop${i + 1}` as ControlAction} />
-                  </span>
-                  {isMod && <PistolBadge />}
-                  <div className="text-xs font-bold tracking-widest">{info.name}</div>
-                  {info.pros ? (
-                    <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
-                      {info.pros.map((t) => (
-                        <div key={t} className="font-bold text-[#1d7a37]">
-                          ▲ {t}
-                        </div>
-                      ))}
-                      {info.cons?.map((t) => (
-                        <div key={t} className="font-bold text-[#b3261e]">
-                          ▼ {t}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
-                  )}
-                  {id !== "heal" && (
-                    <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>
-                  )}
-                  <div className="mt-2 text-sm font-bold">◆ {cost}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <ShopBar
+          offers={offers}
+          bought={bought}
+          perks={perks}
+          shards={shards}
+          shopLeft={shopLeft}
+          rerollCost={rerollCost}
+          freeLeft={freeLeft}
+          rerolls={rerolls}
+          health={health}
+          maxHp={maxHp}
+          multiplayer={multiplayer}
+          kitReady={soloKit.kit > 0}
+          patchCost={PATCH_COST}
+          touchUi={touchUi}
+          onBuy={(i) => buyRef.current(i)}
+          onReroll={() => rerollRef.current()}
+          onPatch={() => patchRef.current()}
+          onKit={() => buyKitRef.current()}
+        />
       )}
 
       {touchUi && locked && !ended && (
@@ -8338,542 +8326,135 @@ export function Game() {
       )}
 
       {(!locked || ended) && picking && (
-        <div
-          className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}
-        >
-          <div
-            className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}
-          >
-            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
-
-            <div className="mt-4 grid grid-cols-5 gap-1">
-              {CLASS_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setCls(id)}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                  style={cls === id ? { background: CLASSES[id].color } : undefined}
-                >
-                  {CLASSES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
-            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
-              {CLASSES[cls].pros.map((t) => (
-                <span key={t} className="text-[#1d7a37]">
-                  ▲ {t}
-                </span>
-              ))}
-              {CLASSES[cls].cons.map((t) => (
-                <span key={t} className="text-[#b3261e]">
-                  ▼ {t}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-1">
-              {ABILITY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setAbility(id)}
-                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
-                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                >
-                  {ABILITIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">
-              {ABILITIES[ability].desc}
-            </div>
-
-            {/* map: the five maps + Random (themes.ts offered()); the host picks */}
-            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
-              {isHost ? "MAP" : "MAP · THE HOST PICKS"}
-            </p>
-            <div className="mt-2 grid grid-cols-5 gap-1">
-              {(
-                [
-                  null,
-                  ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i])),
-                ] as (number | null)[]
-              ).map((i) => {
-                const on = isHost ? mapChoice === i : i === seed % THEMES.length;
-                return (
-                  <button
-                    key={i ?? "random"}
-                    onClick={() => pickMap(i)}
-                    disabled={!isHost}
-                    className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                      on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                    } ${isHost ? "" : "cursor-default"}`}
-                  >
-                    {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
-                  </button>
-                );
-              })}
-            </div>
-            {/* difficulty: five levels, the host picks (Overclock is the default) */}
-            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
-              {isHost ? "DIFFICULTY" : "DIFFICULTY · THE HOST PICKS"}
-            </p>
-            <div className="mt-2 grid grid-cols-5 gap-1">
-              {DIFFICULTY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => pickDifficulty(id)}
-                  disabled={!isHost}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    difficulty === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  } ${isHost ? "" : "cursor-default"}`}
-                  style={difficulty === id ? { background: DIFFICULTIES[id].color } : undefined}
-                >
-                  {DIFFICULTIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">
-              {DIFFICULTIES[difficulty].desc}
-            </div>
-            <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
-              {started
-                ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
-                : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
-            </div>
-
-            {multiplayer && (
-              <div className="mt-5 text-left">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                  {connected.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>
-                        ■
-                      </span>
-                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                      <span
-                        className="font-bold"
-                        style={{
-                          color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
-                        }}
-                      >
-                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
-                      </span>
-                      <span className="opacity-60">
-                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                      </span>
-                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {multiplayer && !isHost ? (
-              <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START
-              </div>
-            ) : (
-              <button
-                onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                ENTER ARENA
-              </button>
-            )}
-            <div>
-              <button
-                onClick={() => setPicking(false)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
-              >
-                BACK
-              </button>
-            </div>
-          </div>
-        </div>
+        <LoadoutScreen
+          cls={cls}
+          setCls={setCls}
+          ability={ability}
+          setAbility={setAbility}
+          mapChoice={mapChoice}
+          pickMap={pickMap}
+          seed={seed}
+          difficulty={difficulty}
+          pickDifficulty={pickDifficulty}
+          isHost={isHost}
+          multiplayer={multiplayer}
+          players={lobbyPlayers}
+          ready={ready}
+          onReady={setReady}
+          weather={
+            started
+              ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
+              : "RANDOM WEATHER · FIXED EACH MATCH"
+          }
+          onEnter={() => start()}
+          onBack={() => setPicking(false)}
+          touchUi={touchUi}
+        />
       )}
 
-      {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6">
-          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            {!started && !ended && !paused && (
-              <div className="mb-2 text-[10px] tracking-[0.3em] opacity-50">{theme.name}</div>
-            )}
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver
-                ? "You got swarmed"
-                : status.won
-                  ? "Arena cleared!"
-                  : paused
-                    ? "Paused"
-                    : "Scrapfall"}
-            </h1>
-            {(gameOver || status.won || paused) && (
-              <p className="mt-2 text-sm opacity-70">
-                {gameOver
-                  ? `You fell on wave ${status.wave} with ${score} kills · ${DIFFICULTIES[difficulty].name}.`
-                  : status.won
-                    ? `All ${WAVES.length} waves survived · ${score} kills · ${DIFFICULTIES[difficulty].name}.`
-                    : `Wave ${status.wave} · ${score} kills so far · ${DIFFICULTIES[difficulty].name}.`}
-              </p>
-            )}
-            {!paused && (
-              <p className="mt-4 text-xs leading-relaxed opacity-60">
-                {/* keys, controller glyphs or touch, whichever was used last (input/Glyph.tsx) */}
-                <ControlsHelp touch={touchUi} />
-              </p>
-            )}
-            {multiplayer && !isHost && (ended || !started) ? (
-              <div className="mt-6">
-                <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                  {ended
-                    ? "WAITING FOR THE HOST TO START A NEW ARENA"
-                    : "WAITING FOR THE HOST TO START"}
-                </div>
-                <button
-                  onClick={() => {
-                    initAudio();
-                    setPicking(true);
-                  }}
-                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  CHOOSE LOADOUT
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  if (started && !ended) {
-                    start();
-                    return;
-                  } // resume straight back in
-                  initAudio();
-                  setPicking(true);
-                }}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
-              </button>
-            )}
+      {(!locked || ended) && !picking && !started && !ended && !paused && (
+        <TitleScreen
+          themeName={theme.name}
+          weather={
+            started
+              ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
+              : "RANDOM WEATHER · FIXED FOR EACH MATCH"
+          }
+          touchUi={touchUi}
+          onPlay={() => {
+            initAudio();
+            setPicking(true);
+          }}
+          onSettings={() => setShowSettings(true)}
+          onWeapons={() => setShowWeapons(true)}
+          onEnemies={() => setShowEnemies(true)}
+          net={net ? { role: net.role, code: net.code } : null}
+          joining={joining}
+          joinCode={joinCode}
+          setJoinCode={setJoinCode}
+          netError={netError}
+          startHost={startHost}
+          startJoin={startJoin}
+          leaveRoom={leaveRoom}
+          players={lobbyPlayers}
+          ready={ready}
+          onReady={setReady}
+          version={GAME_VERSION}
+        />
+      )}
+      {(!locked || ended) && !picking && paused && (
+        <PauseScreen
+          wave={status.wave}
+          totalWaves={WAVES.length}
+          score={score}
+          difficultyName={DIFFICULTIES[difficulty].name}
+          stats={statsRef.current}
+          cls={cls}
+          modBadges={activeMods.map((id) => perkBadge(id, 1) ?? "")}
+          perkBadges={activePerks.map((p) => p.label)}
+          multiplayer={multiplayer}
+          onResume={() => start()}
+          onSettings={() => setShowSettings(true)}
+          onLeave={leaveGame}
+        />
+      )}
+      {!picking && ended && (() => {
+        const r = run.current;
+        const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
+        const mine: RecapRow = {
+          num: myNum,
+          kills: score,
+          dmg: Math.round(r.dmg),
+          acc,
+          shards: r.shards,
+          taken: r.taken,
+        };
+        const rows = [
+          mine,
+          ...Object.entries(squad)
+            .filter(([n]) => Number(n) !== myNum)
+            .map(([n, v]) => ({ num: Number(n), ...v })),
+        ].sort((a, b) => a.num - b.num);
+        return (
+          <EndScreen
+            won={status.won}
+            wave={status.wave}
+            totalWaves={WAVES.length}
+            difficultyName={DIFFICULTIES[difficulty].name}
+            mine={mine}
+            rows={rows}
+            myNum={myNum}
+            multiplayer={multiplayer}
+            isHost={isHost}
+            onNewArena={() => start()}
+            onLoadout={() => {
+              initAudio();
+              setPicking(true);
+            }}
+            onLeave={leaveGame}
+          />
+        );
+      })()}
 
-            {ended &&
-              (() => {
-                const r = run.current;
-                const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
-                const mine = {
-                  kills: score,
-                  dmg: Math.round(r.dmg),
-                  acc,
-                  shards: r.shards,
-                  taken: r.taken,
-                };
-                const rows = [
-                  { num: myNum, ...mine },
-                  ...Object.entries(squad)
-                    .filter(([n]) => Number(n) !== myNum)
-                    .map(([n, v]) => ({ num: Number(n), ...v })),
-                ].sort((a, b) => a.num - b.num);
-                const badges: string[] = [];
-                if (acc >= 60) badges.push("SHARPSHOOTER");
-                // best-in-squad badges need a squad (and something to be best at)
-                if (rows.length > 1) {
-                  if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg))
-                    badges.push("HEAVY GUNNER");
-                  if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards))
-                    badges.push("SCAVENGER");
-                  if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
-                }
-                if (status.won) badges.push("BOSS SLAYER");
-                return (
-                  <div className="mt-5 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
-                    <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                      <div>
-                        WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}
-                      </div>
-                      <div>KILLS · {mine.kills}</div>
-                      <div>DAMAGE DEALT · {mine.dmg}</div>
-                      <div>ACCURACY · {acc}%</div>
-                      <div>SHARDS COLLECTED · {mine.shards}</div>
-                      <div>DAMAGE TAKEN · {mine.taken}</div>
-                    </div>
-                    {badges.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
-                        {badges.map((b) => (
-                          <span key={b}>{b}</span>
-                        ))}
-                      </div>
-                    )}
-                    {multiplayer && rows.length > 1 && (
-                      <div className="mt-3 space-y-1 text-[10px] tracking-wider">
-                        <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                        {rows.map((x) => (
-                          <div key={x.num} className="flex items-center gap-2">
-                            <span
-                              style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}
-                            >
-                              ■
-                            </span>
-                            <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
-                            <span className="opacity-60">
-                              {x.kills} kills · {x.dmg} dmg · {x.acc}%
-                            </span>
-                            {x.num === myNum && <span className="opacity-40">(YOU)</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-            {paused && (
-              <div className="w-full max-w-sm px-4">
-                <StatSheet d={statsRef.current} cls={cls} />
-                {(activeMods.length > 0 || activePerks.length > 0) && (
-                  <div className="mt-3 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {activeMods.map((id) => (
-                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                          {perkBadge(id, 1)}
-                        </span>
-                      ))}
-                      {activePerks.map(({ id, label }) => (
-                        <span key={id} className="text-[10px] tracking-wider text-black">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {paused || (multiplayer && ended) ? (
-              <div className="mt-3">
-                <button
-                  onClick={leaveGame}
-                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
-                </button>
-              </div>
-            ) : (
-              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
-                {!net ? (
-                  <>
-                    <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={startHost}
-                        disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                      >
-                        HOST
-                      </button>
-                      <input
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
-                        placeholder="CODE"
-                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
-                      />
-                      <button
-                        onClick={startJoin}
-                        disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                      >
-                        JOIN
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="opacity-60">
-                      {net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}
-                    </div>
-                    <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
-                    <div className="mt-3 space-y-1 text-left">
-                      {connected.map((p) => (
-                        <div key={p.id} className="flex items-center gap-2">
-                          <span
-                            style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}
-                          >
-                            ■
-                          </span>
-                          <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">
-                            · {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                          </span>
-                          {p.num === myNum && <span className="opacity-50">(YOU)</span>}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 opacity-60">
-                      {net.role === "host" ? "share the code" : "waiting for the host"}
-                    </div>
-                    <button
-                      onClick={leaveRoom}
-                      className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
-                    >
-                      LEAVE ROOM
-                    </button>
-                  </>
-                )}
-                {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
-                {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
-              </div>
-            )}
-
-            {
-              <div>
-                <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
-                  {started
-                    ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
-                    : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
-                </div>
-
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  SETTINGS
-                </button>
-
-                {!paused && (
-                  <button
-                    onClick={() => setShowWeapons(true)}
-                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                  >
-                    WEAPONS
-                  </button>
-                )}
-                {!paused && (
-                  <button
-                    onClick={() => setShowEnemies(true)}
-                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                  >
-                    ENEMIES
-                  </button>
-                )}
-                {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-                {showEnemies && (
-                  <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />
-                )}
-              </div>
-            }
-            {showSettings && (
-              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6]">
-                <div className="my-auto w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
-                    <button
-                      onClick={() => setShowSettings(false)}
-                      className="rounded px-3 py-1 text-xs tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
-                    >
-                      CLOSE
-                    </button>
-                  </div>
-                  <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                    <label className="block">
-                      FIELD OF VIEW · {fov}°
-                      <input
-                        type="range"
-                        min={50}
-                        max={110}
-                        step={1}
-                        value={fov}
-                        onChange={(e) => setFov(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={3}
-                        step={0.1}
-                        value={sensX}
-                        onChange={(e) => setSensX(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={3}
-                        step={0.1}
-                        value={sensY}
-                        onChange={(e) => setSensY(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={musicVol}
-                        onChange={(e) => setMusicVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={sfxVol}
-                        onChange={(e) => setSfxVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={ambVol}
-                        onChange={(e) => setAmbVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <ViewSettings />
-                    <QualitySettings />
-                    <ControlSettings />
-                    <PadSettingsPanel />
-                  </div>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="pointer-events-auto mt-5 w-full rounded bg-[#b4653f] py-3 text-sm font-bold tracking-widest active:scale-95"
-                  >
-                    DONE
-                  </button>
-                  <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v{GAME_VERSION} · TS BUILD
-                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">
-                      BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+      {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
+      {showSettings && (
+        <SettingsScreen
+          fov={fov}
+          setFov={setFov}
+          sensX={sensX}
+          setSensX={setSensX}
+          sensY={sensY}
+          setSensY={setSensY}
+          musicVol={musicVol}
+          setMusicVol={setMusicVol}
+          sfxVol={sfxVol}
+          setSfxVol={setSfxVol}
+          ambVol={ambVol}
+          setAmbVol={setAmbVol}
+          version={GAME_VERSION}
+          onClose={() => setShowSettings(false)}
+        />
       )}
     </div>
   );
@@ -8970,94 +8551,6 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
             CLOSE
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/** tiny pistol silhouette shown on pistol-mod shop cards */
-function PistolBadge() {
-  return (
-    <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
-      <path d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z" fill="#2b2118" />
-      <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
-    </svg>
-  );
-}
-
-type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
-
-/** Brotato-style stat sheet: green above baseline, red below */
-export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
-  const [tab, setTab] = useState<"combat" | "survival">("combat");
-  const pct = (v: number, base = 1): StatRow["tone"] =>
-    v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0;
-  const combat: StatRow[] = [
-    { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
-    { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
-    { label: "Crit Protocol", value: `${Math.round(d.crit * 100)}%`, tone: pct(d.crit, 0) },
-    { label: "Piercing", value: `${d.pierce}`, tone: pct(d.pierce, 0) },
-    { label: "Ricochet", value: `${Math.round(d.ricochet * 100)}%`, tone: pct(d.ricochet, 0) },
-    { label: "Combustion", value: `${Math.round(d.boom * 100)}%`, tone: pct(d.boom, 0) },
-    { label: "Impact Force", value: `${Math.round(d.knock * 100)}%`, tone: pct(d.knock, 0) },
-    { label: "Ammo Capacity", value: `${Math.round(d.ammoMul * 100)}%`, tone: pct(d.ammoMul) },
-  ];
-  const survival: StatRow[] = [
-    { label: "Hull Integrity", value: `${d.maxHp}`, tone: pct(d.maxHp, 10) },
-    { label: "Armor Plating", value: `${Math.round(d.armor * 100)}%`, tone: pct(d.armor, 0) },
-    { label: "Phase Shift", value: `${Math.round(d.dodge * 100)}%`, tone: pct(d.dodge, 0) },
-    { label: "Life Siphon", value: `${Math.round(d.steal * 100)}%`, tone: pct(d.steal, 0) },
-    { label: "Nano-Regen", value: d.regen ? `x${d.regen}` : "0", tone: d.regen ? 1 : 0 },
-    { label: "Shock Thorns", value: `${Math.round(d.thorns * 100)}%`, tone: pct(d.thorns, 0) },
-    { label: "Thruster Speed", value: `${Math.round(d.speed * 100)}%`, tone: pct(d.speed) },
-    { label: "Flux Magnet", value: `${d.magnet.toFixed(1)}m`, tone: pct(d.magnet, 2) },
-    { label: "Salvage Yield", value: `${Math.round(d.greed * 100)}%`, tone: pct(d.greed) },
-    { label: "Recharge Haste", value: `${Math.round(d.haste * 100)}%`, tone: pct(d.haste, 0) },
-    { label: "Free Rerolls", value: `${d.freeRerolls}`, tone: pct(d.freeRerolls, 0) },
-  ];
-  const rows = tab === "combat" ? combat : survival;
-  return (
-    <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
-      <div className="flex items-center justify-between">
-        <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
-        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
-          {CLASSES[cls].name}
-        </div>
-      </div>
-      <div className="mt-2 flex gap-1">
-        {(["combat", "survival"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`pointer-events-auto flex-1 rounded px-2 py-1 text-[10px] font-bold tracking-widest ${
-              tab === t ? "bg-[#f3e6cf] text-[#2b2118]" : "bg-[#f3e6cf]/10 text-[#f3e6cf]/70"
-            }`}
-          >
-            {t === "combat" ? "COMBAT" : "SURVIVAL"}
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 space-y-0.5 text-[11px]">
-        {rows.map((r) => (
-          <div key={r.label} className="flex items-center justify-between">
-            <span
-              className={
-                r.tone === 1
-                  ? "text-[#7cff4f]"
-                  : r.tone === -1
-                    ? "text-[#ff6b5e]"
-                    : "text-[#f3e6cf]/75"
-              }
-            >
-              {r.label}
-            </span>
-            <span
-              className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}
-            >
-              {r.value}
-            </span>
-          </div>
-        ))}
       </div>
     </div>
   );
