@@ -1655,6 +1655,75 @@ function templates() {
     d.col("#9a8266");
     for (const y of [0.4, 0.8, 1.2]) beam(d, -1.25, y, 0, 1.25, y + (r() - 0.5) * 0.06, 0, 0.1);
   });
+  make("picket", (d) => {
+    // a picket fence section, 2 m along x: two posts, two rails, pointed pickets; whitewash
+    // gone grey and patchy
+    d.col("#aaa290");
+    for (const x of [-1, 1]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 1.05, 0.05);
+    d.col("#a49c8a");
+    for (const y of [0.25, 0.75]) boxP(d, WL.PAINT, -1, y, 0.05, 1, y + 0.07, 0.09);
+    for (let x = -0.93; x < 0.95; x += 0.13) {
+      const h = 0.92 + (r() - 0.5) * 0.04;
+      d.col(r() < 0.25 ? "#8e8676" : r() < 0.5 ? "#b8b0a0" : "#c8c2b2");
+      boxP(d, WL.TIMBER, x - 0.035, 0.05, 0.09, x + 0.035, h, 0.12, false);
+      // the point
+      d.v(x - 0.035, h, 0.12, 0, 0.3, 1, 0, 0);
+      d.v(x + 0.035, h, 0.12, 0, 0.3, 1, 1, 0);
+      d.v(x, h + 0.07, 0.12, 0, 0.3, 1, 0.5, 1);
+      d.v(x + 0.035, h, 0.09, 0, 0.3, -1, 0, 0);
+      d.v(x - 0.035, h, 0.09, 0, 0.3, -1, 1, 0);
+      d.v(x, h + 0.07, 0.09, 0, 0.3, -1, 0.5, 1);
+    }
+  });
+  make("clothesline", (d) => {
+    // two T-posts 4.8 m apart, a sagging line, washing pegged out on it
+    d.col("#8a7258");
+    for (const x of [-2.4, 2.4]) {
+      boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 2.1, 0.05);
+      boxP(d, WL.TIMBER, x - 0.04, 1.95, -0.35, x + 0.04, 2.03, 0.35);
+    }
+    d.col("#d8d0c0");
+    for (const z of [-0.28, 0.28]) {
+      for (let i = 0; i < 8; i++) {
+        const xa = -2.4 + (4.8 * i) / 8;
+        const xb = -2.4 + (4.8 * (i + 1)) / 8;
+        const sag = (x: number) => 1.98 - (1 - (x / 2.4) ** 2) * 0.12;
+        beam(d, xa, sag(xa), z, xb, sag(xb), z, 0.015, WL.PAINT);
+      }
+    }
+    const cloths = ["#e8e2d4", "#b84a3a", "#4a6a8a", "#d8c89a", "#f2eee4", "#7a8a5a"];
+    for (let i = 0; i < 5; i++) {
+      const x = -1.9 + i * 0.95 + (r() - 0.5) * 0.3;
+      const w = 0.45 + r() * 0.35;
+      const h = 0.5 + r() * 0.5;
+      const z = r() < 0.5 ? -0.28 : 0.28;
+      d.col(cloths[Math.floor(r() * cloths.length)]!).mat(WL.CANVAS);
+      const top = 1.98 - (1 - (x / 2.4) ** 2) * 0.12;
+      d.quad(x - w / 2, top - h, z, x + w / 2, top - h, z, x + w / 2, top, z, x - w / 2, top, z, [0, 0, 1, 1]);
+      d.quad(x + w / 2, top - h, z, x - w / 2, top - h, z, x - w / 2, top, z, x + w / 2, top, z, [0, 0, 1, 1]);
+    }
+  });
+  make("garden", (d) => {
+    // a vegetable patch: a board edge round furrowed earth and rows of greens and bean poles
+    d.col("#6a4a30").mat(WL.MUD);
+    d.flat(-1.6, -2, 1.6, 2, 0.04, [0, 0, 0.8, 1]);
+    d.col("#7a5a3a");
+    boxP(d, WL.TIMBER, -1.7, 0, -2.1, 1.7, 0.14, -1.95, false);
+    boxP(d, WL.TIMBER, -1.7, 0, 1.95, 1.7, 0.14, 2.1, false);
+    boxP(d, WL.TIMBER, -1.7, 0, -2.1, -1.55, 0.14, 2.1, false);
+    boxP(d, WL.TIMBER, 1.55, 0, -2.1, 1.7, 0.14, 2.1, false);
+    for (let row = 0; row < 4; row++) {
+      const x = -1.15 + row * 0.77;
+      for (let z = -1.7; z < 1.75; z += 0.42) {
+        const s = 0.14 + r() * 0.1;
+        d.col(pick(["#5a7a3a", "#6a8a40", "#4a6a32"], r)).mat(WL.CACTUS);
+        oboxP(d, WL.CACTUS, x + (r() - 0.5) * 0.08, 0.04, z, s * 1.4, s, s * 1.4, r() * 3);
+      }
+    }
+    // bean poles at one end
+    d.col("#8a7258");
+    for (const x of [-1.15, -0.38, 0.39, 1.16]) beam(d, x - 0.1, 0, 1.85, x, 1.5, 1.7, 0.03);
+  });
   make("grave", (d) => {
     d.col("#a8a090");
     boxP(d, WL.P_STONE, -0.3, 0, -0.08, 0.3, 0.75, 0.08);
@@ -2847,7 +2916,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
       p.k === "outhouse";
     const target = big ? ch.main : ch.detail;
     // fences and hitching rails stretch along their length; everything else scales evenly
-    const stretch = p.k === "fence" ? 2.5 : p.k === "hitch" ? 1.1 : 0;
+    const stretch = p.k === "fence" ? 2.5 : p.k === "hitch" ? 1.1 : p.k === "picket" ? 2 : 0;
     const sx = stretch ? p.s / stretch : p.s;
     const sy = stretch ? 1 : p.s;
     target.stamp(t.d, p.x, y, p.z, p.rot, sx, sy, sy, tint);

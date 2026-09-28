@@ -159,6 +159,9 @@ export type WPropKind =
   | "horse"
   | "stagecoach"
   | "sacks"
+  | "picket"
+  | "clothesline"
+  | "garden"
   | "sign";
 export type WProp = { k: WPropKind; x: number; z: number; rot: number; s: number; a?: number };
 
@@ -1101,48 +1104,172 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     prop("streetlamp", x + 18, STREET_HALF - 0.4, Math.PI, 1);
   }
 
-  // houses, shacks and adobes in the back lots; a tent town by the tracks
-  const scatterBld = (
-    t: WType,
-    mat: WMat,
-    n: number,
-    x0: number,
-    z0: number,
-    x1: number,
-    z1: number,
-    wMin: number,
-    wMax: number,
-  ) => {
-    for (let tries = 0, made = 0; made < n && tries < n * 30; tries++) {
-      const w = wMin + Math.floor(rand() * ((wMax - wMin) / 2 + 1)) * 2;
-      const d = wMin + Math.floor(rand() * ((wMax - wMin) / 2 + 1)) * 2;
-      const x = Math.round((x0 + rand() * (x1 - x0 - w)) / 2) * 2;
-      const z = Math.round((z0 + rand() * (z1 - z0 - d)) / 2) * 2;
-      if (!isFree(x - 4, z - 4, x + w + 4, z + d + 4)) continue;
-      const fronts = [0, 1, 2, 3] as const;
-      bld({
-        t,
-        x0: x,
-        z0: z,
-        x1: x + w,
-        z1: z + d,
-        front: fronts[Math.floor(rand() * 4)]!,
+  // ---- the residential town: back streets of house lots, the barrio plaza, the tent camp ----
+  // (a real boomtown grows along streets: every house faces one, with a picket fence and a
+  // gate, a path to the porch, and the back yard where people lived: privy, woodpile,
+  // clothesline, rain barrel, a vegetable patch)
+  /** a picket fence from a to b in 2 m sections (thin-post collision, not whole cells) */
+  const picket = (xa: number, za: number, xb: number, zb: number) => {
+    const dx = xb - xa;
+    const dz = zb - za;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.5) return;
+    const n = Math.max(1, Math.round(len / 2));
+    const rot = Math.atan2(-dz, dx);
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      prop("picket", xa + dx * t, za + dz * t, rot, len / n);
+    }
+    for (let d = 0; d <= len; d += 0.35) posts.push({ x: xa + (dx * d) / len, z: za + (dz * d) / len, r: 0.07 });
+  };
+  /** the back yard behind a house (bx, bz: the middle of its back wall, (ox, oz) outward) */
+  const backYard = (bx: number, bz: number, ox: number, oz: number, w: number) => {
+    // across the yard: (px, pz)
+    const px = -oz;
+    const pz = ox;
+    const at2 = (a: number, d: number): [number, number] => [bx + px * a + ox * d, bz + pz * a + oz * d];
+    const rot = Math.atan2(-oz, ox);
+    const side = rand() < 0.5 ? 1 : -1;
+    const [ohx, ohz] = at2(side * (w / 2 - 0.4), 6.5 + rand() * 1.5);
+    solidProp("outhouse", ohx, ohz, rot + Math.PI / 2, 1.6, 1.6, 2.4);
+    const [wpx, wpz] = at2(-side * (w / 2 + 0.9), 1.2 + rand() * 2);
+    prop("woodpile", wpx, wpz, rot + Math.PI / 2, 0.9 + rand() * 0.3);
+    if (rand() < 0.7) {
+      const [clx, clz] = at2(-side * 1, 4 + rand() * 1.5);
+      prop("clothesline", clx, clz, rot + Math.PI / 2, 1, Math.floor(rand() * 4));
+      const cr = Math.atan2(-pz, px);
+      for (const e of [-2.4, 2.4]) posts.push({ x: clx + Math.cos(cr) * e, z: clz - Math.sin(cr) * e, r: 0.1 });
+    }
+    const [rbx, rbz] = at2(side * (w / 2 - 0.5), 0.6);
+    prop("barrel", rbx, rbz, rand() * 6.28, 1);
+    posts.push({ x: rbx, z: rbz, r: 0.35, shot: true });
+    if (rand() < 0.55) {
+      const [gx, gz] = at2(-side * (w / 2 - 2), 7 + rand() * 2);
+      prop("garden", gx, gz, rot + Math.PI / 2, 1);
+    }
+  };
+  /** a row of house lots along a street edge. side -1: the lots lie at smaller z than the
+   * edge (their houses face +z, the street); +1: they lie beyond it and face -z */
+  const houseLots = (x0: number, x1: number, edgeZ: number, side: -1 | 1, mats: WMat[]) => {
+    for (let x = x0; x < x1 - 11; ) {
+      const lw = 12 + Math.floor(rand() * 4) * 1.5;
+      const w = Math.round(6.5 + rand() * 3.5);
+      const d = Math.round(6 + rand() * 3);
+      const yard = 3.2 + rand() * 1.2;
+      const hx0 = Math.round((x + (lw - w) / 2 + (rand() - 0.5) * 1.5) * 2) / 2;
+      const zNear = edgeZ + side * yard;
+      const zFar = zNear + side * d;
+      const lotFar = zFar + side * 10;
+      const zA = Math.min(edgeZ, lotFar);
+      const zB = Math.max(edgeZ, lotFar);
+      if (!isFree(x, zA, x + lw, zB)) {
+        x += 4;
+        continue;
+      }
+      const mat = mats[Math.floor(rand() * mats.length)]!;
+      const small = rand() < 0.22;
+      const porch = !small && rand() < 0.75 ? 1 : 0;
+      const hb = bld({
+        t: small ? "shack" : "house",
+        x0: hx0,
+        z0: Math.min(zNear, zFar),
+        x1: hx0 + (small ? Math.max(5, w - 2) : w),
+        z1: Math.max(zNear, zFar),
+        front: side < 0 ? 2 : 0,
         storeys: 1,
         mat,
         sign: -1,
-        porch: t === "house" && rand() < 0.6 ? 1 : 0,
+        porch,
         ff: 0,
-        roof: mat === "adobe" ? "flat" : t === "tent" ? "gable" : rand() < 0.6 ? "gable" : "shed",
+        roof: rand() < 0.72 ? "gable" : "shed",
       });
-      made++;
+      const cx = (hb.x0 + hb.x1) / 2;
+      // the front fence along the street with a gate opposite the door, and the path in
+      const fz = edgeZ + side * 0.4;
+      if (rand() < 0.85) {
+        picket(x + 0.3, fz, cx - 0.8, fz);
+        picket(cx + 0.8, fz, x + lw - 0.3, fz);
+      }
+      setGround(cx - 0.6, Math.min(fz, zNear), cx + 0.6, Math.max(fz, zNear), WK.TRAIL);
+      backYard(cx, zFar, 0, side, hb.x1 - hb.x0);
+      x += lw + (rand() < 0.2 ? 3 : 0);
     }
   };
-  scatterBld("house", "clap", 7, -120, -86, -36, -40, 6, 10);
-  scatterBld("shack", "board", 6, -8, -92, 110, -42, 4, 8);
-  scatterBld("tent", "board", 9, 60, -110, 118, -50, 4, 6);
-  scatterBld("adobe", "adobe", 8, -124, 44, -40, 104, 6, 10);
-  scatterBld("house", "clap", 5, -8, 44, 100, 100, 6, 10);
-  scatterBld("shack", "board", 4, 20, 60, 118, 110, 4, 6);
+  // the north back street (east-west behind Main Street's north row)
+  const NB = -64;
+  setGround(-124, NB - 5, 104, NB + 5, WK.TRAIL);
+  houseLots(-124, -32, NB - 5, -1, ["clap", "clap", "board", "log"]);
+  houseLots(-12, 104, NB - 5, -1, ["board", "clap", "board"]);
+  houseLots(-124, -32, NB + 5, 1, ["clap", "board"]);
+  houseLots(-12, 100, NB + 5, 1, ["board", "clap"]);
+  // the south back street
+  const SB = 78;
+  setGround(-12, SB - 5, 116, SB + 5, WK.TRAIL);
+  houseLots(-12, 116, SB - 5, -1, ["clap", "board", "clap"]);
+  houseLots(-12, 116, SB + 5, 1, ["board", "clap", "log"]);
+  // the barrio: adobes round a plaza with a well, west of the cross street
+  {
+    const px0 = -104;
+    const px1 = -52;
+    const pz0 = 58;
+    const pz1 = 92;
+    setGround(px0, pz0, px1, pz1, WK.YARD);
+    solidProp("well", (px0 + px1) / 2, (pz0 + pz1) / 2, 0.3, 2.6, 2.6, 1.2);
+    const adobeAt = (x0: number, z0: number, w: number, d: number, front: 0 | 1 | 2 | 3) =>
+      bld({
+        t: "adobe",
+        x0,
+        z0,
+        x1: x0 + w,
+        z1: z0 + d,
+        front,
+        storeys: 1,
+        mat: "adobe",
+        sign: -1,
+        porch: rand() < 0.45 ? 1 : 0,
+        ff: 0,
+        roof: "flat",
+      });
+    // north side, facing the plaza
+    for (let x = px0 + 1; x < px1 - 8; ) {
+      const w = 8 + Math.round(rand() * 4);
+      if (isFree(x, pz0 - 12, x + w, pz0 - 1)) adobeAt(x, pz0 - 3 - 7, w, 7, 2);
+      x += w + (rand() < 0.4 ? 3 : 0.5);
+    }
+    // south side
+    for (let x = px0 + 1; x < px1 - 8; ) {
+      const w = 8 + Math.round(rand() * 4);
+      if (isFree(x, pz1 + 1, x + w, pz1 + 12)) adobeAt(x, pz1 + 3, w, 7, 0);
+      x += w + (rand() < 0.4 ? 3 : 0.5);
+    }
+    // west side
+    for (let z = pz0 + 2; z < pz1 - 8; ) {
+      const d = 8 + Math.round(rand() * 3);
+      if (isFree(px0 - 12, z, px0 - 1, z + d)) adobeAt(px0 - 3 - 7, z, 7, d, 1);
+      z += d + 1;
+    }
+    // life on the plaza: a cart, crates of produce, benches
+    prop("cart", px0 + 8, (pz0 + pz1) / 2 + 6, 0.6, 1);
+    prop("bench", (px0 + px1) / 2 - 4, (pz0 + pz1) / 2 - 3, 0, 1);
+    prop("crates", px1 - 7, pz0 + 4, 0.4, 0.9);
+  }
+  // the tent camp of the railroad crew, in two rows on the mine trail by the tracks
+  for (let z = -104; z < -56; z += 8) {
+    for (const [x, front] of [
+      [104, 1],
+      [124, 3],
+    ] as const) {
+      if (rand() < 0.15) continue;
+      const w = 4 + Math.round(rand());
+      const d = 5 + Math.round(rand());
+      if (!isFree(x - 1, z - 1, x + w + 1, z + d + 1)) continue;
+      bld({ t: "tent", x0: x, z0: z, x1: x + w, z1: z + d, front, storeys: 1, mat: "board", sign: -1, porch: 0, ff: 0, roof: "gable" });
+    }
+  }
+  prop("campfire", 117, -80, 0, 1);
+  prop("bench", 114.6, -80, Math.PI / 2, 1);
+  prop("crates", 117, -71, 0.5, 1);
+  prop("barrels", 118, -92, 0.2, 1);
 
   // the windmill ranch, south-west of town (the night campfire burns here)
   bld({
