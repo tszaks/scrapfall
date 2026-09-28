@@ -28,6 +28,22 @@ export function Structures({ seed }: { seed: number }) {
     for (const p of structureList()) {
       for (const v of p.solids) draw(v);
       for (const v of p.decor) draw(v);
+      for (const rail of p.rails ?? []) {
+        const a = new THREE.Vector3(...rail.a),
+          b = new THREE.Vector3(...rail.b),
+          dir = b.clone().sub(a);
+        const e = new THREE.Euler().setFromQuaternion(
+          new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 0, 1),
+            dir.clone().normalize(),
+          ),
+        );
+        const mid = a.add(b).multiplyScalar(0.5);
+        m.box(0.09, 0.09, dir.length(), [mid.x, mid.y, mid.z], rail.color, [0.35, 0.7, 0.1], {
+          rot: [e.x, e.y, e.z],
+          bevel: 0.012,
+        });
+      }
       for (const s of p.stairs) {
         const n = Math.ceil((s.y1 - s.y0) / 0.18);
         for (let i = 0; i < n; i++) {

@@ -1,3 +1,4 @@
+import { accessList } from "../access/world";
 import { Vector4 } from "three";
 import { structureList } from "./world";
 
@@ -13,6 +14,9 @@ export function shelterUniforms() {
         top:
           p.kind === "garage" || p.kind === "frame" ? Math.max(...p.floors.map((f) => f.y)) : p.top,
       })),
+    ...accessList()
+      .filter((b) => b.room)
+      .map((b) => ({ bounds: b.spec.roomRect ?? b.spec.roof, top: b.top + b.roomH })),
     ...plans
       .filter((p) => p.kind === "colonnade")
       .flatMap((p) =>

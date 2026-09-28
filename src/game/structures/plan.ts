@@ -28,6 +28,7 @@ export type Structure = {
   solids: Volume[];
   decor: Volume[];
   doors: { x: number; z: number; facing: 0 | 1 | 2 | 3 }[];
+  rails?: { a: [number, number, number]; b: [number, number, number]; color: string }[];
   cars?: { x: number; z: number; y: number; rot: number; v: import("../vehicles").Vehicle }[];
   kind:
     | "colonnade"
@@ -198,7 +199,18 @@ export function roomPlan(
           y1: base + y1,
           level: 1,
         });
-        // Brass handrails follow the actual rise; vertical posts leave a clear walking width.
+        // Continuous visible rails; the short boxes below retain conservative collision.
+        for (const sign of [-1, 1]) {
+          const du = side ? 0 : sign * (width / 2 + 0.07),
+            dv = side ? sign * (width / 2 + 0.07) : 0;
+          const a = point(u0 + du, v0 + dv),
+            b = point(u1 + du, v1 + dv);
+          (p.rails ??= []).push({
+            a: [a[0]!, base + y0 + 1, a[1]!],
+            b: [b[0]!, base + y1 + 1, b[1]!],
+            color: "#ba975c",
+          });
+        }
         const n = Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.55);
         for (let j = 0; j < n; j++)
           for (const sign of [-1, 1]) {
@@ -215,7 +227,7 @@ export function roomPlan(
               y + 0.96,
               y + 1.04,
               "#ba975c",
-            );
+            ).hidden = true;
           }
       };
       flight(mid, 2.5, mid, 6.5, 3.4, 0, half);
