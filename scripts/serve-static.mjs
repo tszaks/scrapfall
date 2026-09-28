@@ -1,4 +1,4 @@
-// Local stand-in for the Vercel deployment: serves dist/site with the same /gta SPA
+// Local stand-in for the Vercel deployment: serves dist/site with the same /game SPA
 // fallback as vercel.json.  Usage: npm run build && npm run serve:static  (port 4173)
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -20,7 +20,7 @@ const types = {
 createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname);
   if (path === "/") {
-    res.writeHead(307, { location: "/gta/" }).end();
+    res.writeHead(307, { location: "/game/" }).end();
     return;
   }
   let file = normalize(join(root, path));
@@ -29,13 +29,13 @@ createServer((req, res) => {
     return;
   }
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, "index.html");
-  // SPA fallback: anything under /gta that isn't a file gets the app shell
-  if (!existsSync(file) && (path === "/gta" || path.startsWith("/gta/")))
-    file = join(root, "gta/index.html");
+  // SPA fallback: anything under /game that isn't a file gets the app shell
+  if (!existsSync(file) && (path === "/game" || path.startsWith("/game/")))
+    file = join(root, "game/index.html");
   if (!existsSync(file)) {
     res.writeHead(404).end("not found");
     return;
   }
   res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" });
   createReadStream(file).pipe(res);
-}).listen(port, () => console.log(`serving ${root} at http://localhost:${port}/gta/`));
+}).listen(port, () => console.log(`serving ${root} at http://localhost:${port}/game/`));
