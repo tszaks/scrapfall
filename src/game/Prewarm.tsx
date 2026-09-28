@@ -22,7 +22,18 @@ if (typeof window !== "undefined") (window as unknown as { __rsWarm?: unknown })
  * is not enough on Safari/Metal: the first real draw still builds the pipelines (a 0.5-1.7 s
  * freeze at the blackout's first dark frame), so they are drawn here, unseen.
  */
-export function Prewarm({ when, delay = 20, withSpot = false }: { when: unknown; delay?: number; withSpot?: boolean }) {
+export function Prewarm({
+  when,
+  delay = 20,
+  withSpot = false,
+  withTarget = false,
+}: {
+  when: unknown;
+  delay?: number;
+  withSpot?: boolean;
+  /** also draw into an HDR render target (the city's rain mirror) */
+  withTarget?: boolean;
+}) {
   const { gl, scene, camera } = useThree();
   const left = useRef(delay);
   useEffect(() => {
@@ -48,13 +59,29 @@ export function Prewarm({ when, delay = 20, withSpot = false }: { when: unknown;
       }
     });
     const spot = withSpot ? new THREE.SpotLight("#ffffff", 0) : null;
+    // the wet streets' mirror renders the scene into a linear HDR target: every material needs
+    // a second (linear output) variant, compiled the first time it rains at night otherwise
+    const rt = withTarget ? new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType, depthBuffer: true }) : null;
+    const prevRT = gl.getRenderTarget();
     try {
       gl.render(scene, camera);
+      if (rt) {
+        gl.setRenderTarget(rt);
+        gl.render(scene, camera);
+        gl.setRenderTarget(prevRT);
+      }
       if (spot) {
         scene.add(spot);
         gl.render(scene, camera);
+        if (rt) {
+          gl.setRenderTarget(rt);
+          gl.render(scene, camera);
+          gl.setRenderTarget(prevRT);
+        }
       }
     } finally {
+      gl.setRenderTarget(prevRT);
+      rt?.dispose();
       if (spot) {
         scene.remove(spot);
         spot.dispose();
