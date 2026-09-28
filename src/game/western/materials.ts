@@ -72,6 +72,7 @@ float wNoise(vec2 p) {
 // vertical fractures, and dark desert-varnish streaks running down from the ledges.
 // rockBump is the ledge/fracture tilt (x: along the wall, y: up), used to bend the normal.
 vec2 rockBump;
+float rockFill;
 vec3 rockDetail(vec3 col) {
   rockBump = vec2(0.0);
   vec3 n = normalize(vWn);
@@ -93,8 +94,10 @@ vec3 rockDetail(vec3 col) {
   // fractures: near-vertical cracks every few metres, wandering a little
   float cx = along * 0.28 + wNoise(vec2(along * 0.05, vWp.y * 0.09)) * 1.6;
   float cr = abs(fract(cx) - 0.5);
-  float crack = (1.0 - smoothstep(0.0, 0.035, cr)) * step(0.35, wNoise(vec2(floor(cx), band * 0.5)));
-  rockBump.x = (fract(cx) < 0.5 ? -1.0 : 1.0) * (1.0 - smoothstep(0.0, 0.07, cr)) * 0.5;
+  // (each crack runs a few metres, then stops: not a line down the whole face)
+  float seg = step(0.5, wNoise(vec2(floor(cx) * 1.7, vWp.y * 0.22 + band * 0.1)));
+  float crack = (1.0 - smoothstep(0.0, 0.022, cr)) * step(0.35, wNoise(vec2(floor(cx), band * 0.5))) * seg;
+  rockBump.x = (fract(cx) < 0.5 ? -1.0 : 1.0) * (1.0 - smoothstep(0.0, 0.05, cr)) * 0.45 * seg;
   // desert varnish: dark streaks hanging below the ledges
   // (thin, of uneven length, fading out as they run down the face)
   float st = wNoise(vec2(along * 1.7, band * 0.37)) * wNoise(vec2(along * 0.23, 1.7));
@@ -107,6 +110,22 @@ vec3 rockDetail(vec3 col) {
   c *= 1.0 + lip * 0.14;
   // fine pitting
   c *= 0.9 + 0.2 * wNoise(vWp.xz * 1.7 + vWp.y * 1.3);
+  // at arm's length: thin laminations inside each stratum, sand grain and pocks, all bending
+  // the light, so a face you walk up to is rock, not a magnified texture on a flat plane
+  float near = 1.0 - smoothstep(3.0, 22.0, length(vViewPosition));
+  if (near > 0.0) {
+    // (smooth sine ripples at odd angles, not value noise: no grid squares up close)
+    vec2 q = vec2(along, vWp.y);
+    float ly = q.y * 8.5 + sin(q.x * 0.9) * 0.9 + sin(q.x * 2.3 + q.y) * 0.35;
+    float lam = sin(ly * 6.2832);
+    vec2 q1 = mat2(0.8, -0.6, 0.6, 0.8) * q * 5.3;
+    vec2 q2 = mat2(0.28, 0.96, -0.96, 0.28) * q * 8.9;
+    float g0 = sin(q1.x + sin(q1.y * 1.3)) * 0.5 + sin(q2.y + sin(q2.x * 0.7)) * 0.5;
+    float gx = cos(q1.x + sin(q1.y * 1.3)) * 0.8 * 0.5 + cos(q2.y + sin(q2.x * 0.7)) * 0.96 * 0.5;
+    float gy = cos(q1.x + sin(q1.y * 1.3)) * 0.6 * 0.5 + cos(q2.y + sin(q2.x * 0.7)) * 0.28 * 0.5;
+    c *= 1.0 + near * (lam * 0.04 + g0 * 0.05);
+    rockBump += near * vec2(gx * 0.22, gy * 0.22 + cos(ly * 6.2832) * 0.16);
+  }
   rockBump *= wall;
   return mix(col, c, wall);
 }`,
@@ -117,10 +136,12 @@ vec3 rockDetail(vec3 col) {
 diffuseColor.rgb *= facT.rgb;
 // close-up grit on the red rock: a fine second sample so cliffs stay crisp at arm's length
 rockBump = vec2(0.0);
+rockFill = 0.0;
 if (abs(vFac.x - 17.0) < 0.5) {
   vec3 grit = texture(uDay, vec3(vFuv * 11.0, 22.0)).rgb;
   diffuseColor.rgb *= mix(vec3(0.82), vec3(1.12), dot(grit, vec3(0.333)));
   diffuseColor.rgb = rockDetail(diffuseColor.rgb);
+  rockFill = 1.0;
 }
 float glassK = facT.a;
 float aoK = step(5.0, vFac.z);
@@ -152,12 +173,17 @@ if (rockBump.x != 0.0 || rockBump.y != 0.0) {
   vec4 nt = texture(uNight, vec3(vFuv, vFac.x));
   float hf = wHash(floor(vFuv * 4.0) + vec2(vFac.y * 97.0, vFac.y * 13.0));
   float on = litMode > 1.5 ? 1.0 : step(0.42, hf);
-  float k = litMode > 1.5 ? 1.7 : 1.0;
+  // 1: some windows lit, 2: all lit bright, 3: all lit softly (candles)
+  float k = litMode > 2.5 ? 1.05 : litMode > 1.5 ? 1.7 : 1.0;
   totalEmissiveRadiance += nt.rgb * nt.a * on * k * uNightK;
-}`,
+}
+// moonlit night: cliff faces turned away from the moon keep a little cool sky light (the
+// whole sky is bright with stars and the far walls bounce the moon), so they read as rock
+// instead of black holes. uNightK is 1 at night, ~0.2 at sunset.
+totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.66, 0.95) * 0.3 * rockFill * smoothstep(0.5, 1.0, uNightK);`,
       );
   };
-  mat.customProgramCacheKey = () => "western-facade-v3";
+  mat.customProgramCacheKey = () => "western-facade-v5";
   return mat;
 }
 

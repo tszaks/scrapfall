@@ -4193,7 +4193,7 @@ export function Game() {
   const [crateMsg, setCrateMsg] = useState<string | null>(null);
   const [deploys, setDeploys] = useState({ turret: 0, mines: 0 });
 
-  const [ammoLeft, setAmmoLeft] = useState(0);
+  const [ammoLeft, setAmmoLeft] = useState(GUNS.pistol.ammo); // (not 0: the HUD showed "PISTOL 0" until the first wave)
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);

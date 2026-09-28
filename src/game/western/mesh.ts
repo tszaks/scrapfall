@@ -34,6 +34,8 @@ export const DETAIL_RANGE = 280;
 
 /** aFac.z flags: +1 windows light up at night (random), +2 always lit (saloon), +10 ground AO */
 const LIT = 1;
+/** always softly lit (the church's stained glass by candlelight) */
+const CANDLE = 3;
 const BRIGHT = 2;
 const AO = 10;
 
@@ -1138,7 +1140,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   const x0 = -W / 2;
   const x1 = W / 2;
   const z0 = -D;
-  G.col("#f6f2ea").mat(WL.F_CHURCH, seed, LIT + AO);
+  G.col("#f6f2ea").mat(WL.F_CHURCH, seed, CANDLE + AO);
   wallF(G, WL.F_CHURCH, x1, 0, x1, z0, 0, H, 0);
   wallF(G, WL.F_CHURCH, x0, z0, x0, 0, 0, H, 0);
   G.mat(WL.P_CLAP, seed, AO);
@@ -1153,7 +1155,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   gable(G, WL.P_CLAP, x1, z0, x0, z0, H, ridge);
   // the back (the side players reach from the yard): two tall windows, a rose window in the
   // gable, a vestry door, corner boards and a stone sill, so it is not a blank slab
-  G.col("#ffffff").mat(WL.F_CHURCH, seed, LIT);
+  G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   const win = (cx: number, y0: number, y1: number, hw: number) =>
     G.quad(cx + hw, y0, z0 - 0.03, cx - hw, y0, z0 - 0.03, cx - hw, y1, z0 - 0.03, cx + hw, y1, z0 - 0.03, [
       0.33 / 4,
@@ -1212,7 +1214,7 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   );
   G.col("#f4efe4");
   boxP(G, WL.PAINT, -1.1, 2.9, tz1, 1.1, 3.2, tz1 + 0.12);
-  G.col("#ffffff").mat(WL.F_CHURCH, seed, LIT);
+  G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   G.quad(-0.8, 6.2, tz1 + 0.02, 0.8, 6.2, tz1 + 0.02, 0.8, 9.6, tz1 + 0.02, -0.8, 9.6, tz1 + 0.02, [
     0.33 / 4 + 0.0,
     0.3 / 4,
@@ -1749,10 +1751,15 @@ function templates() {
       beam(d, -0.3, 0.05, 0.5 + i * 0.18, 0.3, 0.15, 0.5 + i * 0.18, 0.04);
   });
   make("tank", (d) => {
-    d.col("#7a7a78");
-    cylP(d, WL.IRON, 0, 0, 0, 2.2, 0.9, 16, 2.2, false);
-    d.col("#4a6a70").mat(WL.PAINT);
-    d.flat(-1.5, -1.5, 1.5, 1.5, 0.8, [0, 0, 1, 1]);
+    // a galvanised stock tank: pale corrugated steel with rolled rims, water to the brim
+    d.col("#b4b8b8");
+    cylP(d, WL.PAINT, 0, 0, 0, 2.2, 0.9, 20, 2.2, false);
+    d.col("#8e9494");
+    for (const y of [0.05, 0.3, 0.55]) cylP(d, WL.PAINT, 0, y, 0, 2.23, 0.07, 20, 2.23, false);
+    d.col("#d0d4d2");
+    cylP(d, WL.PAINT, 0, 0.86, 0, 2.26, 0.08, 20, 2.26, false);
+    d.col("#6a98a2");
+    cylP(d, WL.PAINT, 0, 0.72, 0, 2.18, 0.04, 20, 2.18, true);
   });
   make("crossbuck", (d) => {
     d.col("#e8e2d4");
@@ -1764,10 +1771,16 @@ function templates() {
     beam(d, -0.8, 3.35, 0.13, 0.8, 2.65, 0.13, 0.26, WL.PAINT);
   });
   make("orecart", (d) => {
-    d.col("#4a4440");
-    boxP(d, WL.IRON, -0.6, 0.35, -0.9, 0.6, 1.2, 0.9);
-    d.col("#6a5a50").mat(WL.ROCK);
+    // a plank ore car with iron corner straps, heaped with ore
+    d.col("#8a6644");
+    boxP(d, WL.TIMBER, -0.6, 0.35, -0.9, 0.6, 1.2, 0.9);
+    d.col("#5a5652");
+    for (const z of [-0.9, 0.9]) for (const x of [-0.6, 0.6]) boxP(d, WL.IRON, x - 0.05, 0.35, z - 0.05, x + 0.05, 1.22, z + 0.05);
+    boxP(d, WL.IRON, -0.62, 1.12, -0.92, 0.62, 1.22, 0.92, false);
+    d.col("#9a8270").mat(WL.ROCK);
     d.flat(-0.55, -0.85, 0.55, 0.85, 1.12, [0, 0, 0.1, 0.1]);
+    d.col("#8a7462");
+    boxP(d, WL.ROCK, -0.4, 1.12, -0.6, 0.4, 1.34, 0.6);
     d.col("#2a2420");
     for (const [x, z] of [
       [-0.6, -0.55],

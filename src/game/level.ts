@@ -117,7 +117,7 @@ export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | un
 
 /** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
  * that the 2 m block grid can't express. Each map installs its own list (or none). */
-export type Post = { x: number; z: number; r: number };
+export type Post = { x: number; z: number; r: number; /** also stops shots (a horse, a hay bale) */ shot?: boolean };
 let postGrid: Map<number, Post[]> | null = null;
 const postKey = (i: number, j: number) => i * 65536 + j;
 export function setPosts(list: Post[] | null) {
@@ -135,7 +135,7 @@ export function setPosts(list: Post[] | null) {
         a.push(p);
       }
 }
-function hitsPost(x: number, z: number, radius: number) {
+function hitsPost(x: number, z: number, radius: number, shotsOnly = false) {
   if (!postGrid) return false;
   const i0 = Math.floor((x - radius - 1) / 4);
   const i1 = Math.floor((x + radius + 1) / 4);
@@ -145,7 +145,7 @@ function hitsPost(x: number, z: number, radius: number) {
     for (let j = j0; j <= j1; j++) {
       const a = postGrid.get(postKey(i, j));
       if (!a) continue;
-      for (const p of a) if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+      for (const p of a) if ((!shotsOnly || p.shot) && Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
     }
   return false;
 }
@@ -156,8 +156,9 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
     const h = blockHook.fn(x, z, radius);
     if (h !== undefined) return h;
   }
-  // (thin posts only stop bodies, not bullets: shots test with a tiny radius)
-  if (radius >= 0.2 && hitsPost(x, z, radius)) return true;
+  // (thin posts only stop bodies, not bullets (shots test with a tiny radius), unless they're
+  // bulky enough to stop a shot: a tied horse, a hay bale, a crate stack)
+  if (radius >= 0.2 ? hitsPost(x, z, radius) : hitsPost(x, z, radius, true)) return true;
   const half = BLOCK / 2 + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes
