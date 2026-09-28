@@ -22,6 +22,7 @@ import { BOOTHILL, CHINATOWN, EW_ST, MINING, NS_ST, PLAZA, TENTS, YARD } from ".
 export type Post = { x: number; z: number; r: number; shot?: boolean; h?: number };
 /** a raised walkable deck (a bridge): layout's section 9 turns it into real terrain */
 export type Deck = { x0: number; z0: number; x1: number; z1: number; y: number; axis: "x" | "z" };
+export type Rect = { x0: number; x1: number; z0: number; z1: number };
 
 export type Kit = {
   rand: () => number;
@@ -59,6 +60,15 @@ export type Kit = {
   nextFiller: () => number;
   picket: (xa: number, za: number, xb: number, zb: number) => void;
   backYard: (bx: number, bz: number, ox: number, oz: number, w: number) => void;
+  footprint: (
+    k: WPropKind,
+    x: number,
+    z: number,
+    rot: number,
+    scale: number,
+  ) => Rect | undefined;
+  doorApproaches: () => readonly Rect[];
+  overlaps: (a: Rect, b: Rect, gap?: number) => boolean;
 };
 
 export type RowPlan = {
@@ -205,32 +215,49 @@ export function townRow(
     }
     if (p.t !== "smithy" && rand() < 0.75) {
       let hx = x + p.w * (0.3 + rand() * 0.4);
-      const length = Math.min(4, p.w * 0.4);
       const building = buildings[buildings.length - 1]!;
       const entrances =
         roomPlan(building, deck, 3.5)
           ?.doors.filter((dd) => dd.wall === "front")
-          .map((dd) => toWorld(building, (dd.a + dd.b) / 2, 0)[0]) ?? [x + p.w / 2];
-      if (entrances.some((ex) => Math.abs(hx - ex) < length / 2 + 1)) {
-        const choices = [x + length / 2 + 0.35, x + p.w - length / 2 - 0.35];
-        hx = choices.sort(
-          (a, b) =>
-            Math.min(...entrances.map((ex) => Math.abs(b - ex))) -
-            Math.min(...entrances.map((ex) => Math.abs(a - ex))),
-        )[0]!;
-      }
-      prop("hitch", hx, edge, 0, length);
+          .map((dd) => {
+            const a = toWorld(building, dd.a, 0)[0],
+              b = toWorld(building, dd.b, 0)[0];
+            return [Math.min(a, b) - 0.6, Math.max(a, b) + 0.6] as const;
+          }) ?? [[x + p.w / 2 - 1.2, x + p.w / 2 + 1.2] as const];
+      let spans: [number, number][] = [[x + 0.35, x + p.w - 0.35]];
+      for (const [lo, hi] of entrances)
+        spans = spans.flatMap(([a, b]) =>
+          hi <= a || lo >= b
+            ? [[a, b]]
+            : [
+                ...(lo > a ? [[a, lo] as [number, number]] : []),
+                ...(hi < b ? [[hi, b] as [number, number]] : []),
+              ],
+        );
+      const preferredLength = Math.min(4, p.w * 0.4);
+      spans.sort((a, b) => {
+        const aFits = a[1] - a[0] >= preferredLength,
+          bFits = b[1] - b[0] >= preferredLength;
+        if (aFits !== bFits) return aFits ? -1 : 1;
+        if (!aFits) return b[1] - b[0] - (a[1] - a[0]);
+        return Math.abs((a[0] + a[1]) / 2 - hx) - Math.abs((b[0] + b[1]) / 2 - hx);
+      });
+      const span = spans[0];
+      const length = span ? Math.min(preferredLength, span[1] - span[0]) : 0;
+      if (span) hx = Math.max(span[0] + length / 2, Math.min(span[1] - length / 2, hx));
+      if (length > 1) prop("hitch", hx, edge, 0, length);
       if (rand() < 0.62) {
         const nh = rand() < 0.4 ? 2 : 1;
-        for (let hi = 0; hi < nh; hi++)
-          prop(
-            "horse",
-            hx + (hi - (nh - 1) / 2) * 1.5 + (rand() - 0.5) * 0.3,
-            edge + (north ? 1.5 : -1.5),
-            north ? Math.PI + (rand() - 0.5) * 0.25 : (rand() - 0.5) * 0.25,
-            0.95 + rand() * 0.1,
-            Math.floor(rand() * 6),
-          );
+        for (let hi = 0; hi < nh; hi++) {
+          const horseX = hx + (hi - (nh - 1) / 2) * 1.5 + (rand() - 0.5) * 0.3;
+          const horseZ = edge + (north ? 1.5 : -1.5);
+          const horseRot = north ? Math.PI + (rand() - 0.5) * 0.25 : (rand() - 0.5) * 0.25;
+          const horseScale = 0.95 + rand() * 0.1,
+            coat = Math.floor(rand() * 6);
+          const body = K.footprint("horse", horseX, horseZ, horseRot, horseScale);
+          if (length > 1 && body && !K.doorApproaches().some((l) => K.overlaps(body, l)))
+            prop("horse", horseX, horseZ, horseRot, horseScale, coat);
+        }
       }
       if (rand() < 0.45)
         solidProp("trough", hx + 3.2, edge - (north ? -0.1 : 0.1), 0, 2.4, 0.8, 0.8);

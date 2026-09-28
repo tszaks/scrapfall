@@ -667,6 +667,10 @@ const WIN_COLS: Record<WBld["mat"], number[]> = {
 };
 
 type Hole = { u0: number; u1: number; y0: number; y1: number };
+/** Reserve the complete sill/head trim, not just the glass, beside a real door. */
+function windowOverlapsDoor(center: number, doors: { u0: number; u1: number }[]) {
+  return doors.some((d) => center + 0.95 > d.u0 && center - 0.95 < d.u1);
+}
 /** Trim follows the same apertures as its wall, including low threshold openings. */
 function solidSpans(start: number, end: number, holes: { u0: number; u1: number }[]) {
   const out: [number, number][] = [];
@@ -888,10 +892,10 @@ function walkIn(
       boxP(
         D2,
         WL.P_BOARD,
-        d.a + 0.02,
+        d.a - 0.07,
         fl,
         -T - (d.b - d.a) + 0.02,
-        d.a + 0.07,
+        d.a - 0.02,
         d.h - 0.02,
         -T - 0.02,
       );
@@ -909,10 +913,10 @@ function walkIn(
       boxP(
         D2,
         WL.P_BOARD,
-        d.b - 0.07,
+        d.b + 0.02,
         fl,
         z0 + T + 0.02,
-        d.b - 0.02,
+        d.b + 0.07,
         d.h - 0.02,
         z0 + T + (d.b - d.a) - 0.02,
       );
@@ -928,10 +932,10 @@ function walkIn(
     boxP(
       D2,
       WL.P_BOARD,
-      ud.b - 0.07,
+      ud.b + 0.02,
       ud.y + 0.02,
       -T - (ud.b - ud.a),
-      ud.b - 0.02,
+      ud.b + 0.07,
       ud.y + 2.26,
       -T - 0.02,
     );
@@ -946,12 +950,12 @@ function walkIn(
   const [ftu, ftv] = TILE_M[finishLayer] ?? [2, 2];
   const finUV = (ua: number, ub: number, ya: number, yb: number) =>
     [ua / ftu, ya / ftv, ub / ftu, yb / ftv] as const;
-  const winHoles = (len: number, skipLastBay: boolean): Hole[] => {
+  const winHoles = (len: number, doors: { u0: number; u1: number }[] = []): Hole[] => {
     const nWin = Math.floor((len - 1.2) / 3.6);
     const out: Hole[] = [];
     for (let k = 0; k < nWin; k++) {
-      if (skipLastBay && k === nWin - 1) continue;
       const tc = ((k + 0.5) / nWin) * len;
+      if (windowOverlapsDoor(tc, doors)) continue;
       out.push({ u0: tc - 0.75, u1: tc + 0.75, y0: 0.8, y1: 2.8 });
     }
     return out;
@@ -963,14 +967,19 @@ function walkIn(
   const iw: IW[] = [];
   // front: from the right corner to the left (u from x1)
   {
-    const holes: Hole[] = front.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h }));
+    const holes: Hole[] = front.map((d) => ({
+      u0: x1 - T - d.b,
+      u1: x1 - T - d.a,
+      y0: 0,
+      y1: d.h,
+    }));
     const win: Hole[] = [];
     for (let m = 0; m < mods; m++) {
       const xa = x0 + m * mw;
       const xb = xa + mw;
       if (front.some((d) => d.b > xa && d.a < xb)) continue;
       const c = (xa + xb) / 2;
-      win.push({ u0: x1 - c - 0.7, u1: x1 - c + 0.7, y0: 0.9, y1: 2.6 });
+      win.push({ u0: x1 - T - c - 0.7, u1: x1 - T - c + 0.7, y0: 0.9, y1: 2.6 });
     }
     iw.push({ ax: x1 - T, az: -T, bx: x0 + T, bz: -T, holes: [...holes, ...win], win });
   }
@@ -979,7 +988,10 @@ function walkIn(
     const holes: Hole[] = back.map((d) => ({ u0: d.a - x0 - T, u1: d.b - x0 - T, y0: 0, y1: d.h }));
     // the outer back wall's windows run from x1 to x0: mirror them
     const lenB = W;
-    const win = winHoles(lenB, back.length > 0).map((h) => ({
+    const win = winHoles(
+      lenB,
+      back.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a })),
+    ).map((h) => ({
       ...h,
       u0: lenB - h.u1 - T,
       u1: lenB - h.u0 - T,
@@ -989,7 +1001,7 @@ function walkIn(
   // the sides (outer windows run from the front corner back along x1, and from the back along x0)
   {
     // (both side walls' outer windows sit at D - tc from the inner walls' start)
-    const win = winHoles(D, false).map((h) => ({ ...h, u0: D - h.u1 - T, u1: D - h.u0 - T }));
+    const win = winHoles(D).map((h) => ({ ...h, u0: D - h.u1 - T, u1: D - h.u0 - T }));
     iw.push({ ax: x0 + T, az: -T, bx: x0 + T, bz: z0 + T, holes: win, win });
     iw.push({ ax: x1 - T, az: z0 + T, bx: x1 - T, bz: -T, holes: win, win });
   }
@@ -2072,7 +2084,14 @@ function building(b: WBld, r: () => number): BGeo {
   // upper-storey row (so they match the front)
   {
     const winCol = (k: number) => (b.mat === "barn" ? (k % 2 ? 3 : 0) : (k + uOff) % FAC_COLS);
-    const wallWindows = (ax: number, az: number, bx: number, bz: number, skipLast = false) => {
+    const wallWindows = (
+      ax: number,
+      az: number,
+      bx: number,
+      bz: number,
+      skipLast = false,
+      doors: { u0: number; u1: number }[] = [],
+    ) => {
       const len = Math.hypot(bx - ax, bz - az);
       const nWin = Math.floor((len - 1.2) / 3.6);
       if (nWin < 1) return;
@@ -2088,6 +2107,7 @@ function building(b: WBld, r: () => number): BGeo {
           // (the ground-floor bay by the back door has the door instead)
           if (skipLast && st === 0 && k === nWin - 1) continue;
           const tc = ((k + 0.5) / nWin) * len;
+          if (st === 0 && windowOverlapsDoor(tc, doors)) continue;
           const c = winCol(k + st);
           const uv = [c * 0.25 + 0.05, 0.295, c * 0.25 + 0.2, 0.465] as const;
           const pa = [ax + ux * (tc - 0.75) + nx, az + uz * (tc - 0.75) + nz] as const;
@@ -2134,9 +2154,8 @@ function building(b: WBld, r: () => number): BGeo {
       z0,
       x0,
       z0,
-      plan
-        ? plan.doors.some((d) => d.wall === "back")
-        : STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch",
+      !plan && (STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch"),
+      plan?.doors.filter((d) => d.wall === "back").map((d) => ({ u0: x1 - d.b, u1: x1 - d.a })),
     );
     wallWindows(x0, z0, x0, 0);
     // a painted advertisement on one tall side wall of the bigger stores

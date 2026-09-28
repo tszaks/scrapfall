@@ -860,8 +860,120 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     return full;
   };
+  // Reserve the entire visible doorway approach before emitting art OR collision.
+  // Clusters use their full rotated extent, not just a center or one navigation cell.
+  const approachFoot: Partial<Record<WPropKind, readonly [number, number]>> = {
+    crate: [1, 1],
+    crates: [2.2, 2.6],
+    barrel: [0.95, 0.95],
+    barrels: [1.8, 1.8],
+    trough: [2.6, 1],
+    streetlamp: [0.55, 0.55],
+    bench: [2, 0.75],
+    sacks: [1.4, 1.4],
+    woodpile: [2.6, 1.6],
+    outhouse: [1.8, 1.8],
+    hay: [1.5, 1],
+    brokencrate: [1.2, 1.2],
+    brokenbarrel: [1.2, 1],
+    anvil: [0.8, 0.9],
+    wheel: [1.4, 0.4],
+  };
+  type Approach = {
+    x0: number;
+    x1: number;
+    z0: number;
+    z1: number;
+    alongX: boolean;
+    building: WBld;
+  };
+  let approachBuildingCount = -1;
+  let approaches: Approach[] = [];
+  const doorApproaches = () => {
+    if (approachBuildingCount === buildings.length) return approaches;
+    approachBuildingCount = buildings.length;
+    approaches = [];
+    for (const b of buildings) {
+      const plan = roomPlan(b, b.deck ?? DECK_Y, STOREY);
+      if (!plan) continue;
+      const D = frameWD(b).D;
+      for (const d of plan.doors) {
+        if (d.wall !== "front" && d.wall !== "back") continue;
+        const front = d.wall === "front",
+          v0 = front ? -0.2 : -D - 5,
+          v1 = front ? 10 : -D + 0.2;
+        const a = toWorld(b, d.a - 0.22, v0),
+          c = toWorld(b, d.b + 0.22, v1);
+        approaches.push({
+          x0: Math.min(a[0], c[0]),
+          x1: Math.max(a[0], c[0]),
+          z0: Math.min(a[1], c[1]),
+          z1: Math.max(a[1], c[1]),
+          alongX: b.front === 0 || b.front === 2,
+          building: b,
+        });
+      }
+    }
+    return approaches;
+  };
+  const footprint = (k: WPropKind, x: number, z: number, rot: number, scale: number) => {
+    const f =
+      approachFoot[k] ?? (k === "horse" ? [1.2, 3.2] : k === "hitch" ? [scale, 0.4] : undefined);
+    if (!f) return undefined;
+    const scale2 = k === "hitch" ? 1 : scale;
+    const cs = Math.abs(Math.cos(rot)),
+      sn = Math.abs(Math.sin(rot));
+    const hw = ((f[0]! * cs + f[1]! * sn) * scale2) / 2,
+      hd = ((f[0]! * sn + f[1]! * cs) * scale2) / 2;
+    return { x0: x - hw, x1: x + hw, z0: z - hd, z1: z + hd };
+  };
+  const overlaps = (
+    a: { x0: number; x1: number; z0: number; z1: number },
+    b: { x0: number; x1: number; z0: number; z1: number },
+    gap = 0,
+  ) => a.x1 + gap > b.x0 && a.x0 - gap < b.x1 && a.z1 + gap > b.z0 && a.z0 - gap < b.z1;
   const prop = (k: WPropKind, x: number, z: number, rot = 0, s = 1, a?: number) => {
-    props.push(a === undefined ? { k, x, z, rot, s } : { k, x, z, rot, s, a });
+    const f = approachFoot[k] && footprint(k, x, z, rot, s);
+    if (f) {
+      const lanes = doorApproaches(),
+        blocked = lanes.find((l) => overlaps(f, l));
+      if (blocked) {
+        let found = false;
+        // Slide beside the entrance on the same level stretch of the same facade.
+        // Deterministic candidates consume no random numbers and never move horses/hitches.
+        for (let step = 1; step <= 24 && !found; step++)
+          for (const sign of [-1, 1]) {
+            const dx = blocked.alongX ? sign * step * 0.5 : 0,
+              dz = blocked.alongX ? 0 : sign * step * 0.5;
+            const q = { x0: f.x0 + dx, x1: f.x1 + dx, z0: f.z0 + dz, z1: f.z1 + dz },
+              b = blocked.building;
+            if (
+              blocked.alongX
+                ? q.x0 < b.x0 + 0.15 || q.x1 > b.x1 - 0.15
+                : q.z0 < b.z0 + 0.15 || q.z1 > b.z1 - 0.15
+            )
+              continue;
+            if (lanes.some((l) => overlaps(q, l)) || buildings.some((b) => overlaps(q, b, 0.1)))
+              continue;
+            if (
+              props.some((p) => {
+                const other = footprint(p.k, p.x, p.z, p.rot, p.s);
+                return other && overlaps(q, other, 0.2);
+              })
+            )
+              continue;
+            x += dx;
+            z += dz;
+            found = true;
+            break;
+          }
+        // Clutter with no safe space is omitted; the designed entrance always wins.
+        if (!found) return undefined;
+      }
+    }
+    const placed: WProp = a === undefined ? { k, x, z, rot, s } : { k, x, z, rot, s, a };
+    props.push(placed);
+    return placed;
   };
   /** a prop that also blocks: collision rectangle centred on it */
   const solidProp = (
@@ -874,7 +986,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     h: number,
     s = 1,
   ) => {
-    prop(k, x, z, rot, s);
+    const placed = prop(k, x, z, rot, s);
+    if (!placed) return;
+    x = placed.x;
+    z = placed.z;
     const c = Math.abs(Math.cos(rot));
     const sn = Math.abs(Math.sin(rot));
     const hw = (w * c + d * sn) / 2;
@@ -969,6 +1084,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     nextFiller,
     picket,
     backYard,
+    footprint,
+    doorApproaches,
+    overlaps,
   };
 
   // north row, west block and east block
@@ -1246,7 +1364,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   solidProp("barrels", -40, -9.5, 0.3, 1.4, 1.4, 1.1);
   solidProp("crates", 64, 9.4, 0.4, 1.6, 1.6, 1.4);
   solidProp("barrels", 96, 9.6, 1.2, 1.4, 1.4, 1.1);
-  solidProp("crates", -74, -9.2, 0.1, 1.6, 1.6, 1.4);
+  solidProp("crates", -74, -9.2, 0.1, 1.6, 1.6, 1.4); // actual doorway reservations choose the safe position
   for (let x = -110; x < 125; x += 36) {
     prop("streetlamp", x, -STREET_HALF + 0.4, 0, 1);
     prop("streetlamp", x + 18, STREET_HALF - 0.4, Math.PI, 1);
