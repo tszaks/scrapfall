@@ -2,7 +2,7 @@ import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
 import { generateAlpine } from "./alpine/layout";
 import { generateBeach } from "./beach/beachLayout";
-import { raised, strictNav } from "./terrain";
+import { groundY, raised, strictNav } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number };
 export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western";
@@ -334,6 +334,114 @@ const DIRS = [
   [-1, 1],
   [-1, -1],
 ] as const;
+
+/**
+ * The nav cell a flow field toward (x, z) should start from. Usually just the cell under the
+ * point; on maps with stacked ground (the beach: a deck above the sand, strict nav) a player
+ * standing by a railing is in a solid cell that touches both levels, so the field would leak
+ * down to the sand below. There the nearest open cell on the player's own level is used.
+ */
+export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]): [number, number] {
+  const ti = toNav(x);
+  const tj = toNav(z);
+  if (!strictNav()) return [ti, tj];
+  const n = nav.n;
+  const gy = groundY(x, z);
+  const same = (k: number) => !nav.g[k] && Math.abs(groundY(nav.px[k]!, nav.pz[k]!) - gy) < 1.2;
+  if (same(ti * n + tj)) return [ti, tj];
+  // prefer the nearest open cell on the same level that has a clear walk to the point, so an
+  // enemy that arrives there can step straight to a player standing along a railing
+  let best: [number, number] = [ti, tj];
+  let bd = Infinity;
+  for (let di = -3; di <= 3; di++)
+    for (let dj = -3; dj <= 3; dj++) {
+      const i = ti + di;
+      const j = tj + dj;
+      if (i < 0 || j < 0 || i >= n || j >= n || !same(i * n + j)) continue;
+      const k = i * n + j;
+      let d = Math.hypot(nav.px[k]! - x, nav.pz[k]! - z);
+      if (blocks && !clearLine(blocks, nav.px[k]!, nav.pz[k]!, x, z, 0.45)) d += 1000;
+      if (d < bd) {
+        bd = d;
+        best = [i, j];
+      }
+    }
+  return best;
+}
+
+/**
+ * A fine (2 m) distance field round a target, for the last stretch on maps with stacked ground
+ * (the beach): the 4 m nav grid can't see a 2 m corridor between a railing and the coaster, so
+ * enemies that got close follow this instead. `R` is the window radius in 2 m cells.
+ */
+export type FineField = { i0: number; j0: number; w: number; dist: Float32Array };
+export function fineField(blocks: Block[], x: number, z: number, R = 24): FineField {
+  const ti = toCell(x);
+  const tj = toCell(z);
+  const i0 = Math.max(0, ti - R);
+  const j0 = Math.max(0, tj - R);
+  const w = 2 * R + 1;
+  const dist = new Float32Array(w * w).fill(Infinity);
+  const open = new Uint8Array(w * w);
+  for (let a = 0; a < w; a++)
+    for (let b = 0; b < w; b++) {
+      const i = i0 + a;
+      const j = j0 + b;
+      if (i >= CELLS || j >= CELLS) continue;
+      open[a * w + b] = blocked(blocks, cellCenter(i), cellCenter(j), 0.45) ? 0 : 1;
+    }
+  const s0 = (ti - i0) * w + (tj - j0);
+  const gy = groundY(x, z);
+  dist[s0] = 0;
+  open[s0] = 1; // the target itself may stand hard against a railing
+  const q = [s0];
+  for (let h = 0; h < q.length; h++) {
+    const c = q[h]!;
+    const a = Math.floor(c / w);
+    const b = c - a * w;
+    for (const [da, db] of DIRS) {
+      const na = a + da;
+      const nb = b + db;
+      if (na < 0 || nb < 0 || na >= w || nb >= w) continue;
+      const k = na * w + nb;
+      if (!open[k]) continue;
+      if (da && db && (!open[(a + da) * w + b] || !open[a * w + b + db])) continue;
+      // out of the target's own cell only onto its level (not over a railing to the sand below)
+      if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2) continue;
+      const nd = dist[c]! + (da && db ? 1.414 : 1);
+      if (nd < dist[k]!) {
+        dist[k] = nd;
+        q.push(k);
+      }
+    }
+  }
+  return { i0, j0, w, dist };
+}
+/** next point down a fine field from (x, z), or null when outside it / not connected / there */
+export function fineStep(f: FineField, x: number, z: number): { x: number; z: number } | null {
+  const a = toCell(x) - f.i0;
+  const b = toCell(z) - f.j0;
+  const w = f.w;
+  if (a < 0 || b < 0 || a >= w || b >= w) return null;
+  const here = f.dist[a * w + b]!;
+  if (!isFinite(here) || here === 0) return null;
+  let best = here;
+  let ba = a;
+  let bb = b;
+  for (const [da, db] of DIRS) {
+    const na = a + da;
+    const nb = b + db;
+    if (na < 0 || nb < 0 || na >= w || nb >= w) continue;
+    const d = f.dist[na * w + nb]!;
+    if (d < best) {
+      best = d;
+      ba = na;
+      bb = nb;
+    }
+  }
+  if (ba === a && bb === b) return null;
+  return { x: cellCenter(f.i0 + ba), z: cellCenter(f.j0 + bb) };
+}
 
 /** Distance (in steps) from every nav cell to the target nav cell. `maxD` bounds the search
  * (the big city only needs routes within a couple of hundred metres of each player). */

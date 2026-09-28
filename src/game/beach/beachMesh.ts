@@ -825,8 +825,14 @@ function building(b: BBld, C: Ctx) {
       G.mat(L.store, b.seed, 1).col(wallCol);
       G.wall(p, q, y0, y0 + groundH, facadeUV(L.store, faceW, 0, 1, 1, Math.floor(r() * 8), 0));
     } else {
-      G.mat(b.t === "restroom" ? L.plain : L.resid, b.seed, 1).col(wallCol);
-      G.wall(p, q, y0, y0 + groundH, facadeUV(L.resid, faceW, 0, groundH, fh, 0, 0));
+      if (b.t === "restroom") {
+        // painted cinder block (a slab texture at block scale), not a flat grey box
+        G.mat(L.paving, b.seed, 1).col(wallCol);
+        G.wall(p, q, y0, y0 + groundH, [0, 0, faceW / 0.8, groundH / 0.4]);
+      } else {
+        G.mat(L.resid, b.seed, 1).col(wallCol);
+        G.wall(p, q, y0, y0 + groundH, facadeUV(L.resid, faceW, 0, groundH, fh, 0, 0));
+      }
     }
     if (b.h > groundH + 0.5) {
       const layer =
@@ -1059,6 +1065,22 @@ function building(b: BBld, C: Ctx) {
         b.front === 1 || b.front === 3 ? 12 : 0.1,
       );
     }
+  }
+  if (b.t === "restroom") {
+    // two doors on the beach side, a painted band and a little roof overhang
+    const D = C.detail;
+    const fr = frontLine(b, b.front, 0.04);
+    D.mat(L.plain, b.seed, 0).col("#2a6a7a");
+    for (const off of [-fr.half * 0.45, fr.half * 0.45]) {
+      if (b.front === 1 || b.front === 3) D.box(fr.x, y0, fr.z + off, 0.08, 2.1, 1.0);
+      else D.box(fr.x + off, y0, fr.z, 1.0, 2.1, 0.08);
+    }
+    D.col("#2a6a7a");
+    const band = frontLine(b, b.front, 0.02);
+    if (b.front === 1 || b.front === 3) D.box(band.x, y0 + 2.6, band.z, 0.05, 0.25, band.half * 2);
+    else D.box(band.x, y0 + 2.6, band.z, band.half * 2, 0.25, 0.05);
+    G.mat(L.plain, b.seed, 0).col("#b8583a");
+    G.box((b.x0 + b.x1) / 2, top, (b.z0 + b.z1) / 2, b.x1 - b.x0 + 1.2, 0.25, b.z1 - b.z0 + 1.2);
   }
   if (b.t === "hq") {
     // glass lookout on the roof
@@ -1628,6 +1650,42 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     }
   }
 
+  // ---- a lattice skirt wherever a raised deck or ramp meets open sand or grass: the ground
+  // under the pier isn't walkable, so show it (boards between the piles, not an invisible wall)
+  {
+    const regionOf = beach.regionOf;
+    for (let i = 1; i < n - 1; i++)
+      for (let j = 1; j < n - 1; j++) {
+        const c = i * n + j;
+        if (regionOf[c]! < 0) continue;
+        const x = cx(i);
+        const z = cx(j);
+        if (x > X.bluff - 6) continue; // the bluff stairs have their own cheek walls
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const k = (i + di) * n + (j + dj);
+          if (regionOf[k]! >= 0 || beach.deep[k]) continue;
+          const ex = x + di;
+          const ez = z + dj;
+          const top = heightOfRegion(beach, c, ex, ez) - 0.8;
+          const bot = gv(ex + di * 0.3, ez + dj * 0.3) - 0.25;
+          if (top - bot < 0.6 || bot < SEA - 0.3) continue;
+          const C2 = ctx(ex, ez);
+          const along = di === 0; // the edge runs along x
+          C2.main.mat(L.plain, 0.5, 0).col("#4e3c2c");
+          // two rails and five uprights per 2 m cell edge
+          for (const yy of [bot + 0.35, top - 0.15]) {
+            if (along) C2.main.box(ex, yy, ez, 2.0, 0.12, 0.08);
+            else C2.main.box(ex, yy, ez, 0.08, 0.12, 2.0);
+          }
+          C2.main.col("#6a5038");
+          for (let s = -0.8; s <= 0.81; s += 0.4) {
+            if (along) C2.main.box(ex + s, bot, ez, 0.12, top - bot, 0.05);
+            else C2.main.box(ex, bot, ez + s, 0.05, top - bot, 0.12);
+          }
+        }
+      }
+  }
+
   // ---- railings: a white rail along every railing cell's side that faces open deck ----
   {
     const solid = city.solid;
@@ -2040,6 +2098,16 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     // whoever climbs the ladder: building access, access/beachAccess.ts)
     G.col(col);
     G.box(t.x - 0.6, y + 2.5, t.z, 2.0, 2.3, 2.0);
+    // clapboard: slightly proud, darker boards all the way round
+    G.col(col, 0.86);
+    for (let yy = y + 2.62; yy < y + 4.75; yy += 0.27) G.box(t.x - 0.6, yy, t.z, 2.04, 0.04, 2.04, false);
+    // the back door (what a climber sees at the top of the ladder), with a porthole and a number
+    G.col("#2f5f8a");
+    G.box(t.x + 0.43, y + 2.5, t.z, 0.06, 1.95, 0.9);
+    G.col("#cfe4ee");
+    G.box(t.x + 0.47, y + 3.75, t.z, 0.03, 0.34, 0.34);
+    G.col("#f4f0e6");
+    G.box(t.x + 0.43, y + 4.5, t.z, 0.05, 0.28, 1.5);
     G.col("#1e2a34");
     G.box(t.x - 1.62, y + 3.2, t.z, 0.05, 1.0, 1.6);
     G.col("#f4f0e6");

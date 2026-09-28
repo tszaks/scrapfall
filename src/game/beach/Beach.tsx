@@ -530,8 +530,10 @@ const BeachScene = memo(function BeachScene({
       <mesh geometry={seaGeo.strip} material={mats.sea} receiveShadow />
       <SkyDome sunset={skies.sunset} night={skies.night} />
       <points geometry={lightsGeo} material={mats.lights} />
-      <mesh ref={mistRef} material={mats.mist} visible={false} renderOrder={-1}>
-        <sphereGeometry args={[2000, 16, 10]} />
+      {/* the marine layer: a fog shell round the camera, drawn after the sky and the stars
+          (anything nearer than its radius stays in front; the scene fog hazes that) */}
+      <mesh ref={mistRef} material={mats.mist} visible={false} renderOrder={10} frustumCulled={false}>
+        <sphereGeometry args={[420, 16, 10]} />
       </mesh>
       {built.chunks.map((c, i) => (
         <group key={i}>

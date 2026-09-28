@@ -4,7 +4,7 @@ import * as THREE from "three";
 
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
-  solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
+  solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
   closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
   BEACH_SIZE, setPosts,
 } from "./level";
@@ -35,7 +35,7 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, raised, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
@@ -220,6 +220,9 @@ const MOVE = new THREE.Vector3();
 const TMP_A = new THREE.Vector3();
 const TMP_B = new THREE.Vector3();
 const PLAYER_R = 0.4; // player body radius for enemy contact
+/** THE KRAKEN RIG's drawn reach (hull + curled tentacles at the boss's 1.6x scale): the solid
+ * body and standoff it keeps from players, so the camera never ends up inside the model */
+const KRAKEN_R = 4.2;
 
 function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
@@ -662,8 +665,9 @@ function KrakenRig({ b }: { b: Theme["boss"] }) {
         let py = 0.3;
         let pr = 1.35;
         for (let k = 0; k < 6; k++) {
-          const th = 0.05 + k * 0.3 + (i % 2) * 0.08;
-          const L = 0.7 - k * 0.04;
+          // tentacles curl up tight so the rig stays within its standoff (see KRAKEN_R)
+          const th = 0.35 + k * 0.38 + (i % 2) * 0.08;
+          const L = 0.55 - k * 0.04;
           segs.push({ y: py + (Math.sin(th) * L) / 2, r: pr + (Math.cos(th) * L) / 2, th, k });
           py += Math.sin(th) * L;
           pr += Math.cos(th) * L;
@@ -1712,6 +1716,11 @@ function World({
 
   // (roofs of access buildings get their own nav cells, walled off from the street)
   const solid = useMemo(() => closeRaised(patchNav(solidGrid(blocks))), [blocks]);
+  /** flow-field cache key: the nav cell a field toward this target starts from (level.ts navTarget) */
+  const navKey = (t: { x: number; z: number }) => {
+    const [i, j] = navTarget(solid, t.x, t.z, blocks);
+    return i * 1000 + j;
+  };
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
@@ -1795,6 +1804,9 @@ function World({
   type GuestTarget = { x: number; z: number; yaw: number };
   const guestTarget = useRef<GuestTarget[]>(enemies.map(() => ({ x: 0, z: 0, yaw: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
+  /** fine 2 m fields round each target (stacked-ground maps only, see level.ts fineField) */
+  const fines = useRef(new Map<number, FineField>());
+  const fineKey = (t: { x: number; z: number }) => toCell(t.x) * 1000 + toCell(t.z);
   const recycleT = useRef(1);
   const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
@@ -2748,7 +2760,7 @@ function World({
       for (let pass = 0; pass < 2; pass++) {
         for (const e of enemies) {
           if (!e.alive || FLYERS.has(e.kind)) continue;
-          const r = STATS[e.kind].radius * (e.elite ? 1.6 : 1) + PLAYER_R;
+          const r = (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1)) + PLAYER_R;
           const ox = cam.position.x - e.x;
           const oz = cam.position.z - e.z;
           const dd = ox * ox + oz * oz;
@@ -3211,7 +3223,8 @@ function World({
         targets,
         enemies,
         rand,
-        fieldFor: (t) => fields.current.get(toNav(t.x) * 1000 + toNav(t.z)),
+        fieldFor: (t) => fields.current.get(navKey(t)),
+        fineFor: (t) => fines.current.get(fineKey(t)),
         hurtTarget,
         shoot: (x, y, z, vx, vy, vz, life, dmg, size) =>
           fireInto(enemyBullets.current, TMP_A.set(x, y, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
@@ -3224,13 +3237,23 @@ function World({
       // flow field per target cell (cached)
       const used = new Set<number>();
       for (const t of targets) {
-        const key = toNav(t.x) * 1000 + toNav(t.z);
+        const key = navKey(t);
+        const [ni, nj] = navTarget(solid, t.x, t.z, blocks);
         used.add(key);
         if (!fields.current.has(key))
-          fields.current.set(key, flowField(solid, toNav(t.x), toNav(t.z), big ? 70 : Infinity));
+          fields.current.set(key, flowField(solid, ni, nj, big ? 70 : Infinity));
       }
       if (fields.current.size > 12) {
         fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
+      }
+      if (strictNav()) {
+        const usedF = new Set<number>();
+        for (const t of targets) {
+          const key = fineKey(t);
+          usedF.add(key);
+          if (!fines.current.has(key)) fines.current.set(key, fineField(blocks, t.x, t.z));
+        }
+        if (fines.current.size > 12) fines.current.forEach((_, key) => { if (!usedF.has(key)) fines.current.delete(key); });
       }
 
       // the city is huge: enemies stranded far from every player get recycled nearby
@@ -3383,8 +3406,16 @@ function World({
         let tz = target.z;
         const ghost = e.kind === "specter"; // specters drift straight through cover
         if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-          const dist = fields.current.get(toNav(target.x) * 1000 + toNav(target.z));
-          if (dist) {
+          const dist = fields.current.get(navKey(target));
+          // at the field's own cell (the target is right there, e.g. against a railing) walk
+          // straight at it instead of parking on the cell centre
+          // close in: the fine field knows the 2 m corridors the nav grid can't see
+          const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
+          const fs = ff ? fineStep(ff, e.x, e.z) : null;
+          if (fs) {
+            tx = fs.x;
+            tz = fs.z;
+          } else if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0) {
             const wp = nextWaypoint(solid, dist, e.x, e.z);
             tx = wp.x;
             tz = wp.z;
@@ -3398,7 +3429,7 @@ function World({
         if (e.kind === "bomber") dir = d > 16 ? 1 : d < 9 ? -1 : 0;
         if (e.kind === "brute" && d < 1.8) dir = 0;
         if (e.kind === "vanguard" && d < 2) dir = 0;
-        if (e.kind === "boss" && d < 3) dir = 0;
+        if (e.kind === "boss" && d < (theme.boss.shape === "kraken" ? KRAKEN_R + 1.4 : 3)) dir = 0;
         const spType = e.kind === "special" ? theme.special.type : null;
         let spMul = 1;
         if (spType) {
@@ -3479,7 +3510,7 @@ function World({
           }
         }
         if (e.kind === "brute" || e.kind === "boss" || e.kind === "vanguard") {
-          const reach = e.kind === "boss" ? 3.6 : e.kind === "vanguard" ? 2.6 : 2.4;
+          const reach = e.kind === "boss" ? (theme.boss.shape === "kraken" ? KRAKEN_R + 2.2 : 3.6) : e.kind === "vanguard" ? 2.6 : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
@@ -3624,7 +3655,7 @@ function World({
       grid.forEach((cell) => (cell.length = 0));
       const CELL = 2.5;
       const keyOf = (x: number, z: number) => Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
-      const bodyR = (e: Enemy) => STATS[e.kind].radius * (e.elite ? 1.6 : 1);
+      const bodyR = (e: Enemy) => (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1));
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive || FLYERS.has(e.kind)) continue;

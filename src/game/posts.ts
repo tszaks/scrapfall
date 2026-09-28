@@ -37,9 +37,17 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
   }
   if (isBeach(city)) {
     for (const p of city.beach.props) {
-      // posts up on the pier deck would also block the sand beneath it, so keep to the ground
-      if (p.y > 1) continue;
-      if (
+      // posts at every height: the ground under the pier deck is part of the deck (you can't
+      // stand beneath it), so a post up there only ever blocks the deck, and the clifftop's
+      // props at 16 m block the clifftop
+      if (p.k === "palm") out.push({ x: p.x, z: p.z, r: 0.45 });
+      else if (p.k === "tree") out.push({ x: p.x, z: p.z, r: 0.35 * (p.s ?? 1) });
+      else if (p.k === "umbrella") out.push({ x: p.x, z: p.z, r: 0.12 });
+      else if (p.k === "firering") out.push({ x: p.x, z: p.z, r: 0.95 });
+      else if (p.k === "bike") bar(out, p.x, p.z, p.rot, 0.5, 0.25);
+      else if (p.k === "board") out.push({ x: p.x, z: p.z, r: 0.25 });
+      else if (p.k === "scope") out.push({ x: p.x, z: p.z, r: 0.25 });
+      else if (
         p.k === "lamp" ||
         p.k === "streetlight" ||
         p.k === "globe" ||
