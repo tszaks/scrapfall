@@ -3227,6 +3227,12 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      {/* shootable hazard props, styled to the map they sit in */}
+      {Array.from({ length: HAZARD_COUNT }, (_, i) => (
+        <group key={`haz${i}`} ref={(g) => { hazardMeshes.current[i] = g; }} visible={false}>
+          <HazardProp def={hazardDef} />
+        </group>
+      ))}
       <mesh ref={barrierMesh} visible={false}>
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
