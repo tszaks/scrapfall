@@ -105,6 +105,12 @@ export type Car = {
   /** was a pursuit car last step; after release it drives on as one up to the next junction */
   wasSpecial: boolean;
   coolKey: number;
+  /** blackout: the dead signal we last saw (and when), and the one we've already stopped at */
+  darkSid: number;
+  darkT: number;
+  darkDone: number;
+  /** the light this car obeyed last step */
+  lightPrev: number;
   /** which car is holding us up (-1 = nothing / a light) and how long we've been stuck */
   blocker: number;
   stuckT: number;
@@ -139,7 +145,13 @@ export type SimEnv = {
 };
 
 /** Debug counters (read by the test tooling through the ?debug=1 handle). */
-export const trafficStats = { redRunsSpecial: 0, redRunsNormal: 0, deadlockBreaks: 0 };
+export const trafficStats = {
+  redRunsSpecial: 0,
+  redRunsNormal: 0,
+  deadlockBreaks: 0,
+  /** the last few normal-car red runs, for diagnosis */
+  redRunLog: [] as Record<string, unknown>[],
+};
 
 /** the car that produced the last scan result, and a car the scans must skip */
 let scanHit: Car | null = null;
@@ -215,6 +227,10 @@ export function makeCar(
     amberStop: false,
     wasSpecial: false,
     coolKey: -1,
+    darkSid: -1,
+    darkT: -9,
+    darkDone: -1,
+    lightPrev: 0,
     blocker: -1,
     stuckT: 0,
     ghost: [],
@@ -784,13 +800,41 @@ export function stepCars(
     // below still keeps them out of cross traffic)
     // (the lights are numbered on the full city grid, even when solo play trims the roads)
     const sid = signalId(crossRoad, ownRoad, c.axis, node);
-    const deadSignal = nodeDark(sid);
+    // (a signal flickering back to life mid-approach stays "dead" for a moment, so the
+    // light doesn't blink red at a car already creeping through its all-way stop)
+    if (nodeDark(sid)) {
+      c.darkSid = sid;
+      c.darkT = t;
+    }
+    const deadSignal = c.darkSid === sid && t - c.darkT < 1.5;
+    if (!deadSignal) c.darkDone = -1;
     const light = deadSignal ? GREEN : signal(sid, t, c.axis);
-    if (committed && c.committedPrev === false && light === RED) {
+    // `committed` reflects last step's move, so judge it by the light that move was made
+    // under (a car creeping over a dead signal isn't running the red it comes back on)
+    if (committed && c.committedPrev === false && c.lightPrev === RED) {
       if (special) trafficStats.redRunsSpecial++;
-      else trafficStats.redRunsNormal++;
+      else {
+        trafficStats.redRunsNormal++;
+        trafficStats.redRunLog.push({
+          t: +t.toFixed(2),
+          car: ci,
+          x: +c.x.toFixed(1),
+          z: +c.z.toFixed(1),
+          speed: +c.speed.toFixed(1),
+          far: !!c.far,
+          turn: c.turn,
+          amberStop: c.amberStop,
+          sid,
+          blocker: c.blocker,
+          ghost: c.ghost.length,
+          dark: deadSignal,
+          stuckT: +c.stuckT.toFixed(1),
+        });
+        if (trafficStats.redRunLog.length > 20) trafficStats.redRunLog.shift();
+      }
     }
     c.committedPrev = committed;
+    c.lightPrev = light;
 
     // travel frame (arc tangent while turning)
     const ty = travelYaw(c);
@@ -809,6 +853,11 @@ export function stepCars(
     if (deadSignal && !committed) {
       const toStop = (stopCentre - c.s) * c.dir;
       if (toStop < 22) vcap = Math.min(vcap, 2.2 + Math.max(0, toStop) * 0.3);
+      // all-way stop: come to a halt at the line once, then creep across
+      if (!special && c.darkDone !== sid) {
+        lim(toStop, null);
+        if (toStop < 1.5 && c.speed < 0.3) c.darkDone = sid;
+      }
     }
     let yawOffT = 0;
     const turnDir = c.turn === 1 || c.turn === -1 ? c.turn : 0;
