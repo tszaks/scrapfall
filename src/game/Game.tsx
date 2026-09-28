@@ -1649,6 +1649,8 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    depletedWave.current = {};
+    dryWaves.current = 0;
     turrets.current = [];
     mines.current = [];
     lastDeploys.current = { turret: -1, mines: -1 };
@@ -1845,7 +1847,6 @@ function World({
     // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
     const waveMul = 1.25 + 0.1 * (n - 1);
     const enemyMul = waveMul * (1 + 0.6 * extra);
-    const lootMul = 1 + 1.1 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
