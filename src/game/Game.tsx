@@ -1845,9 +1845,9 @@ function World({
         else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
       }
       // a hazard someone else shot: show the blast without re-applying the damage
-      if (m.type === "haz") hazardBlow.current(Number(m.i), !isH);
+      if (m.type === "haz") hazardBlow.current(Number(m.i), !isHostRef.current);
       // the host decides where the hazard props stand each round
-      if (m.type === "hazset" && !isH) {
+      if (m.type === "hazset" && !isHostRef.current) {
         const p = m.p as [number, number][];
         hazards.current.forEach((h, i) => {
           const spot = p[i];
