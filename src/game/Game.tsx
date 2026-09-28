@@ -3576,6 +3576,8 @@ export function Game() {
     setShards(0);
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
+    endlessRef.current = false;
+    setMutId("none");
     setWeapon("pistol");
     setSeed((p) => freshSeed(p));
     if (document.pointerLockElement) document.exitPointerLock();
