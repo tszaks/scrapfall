@@ -97,13 +97,13 @@ export function wheelSolid(p: {x:number;y:number;z:number}) {
    if(Math.abs(a)>1.18)continue;
    // Axle between rims, roof and floor; cabin is hollow above its waist panels.
    if(Math.abs(a)<.08&&Math.abs(h)<.08&&Math.abs(n)<2.4)return true;
-   if(Math.abs(a)<=1.16&&Math.abs(n)<=.96&&h>=-.95&&h<=-.79)return true;
+   if(Math.abs(a)<=1.16&&Math.abs(n)<=.96&&h>=-.75&&h<=-.59)return true;
    if(Math.abs(a)<=.96&&Math.abs(n)<=.76&&h>=-2.92&&h<=-2.78)return true;
    if(h>=-2.83&&h<=-1.81) {
      if(Math.abs(Math.abs(a)-.95)<.06&&Math.abs(n)<=.81)return true;
      if(Math.abs(a)<=.96&&Math.abs(n+.75)<.06)return true;
    }
-   if(h>=-2.76&&h<=-.84&&Math.abs(Math.abs(a)-.95)<.06&&Math.abs(Math.abs(n)-.75)<.06)return true;
+   if(h>=-2.76&&h<=-.64&&Math.abs(Math.abs(a)-.95)<.06&&Math.abs(Math.abs(n)-.75)<.06)return true;
    if(h>=-.96&&h<=.05&&Math.abs(Math.abs(a)-.85)<.07&&Math.abs(n)<.07)return true;
  }
  return false;

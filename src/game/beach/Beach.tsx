@@ -809,8 +809,8 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
     // Hollow cabin: usable floor, waist-high panels and real headroom.
     for (const x of [-.95,.95]) box(x,-2.32,0,.1,1,1.6,"#ffffff");
     box(0,-2.32,-.75,1.9,1,.1,"#ffffff");
-    for (const x of [-.95,.95]) for (const z of [-.75,.75]) box(x,-1.8,z,.08,1.9,.08,"#d8d8d8");
-    box(0, -.87, 0, 2.3, 0.14, 1.9, "#ffffff");
+    for (const x of [-.95,.95]) for (const z of [-.75,.75]) box(x,-1.7,z,.08,2.1,.08,"#d8d8d8");
+    box(0, -.67, 0, 2.3, 0.14, 1.9, "#ffffff");
     box(0, -2.85, 0, 1.9, 0.12, 1.5, "#2a2a2a");
     return {
       frame: frame.build(),
