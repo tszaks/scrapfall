@@ -6,7 +6,7 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
   closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
-  BEACH_SIZE, setPosts, jumpBody,
+  BEACH_SIZE, setPosts, jumpBody, shotBlocked, shotStop, clearShot,
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
@@ -35,7 +35,7 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, jumpClimb, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, jumpClimb, raised, strictNav, groundOwnsHits, groundSpeed, groundY, setTerrain, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
@@ -1799,7 +1799,7 @@ function World({
     fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])));
     const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
     fxEnv({
-      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      solid: (x, z, y) => (y === undefined ? blocked(blocks, x, z, 0.05) : shotBlocked(blocks, x, y, z)),
       car: (x, y, z) => (city !== null || western !== null) && hitsTraffic(x, y, z),
       half: () => HALF,
       waterZ: city ? city.waterZ : null,
@@ -2505,8 +2505,13 @@ function World({
       const [lo, hi] = hitBand(e.kind);
       const ey = groundY(e.x, e.z);
       if (y < ey + lo - r || y > ey + hi + r) continue; // far above or below (a roof, a hornet)
-      if (d > er + 0.3 && !clearLine(blocks, x, z, e.x, e.z, 0.1)) continue;
-      const k = 1 - 0.65 * Math.min(1, dd / r);
+      // walls shield; low cover shields the body but not the head (half the splash)
+      let cover = 1;
+      if (d > er + 0.3 && !clearShot(blocks, x, y, z, e.x, ey + (lo + hi) / 2, e.z)) {
+        if (!clearShot(blocks, x, y, z, e.x, ey + hi - 0.15, e.z)) continue;
+        cover = 0.5;
+      }
+      const k = (1 - 0.65 * Math.min(1, dd / r)) * cover;
       // at the centre the blast travels the way the shell was flying
       const [kx, kz] = d > 0.3 ? [dx / d, dz / d] : [vx, vz];
       applyHit(e, i, dmg * k, { kb: 2.4 * k, kx, kz, direct: true }, from);
@@ -2834,8 +2839,8 @@ function World({
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
     // sea); every other map: under the ground or into a solid cell
     // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
-    ((shotHits(p.x, p.y, p.z) ??
-      (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05))) ||
+    // (level.ts shotStop: one height-aware test; low cover stops only what is below its top)
+    (shotStop(blocks, p.x, p.y, p.z) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     (big !== null && hitsTraffic(p.x, p.y, p.z)));
@@ -4163,7 +4168,7 @@ function World({
         if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
-          if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          if (shotBlocked(blocks, b.pos.x, b.pos.y, pz) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
           fxBounce(i);

@@ -8,7 +8,7 @@
 // ping, revive) are written into touchInput, so the game has one path for them. Movement,
 // the trigger and the look are returned / applied here.
 import { touchInput } from "../touch";
-import { jumpBody } from "../level";
+import { FULL_H, jumpBody, shotBlocked, shotStop } from "../level";
 import { climbable, jumpClimb } from "../terrain";
 import { BTN, loadPadSettings, padSettings } from "./bindings";
 import {
@@ -67,6 +67,7 @@ export function installControls() {
       jumpClimb,
       climbable,
       fall: { FALL_TABLE, fallDamage, fallShare },
+      shot: { shotStop, shotBlocked, FULL_H },
     };
   }
 }

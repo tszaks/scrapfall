@@ -1080,11 +1080,13 @@ export function generateAlpine(seed: number, solo: boolean) {
     block(BRIDGE.x0 - 2, zz - 1, BRIDGE.x1 + 2, zz + 1, -1, bridgeY + 6);
   // rink: boards around the ice, open at the north and south
   const rinkY = hAt((RINK.x0 + RINK.x1) / 2, (RINK.z0 + RINK.z1) / 2);
+  // (shots fly over them: their top is the drawn boards' red cap, ~1.2 m over the ice)
+  const boards = rinkY + 1.2;
   for (let x = RINK.x0; x < RINK.x1; x += 2) {
     const gate = Math.abs(x + 1 - (RINK.x0 + RINK.x1) / 2) < 3;
     if (!gate) {
-      block(x, RINK.z0 - 2, x + 2, RINK.z0, -1);
-      block(x, RINK.z1, x + 2, RINK.z1 + 2, -1);
+      block(x, RINK.z0 - 2, x + 2, RINK.z0, -1, boards);
+      block(x, RINK.z1, x + 2, RINK.z1 + 2, -1, boards);
     }
   }
   for (const [cx, cz] of [
@@ -1093,10 +1095,10 @@ export function generateAlpine(seed: number, solo: boolean) {
     [RINK.x0 - 2, RINK.z1],
     [RINK.x1, RINK.z1],
   ] as const)
-    block(cx, cz, cx + 2, cz + 2, -1);
+    block(cx, cz, cx + 2, cz + 2, -1, boards);
   for (let z = RINK.z0; z < RINK.z1; z += 2) {
-    block(RINK.x0 - 2, z, RINK.x0, z + 2, -1);
-    block(RINK.x1, z, RINK.x1 + 2, z + 2, -1);
+    block(RINK.x0 - 2, z, RINK.x0, z + 2, -1, boards);
+    block(RINK.x1, z, RINK.x1 + 2, z + 2, -1, boards);
   }
   // ski jump: timber in-run on trestles
   block(JUMP.x - 3, JUMP.z0 - 2, JUMP.x + 3, JUMP.z1, S_BLD, jumpTopG + 25);
