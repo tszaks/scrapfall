@@ -166,37 +166,49 @@ export type Post = {
 /** the local player's feet above the ground while jumping (input/movement.ts); 0 on foot.
  * Set only around the player's own movement, so enemies are never affected. */
 export const jumpBody = { lift: 0 };
-let postGrid: Map<number, Post[]> | null = null;
-const postKey = (i: number, j: number) => i * 65536 + j;
+// dense 4 m bucket grid: blocked() -> hitsPost runs thousands of times a frame in a
+// crowd, and the old Map lookups were its biggest single cost
+const POST_CELL = 4;
+let postGrid: (Post[] | undefined)[] | null = null;
+let postGW = 0;
+const postI = (v: number) => Math.floor((v + HALF) / POST_CELL) + 1;
 export function setPosts(list: Post[] | null) {
   if (!list || list.length === 0) {
     postGrid = null;
     return;
   }
-  postGrid = new Map();
-  for (const p of list)
-    for (let i = Math.floor((p.x - p.r) / 4); i <= Math.floor((p.x + p.r) / 4); i++)
-      for (let j = Math.floor((p.z - p.r) / 4); j <= Math.floor((p.z + p.r) / 4); j++) {
-        const k = postKey(i, j);
-        let a = postGrid.get(k);
-        if (!a) postGrid.set(k, (a = []));
-        a.push(p);
+  postGW = postI(HALF) + 1;
+  const g = new Array<Post[] | undefined>(postGW * postGW);
+  for (const p of list) {
+    const i0 = Math.max(0, postI(p.x - p.r));
+    const i1 = Math.min(postGW - 1, postI(p.x + p.r));
+    const j0 = Math.max(0, postI(p.z - p.r));
+    const j1 = Math.min(postGW - 1, postI(p.z + p.r));
+    for (let i = i0; i <= i1; i++)
+      for (let j = j0; j <= j1; j++) {
+        const k = i * postGW + j;
+        (g[k] ??= []).push(p);
       }
+  }
+  postGrid = g;
 }
 export function hitsPost(x: number, z: number, radius: number, shotsOnly = false, feet?: number) {
   if (!postGrid) return false;
-  const i0 = Math.floor((x - radius - 1) / 4);
-  const i1 = Math.floor((x + radius + 1) / 4);
-  const j0 = Math.floor((z - radius - 1) / 4);
-  const j1 = Math.floor((z + radius + 1) / 4);
+  const i0 = Math.max(0, postI(x - radius - 1));
+  const i1 = Math.min(postGW - 1, postI(x + radius + 1));
+  const j0 = Math.max(0, postI(z - radius - 1));
+  const j1 = Math.min(postGW - 1, postI(z + radius + 1));
   for (let i = i0; i <= i1; i++)
     for (let j = j0; j <= j1; j++) {
-      const a = postGrid.get(postKey(i, j));
+      const a = postGrid[i * postGW + j];
       if (!a) continue;
       for (const p of a) {
         if (feet !== undefined && feet > groundY(p.x, p.z) + (p.h ?? 4.5)) continue;
         if (shotsOnly ? !p.shot : p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
-        if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+        const dx = p.x - x,
+          dz = p.z - z,
+          rr = p.r + radius;
+        if (dx * dx + dz * dz < rr * rr) return true;
       }
     }
   return false;
@@ -204,7 +216,7 @@ export function hitsPost(x: number, z: number, radius: number, shotsOnly = false
 /** shot-stopping posts (horses, hay, walk-in walls) at height y: a low one (h) only below its top */
 function shotPost(x: number, y: number, z: number) {
   if (!postGrid) return false;
-  const a = postGrid.get(postKey(Math.floor(x / 4), Math.floor(z / 4)));
+  const a = postGrid[postI(x) * postGW + postI(z)];
   if (!a) return false;
   let base = NaN;
   for (const p of a) {

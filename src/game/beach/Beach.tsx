@@ -352,7 +352,8 @@ const BeachScene = memo(function BeachScene({
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
 }) {
-  const { gl, scene } = useThree();
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const built = useMemo(() => {
     const t0 = performance.now();
     const m = buildBeachMeshes(city);

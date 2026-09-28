@@ -408,7 +408,7 @@ export const CityScene = memo(function CityScene({
   /** co-op: the host rolls the weather and ships it to the guests */
   isHost?: boolean;
 }) {
-  const { gl } = useThree();
+  const gl = useThree((s) => s.gl);
   const built = useMemo(() => {
     const t0 = performance.now();
     const m = buildCityMeshes(city);
