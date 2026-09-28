@@ -143,11 +143,43 @@ export function strictNav() {
   return !!G?.strictNav;
 }
 
+/** The local player's jump (input/movement.ts): the absolute height of the feet while in the
+ * air, -Infinity on foot. Set only around the player's own movement. */
+export const jumpClimb = { feet: -Infinity };
+/** how far a jump may climb onto, or drop off, a flat ledge the walk rules refuse (m) */
+const JUMP_LEDGE = 1.15;
+
+/**
+ * A jumping player may step onto (or off) a ledge the walk rules refuse (a porch deck, a
+ * boardwalk): only when the feet are above it, it is within JUMP_LEDGE of the ground under
+ * them (the feet never rise more than ~1.1 m over the take-off), and it is flat on top. A steep slope is never a ledge, so slopes stay walls.
+ */
+function ledgeOK(g: Ground, x0: number, z0: number, x1: number, z1: number, ux: number, uz: number) {
+  const f = jumpClimb.feet;
+  if (f === -Infinity || g.maxSlope === undefined) return false;
+  const h0 = g.height(x0, z0);
+  const px = x1 + ux * 0.25;
+  const pz = z1 + uz * 0.25;
+  const h1 = g.height(x1, z1);
+  const hp = g.height(px, pz);
+  const top = Math.max(h1, hp);
+  if (f < top - 0.02) return false;
+  if (Math.abs(top - h0) > JUMP_LEDGE || Math.abs(Math.min(h1, hp) - h0) > JUMP_LEDGE) return false;
+  const hq = g.height(px + ux * 0.3, pz + uz * 0.3);
+  return Math.abs(hq - hp) <= 0.3 * g.maxSlope + 0.03;
+}
+
 /** Can a walker step from (x0, z0) to (x1, z1)? Only terrains with `maxSlope` refuse steep
- * steps: up a wall, or off a ledge (take the stairs down). */
+ * steps: up a wall, or off a ledge (take the stairs down). A jump may clear low ledges. */
 export function climbable(x0: number, z0: number, x1: number, z1: number) {
   const g = G;
   if (!g || g.maxSlope === undefined) return true;
+  if (walkable(g, g.maxSlope, x0, z0, x1, z1)) return true;
+  const d = Math.hypot(x1 - x0, z1 - z0);
+  return d > 1e-6 && ledgeOK(g, x0, z0, x1, z1, (x1 - x0) / d, (z1 - z0) / d);
+}
+
+function walkable(g: Ground, maxSlope: number, x0: number, z0: number, x1: number, z1: number) {
   // judge the local slope over at least 0.25 m in the direction of travel: a crowd of tiny
   // nudges (each rising less than any threshold) must not walk a body up a wall
   let dx = x1 - x0;
@@ -159,7 +191,7 @@ export function climbable(x0: number, z0: number, x1: number, z1: number) {
   dz = (dz / d) * probe;
   const h0 = g.height(x0, z0);
   const rise = Math.abs(g.height(x0 + dx, z0 + dz) - h0);
-  if (rise > 0.05 && rise > probe * g.maxSlope + 0.02) return false;
+  if (rise > 0.05 && rise > probe * maxSlope + 0.02) return false;
   // and never uphill onto ground steeper than the limit, whatever the angle: slanting across a
   // wall face (a crowd zig-zagging against the tower) would otherwise climb it by switchbacks
   const h1 = g.height(x1, z1);
@@ -167,7 +199,7 @@ export function climbable(x0: number, z0: number, x1: number, z1: number) {
     const e = 0.2;
     const gx = (g.height(x1 + e, z1) - g.height(x1 - e, z1)) / (2 * e);
     const gz = (g.height(x1, z1 + e) - g.height(x1, z1 - e)) / (2 * e);
-    if (Math.hypot(gx, gz) > g.maxSlope * 1.25) return false;
+    if (Math.hypot(gx, gz) > maxSlope * 1.25) return false;
   }
   return true;
 }

@@ -117,7 +117,17 @@ export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | un
 
 /** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
  * that the 2 m block grid can't express. Each map installs its own list (or none). */
-export type Post = { x: number; z: number; r: number };
+export type Post = {
+  x: number;
+  z: number;
+  r: number;
+  /** a low prop's height (m): a jumping player whose feet are higher passes over it.
+   * Absent = blocks at any height (posts, railings, porch posts, blockades). */
+  h?: number;
+};
+/** the local player's feet above the ground while jumping (input/movement.ts); 0 on foot.
+ * Set only around the player's own movement, so enemies are never affected. */
+export const jumpBody = { lift: 0 };
 let postGrid: Map<number, Post[]> | null = null;
 const postKey = (i: number, j: number) => i * 65536 + j;
 export function setPosts(list: Post[] | null) {
@@ -145,7 +155,10 @@ function hitsPost(x: number, z: number, radius: number) {
     for (let j = j0; j <= j1; j++) {
       const a = postGrid.get(postKey(i, j));
       if (!a) continue;
-      for (const p of a) if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+      for (const p of a) {
+        if (p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
+        if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+      }
     }
   return false;
 }
