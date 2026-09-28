@@ -742,8 +742,11 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   const hw = q0.half + 0.15;
   const hh = doorHeight(b);
   const lights: BakeLight[] = [];
-  const wallC = "#bdb9b1";
-  const bandC = "#3f7f5a";
+  // the alpine stairs (timber doors: church tower, chalets) are old stone and timber, with
+  // none of the office signage: no extinguishers, floor plates or EXIT signs
+  const rustic = b.spec.doorStyle === "wood";
+  const wallC = rustic ? "#b9ab93" : "#bdb9b1";
+  const bandC = rustic ? "#5e4630" : "#3f7f5a";
   // uneven light: every lamp its own strength and tint (tired fluorescents among the warm
   // bulkheads), and now and then a dead one
   const rng = (() => {
@@ -791,7 +794,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     const cutA = n === s.laps;
     for (const [c, ya, yz] of [
       [bandC, yb, yb + 0.16],
-      ["#d8b02a", yb - 0.09, yb - 0.05],
+      [rustic ? "#4a3522" : "#d8b02a", yb - 0.09, yb - 0.05],
     ] as const) {
       P.color(c);
       P.box(-W2, -W2 + 0.015, ya, yz, n === 0 ? 0.25 : s.v0, dEnd, "-a+d-d");
@@ -816,7 +819,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       G.flat(-W2, W2, s.v0, dS1, yl - slab, false, 0.7);
       G.wallD(-W2, W2, yl - slab, yl + 0.03, dS1, true);
       // yellow nosing strip on the landing edge
-      G.color("#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#d8b02a");
       G.flat(-W2, W2, dS1 - 0.06, dS1, yl + 0.03, true);
     }
     // the half landing
@@ -835,7 +838,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     if (ly < ceil - 0.15)
       lamp([-W2, -W2 + 0.07, ly, ly + 0.14, s.v0 + 0.5, s.v0 + 1.1], "-a", { a: -W2 + 0.5, y: ly, d: s.v0 + 0.8, r: 1.8, k: 1.05 });
     // a fire extinguisher on its bracket, and its sign, on the landing's +a wall
-    if (n < s.laps) {
+    if (n < s.laps && !rustic) {
       const ex = (n === 0 ? gy : yl) + 0.03;
       const ed = s.v0 + 0.5;
       P.color("#3a3a3c");
@@ -851,7 +854,14 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     }
     const fy = (n === 0 ? gy : yl) + 1.45;
     S.sign.color("#ffffff");
-    if (n < s.laps) {
+    if (rustic) {
+      // the top landing: a timber plaque naming where the stairs lead
+      if (n === s.laps) {
+        P.color("#3a2616");
+        P.box(-W2, -W2 + 0.035, fy, fy + 0.4, s.v0 + 0.15, s.v0 + 1.65, "-a");
+        signA(S.sign, b.spec.windows === "belfry" ? SIGN.BELFRY : SIGN.LOFT, s.v0 + 0.9, fy + 0.02, fy + 0.38, -W2 + 0.055, 1.46, 1);
+      }
+    } else if (n < s.laps) {
       P.color("#f2c230");
       P.box(-W2, -W2 + 0.035, fy, fy + 0.46, s.v0 + 1.25, s.v0 + 1.63, "-a");
       signA(S.sign, SIGN.FLOOR, s.v0 + 1.44, fy + 0.02, fy + 0.44, -W2 + 0.055, 0.36, 1, Math.min(8, n), 10);
@@ -869,9 +879,11 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       P.color("#c8ccd0");
       P.box(0.32, 0.42, yl + 1.02, yl + 1.06, s.v0 + 0.035, s.v0 + 0.09, "b-d");
       // EXIT (down the stairs) over the floor door
-      P.color("#0a6b35");
-      P.box(-0.34, 0.34, yl + 2.25, yl + 2.5, s.v0, s.v0 + 0.035, "b-d");
-      signD(S.sign, SIGN.EXITARROW, 0, yl + 2.27, yl + 2.48, s.v0 + 0.05, 0.64, 1);
+      if (!rustic) {
+        P.color("#0a6b35");
+        P.box(-0.34, 0.34, yl + 2.25, yl + 2.5, s.v0, s.v0 + 0.035, "b-d");
+        signD(S.sign, SIGN.EXITARROW, 0, yl + 2.27, yl + 2.48, s.v0 + 0.05, 0.64, 1);
+      }
     }
   }
   // ---- flights ----
@@ -886,7 +898,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       const dA1 = dS1 + (k + 1) * (s.Lr / s.steps);
       G.color("#aaa69e");
       G.flat(a0, a1, dA0 + 0.05, dA1, ya, true);
-      G.color("#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#d8b02a");
       G.flat(a0, a1, dA0, dA0 + 0.05, ya, true);
       G.color("#9d9991");
       G.wallD(a0, a1, ya - rise - 0.14, ya, dA0, false);
@@ -901,7 +913,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       const dB0 = dN0 - (k + 1) * (s.Lr / s.steps);
       G.color("#aaa69e");
       G.flat(b0, b1, dB0, dB1 - 0.05, yb, true);
-      G.color("#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#d8b02a");
       G.flat(b0, b1, dB1 - 0.05, dB1, yb, true);
       G.color("#9d9991");
       G.wallD(b0, b1, yb - rise - 0.14, yb, dB1, true);
@@ -910,7 +922,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       G.wallD(b0, b1, yb - rise - 0.14, yb - rise, dB0, false);
     }
     // handrails on the outer walls and both faces of the spine
-    P.color("#c23a2a");
+    P.color(rustic ? "#4a3020" : "#c23a2a");
     rail(P, -W2 + 0.06, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
     rail(P, -g - 0.05, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
     rail(P, W2 - 0.06, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
@@ -920,14 +932,14 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   G.color(wallC);
   G.wallD(g, W2, y0, gy + s.h - rise - 0.14, dS1, false);
   // top: guard rail across the pit of the last flight up, bulkhead ceiling and lamp
-  P.color("#c23a2a");
+  P.color(rustic ? "#4a3020" : "#c23a2a");
   P.quad([-W2, topY + 1.02, dS1 + 0.03], [-g, topY + 1.02, dS1 + 0.03], [-g, topY + 1.08, dS1 + 0.03], [-W2, topY + 1.08, dS1 + 0.03]);
   for (const a of [-W2 + 0.1, (-W2 - g) / 2, -g - 0.05]) P.box(a - 0.02, a + 0.02, topY + 0.03, topY + 1.05, dS1, dS1 + 0.06);
   if (b.room) {
     // the stairwell opens into the lookout room: a railing round the opening, open on the
     // top landing's +a side (where you step off)
     const rt = topY + 1.05;
-    P.color("#c23a2a");
+    P.color(rustic ? "#4a3020" : "#c23a2a");
     const posts = new Set<string>(); // a corner post is shared by two runs: draw it once
     const railRun = (a0: number, d0: number, a1: number, d1: number) => {
       const len = Math.hypot(a1 - a0, d1 - d0);
@@ -972,7 +984,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   S.glow.box(-0.3, 0.3, hallH - 0.06, hallH, (0.25 + s.v0) / 2 - 0.2, (0.25 + s.v0) / 2 + 0.2, "t");
   lights.push({ a: 0, y: hallH - 0.3, d: (0.25 + s.v0) / 2 + 0.3, r: 1.8, k: 0.9, col: "#ffd29a" });
   // EXIT over the street door, inside
-  if (hallH - (gy + hh) > 0.34) {
+  if (hallH - (gy + hh) > 0.34 && !rustic) {
     P.color("#0a6b35");
     P.box(-0.34, 0.34, gy + hh + 0.05, gy + hh + 0.29, 0.25, 0.285, "b-d");
     signD(S.sign, SIGN.EXIT, 0, gy + hh + 0.07, gy + hh + 0.27, 0.3, 0.64, 1);

@@ -71,3 +71,74 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
   }
   return out;
 }
+
+/** the prop list mapPosts reads for this map (its entries are moved in place) */
+function sourceProps(city: CityLayout | null, western: WesternLayout | null): { x: number; z: number; k: string }[] {
+  if (city && "alpine" in city) return (city as AlpineLayout).alpine.props;
+  if (isBeach(city)) return city.beach.props;
+  if (western) return western.props;
+  return city ? city.props : [];
+}
+
+type Door = { x: number; z: number; facing: 0 | 1 | 2 | 3 };
+const NRM = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+] as const;
+/** a prop (collision up to ~0.65 m) in a door's approach: 1.3 m either side of its centre
+ * line, from the wall out to 3.5 m */
+function inDoorway(d: Door, x: number, z: number) {
+  const [nx, nz] = NRM[d.facing];
+  const out = (x - d.x) * nx + (z - d.z) * nz;
+  const lat = (x - d.x) * nz - (z - d.z) * nx;
+  return out > -1.2 && out < 4.2 && Math.abs(lat) < 1.95 ? lat : null;
+}
+
+/**
+ * Building access doors win over thin props: a lamp post, bench or hydrant standing in a
+ * door's approach is moved sideways along the facade (never made non-solid). Call before the
+ * map's meshes are built and before setPosts(mapPosts(...)). `solid` = is that spot inside a
+ * wall or building. Returns how many props moved (and how many had nowhere to go: removed).
+ */
+export function movePropsFromDoors(
+  city: CityLayout | null,
+  western: WesternLayout | null,
+  doors: readonly Door[],
+  solid: (x: number, z: number) => boolean,
+) {
+  if (!doors.length) return { moved: 0, removed: 0 };
+  const props = sourceProps(city, western);
+  const free = (x: number, z: number) => !solid(x, z) && doors.every((d) => inDoorway(d, x, z) === null);
+  let moved = 0;
+  const drop = new Set<object>();
+  for (const p of props) {
+    for (const d of doors) {
+      const lat = inDoorway(d, p.x, p.z);
+      if (lat === null) continue;
+      const [nx, nz] = NRM[d.facing];
+      const out = (p.x - d.x) * nx + (p.z - d.z) * nz;
+      const s = lat >= 0 ? 1 : -1;
+      let done = false;
+      for (const l of [2.1 * s, -2.1 * s, 2.8 * s, -2.8 * s, 3.6 * s, -3.6 * s]) {
+        const x = d.x + nx * out + nz * l;
+        const z = d.z + nz * out - nx * l;
+        if (!free(x, z)) continue;
+        p.x = x;
+        p.z = z;
+        done = true;
+        break;
+      }
+      if (done) moved++;
+      else drop.add(p);
+      break;
+    }
+  }
+  if (drop.size) {
+    const keep = props.filter((p) => !drop.has(p));
+    props.length = 0;
+    props.push(...keep);
+  }
+  return { moved, removed: drop.size };
+}

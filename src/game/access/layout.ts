@@ -562,10 +562,3 @@ export function doorwayClear(posts: readonly PostLike[], x: number, z: number, f
   }
   return true;
 }
-
-/** the props that are left once every access door's approach is kept clear (a door whose
- * adapter could not avoid a lamp post: the post keeps its look, loses its collision) */
-export function postsClearOfDoors<P extends PostLike>(posts: P[], list: readonly AccessBuilding[]): P[] {
-  if (!list.length) return posts;
-  return posts.filter((p) => list.every((b) => doorwayClear([p], b.spec.door.x, b.spec.door.z, b.spec.door.facing)));
-}

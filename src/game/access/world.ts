@@ -39,6 +39,12 @@ export const OPENING = 3;
 export const DOOR_T = 1.1; // seconds for the doors to slide
 const HOLD_T = 1.4; // an occupied car waits this long with its doors open, then goes
 const ARRIVE_T = 5; // ...plus this long after an arrival, so riders can step out
+const DWELL_T = 3.5; // an empty car stays open at least this long before answering a call
+// the call spot: standing at the call button beside the landing doors (build.ts
+// landingDoorFrame: the plate at a 1.15..1.33 on the core front), not anywhere near the doors
+const CALL_A = 1.24;
+const CALL_HALF = 0.6;
+const CALL_DEPTH = 1.2;
 
 export type Car = {
   phase: number;
@@ -47,6 +53,9 @@ export type Car = {
   from: 0 | 1;
   t: number;
   hold: number;
+  /** host only: per floor, may a player at the call button call the car? A call is served
+   * once: whoever is still standing there after the car has come must step away to call again */
+  armed: [boolean, boolean];
   /** events for the renderer / audio: bumped on each departure and arrival */
   departs: number;
   arrivals: number;
@@ -98,7 +107,7 @@ export function portalDoor(b: number, which: 0 | 1) {
 }
 
 function newCar(): Car {
-  return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, departs: 0, arrivals: 0 };
+  return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, armed: [true, true], departs: 0, arrivals: 0 };
 }
 
 /** A way up a map built by hand (Dry Gulch's saloon and belfry stairs): pingable and on the
@@ -274,8 +283,14 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number 
     const inDoor = here.some(
       (h) => Math.abs(h.a) < CAR_W / 2 && h.d > E.coreFront - 0.45 && h.d < E.car.d0 + BODY_R + 0.05 && (h.code === AZ_CAR || h.code === (c.level ? AZ_UP : AZ_DOWN)),
     );
-    const other = (c.level ? AZ_DOWN : AZ_UP) as number;
-    const called = here.some((h) => h.code === other && h.d > E.coreFront - 2.4 && Math.abs(h.a) < 1.9);
+    const atButton = (code: number) =>
+      here.some((h) => h.code === code && h.d > E.coreFront - CALL_DEPTH && h.d < E.coreFront + 0.05 && Math.abs(h.a - CALL_A) < CALL_HALF);
+    const callAt = [atButton(AZ_DOWN), atButton(AZ_UP)] as const;
+    for (const f of [0, 1] as const) if (!callAt[f]) c.armed[f] = true; // stepped away: re-armed
+    // standing at the button of the floor where the car is open: that call is served
+    if (c.phase === IDLE && callAt[c.level]) c.armed[c.level] = false;
+    const other = (1 - c.level) as 0 | 1;
+    const called = callAt[other] && c.armed[other];
     if (c.phase === IDLE) {
       if (inCar.length > 0) {
         // riders who just arrived get time to walk out (hold starts negative on arrival);
@@ -284,7 +299,8 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number 
         if (c.hold > HOLD_T && !inDoor) start(c, CLOSING);
       } else {
         c.hold = 0;
-        if (called) start(c, CLOSING);
+        // an empty car stays open a while (c.t counts from the doors opening), then answers
+        if (called && c.t >= DWELL_T && !inDoor) start(c, CLOSING);
       }
     } else if (c.phase === CLOSING) {
       if (inDoor && c.t < DOOR_T * 0.9) {

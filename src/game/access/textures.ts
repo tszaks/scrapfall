@@ -9,7 +9,7 @@ const canvas = (w: number, h: number) => {
   return c;
 };
 
-/** sign atlas rows: 10 rows of 128 px in a 1024 x 1280 canvas */
+/** sign atlas rows: 12 rows of 128 px in a 1024 x 1536 canvas */
 export const SIGN = {
   ELEVATOR: 0,
   STAIRS: 1,
@@ -21,8 +21,10 @@ export const SIGN = {
   STAIRUP: 7,
   FIRE: 8, // "FIRE EXTINGUISHER"
   EXITARROW: 9, // "EXIT ←" for the stairwell
+  BELFRY: 10, // carved timber plaques for the alpine stairs' top landing
+  LOFT: 11,
 } as const;
-const ROWS = 10;
+const ROWS = 12;
 
 /** uv rectangle [u0 v0 u1 v1] of a sign row (or one cell of a row split in n) */
 export function signUV(row: number, cell = 0, n = 1): [number, number, number, number] {
@@ -105,6 +107,15 @@ export function signTexture() {
   g.fillStyle = "#b3161b";
   g.fillRect(0, row(8), 1024, 128);
   text("FIRE EXTINGUISHER", 512, row(8) + 66, 78, "#ffffff");
+  // timber plaques (alpine stairs): pale lettering on dark wood
+  for (const [r, t] of [
+    [SIGN.BELFRY, "BELFRY"],
+    [SIGN.LOFT, "LOFT"],
+  ] as const) {
+    panel(r, "#5a3b22", "#2e1d10");
+    arrowUp(120, row(r) + 64, 38, "#e9d3a4");
+    text(t, 560, row(r) + 68, 96, "#f0dcb0");
+  }
   // EXIT with an arrow pointing down the stairs
   g.fillStyle = "#0a6b35";
   g.fillRect(0, row(9), 1024, 128);

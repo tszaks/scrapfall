@@ -275,7 +275,6 @@ export const THEMES: Theme[] = [
   },
   {
     name: "Whiteout Pass",
-    wip: true,
     sky: "#9fb4d6",
     ground: "#eef3fa",
     grid: ["#dfe8f3", "#e8eef6"],

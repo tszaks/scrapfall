@@ -11,7 +11,7 @@ import {
 
 import { THEMES, layoutOf, type Theme } from "./themes";
 import { isBeach } from "./beach/beachLayout";
-import { mapPosts } from "./posts";
+import { mapPosts, movePropsFromDoors } from "./posts";
 import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
@@ -48,7 +48,6 @@ import { beachAccess } from "./access/beachAccess";
 import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
-import { postsClearOfDoors } from "./access/layout";
 import {
   accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
   encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
@@ -4381,8 +4380,16 @@ export function Game() {
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
-    // (a door no adapter could keep clear, e.g. a city hydrant: that prop loses its collision)
-    setPosts(postsClearOfDoors(posts0, accessList0 ?? []));
+    // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
+    // moves along the facade and stays solid (before the map's meshes are built from it)
+    setPosts(null);
+    movePropsFromDoors(
+      level.city,
+      level.western ?? null,
+      (accessList0 ?? []).map((b) => b.spec.door),
+      (x, z) => blocked(level.blocks, x, z, 0.35),
+    );
+    setPosts(mapPosts(level.city, level.western ?? null));
     let gaps: Gap[] = [];
     if (sealed && !coop) {
       gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
