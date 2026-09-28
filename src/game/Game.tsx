@@ -1410,6 +1410,10 @@ function World({
   const ammo = useRef<Record<Weapon, number>>(Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<Weapon, number>);
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
+  /** wave on which a gun ran dry, so it can't come straight back */
+  const depletedWave = useRef<Partial<Record<Weapon, number>>>({});
+  /** waves in a row with no gun drop (2 dry waves => the next one drops two) */
+  const dryWaves = useRef(0);
   const bob = useRef(0);
   const sensXRef = useRef(sensX);
   const sensYRef = useRef(sensY);
@@ -1762,10 +1766,11 @@ function World({
       return;
     }
     if (ammo.current[w] <= 0) {
+      // a dry gun is gone: it does NOT drop back into the arena right away
       owned.current.delete(w);
       equip("pistol");
-      if (pickup.current.active) lostQueue.current.push(w);
-      else placePickup(w);
+      depletedWave.current[w] = wave.current;
+      if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     } else {
       syncInv();
     }
