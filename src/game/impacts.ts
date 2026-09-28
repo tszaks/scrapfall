@@ -238,7 +238,7 @@ export function classify(prev: THREE.Vector3, pos: THREE.Vector3, vel: THREE.Vec
     out.p.lerpVectors(prev, pos, lo);
     P.lerpVectors(prev, pos, hi);
     // came down onto a low block's top (it was already over the footprint): the hole faces up
-    if (!solidAt(prev) && env.solid(prev.x, prev.z) && !env.solid(prev.x, prev.z, prev.y)) out.n.set(0, 1, 0);
+    if (solidAt(FACE.set(prev.x, out.p.y - 0.06, prev.z))) out.n.set(0, 1, 0);
     // which side: moving only along x into the solid? (height-aware, like the hit itself)
     else if (solidAt(FACE.set(P.x, out.p.y, out.p.z))) out.n.set(-Math.sign(vel.x) || 1, 0, 0);
     else out.n.set(0, 0, -Math.sign(vel.z) || 1);

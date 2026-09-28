@@ -11,7 +11,7 @@
 // FALL_TABLE below (straight lines between rows). FALL_DOWN_FLOORS and up: instantly DOWN
 // (co-op: bleeding out, revivable; solo: dead, unless SOLO_FALL_DOWN_KILLS is switched off).
 import { blocked, type Block } from "../level";
-import { groundY } from "../terrain";
+import { downhill, groundY, steepAt } from "../terrain";
 import { accessList, player as accPlayer, roofAt } from "../access/world";
 import { moveState, startFall } from "./movement";
 
@@ -130,4 +130,30 @@ export function landZone(x: number, z: number) {
       climb: 0,
     });
   else if (accPlayer.zone === 2) Object.assign(accPlayer, { zone: 0, b: -1 });
+}
+
+/**
+ * Landed on the face of a ledge (a fall past a balcony edge that ran out of forward speed):
+ * slide straight down the slope to the first spot you can stand on, so nobody is stranded
+ * on ground too steep to walk off.
+ */
+export function slideOffFace(pos: { x: number; z: number }, blocks: Block[]) {
+  if (!steepAt(pos.x, pos.z)) return false;
+  let x = pos.x;
+  let z = pos.z;
+  for (let k = 0; k < 30; k++) {
+    const d = downhill(x, z);
+    if (!d) break;
+    const nx = x + d[0] * 0.1;
+    const nz = z + d[1] * 0.1;
+    if (blocked(blocks, nx, nz, BODY)) break;
+    x = nx;
+    z = nz;
+    if (!steepAt(x, z)) {
+      pos.x = x;
+      pos.z = z;
+      return true;
+    }
+  }
+  return false;
 }

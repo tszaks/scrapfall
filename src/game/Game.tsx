@@ -66,7 +66,7 @@ import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
 import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
-import { fallDamage, landZone, tryRoofExit } from "./input/fall";
+import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
 import { clearControls, installControls, padHooks, padLook, padOut, rumbleFor, sprintPose, stepMove, stepPadActions, takeJump } from "./input/controls";
 import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
@@ -1799,7 +1799,8 @@ function World({
     fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])));
     const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
     fxEnv({
-      solid: (x, z, y) => (y === undefined ? blocked(blocks, x, z, 0.05) : shotBlocked(blocks, x, y, z)),
+      // (with a height: the same world test the bullets use, so holes land where rounds stop)
+      solid: (x, z, y) => (y === undefined ? blocked(blocks, x, z, 0.05) : shotStop(blocks, x, y, z)),
       car: (x, y, z) => (city !== null || western !== null) && hitsTraffic(x, y, z),
       half: () => HALF,
       waterZ: city ? city.waterZ : null,
@@ -2976,6 +2977,7 @@ function World({
     // mid-jump, low props (benches, barrels) and flat ledges under the feet don't block
     jumpBody.lift = moveState.airborne ? moveState.lift : 0;
     jumpClimb.feet = moveState.airborne ? moveState.feet : -Infinity;
+    jumpClimb.top = moveState.airborne ? moveState.fallTop : -Infinity;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
@@ -3036,6 +3038,7 @@ function World({
     }
     jumpBody.lift = 0;
     jumpClimb.feet = -Infinity;
+    jumpClimb.top = -Infinity;
 
     // enemies are solid: push the player back out of any body it walked into and let it slide
     // round. Walls win (an enemy can never shove you into a building). Every client resolves
@@ -3093,6 +3096,7 @@ function World({
       if (moveState.landed >= 0) {
         camGround.current = gy;
         if (accessActive()) landZone(cam.position.x, cam.position.z); // a lower roof, or the street
+        slideOffFace(cam.position, blocks); // never left standing on a ledge's face
         // fall damage by the drop (input/fall.ts FALL_TABLE); a downing fall downs you
         const fd = spectating ? 0 : fallDamage(moveState.landed, stats.current.maxHp, healthRef.current, !netRef.current);
         if (moveState.landed > 2.5) {
