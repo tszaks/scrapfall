@@ -7900,7 +7900,7 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
+        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6">
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             {!started && !ended && !paused && (
               <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
@@ -8184,8 +8184,8 @@ export function Game() {
               </div>
             }
             {showSettings && (
-              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6] sm:items-center">
-                <div className="w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
+              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6]">
+                <div className="my-auto w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
                   <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
                     <button
