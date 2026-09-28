@@ -81,10 +81,10 @@ import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, type PingWorld } from "./ping";
 import { REVIVE_HP, reviveInterrupted, squad } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
-import { QualityGovernor, liveDpr } from "./QualityGovernor";
+import { QualityGovernor } from "./QualityGovernor";
 import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
-import { antialiasAtLoad } from "./quality";
+import { antialiasAtLoad, liveDpr } from "./quality";
 import { QualitySettings } from "./QualitySettings";
 
 // hidden subtrees skip the per-frame world-matrix walk (sceneOpt.ts)

@@ -96,6 +96,14 @@ type State = { pref: QualityPref; tier: Tier; spec: QualitySpec };
 const initialPref = readPref();
 const initialTier: Tier = initialPref === "auto" ? "high" : initialPref;
 let state: State = { pref: initialPref, tier: initialTier, spec: specFor(initialTier, initialPref) };
+let dprNow = Math.round(state.spec.dprMax * 100) / 100;
+/** the resolution the governor picked (the Canvas's `dpr` prop) */
+export function liveDpr() {
+  return dprNow;
+}
+export function setLiveDpr(v: number) {
+  dprNow = v;
+}
 /** antialiasing is fixed when the WebGL context is made: the value the Canvas mounted with */
 export const antialiasAtLoad = state.spec.antialias;
 

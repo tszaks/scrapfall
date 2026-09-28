@@ -8,20 +8,15 @@
 // for half a minute so the governor doesn't flip-flop. On a 120 Hz display it also trims the
 // resolution (but not below 1.3) when it can't keep up with the display.
 //
-// The Canvas reads `liveDpr()` for its `dpr` prop, so a re-render of the game never resets
-// what the governor picked (react-three-fiber re-applies the prop on every render).
+// The Canvas reads `liveDpr()` (quality.ts) for its `dpr` prop, so a re-render of the game
+// never resets what the governor picked (react-three-fiber re-applies the prop on every render).
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 
 import { setParticleScale } from "./fxCore";
 import { setRoomsEnabled } from "./interiors";
-import { quality, setAutoTier, useQuality, type Tier } from "./quality";
+import { liveDpr, quality, setAutoTier, setLiveDpr, useQuality, type Tier } from "./quality";
 
-let dprNow = Math.round(quality().spec.dprMax * 100) / 100;
-/** the resolution the governor wants (the Canvas's `dpr` prop) */
-export function liveDpr() {
-  return dprNow;
-}
 
 const STEP_DOWN = 0.15;
 const STEP_UP = 0.1;
@@ -29,7 +24,7 @@ const MISS_60 = 18.5; // ms: a frame that missed a 60 Hz vsync
 const TIERS: Tier[] = ["low", "medium", "high"];
 
 type Log = { t: number; what: string };
-const debug = { dpr: dprNow, tier: quality().tier, vsync: 16.7, miss: 0, cpu: 0, log: [] as Log[] };
+const debug = { dpr: liveDpr(), tier: quality().tier, vsync: 16.7, miss: 0, cpu: 0, log: [] as Log[] };
 if (typeof window !== "undefined") (window as unknown as { __rsQuality?: unknown }).__rsQuality = debug;
 
 export function QualityGovernor() {
@@ -85,8 +80,8 @@ export function QualityGovernor() {
 
   const apply = (d: number, why: string) => {
     const v = Math.round(d * 100) / 100;
-    if (v === dprNow) return;
-    dprNow = v;
+    if (v === liveDpr()) return;
+    setLiveDpr(v);
     debug.dpr = v;
     debug.log.push({ t: +st.current.clock.toFixed(1), what: `${why} dpr ${v}` });
     if (debug.log.length > 60) debug.log.shift();
@@ -100,7 +95,7 @@ export function QualityGovernor() {
     debug.tier = q.tier;
     setRoomsEnabled(spec.rooms);
     setParticleScale(spec.particles);
-    const want = pref === "auto" ? Math.min(spec.dprMax, Math.max(spec.dprMin, dprNow)) : spec.dprMax;
+    const want = pref === "auto" ? Math.min(spec.dprMax, Math.max(spec.dprMin, liveDpr())) : spec.dprMax;
     apply(want, `tier ${q.tier}`);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps -- apply only reads refs
 
@@ -135,7 +130,7 @@ export function QualityGovernor() {
       S.cool--;
       return;
     }
-    const bad = miss60 > 0.08 || (hiHz && missHi > 0.3 && dprNow > Math.max(spec.dprMin, 1.3));
+    const bad = miss60 > 0.08 || (hiHz && missHi > 0.3 && liveDpr() > Math.max(spec.dprMin, 1.3));
     const good = miss60 < 0.015 && (!hiHz || missHi < 0.08);
     S.bad = bad ? S.bad + 1 : 0;
     S.good = good ? S.good + 1 : 0;
@@ -143,23 +138,23 @@ export function QualityGovernor() {
       S.bad = 0;
       // failing right after a step up: that level is too much for now
       if (S.clock - S.lastUp < 10) {
-        S.ceiling = dprNow;
+        S.ceiling = liveDpr();
         S.ceilingUntil = S.clock + 30;
       }
       const hard = miss60 > 0.08;
       const cpuBound = cpuMed > 13;
       if (cpuBound && hard && tier !== "low") tierDown(tier, `cpu ${cpuMed.toFixed(1)}ms`); else if (cpuBound) {
         // nothing left to trade that would help
-      } else if (dprNow - STEP_DOWN >= spec.dprMin - 1e-3) apply(dprNow - STEP_DOWN, "slow");
-      else if (dprNow > spec.dprMin + 1e-3) apply(spec.dprMin, "slow");
+      } else if (liveDpr() - STEP_DOWN >= spec.dprMin - 1e-3) apply(liveDpr() - STEP_DOWN, "slow");
+      else if (liveDpr() > spec.dprMin + 1e-3) apply(spec.dprMin, "slow");
       else if (hard && tier !== "low") tierDown(tier, "slow at the lowest resolution");
     } else if (S.good >= 4) {
       const ceil = S.clock < S.ceilingUntil ? S.ceiling - 0.01 : 99;
-      if (dprNow + 0.01 < spec.dprMax && dprNow + STEP_UP < ceil) {
+      if (liveDpr() + 0.01 < spec.dprMax && liveDpr() + STEP_UP < ceil) {
         S.good = 0;
         S.lastUp = S.clock;
-        apply(Math.min(spec.dprMax, dprNow + STEP_UP), "headroom");
-      } else if (dprNow + 0.01 >= spec.dprMax && tier !== "high" && S.good >= 10 && S.clock - S.tierAt > S.tierWait) {
+        apply(Math.min(spec.dprMax, liveDpr() + STEP_UP), "headroom");
+      } else if (liveDpr() + 0.01 >= spec.dprMax && tier !== "high" && S.good >= 10 && S.clock - S.tierAt > S.tierWait) {
         S.good = 0;
         S.lastUp = S.clock;
         S.tierAt = S.clock;
