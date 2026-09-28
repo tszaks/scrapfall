@@ -26,13 +26,15 @@ export function GunView({
   mods,
   color,
   body,
+  animate,
 }: {
   w: GunId;
   mods?: PistolMods | undefined;
   color: string;
   body: string;
+  animate?: boolean | undefined;
 }) {
-  const view = mods !== undefined; // first person (the pickup and the panel pass no mods)
+  const view = animate ?? mods !== undefined; // first person (the pickup and the panel pass no mods)
   // test hook (like window.__rs): contact sheets can force pistol mod looks without buying perks
   const forced = view ? (globalThis as { __artGunMods?: PistolMods }).__artGunMods : undefined;
   const key = w === "pistol" ? modKey(forced ?? mods) : "";
@@ -169,10 +171,11 @@ export function GunView({
     artSet(mats.pulse, {
       glow: 1 + 2.4 * Math.exp(-Math.max(0, since) * 7) + Math.sin(t * 5) * 0.15,
     });
-  });
+  }, -2); // Pose the animated child before the simulation snapshots a shot.
 
   return (
     <group ref={root}>
+      <object3D name={`gun-muzzle:${w}`} position={g.muzzle} />
       <mesh geometry={g.body} material={mats.main} />
       {g.parts.map((p, i) => (
         <group

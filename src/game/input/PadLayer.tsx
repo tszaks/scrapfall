@@ -112,7 +112,7 @@ const focusOn = (el: HTMLElement) => {
 };
 
 function menuFrame(rep: { dir: string; next: number }) {
-  if(controlState.capturing&&!controlState.captureMenu)return;
+  if (controlState.capturing && !controlState.captureMenu) return;
   const p = pollPad();
   if (!p.connected) return;
   const root = topMenu();

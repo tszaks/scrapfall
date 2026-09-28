@@ -62,10 +62,17 @@ import {
   stepWheel,
   leaveWheel,
 } from "./beach/wheelRide";
-import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
+import {
+  PlayerView,
+  ViewSettings,
+  shoulderAim,
+  shoulderView,
+  playerMuzzle,
+  type PreparePlayer,
+} from "./PlayerView";
 import { getViewMode } from "./viewMode";
-import { setWorldMuzzle } from "./projectiles";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { setLocalMuzzle } from "./projectiles";
+import { Canvas, useFrame, useThree, type RootState } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { firstWorldHit, firstShotImpact, type ShotTarget } from "./enemyProjectiles";
@@ -243,6 +250,7 @@ import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
 import { hasArtBoss } from "./art/robots/bosses";
 import { hasArtSpecial } from "./art/robots/specials";
 import { GunView } from "./art/GunView";
+import { readGunMuzzle } from "./art/muzzle";
 import { gunKick, gunReload } from "./art/gunFx";
 import {
   bomberInputs,
@@ -2213,10 +2221,10 @@ function addGunRim(m: THREE.Material) {
   m.needsUpdate = true;
 }
 
-function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
+function GunModel({ w, mods, animate }: { w: Weapon; mods?: ModLooks; animate?: boolean }) {
   // detailed PBR models, first-person animation and the pistol mod looks live in art/
   const g = GUNS[w];
-  return <GunView w={w} mods={mods} color={g.color} body={g.body} />;
+  return <GunView w={w} mods={mods} animate={animate} color={g.color} body={g.body} />;
 }
 
 function World({
@@ -2330,6 +2338,9 @@ function World({
   const trigger = useRef(false);
   const fireCd = useRef(0);
   const viewModel = useRef<THREE.Group>(null);
+  const playerPose = useRef<PreparePlayer | null>(null);
+  const shotMuzzle = useRef(new THREE.Vector3());
+  const posedAt = useRef(-1);
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({
     x: 0,
@@ -3214,6 +3225,7 @@ function World({
   };
 
   const equip = (w: Weapon) => {
+    burstQueue.current = 0;
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
@@ -3648,9 +3660,12 @@ function World({
     camera.getWorldDirection(FORWARD);
     const third = getViewMode() === "third";
     const pos = third
-      ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds)
+      ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds, shotMuzzle.current)
       : camera.position.clone().addScaledVector(FORWARD, 0.6);
-    if (!third) pos.y -= 0.25;
+    if (!third) {
+      pos.y -= 0.25;
+      playerMuzzle(camera, pos, outOfBounds, pos.clone());
+    }
     if (third)
       shoulderAim(
         camera,
@@ -3671,7 +3686,6 @@ function World({
           }),
         FORWARD,
       );
-    setWorldMuzzle(third ? pos : null);
     // seeded spread so co-op viewers can replay the exact same pellets
     const seed = (Math.random() * 1e9) | 0;
     const spread = rng(seed);
@@ -4064,6 +4078,41 @@ function World({
   const aimVisible = (t: { x: number; z: number }) =>
     clearLine(blocks, camera.position.x, camera.position.z, t.x, t.z, 0.1);
 
+  // The same posed transforms are sampled for emission and rendered for this frame.
+  // A new recoil impulse starts affecting the model on the following frame.
+  const poseWeapons = (state: RootState, delta: number) => {
+    if (posedAt.current === state.clock.elapsedTime) return;
+    posedAt.current = state.clock.elapsedTime;
+    const cam = state.camera;
+    recoil.current = Math.max(0, recoil.current - delta * 6);
+    const v = viewModel.current;
+    if (!v) return;
+    v.visible = !deadRef.current && getViewMode() === "first"; // spectators carry no weapon
+
+    v.position.copy(cam.position);
+    v.quaternion.copy(cam.quaternion);
+    const sway = bobAmt.current;
+    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
+    v.translateY(
+      -0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03,
+    );
+    v.translateZ(-0.75 + recoil.current * 0.08);
+    v.rotateX(recoil.current * 0.15);
+    sprintPose(v); // lowered while sprinting, raised for a tactical sprint
+    // the gun joins the transparent queue at the very end, after a depth clear (see below)
+    v.traverse((o) => {
+      if (o.renderOrder < 999) o.renderOrder = 1000;
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
+      if (m && !Array.isArray(m)) addGunRim(m);
+    });
+    const rig = playerPose.current?.(cam, state.clock.elapsedTime, delta) ?? null;
+    const source = getViewMode() === "third" ? rig : v;
+    if (!readGunMuzzle(source, shotMuzzle.current, weapon.current))
+      shotMuzzle.current.copy(cam.position);
+    setLocalMuzzle(shotMuzzle.current, getViewMode() === "third");
+  };
+
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
@@ -4160,35 +4209,6 @@ function World({
       const want = touchInput.pick as Weapon;
       touchInput.pick = null;
       if (owned.current.has(want)) equip(want);
-    }
-
-    fireCd.current -= delta;
-    if (burstQueue.current > 0 && !spectating) {
-      burstTimer.current -= delta;
-      if (burstTimer.current <= 0) {
-        burstQueue.current--;
-        burstTimer.current = 0.07;
-        if (ammo.current.pistol > 0) {
-          spit();
-          ammo.current.pistol--;
-          onAmmo(ammo.current.pistol);
-        } else {
-          burstQueue.current = 0;
-        }
-      }
-    } else if (
-      (trigger.current || touchInput.fire || padOut.fire) &&
-      canFire() &&
-      !spectating &&
-      fireCd.current <= 0
-    ) {
-      const w = weapon.current;
-      fire();
-      rumbleFor.fire(GUNS[w].damage, GUNS[w].count, !!GUNS[w].blast);
-      // the sidearm always fires at its stock cadence; fire-rate perks skip it
-      fireCd.current =
-        (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate) *
-        (overdrive.current > 0 ? 0.5 : 1);
     }
 
     // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
@@ -4544,6 +4564,38 @@ function World({
         slide.current.z = 0;
       }
       if (!wasAboard && wheelRide.cabin >= 0) showToast("FERRIS WHEEL · ENJOY THE FULL CIRCUIT");
+    }
+
+    poseWeapons(state, delta);
+
+    fireCd.current -= delta;
+    if (burstQueue.current > 0 && !spectating && held === weapon.current) {
+      burstTimer.current -= delta;
+      if (burstTimer.current <= 0) {
+        burstQueue.current--;
+        burstTimer.current = 0.07;
+        if (ammo.current.pistol > 0) {
+          spit();
+          ammo.current.pistol--;
+          onAmmo(ammo.current.pistol);
+        } else {
+          burstQueue.current = 0;
+        }
+      }
+    } else if (
+      (trigger.current || touchInput.fire || padOut.fire) &&
+      canFire() &&
+      held === weapon.current &&
+      !spectating &&
+      fireCd.current <= 0
+    ) {
+      const w = weapon.current;
+      fire();
+      rumbleFor.fire(GUNS[w].damage, GUNS[w].count, !!GUNS[w].blast);
+      // the sidearm always fires at its stock cadence; fire-rate perks skip it
+      fireCd.current =
+        (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate) *
+        (overdrive.current > 0 ? 0.5 : 1);
     }
 
     // minimap feed (the HUD reads it)
@@ -6210,11 +6262,10 @@ function World({
     }
   });
 
-  // runs after the main frame so the gun uses this frame's final camera pose
+  // Effects run after simulation and remote avatar poses, before PlayerView renders.
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
-    recoil.current = Math.max(0, recoil.current - delta * 6);
     markMeshes.current.forEach((g, i) => {
       if (!g) return;
       const pd = pending.current[i];
@@ -6222,30 +6273,10 @@ function World({
       g.visible = show;
       if (pd) g.position.set(pd.x, groundY(pd.x, pd.z), pd.z);
     });
+    poseWeapons(state, delta);
     const v = viewModel.current;
-    if (!v) return;
-    v.visible = !deadRef.current && getViewMode() === "first"; // spectators carry no weapon
-
-    v.position.copy(cam.position);
-    v.quaternion.copy(cam.quaternion);
-    const sway = bobAmt.current;
-    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
-    v.translateY(
-      -0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03,
-    );
-    v.translateZ(-0.75 + recoil.current * 0.08);
-    v.rotateX(recoil.current * 0.15);
-    sprintPose(v); // lowered while sprinting, raised for a tactical sprint
-    // the gun joins the transparent queue at the very end, after a depth clear (see below)
-    v.traverse((o) => {
-      if (o.renderOrder < 999) o.renderOrder = 1000;
-      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
-      if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
-      if (m && !Array.isArray(m)) addGunRim(m);
-    });
-    setWorldMuzzle(getViewMode() === "third" ? playerMuzzle(cam, TMP_DIR, outOfBounds) : null);
-    fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
-  });
+    fxFrame(delta, cam, v, bullets.current);
+  }, 0.5);
 
   return (
     <>
@@ -6566,6 +6597,7 @@ function World({
         <GunModel w={held} mods={renderStats} />
       </group>
       <PlayerView
+        prepare={playerPose}
         active={locked && !gameOver}
         hidden={deadRef}
         look={look}
@@ -6575,7 +6607,7 @@ function World({
         airborne={() => moveState.airborne}
         stop={outOfBounds}
       >
-        <GunModel w={held} />
+        <GunModel w={held} mods={renderStats} animate={false} />
       </PlayerView>
       <RemotePlayers
         remotes={remotes}

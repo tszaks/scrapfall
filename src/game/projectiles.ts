@@ -1,8 +1,5 @@
+import { readGunMuzzle, remoteGunRoots } from "./art/muzzle";
 import { firstWorldHit } from "./enemyProjectiles";
-import { wheelWorld, wheelEye } from "./beach/wheelRide";
-import { remoteFloorY } from "./access/world";
-import { alpine } from "./alpine/weather";
-import { riderEye } from "./alpine/ride";
 import * as THREE from "three";
 import { groundY, shotHits } from "./terrain";
 
@@ -224,7 +221,6 @@ type Look = {
   power: number;
   kick: number;
   flash: { w: number; spikes: number; len: number; col: number; smoke: number; life: number };
-  muzzle: [number, number];
 };
 const LOOKS: Record<VisKind, Look> = {
   [VK.PISTOL]: {
@@ -239,7 +235,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1,
     kick: 0.01,
     flash: { w: 0.24, spikes: 4, len: 0.26, col: 0xffb050, smoke: 0, life: 0.05 },
-    muzzle: [0, -0.34],
   },
   [VK.SCATTER]: {
     geo: "pellet",
@@ -253,7 +248,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.6,
     kick: 0.035,
     flash: { w: 0.55, spikes: 7, len: 0.55, col: 0xffb040, smoke: 4, life: 0.06 },
-    muzzle: [0, -0.62],
   },
   [VK.SMG]: {
     geo: "bullet",
@@ -267,7 +261,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.7,
     kick: 0.005,
     flash: { w: 0.2, spikes: 3, len: 0.2, col: 0xffd890, smoke: 0, life: 0.035 },
-    muzzle: [0, -0.56],
   },
   [VK.RAIL]: {
     geo: "slug",
@@ -281,7 +274,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 2,
     kick: 0.03,
     flash: { w: 0.4, spikes: 0, len: 0, col: 0xe04bff, smoke: 0, life: 0.08 },
-    muzzle: [0, -0.72],
   },
   [VK.CANNON]: {
     geo: "shell",
@@ -295,7 +287,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 3,
     kick: 0.06,
     flash: { w: 0.7, spikes: 6, len: 0.65, col: 0xff7a30, smoke: 5, life: 0.08 },
-    muzzle: [0, -0.56],
   },
   [VK.REBOUND]: {
     geo: "orbGreen",
@@ -309,7 +300,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.4,
     kick: 0.014,
     flash: { w: 0.42, spikes: 0, len: 0, col: 0x7cff4f, smoke: 0, life: 0.07 },
-    muzzle: [0.06, -0.44],
   },
   [VK.HARPOON]: {
     geo: "harpoon",
@@ -323,7 +313,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.6,
     kick: 0.02,
     flash: { w: 0.16, spikes: 0, len: 0, col: 0xfff0d0, smoke: 2, life: 0.05 },
-    muzzle: [0.02, -0.72],
   },
   [VK.CRYO]: {
     geo: "ice",
@@ -337,7 +326,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.8,
     kick: 0.006,
     flash: { w: 0.28, spikes: 0, len: 0, col: 0x9fe8ff, smoke: 0, life: 0.05 },
-    muzzle: [0, -0.62],
   },
   [VK.FLAK]: {
     geo: "flak",
@@ -351,7 +339,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.5,
     kick: 0.035,
     flash: { w: 0.5, spikes: 6, len: 0.45, col: 0xffa040, smoke: 3, life: 0.07 },
-    muzzle: [0, -0.63],
   },
   [VK.TESLA]: {
     geo: "orbBlue",
@@ -365,7 +352,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.2,
     kick: 0.012,
     flash: { w: 0.34, spikes: 0, len: 0, col: 0x7fb0ff, smoke: 0, life: 0.07 },
-    muzzle: [0, -0.48],
   },
   [VK.TURRET]: {
     geo: "bullet",
@@ -379,7 +365,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.6,
     kick: 0,
     flash: { w: 0.3, spikes: 4, len: 0.3, col: 0x9ff0ff, smoke: 0, life: 0.05 },
-    muzzle: [0, 0],
   },
   [VK.FRAG]: {
     geo: "pellet",
@@ -393,7 +378,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.5,
     kick: 0,
     flash: { w: 0, spikes: 0, len: 0, col: 0, smoke: 0, life: 0 },
-    muzzle: [0, 0],
   },
   [VK.REVOLVER]: {
     geo: "bullet",
@@ -407,7 +391,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.8,
     kick: 0.03,
     flash: { w: 0.4, spikes: 5, len: 0.4, col: 0xffb050, smoke: 2, life: 0.06 },
-    muzzle: [0.02, -0.48],
   },
   [VK.MINIGUN]: {
     geo: "bullet",
@@ -421,7 +404,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 0.6,
     kick: 0.004,
     flash: { w: 0.26, spikes: 4, len: 0.28, col: 0xffd890, smoke: 0, life: 0.035 },
-    muzzle: [0, -0.6],
   },
   [VK.CROSSBOW]: {
     geo: "harpoon",
@@ -435,7 +417,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.4,
     kick: 0.015,
     flash: { w: 0.12, spikes: 0, len: 0, col: 0xe8ffc0, smoke: 0, life: 0.04 },
-    muzzle: [0, -0.5],
   },
   [VK.PLASMA]: {
     geo: "orbPink",
@@ -449,7 +430,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.2,
     kick: 0.012,
     flash: { w: 0.36, spikes: 0, len: 0, col: 0xff7fe0, smoke: 0, life: 0.06 },
-    muzzle: [0, -0.48],
   },
   [VK.VOIDORB]: {
     geo: "orbVoid",
@@ -463,7 +443,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.8,
     kick: 0.03,
     flash: { w: 0.5, spikes: 0, len: 0, col: 0xc090ff, smoke: 0, life: 0.09 },
-    muzzle: [0, -0.5],
   },
   [VK.SHATTER]: {
     geo: "ice",
@@ -477,7 +456,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.4,
     kick: 0.03,
     flash: { w: 0.4, spikes: 0, len: 0, col: 0x9fe8ff, smoke: 2, life: 0.06 },
-    muzzle: [0, -0.56],
   },
   [VK.MORTAR]: {
     geo: "flak",
@@ -491,7 +469,6 @@ const LOOKS: Record<VisKind, Look> = {
     power: 1.6,
     kick: 0.04,
     flash: { w: 0.55, spikes: 6, len: 0.5, col: 0xffa040, smoke: 4, life: 0.07 },
-    muzzle: [0, -0.4],
   },
 };
 /** the gun names Game.tsx uses, by VK number (for sounds and ghost stats); 10-12 are not guns */
@@ -663,16 +640,14 @@ const CONTACT: Contact = { p: new THREE.Vector3(), n: new THREE.Vector3() };
 const rnd = (a = 1) => (Math.random() * 2 - 1) * a;
 
 let cam: THREE.Camera | null = null;
-const WORLD_MUZZLE = new THREE.Vector3();
 let worldMuzzle = false;
-/** Third-person gun origin; first-person and remote effects retain their own paths. */
-export function setWorldMuzzle(p: THREE.Vector3 | null) {
-  worldMuzzle = p !== null;
-  if (p) WORLD_MUZZLE.copy(p);
+/** Published by the explicit model-pose phase, before any new rounds are emitted. */
+export function setLocalMuzzle(p: THREE.Vector3, third: boolean) {
+  worldMuzzle = third;
+  MUZZLE.copy(p);
 }
-/** the local gun's muzzle this frame (world) */
+
 const MUZZLE = new THREE.Vector3();
-let viewKind: VisKind = VK.PISTOL;
 let viewModel: THREE.Object3D | null = null;
 
 /** tiny deterministic PRNG so the shooter and every viewer agree on the spread */
@@ -703,50 +678,13 @@ export function aimDir(
 
 // ---------------------------------------------------------------- muzzles
 
-/** the local gun's muzzle in world space, from the camera (used at the moment of firing) */
-function localMuzzle(kind: VisKind, flags: number, out: THREE.Vector3) {
-  if (worldMuzzle) return out.copy(WORLD_MUZZLE);
-  const lk = LOOKS[kind];
-  const z = kind === VK.PISTOL && flags & VF.MAGNUM ? -0.48 : lk.muzzle[1];
-  if (viewModel && viewModel.visible) {
-    // the view model's pose from last frame, carried along by the camera's movement since
-    out
-      .set(0, lk.muzzle[0], z)
-      .multiplyScalar(0.7)
-      .applyQuaternion(viewModel.quaternion)
-      .add(viewModel.position);
-    if (cam) out.add(V3.copy(cam.position).sub(lastCam));
-    return out;
-  }
-  if (cam) return out.copy(cam.position);
-  return out.set(0, 0, 0);
-}
-const lastCam = new THREE.Vector3();
 const MUZ_FIRE = new THREE.Vector3();
 const MUZ_REMOTE = new THREE.Vector3();
 
-/** a teammate's gun tip, from their smoothed avatar pose (Remote.tsx draws the gun there) */
+/** The actual rendered teammate socket, after interpolation and hand animation. */
 function remoteMuzzle(r: RemoteState, out: THREE.Vector3) {
-  const th = r.ry + Math.PI;
-  const c = Math.cos(th),
-    s = Math.sin(th);
-  const lift = alpine.active ? alpine.lift : null;
-  const seat =
-    wheelWorld.wheel && (r.wr ?? -1) >= 0
-      ? wheelEye(wheelWorld.wheel, r.wr!)
-      : lift && (r.rc ?? -1) >= 0
-        ? riderEye(lift, r.rc!)
-        : null;
-  const gy = groundY(r.rx, r.rz);
-  const feet = seat
-    ? seat.y - 1.6
-    : (r.sy ?? (r.az ? remoteFloorY(r.az, r.ay, gy) : gy)) + (r.jy ?? 0);
-  const pitch = r.pitch ?? 0;
-  return out.set(
-    (seat?.x ?? r.rx) - 0.24 * c + 0.7 * Math.cos(pitch) * s,
-    feet + 1.24 + 0.7 * Math.sin(pitch),
-    (seat?.z ?? r.rz) + 0.24 * s + 0.7 * Math.cos(pitch) * c,
-  );
+  if (readGunMuzzle(remoteGunRoots.get(r.id) ?? null, out)) return out;
+  return out.set(r.rx, (r.sy ?? groundY(r.rx, r.rz)) + (r.jy ?? 0) + 1.22, r.rz);
 }
 
 // ---------------------------------------------------------------- hooks for Game.tsx
@@ -778,7 +716,6 @@ function start(
     CONV_DIR.copy(P.vel).normalize();
     P.conv = Math.max(3, Math.min(60, rayHit(pos, CONV_DIR, 60)));
   } else P.vo.set(0, 0, 0);
-  if (kind === VK.HARPOON) P.vo.set(0, 0, 0);
 }
 
 /** a local round was just put in bullet slot `i` */
@@ -788,7 +725,7 @@ export function fxShot(i: number, b: BulletLike, kind: VisKind, flags = 0, from?
   P.pos = b.pos;
   P.vel = b.vel;
   P.owner = null;
-  const muz = from ?? (kind === VK.FRAG ? null : localMuzzle(kind, flags, V1));
+  const muz = from ?? (kind === VK.FRAG ? null : V1.copy(MUZZLE));
   start(P, b.pos, kind, flags, b.size, muz);
   P.blastR = b.blast ?? 0; // the drawn blast matches the local shot's (perk-widened) radius
 }
@@ -808,13 +745,13 @@ export function fxFired(
   at?: THREE.Vector3,
 ) {
   const lk = LOOKS[kind];
-  const muz = at ? MUZ_FIRE.copy(at) : localMuzzle(kind, flags, MUZ_FIRE);
+  const muz = at ? MUZ_FIRE.copy(at) : MUZ_FIRE.copy(MUZZLE);
   const f = flashes[flashNext]!;
   flashNext = (flashNext + 1) % flashes.length;
   f.t = lk.flash.life * (flags & VF.MAGNUM ? 1.4 : 1);
   f.kind = kind;
   f.flags = flags;
-  f.fixed = !!at || worldMuzzle;
+  f.fixed = !!at;
   f.p.copy(muz);
   f.d.copy(dir);
   if (!at) {
@@ -1432,7 +1369,7 @@ function drawFlash(f: Flash, dt: number) {
   const lk = LOOKS[f.kind];
   const fl = lk.flash;
   const p = f.fixed ? f.p : MUZZLE;
-  if (!f.fixed && !viewModel?.visible) return;
+  if (!f.fixed && !worldMuzzle && !viewModel?.visible) return;
   const mag = f.flags & VF.MAGNUM ? 1.5 : 1;
   const d = f.d;
   // the flash sits just in front of the barrel
@@ -1617,7 +1554,16 @@ const EXTRA_GUNS: Partial<Record<VisKind, GhostGun>> = {
 };
 
 /** a teammate fired: replay it as visual-only rounds from their gun */
+const remoteFireQueue: { m: NetMsg; remotes: Map<string, RemoteState> }[] = [];
 export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
+  if (!Array.isArray(m.s)) return;
+  const id = String(m.from ?? "host");
+  if (m.s.some((v: unknown, i: number) => i % GROUP === 0 && isGun(v as VisKind)))
+    REMOTE_SHOT.set(id, performance.now());
+  if (remoteFireQueue.length >= 64) remoteFireQueue.shift();
+  remoteFireQueue.push({ m, remotes });
+}
+function replayRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
   remotesRef = remotes;
   const s = Array.isArray(m.s) ? (m.s as number[]) : [];
   const id = String(m.from ?? "host");
@@ -1633,7 +1579,6 @@ export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     V1.set(s[j + 1]!, s[j + 2]!, s[j + 3]!);
     V2.set(s[j + 4]!, s[j + 5]!, s[j + 6]!).normalize();
     const muz = kind === VK.TURRET || !r ? V1 : remoteMuzzle(r, MUZ_REMOTE);
-    if (kind !== VK.TURRET) REMOTE_SHOT.set(id, performance.now());
     const f = flashes[flashNext]!;
     flashNext = (flashNext + 1) % flashes.length;
     Object.assign(f, { t: LOOKS[kind].flash.life, kind, flags, fixed: true });
@@ -1772,24 +1717,16 @@ export function fxFrame(
   camera: THREE.Camera,
   vm: THREE.Object3D | null,
   bullets: BulletLike[],
-  weapon: string,
 ) {
   const t0 = performance.now();
-  frame(dt, camera, vm, bullets, weapon);
+  frame(dt, camera, vm, bullets);
   fxNetStats.cpuMs += performance.now() - t0;
   fxNetStats.frames++;
 }
-function frame(
-  dt: number,
-  camera: THREE.Camera,
-  vm: THREE.Object3D | null,
-  bullets: BulletLike[],
-  weapon: string,
-) {
+function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bullets: BulletLike[]) {
   cam = camera;
   viewModel = vm;
   FX.ear.copy(camera.position);
-  viewKind = visOf(weapon);
   const add = FX.add,
     alpha = FX.alpha;
   if (!add || !alpha) return;
@@ -1800,14 +1737,9 @@ function frame(
   add.setPixel(px);
   alpha.setPixel(px);
 
-  if (worldMuzzle) MUZZLE.copy(WORLD_MUZZLE);
-  else if (vm && vm.visible) {
-    const lk = LOOKS[viewKind];
-    MUZZLE.set(0, lk.muzzle[0], lk.muzzle[1])
-      .multiplyScalar(0.7)
-      .applyQuaternion(vm.quaternion)
-      .add(vm.position);
-  }
+  // Remote events arrive between frames; resolve them only after RemotePlayers has
+  // updated its rendered pose, so ghost rounds start at that same visible barrel.
+  for (const pending of remoteFireQueue.splice(0)) replayRemoteFire(pending.m, pending.remotes);
 
   // local rounds
   for (let i = 0; i < bullets.length; i++) {
@@ -1944,7 +1876,6 @@ function frame(
   FX.rings?.step(dt, camera);
   add.upload();
   alpha.upload();
-  lastCam.copy(camera.position);
   flushFire();
 }
 
@@ -1959,6 +1890,8 @@ export function fxKick() {
 }
 
 export function fxReset() {
+  remoteFireQueue.length = 0;
+  REMOTE_SHOT.clear();
   FX.add?.clear();
   FX.alpha?.clear();
   FX.decals?.clear();

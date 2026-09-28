@@ -16,7 +16,6 @@ export const touchInput = {
   sprint: false, // one-shot: the SPRINT button (a toggle; two quick taps = tactical sprint)
 };
 
-
 export function resetTouchInput() {
   touchInput.moveX = 0;
   touchInput.moveZ = 0;
@@ -32,7 +31,6 @@ export function resetTouchInput() {
   touchInput.jump = false;
   touchInput.sprint = false;
 }
-
 
 export function isTouchDevice() {
   if (typeof window === "undefined") return false;

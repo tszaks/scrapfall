@@ -3,7 +3,7 @@ import { KeyHint } from "./input/Glyph";
 import { actionLabel } from "./input/labels";
 import { subscribeActions } from "./input/remap";
 import { createPortal, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, type ReactNode, type MutableRefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, type ReactNode, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { newPlayerRig } from "./art/player";
 import { artFrame } from "./art/kit";
@@ -66,20 +66,22 @@ export function updateViewCamera(camera: THREE.Camera, stop: Stop) {
   viewCamera.getWorldDirection(shoulderView.direction);
   return viewCamera;
 }
-const muzzleEnd = new THREE.Vector3(),
-  muzzleProbe = new THREE.Vector3();
-export function playerMuzzle(camera: THREE.Camera, out: THREE.Vector3, stop?: Stop) {
-  muzzleEnd.set(0.24, -0.36, -0.7).applyQuaternion(camera.quaternion).add(camera.position);
-  if (!stop) return out.copy(muzzleEnd);
-  out.copy(camera.position);
-  const n = Math.ceil(muzzleEnd.distanceTo(camera.position) / 0.06);
-  for (let i = 1; i <= n; i++) {
-    muzzleProbe.lerpVectors(camera.position, muzzleEnd, i / n);
-    if (stop(muzzleProbe)) break;
-    out.copy(muzzleProbe);
-  }
-  return out;
+/** Clip a proposed origin to cover between the eye and the actual barrel. */
+export function playerMuzzle(
+  camera: THREE.Camera,
+  out: THREE.Vector3,
+  stop: Stop,
+  muzzle: THREE.Vector3,
+) {
+  const contact = firstWorldHit(camera.position, muzzle, (p) => stop(test.set(p.x, p.y, p.z)));
+  const length = camera.position.distanceTo(muzzle);
+  return out.lerpVectors(
+    camera.position,
+    muzzle,
+    contact === undefined ? 1 : Math.max(0, contact - 0.02 / Math.max(0.001, length)),
+  );
 }
+export type PreparePlayer = (camera: THREE.Camera, time: number, dt: number) => THREE.Object3D;
 export type AimBody = { x: number; z: number; bottom: number; top: number; radius: number };
 /** Reticle-to-muzzle convergence, using the same world collision and enemy hit bands as combat. */
 export function shoulderAim(
@@ -134,6 +136,7 @@ export function PlayerView({
   airborne,
   stop,
   children,
+  prepare,
 }: {
   active: boolean;
   hidden: MutableRefObject<boolean>;
@@ -144,6 +147,7 @@ export function PlayerView({
   airborne: () => boolean;
   stop: Stop;
   children: ReactNode;
+  prepare: MutableRefObject<PreparePlayer | null>;
 }) {
   const rig = useMemo(newPlayerRig, []);
   useEffect(() => () => rig.dispose(), [rig]);
@@ -159,30 +163,33 @@ export function PlayerView({
     [active],
   );
 
-  useFrame(({ camera, gl, scene, clock }, dt) => {
-    artFrame();
-    eye.copy(camera.position);
-    const on = (!hidden.current || downed.current) && getViewMode() === "third";
-    shoulderView.active = on;
-    rig.mesh.visible = false;
-    if (on) {
-      updateViewCamera(camera, stop);
-      const distance = shoulderView.distance;
-      rig.mesh.visible = distance > 0.85;
-      rig.mesh.position.set(eye.x, eye.y - (downed.current ? 0.15 : 1.6), eye.z);
-      rig.mesh.rotation.set(downed.current ? -Math.PI / 2 : 0, look.current.yaw + Math.PI, 0);
-      rig.pose.seated = seated();
-      rig.pose.airborne = airborne();
-      rig.update(
-        clock.elapsedTime,
-        Math.min(dt, 0.05),
-        eye.x,
-        eye.z,
-        recoil.current,
-        -look.current.pitch,
-        0,
-      );
-    }
+  useLayoutEffect(() => {
+    prepare.current = (camera, time, dt) => {
+      artFrame();
+      eye.copy(camera.position);
+      const on = (!hidden.current || downed.current) && getViewMode() === "third";
+      shoulderView.active = on;
+      rig.mesh.visible = false;
+      if (on) {
+        updateViewCamera(camera, stop);
+        const distance = shoulderView.distance;
+        rig.mesh.visible = distance > 0.85;
+        rig.mesh.position.set(eye.x, eye.y - (downed.current ? 0.15 : 1.6), eye.z);
+        rig.mesh.rotation.set(downed.current ? -Math.PI / 2 : 0, look.current.yaw + Math.PI, 0);
+        rig.pose.seated = seated();
+        rig.pose.airborne = airborne();
+        rig.update(time, Math.min(dt, 0.05), eye.x, eye.z, recoil.current, -look.current.pitch, 0);
+      }
+      return rig.mesh;
+    };
+    return () => {
+      prepare.current = null;
+    };
+  }, [prepare, rig, hidden, downed, look, recoil, seated, airborne, stop]);
+
+  useFrame(({ camera, gl, scene }) => {
+    const on = shoulderView.active;
+    if (on) updateViewCamera(camera, stop);
     gl.render(scene, on ? viewCamera : camera);
   }, 1);
   return (

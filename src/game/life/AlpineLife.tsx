@@ -1,3 +1,10 @@
+import {
+  geometryBounds,
+  geometryBody,
+  geometryPoint,
+  geometryRayContact,
+  boundsMayTouchBody,
+} from "../staticCollision";
 import { useMemo, useEffect, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
@@ -46,21 +53,35 @@ export function AlpineLife({
       road.length * 0.3 - 18,
       road.length * 0.8 - 18,
     ];
-    const cars = Array.from({ length: 6 }, (_, i) => ({
-      distance: starts[i]!,
-      speed: 0,
-      hit: 0,
-      box: {
-        x: 0,
-        z: 0,
-        sin: 0,
-        cos: 1,
-        hl: i < 2 ? 2.8 : 1.7,
-        hw: i < 2 ? 1.8 : 0.7,
-        h: 0,
-        base: 0,
-      } as CarBox,
-    }));
+    const cars = Array.from({ length: 6 }, (_, i) => {
+      const geometry = vehicles[Math.floor(i / 2)]!.geometry;
+      const matrix = new THREE.Matrix4(),
+        bounds = new THREE.Box3();
+      return {
+        geometry,
+        matrix,
+        bounds,
+        distance: starts[i]!,
+        speed: 0,
+        hit: 0,
+        box: {
+          x: 0,
+          z: 0,
+          sin: 0,
+          cos: 1,
+          hl: i < 2 ? 2.8 : 1.7,
+          hw: i < 2 ? 1.8 : 0.7,
+          h: 0,
+          base: 0,
+          bounds,
+          contact: (x: number, y: number, z: number) => geometryPoint(geometry, matrix, x, y, z),
+          rayContact: (
+            a: { x: number; y: number; z: number },
+            b: { x: number; y: number; z: number },
+          ) => geometryRayContact(geometry, matrix, a, b),
+        } as CarBox,
+      };
+    });
     const paths = skiRoutes(layout, terrainY);
     const skiers = new THREE.InstancedMesh(skiModel(), mat, paths.length * 5);
     skiers.name = "whiteout-skiers";
@@ -176,6 +197,8 @@ export function AlpineLife({
       scale.set(1, 1, 1);
       m.compose(v, q, scale);
       built.vehicles[Math.floor(i / 2)]!.setMatrixAt(i % 2, m);
+      car.matrix.copy(m);
+      geometryBounds(car.geometry, car.matrix, car.bounds);
       if (patrol)
         for (let side = 0; side < 2; side++) {
           lampLocal.makeTranslation(side ? 0.4 : -0.4, 1.11, 0.75);
@@ -193,16 +216,17 @@ export function AlpineLife({
       });
       liveCars.push(car.box);
       car.hit = Math.max(0, car.hit - dt);
+      const feet = ctx.feet ?? (ctx.py ?? floor + 1.6) - 1.6;
+      const height = ctx.bodyHeight ?? 1.8;
       if (
         ctx.active &&
         car.hit <= 0 &&
-        (ctx.py === undefined || (ctx.py >= floor && ctx.py < car.box.h + 1.3))
+        boundsMayTouchBody(car.bounds, ctx.px, ctx.pz, 0.4, feet, height)
       ) {
         const dx = ctx.px - pos.x,
-          dz = ctx.pz - pos.z,
-          along = dx * car.box.sin + dz * car.box.cos,
-          lat = dx * car.box.cos - dz * car.box.sin;
-        if (Math.abs(along) < car.box.hl + 0.35 && Math.abs(lat) < car.box.hw + 0.35) {
+          dz = ctx.pz - pos.z;
+        const lat = dx * car.box.cos - dz * car.box.sin;
+        if (geometryBody(car.geometry, car.matrix, ctx.px, ctx.pz, 0.4, feet, height)) {
           car.hit = 0.8;
           const sign = lat < 0 ? -1 : 1;
           ctx.hitPlayer(

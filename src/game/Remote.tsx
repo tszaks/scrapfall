@@ -5,6 +5,7 @@ import { remoteFloorY } from "./access/world";
 import { alpine } from "./alpine/weather";
 import { riderEye } from "./alpine/ride";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { remoteGunRoots } from "./art/muzzle";
 import { newPlayerRig } from "./art/player";
 import * as THREE from "three";
 
@@ -17,7 +18,8 @@ const PIPS = 10;
 
 /** Low-poly teammate avatars, driven imperatively from the shared map. */
 export function RemotePlayers({
-  remotes, renderGun,
+  remotes,
+  renderGun,
 }: {
   remotes: React.MutableRefObject<Map<string, RemoteState>>;
   renderGun: (weapon: string) => React.ReactNode;
@@ -27,11 +29,18 @@ export function RemotePlayers({
   const rigs = useMemo(() => Array.from({ length: MAX_REMOTE }, newPlayerRig), []);
   const [weapons, setWeapons] = useState<string[]>(["pistol", "pistol", "pistol"]);
   const weaponRef = useRef(weapons);
-  useEffect(() => () => rigs.forEach((r) => r.dispose()), [rigs]);
+  useEffect(
+    () => () => {
+      rigs.forEach((r) => r.dispose());
+      remoteGunRoots.clear();
+    },
+    [rigs],
+  );
   const pips = useRef<(THREE.Mesh | null)[][]>([]);
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
+    remoteGunRoots.clear();
     // a teammate we haven't heard from in 6 s is gone (the network drops them shortly)
     const now = performance.now();
     const list = [...remotes.current.values()]
@@ -58,7 +67,9 @@ export function RemotePlayers({
       const lift = alpine.active ? alpine.lift : null;
       if (wheelWorld.wheel && (p.wr ?? -1) >= 0 && !down) {
         const e = wheelEye(wheelWorld.wheel, p.wr!);
-        p.rx = e.x; p.rz = e.z; g.position.set(e.x, e.y - 1.6, e.z);
+        p.rx = e.x;
+        p.rz = e.z;
+        g.position.set(e.x, e.y - 1.6, e.z);
       } else if (lift && (p.rc ?? -1) >= 0 && !down) {
         const e = riderEye(lift, p.rc!);
         p.rx = e.x;
@@ -83,7 +94,7 @@ export function RemotePlayers({
       );
       const since = (performance.now() - (REMOTE_SHOT.get(p.id) ?? -1e9)) / 1000;
       rigs[i]!.pose.seated = (p.rc ?? -1) >= 0;
-      rigs[i]!.pose.airborne = (p.jy ?? 0) > .1;
+      rigs[i]!.pose.airborne = (p.jy ?? 0) > 0.1;
       rigs[i]!.update(
         now / 1000,
         delta,
@@ -99,6 +110,7 @@ export function RemotePlayers({
         weaponRef.current = next;
         setWeapons(next);
       }
+      remoteGunRoots.set(p.id, g);
       const visor = visors.current[i];
       if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
       const row = pips.current[i];

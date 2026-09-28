@@ -57,12 +57,23 @@ export function SquadDriver({
 
   const cb = useRef({ onRevived, onBleedOut, net, myNum });
   cb.current = { onRevived, onBleedOut, net, myNum };
-  useEffect(() => subscribeActions((a,down,repeat) => {
-    if(a === "ping" && down && !repeat)pingReq.current=true;
-    if(a === "revive")holdR.current=down;
-  }), []);
+  useEffect(
+    () =>
+      subscribeActions((a, down, repeat) => {
+        if (a === "ping" && down && !repeat) pingReq.current = true;
+        if (a === "revive") holdR.current = down;
+      }),
+    [],
+  );
 
-  useEffect(()=>subscribeInputReset(()=>{pingReq.current=false;holdR.current=false;}),[]);
+  useEffect(
+    () =>
+      subscribeInputReset(() => {
+        pingReq.current = false;
+        holdR.current = false;
+      }),
+    [],
+  );
   useEffect(() => {
     me.id = net?.self ?? "host";
     if (!net) resetSquad();
@@ -85,7 +96,7 @@ export function SquadDriver({
       touchInput.ping = false;
       pingReq.current = true;
     }
-    const reviveHeld=holdR.current||touchInput.revive;
+    const reviveHeld = holdR.current || touchInput.revive;
     // ---- pings ----
     if (w) tickPings(w.enemies, w.ground, w.band);
     if (pingReq.current) {
@@ -106,7 +117,7 @@ export function SquadDriver({
       let bd = REVIVE_RANGE;
       remotes.current.forEach((r) => {
         if (squad.get(r.id)?.st !== DOWN) return;
-        const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x,r.z)) - me.y, r.z - me.z);
+        const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x, r.z)) - me.y, r.z - me.z);
         if (d <= bd) {
           bd = d;
           want = r.id;
@@ -125,9 +136,19 @@ export function SquadDriver({
     // ---- host: the squad table ----
     if (n.role === "host") {
       const now = performance.now();
-      const players: Player[] = [{ id: "host", x: me.x, y:me.y, z: me.z, hp: s.hp, bledOut: s.bledOut }];
+      const players: Player[] = [
+        { id: "host", x: me.x, y: me.y, z: me.z, hp: s.hp, bledOut: s.bledOut },
+      ];
       remotes.current.forEach((r) => {
-        if (now - r.last < 4000) players.push({ id: r.id, x: r.x, y:r.sy ?? r.ay ?? groundY(r.x,r.z), z: r.z, hp: r.hp, bledOut: false });
+        if (now - r.last < 4000)
+          players.push({
+            id: r.id,
+            x: r.x,
+            y: r.sy ?? r.ay ?? groundY(r.x, r.z),
+            z: r.z,
+            hp: r.hp,
+            bledOut: false,
+          });
       });
       const res = hostReviveStep(dt, players, hostWants);
       for (const id of res.revived) {
@@ -163,7 +184,15 @@ const _v = new THREE.Vector3();
 const _q = new THREE.Vector3();
 
 type Proj = { x: number; y: number; on: boolean; dist: number };
-function project(cam: THREE.Camera, x: number, y: number, z: number, W: number, H: number, out: Proj) {
+function project(
+  cam: THREE.Camera,
+  x: number,
+  y: number,
+  z: number,
+  W: number,
+  H: number,
+  out: Proj,
+) {
   _v.set(x, y, z);
   out.dist = cam.position.distanceTo(_v);
   _q.copy(_v).applyMatrix4(cam.matrixWorldInverse);
@@ -294,9 +323,10 @@ export function HudOverlay({
           const txt = `✚ ${who} DOWN · ${Math.round(P.dist)}m · ${Math.ceil(s.bleed)}s${s.by ? " · REVIVING" : ""}`;
           if (el.textContent !== txt) el.textContent = txt;
           el.style.opacity = P.on ? "1" : "0.85";
-          const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x,r.z)) - me.y, r.z - me.z);
+          const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x, r.z)) - me.y, r.z - me.z);
           if (d <= REVIVE_RANGE && !prompt) {
-            prompt = s.by === me.id ? `REVIVING ${who}` : `HOLD ${actionLabel("revive")} TO REVIVE ${who}`;
+            prompt =
+              s.by === me.id ? `REVIVING ${who}` : `HOLD ${actionLabel("revive")} TO REVIVE ${who}`;
             promptProg = s.by === me.id ? s.prog : 0;
           }
         });
@@ -326,7 +356,8 @@ export function HudOverlay({
           const tb = by ? `${by} IS REVIVING YOU` : "CRAWL TO COVER · A TEAMMATE CAN REVIVE YOU";
           if (a && a.textContent !== ta) a.textContent = ta;
           if (b && b.textContent !== tb) b.textContent = tb;
-          if (selfRingEl.current) selfRingEl.current.style.strokeDashoffset = String(113 * (1 - mine.prog));
+          if (selfRingEl.current)
+            selfRingEl.current.style.strokeDashoffset = String(113 * (1 - mine.prog));
         }
       }
       // ---- toast ----
@@ -379,38 +410,96 @@ export function HudOverlay({
         @keyframes hudpulse { from { box-shadow:0 0 4px #ff4a3a; } to { box-shadow:0 0 16px #ff4a3a; } }
       `}</style>
       {Array.from({ length: MAX_PINGS }, (_, i) => (
-        <div key={`b${i}`} ref={(e) => { boxEls.current[i] = e; }} className="hud-box" style={{ display: "none" }} />
+        <div
+          key={`b${i}`}
+          ref={(e) => {
+            boxEls.current[i] = e;
+          }}
+          className="hud-box"
+          style={{ display: "none" }}
+        />
       ))}
       {Array.from({ length: MAX_PINGS }, (_, i) => (
-        <div key={`p${i}`} ref={(e) => { pingEls.current[i] = e; }} className="hud-ping" style={{ display: "none" }} />
+        <div
+          key={`p${i}`}
+          ref={(e) => {
+            pingEls.current[i] = e;
+          }}
+          className="hud-ping"
+          style={{ display: "none" }}
+        />
       ))}
       {Array.from({ length: MAX_DOWN }, (_, i) => (
-        <div key={`d${i}`} ref={(e) => { downEls.current[i] = e; }} className="hud-down" style={{ display: "none" }} />
+        <div
+          key={`d${i}`}
+          ref={(e) => {
+            downEls.current[i] = e;
+          }}
+          className="hud-down"
+          style={{ display: "none" }}
+        />
       ))}
-      <div ref={promptEl} className="absolute left-1/2 top-[60%] -translate-x-1/2 items-center gap-3 rounded-lg bg-[#2b2118]/85 px-4 py-2 text-sm font-bold tracking-[0.2em] text-[#f3e6cf]" style={{ display: "none" }}>
+      <div
+        ref={promptEl}
+        className="absolute left-1/2 top-[60%] -translate-x-1/2 items-center gap-3 rounded-lg bg-[#2b2118]/85 px-4 py-2 text-sm font-bold tracking-[0.2em] text-[#f3e6cf]"
+        style={{ display: "none" }}
+      >
         <svg width="40" height="40" viewBox="0 0 40 40">
           <circle cx="20" cy="20" r="18" fill="none" stroke="#f3e6cf33" strokeWidth="4" />
-          <circle ref={ringEl} cx="20" cy="20" r="18" fill="none" stroke="#5fe08a" strokeWidth="4" strokeDasharray="113" strokeDashoffset="113" transform="rotate(-90 20 20)" />
+          <circle
+            ref={ringEl}
+            cx="20"
+            cy="20"
+            r="18"
+            fill="none"
+            stroke="#5fe08a"
+            strokeWidth="4"
+            strokeDasharray="113"
+            strokeDashoffset="113"
+            transform="rotate(-90 20 20)"
+          />
         </svg>
         <span />
       </div>
-      <div ref={selfEl} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center text-[#f3e6cf]" style={{ display: "none" }}>
+      <div
+        ref={selfEl}
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center text-[#f3e6cf]"
+        style={{ display: "none" }}
+      >
         <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">DOWN</div>
         <div data-t className="mt-2 text-sm font-bold tracking-[0.25em]" />
         <div className="mt-3 flex justify-center">
           <svg width="46" height="46" viewBox="0 0 40 40">
             <circle cx="20" cy="20" r="18" fill="none" stroke="#f3e6cf33" strokeWidth="4" />
-            <circle ref={selfRingEl} cx="20" cy="20" r="18" fill="none" stroke="#5fe08a" strokeWidth="4" strokeDasharray="113" strokeDashoffset="113" transform="rotate(-90 20 20)" />
+            <circle
+              ref={selfRingEl}
+              cx="20"
+              cy="20"
+              r="18"
+              fill="none"
+              stroke="#5fe08a"
+              strokeWidth="4"
+              strokeDasharray="113"
+              strokeDashoffset="113"
+              transform="rotate(-90 20 20)"
+            />
           </svg>
         </div>
         <div data-s className="mt-2 text-[11px] tracking-[0.2em] opacity-80" />
       </div>
-      <div ref={toastEl} className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]" style={{ display: "none" }} />
-      <div ref={bannerEl} className="absolute left-1/2 top-[14%] -translate-x-1/2 rounded-lg px-7 py-2.5 text-center text-[#f7eeda] shadow-lg" style={{ display: "none" }}>
+      <div
+        ref={toastEl}
+        className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]"
+        style={{ display: "none" }}
+      />
+      <div
+        ref={bannerEl}
+        className="absolute left-1/2 top-[14%] -translate-x-1/2 rounded-lg px-7 py-2.5 text-center text-[#f7eeda] shadow-lg"
+        style={{ display: "none" }}
+      >
         <div data-t className="text-xl font-bold tracking-[0.35em]" />
         <div data-s className="mt-0.5 text-[11px] tracking-[0.25em] opacity-85" />
       </div>
     </div>
   );
 }
-

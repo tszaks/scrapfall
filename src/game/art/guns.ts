@@ -1,9 +1,8 @@
 // First-person gun models for every weapon, built with the art kit.
 //
 // Gun space: the barrel points down -z, y is up, the origin sits just above the grip. Each
-// gun's muzzle is exactly where projectiles.ts LOOKS[kind].muzzle puts the flash and the
-// tracer origin ([0, y, z] before the 0.7 view-model scale), so the effects keep leaving
-// the bore. Most shapes are side profiles (x = distance forward, y = up) extruded to a
+// gun owns its muzzle socket, including barrel attachments, so effects leave the bore
+// through the same complete transform as the rendered model. Most shapes are side profiles (x = distance forward, y = up) extruded to a
 // width, the way real receivers and slides are machined from plate.
 import * as THREE from "three";
 
@@ -70,7 +69,32 @@ export type GunBuild = {
   /** the laser sight beam's start (pistol laser mod), if any */
   laser: V3 | null;
   verts: number;
+  muzzle: V3;
 };
+
+/** Barrel outlets in model space; the rendered socket is the source of firing effects. */
+const MUZZLES: Record<GunId, V3> = {
+  pistol: [0, 0, -0.34],
+  scatter: [0, 0, -0.62],
+  smg: [0, 0, -0.56],
+  rail: [0, 0, -0.72],
+  cannon: [0, 0, -0.56],
+  rebound: [0, 0.06, -0.44],
+  harpoon: [0, 0.02, -0.72],
+  cryo: [0, 0, -0.62],
+  flak: [0, 0, -0.63],
+  tesla: [0, 0, -0.48],
+  revolver: [0, 0.02, -0.48],
+  minigun: [0, 0, -0.6],
+  crossbow: [0, 0, -0.5],
+  plasma: [0, 0, -0.48],
+  voidorb: [0, 0, -0.5],
+  shatter: [0, 0, -0.56],
+};
+export function gunMuzzle(w: GunId, mods: PistolMods = {}): V3 {
+  if (w !== "pistol") return MUZZLES[w];
+  return [0, 0, -(mods.magnum ? 0.48 : 0.34) - (mods.suppr ? 0.2 : mods.comp ? 0.065 : 0)];
+}
 
 const PI = Math.PI;
 const S = SURF;
@@ -1558,7 +1582,7 @@ export function gunBuild(w: GunId, key: string, color: string, body: string): Gu
   const verts =
     bodyGeo.getAttribute("position").count +
     parts.reduce((s, p) => s + p.geo.getAttribute("position").count, 0);
-  g = { body: bodyGeo, parts, laser, verts };
+  g = { body: bodyGeo, parts, laser, verts, muzzle: gunMuzzle(w, mods) };
   cache.set(ck, g);
   return g;
 }
