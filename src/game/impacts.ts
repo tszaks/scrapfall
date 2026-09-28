@@ -124,6 +124,7 @@ export function chips(x: number, y: number, z: number, n: number, col: number, s
 }
 
 const P = new THREE.Vector3();
+const FACE = new THREE.Vector3();
 const D = new THREE.Vector3();
 const Q = new THREE.Vector3();
 /** a jagged lightning bolt between two points, drawn for this frame only (redraw every frame to crackle) */
@@ -238,7 +239,8 @@ export function classify(prev: THREE.Vector3, pos: THREE.Vector3, vel: THREE.Vec
     P.lerpVectors(prev, pos, hi);
     // came down onto a low block's top (it was already over the footprint): the hole faces up
     if (!solidAt(prev) && env.solid(prev.x, prev.z) && !env.solid(prev.x, prev.z, prev.y)) out.n.set(0, 1, 0);
-    else if (env.solid(P.x, out.p.z)) out.n.set(-Math.sign(vel.x) || 1, 0, 0);
+    // which side: moving only along x into the solid? (height-aware, like the hit itself)
+    else if (solidAt(FACE.set(P.x, out.p.y, out.p.z))) out.n.set(-Math.sign(vel.x) || 1, 0, 0);
     else out.n.set(0, 0, -Math.sign(vel.z) || 1);
     return "wall";
   }
