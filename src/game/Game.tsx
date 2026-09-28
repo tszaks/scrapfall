@@ -2589,7 +2589,7 @@ function World({
       if (!spectating && Math.hypot(cam.position.x - h.x, cam.position.z - h.z) < def.radius * 0.7) takeHit(2);
       if (share) netRef.current?.broadcast({ type: "haz", i: idx });
     };
-    hazardBlow.current = (i: number) => blowHazard(i, false);
+    hazardBlow.current = (i: number, visualOnly = false) => blowHazard(i, false, visualOnly);
 
 
 
