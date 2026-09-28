@@ -1,3 +1,4 @@
+import { MarineLife } from "../life/MarineLife";
 import { wheelAngle, wheelCabin, CABINS } from "./wheelRide";
 import { trafficClock } from "../trafficCore";
 // Renders Pacific Pier: the merged chunk geometry from beachMesh.ts (facade atlas, one shared
@@ -267,11 +268,12 @@ export const BeachWorld = memo(function BeachWorld({
   return (
     <>
       <SurgeFx city={city} />
+      <MarineLife />
       <CitySun time={time} color={look.sun.color} intensity={look.sun.intensity} dir={L.lightDir} />
       <BeachScene city={city} time={time} />
       <BeachPalms city={city} />
       <SetPieces city={city} time={time} />
-      <CityTraffic city={city} seed={seed} time={time} link={link} cars={30} />
+      <CityTraffic city={city} seed={seed} time={time} link={link} cars={44} coastal />
       <Mountains time={time} />
     </>
   );

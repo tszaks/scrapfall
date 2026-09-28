@@ -4,7 +4,6 @@ import Peer, { type DataConnection } from "peerjs";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type NetMsg = any;
 
-
 export type NetHandle = {
   role: "host" | "guest";
   code: string;
@@ -51,8 +50,9 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 
 // Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
 // big-map build speak different message sets, so they must not join each other's rooms.
-// v2 resolves enemy projectile hits on the host; v1 guests would apply them twice.
-const PREFIX = "scrapfall-ts-arena-v2-";
+// v3 adds coastal service vehicles and host-authoritative alpine traffic snapshots.
+// Older clients have incompatible vehicle counts; keep their rooms separate.
+const PREFIX = "scrapfall-ts-arena-v3-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
@@ -91,7 +91,9 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       if (now - t > HEARTBEAT) drop.get(id)?.();
     });
     // keep-alive both ways, also while menus / pause stop the game's own traffic
-    conns.forEach((c) => { if (c.open) c.send({ type: "hb", from: "host" }); });
+    conns.forEach((c) => {
+      if (c.open) c.send({ type: "hb", from: "host" });
+    });
   }, 1000);
 
   const handle: NetHandle = {
@@ -100,14 +102,20 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
     self: "host",
     broadcast: (m) => {
       const payload = { ...m, from: m.from ?? "host" };
-      conns.forEach((c) => { if (c.open) c.send(payload); });
+      conns.forEach((c) => {
+        if (c.open) c.send(payload);
+      });
     },
     sendTo: (id, m) => {
       const c = conns.get(id);
       if (c?.open) c.send({ ...m, from: "host" });
     },
     peers: list,
-    close: () => { clearInterval(beat); conns.forEach((c) => c.close()); peer.destroy(); },
+    close: () => {
+      clearInterval(beat);
+      conns.forEach((c) => c.close());
+      peer.destroy();
+    },
   };
 
   peer.on("connection", (conn) => {
@@ -124,7 +132,9 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
       if (RELAYED.has(m.type)) {
-        conns.forEach((c, id) => { if (id !== conn.peer && c.open) c.send(m); });
+        conns.forEach((c, id) => {
+          if (id !== conn.peer && c.open) c.send(m);
+        });
       }
       opts.onMsg(m);
     });
@@ -135,7 +145,11 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       drop.delete(conn.peer);
       opts.onPeers(list());
       opts.onMsg({ type: "left", from: conn.peer });
-      try { conn.close(); } catch { /* already closed */ }
+      try {
+        conn.close();
+      } catch {
+        /* already closed */
+      }
     };
     drop.set(conn.peer, gone);
     conn.on("close", gone);
@@ -154,8 +168,14 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
   const conn = peer.connect(PREFIX + code, { reliable: false });
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error("No arena with that code")), 12000);
-    conn.on("open", () => { clearTimeout(t); resolve(); });
-    peer.on("error", (e) => { clearTimeout(t); reject(e); });
+    conn.on("open", () => {
+      clearTimeout(t);
+      resolve();
+    });
+    peer.on("error", (e) => {
+      clearTimeout(t);
+      reject(e);
+    });
   });
 
   // heartbeat: the host streams snapshots many times a second; 8 s of silence = it's gone
@@ -183,9 +203,18 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     role: "guest",
     code,
     self,
-    broadcast: (m) => { if (conn.open) conn.send({ ...m, from: self }); },
-    sendTo: (_id, m) => { if (conn.open) conn.send({ ...m, from: self }); },
+    broadcast: (m) => {
+      if (conn.open) conn.send({ ...m, from: self });
+    },
+    sendTo: (_id, m) => {
+      if (conn.open) conn.send({ ...m, from: self });
+    },
     peers: () => ["host"],
-    close: () => { closed = true; clearInterval(beat); conn.close(); peer.destroy(); },
+    close: () => {
+      closed = true;
+      clearInterval(beat);
+      conn.close();
+      peer.destroy();
+    },
   };
 }

@@ -156,6 +156,7 @@ export const EXTRA_LADDER = 4;
 
 export type Vehicle = {
   type: VehicleType;
+  variant?: "lifeguard" | "coastal-patrol" | undefined;
   len: number;
   wid: number;
   wheel: number;
@@ -390,7 +391,7 @@ export function vehicleParts(v: Vehicle): Part[] {
 
 /** Total height, used for the collision block of a parked car. */
 export function vehicleHeight(v: Vehicle) {
-  const s = SPECS[v.type];
+  const s = SPECS[v.variant ? "pickup" : v.type];
   if (v.type === "van") return s.ride + 2.4;
   if (v.type === "bus") return s.ride + s.body;
   return s.ride + s.body + s.cabH;

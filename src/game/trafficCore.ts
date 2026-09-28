@@ -38,6 +38,7 @@ export type CarBox = {
   hl: number;
   hw: number;
   h: number;
+  base?: number;
 };
 export const liveCars: CarBox[] = [];
 /**
@@ -48,7 +49,7 @@ export const pursuitDots: { x: number; z: number; kind: 1 | 2; i: number }[] = [
 
 export function hitsTraffic(x: number, y: number, z: number) {
   for (const c of liveCars) {
-    if (y > c.h) continue;
+    if (y > c.h || y < (c.base ?? 0)) continue;
     const dx = x - c.x;
     const dz = z - c.z;
     const along = dx * c.sin + dz * c.cos;
@@ -64,11 +65,12 @@ export type TrafficLink = {
   active: boolean;
   px: number;
   pz: number;
+  py?: number;
   isHost: boolean;
   /** solo and host simulate traffic; guests only follow the host's snapshots */
   role: "solo" | "host" | "guest";
   /** other players (host only) the cars must also brake for */
-  others: { x: number; z: number }[];
+  others: { x: number; z: number; y?: number }[];
   /** host: compact car state for the snapshot (set by the traffic component) */
   encode: (() => number[]) | null;
   /** guest: apply car state from a host snapshot (set by the traffic component) */

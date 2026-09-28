@@ -85,7 +85,7 @@ function tryStart(d: Director, cars: Car[], env: SimEnv, t: number) {
   const cands: number[] = [];
   cars.forEach((c, i) => {
     if (busy.has(i) || c.role !== ROLE_NORMAL || c.arc || c.speed < 3) return;
-    if (c.v.type === "police" || c.v.type === "bus") return;
+    if (c.v.type === "police" || c.v.type === "bus" || c.v.variant === "lifeguard") return;
     const d0 = nearestPlayer(c, env);
     if (d0 > 60 && d0 < 230) cands.push(i);
   });

@@ -15,7 +15,7 @@
 import { CURB, LANES, type Road, type StreetClass } from "./cityLayout";
 import { signal, untilRed, GREEN, RED, YELLOW } from "./trafficCore";
 import { nodeDark } from "./events/power";
-import { makeVehicle, vehicleHeight, type Vehicle } from "./vehicles";
+import { makeVehicle, vehicleHeight, SPECS, type Vehicle } from "./vehicles";
 
 export const SIM_DT = 1 / 60;
 /** Right-hand traffic: which side of the centre line a direction drives on (+1 / -1). */
@@ -466,11 +466,47 @@ type Path = {
 const _pp = { x: 0, z: 0, tx: 0, tz: 0 };
 
 /** the one path in use (a path is consumed by scanPath before the next is made: no garbage) */
-const _path: Path = { x0: 0, z0: 0, fx: 0, fz: 0, L0: 0, ex: 0, ez: 0, nx: 0, nz: 0, R: 1, d0: 0, len: 0 };
-function setPath(x0: number, z0: number, fx: number, fz: number, L0: number, ex: number, ez: number, nx: number, nz: number, R: number, d0: number, len: number) {
+const _path: Path = {
+  x0: 0,
+  z0: 0,
+  fx: 0,
+  fz: 0,
+  L0: 0,
+  ex: 0,
+  ez: 0,
+  nx: 0,
+  nz: 0,
+  R: 1,
+  d0: 0,
+  len: 0,
+};
+function setPath(
+  x0: number,
+  z0: number,
+  fx: number,
+  fz: number,
+  L0: number,
+  ex: number,
+  ez: number,
+  nx: number,
+  nz: number,
+  R: number,
+  d0: number,
+  len: number,
+) {
   const P = _path;
-  P.x0 = x0; P.z0 = z0; P.fx = fx; P.fz = fz; P.L0 = L0; P.ex = ex; P.ez = ez;
-  P.nx = nx; P.nz = nz; P.R = R; P.d0 = d0; P.len = len;
+  P.x0 = x0;
+  P.z0 = z0;
+  P.fx = fx;
+  P.fz = fz;
+  P.L0 = L0;
+  P.ex = ex;
+  P.ez = ez;
+  P.nx = nx;
+  P.nz = nz;
+  P.R = R;
+  P.d0 = d0;
+  P.len = len;
   return P;
 }
 
@@ -482,13 +518,18 @@ function pathOf(c: Car, geom: Geom | null, ownRoad: Road, turn: -1 | 0 | 1): Pat
   if (!geom || turn === 0) return setPath(c.x, c.z, fx, fz, Infinity, 0, 0, 0, 0, 1, 0, 0);
   const perp = ownRoad.c + c.lat;
   return setPath(
-    c.x, c.z, fx, fz,
+    c.x,
+    c.z,
+    fx,
+    fz,
     Math.max(0, (geom.sStart - c.s) * c.dir),
     c.axis === 0 ? geom.sStart : perp,
     c.axis === 0 ? perp : geom.sStart,
     turn === 1 ? -fz : fz,
     turn === 1 ? fx : -fx,
-    geom.R, 0, (geom.R * Math.PI) / 2,
+    geom.R,
+    0,
+    (geom.R * Math.PI) / 2,
   );
 }
 
@@ -1313,6 +1354,7 @@ export function spawnTraffic(
   seed: number,
   /** fixed number of cars (a quiet coast road wants fewer than a downtown grid) */
   count?: number,
+  coastal = false,
 ) {
   const rand = mulberry(seed ^ 0x51f15e);
   const list: Car[] = [];
@@ -1342,6 +1384,20 @@ export function spawnTraffic(
     // about one car in nine is a patrol cruiser (on top of the random ones), so there are
     // always spare cruisers for pursuits while most of them keep patrolling
     const v = makeVehicle(rand, Infinity, list.length % 9 === 4 ? ["police"] : undefined)!;
+    if (coastal && (v.type === "police" || list.length % 7 === 2)) {
+      const patrol = v.type === "police",
+        truck = SPECS.pickup;
+      Object.assign(v, {
+        type: patrol ? "police" : "pickup",
+        variant: patrol ? "coastal-patrol" : "lifeguard",
+        len: truck.len,
+        wid: truck.wid,
+        wheel: truck.wheel,
+        mass: truck.mass,
+        extras: 0,
+        color: patrol ? 0xeeeeea : 0xc52425,
+      });
+    }
     if (
       list.some(
         (o) =>

@@ -109,6 +109,7 @@ export function CityTraffic({
   time,
   link,
   cars: carCount,
+  coastal = false,
 }: {
   city: CityLayout;
   seed: number;
@@ -117,13 +118,14 @@ export function CityTraffic({
   link: React.MutableRefObject<TrafficLink>;
   /** fixed number of moving cars (default: about one per 45 m of street, 40-60) */
   cars?: number;
+  coastal?: boolean;
 }) {
   const { roadX, roadZ } = city;
 
   // ---- moving cars, deterministic start from the seed ----
   const cars = useMemo(
-    () => spawnTraffic(roadX, roadZ, city.spawn, seed, carCount),
-    [seed, roadX, roadZ, city.spawn, carCount],
+    () => spawnTraffic(roadX, roadZ, city.spawn, seed, carCount, coastal),
+    [seed, roadX, roadZ, city.spawn, carCount, coastal],
   );
 
   // ---- one batch for every vehicle: the moving cars first, then the parked ones ----
@@ -362,7 +364,8 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
-    if (lastPos.current.length !== cars.length * 2) lastPos.current = new Float32Array(cars.length * 2);
+    if (lastPos.current.length !== cars.length * 2)
+      lastPos.current = new Float32Array(cars.length * 2);
     // headlight beams and road pools: full at night, faint in the dusk light
     mats.cone.opacity = liveCity.cone;
     mats.pool.opacity = liveCity.headPool;
@@ -572,12 +575,7 @@ export function CityTraffic({
       };
     }
     batch.commit(cam);
-    for (const m of [
-      coneRef.current,
-      poolRef.current,
-      spillRef.current,
-      haloRef.current,
-    ]) {
+    for (const m of [coneRef.current, poolRef.current, spillRef.current, haloRef.current]) {
       if (!m) continue;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;

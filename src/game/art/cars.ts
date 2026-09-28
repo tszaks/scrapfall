@@ -807,8 +807,14 @@ function busBody(far: boolean) {
     // Keep separate panes readable when the transparent cabin switches to its distant LOD.
     m.both(() => {
       for (let k = 0; k <= 8; k++)
-        m.box(0.045, winHi - winLo, 0.09,
-          [W / 2 - 0.015, (winLo + winHi) / 2, R + 0.1 + k * ((L - 0.4) / 8)], PAINT, CAR_PAINT);
+        m.box(
+          0.045,
+          winHi - winLo,
+          0.09,
+          [W / 2 - 0.015, (winLo + winHi) / 2, R + 0.1 + k * ((L - 0.4) / 8)],
+          PAINT,
+          CAR_PAINT,
+        );
     });
     simpleWheels(m, f, 0.34);
   } else {
@@ -1035,6 +1041,7 @@ function stdLamps(
 }
 
 /** the model for a vehicle type (built once, on first use) */
+export const vehicleModelKey = (v: Vehicle) => v.variant ?? v.type;
 export function vehicleModel(type: string): VehicleModel {
   let md = models.get(type);
   if (md) return md;
@@ -1073,19 +1080,66 @@ export function vehicleModel(type: string): VehicleModel {
       ]),
     };
   } else {
-    const body =
-      t === "taxi" ||
-      t === "police" ||
-      t === "sedan" ||
-      t === "compact" ||
-      t === "suv" ||
-      t === "sports" ||
-      t === "pickup"
+    const service = type === "lifeguard" || type === "coastal-patrol";
+    const body = service
+      ? "pickup"
+      : t === "taxi" ||
+          t === "police" ||
+          t === "sedan" ||
+          t === "compact" ||
+          t === "suv" ||
+          t === "sports" ||
+          t === "pickup"
         ? t
         : "sedan";
     const n = carBody(body, false);
     const fr = carBody(body, true);
     const f = n.f;
+    if (service)
+      for (const m of [n.m, fr.m]) {
+        const patrol = type === "coastal-patrol",
+          rz = (f.zRf + f.zRb) / 2;
+        // Roof lightbar, contrasting door stripe, rescue board and tie-down rack.
+        m.box(1.15, 0.1, 0.3, [0, f.yr + 0.06, rz], "#292b2d", SURF.polymer, { bevel: 0.025 });
+        for (const x of [-0.3, 0.3])
+          m.box(
+            0.45,
+            0.12,
+            0.24,
+            [x, f.yr + 0.14, rz],
+            x < 0 ? "#d62624" : patrol ? "#2658c6" : "#e7a02b",
+            SURF.lens,
+            { bevel: 0.02 },
+          );
+        for (const x of [-f.W / 2 - 0.008, f.W / 2 + 0.008]) {
+          m.box(
+            0.025,
+            0.24,
+            1.6,
+            [x, f.yb + 0.45, f.zRf - 0.65],
+            patrol ? "#263e35" : "#f0e8d5",
+            SURF.enamel,
+          );
+          // Rescue cross / patrol shield on each door, visible as geometry at player height.
+          m.box(
+            0.035,
+            0.3,
+            0.3,
+            [x * 1.004, f.yb + 0.62, f.zRf - 0.6],
+            patrol ? "#c3a35c" : "#eeeeeb",
+            SURF.enamel,
+            { bevel: 0.025 },
+          );
+        }
+        if (!patrol) {
+          for (const z of [-1.8, -0.8])
+            m.box(1.75, 0.07, 0.08, [0, 1.45, z], "#4a4c4d", SURF.steel);
+          m.box(0.56, 0.12, 2.25, [0.3, 1.55, -1.3], "#f3d149", SURF.enamel, { bevel: 0.055 });
+          for (const z of [-1.85, -0.7])
+            m.box(0.59, 0.02, 0.06, [0.3, 1.62, z], "#303337", SURF.rubber);
+          m.box(0.55, 0.35, 0.55, [-0.45, 0.95, -1.65], "#e6e3d9", SURF.polymer, { bevel: 0.05 });
+        }
+      }
     const roofZ = (f.zRf + f.zRb) / 2;
     md = {
       near: n.m.build(),
@@ -1107,7 +1161,7 @@ export function vehicleModel(type: string): VehicleModel {
                 color: 0xfff2a0,
               },
             ]
-          : body === "police"
+          : body === "police" || type === "coastal-patrol"
             ? [
                 {
                   kind: "barR",
@@ -1246,12 +1300,12 @@ export class CarBatch {
     const exCounts = new Map<ExtraKey, number>();
     let lamps = 0;
     for (const v of vehicles) {
-      const model = vehicleModel(v.type);
+      const model = vehicleModel(vehicleModelKey(v));
       const ls = model.lamps(v);
       const ex = extraKeys(v);
       this.slots.push({
         v,
-        type: v.type,
+        type: vehicleModelKey(v),
         model,
         frame: new THREE.Matrix4(),
         body: new THREE.Matrix4(),
@@ -1269,7 +1323,7 @@ export class CarBatch {
         rgb: _c.set(v.color).toArray() as [number, number, number],
       });
       lamps += ls.length;
-      counts.set(v.type, (counts.get(v.type) ?? 0) + 1);
+      counts.set(vehicleModelKey(v), (counts.get(vehicleModelKey(v)) ?? 0) + 1);
       for (const k of ex) exCounts.set(k, (exCounts.get(k) ?? 0) + 1);
     }
     const inst = (g: THREE.BufferGeometry, m: THREE.Material, n: number, color: boolean) => {
@@ -1509,7 +1563,7 @@ function put(im: THREE.InstancedMesh, sl: Slot) {
 // ---------------------------------------------------------------- baked cars
 /** the lamps of a vehicle in car space (for lights that live elsewhere, e.g. blockade flashers) */
 export function vehicleLamps(v: Vehicle) {
-  return vehicleModel(v.type).lamps(v);
+  return vehicleModel(vehicleModelKey(v)).lamps(v);
 }
 
 /**
@@ -1525,7 +1579,7 @@ export function bakeCar(
   rot: number,
   layer = 0,
 ) {
-  const md = vehicleModel(v.type);
+  const md = vehicleModel(vehicleModelKey(v));
   const g = md.far;
   const pos = g.getAttribute("position");
   const nor = g.getAttribute("normal");

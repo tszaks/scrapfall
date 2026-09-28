@@ -1,3 +1,4 @@
+import { AlpineLife } from "./life/AlpineLife";
 import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
 import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
 import { getViewMode } from "./viewMode";
@@ -121,6 +122,7 @@ import {
   playerAz,
   playerBlocked,
   playerZoneKey,
+  remoteFloorY,
   pressCarButton,
   roofCount,
   roofSpot,
@@ -3911,12 +3913,17 @@ function World({
     traffic.current.active = false;
     traffic.current.px = cam.position.x;
     traffic.current.pz = cam.position.z;
+    traffic.current.py = cam.position.y;
     if (traffic.current.role === "host") {
       // the host's cars must brake for every live player in the lane, not just the host
       const now = performance.now();
       traffic.current.others = [...remotes.current.values()]
         .filter((r) => r.hp > 0 && now - r.last < 4000)
-        .map((r) => ({ x: r.x, z: r.z }));
+         .map((r) => {
+          if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
+          if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
+          return { x: r.x, z: r.z, y: remoteFloorY(r.az, r.ay, groundY(r.x, r.z)) + (r.jy ?? 0) + EYE };
+        });
     } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
@@ -5933,7 +5940,8 @@ function World({
         <CitySun key="sun-city" />
       ) : null}
       {alpineMap ? (
-        <AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
+        <><AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
+        <AlpineLife layout={alpineMap} link={traffic} /></>
       ) : isBeach(city) ? (
         <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
       ) : city ? (
