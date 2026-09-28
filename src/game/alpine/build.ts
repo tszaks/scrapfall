@@ -1,3 +1,4 @@
+import { facadePieces } from "../structures/facade";
 // Builds Whiteout Pass's chalets, set pieces and props into merged chunk geometry.
 // Everything is stamped into the city's Geo accumulator (cityGeo.ts) with the alpine
 // texture-array layers from textures.ts, so a 200 m chunk draws in a handful of calls:
@@ -787,6 +788,19 @@ function hotel(k: Kit, b: ABld) {
   const g = k.main;
   const floors = b.floors;
   const top = y + floors * 3.2;
+  const hostFace=(g:Geo,F:Frame,ax:number,az:number,bx:number,bz:number,ya:number,yb:number,uv:readonly number[]=[0,ya/2,Math.hypot(bx-ax,bz-az)/2,yb/2])=>{
+    const a=F.P(ax,az),q=F.P(bx,bz);
+    for(const cut of facadePieces(a[0],a[1],q[0],q[1],ya,yb,b.grandWing?[b.grandWing]:[])) {
+      const u0=uv[0]!+(uv[2]!-uv[0]!)*cut.t0,u1=uv[0]!+(uv[2]!-uv[0]!)*cut.t1;
+      const v0=uv[1]!+(uv[3]!-uv[1]!)*(cut.y0-ya)/(yb-ya),v1=uv[1]!+(uv[3]!-uv[1]!)*(cut.y1-ya)/(yb-ya);
+      lface(g,F,ax+(bx-ax)*cut.t0,az+(bz-az)*cut.t0,ax+(bx-ax)*cut.t1,az+(bz-az)*cut.t1,cut.y0,cut.y1,[u0,v0,u1,v1]);
+    }
+  };
+  const hostWindow=(k:Kit,F:Frame,lx:number,lz:number,faceDir:0|1|2|3,wy:number,ww:number,hh:number,r:()=>number,flowers:boolean,shutter:string)=>{
+    const q=F.P(lx,lz),p=b.grandWing;
+    if(p&&q[0]>=p.bounds.x0-.25&&q[0]<=p.bounds.x1+.25&&q[1]>=p.bounds.z0-.25&&q[1]<=p.bounds.z1+.25&&wy<p.top&&wy+hh>p.base)return;
+    windowAt(k,F,lx,lz,faceDir,wy,ww,hh,r,flowers,shutter);
+  };
   // rusticated stone ground floor, cream plaster above
   g.mat(T.stone, 0, 1).col("#f0e8dc");
   for (const [ax, az, bx, bz] of [
@@ -795,7 +809,7 @@ function hotel(k: Kit, b: ABld) {
     [W, D, 0, D],
     [0, D, 0, 0],
   ] as const)
-    lface(g, F, ax, az, bx, bz, b.ymin, y + 3.4);
+    hostFace(g, F, ax, az, bx, bz, b.ymin, y + 3.4);
   g.mat(T.plaster, 0, 1).col("#f4e6cc");
   for (const [ax, az, bx, bz] of [
     [0, 0, W, 0],
@@ -803,7 +817,7 @@ function hotel(k: Kit, b: ABld) {
     [W, D, 0, D],
     [0, D, 0, 0],
   ] as const)
-    lface(g, F, ax, az, bx, bz, y + 3.4, top);
+    hostFace(g, F, ax, az, bx, bz, y + 3.4, top);
   // cornice bands
   g.mat(T.plain, 0, 0).col("#d8c8a8");
   lbox(g, F, W / 2, D / 2, y + 3.3, W + 0.4, 0.3, D + 0.4, false);
@@ -815,8 +829,8 @@ function hotel(k: Kit, b: ABld) {
     const wy = y + f * 3.2 + 0.9;
     for (let i = 0; i < bays; i++) {
       const c = (W * (i + 0.5)) / bays;
-      windowAt(k, F, c, 0, 0, wy, 1.2, 1.7, r, false, "#2a5a3a");
-      windowAt(k, F, c, D, 2, wy, 1.2, 1.7, r, false, "#2a5a3a");
+      hostWindow(k, F, c, 0, 0, wy, 1.2, 1.7, r, false, "#2a5a3a");
+      hostWindow(k, F, c, D, 2, wy, 1.2, 1.7, r, false, "#2a5a3a");
       if (f >= 2 && i % 2 === 1 && f < floors - 1) {
         k.detail.mat(T.plain, 0, 0).col("#2a2a2e");
         lbox(k.detail, F, c, -0.55, wy - 0.95, 2.2, 0.12, 1.1);
@@ -827,8 +841,8 @@ function hotel(k: Kit, b: ABld) {
     }
     for (let i = 0; i < dbays; i++) {
       const c = (D * (i + 0.5)) / dbays;
-      windowAt(k, F, W, c, 1, wy, 1.2, 1.7, r, false, "#2a5a3a");
-      windowAt(k, F, 0, c, 3, wy, 1.2, 1.7, r, false, "#2a5a3a");
+      hostWindow(k, F, W, c, 1, wy, 1.2, 1.7, r, false, "#2a5a3a");
+      hostWindow(k, F, 0, c, 3, wy, 1.2, 1.7, r, false, "#2a5a3a");
     }
   }
   // ground floor: tall arched-feel windows and a grand entrance with a portico
@@ -836,10 +850,10 @@ function hotel(k: Kit, b: ABld) {
     const c = (W * (i + 0.5)) / bays;
     if (Math.abs(c - W / 2) < 3) continue;
     g.mat(T.glasswall, r(), 0).col("#ffffff");
-    lface(g, F, c - 0.8, -0.06, c + 0.8, -0.06, y + 0.6, y + 2.9, [0, 0, 1, 1]);
+    hostFace(g, F, c - 0.8, -0.06, c + 0.8, -0.06, y + 0.6, y + 2.9, [0, 0, 1, 1]);
   }
   g.mat(T.door, r(), 0).col("#ffffff");
-  lface(g, F, W / 2 - 1.2, -0.06, W / 2 + 1.2, -0.06, y, y + 2.8, [0, 0, 1, 1]);
+  hostFace(g, F, W / 2 - 1.2, -0.06, W / 2 + 1.2, -0.06, y, y + 2.8, [0, 0, 1, 1]);
   g.mat(T.plain, 0, 0).col("#e8dcc4");
   for (const s of [-1, 1]) {
     lbox(g, F, W / 2 + s * 2.6, -3.2, y, 0.5, 3.6, 0.5, false);

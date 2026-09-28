@@ -72,6 +72,7 @@ export function roomPlan(
   front: number,
   kind: Structure["kind"],
   levels = 2,
+  grand = false,
 ): Structure {
   const p: Structure = {
     id,
@@ -155,6 +156,76 @@ export function roomPlan(
   slab(p, bounds, base, 0);
   // Straight interior flights at alternating sides. Upper landings lead into real rooms.
   for (let f = 1; f < levels; f++) {
+    if (grand && f === 1) {
+      // A broad lower flight divides at a half-height landing into two return flights.
+      // The gallery has a real central void: from the street one sees the entire staircase.
+      const mid = w / 2,
+        half = floorH / 2;
+      const flight = (
+        u0: number,
+        v0: number,
+        u1: number,
+        v1: number,
+        width: number,
+        y0: number,
+        y1: number,
+      ) => {
+        const side = Math.abs(u1 - u0) > 0.01,
+          a = point(u0, v0),
+          b = point(u1, v1);
+        const q = side
+          ? rect(Math.min(u0, u1), v0 - width / 2, Math.max(u0, u1), v0 + width / 2)
+          : rect(u0 - width / 2, Math.min(v0, v1), u0 + width / 2, Math.max(v0, v1));
+        const axis: Flight["axis"] = Math.abs(a[0]! - b[0]!) > 0.01 ? "x" : "z";
+        p.stairs.push({
+          ...q,
+          axis,
+          reverse: axis === "x" ? b[0]! < a[0]! : b[1]! < a[1]!,
+          y0: base + y0,
+          y1: base + y1,
+          level: 1,
+        });
+        // Brass handrails follow the actual rise; vertical posts leave a clear walking width.
+        const n = Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.55);
+        for (let j = 0; j < n; j++)
+          for (const sign of [-1, 1]) {
+            const t = (j + 0.5) / n,
+              u = u0 + (u1 - u0) * t + (side ? 0 : sign * (width / 2 + 0.07)),
+              v = v0 + (v1 - v0) * t + (side ? sign * (width / 2 + 0.07) : 0),
+              y = y0 + (y1 - y0) * t;
+            B(u - 0.035, v - 0.035, u + 0.035, v + 0.035, y, y + 1.04, "#9a7548");
+            B(
+              u - (side ? Math.abs(u1 - u0) / n / 2 : 0.04),
+              v - (side ? 0.04 : Math.abs(v1 - v0) / n / 2),
+              u + (side ? Math.abs(u1 - u0) / n / 2 : 0.04),
+              v + (side ? 0.04 : Math.abs(v1 - v0) / n / 2),
+              y + 0.96,
+              y + 1.04,
+              "#ba975c",
+            );
+          }
+      };
+      flight(mid, 2.5, mid, 6.5, 3.4, 0, half);
+      slab(p, rect(mid - 1.7, 6.5, mid + 1.7, 9.1), base + half, 1);
+      flight(mid - 1.7, 7.8, 1.5, 7.8, 2.6, half, floorH);
+      flight(mid + 1.7, 7.8, w - 1.5, 7.8, 2.6, half, floorH);
+      slab(p, bounds, base + floorH, 1, rect(1.5, 2.3, w - 1.5, 9.1));
+      const rail = (u0: number, v0: number, u1: number, v1: number, y: number) => {
+        B(u0 - 0.035, v0 - 0.035, u1 + 0.035, v1 + 0.035, y + 1, y + 1.08, "#ba975c");
+        const n = Math.ceil(Math.hypot(u1 - u0, v1 - v0) / 0.7);
+        for (let j = 0; j <= n; j++) {
+          const u = u0 + ((u1 - u0) * j) / n,
+            v = v0 + ((v1 - v0) * j) / n;
+          B(u - 0.035, v - 0.035, u + 0.035, v + 0.035, y, y + 1.02, "#9a7548");
+        }
+      };
+      rail(1.5, 2.3, w - 1.5, 2.3, floorH);
+      rail(1.5, 9.1, w - 1.5, 9.1, floorH);
+      rail(1.5, 2.3, 1.5, 6.35, floorH);
+      rail(w - 1.5, 2.3, w - 1.5, 6.35, floorH);
+      rail(mid - 1.7, 9.1, mid + 1.7, 9.1, half);
+      continue;
+    }
     const width = 1.65,
       run = Math.min(d - 4, floorH * 1.9),
       side = f % 2 ? 0.45 : w - 0.45 - width;
@@ -270,6 +341,12 @@ export function roomPlan(
     }
   }
   const clearStair = (v: Volume) =>
+    !p.floors.some(
+      (f) =>
+        v.y0 >= f.y - 0.01 &&
+        v.y0 < f.y + floorH - 0.3 &&
+        f.holes.some((h) => v.x1 > h.x0 && v.x0 < h.x1 && v.z1 > h.z0 && v.z0 < h.z1),
+    ) &&
     !p.stairs.some(
       (s) =>
         v.y0 < s.y1 + 1.9 &&
@@ -279,9 +356,31 @@ export function roomPlan(
         v.z1 > s.z0 - 0.55 &&
         v.z0 < s.z1 + 0.55,
     );
+  const removedFurniture = p.solids.slice(furnitureStart).filter((v) => !clearStair(v));
   p.solids = p.solids
     .slice(0, furnitureStart)
     .concat(p.solids.slice(furnitureStart).filter(clearStair));
-  p.decor = p.decor.slice(0, decorStart).concat(p.decor.slice(decorStart).filter(clearStair));
+  // Screens and merchandise belong to their cabinet, even when their thin front panel
+  // sits just outside the stair-clearance box that removed the cabinet itself.
+  p.decor = p.decor
+    .slice(0, decorStart)
+    .concat(
+      p.decor
+        .slice(decorStart)
+        .filter(
+          (v) =>
+            clearStair(v) &&
+            !removedFurniture.some(
+              (q) =>
+                v.x1 >= q.x0 - 0.12 &&
+                v.x0 <= q.x1 + 0.12 &&
+                v.z1 >= q.z0 - 0.12 &&
+                v.z0 <= q.z1 + 0.12 &&
+                v.y1 >= q.y0 - 0.12 &&
+                v.y0 <= q.y1 + 0.12,
+            ),
+        ),
+    );
+
   return p;
 }

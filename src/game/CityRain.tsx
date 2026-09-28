@@ -1,3 +1,4 @@
+import { shelterUniforms, SHELTER_GLSL } from "./structures/weather";
 // Night rain over Vice Heights, drawn around the player:
 //   streaks   - 10k thin, camera-facing streaks, wrapped in a box around the camera on the
 //               GPU (one draw call, no per-frame CPU work), fading with distance
@@ -83,6 +84,7 @@ void main() {
 `;
 
 const RAIN_VERT = /* glsl */ `
+${SHELTER_GLSL}
 attribute vec4 aSeed;
 uniform float uTime;
 uniform float uRain;
@@ -105,7 +107,7 @@ void main() {
   float on = step(fract(aSeed.w * 91.7), uRain);
   float fade = smoothstep(0.6, 2.0, depth) * (1.0 - smoothstep(0.6, 1.0, dxz)) * (1.0 - smoothstep(0.75, 1.0, dy));
   fade *= step(0.0, p.y) * (1.0 - smoothstep(12.0, 19.0, depth));
-  vA = on * fade * k * 0.9;
+  vA = outsideShelter(p) * on * fade * k * 0.9;
   vQ = position.xy;
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
 }
@@ -252,6 +254,7 @@ export function CityRain({
       fragmentShader: STREAK_FRAG,
       uniforms: {
         uTime: time0,
+        ...shelterUniforms(),
         uRain: rainU,
         uBox: { value: BOX },
         uCenter: { value: new THREE.Vector3() },

@@ -76,5 +76,31 @@ export function alpineRooms(
     b.interior = p;
     out.push(p);
   }
+  const hotel = city.alpine.buildings.find(
+    (b) =>
+      b.t === "hotel" &&
+      Math.max(Math.abs(b.x0), Math.abs(b.x1), Math.abs(b.z0), Math.abs(b.z1)) < limit - 12,
+  );
+  if (hotel && hotel.front === 2 && hotel.x1 - hotel.x0 >= 42) {
+    const wing = { x0: hotel.x0, x1: hotel.x0 + 14, z0: hotel.z0, z1: hotel.z1 };
+    const p = roomPlan("alpine-grand-west-lobby", wing, hotel.y, 6.4, 2, "hotel", 2, true);
+    hotel.grandWing = p;
+    out.push(p);
+  }
   return out;
+}
+
+/** A podium wing beside the existing elevator, leaving its entire approach and roof intact. */
+export function cityRooms(city: import("../cityLayout").CityLayout, limit: number): Structure[] {
+  const b = city.buildings.find((b) => b.t === "super" && !b.backdrop);
+  const podium = b?.parts.find((p) => p.role === "podium");
+  if (!b || !podium) return [];
+  const cx = (podium.x0 + podium.x1) / 2,
+    cz = (podium.z0 + podium.z1) / 2;
+  const r = { x0: cx - 30, x1: cx - 12, z0: cz, z1: cz + 30 };
+  if (Math.max(Math.abs(r.x0), Math.abs(r.x1), Math.abs(r.z0), Math.abs(r.z1)) >= limit - 4)
+    return [];
+  const p = roomPlan("vice-grand-west-lobby", r, 0, 8, 2, "landmark", 2, true);
+  b.grandWing = p;
+  return [p];
 }

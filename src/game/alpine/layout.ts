@@ -59,6 +59,7 @@ export type BldType =
   | "summit";
 export type ABld = {
   interior?: import("../structures/plan").Structure;
+  grandWing?: import("../structures/plan").Structure;
   t: BldType;
   x0: number;
   z0: number;

@@ -1,3 +1,4 @@
+import { shelterUniforms, SHELTER_GLSL } from "../structures/weather";
 // Renders Whiteout Pass: the heightfield terrain and the endless land beyond, merged
 // chunks of chalets and props (one texture-array material), the instanced spruce forest,
 // the running chairlift, a painted sky with alpenglow / stars / aurora, falling snow,
@@ -609,6 +610,7 @@ function snowMaterial() {
     depthWrite: false,
     fog: false,
     uniforms: {
+      ...shelterUniforms(),
       uTime: U.uTime,
       uCam: { value: new THREE.Vector3() },
       uWind: { value: new THREE.Vector3() },
@@ -621,6 +623,7 @@ function snowMaterial() {
       uGround: U.uGround,
     },
     vertexShader: /* glsl */ `
+${SHELTER_GLSL}
 attribute float aSeed;
 uniform float uTime;
 uniform vec3 uCam;
@@ -652,7 +655,7 @@ void main() {
     vLamp = texture2D(uLightMap, (p.xz + 400.0) / 800.0).rgb * uLampK * 2.4 * (1.0 - smoothstep(2.0, 9.0, p.y - gy));
   }
   float keep = step(aSeed, 0.35 + uBlizz * 0.65);
-  vA = keep * smoothstep(1.2, 3.5, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, dist));
+  vA = outsideShelter(p) * keep * smoothstep(1.2, 3.5, dist) * (1.0 - smoothstep(B * 0.3, B * 0.5, dist));
 }`,
     fragmentShader: /* glsl */ `
 uniform sampler2D uTex;
@@ -674,6 +677,7 @@ function streakMaterial() {
     depthWrite: false,
     fog: false,
     uniforms: {
+      ...shelterUniforms(),
       uTime: U.uTime,
       uCam: { value: new THREE.Vector3() },
       uWind: { value: new THREE.Vector3() },
@@ -681,6 +685,7 @@ function streakMaterial() {
       uBlizz: { value: 0 },
     },
     vertexShader: /* glsl */ `
+${SHELTER_GLSL}
 attribute float aSeed;
 attribute float aEnd;
 uniform float uTime;
@@ -697,7 +702,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = -mv.z;
-  vA = uBlizz * smoothstep(4.0, 8.0, dist) * (1.0 - smoothstep(14.0, 24.0, dist)) * (1.0 - aEnd * 0.7);
+  vA = outsideShelter(p) * uBlizz * smoothstep(4.0, 8.0, dist) * (1.0 - smoothstep(14.0, 24.0, dist)) * (1.0 - aEnd * 0.7);
 }`,
     fragmentShader: /* glsl */ `
 uniform vec3 uCol;

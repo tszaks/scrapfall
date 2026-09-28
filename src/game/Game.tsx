@@ -1,5 +1,5 @@
 import { Structures } from "./structures/Structures";
-import { beachRooms, alpineRooms } from "./structures/adapters";
+import { beachRooms, alpineRooms, cityRooms } from "./structures/adapters";
 import { installStructures, structureList, structurePlayer, structureFloor, structureBody, structureShot } from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
 import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
@@ -6841,6 +6841,7 @@ export function Game() {
               })()
             : null;
     if(alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
+    if (mode === "city" && level.city) installStructures(cityRooms(level.city as CityLayout, PLAY_HALF));
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();

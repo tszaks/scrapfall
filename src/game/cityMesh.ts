@@ -1,3 +1,5 @@
+import { facadePieces } from "./structures/facade";
+import type { Structure } from "./structures/plan";
 // Turns the pure city layout into merged geometry, one set of meshes per 150 m chunk:
 //   main   - building massing, crowns, rooftops, ground (always drawn; casts shadows)
 //   detail - street furniture, parked cars, balconies, fire escapes, awnings, markings
@@ -449,6 +451,7 @@ function walls(
   tint = st.tint,
   fh = st.fh,
   cut?: DoorCut,
+  rooms: readonly Structure[] = [],
 ) {
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i]!;
@@ -457,13 +460,13 @@ function walls(
     if (fw < 0.05) continue;
     if (store && y0 < 0.1 && y1 > 6 && fw > 3 && isStreetEdge(p, q, mask)) {
       G.mat(L.store, st.seed, 1).col(hex("#f4f2ee"));
-      cutWall(G, p, q, 0, 4.5, facadeUV(L.store, fw, 0, 4.5, 4.5, st.uOff, 0), cut);
+      cutWall(G, p, q, 0, 4.5, facadeUV(L.store, fw, 0, 4.5, 4.5, st.uOff, 0), cut, rooms);
       G.mat(layer, st.seed, 1).col(tint);
       const mods = Math.max(1, Math.round(fw / (MODULE_W[layer] ?? 3)));
-      cutWall(G, p, q, 4.5, y1, [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh], cut);
+      cutWall(G, p, q, 4.5, y1, [st.uOff, st.vOff, st.uOff + mods, st.vOff + (y1 - 4.5) / fh], cut, rooms);
     } else {
       G.mat(layer, st.seed, 1).col(tint);
-      cutWall(G, p, q, y0, y1, facadeUV(layer, fw, y0, y1, fh, st.uOff, st.vOff), cut);
+      cutWall(G, p, q, y0, y1, facadeUV(layer, fw, y0, y1, fh, st.uOff, st.vOff), cut, rooms);
     }
   }
 }
@@ -475,7 +478,15 @@ type DoorCut = { x: number; z: number; facing: number; w: number; h: number };
  * pieces keep the whole wall's texture mapping (u runs q -> p across the full edge), so the
  * facade pattern doesn't shift around the opening.
  */
-function cutWall(G: Geo, p: P2, q: P2, y0: number, y1: number, uv: readonly number[], cut?: DoorCut) {
+function cutWall(G: Geo, p: P2, q: P2, y0: number, y1: number, uv: readonly number[], cut?: DoorCut, rooms: readonly Structure[] = []) {
+  if (rooms.length) {
+    const U=(t:number)=>uv[2]!+(uv[0]!-uv[2]!)*t;
+    const V=(y:number)=>uv[1]!+(uv[3]!-uv[1]!)*(y-y0)/(y1-y0);
+    const at=(t:number):P2=>[p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t];
+    for(const r of facadePieces(p[0],p[1],q[0],q[1],y0,y1,rooms))
+      cutWall(G,at(r.t0),at(r.t1),r.y0,r.y1,[U(r.t1),V(r.y0),U(r.t0),V(r.y1)],cut);
+    return;
+  }
   if (!cut || cut.h <= y0 || sideOf(p, q) !== cut.facing) return G.wall(p, q, y0, y1, uv);
   const fw = Math.hypot(q[0] - p[0], q[1] - p[1]);
   const ux = (q[0] - p[0]) / fw;
@@ -1090,7 +1101,7 @@ function massPart(C: Ctx, p: Part, st: Style, b: Bld, store: boolean): { poly: P
     return { poly, y: y1 };
   }
   const cut = b.access && y0 < 0.1 ? b.access.door : undefined;
-  walls(G, base, y0, y1, st, b.street, store && y0 < 0.1, st.layer, st.tint, st.fh, cut);
+  walls(G, base, y0, y1, st, b.street, store && y0 < 0.1, st.layer, st.tint, st.fh, cut, b.grandWing ? [b.grandWing] : []);
   if (y0 > 0.1 && p.role !== "tower") {
     // overhanging upper block (cantilever): close its underside
     G.mat(L.plain, st.seed, 0).col(st.tint, 0.6);
