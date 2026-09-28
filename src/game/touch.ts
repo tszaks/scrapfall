@@ -9,6 +9,9 @@ export const touchInput = {
   ability: false, // one-shot
   swap: 0, // one-shot: -1 previous weapon, 1 next weapon
   pick: null as string | null, // one-shot: equip this weapon directly (tapped HUD chip)
+  use: false, // one-shot: E (the elevator car's floor button)
+  ping: false, // one-shot: G / middle mouse
+  revive: false, // held: R next to a downed teammate
 };
 
 
@@ -21,6 +24,9 @@ export function resetTouchInput() {
   touchInput.ability = false;
   touchInput.swap = 0;
   touchInput.pick = null;
+  touchInput.use = false;
+  touchInput.ping = false;
+  touchInput.revive = false;
 }
 
 

@@ -4,25 +4,90 @@ import * as THREE from "three";
 
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
-  solidGrid, flowField, nextWaypoint, clearLine, toCell,
-  setArenaSize, SOLO_ARENA, COOP_ARENA,
+  solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
+  closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
+  BEACH_SIZE, setPosts,
 } from "./level";
 
-import { THEMES, type Theme } from "./themes";
+import { THEMES, layoutOf, offered, type Theme } from "./themes";
+import { isBeach } from "./beach/beachLayout";
+import { mapPosts, movePropsFromDoors } from "./posts";
+import { BeachWorld } from "./beach/Beach";
+import type { CityLayout } from "./cityLayout";
+import { CityScene, CitySun } from "./City";
+import { CityTraffic } from "./Traffic";
+import { CURB } from "./cityLayout";
+import { CityBlockades } from "./cityBlockades";
+import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./soloBounds";
+import type { WesternLayout } from "./western/layout";
+import { WesternScene, WesternSun } from "./western/Western";
+import { WesternTrain } from "./western/Train";
+import { WesternWeather } from "./western/Weather";
+import { WesternBlockades } from "./western/Blockades";
+import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
+import { DesperadoModel, IronMarshalParts } from "./western/enemies";
+import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
+import { westernMinimap } from "./western/minimap";
+import { Minimap, type MapFeed } from "./Minimap";
+import { alpineMinimap, cityMinimap } from "./cityMinimap";
+import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
+import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
+import { arenaSunsetSky } from "./sky";
+import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
+import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
+import { climbable, ghostOK, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { beachTerrain } from "./beach/terrain";
+import { AlpineScene, AlpineSun } from "./alpine/Alpine";
+import { PloughBody, SkierModel } from "./alpine/enemies";
+import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { decodeWeather, encodeWeather } from "./cityWeather";
+import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
+import { leaveRide, resetRide, ride, riderEye, stepRide } from "./alpine/ride";
+import { cityAccess } from "./access/cityAccess";
+import { beachAccess } from "./access/beachAccess";
+import { alpineAccessFull } from "./access/alpineAccess";
+import { westernMarkers } from "./access/westernMarkers";
+import { AccessScene } from "./access/AccessScene";
+import {
+  accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
+  encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
+  pressCarButton, roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz, ROOF_KEY,
+} from "./access/world";
+import { Stars } from "@react-three/drei";
+import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
+import { ENEMY_INFO, FLYERS, HEAVY_NEW, NEW_KINDS, NEW_STATS, hitBand, isNewKind, packVis, type NewKind } from "./enemyKinds";
+import {
+  MAX_ORD, MELEE_DY, blast, damageMul, drainShield, newOrd, packOrds, rocketAt, shieldBlocks, stepNewKind, stepOrds, unpackOrds,
+  type AICtx, type Ord,
+} from "./enemyAI";
+import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
+import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { CombatFx } from "./CombatFx";
+import { visOf, aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import { FX, VF, VK, type VisKind } from "./impacts";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
+import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
+import { MapEvents } from "./events/EventsLayer";
+import { forceMapEvent, mapEvent, onMapEventMsg } from "./events/mapEvents";
+import { power } from "./events/power";
+import { HudOverlay, SquadDriver } from "./Squad";
+import { handleSquadMsg, resetSquad, showToast } from "./squadState";
+import { pings, type PingWorld } from "./ping";
+import { DOWN, REVIVE_HP, REVIVE_RANGE, me as squadMe, reviveInterrupted, squad, squad as downTable } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 
 
 
-type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special";
+type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla"
@@ -52,7 +117,8 @@ const GUNS: Record<Weapon, Gun> = {
 };
 const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
-const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
+// wire order for co-op snapshots: only ever append (index 9 on are the newer types)
+const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special", ...NEW_KINDS];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
 const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
@@ -65,6 +131,10 @@ const TURRET_LIFE = 15;
 
 type Enemy = {
   kind: Kind;
+  /** city unstick tracking: last sampled spot and seconds without progress */
+  lastX?: number;
+  lastZ?: number;
+  stuckFor?: number;
   x: number;
   z: number;
   hp: number;
@@ -74,13 +144,35 @@ type Enemy = {
   flash: number; // hit flash timer
   shot: number; // boss volley timer
   slow: number; // slowed timer
-  frozen?: number; // cryo nova: fully frozen timer
+  frozen?: number; // cryo nova: fully frozen timer (host sim)
+  iceUntil?: number; // cryo nova: performance.now() until which the ice shell shows (the caster's client)
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
+  yaw?: number; // facing, decided by the host (toward its target) and synced to guests
   elite?: number; // 1 = event champion (gold, tougher, big shard payout)
+  // newer enemy types (enemyAI.ts): AI state, telegraph state synced to guests, shield
+  vis?: number;
+  st?: number;
+  t1?: number;
+  ax?: number | undefined;
+  az?: number | undefined;
+  side?: number | undefined;
+  plan?: number;
+  shots?: number;
+  stuck?: number;
+  gd0?: number;
+  detour?: number;
+  shield?: number;
+  shieldMax?: number;
+  shieldT?: number;
+  blockT?: number;
+  hitT?: number;
+  tgt?: number;
+  /** who set it on fire (co-op kill credit for burn kills; null = host) */
+  burnFrom?: string | null;
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
@@ -100,28 +192,34 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
   bomber: { hp: 4, speed: 1.5, radius: 0.7, dmg: 2 },
   vanguard: { hp: 11, speed: 1.2, radius: 0.9, dmg: 2 },
   special: { hp: 6, speed: 2.6, radius: 0.65, dmg: 1 },
+  ...NEW_STATS,
 };
 
-// 12 rounds, ramping; the last one is the map boss
+// 12 rounds, ramping; the last one is the map boss. From wave 2 on, one or two of the newer
+// types join each round (hornet 2; flanker + grenadier 3; sniper 4; bulwark + charger 5;
+// medic 6; cloaker 7; gatling + rocketeer 8), and the old roster is thinned to make room,
+// so a round's total pressure stays close to what it was. The city multiplies counts by 1.75.
 type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
   { drifter: 5, brute: 1 },
-  { drifter: 6, shooter: 1, runner: 1 },
-  { drifter: 6, brute: 1, shooter: 2, specter: 1, special: 1 },
-  { drifter: 6, brute: 2, shooter: 3, runner: 2, bomber: 1, special: 1 },
-  { drifter: 7, brute: 2, shooter: 3, runner: 3, specter: 2, vanguard: 1, special: 2 },
-  { drifter: 7, brute: 3, shooter: 3, runner: 4, bomber: 1, vanguard: 1, special: 2 },
-  { drifter: 8, brute: 3, shooter: 4, runner: 4, specter: 3, bomber: 2, vanguard: 1, special: 2 },
-  { drifter: 8, brute: 4, shooter: 5, runner: 5, specter: 3, bomber: 2, vanguard: 2, special: 3 },
-  { drifter: 9, brute: 5, shooter: 5, runner: 6, specter: 4, bomber: 2, vanguard: 2, special: 3 },
-  { drifter: 9, brute: 5, shooter: 6, runner: 7, specter: 4, bomber: 3, vanguard: 3, special: 3 },
-  { drifter: 10, brute: 6, shooter: 7, runner: 8, specter: 5, bomber: 3, vanguard: 3, special: 4 },
-  { boss: 1, drifter: 10, brute: 6, shooter: 6, runner: 6, specter: 4, bomber: 3, vanguard: 3, special: 3 },
+  { drifter: 5, shooter: 1, runner: 1, hornet: 3 },
+  { drifter: 5, brute: 1, shooter: 1, specter: 1, special: 1, flanker: 1, grenadier: 1 },
+  { drifter: 4, brute: 2, shooter: 2, runner: 2, bomber: 1, special: 1, hornet: 3, sniper: 1 },
+  { drifter: 5, brute: 1, shooter: 2, runner: 2, specter: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, charger: 1, hornet: 3 },
+  { drifter: 5, brute: 1, shooter: 2, runner: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, medic: 1, hornet: 3 },
+  { drifter: 5, brute: 2, shooter: 2, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, bulwark: 1, medic: 1, cloaker: 2, hornet: 3 },
+  { drifter: 5, brute: 2, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, grenadier: 1, sniper: 1, charger: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 5, brute: 3, shooter: 3, runner: 3, specter: 2, bomber: 1, vanguard: 1, special: 2, flanker: 2, grenadier: 1, sniper: 2, bulwark: 1, medic: 1, cloaker: 1, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 5, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 1, special: 2, flanker: 2, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 1, cloaker: 2, gatling: 1, rocketeer: 1, hornet: 4 },
+  { drifter: 6, brute: 3, shooter: 3, runner: 4, specter: 2, bomber: 2, vanguard: 2, special: 2, flanker: 3, grenadier: 2, sniper: 2, bulwark: 1, charger: 1, medic: 2, cloaker: 2, gatling: 1, rocketeer: 2, hornet: 5 },
+  { boss: 1, drifter: 4, brute: 2, shooter: 2, runner: 2, specter: 1, bomber: 1, vanguard: 1, special: 1, flanker: 1, bulwark: 1, sniper: 1, medic: 1, hornet: 3 },
 ];
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
+/** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
+const GAME_VERSION = "1.0.2";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
 
 
@@ -136,6 +234,12 @@ const EYE = 1.6;
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const MOVE = new THREE.Vector3();
+const TMP_A = new THREE.Vector3();
+const TMP_B = new THREE.Vector3();
+const PLAYER_R = 0.4; // player body radius for enemy contact
+/** THE KRAKEN RIG's drawn reach (hull + curled tentacles at the boss's 1.6x scale): the solid
+ * body and standoff it keeps from players, so the camera never ends up inside the model */
+const KRAKEN_R = 4.2;
 
 function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
@@ -474,6 +578,7 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
+  if (b.shape === "plough") return <PloughBody theme={theme} />;
   const skin = <meshLambertMaterial color={b.body} flatShading />;
   const limb = <meshLambertMaterial color={b.limb} flatShading />;
   const glow = <meshBasicMaterial color={b.glow} fog={false} />;
@@ -521,6 +626,8 @@ function BossBody({ theme }: { theme: Theme }) {
         <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
         <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
       </>)}
+      {b.shape === "marshal" && <IronMarshalParts b={b} />}
+      {b.shape === "kraken" && <KrakenRig b={b} />}
       {b.shape === "drake" && (<>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
@@ -531,6 +638,68 @@ function BossBody({ theme }: { theme: Theme }) {
           <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
         ))}
       </>)}
+    </group>
+  );
+}
+
+// THE KRAKEN RIG (Pacific Pier): a rusted pressure hull on a drilling derrick, dragging six
+// segmented steel tentacles.
+function KrakenRig({ b }: { b: Theme["boss"] }) {
+  const hull = <meshLambertMaterial color={b.body} flatShading />;
+  const steel = <meshLambertMaterial color={b.limb} flatShading />;
+  const brass = <meshLambertMaterial color={b.weapon} flatShading />;
+  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
+  const eye = <meshBasicMaterial color={b.eye} fog={false} />;
+  return (
+    <group>
+      <mesh position-y={1.7} castShadow><cylinderGeometry args={[1.2, 1.5, 2.8, 10]} />{hull}</mesh>
+      <mesh position-y={3.15} castShadow><sphereGeometry args={[1.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />{hull}</mesh>
+      {[0.9, 1.9, 2.8].map((y) => (
+        <mesh key={y} position-y={y}><torusGeometry args={[1.36 - y * 0.05, 0.07, 5, 14]} />{brass}</mesh>
+      ))}
+      <mesh position={[0, 2.1, 1.18]}><sphereGeometry args={[0.46, 12, 10]} />{eye}</mesh>
+      <mesh position={[0, 2.1, 1.12]} rotation-x={Math.PI / 2}><torusGeometry args={[0.52, 0.09, 6, 16]} />{brass}</mesh>
+      {[-0.75, 0.75].map((x) => (
+        <mesh key={x} position={[x, 1.25, 1.02]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.1, 10]} />{glow}</mesh>
+      ))}
+      {/* derrick */}
+      {[0, 1, 2, 3].map((k) => {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        return (
+          <mesh key={k} position={[Math.sin(a) * 0.45, 4.7, Math.cos(a) * 0.45]} rotation={[Math.cos(a) * -0.18, 0, Math.sin(a) * 0.18]}>
+            <boxGeometry args={[0.1, 2.6, 0.1]} />{steel}
+          </mesh>
+        );
+      })}
+      {[4.1, 4.9, 5.6].map((y) => (
+        <mesh key={y} position-y={y}><boxGeometry args={[1.1 - (y - 4.1) * 0.45, 0.07, 1.1 - (y - 4.1) * 0.45]} />{steel}</mesh>
+      ))}
+      <mesh position-y={6.05}><sphereGeometry args={[0.2, 8, 6]} />{glow}</mesh>
+      {/* tentacles: jointed steel segments curling out and up from the base */}
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        const segs: { y: number; r: number; th: number; k: number }[] = [];
+        let py = 0.3;
+        let pr = 1.35;
+        for (let k = 0; k < 6; k++) {
+          // tentacles curl up tight so the rig stays within its standoff (see KRAKEN_R)
+          const th = 0.35 + k * 0.38 + (i % 2) * 0.08;
+          const L = 0.55 - k * 0.04;
+          segs.push({ y: py + (Math.sin(th) * L) / 2, r: pr + (Math.cos(th) * L) / 2, th, k });
+          py += Math.sin(th) * L;
+          pr += Math.cos(th) * L;
+        }
+        return (
+          <group key={i} rotation-y={a}>
+            {segs.map((sg) => (
+              <mesh key={sg.k} position={[0, sg.y, sg.r]} rotation-x={Math.PI / 2 - sg.th} castShadow>
+                <cylinderGeometry args={[0.2 - sg.k * 0.025, 0.27 - sg.k * 0.025, 0.74, 7]} />{sg.k % 2 ? brass : steel}
+              </mesh>
+            ))}
+            <mesh position={[0, py, pr]}><sphereGeometry args={[0.13, 6, 5]} />{glow}</mesh>
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -548,6 +717,10 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
       else if (sp.type === "spore") part.current.scale.setScalar(1 + Math.sin(t * 3) * 0.12);
       else if (sp.type === "leaper") part.current.position.y = (data.aux ?? 0) > 0 ? 1.4 : Math.abs(Math.sin(t * 5)) * 0.15;
       else if (sp.type === "wyrm") part.current.rotation.z = Math.sin(t * 2) * 0.3;
+      else if (sp.type === "crawler") {
+        part.current.rotation.z = Math.sin(t * 16) * 0.07;
+        part.current.position.y = Math.abs(Math.sin(t * 16)) * 0.05;
+      }
       else part.current.rotation.z = Math.sin(t * 4) * 0.15;
     }
   });
@@ -682,6 +855,35 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
         <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
       </group>)}
+      {sp.type === "desperado" && <DesperadoModel sp={sp} data={data} />}
+      {sp.type === "crawler" && (<group ref={part}>
+        <mesh position-y={0.62} scale={[1.15, 0.42, 0.9]} castShadow><sphereGeometry args={[0.62, 12, 8]} />{B}</mesh>
+        {[-0.28, 0, 0.28].map((x) => (
+          <mesh key={x} position={[x, 0.86, -0.05]} scale={[0.16, 0.08, 0.5]}><sphereGeometry args={[0.6, 6, 5]} />{A}</mesh>
+        ))}
+        {[-0.18, 0.18].map((x) => (
+          <group key={`e${x}`} position={[x, 0.9, 0.4]}>
+            <mesh position-y={0.12}><cylinderGeometry args={[0.03, 0.035, 0.26, 5]} />{A}</mesh>
+            <mesh position-y={0.28}><sphereGeometry args={[0.07, 8, 6]} />{G}</mesh>
+          </group>
+        ))}
+        {[-1, 1].map((sd) => (
+          <group key={`c${sd}`} position={[sd * 0.55, 0.6, 0.45]} rotation-y={sd * -0.5}>
+            <mesh position-z={0.22} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.09, 0.45, 6]} />{B}</mesh>
+            <mesh position={[0, 0.02, 0.55]} scale={[0.9, 0.55, 1.2]}><sphereGeometry args={[0.2, 8, 6]} />{B}</mesh>
+            <mesh position={[sd * 0.06, 0.1, 0.76]} rotation-x={0.35}><boxGeometry args={[0.1, 0.06, 0.3]} />{B}</mesh>
+            <mesh position={[sd * 0.06, -0.06, 0.76]} rotation-x={-0.35}><boxGeometry args={[0.1, 0.06, 0.26]} />{A}</mesh>
+          </group>
+        ))}
+        {[-1, 1].map((sd) =>
+          [-0.3, 0, 0.3].map((z) => (
+            <mesh key={`l${sd}${z}`} position={[sd * 0.72, 0.32, z]} rotation={[0, 0, sd * 0.9]}>
+              <cylinderGeometry args={[0.035, 0.05, 0.7, 5]} />{A}
+            </mesh>
+          )),
+        )}
+        <mesh position-y={0.05} rotation-x={-Math.PI / 2}><ringGeometry args={[0.7, 0.85, 18]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
+      </group>)}
       {sp.type === "bile" && (<group>
         <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
         <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
@@ -700,7 +902,8 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
   );
 }
 
-const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
+const NO_ENEMIES: Enemy[] = [];
+const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; theme: Theme; all?: Enemy[] }) {
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
@@ -724,17 +927,17 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "boss" || k === "vanguard";
+    const heavy = k === "brute" || k === "boss" || k === "vanguard" || isNewKind(k); // newer types animate themselves
     const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
-    g.position.set(data.x, bob, data.z);
-    g.lookAt(state.camera.position.x, 0, state.camera.position.z);
-    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
+    g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
+    g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
+    const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : k === "hornet" ? 1.3 : 1;
     g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
-    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0;
+    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > performance.now();
     if (flame.current) {
       const burning = data.burn > 0;
       flame.current.visible = burning;
@@ -764,7 +967,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     <group ref={ref}>
       {/* event champion: gold halo + ground ring */}
       <group ref={aura} visible={false}>
-        <mesh position-y={0.06} rotation-x={-Math.PI / 2}>
+        <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[1.1, 1.35, 20]} />
           <meshBasicMaterial color="#ffd24a" fog={false} />
         </mesh>
@@ -1028,7 +1231,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && <SpecialModel theme={theme} data={data} />}
+      {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
+      {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
       {(kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
@@ -1129,6 +1333,11 @@ const BulletPool = memo(function BulletPool({
   );
 });
 
+/** is this bulwark's shield raised? The host knows its shield strength; guests read the synced flag. */
+function shieldUp(e: Enemy, host: boolean) {
+  if (e.kind !== "bulwark") return false;
+  return host ? (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 : (((e.vis ?? 0) >> 6) & 1) === 1;
+}
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
@@ -1137,19 +1346,49 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
   };
-  const slot = pool.find((b) => !b.active);
+  const i = pool.findIndex((b) => !b.active);
+  const slot = pool[i];
   if (slot) {
     Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
+    return i;
   } else if (pool.length < MAX_BULLETS) {
     pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
+    return pool.length - 1;
   }
+  return -1;
 }
 
 
 /** Simple blocky gun model, different silhouette per weapon. */
 type ModLooks = Partial<Record<"burst" | "incend" | "magnum" | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty", boolean>>;
+/**
+ * A modest rim and fill light on the first-person gun's lit materials, so a dark gun still
+ * reads against a bright sunset or a dark night: a soft edge highlight where its surfaces turn
+ * away from the eye, and a small lift of its own colour. Patched once per material.
+ */
+function addGunRim(m: THREE.Material) {
+  if (m.userData["gunRim"] || !(m instanceof THREE.MeshLambertMaterial || m instanceof THREE.MeshStandardMaterial)) return;
+  m.userData["gunRim"] = true;
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "#include <aomap_fragment>",
+      `#include <aomap_fragment>
+{
+  vec3 vd = isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vViewPosition);
+  float rim = pow(1.0 - clamp(dot(normal, vd), 0.0, 1.0), 3.0);
+  totalEmissiveRadiance += (diffuseColor.rgb * 0.5 + vec3(0.32, 0.34, 0.38)) * rim * 0.42 + diffuseColor.rgb * 0.07;
+}`,
+    );
+  };
+  const key = m.customProgramCacheKey.bind(m);
+  m.customProgramCacheKey = () => key() + "|gun-rim";
+  m.needsUpdate = true;
+}
+
 function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
   const g = GUNS[w];
   const glow = <meshBasicMaterial color={g.color} fog={false} />;
@@ -1340,13 +1579,18 @@ function World({
   onLeech,
   onCrate,
   onDeploys,
+  city,
+  western,
+  gaps,
+  seed,
+  time,
   ability,
   onAbilityCd,
   onStat,
   onEvent,
-
-
-
+  mapFeed,
+  downed,
+  pingWorld,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -1377,11 +1621,22 @@ function World({
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
   onDeploys: (d: { turret: number; mines: number }) => void;
+  city: CityLayout | null;
+  /** Dry Gulch, the western big map */
+  western: WesternLayout | null;
+  /** solo blockade openings on a big map (empty in co-op) */
+  gaps: Gap[];
+  seed: number;
+  time: TimeOfDay;
   ability: AbilityId;
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
-
+  mapFeed: React.MutableRefObject<MapFeed>;
+  /** co-op: out of health but not yet bled out (crawling, waiting for a revive) */
+  downed: boolean;
+  /** what pings can hit (filled here, read by the SquadDriver) */
+  pingWorld: React.MutableRefObject<PingWorld | null>;
 }) {
 
 
@@ -1450,15 +1705,27 @@ function World({
   const strikeRing = useRef<THREE.Mesh>(null);
   const strikeBeam = useRef<THREE.Mesh>(null);
   const strikeFlash = useRef({ t: 0 });
-  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = 0.12) => {
+  // (big maps: the ring sits on the ground there, or at your feet on a roof / in a car)
+  const fxFloor = (x: number, z: number) =>
+    Math.hypot(x - camera.position.x, z - camera.position.z) < 0.5 ? camera.position.y - EYE : groundY(x, z);
+  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = fxFloor(x, z) + 0.12) => {
     ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
   };
   const cdReport = useRef(0);
 
 
   // armour soaks damage; getting hit can discharge a shock ring
+  // knocked back by a ram / blast: same decaying push as a car bump
+  const shove = (kx: number, kz: number) => {
+    knock.current.x = kx;
+    knock.current.z = kz;
+    knock.current.shake = Math.max(knock.current.shake, 0.5);
+  };
+  const hitLog = useRef<{ dmg: number; t: number }[]>([]); // test handle: every incoming hit
   const takeHit = (dmg: number) => {
+    if (hitLog.current.length < 400) hitLog.current.push({ dmg, t: performance.now() });
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
+    reviveInterrupted(); // taking damage breaks off a revive in progress
     const s2 = stats.current;
     if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
@@ -1472,20 +1739,114 @@ function World({
     c.fov = fov;
     c.updateProjectionMatrix();
   }, [fov, camera]);
+  const look3 = worldLook(theme, time, ARENA);
+  const arenaNight = useMemo(() => new THREE.Color(worldLook(theme, "night", ARENA).sky), [theme]);
+  /** the big real-scale maps (the city, Dry Gulch) share spawning, recycling and the minimap */
+  const big = city ?? western;
+  // solo on the city: traffic keeps to the streets inside the blockades (it turns back at
+  // the last crossing instead of driving into the barricades)
+  const trafficCity = useMemo(() => {
+    if (!city || gaps.length === 0) return null;
+    const inside = (r: CityLayout["roadX"][number]) => Math.abs(r.c) + CURB[r.cls] + 6 < PLAY_HALF;
+    // (each road keeps its index in the full grid, so the light phases stay the drawn ones)
+    const nz = city.roadZ.length;
+    return {
+      ...city,
+      roadX: city.roadX.map((r, i) => ({ ...r, sig: i })).filter(inside),
+      roadZ: city.roadZ.map((r, i) => ({ ...r, sig: i, sigN: nz })).filter(inside),
+    };
+  }, [city, gaps]);
+  const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    // dev-only handle for poking at the scene from the console / test tooling
+    if (debugHandles()) {
+      const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
+      Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
+      // enemy testing: ordnance, the hit log, the wave director, the damage path
+      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      const giveAll = () => {
+        for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
+        syncInv();
+      };
+      Object.assign(handle, { giveAll, equip, trigger, weapon, invuln, stats, bullets, fxNetStats, net: netRef, fx: FX });
+      // building access: the buildings, the local player's zone state, cars and doors
+      Object.assign(handle, { access: { list: accessList, markers: accessMarkers, state: accessDebug, player: accPlayer, zoneAt, solid, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1), blocked: (x: number, z: number, r: number) => blocked(blocks, x, z, r) } });
+      // gameplay testing: the time of day, map events, the power grid, pings and revives
+      Object.assign(handle, { tod, mapEvent, forceMapEvent, power, pings, squad, waveTotal, healthRef, owned, downedRef });
+      (window as unknown as { __rs?: unknown }).__rs = handle;
+    }
+  }, [gl, scene, camera, city, western, gaps, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
+  // combat effects need to know the world: what is solid, where the robots are, the gun table
+  useEffect(() => {
+    fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])));
+    const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
+    fxEnv({
+      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      car: (x, y, z) => (city !== null || western !== null) && hitsTraffic(x, y, z),
+      half: () => HALF,
+      waterZ: city ? city.waterZ : null,
+      enemies,
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      height: (k) => hitBand(k)[1], // fliers hover: their band tops out higher (enemyKinds.ts)
+      dust: Number.isFinite(dust) ? dust : 0x9a9080,
+    });
+  }, [blocks, city, western, enemies, theme]);
+  useEffect(() => {
+    // the city needs a much deeper view so the skyline reads; other maps keep 120
+    const c = camera as THREE.PerspectiveCamera;
+    c.far = look3.camFar;
+    c.updateProjectionMatrix();
+  }, [look3.camFar, camera]);
   const bobAmt = useRef(0);
+  /** smoothed ground height under the player (decks, stairs, bowls on maps with relief) */
+  const camGround = useRef(0);
 
-  const solid = useMemo(() => solidGrid(blocks), [blocks]);
+  // what a ping can land on (read by the SquadDriver)
+  useEffect(() => {
+    pingWorld.current = {
+      enemies,
+      items: [
+        { get x() { return pickup.current.x; }, get z() { return pickup.current.z; }, get active() { return pickup.current.active; }, kind: "gun", get label() { return GUNS[pickup.current.gun].name; } },
+        { get x() { return heal.current.x; }, get z() { return heal.current.z; }, get active() { return heal.current.active; }, kind: "heal", label: "HEALTH" },
+        { get x() { return crate.current.x; }, get z() { return crate.current.z; }, get active() { return crate.current.active; }, kind: "crate", get label() { return CRATE_INFO[crate.current.kind].name; } },
+      ],
+      solid: (x, z) => blocked(blocks, x, z, 0),
+      ground: groundY,
+      los: (ax, az, bx, bz) => clearLine(blocks, ax, az, bx, bz, 0.05),
+      band: (k) => hitBand(k),
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      enemyLabel: (e) => (e.kind === "boss" ? theme.boss.name : e.kind === "special" ? theme.special.name : (ENEMY_INFO[e.kind]?.name ?? e.kind.toUpperCase())),
+    };
+  }, [blocks, enemies, theme, pingWorld]);
+
+  // (roofs of access buildings get their own nav cells, walled off from the street)
+  const solid = useMemo(() => closeRaised(patchNav(solidGrid(blocks))), [blocks]);
+  /** flow-field cache key: the nav cell a field toward this target starts from (level.ts navTarget) */
+  const navKey = (t: { x: number; z: number }) => {
+    const [i, j] = navTarget(solid, t.x, t.z, blocks);
+    return i * 1000 + j;
+  };
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
-  const pending = useRef<({ x: number; z: number; t: number } | null)[]>([]);
+  const pending = useRef<({ x: number; z: number; t: number; placed?: boolean } | null)[]>([]);
   const markMeshes = useRef<(THREE.Group | null)[]>([]);
 
   const bullets = useRef<Bullet[]>([]);
   const bulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
   const enemyBullets = useRef<Bullet[]>([]);
   const enemyBulletMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  // grenades / rockets / blasts from the newer enemy types (the host simulates, guests mirror)
+  const ords = useRef<Ord[]>(Array.from({ length: MAX_ORD }, newOrd));
+  const ordTx = useRef(new Float32Array(MAX_ORD * 3));
+  const hornetCd = useRef({ v: 0 });
+  const guestRef = useRef(false);
+  // hornet packs: index of the pack leader each follower spawns beside (-1 = none)
+  const packLead = useRef(new Int16Array(MAX_ENEMIES).fill(-1));
+  const sepGrid = useRef(new Map<number, number[]>());
 
   // ---------- networking ----------
   const netRef = useRef<NetHandle | null>(net);
@@ -1493,10 +1854,45 @@ function World({
   const isHost = !net || net.role === "host";
   const isHostRef = useRef(isHost);
   isHostRef.current = isHost;
+  guestRef.current = !isHost;
   const deadRef = useRef(dead);
   deadRef.current = dead;
+  const downedRef = useRef(downed);
+  downedRef.current = downed;
+  const aliveRef = useRef(!dead);
+  aliveRef.current = !dead;
+  const waveTotal = useRef(1);
   const slide = useRef({ x: 0, z: 0 }); // carried momentum, used for slippery boss floors
-  const dashT = useRef(0); // phase dash burst timer
+  // city traffic: bumped around by cars (velocity decays), with a short camera shake
+  const knock = useRef({ x: 0, z: 0, shake: 0 });
+  const traffic = useRef<TrafficLink>({
+    active: false,
+    px: 0,
+    pz: 0,
+    isHost: true,
+    role: "solo",
+    others: [],
+    encode: null,
+    decode: null,
+    enemies,
+    // cars treat enemies at their drawn size: elites (bounty champion, mini-boss) are 1.6x
+    // fliers (hornets, medic drones) pass over traffic: a hugely negative radius never touches
+    radiusOf: (e) => (FLYERS.has(e.kind) ? -99 : (STATS[e.kind as Kind]?.radius ?? 0.6) * (e.elite ? 1.6 : 1)),
+    isBig: (e) => !!e.elite || e.kind === "boss" || e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind),
+    hurtEnemy: null,
+    hitPlayer: () => {},
+  });
+  // guests never simulate traffic; they follow the host's snapshots
+  traffic.current.role = !net ? "solo" : net.role;
+  traffic.current.isHost = !net || net.role === "host";
+  traffic.current.enemies = enemies;
+  traffic.current.hitPlayer = (dmg, kx, kz, shake) => {
+    knock.current.x = kx;
+    knock.current.z = kz;
+    knock.current.shake = Math.max(knock.current.shake, shake);
+    if (shake > 0) playSfx("thud");
+    if (dmg > 0) takeHit(dmg);
+  };
 
   const playersRef = useRef(players);
   playersRef.current = players;
@@ -1507,8 +1903,19 @@ function World({
 
   const tTimer = useRef(0);
   const snapTimer = useRef(0);
-  const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
+  // other players' turrets / mines (visual copies; their owner's client fires them and the
+  // host applies the damage through the normal "hit" messages)
+  const remoteDeps = useRef<RemoteDeps>(new Map());
+  const depTick = useRef(0);
+  const lastDepKey = useRef("");
+  type GuestTarget = { x: number; z: number; yaw: number };
+  const guestTarget = useRef<GuestTarget[]>(enemies.map(() => ({ x: 0, z: 0, yaw: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
+  /** fine 2 m fields round each target (stacked-ground maps only, see level.ts fineField) */
+  const fines = useRef(new Map<number, FineField>());
+  const fineKey = (t: { x: number; z: number }) => toCell(t.x) * 1000 + toCell(t.z);
+  const recycleT = useRef(1);
+  const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
 
   const upsertRemote = (m: NetMsg) => {
@@ -1530,6 +1937,10 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.hp = Number(m.hp ?? MAX_HP);
     r.weapon = String(m.w ?? "pistol");
+    r.az = Number(m.az ?? 0);
+    if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
+    r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
+    r.rc = Number(m.rc ?? -1);
     r.last = performance.now();
   };
 
@@ -1537,17 +1948,30 @@ function World({
     const arr = (m.e as number[]) ?? [];
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i]!;
-      const o = i * 5;
-      if (o + 4 >= arr.length) { e.alive = false; continue; }
-      const alive = arr[o] === 1;
-      e.kind = KINDS[arr[o + 1]!] ?? "drifter";
-      e.swing = arr[o + 4]!;
-      const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0 });
-      t.x = arr[o + 2]!;
-      t.z = arr[o + 3]!;
-      if (!e.alive || !alive) { e.x = t.x; e.z = t.z; }
-      e.alive = alive;
+      const o = i * ENEMY_FIELDS;
+      if (o + ENEMY_FIELDS - 1 >= arr.length) {
+        e.alive = false;
+        continue;
+      }
+      const u = unpackEnemy(arr, o, KINDS);
+      e.kind = u.kind;
+      e.swing = u.swing;
+      if (u.flash) e.flash = 0.1;
+      e.elite = u.elite ? 1 : 0;
+      e.aux = u.leaping ? 1 : 0; // only drives the leaper's jump pose on guests
+      e.vis = u.vis; // telegraphs, lasers, shields and cloak of the newer types
+      const t = guestTarget.current[i] ?? (guestTarget.current[i] = { x: 0, z: 0, yaw: 0 });
+      t.x = u.x;
+      t.z = u.z;
+      t.yaw = u.yaw;
+      if (!e.alive || !u.alive) {
+        e.x = t.x;
+        e.z = t.z;
+        e.yaw = u.yaw;
+      }
+      e.alive = u.alive;
     }
+    unpackOrds(ords.current, Array.isArray(m.od) ? (m.od as number[]) : [], ordTx.current);
     const eb = (m.b as number[]) ?? [];
     enemyBullets.current.forEach((b) => (b.active = false));
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
@@ -1577,6 +2001,11 @@ function World({
     crate.current.z = c[1]!;
     crate.current.active = c[2] === 1;
     crate.current.kind = CRATE_KINDS[c[3]!] ?? "turret";
+    if (Array.isArray(m.tr)) traffic.current.decode?.(m.tr as number[]);
+    if (Array.isArray(m.al)) decodeAlpine(m.al as number[]);
+    if (Array.isArray(m.ac)) decodeCars(m.ac as number[]);
+    if (typeof m.tk === "number") tod.hostK = m.tk / 1000;
+    if (typeof m.rn === "number") decodeWeather(m.rn);
     const mk = (m.mk as number[]) ?? [];
     pending.current = enemies.map(() => null);
     for (let j = 0; j + 3 < mk.length; j += 4) {
@@ -1587,18 +2016,41 @@ function World({
   useEffect(() => {
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
+      if (onMapEventMsg(m)) return;
       if (m.type === "t") { upsertRemote(m); return; }
-      if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
+      if (m.type === "fire") { fxRemoteFire(m, remotes.current); return; } // visual-only replay
+      if (m.type === "left") {
+        remotes.current.delete(String(m.from));
+        remoteDeps.current.delete(String(m.from));
+        return;
+      }
+      if (m.type === "dep") {
+        remoteDeps.current.set(String(m.from ?? "host"), {
+          t: Array.isArray(m.t) ? (m.t as number[]) : [],
+          m: Array.isArray(m.m) ? (m.m as number[]) : [],
+          at: performance.now(),
+        });
+        return;
+      }
       if (isHostRef.current) {
         if (m.type === "hit") {
-          const e = enemies[Number(m.i)];
+          // a guest's hit runs through exactly the same path as the host's own; a direct shot
+          // into a raised shield is re-checked with the host's facing (the host has final say)
+          const i = Number(m.i);
+          const e = enemies[i];
           if (e?.alive) {
-            e.hp -= Number(m.dmg);
-            e.flash = 0.1;
-            if (Number(m.slow) > 0) e.slow = Number(m.slow);
-            if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { e.alive = false; onScore(); }
+            applyHit(e, i, Number(m.dmg) || 0, {
+              slow: Number(m.slow ?? 0), burn: Number(m.burn ?? 0), kb: Number(m.kb ?? 0),
+              kx: Number(m.kx ?? 0), kz: Number(m.kz ?? 0), direct: m.d === 1,
+              shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1, freeze: Number(m.fz ?? 0),
+            }, String(m.from));
           }
+        } else if (m.type === "shield") {
+          const e = enemies[Number(m.i)];
+          if (e?.alive && e.kind === "bulwark") drainShield(e, Number(m.dmg));
+        } else if (m.type === "odhit") {
+          const o = ords.current[Number(m.i)];
+          if (o?.on && o.tp === 1) { o.on = false; blast(ords.current, o.x, o.z, 0.8, o.y); }
         } else if (m.type === "ebhit") {
           const b = enemyBullets.current[Number(m.i)];
           if (b) b.active = false;
@@ -1617,9 +2069,24 @@ function World({
         }
       } else {
         if (m.type === "snap") applySnap(m);
-        else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
+        else if (m.type === "status") {
+          onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
+          if (m.banner) {
+            // a new wave: guests get the same fresh sidearm magazine the host's spawnWave hands out
+            ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+            onAmmo(ammo.current[weapon.current]);
+            syncInv();
+          }
+        }
         else if (m.type === "boss") onBoss(Number(m.hp));
-        else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
+        else if (m.type === "kill") {
+          const e = enemies[Number(m.i)];
+          if (e) creditKill(e, m.el === 1, m.bo === 1); // I landed the killing blow
+        }
+        else if (m.type === "hurt") {
+          if (m.kx !== undefined && invuln.current <= 0) shove(Number(m.kx), Number(m.kz));
+          takeHit(Number(m.dmg) || 1);
+        }
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1628,8 +2095,13 @@ function World({
 
 
   useEffect(() => {
-    camera.position.set(0, EYE, 0);
-    look.current = { yaw: 0, pitch: 0 };
+    // the city starts on the landmark's plaza, looking up the tower
+    look.current = {
+      yaw: western ? western.spawnYaw : isBeach(city) ? city.spawnYaw : alpineMap ? alpineMap.alpine.spawnYaw : 0,
+      pitch: city ? 0.12 : 0,
+    };
+    placeAtSpawn();
+    resetRide();
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -1642,8 +2114,11 @@ function World({
     lostQueue.current = [];
     turrets.current = [];
     mines.current = [];
+    remoteDeps.current.clear();
+    lastDepKey.current = "";
     lastDeploys.current = { turret: -1, mines: -1 };
     onDeploys({ turret: 0, mines: 0 });
+    fxReset();
 
     syncInv();
 
@@ -1654,11 +2129,57 @@ function World({
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
     }
     dropOrder.current = pool;
-    onAmmo(0);
+    // a full sidearm from the first frame (the HUD used to flash "PISTOL 0" until wave 1)
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    onAmmo(ammo.current.pistol);
+    syncInv();
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
+    ords.current.forEach((o) => (o.on = false));
     onStatus(1, 0, false, true);
   }, [blocks, camera]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // co-op players stand side by side at the spawn (a small ring by player number), not inside
+  // each other
+  const spawnNum = () => (!net || net.role === "host" ? 1 : (slots.current[net.self] ?? 2));
+  const placeAtSpawn = () => {
+    const sx = big ? big.spawn.x : 0;
+    const sz = big ? big.spawn.z : 0;
+    const num = spawnNum();
+    let x = sx;
+    let z = sz;
+    if (num > 1) {
+      // to the right, left, then behind the host, relative to the spawn facing
+      const yaw = look.current.yaw;
+      const rx = Math.cos(yaw);
+      const rz = -Math.sin(yaw);
+      const bx = Math.sin(yaw);
+      const bz = Math.cos(yaw);
+      const offs: [number, number][] = num === 2 ? [[2.4, 0], [-2.4, 0], [0, 2.4]] : num === 3 ? [[-2.4, 0], [2.4, 0], [0, 2.4]] : [[0, 2.4], [2.4, 2.4], [-2.4, 2.4]];
+      for (const r of [1, 1.6, 2.2]) {
+        const hit = offs.find(([a, b]) => !blocked(blocks, sx + (rx * a + bx * b) * r, sz + (rz * a + bz * b) * r, 0.5));
+        if (hit) {
+          x = sx + (rx * hit[0] + bx * hit[1]) * r;
+          z = sz + (rz * hit[0] + bz * hit[1]) * r;
+          break;
+        }
+      }
+    }
+    camera.position.set(x, EYE + (big ? groundY(x, z) : 0), z);
+    camGround.current = camera.position.y - EYE;
+  };
+  // the roster (my player number) can arrive just after the new arena: re-place before the match starts
+  const lastSpawnNum = useRef(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const num = spawnNum();
+      if (num !== lastSpawnNum.current && wave.current === 0 && !lockedRef.current) {
+        lastSpawnNum.current = num;
+        placeAtSpawn();
+      }
+    }, 300);
+    return () => window.clearInterval(id);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -1684,8 +2205,126 @@ function World({
     syncInv();
   };
 
+  /** where the living players are (the host sees everyone) */
+  /** chairlift chairs teammates are riding (so two players never share one) */
+  const ridersTaken = () => {
+    const out = new Set<number>();
+    const now = performance.now();
+    remotes.current.forEach((r) => {
+      if (now - r.last < 4000 && (r.rc ?? -1) >= 0) out.add(r.rc!);
+    });
+    return out;
+  };
+  const livePlayers = (zone?: number) => {
+    const out: { x: number; z: number }[] = [];
+    const ok = (x: number, z: number, onLift: boolean) =>
+      !alpineMap || (!onLift && (zone === undefined || alpineZone(x, z) === zone));
+    if (!deadRef.current && ok(camera.position.x, camera.position.z, ride.chair >= 0))
+      out.push({ x: camera.position.x, z: camera.position.z });
+    const now = performance.now();
+    remotes.current.forEach((r) => {
+      if (r.hp > 0 && now - r.last < 4000 && ok(r.x, r.z, (r.rc ?? -1) >= 0)) out.push({ x: r.x, z: r.z });
+    });
+    if (out.length === 0) out.push({ x: camera.position.x, z: camera.position.z });
+    return out;
+  };
+  /** a spawn spot: anywhere on the small maps; near a living player in the big city */
+  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
+  /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
+  const liveZones = () => {
+    const z = new Set<number>();
+    for (const p of livePlayers()) z.add(alpineZone(p.x, p.z));
+    return z;
+  };
+  // building access zones: roofs are 100 + b, inside a building (or on the alpine lift) -1,
+  // the street is the map's own zone (0; the alpine village 0 / summit 1)
+  const baseZone = (x: number, z: number) => (alpineMap ? alpineZone(x, z) : 0);
+  const zoneOf = (x: number, z: number) => zoneAt(x, z) || baseZone(x, z);
+  const myZone = () => {
+    const k = playerZoneKey();
+    if (k !== 0) return k;
+    if (alpineMap && ride.chair >= 0) return -1;
+    return baseZone(camera.position.x, camera.position.z);
+  };
+  const remoteZone = (r: RemoteState) => {
+    const k = zoneKeyOfAz(r.az);
+    if (k !== 0) return k;
+    if (alpineMap && (r.rc ?? -1) >= 0) return -1;
+    return baseZone(r.x, r.z);
+  };
+  /** building access: every live player with their zone */
+  const zonePlayers = () => {
+    const out: { x: number; z: number; zn: number; b: number }[] = [];
+    if (!deadRef.current) out.push({ x: camera.position.x, z: camera.position.z, zn: myZone(), b: accPlayer.b });
+    const now = performance.now();
+    remotes.current.forEach((r) => {
+      if (r.hp > 0 && now - r.last < 4000) out.push({ x: r.x, z: r.z, zn: remoteZone(r), b: r.az ? azBuilding(r.az) : -1 });
+    });
+    return out;
+  };
+  const streetIn = (zn: number) => (x: number, z: number) => navOpen(x, z) && zoneOf(x, z) === zn;
+  /**
+   * A spawn spot. Big city: near a living player, out of sight. With building access the spot
+   * is in a zone that has players standing in it (`zone` forces one): on a roof it is behind
+   * rooftop structures or at the roof door, and a full roof sends the rest to wait round the
+   * building's entrance on the street.
+   */
+  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number, already = false) => {
+    if (!big) return randomSpawn(blocks, rand);
+    if (!accessActive()) {
+      const q = spawnNear(
+        blocks, rand, livePlayers(zone), rMin, rMax, hidden, 1,
+        alpineMap && zone !== undefined ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone : navOpen,
+      );
+      // the alpine summit is a small open island where the ring search often finds nothing out
+      // of sight: fall back to any open island cell no player can see (behind the lodge or the
+      // top station), before ever appearing in view
+      if (hidden && alpineMap && alpineZone(q.x, q.z) === 1) {
+        const ps = livePlayers(1);
+        const seen = (x: number, z: number) => ps.some((p) => clearLine(blocks, p.x, p.z, x, z, 0.1));
+        if (seen(q.x, q.z)) {
+          const isl = alpineMap.alpine.island;
+          for (let k = 0; k < 120; k++) {
+            const x = isl.x0 + 1 + rand() * (isl.x1 - isl.x0 - 2);
+            const z = isl.z0 + 1 + rand() * (isl.z1 - isl.z0 - 2);
+            if (blocked(blocks, x, z, 1) || !navOpen(x, z) || seen(x, z)) continue;
+            if (ps.some((p) => Math.hypot(p.x - x, p.z - z) < 10)) continue;
+            return { x, z };
+          }
+        }
+      }
+      return q;
+    }
+    const zp = zonePlayers();
+    const standing = zp.filter((p) => p.zn >= 0);
+    const zn = zone ?? (standing.length ? standing[Math.floor(rand() * standing.length)]!.zn : baseZone(camera.position.x, camera.position.z));
+    if (zn >= ROOF_KEY) {
+      const b = zn - ROOF_KEY;
+      // (`already`: the caller is an enemy on that roof, re-placing itself: it has a place)
+      if (already || roofCount(b, enemies, pending.current) < (accessList()[b]?.cap ?? 0))
+        return roofSpot(b, blocks, standing.filter((p) => p.zn === zn), rand, hidden);
+      const ds = doorstep(b);
+      return spawnNear(blocks, rand, [ds], rMin, rMax, hidden, 1, streetIn(baseZone(ds.x, ds.z)));
+    }
+    let anchors: { x: number; z: number }[] = standing.filter((p) => p.zn === zn);
+    // nobody on the street: gather round the buildings the squad went into
+    if (!anchors.length) anchors = zp.filter((p) => p.b >= 0).map((p) => doorstep(p.b));
+    if (!anchors.length) anchors = livePlayers();
+    return spawnNear(blocks, rand, anchors, rMin, rMax, hidden, 1, streetIn(zn));
+  };
+  /** snipers take to the rooftops: a roof with a player on it (and room), if there is one */
+  const sniperZone = () => {
+    if (!accessActive()) return undefined;
+    const roofs = zonePlayers().filter((p) => p.zn >= ROOF_KEY).map((p) => p.zn);
+    const ok = roofs.filter((z) => roofCount(z - ROOF_KEY, enemies, pending.current) < (accessList()[z - ROOF_KEY]?.cap ?? 0));
+    return ok.length ? ok[Math.floor(rand() * ok.length)] : undefined;
+  };
+
+  /** where the boss appears: Dry Gulch's Iron Marshal steps off his train at the platform */
+  const bossSpot = () => (western ? trainBossSpot() : spot(25, 40, false));
+
   const placePickup = (gun: Weapon) => {
-    const p = randomSpawn(blocks, rand);
+    const p = spot(8, 26, false);
     pickup.current = { x: p.x, z: p.z, active: true, gun };
     setDropGun(gun);
   };
@@ -1702,7 +2341,125 @@ function World({
   };
 
   const burstQueue = useRef(0);
+  const tracerCount = useRef(0);
   const bountyKills = useRef(0);
+
+  // ---- damage: ONE host-side path for every hit, the host's own and the guests' ----
+  // Guests never apply damage themselves: they send the full hit (damage, slow, burn,
+  // knockback, shred / executioner / bounty flags, shot direction) and the host runs
+  // applyHit exactly as for its own shots. Kill credit and kill rewards go back to the
+  // shooter, so nothing is lost and nothing is counted twice.
+  type HitFx = { slow?: number; burn?: number; kb?: number; kx?: number; kz?: number; direct?: boolean; shred?: boolean; exec?: boolean; bounty?: boolean; freeze?: number };
+  /** kill credit and kill rewards, on the client of whoever landed the blow */
+  const creditKill = (e: Enemy, elite: boolean, bounty: boolean) => {
+    onScore();
+    if (elite) onShard(15);
+    if (bounty) {
+      onShard(1);
+      bountyKills.current++;
+      if (bountyKills.current % 6 === 0) onLeech();
+    }
+    const s2 = stats.current;
+    if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
+    if (s2.boom > 0 && Math.random() < s2.boom) {
+      for (let oi = 0; oi < enemies.length; oi++) {
+        const o = enemies[oi]!;
+        if (!o.alive || o === e) continue;
+        if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
+      }
+    }
+  };
+  /** host: an enemy dies; `from` is the shooter (null = this host player) */
+  const killEnemy = (e: Enemy, idx: number, from: string | null, bounty: boolean) => {
+    e.alive = false;
+    e.burn = 0;
+    if (e.kind === "special" && theme.special.type === "mite") {
+      // shell shatters into a ring of cold shrapnel
+      for (let s = 0; s < 8; s++) {
+        const a = (s / 8) * Math.PI * 2;
+        const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+        fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, groundY(e.x, e.z) + 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
+      }
+    }
+    const elite = !!e.elite;
+    e.elite = 0;
+    // elites, mini-bosses and bosses always leave a medkit behind (Toby); only on open ground
+    // (not up on a roof, where the pack would drop into the building below)
+    if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5)) heal.current = { x: e.x, z: e.z, active: true };
+    if (from === null) creditKill(e, elite, bounty);
+    else netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
+  };
+  /** host only: apply one hit with all its effects */
+  const applyHit = (e: Enemy, idx: number, dmg: number, h: HitFx, from: string | null) => {
+    if (!e.alive) return;
+    // a direct shot into a raised bulwark shield is stopped, whoever fired it
+    if (h.direct && shieldBlocks(e, h.kx ?? 0, h.kz ?? 0, shieldUp(e, true))) {
+      drainShield(e, dmg);
+      return;
+    }
+    const now = performance.now();
+    if (h.exec && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2; // executioner: judged on the host's true health
+    if ((e.shredUntil ?? 0) > now) dmg *= 1.3;
+    if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
+    if (e.kind === "special" && theme.special.type === "crawler") dmg *= 0.7; // crab shell
+    dmg *= damageMul(e); // a charger stunned against a wall takes extra
+    const kb = h.kb ?? 0;
+    if (kb > 0 && e.kind !== "boss") {
+      const kx = h.kx ?? 0;
+      const kz = h.kz ?? 0;
+      const len = Math.hypot(kx, kz) || 1;
+      const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
+      // walk the push in small steps so a shove never drives anyone into cover (Toby), and
+      // never lifts it onto a balcony or up the tower's face (climbable)
+      const er = Math.min(STATS[e.kind].radius, 0.8);
+      const steps = Math.max(1, Math.ceil(push / 0.35));
+      const sx = (kx / len) * (push / steps);
+      const sz = (kz / len) * (push / steps);
+      for (let s = 0; s < steps; s++) {
+        const nx = e.x + sx;
+        const nz = e.z + sz;
+        const okX = !blocked(blocks, nx, e.z, er) && climbable(e.x, e.z, nx, e.z);
+        if (okX) e.x = nx;
+        const okZ = !blocked(blocks, e.x, nz, er) && climbable(e.x, e.z, e.x, nz);
+        if (okZ) e.z = nz;
+        if (!okX && !okZ) break;
+      }
+    }
+    e.hp -= dmg;
+    e.flash = 0.1;
+    e.hitT = 2; // cloakers flicker into view when hurt
+    if ((h.slow ?? 0) > 0) e.slow = h.slow!;
+    if ((h.freeze ?? 0) > 0) e.frozen = Math.max(e.frozen ?? 0, h.freeze!); // cryo nova
+    if ((h.burn ?? 0) > 0) { e.burn = h.burn!; e.burnTick = 1; e.burnFrom = from; }
+    if (h.shred) e.shredUntil = now + 3000;
+    if (e.kind === "boss") onBoss(Math.max(0, e.hp));
+    if (e.hp <= 0) killEnemy(e, idx, from, !!h.bounty);
+  };
+  /** this client's player deals damage: applied on the host, sent to the host from a guest */
+  const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0, fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {}) => {
+    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the damage
+    if (stats.current.steal > 0 && dmg > 0 && e.alive) {
+      stealBank.current += dmg * stats.current.steal;
+      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+    }
+    if (!isHostRef.current) {
+      netRef.current?.broadcast({
+        type: "hit", i: idx, dmg,
+        ...(slow ? { slow } : {}),
+        ...(burn ? { burn } : {}),
+        ...(kb ? { kb } : {}),
+        ...(kb || fx.direct ? { kx: Math.round(kx * 100) / 100, kz: Math.round(kz * 100) / 100 } : {}),
+        ...(fx.direct ? { d: 1 } : {}),
+        ...(fx.shred ? { sh: 1 } : {}),
+        ...(fx.exec ? { ex: 1 } : {}),
+        ...(fx.bounty ? { bo: 1 } : {}),
+        ...(fx.freeze ? { fz: fx.freeze } : {}),
+      });
+      e.flash = 0.1;
+      return;
+    }
+    applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
+  };
   const burstTimer = useRef(0);
 
   const spit = () => {
@@ -1712,10 +2469,14 @@ function World({
     camera.getWorldDirection(FORWARD);
     const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
     pos.y -= 0.25;
+    // seeded spread so co-op viewers can replay the exact same pellets
+    const seed = (Math.random() * 1e9) | 0;
+    const spread = rng(seed);
+    const kind = visOf(w);
+    let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
-      const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
-      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
-      dir.y += (Math.random() - 0.5) * g.spread * 0.6;
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, g.spread, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -1729,12 +2490,14 @@ function World({
         burn: isP && s2.incend ? 3 : 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
-      fireInto(
+      const slot = fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
@@ -1765,9 +2528,10 @@ function World({
     }
   };
 
-  // dying costs you every gun but the pistol; upgrades and pistol mods are kept
+  // dying costs you every gun but the pistol; upgrades and pistol mods are kept. Going DOWN
+  // in co-op is not dying: the guns go only if the bleed-out runs out (or solo death).
   useEffect(() => {
-    if (!dead) return;
+    if (!dead || downed) return;
     const lost = [...owned.current].filter((w) => w !== "pistol");
     lost.forEach((w) => {
       owned.current.delete(w);
@@ -1776,7 +2540,7 @@ function World({
     });
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
     equip("pistol");
-  }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
 
@@ -1795,6 +2559,8 @@ function World({
         if (w) equip(w);
       }
       if (e.code === "KeyF") abilFire.current = true;
+      // in an elevator car, E presses the floor button (instead of the next weapon)
+      if (e.code === "KeyE" && accessActive() && pressCarButton()) return;
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -1817,15 +2583,28 @@ function World({
     };
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** an open spot right next to (x, z): hornet pack members land around their leader */
+  const besides = (x: number, z: number) => {
+    // close beside the leader first, then a little wider; never a blocked or stair-only spot
+    for (let k = 0; k < 20; k++) {
+      const w = k < 8 ? 2.4 : 7;
+      const qx = x + (rand() - 0.5) * w;
+      const qz = z + (rand() - 0.5) * w;
+      if (!blocked(blocks, qx, qz, 0.5) && !raised(qx, qz)) return { x: qx, z: qz };
+    }
+    return spot(25, 45, true);
+  };
+
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
-    const waveMul = 1.25 + 0.1 * (n - 1);
-    const enemyMul = waveMul * (1 + 0.6 * extra);
+    // arenas: Toby's fuller waves as the run goes (1.25x on wave 1, +0.10x every wave after).
+    // The big real-scale maps keep their own tuned crowd (1.75x: enemies hide behind blocks).
+    const waveMul = big ? 1.75 : 1.25 + 0.1 * (n - 1);
+    const enemyMul = (1 + 0.6 * extra) * waveMul;
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
@@ -1838,17 +2617,32 @@ function World({
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
       .concat(surprises)
       .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
-    // shuffle arrivals so enemy types come mixed instead of type-by-type
-    const boss: Kind[] = roster.filter((k) => k === "boss");
-    const rest: Kind[] = roster.filter((k) => k !== "boss");
-    for (let i = rest.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      const tmp = rest[i]!;
-      rest[i] = rest[j]!;
-      rest[j] = tmp;
+    // arrival order: the boss first, then a shuffled mix, so the newer types turn up through
+    // the wave instead of all at the end; hornets arrive as one pack of 3-5 from one spot
+    const units: Kind[][] = roster.filter((k) => k !== "hornet" && k !== "boss").map((k) => [k]);
+    const hornets = roster.filter((k) => k === "hornet");
+    for (let h = 0; h < hornets.length; ) {
+      const left = hornets.length - h;
+      const size = left <= 5 ? left : 4;
+      units.push(hornets.slice(h, h + size));
+      h += size;
     }
-    const kinds: Kind[] = boss.concat(rest).slice(0, MAX_ENEMIES);
+    for (let u = units.length - 1; u > 0; u--) {
+      const j = Math.floor(rand() * (u + 1));
+      [units[u], units[j]] = [units[j]!, units[u]!];
+    }
+    const kinds: Kind[] = [];
+    const leadOf: number[] = [];
+    roster.filter((k) => k === "boss").forEach((k) => { kinds.push(k); leadOf.push(-1); });
+    for (const unit of units) {
+      const first = kinds.length;
+      unit.forEach((k, m) => { kinds.push(k); leadOf.push(m === 0 ? -1 : first); });
+    }
+    kinds.length = Math.min(kinds.length, MAX_ENEMIES);
+    waveTotal.current = Math.max(1, kinds.length); // the time of day follows how much is cleared
     const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+    // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
+    const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
 
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
@@ -1859,7 +2653,10 @@ function World({
         e.alive = false;
         return;
       }
-      const p = randomSpawn(blocks, rand);
+      const lead = leadOf[i] ?? -1;
+      packLead.current[i] = lead;
+      const lp = lead >= 0 ? pending.current[lead] : null;
+      const p = lp ? besides(lp.x, lp.z) : kind === "boss" ? bossSpot() : spot(25, 45, true);
       Object.assign(e, {
         kind,
         x: p.x,
@@ -1876,10 +2673,30 @@ function World({
         slow: 0,
         burn: 0,
         burnTick: 0,
+        vis: 0,
+        st: 0,
+        t1: 0,
+        ax: undefined,
+        az: undefined,
+        side: undefined,
+        plan: 0,
+        shots: 0,
+        stuck: 0,
+        gd0: 99,
+        detour: 0,
+        shield: kind === "bulwark" ? Math.round(8 * hpMul) : 0,
+        shieldMax: kind === "bulwark" ? Math.round(8 * hpMul) : 0,
+        shieldT: 0,
+        blockT: 0,
+        hitT: 0,
+        tgt: -1,
       });
       e.elite = 0;
-      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
+      pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay + (kind === "boss" ? bossTrain : 0) };
+      // a steady trickle; the city's bigger crowd trickles a little faster so waves don't drag.
+      // A hornet pack lands together, a beat apart.
+      const nextLead = leadOf[i + 1] ?? -1;
+      delay += nextLead >= 0 ? 0.12 : i < 2 ? 0.4 : big ? 0.4 + rand() * 1.2 : 0.5 + rand() * 1.6;
 
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
@@ -1903,14 +2720,14 @@ function World({
     // health: guaranteed pack every wave in co-op, every other wave solo
     const healGap = extra > 0 ? 1 : 2;
     if (n >= 2 && n - lastHealWave.current >= healGap) {
-      const h = randomSpawn(blocks, rand);
+      const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
 
     // supply crate: turret kit, barrier, cryo mine or ammo cache
     if (!crate.current.active) { // exactly one supply drop per wave
-      const c = randomSpawn(blocks, rand);
+      const c = spot(8, 28, false);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
@@ -1934,12 +2751,32 @@ function World({
 
 
   const outOfBounds = (p: THREE.Vector3) =>
-    p.y < 0 || Math.abs(p.x) > HALF || Math.abs(p.z) > HALF || blocked(blocks, p.x, p.z, 0.05);
+    bulletBlocked(p.x, p.y, p.z) ??
+    // the beach's ground decides shots itself (they fly over railings, stop on decks and the
+    // sea); every other map: under the ground or into a solid cell
+    // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
+    ((shotHits(p.x, p.y, p.z) ??
+      (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05))) ||
+    Math.abs(p.x) > HALF ||
+    Math.abs(p.z) > HALF ||
+    (big !== null && hitsTraffic(p.x, p.y, p.z)));
+  // the local player's collision: interiors (lobby, car, stairwell) have their own walls
+  const pBlocked = (x: number, z: number, r: number) => playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const k = keys.current;
+    traffic.current.active = false;
+    traffic.current.px = cam.position.x;
+    traffic.current.pz = cam.position.z;
+    if (traffic.current.role === "host") {
+      // the host's cars must brake for every live player in the lane, not just the host
+      const now = performance.now();
+      traffic.current.others = [...remotes.current.values()]
+        .filter((r) => r.hp > 0 && now - r.last < 4000)
+        .map((r) => ({ x: r.x, z: r.z }));
+    } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
       look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
@@ -1956,7 +2793,11 @@ function World({
       }
     }
     cam.rotation.order = "YXZ";
-    cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+    const kn = knock.current;
+    kn.shake = Math.max(0, kn.shake - delta * 2.2);
+    const roll = kn.shake > 0 ? Math.sin(state.clock.elapsedTime * 38) * 0.06 * kn.shake : 0;
+    const kick = fxKick(); // per-weapon camera kick + explosion shake
+    cam.rotation.set(look.current.pitch + roll * 0.4 + kick.pitch, look.current.yaw + kick.yaw, roll);
 
     if (gameOver || !locked) return;
 
@@ -1968,6 +2809,11 @@ function World({
     if (touchInput.ability) {
       touchInput.ability = false;
       abilFire.current = true;
+    }
+    // touch USE: the elevator car's floor button (E on a keyboard)
+    if (touchInput.use) {
+      touchInput.use = false;
+      if (accessActive()) pressCarButton();
     }
     if (touchInput.swap) {
       const dir = touchInput.swap;
@@ -2006,6 +2852,13 @@ function World({
         * (overdrive.current > 0 ? 0.5 : 1);
     }
 
+    // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
+    // (building access: interiors have their own walls, see pBlocked)
+    // (already overlapping something, e.g. dropped onto a thin post: step out with a slimmer
+    // body instead of being frozen in place)
+    const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
+    const walkTo = (x: number, z: number) =>
+      !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
@@ -2017,30 +2870,143 @@ function World({
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
+    alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
+    worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1);
-    if (dashT.current > 0) {
-      // dash burst: carry the impulse, easing off, instead of snapping to walk speed
-      dashT.current -= delta;
-      const k = Math.min(1, delta * 4);
-      slide.current.x += (MOVE.x * spd - slide.current.x) * k;
-      slide.current.z += (MOVE.z * spd - slide.current.z) * k;
-    } else {
-      slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
-      slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
-    }
+      * (overdrive.current > 0 ? 1.3 : 1)
+      * groundSpeed(cam.position.x, cam.position.z) // deep snow off the paths
+      * (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
+    slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
+    slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+      if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
+      if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
+    }
+    // weather: blizzard gusts shove you downwind (not while you wait on a loading line)
+    const onLoadingLine =
+      !!alpineMap &&
+      [alpineMap.alpine.ride.boardUp, alpineMap.alpine.ride.boardDown].some(
+        ([bx, bz]) => Math.hypot(cam.position.x - bx, cam.position.z - bz) < 5,
+      );
+    if ((wind.x !== 0 || wind.z !== 0) && !onLoadingLine) {
+      const wx = cam.position.x + wind.x * delta;
+      const wz = cam.position.z + wind.z * delta;
+      if (walkTo(wx, cam.position.z)) cam.position.x = wx;
+      if (walkTo(cam.position.x, wz)) cam.position.z = wz;
+    }
+
+    // car bumps: velocity that decays quickly, sliding along walls instead of through them
+    if (Math.abs(kn.x) > 0.01 || Math.abs(kn.z) > 0.01) {
+      const steps = Math.ceil((Math.hypot(kn.x, kn.z) * delta) / 0.25);
+      for (let st = 0; st < steps; st++) {
+        const nx = cam.position.x + (kn.x * delta) / steps;
+        const nz = cam.position.z + (kn.z * delta) / steps;
+        if (walkTo(nx, cam.position.z)) cam.position.x = nx;
+        else kn.x *= -0.2;
+        if (walkTo(cam.position.x, nz)) cam.position.z = nz;
+        else kn.z *= -0.2;
+      }
+      const decay = Math.exp(-delta * 6);
+      kn.x *= decay;
+      kn.z *= decay;
+    }
+
+    // enemies are solid: push the player back out of any body it walked into and let it slide
+    // round. Walls win (an enemy can never shove you into a building). Every client resolves
+    // its own player against the enemies it sees; fliers pass overhead; the phase dash goes
+    // straight through ("shrug off every hit").
+    const phasing = invuln.current > 0 && abilityRef.current === "dash";
+    if (!spectating && !phasing) {
+      for (let pass = 0; pass < 2; pass++) {
+        for (const e of enemies) {
+          if (!e.alive || FLYERS.has(e.kind)) continue;
+          const r = (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1)) + PLAYER_R;
+          const ox = cam.position.x - e.x;
+          const oz = cam.position.z - e.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd);
+          // dead centre (e.g. it spawned on you): step out backwards
+          const nx = dist > 1e-4 ? ox / dist : -FORWARD.x;
+          const nz = dist > 1e-4 ? oz / dist : -FORWARD.z;
+          const push = r - dist;
+          const tx = cam.position.x + nx * push;
+          const tz = cam.position.z + nz * push;
+          if (!pBlocked(tx, cam.position.z, 0.4)) cam.position.x = tx;
+          if (!pBlocked(cam.position.x, tz, 0.4)) cam.position.z = tz;
+          // drop the velocity into the body so walking into it slides instead of bouncing
+          const vn = slide.current.x * nx + slide.current.z * nz;
+          if (vn < 0) {
+            slide.current.x -= vn * nx;
+            slide.current.z -= vn * nz;
+          }
+        }
+      }
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     bob.current += delta * 9 * bobAmt.current;
-    cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    {
+      // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
+      // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
+      // stairs, the car and the roof decide the floor under you
+      const gy = accessActive()
+        ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
+        : groundY(cam.position.x, cam.position.z);
+      const dg = gy - camGround.current;
+      camGround.current =
+        !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+    }
+    // DOWN in co-op: the view drops to the ground (a crawl)
+    cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    if (accessActive()) {
+      // elevator cars (the host decides, guests follow the snapshot) and the auto doors
+      const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
+      const now = performance.now();
+      remotes.current.forEach((r) => {
+        if (r.hp > 0 && now - r.last < 4000) people.push({ x: r.x, z: r.z, az: r.az ?? 0, y: r.ay ?? 0, id: r.id, press: r.ap ?? 0 });
+      });
+      stepCars(delta, people, isH);
+      stepDoors(delta, people);
+    }
+    // in a car the floor counter sits where the ammo pills are: the HUD hides them (CSS)
+    const inCarNow = accessActive() && accPlayer.inCar;
+    if (inCarNow !== inCarHud) {
+      inCarHud = inCarNow;
+      if (typeof document !== "undefined") document.documentElement.classList.toggle("rs-incar", inCarNow);
+    }
+    // alpine chairlift: stand on a loading line to board; seated, the chair carries you
+    if (alpineMap && spectating && ride.chair >= 0) leaveRide(cam, alpineMap.alpine); // died on the chair
+    if (alpineMap && !spectating && stepRide(cam, alpineMap.alpine, delta, look.current, ridersTaken())) {
+      slide.current.x = 0;
+      slide.current.z = 0;
+    }
+
+    // minimap feed (the HUD reads it)
+    if (big) {
+      const mf = mapFeed.current;
+      mf.x = cam.position.x;
+      mf.z = cam.position.z;
+      mf.yaw = look.current.yaw;
+      const [g0, h0, c0] = mf.items;
+      if (g0 && h0 && c0) {
+        g0.x = pickup.current.x;
+        g0.z = pickup.current.z;
+        g0.active = pickup.current.active && !owned.current.has(pickup.current.gun);
+        g0.color = GUNS[pickup.current.gun].color;
+        h0.x = heal.current.x;
+        h0.z = heal.current.z;
+        h0.active = heal.current.active;
+        c0.x = crate.current.x;
+        c0.z = crate.current.z;
+        c0.active = crate.current.active;
+        c0.color = CRATE_INFO[crate.current.kind].color;
+      }
+    }
 
     // share my position with the room
     if (n) {
@@ -2050,6 +3016,8 @@ function World({
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
+          ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press } : {}),
+          ...(alpineMap ? { rc: ride.chair } : {}),
         });
       }
     }
@@ -2061,7 +3029,7 @@ function World({
     if (pickupMesh.current) {
       pickupMesh.current.visible = pk.active && canTake;
       if (pk.active) {
-        pickupMesh.current.position.set(pk.x, Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
+        pickupMesh.current.position.set(pk.x, groundY(pk.x, pk.z) + Math.sin(state.clock.elapsedTime * 3) * 0.15, pk.z);
         pickupMesh.current.rotation.y += delta * 2;
       }
     }
@@ -2082,7 +3050,7 @@ function World({
     if (healMesh.current) {
       healMesh.current.visible = hp.active;
       if (hp.active) {
-        healMesh.current.position.set(hp.x, 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
+        healMesh.current.position.set(hp.x, groundY(hp.x, hp.z) + 0.9 + Math.sin(state.clock.elapsedTime * 3) * 0.15, hp.z);
         healMesh.current.rotation.y += delta * 1.5;
       }
     }
@@ -2101,7 +3069,7 @@ function World({
     if (crateMesh.current) {
       crateMesh.current.visible = ck.active;
       if (ck.active) {
-        crateMesh.current.position.set(ck.x, 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
+        crateMesh.current.position.set(ck.x, groundY(ck.x, ck.z) + 0.5 + Math.sin(state.clock.elapsedTime * 2.4) * 0.12, ck.z);
         crateMesh.current.rotation.y += delta * 1.2;
       }
     }
@@ -2131,7 +3099,7 @@ function World({
       const mesh = turretMeshes.current[ti];
       if (mesh) {
         mesh.visible = t.t > 0;
-        mesh.position.set(t.x, 0, t.z);
+        mesh.position.set(t.x, groundY(t.x, t.z), t.z);
       }
       if (t.t <= 0) { turrets.current.splice(ti, 1); continue; }
       t.cd -= delta;
@@ -2146,7 +3114,11 @@ function World({
         t.cd = 0.3;
         playSfx("turret");
         const v = new THREE.Vector3(best.x - t.x, 0, best.z - t.z).normalize().multiplyScalar(30);
-        fireInto(bullets.current, new THREE.Vector3(t.x, 1.1, t.z), v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        const from = new THREE.Vector3(t.x, groundY(t.x, t.z) + 1.1, t.z);
+        const tip = from.clone().addScaledVector(v, 0.85 / 30).setY(from.y - 0.2);
+        const ts = fireInto(bullets.current, from, v, 0.4, 0.5, "#4fe3ff", 0.11, { knock: stats.current.knock });
+        if (ts >= 0) fxShot(ts, bullets.current[ts]!, VK.TURRET, 0, tip);
+        fxFired(VK.TURRET, 0, from, v.clone().normalize(), 0, 30, n, tip);
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
@@ -2154,6 +3126,20 @@ function World({
     for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
 
     // keep the HUD status panel in sync with what's deployed
+    // share my turrets / mines with the room: on change, and a 1 s heartbeat
+    if (n) {
+      depTick.current -= delta;
+      const r100 = (v: number) => Math.round(v * 100);
+      const t = turrets.current.flatMap((q) => [r100(q.x), r100(q.z), Math.round(q.t * 10)]);
+      const m = mines.current.flatMap((q) => [r100(q.x), r100(q.z)]);
+      const key = `${turrets.current.length}:${m.join(",")}`;
+      if (key !== lastDepKey.current || depTick.current <= 0) {
+        lastDepKey.current = key;
+        depTick.current = 1;
+        n.broadcast({ type: "dep", t, m });
+      }
+    }
+
     deployTick.current -= delta;
     if (deployTick.current <= 0) {
       deployTick.current = 0.25;
@@ -2177,6 +3163,8 @@ function World({
         const f = Math.min(1, delta * 12);
         e.x += (t.x - e.x) * f;
         e.z += (t.z - e.z) * f;
+        const dy = Math.atan2(Math.sin(t.yaw - (e.yaw ?? 0)), Math.cos(t.yaw - (e.yaw ?? 0)));
+        e.yaw = (e.yaw ?? 0) + dy * (1 - Math.exp(-delta * 14));
         e.flash -= delta;
       });
       enemyBullets.current.forEach((b, i) => {
@@ -2202,70 +3190,11 @@ function World({
       if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
     };
 
-    const onKill = (e: Enemy) => {
-      const s2 = stats.current;
-      if (s2.leech > 0 && Math.random() < s2.leech) onLeech();
-      if (s2.boom > 0 && Math.random() < s2.boom) {
-        for (let oi = 0; oi < enemies.length; oi++) {
-          const o = enemies[oi]!;
-          if (!o.alive || o === e) continue;
-          if (Math.hypot(o.x - e.x, o.z - e.z) < 3.4) hurtEnemy(o, 3, oi);
-        }
-      }
-    };
-    const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
-      if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
-      if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
-      if (stats.current.steal > 0 && dmg > 0) {
-        stealBank.current += dmg * stats.current.steal;
-        if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
-      }
-      if (kb > 0 && e.kind !== "boss") {
-        const len = Math.hypot(kx, kz) || 1;
-        const push = kb * (e.kind === "brute" || e.kind === "vanguard" ? 0.5 : 1);
-        // walk the push in small steps so a shove never drives anyone into cover
-        const er = Math.min(STATS[e.kind].radius, 0.8);
-        const steps = Math.max(1, Math.ceil(push / 0.35));
-        const sx = (kx / len) * (push / steps);
-        const sz = (kz / len) * (push / steps);
-        for (let s = 0; s < steps; s++) {
-          const nx = e.x + sx;
-          const nz = e.z + sz;
-          const okX = !blocked(blocks, nx, e.z, er);
-          const okZ = !blocked(blocks, e.x, nz, er);
-          if (!okX && !okZ) break;
-          if (okX) e.x = nx;
-          if (okZ) e.z = nz;
-        }
-      }
-
-      if (!isH) {
-        n?.broadcast({ type: "hit", i: idx, dmg, slow });
-        e.flash = 0.1;
-        return;
-      }
-      e.hp -= dmg;
-      e.flash = 0.1;
-      if (slow > 0) e.slow = slow;
-      if (burn > 0) { e.burn = burn; e.burnTick = 1; }
-      if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-      if (e.hp <= 0) {
-        e.alive = false;
-        if (e.kind === "special" && theme.special.type === "mite") {
-          // shell shatters into a ring of cold shrapnel
-          for (let s = 0; s < 8; s++) {
-            const a = (s / 8) * Math.PI * 2;
-            const v = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
-            fireInto(enemyBullets.current, new THREE.Vector3(e.x + v.x * 0.6, 1.2, e.z + v.z * 0.6), v.multiplyScalar(9), 0.9, 1, "", 0.14);
-          }
-        }
-        onScore();
-        if (e.elite) { onShard(15); e.elite = 0; }
-        // elites, mini-bosses and bosses always leave a medkit behind
-        if (e.kind === "boss" || e.kind === "vanguard") heal.current = { x: e.x, z: e.z, active: true };
-        onKill(e);
-
-      }
+    // city traffic reads the player and can shove enemies through the regular hit path
+    traffic.current.active = !spectating;
+    traffic.current.hurtEnemy = (idx, dmg, kx, kz) => {
+      const e = enemies[idx];
+      if (e?.alive) hurtEnemy(e, dmg, idx, 0, 0, 1.6, kx, kz);
     };
 
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
@@ -2307,7 +3236,7 @@ function World({
       strikeRing.current.visible = aiming;
       if (aiming) {
         const p = 1 - flareTimer.current / 1.2;
-        strikeRing.current.position.set(strikeAt.current.x, 0.08, strikeAt.current.z);
+        strikeRing.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 0.08, strikeAt.current.z);
         strikeRing.current.rotation.z = state.clock.elapsedTime * 3;
         strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
         (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
@@ -2319,7 +3248,7 @@ function World({
       strikeBeam.current.visible = f.t > 0;
       if (f.t > 0) {
         const k = f.t / 0.5;
-        strikeBeam.current.position.set(strikeAt.current.x, 22, strikeAt.current.z);
+        strikeBeam.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 22, strikeAt.current.z);
         strikeBeam.current.scale.set(1 + (1 - k) * 1.6, 1, 1 + (1 - k) * 1.6);
         (strikeBeam.current.material as THREE.MeshBasicMaterial).opacity = Math.min(1, k * 1.2);
       }
@@ -2370,9 +3299,10 @@ function World({
           }
         };
         if (id === "dash") {
-          slide.current.x = FORWARD.x * 30;
-          slide.current.z = FORWARD.z * 30;
-          dashT.current = 0.3;
+          // rides the decaying knock velocity (~4 m, sliding along walls): an impulse on
+          // `slide` was overwritten by the next frame's walk speed, so the dash never moved you
+          knock.current.x += FORWARD.x * 26;
+          knock.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
           playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
         } else if (id === "well") {
@@ -2388,7 +3318,8 @@ function World({
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
           playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
-          near(8, (e, ei) => { e.frozen = 3.5; hurtEnemy(e, 1, ei, 3.5); });
+          // frozen solid on the host (guests send the freeze with the hit); the ice shows here at once
+          near(8, (e, ei) => { e.iceUntil = performance.now() + 3500; hurtEnemy(e, 1, ei, 3.5, 0, 0, 0, 0, { freeze: 3.5 }); });
           playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
         } else if (id === "storm") {
           const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
@@ -2403,7 +3334,7 @@ function World({
             m.visible = !!tgt;
             if (!tgt) continue;
             const ax = cam.position.x, az = cam.position.z, ay = cam.position.y - 0.4;
-            const bx = tgt.e.x, bz = tgt.e.z, by = 1.1;
+            const bx = tgt.e.x, bz = tgt.e.z, by = groundY(bx, bz) + 1.1;
             const len = Math.hypot(bx - ax, bz - az, by - ay);
             m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
             m.scale.set(1, len, 1);
@@ -2436,7 +3367,7 @@ function World({
     for (let mi = mines.current.length - 1; mi >= 0; mi--) {
       const mn = mines.current[mi]!;
       const mesh = mineMeshes.current[mi];
-      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, 0.2, mn.z); }
+      if (mesh) { mesh.visible = true; mesh.position.set(mn.x, groundY(mn.x, mn.z) + 0.2, mn.z); }
       let hit = false;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
@@ -2455,17 +3386,35 @@ function World({
       pending.current.forEach((pd, i) => {
         if (!pd) return;
         pd.t -= delta;
+        if (big && !pd.placed && pd.t <= MARK_TIME) {
+          // late arrivals appear near wherever the squad is now, not where it was
+          pd.placed = true;
+          const lead = packLead.current[i]!;
+          const lp = lead >= 0 ? pending.current[lead] : null;
+          const le = lead >= 0 ? enemies[lead] : undefined;
+          const q = lp ? besides(lp.x, lp.z)
+            : le?.alive && le.kind === "hornet" ? besides(le.x, le.z)
+            : enemies[i]!.kind === "boss" ? bossSpot()
+            : enemies[i]!.kind === "sniper" ? spot(30, 55, true, sniperZone())
+            : spot(25, 45, true);
+          // (alpine: spot() only anchors on players standing in a zone, never riders)
+          pd.x = q.x;
+          pd.z = q.z;
+        }
         if (pd.t <= 0) {
           const e = enemies[i]!;
           e.x = pd.x;
           e.z = pd.z;
           e.alive = true;
+          delete e.lastX;
+          e.stuckFor = 0;
           if (e.kind === "boss") onBoss(BOSS_HP);
           pending.current[i] = null;
         }
       });
       // waves
       const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      setWaveClock(wave.current, wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current);
       if (remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
@@ -2492,32 +3441,169 @@ function World({
 
       // everyone the enemies can go after
       const now = performance.now();
-      type Target = { id: string | null; x: number; z: number; y: number };
+      // fx/fz: which way each player faces (the camera looks down -z at yaw 0); flankers use it
+      // zn: building-access zone (0 street, 1 + b roof b, -1 inside a building: untargetable)
+      type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; zn?: number; air?: boolean };
+      const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+      if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone(), air: ride.chair >= 0 });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) targets.push({ id: r.id, x: r.x, z: r.z, y: EYE });
+        if (r.hp > 0 && now - r.last < 4000) {
+          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z));
+          targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: remoteZone(r), air: (r.rc ?? -1) >= 0 });
+        }
       });
-      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y });
+      if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone() });
+      const accOn = accessActive();
 
-      const hurtTarget = (t: Target, dmg: number) => {
-        if (t.id === null) takeHit(dmg);
-        else n?.sendTo(t.id, { type: "hurt", dmg });
+      const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0) => {
+        if (t.id === null) {
+          if ((kx || kz) && invuln.current <= 0) shove(kx, kz);
+          takeHit(dmg);
+        } else n?.sendTo(t.id, kx || kz ? { type: "hurt", dmg, kx, kz } : { type: "hurt", dmg });
       };
+      const aiCtx: AICtx = {
+        delta,
+        time: state.clock.elapsedTime,
+        blocks,
+        solid,
+        targets,
+        enemies,
+        rand,
+        fieldFor: (t) => fields.current.get(navKey(t)),
+        fineFor: (t) => fines.current.get(fineKey(t)),
+        hurtTarget,
+        shoot: (x, y, z, vx, vy, vz, life, dmg, size) =>
+          fireInto(enemyBullets.current, TMP_A.set(x, y, z), TMP_B.set(vx, vy, vz), life, dmg, "", size),
+        ords: ords.current,
+        hornetCd: hornetCd.current,
+        navOpen,
+      };
+      hornetCd.current.v -= delta;
 
       // flow field per target cell (cached)
       const used = new Set<number>();
       for (const t of targets) {
-        const key = toCell(t.x) * 1000 + toCell(t.z);
+        const key = navKey(t);
+        const [ni, nj] = navTarget(solid, t.x, t.z, blocks);
         used.add(key);
-        if (!fields.current.has(key)) fields.current.set(key, flowField(solid, toCell(t.x), toCell(t.z)));
+        if (!fields.current.has(key))
+          fields.current.set(key, flowField(solid, ni, nj, big ? 70 : Infinity));
       }
       if (fields.current.size > 12) {
         fields.current.forEach((_, key) => { if (!used.has(key)) fields.current.delete(key); });
       }
+      if (strictNav()) {
+        const usedF = new Set<number>();
+        for (const t of targets) {
+          const key = fineKey(t);
+          usedF.add(key);
+          if (!fines.current.has(key)) fines.current.set(key, fineField(blocks, t.x, t.z));
+        }
+        if (fines.current.size > 12) fines.current.forEach((_, key) => { if (!usedF.has(key)) fines.current.delete(key); });
+      }
+
+      // the city is huge: enemies stranded far from every player get recycled nearby
+      if (big) {
+        recycleT.current -= delta;
+        if (recycleT.current <= 0) {
+          recycleT.current = 1;
+          // building access zones (the alpine rule): when the last player has left a zone and
+          // nobody is inside a building, its enemies re-enter out of sight where the players
+          // are (a full roof keeps the rest waiting round the entrance); while anyone is inside
+          // (riding the car, on the stairs) every enemy stays put
+          const zp = accOn ? zonePlayers() : [];
+          const aRiding = zp.some((p) => p.zn < 0);
+          const aZones = new Set(zp.filter((p) => p.zn >= 0).map((p) => p.zn));
+          if (accOn && aZones.size > 0 && !aRiding) {
+            const list = [...aZones];
+            for (const e of enemies) {
+              if (!e.alive) continue;
+              const ez = zoneOf(e.x, e.z);
+              if (aZones.has(ez)) continue;
+              const pick = list[Math.floor(rand() * list.length)]!;
+              const q = e.kind === "boss" ? spot(25, 40, false, pick) : spot(25, 45, true, pick);
+              if (zoneOf(q.x, q.z) === ez) continue; // no room up there: it waits where it is
+              e.x = q.x;
+              e.z = q.z;
+              e.stuckFor = 0;
+              delete e.lastX;
+            }
+          }
+          // alpine zones: when the last player has left a zone (and nobody is on the lift),
+          // its enemies re-enter out of sight in a zone that has players; otherwise every
+          // enemy stays in its own zone
+          // (with building access on, its zone rule above covers the alpine zones too)
+          const zones = alpineMap && !accOn ? liveZones() : null;
+          const anyRiding = !!alpineMap && (ride.chair >= 0 || [...remotes.current.values()].some((r) => (r.rc ?? -1) >= 0 && r.hp > 0));
+          const zoneFor = (x: number, z: number) => {
+            if (!zones || zones.size === 0) return undefined;
+            const ez = alpineZone(x, z);
+            return zones.has(ez) ? ez : [...zones][0];
+          };
+          if (zones && zones.size > 0 && !anyRiding) {
+            for (const e of enemies) {
+              if (!e.alive || zones.has(alpineZone(e.x, e.z))) continue;
+              if (targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1))) continue;
+              const q = spot(25, 45, true, zoneFor(e.x, e.z));
+              e.x = q.x;
+              e.z = q.z;
+              e.stuckFor = 0;
+            }
+            pending.current.forEach((pd) => {
+              if (pd?.placed && !zones.has(alpineZone(pd.x, pd.z))) {
+                const q = spot(25, 45, true, zoneFor(pd.x, pd.z));
+                pd.x = q.x;
+                pd.z = q.z;
+              }
+            });
+          }
+          for (const e of enemies) {
+            if (!e.alive) continue;
+            if (accOn && !aZones.has(zoneOf(e.x, e.z))) {
+              e.stuckFor = 0; // parked in an empty zone (someone is riding): not stuck
+              continue;
+            }
+            let dmin = Infinity;
+            for (const t of targets) dmin = Math.min(dmin, Math.hypot(t.x - e.x, t.z - e.z));
+            // (the Iron Marshal gets a head start from the station before he's brought closer)
+            if (zones && (anyRiding || !zones.has(alpineZone(e.x, e.z)))) {
+              // nobody in its zone yet (or someone mid-ride): it stays put
+            } else if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
+              const home = accOn ? zoneOf(e.x, e.z) : zoneFor(e.x, e.z); // stays in its own zone
+              const onRoof = accOn && (home ?? 0) >= ROOF_KEY;
+              const q = e.kind === "boss" ? spot(25, 40, false, home, onRoof) : spot(25, 45, true, home, onRoof);
+              e.x = q.x;
+              e.z = q.z;
+              e.stuckFor = 0;
+            } else {
+              // wedged on a corner the coarse nav grid thinks is open: once it has made no
+              // progress for 3 s and nobody can see it, it re-enters from another hidden spot
+              // (the boss too: a wedged boss is a turret, and a sealed-in one never dies)
+              const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
+              // (a melee type standing still short of its target is stuck too, even in plain sight)
+              const melee = e.kind === "drifter" || e.kind === "runner" || e.kind === "brute" || e.kind === "vanguard";
+              e.stuckFor = moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
+              const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
+              if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
+                const hidden = e.kind !== "boss";
+                const q = accOn
+                  ? spot(25, 45, hidden, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
+                  : spot(25, 45, hidden, zoneFor(e.x, e.z));
+                e.x = q.x;
+                e.z = q.z;
+                e.stuckFor = 0;
+              }
+            }
+            e.lastX = e.x;
+            e.lastZ = e.z;
+          }
+        }
+      }
 
       meleeCooldown.current -= delta;
-      for (const e of enemies) {
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
         if (!e.alive) continue;
         e.flash -= delta;
         e.cooldown -= delta;
@@ -2538,27 +3624,53 @@ function World({
             e.hp -= 1;
             e.flash = 0.1;
             if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { e.alive = false; e.burn = 0; onScore(); onKill(e); continue; }
+            if (e.hp <= 0) { killEnemy(e, ei, e.burnFrom ?? null, false); continue; }
           }
         }
         const st = STATS[e.kind];
-        // nearest player
-        let target = targets[0]!;
-        let d = Math.hypot(target.x - e.x, target.z - e.z) || 1;
+        // nearest player (alpine: chase someone in your own zone if there is anyone; others are
+        // unreachable. Building access: only players in this enemy's zone, a player on a roof or
+        // inside a building can't be reached from the street, so it holds)
+        let target: Target | null = null;
+        let d = Infinity;
+        const ez = accOn ? zoneOf(e.x, e.z) : alpineMap ? alpineZone(e.x, e.z) : 0;
+        const same = alpineMap && !accOn ? targets.some((t) => alpineZone(t.x, t.z) === ez) : true;
         for (const t of targets) {
+          if (accOn && (t.zn ?? 0) !== ez) continue;
+          if (alpineMap && !accOn && same && alpineZone(t.x, t.z) !== ez) continue;
           const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
           if (dd < d) { d = dd; target = t; }
         }
+        if (!target) continue;
         const dx = target.x - e.x;
         const dz = target.z - e.z;
+        // melee needs vertical proximity on every map: a player up on a deck, a rooftop or a
+        // chairlift is out of reach from the ground below (shots and ordnance leave from each
+        // enemy's own ground in enemyAI.ts). The beach's stairs keep its roomier 2.2 m.
+        const vReach = groundOwnsHits() ? 2.2 : MELEE_DY;
+        const inReach = !target.air && Math.abs(target.y - EYE - groundY(e.x, e.z)) < vReach;
+        if (isNewKind(e.kind)) {
+          stepNewKind(e, ei, target, inReach ? d : Math.max(d, 3.5), aiCtx); // enemyAI.ts
+          continue;
+        }
+        e.yaw = Math.atan2(dx, dz); // face whoever this enemy is after (synced to guests)
+        const dm = inReach ? d : Infinity;
 
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
         let tz = target.z;
         const ghost = e.kind === "specter"; // specters drift straight through cover
         if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-          const dist = fields.current.get(toCell(target.x) * 1000 + toCell(target.z));
-          if (dist) {
+          const dist = fields.current.get(navKey(target));
+          // at the field's own cell (the target is right there, e.g. against a railing) walk
+          // straight at it instead of parking on the cell centre
+          // close in: the fine field knows the 2 m corridors the nav grid can't see
+          const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
+          const fs = ff ? fineStep(ff, e.x, e.z) : null;
+          if (fs) {
+            tx = fs.x;
+            tz = fs.z;
+          } else if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0) {
             const wp = nextWaypoint(solid, dist, e.x, e.z);
             tx = wp.x;
             tz = wp.z;
@@ -2572,7 +3684,7 @@ function World({
         if (e.kind === "bomber") dir = d > 16 ? 1 : d < 9 ? -1 : 0;
         if (e.kind === "brute" && d < 1.8) dir = 0;
         if (e.kind === "vanguard" && d < 2) dir = 0;
-        if (e.kind === "boss" && d < 3) dir = 0;
+        if (e.kind === "boss" && d < (theme.boss.shape === "kraken" ? KRAKEN_R + 1.4 : 3)) dir = 0;
         const spType = e.kind === "special" ? theme.special.type : null;
         let spMul = 1;
         if (spType) {
@@ -2585,33 +3697,59 @@ function World({
           if (spType === "nautilus") dir = d > 13 ? 1 : d < 8 ? -1 : 0;
           if (spType === "hacker") dir = d > 15 ? 1 : d < 10 ? -1 : 0;
           if (spType === "bile") dir = d > 5 ? 1 : 0;
+          if (spType === "desperado") dir = desperadoDir(e, d);
+          // RIDGE RAIDER: carves in fast on skis, quicker still in a whiteout
+          if (spType === "skier") { dir = d > 6 ? 1 : 0; spMul = 1.5 + alpine.blizzard * 0.5; }
+          if (spType === "crawler") { dir = d > 1.3 ? 1 : 0; spMul = 1.45; }
         }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir
+          * (groundOwnsHits() ? 0.5 + 0.5 * groundSpeed(e.x, e.z) : 1); // beach sand drags a little
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
-        if (spType === "stalker" || spType === "shinobi") {
-          // flanking arcs / zig-zag dash-steps
+        if (spType === "stalker" || spType === "shinobi" || spType === "skier" || spType === "crawler") {
+          // flanking arcs / zig-zag dash-steps / a crab's sideways scuttle
           const now = performance.now() / 1000;
-          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2 : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
+          const side = spType === "shinobi" ? Math.sign(Math.sin(now * 3.2 + (e.max ?? 1))) * 3.2
+            : spType === "crawler" ? Math.sign(Math.sin(now * 1.9 + (e.max ?? 1) * 1.7)) * 3.8
+            : Math.sin(now * 1.3 + (e.max ?? 1)) * 2.4;
           nx += (-dz / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
           nz += (dx / d) * side * delta * (e.slow > 0 ? 0.5 : 1);
         }
         const r = Math.min(st.radius, 0.8);
-        if (ghost) { e.x = nx; e.z = nz; }
+        // ghosts drift through walls but never over ground no one could walk on (a cliff, the
+        // mountain face under the chairlift, another zone, past a blockade)
+        if (ghost) { if (ghostOK(nx, nz)) { e.x = nx; e.z = nz; } }
         else {
-          // if anything ever ends up wedged inside cover, slide it back out
-          if (blocked(blocks, e.x, e.z, r)) {
+          // arenas: if anything ever ends up wedged inside cover, slide it back out (Toby). The
+          // big maps have roofs and raised ground; they keep their own unstick below.
+          if (!big && blocked(blocks, e.x, e.z, r)) {
             const out = pushOut(blocks, e.x, e.z, r);
             e.x = out.x;
             e.z = out.z;
           }
-          if (!blocked(blocks, nx, e.z, r)) e.x = nx;
-          if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+          const ox = e.x;
+          const oz = e.z;
+          // (and only steps it could walk: no hopping up a balcony edge or the tower's face)
+          const can = (fx: number, fz: number, tx: number, tz: number) => !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz);
+          if (can(e.x, e.z, nx, e.z)) e.x = nx;
+          if (can(e.x, e.z, e.x, nz)) e.z = nz;
+          // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
+          // sideways round it instead of pushing into it forever
+          const want = Math.hypot(nx - ox, nz - oz);
+          if (want > 1e-4 && Math.hypot(e.x - ox, e.z - oz) < want * 0.2) {
+            const px = -(nz - oz);
+            const pz = nx - ox;
+            const side = Math.sin(ei * 12.9898 + (performance.now() / 1500 | 0)) > 0 ? 1 : -1;
+            for (const sgn of [side, -side]) {
+              const sx = ox + px * sgn;
+              const sz = oz + pz * sgn;
+              if (can(ox, oz, sx, sz)) { e.x = sx; e.z = sz; break; }
+            }
+          }
         }
 
-
-        if ((e.kind === "drifter" || e.kind === "runner") && d < 1.3 && meleeCooldown.current <= 0) {
+        if ((e.kind === "drifter" || e.kind === "runner") && dm < 1.3 && meleeCooldown.current <= 0) {
           meleeCooldown.current = 1;
           hurtTarget(target, st.dmg);
         }
@@ -2623,27 +3761,30 @@ function World({
             const a = rand() * Math.PI * 2;
             const bx = target.x + Math.sin(a) * 4;
             const bz = target.z + Math.cos(a) * 4;
-            if (!blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
+            // only onto open, walkable ground near a target standing on it (never under a rider)
+            const onGround = Math.abs(target.y - EYE - groundY(bx, bz)) < MELEE_DY;
+            const sameZone = !alpineMap || alpineZone(bx, bz) === alpineZone(e.x, e.z);
+            if (onGround && sameZone && ghostOK(bx, bz) && !blocked(blocks, bx, bz, 0.6)) { e.x = bx; e.z = bz; }
           }
-          if (d < 1.6 && e.cooldown <= 0) {
+          if (dm < 1.6 && e.cooldown <= 0) {
             e.cooldown = 1.4;
             hurtTarget(target, st.dmg);
           }
         }
         if (e.kind === "brute" || e.kind === "boss" || e.kind === "vanguard") {
-          const reach = e.kind === "boss" ? 3.6 : e.kind === "vanguard" ? 2.6 : 2.4;
+          const reach = e.kind === "boss" ? (theme.boss.shape === "kraken" ? KRAKEN_R + 2.2 : 3.6) : e.kind === "vanguard" ? 2.6 : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
             e.swing -= delta;
-            if (before > 0.2 && e.swing <= 0.2 && d < reach) hurtTarget(target, st.dmg);
-          } else if (d < reach - 0.2 && e.cooldown <= 0) {
+            if (before > 0.2 && e.swing <= 0.2 && dm < reach) hurtTarget(target, st.dmg);
+          } else if (dm < reach - 0.2 && e.cooldown <= 0) {
             e.swing = 0.4;
             e.cooldown = e.kind === "boss" ? 1.3 : 1.6;
           }
         }
         if (e.kind === "shooter" && e.cooldown <= 0 && d < 22) {
           e.cooldown = 1.5 + rand() * 0.6;
-          const from = new THREE.Vector3(e.x, 1.5, e.z);
+          const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 1.5, e.z);
           const vel = new THREE.Vector3(target.x, target.y - 0.2, target.z).sub(from).normalize();
           from.addScaledVector(vel, 0.8);
           fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED), 3.5, st.dmg);
@@ -2653,15 +3794,16 @@ function World({
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
-            const from = new THREE.Vector3(e.x, 3.2, e.z);
-            const vel = new THREE.Vector3(target.x - e.x, target.y - 3.2, target.z - e.z).normalize();
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 3.2, e.z);
+            const vel = new THREE.Vector3(target.x - e.x, target.y - from.y, target.z - e.z).normalize();
             from.addScaledVector(vel, 1.2);
             fireInto(enemyBullets.current, from, vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 4.5, st.dmg, "", 0.36);
           }
         }
         if (spType) {
           e.shot -= delta;
-          const aim = (y: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+          const aim = (y0: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
+            const y = y0 + groundY(e.x, e.z);
             const from = new THREE.Vector3(e.x, y, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = 0; s < n; s++) {
@@ -2672,7 +3814,7 @@ function World({
           };
           const ready = e.shot <= 0;
           if (spType === "stalker" && ready && d < 18) { e.shot = 2.4; aim(0.9, 16, 0.08, 3, 1, 2.5, 0.12); }
-          if ((spType === "mite") && d < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
+          if ((spType === "mite") && dm < 1.2 && e.cooldown <= 0) { e.cooldown = 1; hurtTarget(target, 1); }
           if (spType === "spore" && ready && d < 26) { e.shot = 3.2; aim(3, ENEMY_BULLET_SPEED * 0.7, 0, 1, 1, 5, 0.42); }
           if (spType === "pyre" && ready && d < 24) { e.shot = 3; aim(1.1, 22, 0, 1, 2, 2.5, 0.34); }
           if (spType === "leaper") {
@@ -2680,9 +3822,9 @@ function World({
               e.aux = (e.aux ?? 0) - delta;
               const lx = e.x + (dx / d) * 14 * delta;
               const lz = e.z + (dz / d) * 14 * delta;
-              if (!blocked(blocks, lx, e.z, 0.6)) e.x = lx;
-              if (!blocked(blocks, e.x, lz, 0.6)) e.z = lz;
-              if (d < 1.4) { e.aux = 0; hurtTarget(target, 2); }
+              if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z)) e.x = lx;
+              if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz)) e.z = lz;
+              if (dm < 1.4) { e.aux = 0; hurtTarget(target, 2); }
             } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
           }
           if (spType === "shinobi" && ready && d < 16) { e.shot = 2; aim(1.3, 15, 0.25, 2, 1, 2, 0.16); }
@@ -2703,23 +3845,150 @@ function World({
             if (d < 20) aim(1.6, 18, 0, 1, 1, 2, 0.14);
           }
           if (spType === "bile" && ready && d < 9) { e.shot = 2.2; aim(1, 12, 0.14, 6, 1, 0.9, 0.16); }
+          if (spType === "desperado") desperadoTick(e, d, delta, ready, aim);
+          if (spType === "skier") {
+            // a fan of thrown ice picks at mid range, a pole jab up close
+            if (ready && d < 20 && d > 4) { e.shot = 2.3; aim(1.3, 17, 0.12, 3, 1, 2, 0.12); }
+            if (dm < 1.7 && e.cooldown <= 0) { e.cooldown = 1.1; hurtTarget(target, 1); }
+          }
+          // TIDE CRAWLER: pincer snaps up close, a fan of sea-foam bubbles from mid range
+          if (spType === "crawler" && dm < 1.5 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 2); }
+          if (spType === "crawler" && ready && d > 5 && d < 14) { e.shot = 3.4; aim(0.6, 11, 0.22, 5, 1, 1.3, 0.18); }
         }
-        if (e.kind === "boss") {
+        if (e.kind === "boss" && theme.boss.shape === "marshal") {
+          // THE IRON MARSHAL: Gatling bursts and a lasso that drags you in
+          const aimB = (y: number, spd: number, spread: number, nb: number, dmg: number, life = 3.5, size = 0.2) => {
+            const from = new THREE.Vector3(e.x + (dz / d) * 1.4, y, e.z - (dx / d) * 1.4);
+            for (let s = 0; s < nb; s++) {
+              const a = Math.atan2(dx, dz) + (Math.random() - 0.5) * spread * 2;
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - y) / d, Math.cos(a)).normalize();
+              fireInto(enemyBullets.current, from.clone().addScaledVector(vel, 1.8), vel.multiplyScalar(spd), life, dmg, "", size);
+            }
+          };
+          // the lasso lands: 1 damage and a yank toward him (a shove, synced like any hit)
+          marshalTick(e, inReach ? d : Math.max(d, 3.5), dx, dz, delta, aimB, (kx, kz) => hurtTarget(target, 1, kx, kz));
+        } else if (e.kind === "boss") {
           e.shot -= delta;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
-            const from = new THREE.Vector3(e.x, 2.6, e.z);
+            const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 2.6, e.z);
             const base = Math.atan2(dx, dz);
             for (let s = -3; s <= 3; s++) {
               const a = base + s * 0.16;
-              const vel = new THREE.Vector3(Math.sin(a), (target.y - 2.6) / d, Math.cos(a)).normalize();
+              const vel = new THREE.Vector3(Math.sin(a), (target.y - from.y) / d, Math.cos(a)).normalize();
               const p = from.clone().addScaledVector(vel, 1.6);
               fireInto(enemyBullets.current, p, vel.multiplyScalar(ENEMY_BULLET_SPEED), 4, st.dmg - 1, "", 0.3);
+            }
+          }
+          // THE AVALANCHE ENGINE: every few seconds it drops the blade and ploughs straight at you
+          if (theme.boss.shape === "plough") {
+            e.aux = (e.aux ?? 5) - delta;
+            if (e.aux < 0 && e.aux > -1.4) {
+              const cx = e.x + (dx / d) * 10 * delta;
+              const cz = e.z + (dz / d) * 10 * delta;
+              if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
+              if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
+              if (dm < 3.2 && e.cooldown <= 0) { e.cooldown = 1.2; hurtTarget(target, 3); }
+            } else if (e.aux <= -1.4) e.aux = d > 5 && d < 28 ? 5 + rand() * 3 : 1;
+          }
+          // THE KRAKEN RIG: every few seconds its tentacles sweep a ring of shots all round
+          if (theme.boss.shape === "kraken") {
+            krakenT.current -= delta;
+            if (krakenT.current <= 0 && d < 34) {
+              krakenT.current = 5;
+              for (let s = 0; s < 14; s++) {
+                const a = (s / 14) * Math.PI * 2 + rand();
+                const vel = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+                fireInto(enemyBullets.current, new THREE.Vector3(e.x + vel.x * 2.6, 1.1 + groundY(e.x, e.z), e.z + vel.z * 2.6), vel.multiplyScalar(ENEMY_BULLET_SPEED * 0.8), 3.2, 1, "", 0.26);
+              }
             }
           }
         }
       }
 
+      // grenades and homing rockets
+      stepOrds(aiCtx);
+
+      // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
+      // inside you), and push apart lightly so a crowd doesn't stack into one blob. Fliers pass
+      // over everything. A spatial hash keeps the pair checks cheap with 110 enemies.
+      const grid = sepGrid.current;
+      if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
+      grid.forEach((cell) => (cell.length = 0));
+      const CELL = 2.5;
+      const keyOf = (x: number, z: number) => Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
+      const bodyR = (e: Enemy) => (e.kind === "boss" && theme.boss.shape === "kraken" ? KRAKEN_R : STATS[e.kind].radius * (e.elite ? 1.6 : 1));
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive || FLYERS.has(e.kind)) continue;
+        const k = keyOf(e.x, e.z);
+        let cell = grid.get(k);
+        if (!cell) grid.set(k, (cell = []));
+        cell.push(ei);
+      }
+      const nudge = (e: Enemy, px: number, pz: number) => {
+        const rr = Math.min(STATS[e.kind].radius, 0.8);
+        const ghost = e.kind === "specter";
+        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
+        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)) e.x += px;
+        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)) e.z += pz;
+      };
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const a = enemies[ei]!;
+        if (!a.alive || FLYERS.has(a.kind)) continue;
+        const ra = bodyR(a);
+        const ci = Math.floor((a.x + HALF) / CELL);
+        const cj = Math.floor((a.z + HALF) / CELL);
+        for (let di = -1; di <= 1; di++) {
+          for (let dj = -1; dj <= 1; dj++) {
+            const cell = grid.get((ci + di) * 4096 + cj + dj);
+            if (!cell) continue;
+            for (const oj of cell) {
+              if (oj <= ei) continue;
+              const b = enemies[oj]!;
+              const rb = bodyR(b);
+              const reach = (ra + rb) * 0.8; // light: a little overlap is fine
+              const ox = b.x - a.x;
+              const oz = b.z - a.z;
+              const dd = ox * ox + oz * oz;
+              if (dd >= reach * reach) continue;
+              const dist = Math.sqrt(dd) || 0.01;
+              const nx = dd > 1e-6 ? ox / dist : Math.cos(ei);
+              const nz = dd > 1e-6 ? oz / dist : Math.sin(ei);
+              // soft: resolve part of the overlap per frame; the bigger body gives less ground
+              const push = Math.min(reach - dist, 0.5) * Math.min(1, delta * 10);
+              const wa = (rb * rb) / (ra * ra + rb * rb);
+              const bossA = a.kind === "boss" ? 0.1 : 1;
+              const bossB = b.kind === "boss" ? 0.1 : 1;
+              nudge(a, -nx * push * wa * bossA, -nz * push * wa * bossA);
+              nudge(b, nx * push * (1 - wa) * bossB, nz * push * (1 - wa) * bossB);
+            }
+          }
+        }
+        // keep out of the players: at most touching
+        for (const t of targets) {
+          const r = ra + PLAYER_R;
+          const ox = a.x - t.x;
+          const oz = a.z - t.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd) || 0.01;
+          nudge(a, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
+        }
+      }
+      // fliers aren't solid, but they still hover at arm's length rather than inside your head
+      for (const f of enemies) {
+        if (!f.alive || !FLYERS.has(f.kind)) continue;
+        for (const t of targets) {
+          const r = STATS[f.kind].radius + PLAYER_R + 0.3;
+          const ox = f.x - t.x;
+          const oz = f.z - t.z;
+          const dd = ox * ox + oz * oz;
+          if (dd >= r * r) continue;
+          const dist = Math.sqrt(dd) || 0.01;
+          nudge(f, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
+        }
+      }
     }
 
     // player bullets
@@ -2727,10 +3996,12 @@ function World({
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
+      fxBurst(b);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
-        fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        const fs = fireInto(bullets.current, b.pos, v, 0.45, Math.max(1, Math.round(b.damage / 2)), b.color, b.size * 0.45, { cluster: 0 });
+        if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
       }
     };
     bullets.current.forEach((b, i) => {
@@ -2747,28 +4018,55 @@ function World({
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
+          fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
           burst(b);
+          fxDie(i, hitWall);
           b.active = false;
         } else {
-          for (let ei = 0; ei < enemies.length; ei++) {
+          // a homing rocket can be shot down (the host has the final say in co-op)
+          const ri = rocketAt(ords.current, b.pos.x, b.pos.y, b.pos.z);
+          if (ri >= 0) {
+            const o = ords.current[ri]!;
+            o.on = false;
+            if (isH) blast(ords.current, o.x, o.z, 0.8, o.y);
+            else n?.broadcast({ type: "odhit", i: ri });
+            fxDie(i, true);
+            b.active = false;
+            onStat("hit", 1);
+          }
+          for (let ei = 0; b.active && ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
-            const h = e.kind === "boss" ? 5 : e.kind === "brute" || e.kind === "vanguard" ? 2.6 : 2;
-            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && b.pos.y < h) {
+            // bulwark: the shield face stops shots from the front, including ones aimed past it
+            if (e.kind === "bulwark" && shieldUp(e, isH)) {
+              const fx = Math.sin(e.yaw ?? 0);
+              const fz = Math.cos(e.yaw ?? 0);
+              const rx = b.pos.x - e.x;
+              const rz = b.pos.z - e.z;
+              const fwd = rx * fx + rz * fz;
+              const lat = rx * fz - rz * fx;
+              if (fwd > 0.2 && fwd < 1.6 && Math.abs(lat) < 1.15 && b.pos.y - groundY(e.x, e.z) < 2.5 && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
+                if (isH) drainShield(e, b.damage);
+                else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
+                burst(b);
+                fxDie(i, true); // the round sparks off the shield face
+                b.active = false;
+                break;
+              }
+            }
+            const [lo, hi] = hitBand(e.kind);
+            const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
+            if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
-              let dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
-              if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
-              const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
-              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
+              const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
+              // executioner / shredder / bounty are judged on the host (it has the true health)
+              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
+                direct: true, shred: !!(b.mods & M_SHRED), exec: !!(b.mods & M_EXEC), bounty: !!(b.mods & M_BOUNTY),
+              });
+              fxHit(i, b, e);
               onStat("hit", 1);
               onStat("dmg", dmg);
-              if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
-              if (b.mods & M_BOUNTY && lethal) {
-                onShard(1);
-                bountyKills.current++;
-                if (bountyKills.current % 6 === 0) onLeech();
-              }
 
               if (b.chain > 0) {
                 let left = b.chain;
@@ -2778,6 +4076,7 @@ function World({
                   if (!o.alive || o === e) continue;
                   if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
                     hurtEnemy(o, b.damage, oi);
+                    fxChain(e, o);
                     left--;
                   }
                 }
@@ -2803,6 +4102,7 @@ function World({
             TMP_DIR.copy(b.vel).normalize();
             m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
           }
+          fxStyle(i, m, b); // per-weapon round (projectiles.tsx)
         }
       }
 
@@ -2835,9 +4135,7 @@ function World({
         if (snapTimer.current <= 0) {
           snapTimer.current = 0.05;
           const e: number[] = [];
-          for (const en of enemies) {
-            e.push(en.alive ? 1 : 0, KINDS.indexOf(en.kind), Math.round(en.x * 100) / 100, Math.round(en.z * 100) / 100, en.swing);
-          }
+          for (const en of enemies) e.push(...packEnemy(en, KINDS));
           const b: number[] = [];
           for (const bu of enemyBullets.current) {
             if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
@@ -2846,8 +4144,19 @@ function World({
           pending.current.forEach((pd, i) => {
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
+          const tr = traffic.current.encode?.();
+          const al = encodeAlpine();
+          const ac = encodeCars();
+          const rn = encodeWeather();
+          const od = packOrds(ords.current);
           n.broadcast({
             type: "snap", e, b, mk,
+            tk: Math.round(waveStage(tod.wave, tod.progress) * 1000), // the host's time of day
+            ...(od.length ? { od } : {}),
+            ...(tr ? { tr } : {}),
+            ...(al ? { al } : {}),
+            ...(ac ? { ac } : {}),
+            ...(rn !== null ? { rn } : {}),
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -2868,7 +4177,7 @@ function World({
       const pd = pending.current[i];
       const show = !!pd && pd.t <= MARK_TIME && Math.floor(state.clock.elapsedTime * 6) % 2 === 0;
       g.visible = show;
-      if (pd) g.position.set(pd.x, 0, pd.z);
+      if (pd) g.position.set(pd.x, groundY(pd.x, pd.z), pd.z);
     });
     const v = viewModel.current;
     if (!v) return;
@@ -2881,23 +4190,113 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    // the gun joins the transparent queue at the very end, after a depth clear (see below)
+    v.traverse((o) => {
+      if (o.renderOrder < 999) o.renderOrder = 1000;
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
+      if (m && !Array.isArray(m)) addGunRim(m);
+    });
+    fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
   return (
     <>
-      <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={[theme.sky, 12, ARENA + 4]} />
-      <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
-      <directionalLight
-        position={[18, 26, 10]}
-        intensity={1.5}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+      {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
+      <TimeDriver theme={theme} arena={ARENA} />
+      <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
+      {!big && <SkyDome sunset={arenaSunsetSky(theme.name, theme.sky, ARENA_SUN.sunset)} night={arenaNight} />}
+      {!alpineMap && (
+        <NightStars
+          radius={big ? 900 : 90}
+          depth={big ? 200 : 20}
+          count={big ? 3000 : 1500}
+          factor={big ? 26 : 4}
+        />
+      )}
+      {western ? (
+        <WesternSun key="sun-western" />
+      ) : alpineMap ? (
+        <AlpineSun key="sun-alpine" />
+      ) : isBeach(city) ? null : city ? (
+        // city sun: shadow frustum follows the player, auto-off on slow devices
+        <CitySun key="sun-city" />
+      ) : null}
+      {alpineMap ? (
+        <AlpineScene layout={alpineMap} time={time} isHost={isHost} playing={locked && !gameOver} />
+      ) : isBeach(city) ? (
+        <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
+      ) : city ? (
+        <>
+          <CityScene city={city} time={time} isHost={isHost} />
+          <CityTraffic city={trafficCity ?? city} seed={seed} time={time} link={traffic} />
+          {gaps.length > 0 && <CityBlockades city={city} gaps={gaps} time={time} />}
+        </>
+      ) : western ? (
+        <>
+          <WesternScene layout={western} time={time} />
+          <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
+          <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
+          {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
+        </>
+      ) : (
+        <Level blocks={blocks} theme={theme} />
+      )}
+      {big && <AccessScene time={time} cityKey={big} />}
+      <MapEvents
+        theme={theme}
+        city={city}
+        enemies={enemies}
+        net={net}
+        isHost={isHost}
+        wave={wave}
+        playing={locked && !gameOver}
+        matchSeed={seed}
+        alive={aliveRef}
+        hurtPlayer={(dmg, kx, kz, shake) => {
+          if (deadRef.current) return;
+          if (kx || kz) shove(kx, kz);
+          knock.current.shake = Math.max(knock.current.shake, shake);
+          if (dmg > 0) takeHit(dmg);
+        }}
+        movePlayer={(dx, dz) => {
+          const p = camera.position;
+          if (!blocked(blocks, p.x + dx, p.z, 0.4)) p.x += dx;
+          if (!blocked(blocks, p.x, p.z + dz, 0.4)) p.z += dz;
+        }}
+        hurtEnemy={(i, dmg, kx, kz) => {
+          const e = enemies[i];
+          if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, 3, kx, kz);
+        }}
+        spawnEnemies={(kindName, n, x, z) => {
+          // extra enemies for an event (the train robbery's gang): free slots, the same set-up
+          // as a wave's arrivals, a red X first; they count toward the wave
+          if (!(KINDS as string[]).includes(kindName) || kindName === "boss") return 0;
+          const kind = kindName as Kind;
+          const hpMul = 1 + 0.09 * (Math.max(1, wave.current) - 1);
+          let placed = 0;
+          for (let i = 0; i < enemies.length && placed < n; i++) {
+            const e = enemies[i]!;
+            if (e.alive || pending.current[i]) continue;
+            const p = besides(x, z);
+            const hp = Math.max(1, Math.round(STATS[kind].hp * hpMul));
+            Object.assign(e, {
+              kind, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false,
+              cooldown: 1 + rand() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0,
+              vis: 0, st: 0, t1: 0, ax: undefined, az: undefined, side: undefined, plan: 0, shots: 0,
+              stuck: 0, gd0: 99, detour: 0, shield: 0, shieldMax: 0, shieldT: 0, blockT: 0, hitT: 0, tgt: -1,
+            });
+            e.elite = 0;
+            packLead.current[i] = -1;
+            pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + placed * 0.3, placed: true };
+            placed++;
+          }
+          waveTotal.current += placed;
+          return placed;
+        }}
       />
-      <Level blocks={blocks} theme={theme} />
       {enemies.map((e, i) => (
-        <EnemyMesh key={i} data={e} theme={theme} />
+        <EnemyMesh key={i} data={e} theme={theme} all={enemies} />
       ))}
       {enemies.map((_, i) => (
         <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
@@ -2965,14 +4364,23 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      <RemoteDeployables deps={remoteDeps} enemies={enemies} />
+      <OrdnancePool ords={ords.current} guestTx={ordTx.current} guest={guestRef} />
       <mesh ref={barrierMesh} visible={false}>
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
       </mesh>
       <group ref={viewModel} scale={0.7}>
+        {/* the gun draws last (end of the transparent queue) over a cleared depth buffer, so
+            walls and railings never cut into it and the world's own effects still sort normally */}
+        <mesh renderOrder={999} frustumCulled={false} onBeforeRender={(r) => r.clearDepth()}>
+          <planeGeometry args={[0.001, 0.001]} />
+          <meshBasicMaterial colorWrite={false} depthWrite={false} transparent />
+        </mesh>
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
+      <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
@@ -2981,14 +4389,84 @@ function World({
   );
 }
 
+/** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
+function debugHandles() {
+  if (import.meta.env.DEV) return true;
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "1"
+  );
+}
+
+/** `?map=vice` (case-insensitive name substring), `?map=city` (layout type) or `?map=3` (index) forces the solo map for testing. */
+function forcedMapIndex(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("map");
+  if (!raw) return null;
+  const n = Number(raw);
+  if (Number.isInteger(n) && n >= 0 && n < THEMES.length) return n;
+  const q = raw.toLowerCase();
+  const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
+  return i >= 0 ? i : null;
+}
+/** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
+function seedParam(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("seed");
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** is the HUD in its in-elevator-car state (the html element's rs-incar class)? */
+let inCarHud = false;
+
+const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
+/** Every visit opens on the city unless `?map=` names another; the start-menu picker
+ * switches for the rest of the visit. null = random. */
+function initialMapChoice(): number | null {
+  return forcedMapIndex() ?? CITY_MAP;
+}
+
+/** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
+ * guests (who derive the map from the shared seed) land on the same one. Random only rolls
+ * the offered maps (the four big ones) and, given the previous seed, never repeats its map
+ * (Toby's anti-repeat roll). */
+function newSeed(choice: number | null, prev?: number) {
+  let s = Math.floor(Math.random() * 1e9);
+  const prevMap = prev === undefined ? -1 : prev % THEMES.length;
+  const pool = THEMES.filter((t) => offered(t)).length;
+  const reroll = (v: number) =>
+    !offered(THEMES[v % THEMES.length]!) || (pool > 1 && v % THEMES.length === prevMap);
+  while (choice === null && reroll(s)) s = Math.floor(Math.random() * 1e9);
+  return choice === null ? s : s - (s % THEMES.length) + choice;
+}
+
 export function Game() {
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
-  // Anti-repeat: roll a new seed whose map differs from the current one.
-  const freshSeed = (prev: number) => {
-    let s = Math.floor(Math.random() * 1e9);
-    while (s % THEMES.length === prev % THEMES.length) s = Math.floor(Math.random() * 1e9);
-    return s;
-  };
+  const [mapChoice, setMapChoice] = useState(initialMapChoice);
+  const mapChoiceRef = useRef(mapChoice);
+  mapChoiceRef.current = mapChoice;
+  const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
+  // time of day (timeOfDay.ts): AUTO follows the waves from sunset into night; N locks
+  // this player's choice for the rest of the match. `?time=` overrides for testing.
+  const time = useTodNearest();
+  const timeMode = useTodMode();
+  useEffect(() => {
+    const init = initialMode();
+    setTimeMode(init.mode);
+    if (init.k !== null) pinTime(init.k);
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyN" || e.repeat) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      pinTime(null);
+      const inMatch = phase.current.started && !phase.current.ended;
+      toggleTimeLock(inMatch);
+      if (inMatch) showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
@@ -3010,12 +4488,14 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
+  const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
   const [healMsg, setHealMsg] = useState(0);
   const [musicVol, setMusicVol] = useState(0.5);
   const [sfxVol, setSfxVol] = useState(0.7);
+  const [ambVol, setAmbVol] = useState(0.6);
   const [shards, setShards] = useState(0);
   const [ability, setAbility] = useState<AbilityId>(() => {
     if (typeof window === "undefined") return "dash";
@@ -3074,6 +4554,9 @@ export function Game() {
   const [joinCode, setJoinCode] = useState("");
   const [netError, setNetError] = useState("");
   const [allDown, setAllDown] = useState(false);
+  // co-op revive (revive.ts): the bleed-out ran out, so this player is dead until next wave
+  const [bledOut, setBledOut] = useState(false);
+  const pingWorld = useRef<PingWorld | null>(null);
   const remotes = useRef(new Map<string, RemoteState>());
   const msgSink = useRef<(m: NetMsg) => void>(() => {});
   const seedRef = useRef(seed);
@@ -3101,6 +4584,8 @@ export function Game() {
   };
 
   const handleMsg = (m: NetMsg) => {
+    // pings and revives (Squad.tsx)
+    if (handleSquadMsg(m, squadCb)) return;
     if (m.type === "roster") {
       slots.current = (m.slots ?? {}) as Record<string, number>;
       setRoster(
@@ -3159,6 +4644,8 @@ export function Game() {
       }
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
       publishRoster();
+      // a match is already running: the newcomer drops straight into it
+      if (phase.current.started && !phase.current.ended) netHolder.current?.sendTo(id, { type: "begin" });
     }
     if (m.type === "left") {
       delete slots.current[String(m.from)];
@@ -3167,6 +4654,14 @@ export function Game() {
     if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
+  };
+  const squadCb = {
+    isHost: () => !netHolder.current || netHolder.current.role === "host",
+    numOf: (id: string) => (id === "host" ? 1 : (slots.current[id] ?? 2)),
+    onRevived: () => {
+      setHealth((h) => (h > 0 ? h : Math.max(1, Math.round(derive(perksRef.current).maxHp * REVIVE_HP))));
+    },
+    onBleedOut: () => setBledOut(true),
   };
   const handleMsgRef = useRef(handleMsg);
   handleMsgRef.current = handleMsg;
@@ -3232,7 +4727,7 @@ export function Game() {
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
-    setSeed((p) => freshSeed(p));
+    setSeed((p) => newSeed(mapChoiceRef.current, p));
     if (document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -3241,7 +4736,8 @@ export function Game() {
     if (!net || net.role !== "host") return;
     const id = window.setInterval(() => {
       const list = [...remotes.current.values()].filter((r) => performance.now() - r.last < 5000);
-      if (healthRef.current <= 0 && list.length > 0 && list.every((r) => r.hp <= 0)) {
+      // nobody left standing, including nobody left at all (the teammates quit): the run ends
+      if (phase.current.started && !phase.current.ended && healthRef.current <= 0 && list.every((r) => r.hp <= 0)) {
         net.broadcast({ type: "over" });
         setAllDown(true);
       }
@@ -3251,7 +4747,8 @@ export function Game() {
 
   useEffect(() => {
     try {
-      const v = JSON.parse(localStorage.getItem("scrapfall-settings") ?? "{}");
+      // (the key was "dustfield-settings" before the Scrapfall rename: carry those over)
+      const v = JSON.parse(localStorage.getItem("scrapfall-settings") ?? localStorage.getItem("dustfield-settings") ?? "{}");
       if (typeof v.fov === "number") setFov(v.fov);
       if (typeof v.sensX === "number") setSensX(v.sensX);
       else if (typeof v.sens === "number") setSensX(v.sens);
@@ -3259,11 +4756,12 @@ export function Game() {
       else if (typeof v.sens === "number") setSensY(v.sens);
       if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
       if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
+      if (typeof v.ambVol === "number") setAmbVol(v.ambVol);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
-  }, [fov, sensX, sensY, musicVol, sfxVol]);
+    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+  }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -3283,11 +4781,83 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
-  const { blocks, enemies, rand, theme } = useMemo(() => {
-    setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
-    const level = generateLevel(seed);
-    const theme = THEMES[seed % THEMES.length]!;
-    level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
+  const mapFeed = useRef<MapFeed>({
+    x: 0,
+    z: 0,
+    yaw: 0,
+    items: [
+      { x: 0, z: 0, kind: "gun", color: "#ffffff", active: false },
+      { x: 0, z: 0, kind: "heal", color: "#e8322a", active: false },
+      { x: 0, z: 0, kind: "crate", color: "#9fe8ff", active: false },
+    ],
+  });
+  const { blocks, enemies, rand, theme, city, western, gaps } = useMemo(() => {
+    // the map decides the layout, so pick the theme first (still purely from the shared seed)
+    const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
+    const theme = forced ?? THEMES[seed % THEMES.length]!;
+    // co-op gets a bigger field. The big real-scale maps always build the full co-op map and
+    // route on 4 m nav cells; solo fences the city and Dry Gulch into the middle 70% with
+    // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
+    // and beach maps seal their own solo squares inside their generators.
+    const mode = layoutOf(theme);
+    const sealed = mode === "city" || mode === "western";
+    if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
+    else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
+    else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
+    else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
+    const level = generateLevel(seed, mode, !coop);
+    const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
+    // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
+    // Gulch's boardwalks, balconies and riverbed, or flat
+    setTerrain(
+      alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : level.western ? level.western.terrain : null,
+    );
+    // building access (elevators, stairwells, walkable roofs): Vice Heights today. Solo only
+    // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
+    const accessOn = typeof window === "undefined" || new URLSearchParams(window.location.search).get("access") !== "0";
+    installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
+    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
+    // the access adapters keep their doors clear of them
+    const posts0 = mapPosts(level.city, level.western ?? null);
+    const accessList0 = !accessOn
+      ? null
+      : mode === "city" && level.city
+        ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
+        : isBeach(level.city)
+          ? beachAccess(level.city, !coop, posts0)
+          : alp && level.city
+            ? (() => {
+                // (chalet balconies wall off the ground under them: extra collision)
+                const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
+                level.blocks = level.blocks.concat(aa.blocks);
+                return aa.list;
+              })()
+            : null;
+    installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
+    resetAlpine(alp !== null, alp ? alp.lift : null);
+    resetRide();
+    // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
+    // moves along the facade and stays solid (before the map's meshes are built from it)
+    setPosts(null);
+    movePropsFromDoors(
+      level.city,
+      level.western ?? null,
+      (accessList0 ?? []).map((b) => b.spec.door),
+      (x, z) => blocked(level.blocks, x, z, 0.35),
+    );
+    setPosts(mapPosts(level.city, level.western ?? null));
+    let gaps: Gap[] = [];
+    if (sealed && !coop) {
+      gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
+      level.blocks = level.blocks.concat(sealGaps(gaps));
+    }
+    // the city generator keeps its own spawn plaza clear and every cell reachable;
+    // trimming its blocks here would leave buildings without collision
+    if (!level.city && !level.western) {
+      level.blocks = level.blocks.filter(
+        (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
+      );
+    }
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
       x: 0,
@@ -3302,13 +4872,31 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
-  }, [seed, coop]);
+    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, city: level.city, western: level.western, gaps };
+  }, [seed, coop, mapChoice]);
+  // the HUD radar for the big maps (solo dims everything beyond the blockades)
+  const miniSrc = useMemo(
+    () =>
+      city && "alpine" in city
+        ? alpineMinimap(city as AlpineLayout)
+        : city
+          ? cityMinimap(city, blocks, PLAY_HALF)
+          : western
+            ? westernMinimap(western, blocks, PLAY_HALF)
+            : null,
+    [city, western, blocks],
+  );
 
 
   useEffect(() => {
     // pausing puts the whole squad on hold
+    // closing the tab releases the pointer lock too: that must not pause everyone else
+    let unloading = false;
+    const onUnload = () => (unloading = true);
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", onUnload);
     const pauseAll = () => {
+      if (unloading || document.visibilityState === "hidden") return;
       if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
     };
     const wasLocked = { v: false };
@@ -3335,6 +4923,8 @@ export function Game() {
     return () => {
       document.removeEventListener("pointerlockchange", onChange);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("pagehide", onUnload);
     };
   }, []);
 
@@ -3358,9 +4948,24 @@ export function Game() {
 
   const multiplayer = !!net;
   const dead = health <= 0;
+  // co-op: out of health but still bleeding out, waiting for a revive
+  const downed = multiplayer && dead && !bledOut;
+  useEffect(() => {
+    if (health > 0) setBledOut(false);
+  }, [health]);
+  const selfRef = useRef({ hp: 1, bledOut: false, playing: false });
+  selfRef.current = { hp: health, bledOut, playing: started && locked && !(multiplayer ? allDown : dead) };
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
+  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
+  const pickMap = (choice: number | null) => {
+    if (!isHost) return;
+    setMapChoice(choice);
+    const s = newSeed(choice);
+    setSeed(s);
+    net?.broadcast({ type: "seed", seed: s });
+  };
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
@@ -3399,12 +5004,13 @@ export function Game() {
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
     setPicking(false);
+    if (!resuming) beginMatchTime();
     setStarted(true);
     if (ended && !fromNet) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
-        const s = freshSeed(seed);
+        const s = newSeed(mapChoiceRef.current, seed);
         setSeed(s);
         net?.broadcast({ type: "seed", seed: s });
       }
@@ -3500,6 +5106,11 @@ export function Game() {
 
     playSfx("buy");
   };
+  const reviveNearbyRef = useRef<() => boolean>(() => false);
+  reviveNearbyRef.current = () =>
+    [...remotes.current.values()].some(
+      (r) => downTable.get(r.id)?.st === DOWN && Math.hypot(r.x - squadMe.x, r.z - squadMe.z) <= REVIVE_RANGE,
+    );
   const patchRef = useRef<() => void>(() => {});
   patchRef.current = () => {
     if (!shopOpen) return;
@@ -3526,7 +5137,8 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       const i = SHOP_KEYS.indexOf(e.code);
       if (i >= 0) buyRef.current(i);
-      else if (e.code === "KeyR") rerollRef.current();
+      // R is also "hold to revive": next to a downed teammate it revives instead of rerolling
+      else if (e.code === "KeyR" && !e.repeat && !reviveNearbyRef.current()) rerollRef.current();
       else if (e.code === "KeyV") patchRef.current();
     };
     window.addEventListener("keydown", onKey);
@@ -3542,13 +5154,14 @@ export function Game() {
     return () => window.clearInterval(id);
   }, [regenRate, started, locked, ended, dead, maxHp]);
 
-
-  // soundtrack: plays on the menu too (muffled, drumless) and opens up in combat
+  // soundtrack: Toby's menu march plays on the menus (muffled); the map's track opens up in
+  // combat, and the background soundscape plays (and pauses) with the match
   useEffect(() => { hookAudioUnlock(); }, []);
   const inCombat = started && locked && !ended;
   useEffect(() => {
     setMusicMenu(!inCombat);
     startMusic();
+    setAmbienceActive(inCombat);
   }, [inCombat]);
   // if the browser blocked sound until now, the next click/keypress starts it
   useEffect(() => {
@@ -3564,11 +5177,22 @@ export function Game() {
     };
   }, []);
 
-  useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
-  useEffect(() => setMusicTheme(theme.name), [theme.name]);
-  useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
+  useEffect(() => {
+    const boss = status.wave === WAVES.length && !status.won;
+    setMusicIntensity(boss);
+    setMusicProgress(status.wave, WAVES.length);
+    // the map's hazard (blizzard, dust storm, marine layer...) comes with the boss round
+    setAmbienceHazard(boss);
+  }, [status.wave, status.won]);
+  useEffect(() => setMusicTheme(theme.name, layoutOf(theme)), [theme]);
+  useEffect(() => setAmbienceScene(theme.name, layoutOf(theme), city ?? western), [theme, city, western]);
+  useEffect(() => setAmbienceTime(time), [time]);
+  useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
+  // the time of day runs with the match; a new arena opens straight onto its wave-1 sunset
+  useEffect(() => { tod.playing = started; }, [started]);
+  useEffect(() => { resetMatchTime(); tod.snap = true; resetSquad(); setBledOut(false); }, [seed]);
 
   // HUD status lists
   const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
@@ -3580,7 +5204,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows="percentage" dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <World
           blocks={blocks}
           enemies={enemies}
@@ -3640,6 +5264,11 @@ export function Game() {
             setCrateMsg(CRATE_INFO[kind].name);
           }}
           onDeploys={setDeploys}
+          city={city}
+          western={western}
+          gaps={gaps}
+          seed={seed}
+          time={time}
           ability={ability}
           onAbilityCd={(left, max) => setAbilCd((c) => (Math.abs(c.left - left) < 0.05 && c.max === max ? c : { left, max }))}
           onStat={(k, n) => {
@@ -3650,6 +5279,9 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          mapFeed={mapFeed}
+          downed={downed}
+          pingWorld={pingWorld}
 
 
 
@@ -3660,7 +5292,18 @@ export function Game() {
           onInv={setInv}
 
         />
+        <SquadDriver
+          net={net}
+          remotes={remotes}
+          self={selfRef}
+          world={pingWorld}
+          myNum={myNum}
+          onRevived={squadCb.onRevived}
+          onBleedOut={squadCb.onBleedOut}
+        />
+        <AmbienceListener />
       </Canvas>
+      <HudOverlay remotes={remotes} active={started && locked && !ended} coop={multiplayer} numOf={squadCb.numOf} />
 
       {hurtFlash > 0 && (
         <div
@@ -3695,14 +5338,15 @@ export function Game() {
             </div>
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
-            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
+            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}</div>
             {[...remotes.current.values()].map((r) => (
               <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
                 <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                 <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
                 {r.hp > 0 ? (
                   <span>
-                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
+                    {/* (a class can lift max health past 10: Vanguard has 16) */}
+                    {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
                     <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
                   </span>
                 ) : (
@@ -3715,7 +5359,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -3748,6 +5392,11 @@ export function Game() {
               </div>
             );
           })}
+        </div>
+
+        {/* in an elevator car: how to ride (world.ts pressCarButton) */}
+        <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
+          E · FLOOR BUTTON
         </div>
 
         {bossHp > 0 && locked && !ended && (
@@ -3798,6 +5447,19 @@ export function Game() {
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
+          </div>
+        )}
+        {miniSrc && started && !ended && (
+          // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
+          // list sits under the shards, so a smaller map sits just left of the buttons
+          <div className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
+            <Minimap
+              src={miniSrc}
+              feed={mapFeed}
+              enemies={enemies}
+              remotes={remotes}
+              myColor={colorFor(myNum)}
+            />
           </div>
         )}
       </div>
@@ -3881,6 +5543,7 @@ export function Game() {
           }}
           abilityName={ABILITIES[ability].name}
           abilityLeft={abilCd.left}
+          coop={multiplayer}
         />
       )}
       {touchUi && locked && !ended && (
@@ -3914,7 +5577,7 @@ export function Game() {
           +3 HEALTH
         </div>
       )}
-      {multiplayer && dead && !ended && locked && (
+      {multiplayer && dead && !downed && !ended && locked && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
@@ -3967,6 +5630,37 @@ export function Game() {
               ))}
             </div>
             <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
+
+            {/* map: Tyler's four big maps + Random (themes.ts offered()); the host picks */}
+            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">{isHost ? "MAP" : "MAP · THE HOST PICKS"}</p>
+            <div className="mt-2 grid grid-cols-5 gap-1">
+              {([null, ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
+                const on = isHost ? mapChoice === i : i === seed % THEMES.length;
+                return (
+                  <button
+                    key={i ?? "random"}
+                    onClick={() => pickMap(i)}
+                    disabled={!isHost}
+                    className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                      on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                    } ${isHost ? "" : "cursor-default"}`}
+                  >
+                    {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => { pinTime(null); cycleTimeMode(); }}
+              title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
+              className="pointer-events-auto mt-2 w-full rounded bg-[#2b2118]/10 px-2 py-1.5 text-[10px] font-bold tracking-wider"
+            >
+              {timeMode === "auto"
+                ? "TIME · AUTO (SUNSET INTO NIGHT)"
+                : timeMode === "night"
+                  ? "TIME · ☾ NIGHT (LOCKED)"
+                  : "TIME · SUNSET (LOCKED)"}
+            </button>
 
             {multiplayer && (
               <div className="mt-5 text-left">
@@ -4037,8 +5731,8 @@ export function Game() {
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 {touchUi
-                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
+                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · USE for elevators · PING · hold REVIVE by a downed teammate · tap a gun to swap · pause button up top"
+                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · E in an elevator car for the floor button · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · P to pause"}
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -4077,9 +5771,12 @@ export function Game() {
                 .sort((a, b) => a.num - b.num);
               const badges: string[] = [];
               if (acc >= 60) badges.push("SHARPSHOOTER");
-              if (rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
-              if (rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
-              if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              // best-in-squad badges need a squad (and something to be best at)
+              if (rows.length > 1) {
+                if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
+                if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
+                if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              }
               if (status.won) badges.push("BOSS SLAYER");
               return (
                 <div className="mt-5 text-left text-black">
@@ -4210,6 +5907,22 @@ export function Game() {
             {(
               <div>
                 <button
+                  onClick={() => { pinTime(null); cycleTimeMode(); }}
+                  title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
+                  className={`pointer-events-auto mt-4 w-full rounded-md ${paused ? "block" : "hidden"} border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]`}
+                >
+                  {timeMode === "auto"
+                    ? "TIME · AUTO (SUNSET INTO NIGHT)"
+                    : timeMode === "night"
+                      ? "TIME · ☾ NIGHT (LOCKED)"
+                      : "TIME · SUNSET (LOCKED)"}
+                </button>
+                {started && !ended && (
+                  <div className="mt-1 text-[10px] tracking-wider opacity-50">
+                    {timeMode === "auto" ? "N LOCKS YOUR LOOK FOR THIS MATCH (AUTO OFF)" : "LOCKED FOR THIS MATCH · CLICK FOR AUTO"}
+                  </div>
+                )}
+                <button
                   onClick={() => setShowSettings(true)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
                 >
@@ -4222,7 +5935,14 @@ export function Game() {
                 >
                   WEAPONS
                 </button>}
+                {!paused && <button
+                  onClick={() => setShowEnemies(true)}
+                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
+                >
+                  ENEMIES
+                </button>}
                 {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+                {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
               </div>
             )}
             {showSettings && (
@@ -4268,6 +5988,12 @@ export function Game() {
                         onChange={(e) => setSfxVol(Number(e.target.value))}
                         className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                     </label>
+                    <label className="block">
+                      AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={ambVol}
+                        onChange={(e) => setAmbVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}
@@ -4276,7 +6002,8 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v1.0.2
+                    SCRAPFALL · v{GAME_VERSION} · TS BUILD
+                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER</div>
                   </div>
                 </div>
               </div>
@@ -4425,6 +6152,125 @@ export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
             </span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- enemy reference
+const PANEL_KINDS = Object.keys(ENEMY_INFO).filter((k): k is Kind => (KINDS as string[]).includes(k));
+const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
+  kind, x, z, hp: 1, alive: true, cooldown: 0, swing: 0, flash: 0, shot: 0, slow: 0, burn: 0, burnTick: 0, yaw: 0, vis: 0,
+});
+
+function LookAt({ y, z }: { y: number; z: number }) {
+  const { camera } = useThree();
+  useEffect(() => camera.lookAt(0, y, z), [camera, y, z]);
+  return null;
+}
+
+/** loops each newer type through idle, telegraph, attack and after, so the card shows its tell */
+function TelegraphDemo({ list, still }: { list: Enemy[]; still?: boolean }) {
+  useFrame(({ clock }) => {
+    if (still) {
+      // lineup: everyone at rest, shields raised, cloakers drawn solid so they can be seen
+      for (const e of list) if (e.kind === "bulwark") e.vis = packVis(0, 0, 1);
+      return;
+    }
+    const t = clock.elapsedTime % 4.2;
+    const ph = t < 1.2 ? 0 : t < 2.8 ? 1 : t < 3.6 ? 2 : 3;
+    const pr = ph === 1 ? (t - 1.2) / 1.6 : ph === 2 ? 1 : ph === 3 ? 1 - (t - 3.6) / 0.6 : 0;
+    for (const e of list) {
+      if (!isNewKind(e.kind)) continue;
+      let ex = 0;
+      if (e.kind === "sniper") ex = list.length > 1 ? 3 : 9;
+      if (e.kind === "bulwark") ex = ph === 2 ? 3 : 1;
+      if (e.kind === "cloaker") ex = ph === 0 ? 1 : ph === 1 ? 2 : 0;
+      e.vis = packVis(ph, pr, ex);
+    }
+  });
+  return null;
+}
+
+export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => void }) {
+  const [sel, setSel] = useState<Kind | "lineup">("lineup");
+  const lineup = useMemo(() => {
+    // the boss is huge: it stands in the middle of the back row
+    const rest = PANEL_KINDS.filter((k) => !isNewKind(k) && k !== "boss");
+    const old = [...rest.slice(0, 4), "boss" as Kind, ...rest.slice(4)];
+    const fresh = PANEL_KINDS.filter((k) => isNewKind(k));
+    return [
+      ...old.map((k, i) => fakeEnemy(k, (i - (old.length - 1) / 2) * 2.5, -4.5)),
+      ...fresh.map((k, i) => fakeEnemy(k, (i - (fresh.length - 1) / 2) * 2.2, 1.5)),
+    ];
+  }, []);
+  const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
+  const list = sel === "lineup" ? lineup : single;
+  const info = sel === "lineup" ? null : ENEMY_INFO[sel];
+  const st = sel === "lineup" ? null : STATS[sel];
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
+      <div className="flex max-h-full w-full max-w-5xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
+        <div className="grid grid-cols-2 gap-1 md:w-60 md:grid-cols-1">
+          <button onClick={() => setSel("lineup")}
+            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+            ALL · LINEUP
+          </button>
+          {PANEL_KINDS.map((k) => (
+            <button key={k} onClick={() => setSel(k)}
+              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}>
+              <span style={{ color: ENEMY_INFO[k]!.accent }}>■</span> {k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}
+              <span className="float-right opacity-50">W{ENEMY_INFO[k]!.wave}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1">
+          <div className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}>
+            <Canvas key={sel === "lineup" ? "lineup" : "one"} camera={sel === "lineup" ? { position: [0, 6, 25], fov: 28 } : { position: [2.6, 2.4, 4.6], fov: 42 }}>
+              <LookAt y={sel === "lineup" ? 0.5 : 0} z={sel === "lineup" ? -1.5 : 0} />
+              <ambientLight intensity={0.9} />
+              <hemisphereLight args={["#ffe7c4", "#3a3028", 0.6]} />
+              <directionalLight position={[3, 6, 5]} intensity={1.6} />
+              <TelegraphDemo list={list} still={sel === "lineup"} />
+              {sel === "lineup" ? (
+                <group position={[0, -1.4, 0]}>
+                  {list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}
+                </group>
+              ) : (
+                <Spin><group position={[0, -1.1, 0]}>{list.map((e) => <EnemyMesh key={e.kind} data={e} theme={theme} all={list} />)}</group></Spin>
+              )}
+            </Canvas>
+          </div>
+          {info && st ? (
+            <>
+              <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: info.accent }}>
+                {sel === "special" ? theme.special.name : info.name}
+              </h2>
+              <p className="mt-2 text-sm opacity-90">{info.tactic}</p>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] tracking-widest opacity-80">
+                <div>HEALTH<br /><b className="text-base">{sel === "boss" ? BOSS_HP : st.hp}</b></div>
+                <div>SPEED<br /><b className="text-base">{st.speed} m/s</b></div>
+                <div>WEAPON<br /><b className="text-xs">{info.weapon}</b></div>
+                <div>FIRST WAVE<br /><b className="text-base">{info.wave}</b></div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 space-y-1 text-[11px] tracking-wider">
+              {[["BACK ROW", false], ["FRONT ROW", true]].map(([label, fresh]) => (
+                <div key={String(label)}>
+                  <span className="opacity-50">{label} · </span>
+                  {lineup.map((e) => e.kind).filter((k) => isNewKind(k) === fresh).map((k, i) => (
+                    <span key={k} style={{ color: ENEMY_INFO[k]!.accent }}>{i ? " · " : ""}{k === "special" ? theme.special.name : ENEMY_INFO[k]!.name}</span>
+                  ))}
+                </div>
+              ))}
+              <p className="pt-1 text-sm opacity-80">
+                Every attack is telegraphed: watch for the glow, the laser, the lit lane or the red ring, then move.
+              </p>
+            </div>
+          )}
+          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
+        </div>
       </div>
     </div>
   );

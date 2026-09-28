@@ -1,16 +1,16 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "gta",
   "version": "1.0.2",
   "private": true,
   "sideEffects": false,
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/stage-static.mjs",
     "build:dev": "vite build --mode development",
-    "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "serve:static": "node scripts/serve-static.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -92,5 +92,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5"
+  },
+  "engines": {
+    "node": ">=20.19"
   }
 }

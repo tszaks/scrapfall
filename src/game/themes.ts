@@ -12,12 +12,18 @@ export type Theme = {
     shooter: { body: string; barrel: string; eye: string };
   };
   enemyBullet: string;
+  /** "city" swaps the random scatter for a street grid with skyscrapers (see cityLayout.ts);
+   * "beach" builds the Pacific Pier beach town (see beach/beachLayout.ts). */
   blockShape:
     | "monument" | "crystal" | "tree" | "basalt" | "butte"
-    | "pagoda" | "berg" | "coral" | "server" | "vat";
+    | "pagoda" | "berg" | "coral" | "server" | "vat" | "city" | "alpine" | "beach" | "western";
+  /** big real-scale maps: which generator builds the world (default: scatter, or city for blockShape "city") */
+  layout?: "scatter" | "city" | "alpine" | "beach" | "western";
+  /** Work in progress: kept out of the map picker and the random roll; still reachable with ?map= */
+  wip?: boolean;
   boss: {
     name: string;
-    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";
+    shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake" | "plough" | "kraken" | "marshal";
     body: string;
     limb: string;
     eye: string;
@@ -29,7 +35,7 @@ export type Theme = {
   /** Map-exclusive bonus enemy that joins waves on top of the regular roster. */
   special: {
     name: string;
-    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile";
+    type: "stalker" | "mite" | "spore" | "pyre" | "leaper" | "shinobi" | "wyrm" | "nautilus" | "hacker" | "bile" | "skier" | "crawler" | "desperado";
     body: string;
     accent: string;
     glow: string;
@@ -228,4 +234,165 @@ export const THEMES: Theme[] = [
     hazard: { name: "SLUDGE BOG", slip: 0.3 },
     special: { name: "BILE SPRAYER", type: "bile", body: "#c8b02a", accent: "#3a3a2a", glow: "#9aff3a" },
   },
+  {
+    name: "Vice Heights",
+    sky: "#9cc9ec",
+    ground: "#3b3e44",
+    grid: ["#2e3136", "#34373c"],
+    blocks: ["#f2a7b8", "#9ee0c8", "#f8e0a8"],
+    wall: "#8a8a86",
+    hemi: ["#ffffff", "#6b6255"],
+    enemy: {
+      drifter: { body: "#ff4fa0", emissive: "#3a0620", eye: "#fff4a0" },
+      brute: {
+        body: "#3a3f4a",
+        head: "#2a2e36",
+        eye: "#3affd8",
+        club: "#1a1c20",
+        clubHead: "#c8ccd6",
+      },
+      shooter: { body: "#f2f2f2", barrel: "#1a1a1a", eye: "#ff3a8a" },
+    },
+    enemyBullet: "#ff3aa8",
+    blockShape: "city",
+    boss: {
+      name: "THE KINGPIN",
+      shape: "mech",
+      body: "#d8b04a",
+      limb: "#2a2a30",
+      eye: "#ff3aa8",
+      weapon: "#1a1a1e",
+      glow: "#3affd8",
+    },
+    hazard: { name: "OIL SLICK", slip: 0.55 },
+    special: {
+      name: "ROOFTOP RUNNER",
+      type: "leaper",
+      body: "#2a2a30",
+      accent: "#ff4fa0",
+      glow: "#3affd8",
+    },
+  },
+  {
+    name: "Whiteout Pass",
+    sky: "#9fb4d6",
+    ground: "#eef3fa",
+    grid: ["#dfe8f3", "#e8eef6"],
+    blocks: ["#7a5236", "#9aa4ae", "#f4f7fb"],
+    wall: "#5a4030",
+    hemi: ["#dfe9ff", "#7d8fb0"],
+    enemy: {
+      drifter: { body: "#e8452a", emissive: "#3a0c04", eye: "#e6fbff" },
+      brute: {
+        body: "#2e3a52",
+        head: "#223047",
+        eye: "#ffb13a",
+        club: "#5a4030",
+        clubHead: "#c8d8e8",
+      },
+      shooter: { body: "#f0f4fa", barrel: "#1a2230", eye: "#ff3a4a" },
+    },
+    enemyBullet: "#ff6a2a",
+    blockShape: "alpine",
+    layout: "alpine",
+    boss: {
+      name: "THE AVALANCHE ENGINE",
+      shape: "plough",
+      body: "#e8a21a",
+      limb: "#2a2e36",
+      eye: "#ff4a2a",
+      weapon: "#c8ccd4",
+      glow: "#ffb13a",
+    },
+    hazard: { name: "BLIZZARD", slip: 0.3 },
+    special: {
+      name: "RIDGE RAIDER",
+      type: "skier",
+      body: "#f2f5fa",
+      accent: "#2a6fd6",
+      glow: "#ff6a2a",
+    },
+  },
+  {
+    // a real-scale Santa Monica-style beach town: pier, Ferris wheel, boardwalk, bluffs
+    name: "Pacific Pier",
+    sky: "#f2a27e",
+    ground: "#d9c49a",
+    grid: ["#c9b48a", "#d2bd92"],
+    blocks: ["#f4d9b0", "#8fd0d8", "#f2a0a8"],
+    wall: "#8a7a6a",
+    hemi: ["#ffe2c8", "#6a4a3a"],
+    enemy: {
+      drifter: { body: "#ff6a3a", emissive: "#3a1206", eye: "#fff4c0" },
+      brute: {
+        body: "#2e5a6a",
+        head: "#1f4250",
+        eye: "#ffd24a",
+        club: "#5a4432",
+        clubHead: "#c8c0b0",
+      },
+      shooter: { body: "#f2e8d8", barrel: "#1a1a1a", eye: "#ff3a4a" },
+    },
+    enemyBullet: "#3af0ff",
+    blockShape: "beach",
+    layout: "beach",
+    boss: {
+      name: "THE KRAKEN RIG",
+      shape: "kraken",
+      body: "#7a4630",
+      limb: "#3c4a4c",
+      eye: "#ff3a2a",
+      weapon: "#9a7050",
+      glow: "#3af0ff",
+    },
+    hazard: { name: "MARINE LAYER", slip: 0.25 },
+    special: {
+      name: "TIDE CRAWLER",
+      type: "crawler",
+      body: "#e0582a",
+      accent: "#5a2a1a",
+      glow: "#3af0ff",
+    },
+  },
+  {
+    // a real-scale 1880s railroad boomtown (western/layout.ts)
+    name: "Dry Gulch",
+    sky: "#f08a4a",
+    ground: "#c9a070",
+    grid: ["#b8905e", "#c49a68"],
+    blocks: ["#b8563f", "#a8845a", "#8a6a48"],
+    wall: "#6a3a20",
+    hemi: ["#ffe0b8", "#7a4a34"],
+    enemy: {
+      drifter: { body: "#c8452a", emissive: "#3a0e06", eye: "#ffe0a0" },
+      brute: { body: "#4a3a2e", head: "#3a2c22", eye: "#ffb03a", club: "#2a1e16", clubHead: "#8a8a86" },
+      shooter: { body: "#e8dcc4", barrel: "#2a2420", eye: "#e0462a" },
+    },
+    enemyBullet: "#ffcf4a",
+    blockShape: "western",
+    layout: "western",
+    boss: {
+      name: "THE IRON MARSHAL",
+      shape: "marshal",
+      body: "#5a5c62",
+      limb: "#2a2826",
+      eye: "#ff5a2a",
+      weapon: "#1a1a1c",
+      glow: "#ffc840",
+    },
+    hazard: { name: "DUST STORM", slip: 0.3 },
+    special: { name: "DESPERADO", type: "desperado", body: "#b8452a", accent: "#4a3a2e", glow: "#ffd24a" },
+  },
 ];
+
+/** Which generator builds this theme's world. */
+export function layoutOf(t: Theme): "scatter" | "city" | "alpine" | "beach" | "western" {
+  return t.layout ?? (t.blockShape === "city" ? "city" : "scatter");
+}
+
+/** Maps offered in the picker and the random roll on this build: Tyler's four big maps
+ * (the small arenas stay in the code, reachable only with ?map=, and hidden work-in-progress
+ * maps are never offered). */
+export function offered(t: Theme): boolean {
+  return !t.wip && layoutOf(t) !== "scatter";
+}

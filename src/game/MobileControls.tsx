@@ -45,10 +45,13 @@ function Btn({
 export function MobileControls({
   abilityName,
   abilityLeft,
+  coop = false,
 }: {
   onPause: () => void;
   abilityName: string;
   abilityLeft: number;
+  /** in a co-op room: show the hold-to-revive button */
+  coop?: boolean;
 }) {
   const [stick, setStick] = useState<{ ox: number; oy: number; dx: number; dy: number } | null>(null);
   const moveId = useRef<number | null>(null);
@@ -120,6 +123,25 @@ export function MobileControls({
           />
         </div>
       )}
+
+      {/* squad and building buttons (the big maps): ping, hold to revive, and the elevator
+          car's floor button, which only shows while you stand in a car (html.rs-incar) */}
+      <div className="absolute flex flex-col items-end gap-2" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)" }}>
+        <div className="hidden [.rs-incar_&]:block">
+          <Btn label="USE" sub="FLOOR" size={56} onTap={() => (touchInput.use = true)} />
+        </div>
+        <div className="flex gap-2">
+          <Btn label="PING" size={48} onTap={() => (touchInput.ping = true)} />
+          {coop && (
+            <Btn
+              label="REVIVE"
+              size={48}
+              onDown={() => (touchInput.revive = true)}
+              onUp={() => (touchInput.revive = false)}
+            />
+          )}
+        </div>
+      </div>
 
       {/* action buttons */}
       <div className="absolute flex items-end gap-4" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>

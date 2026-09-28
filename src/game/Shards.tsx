@@ -1,9 +1,12 @@
 import { useFrame } from "@react-three/fiber";
+import { groundY } from "./terrain";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
+import { NEW_VALUE } from "./enemyKinds";
+
 type E = { kind: string; x: number; z: number; alive: boolean };
-const VALUE: Record<string, number> = { drifter: 1, runner: 1, shooter: 2, specter: 2, bomber: 3, brute: 3, vanguard: 4, special: 4, boss: 25 };
+const VALUE: Record<string, number> = { drifter: 1, runner: 1, shooter: 2, specter: 2, bomber: 3, brute: 3, vanguard: 4, special: 4, boss: 25, ...NEW_VALUE };
 const N = 90;
 
 /** Every client drops its own shards when an enemy dies, so each player earns currency. */
@@ -69,7 +72,7 @@ export function Shards({
         }
       }
       if (m) {
-        m.position.set(p.x, 0.45 + Math.sin(t * 4 + i) * 0.1, p.z);
+        m.position.set(p.x, groundY(p.x, p.z) + 0.45 + Math.sin(t * 4 + i) * 0.1, p.z);
         m.rotation.y = t * 3 + i;
         m.scale.setScalar(0.8 + Math.sqrt(p.v) * 0.25);
       }

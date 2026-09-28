@@ -26,6 +26,13 @@ export type RemoteState = {
   color: string;
   /** 1 = host, 2-4 = guests */
   num: number;
+  /** building access: zone code (0 street; see access/world.ts) and floor height */
+  az?: number;
+  /** building access: elevator button presses so far (the host compares counts) */
+  ap?: number;
+  ay?: number | undefined;
+  /** alpine: the chairlift chair this player is riding, -1 on foot */
+  rc?: number;
   last: number;
   // render smoothing
   rx: number;
@@ -37,7 +44,13 @@ export type RemoteState = {
 export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
 export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
-const PREFIX = "scrapfall-arena-v1-";
+// Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
+// big-map build speak different message sets, so they must not join each other's rooms.
+const PREFIX = "scrapfall-ts-arena-v1-";
+/** ms without a word from a guest before the host drops it */
+const HEARTBEAT = 5000;
+/** player-to-player chatter the host forwards to the other guests */
+const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping", "pick"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
@@ -62,6 +75,18 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
 
   const conns = new Map<string, DataConnection>();
   const list = () => [...conns.keys()];
+  // heartbeat: a closed tab often never sends PeerJS "close"; a guest silent for 5 s is gone
+  // (guests send their position 20 times a second)
+  const heard = new Map<string, number>();
+  const drop = new Map<string, () => void>();
+  const beat = setInterval(() => {
+    const now = performance.now();
+    heard.forEach((t, id) => {
+      if (now - t > HEARTBEAT) drop.get(id)?.();
+    });
+    // keep-alive both ways, also while menus / pause stop the game's own traffic
+    conns.forEach((c) => { if (c.open) c.send({ type: "hb", from: "host" }); });
+  }, 1000);
 
   const handle: NetHandle = {
     role: "host",
@@ -76,28 +101,37 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       if (c?.open) c.send({ ...m, from: "host" });
     },
     peers: list,
-    close: () => { conns.forEach((c) => c.close()); peer.destroy(); },
+    close: () => { clearInterval(beat); conns.forEach((c) => c.close()); peer.destroy(); },
   };
 
   peer.on("connection", (conn) => {
     conn.on("open", () => {
       conns.set(conn.peer, conn);
+      heard.set(conn.peer, performance.now());
       opts.onPeers(list());
       opts.onMsg({ type: "joined", from: conn.peer });
     });
     conn.on("data", (raw) => {
+      if (!conns.has(conn.peer)) return; // timed out already
+      heard.set(conn.peer, performance.now());
+      if ((raw as NetMsg)?.type === "hb") return;
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
-      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume" || m.type === "pick") {
+      if (RELAYED.has(m.type)) {
         conns.forEach((c, id) => { if (id !== conn.peer && c.open) c.send(m); });
       }
       opts.onMsg(m);
     });
     const gone = () => {
+      if (conns.get(conn.peer) !== conn) return; // already dropped (or replaced)
       conns.delete(conn.peer);
+      heard.delete(conn.peer);
+      drop.delete(conn.peer);
       opts.onPeers(list());
       opts.onMsg({ type: "left", from: conn.peer });
+      try { conn.close(); } catch { /* already closed */ }
     };
+    drop.set(conn.peer, gone);
     conn.on("close", gone);
     conn.on("error", gone);
   });
@@ -118,8 +152,25 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     peer.on("error", (e) => { clearTimeout(t); reject(e); });
   });
 
-  conn.on("data", (raw) => opts.onMsg(raw as NetMsg));
-  conn.on("close", () => opts.onClose?.());
+  // heartbeat: the host streams snapshots many times a second; 8 s of silence = it's gone
+  let heardAt = performance.now();
+  let closed = false;
+  const lost = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(beat);
+    opts.onClose?.();
+  };
+  const beat = setInterval(() => {
+    if (performance.now() - heardAt > HEARTBEAT + 3000) lost();
+    else if (conn.open) conn.send({ type: "hb" });
+  }, 1000);
+  conn.on("data", (raw) => {
+    heardAt = performance.now();
+    if ((raw as NetMsg)?.type === "hb") return;
+    opts.onMsg(raw as NetMsg);
+  });
+  conn.on("close", lost);
 
   const self = peer.id;
   return {
@@ -129,6 +180,6 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     broadcast: (m) => { if (conn.open) conn.send({ ...m, from: self }); },
     sendTo: (_id, m) => { if (conn.open) conn.send({ ...m, from: self }); },
     peers: () => ["host"],
-    close: () => { conn.close(); peer.destroy(); },
+    close: () => { closed = true; clearInterval(beat); conn.close(); peer.destroy(); },
   };
 }
