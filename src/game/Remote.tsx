@@ -1,9 +1,12 @@
-import { useFrame } from "@react-three/fiber";
+import { createPortal, useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
 import { remoteFloorY } from "./access/world";
 import { alpine } from "./alpine/weather";
 import { riderEye } from "./alpine/ride";
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { newPlayerRig } from "./art/player";
+import { GunView } from "./art/GunView";
+import type { GunId } from "./art/guns";
 import * as THREE from "three";
 
 import type { RemoteState } from "./net";
@@ -14,17 +17,26 @@ const MAX_REMOTE = 3;
 const PIPS = 10;
 
 /** Low-poly teammate avatars, driven imperatively from the shared map. */
-export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map<string, RemoteState>> }) {
+export function RemotePlayers({
+  remotes,
+}: {
+  remotes: React.MutableRefObject<Map<string, RemoteState>>;
+}) {
   const groups = useRef<(THREE.Group | null)[]>([]);
   const visors = useRef<(THREE.Mesh | null)[]>([]);
+  const rigs = useMemo(() => Array.from({ length: MAX_REMOTE }, newPlayerRig), []);
+  const [weapons, setWeapons] = useState<string[]>(["pistol", "pistol", "pistol"]);
+  const weaponRef = useRef(weapons);
+  useEffect(() => () => rigs.forEach((r) => r.dispose()), [rigs]);
   const pips = useRef<(THREE.Mesh | null)[][]>([]);
-  const guns = useRef<(THREE.Mesh | null)[]>([]);
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     // a teammate we haven't heard from in 6 s is gone (the network drops them shortly)
     const now = performance.now();
-    const list = [...remotes.current.values()].filter((r) => now - r.last < 6000).slice(0, MAX_REMOTE);
+    const list = [...remotes.current.values()]
+      .filter((r) => now - r.last < 6000)
+      .slice(0, MAX_REMOTE);
     for (let i = 0; i < MAX_REMOTE; i++) {
       const g = groups.current[i];
       if (!g) continue;
@@ -48,21 +60,39 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
         const e = riderEye(lift, p.rc!);
         p.rx = e.x;
         p.rz = e.z;
-        g.position.set(e.x, e.y - 1.25, e.z);
+        g.position.set(e.x, e.y - 1.6, e.z);
       } else {
         // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
         const gy = groundY(p.rx, p.rz);
         // (+ their jump: feet above the ground, input/movement.ts)
-        g.position.set(p.rx, (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : (p.jy ?? 0)), p.rz);
+        g.position.set(
+          p.rx,
+          (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : (p.jy ?? 0)),
+          p.rz,
+        );
       }
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.order = "YXZ";
-      g.rotation.set(down ? -Math.PI / 2 : 0, p.ry + Math.PI, down ? Math.sin(performance.now() / 400) * 0.08 : 0);
-      // their gun kicks back when they fire (projectiles.tsx replays the shot itself)
-      const gun = guns.current[i];
-      if (gun) {
-        const since = (performance.now() - (REMOTE_SHOT.get(p.id) ?? -1e9)) / 1000;
-        gun.position.z = 0.3 - Math.max(0, 1 - since / 0.12) * 0.12;
+      g.rotation.set(
+        down ? -Math.PI / 2 : 0,
+        p.ry + Math.PI,
+        down ? Math.sin(performance.now() / 400) * 0.08 : 0,
+      );
+      const since = (performance.now() - (REMOTE_SHOT.get(p.id) ?? -1e9)) / 1000;
+      rigs[i]!.update(
+        now / 1000,
+        delta,
+        p.rx,
+        p.rz,
+        Math.max(0, 1 - since / 0.12),
+        -(p.pitch ?? 0),
+        0,
+      );
+      if (weaponRef.current[i] !== p.weapon) {
+        const next = [...weaponRef.current];
+        next[i] = p.weapon;
+        weaponRef.current = next;
+        setWeapons(next);
       }
       const visor = visors.current[i];
       if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
@@ -83,33 +113,36 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
   return (
     <>
       {Array.from({ length: MAX_REMOTE }, (_, i) => (
-        <group key={i} ref={(g) => { groups.current[i] = g; }} visible={false}>
-          <mesh position-y={0.95} castShadow>
-            <boxGeometry args={[0.8, 1.2, 0.5]} />
-            <meshLambertMaterial color="#5c6270" flatShading />
-          </mesh>
-          <mesh position-y={1.85} castShadow>
-            <boxGeometry args={[0.6, 0.55, 0.55]} />
-            <meshLambertMaterial color="#8a919e" flatShading />
-          </mesh>
-          <mesh ref={(m) => { visors.current[i] = m; }} position={[0, 1.88, 0.29]}>
-            <boxGeometry args={[0.44, 0.16, 0.04]} />
-            <meshBasicMaterial color="#ffffff" fog={false} />
-          </mesh>
-          <mesh position={[0.3, 0.3, 0]} castShadow>
-            <boxGeometry args={[0.22, 0.9, 0.22]} />
-            <meshLambertMaterial color="#454a55" flatShading />
-          </mesh>
-          <mesh position={[-0.3, 0.3, 0]} castShadow>
-            <boxGeometry args={[0.22, 0.9, 0.22]} />
-            <meshLambertMaterial color="#454a55" flatShading />
-          </mesh>
-          <mesh ref={(m) => { guns.current[i] = m; }} position={[0.45, 1.1, 0.3]} rotation-x={Math.PI / 2}>
-            <boxGeometry args={[0.14, 0.6, 0.14]} />
-            <meshLambertMaterial color="#2f2f33" flatShading />
-          </mesh>
+        <group
+          key={i}
+          ref={(g) => {
+            groups.current[i] = g;
+          }}
+          visible={false}
+        >
+          <primitive object={rigs[i]!.mesh} dispose={null} />
+          {createPortal(
+            <>
+              <mesh
+                ref={(m) => {
+                  visors.current[i] = m;
+                }}
+                position={[0, 0.18, 0.178]}
+              >
+                <boxGeometry args={[0.26, 0.06, 0.012]} />
+                <meshBasicMaterial color="#ffffff" fog={false} />
+              </mesh>
+            </>,
+            rigs[i]!.byName["head"]!,
+          )}
+          {createPortal(
+            <group rotation-y={Math.PI} scale={0.65}>
+              <GunView w={weapons[i] as GunId} color="#d2b68e" body="#586068" />
+            </group>,
+            rigs[i]!.byName["hands"]!,
+          )}
           {/* black diamond health pips floating over the head */}
-          <group position-y={2.45}>
+          <group position-y={2.05}>
             {Array.from({ length: PIPS }, (_, j) => (
               <mesh
                 key={j}
@@ -121,7 +154,12 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
                 rotation-z={Math.PI / 4}
               >
                 <planeGeometry args={[0.085, 0.085]} />
-                <meshBasicMaterial color="#000000" fog={false} transparent side={THREE.DoubleSide} />
+                <meshBasicMaterial
+                  color="#000000"
+                  fog={false}
+                  transparent
+                  side={THREE.DoubleSide}
+                />
               </mesh>
             ))}
           </group>

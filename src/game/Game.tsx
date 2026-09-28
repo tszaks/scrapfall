@@ -1,3 +1,6 @@
+import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
+import { getViewMode } from "./viewMode";
+import { setWorldMuzzle } from "./projectiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -2438,6 +2441,7 @@ function World({
       Object.assign(handle, {
         healthRef,
         ammo,
+        shoulderView,
         enemyBullets,
         heal,
         crate,
@@ -2720,6 +2724,7 @@ function World({
     r.x = Number(m.x ?? 0);
     r.z = Number(m.z ?? 0);
     r.yaw = Number(m.yaw ?? 0);
+    r.pitch = Math.max(-1.2, Math.min(1.2, Number(m.pt ?? 0)));
     r.hp = Number(m.hp ?? MAX_HP);
     r.weapon = String(m.w ?? "pistol");
     r.az = Number(m.az ?? 0);
@@ -3504,8 +3509,14 @@ function World({
     const g = gunFor(w);
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
-    const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
-    pos.y -= 0.25;
+    const third = getViewMode() === "third";
+    const pos = third ? playerMuzzle(camera, new THREE.Vector3()) : camera.position.clone().addScaledVector(FORWARD, 0.6);
+    if (!third) pos.y -= 0.25;
+    if (third) shoulderAim(camera, pos, outOfBounds, enemies.filter(e => e.alive).map(e => {
+      const [lo, hi] = hitBand(e.kind), gy = groundY(e.x,e.z);
+      return {x:e.x,z:e.z,bottom:gy+lo,top:gy+hi,radius:STATS[e.kind].radius + .2};
+    }), FORWARD);
+    setWorldMuzzle(third ? pos : null);
     // seeded spread so co-op viewers can replay the exact same pellets
     const seed = (Math.random() * 1e9) | 0;
     const spread = rng(seed);
@@ -4253,6 +4264,7 @@ function World({
           x: cam.position.x,
           z: cam.position.z,
           yaw: look.current.yaw,
+          pt: look.current.pitch,
           hp: spectating ? 0 : Math.max(1, healthRef.current),
           w: weapon.current,
           ...(accPlayer.zone !== 0
@@ -5837,7 +5849,7 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
-    v.visible = !deadRef.current; // spectators carry no weapon
+    v.visible = !deadRef.current && getViewMode() === "first"; // spectators carry no weapon
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
@@ -5856,6 +5868,7 @@ function World({
       if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
       if (m && !Array.isArray(m)) addGunRim(m);
     });
+    setWorldMuzzle(getViewMode() === "third" ? playerMuzzle(cam, TMP_DIR) : null);
     fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
@@ -6167,6 +6180,9 @@ function World({
         </mesh>
         <GunModel w={held} mods={renderStats} />
       </group>
+      <PlayerView active={locked && !gameOver} hidden={deadRef} look={look} recoil={recoil} downed={downedRef} stop={outOfBounds}>
+        <GunModel w={held} />
+      </PlayerView>
       <RemotePlayers remotes={remotes} />
       <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
@@ -7123,7 +7139,7 @@ export function Game() {
       if (i >= 0) buyRef.current(i);
       // R is also "hold to revive": next to a downed teammate it revives instead of rerolling
       else if (e.code === "KeyR" && !e.repeat && !reviveNearbyRef.current()) rerollRef.current();
-      else if (e.code === "KeyV") patchRef.current();
+      else if (e.code === "KeyH" && !e.repeat && !(e.target instanceof HTMLElement && (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)))) patchRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -7556,7 +7572,7 @@ export function Game() {
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
             >
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                V
+                H
               </span>
               <span className="font-bold tracking-widest">FIELD DRESSING</span>
               <span className="opacity-60">
@@ -8225,6 +8241,7 @@ export function Game() {
                         className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
                       />
                     </label>
+                    <ViewSettings />
                     <QualitySettings />
                     <PadSettingsPanel />
                   </div>

@@ -1,3 +1,6 @@
+import { remoteFloorY } from "./access/world";
+import { alpine } from "./alpine/weather";
+import { riderEye } from "./alpine/ride";
 import * as THREE from "three";
 import { groundY, shotHits } from "./terrain";
 
@@ -200,6 +203,13 @@ const CONTACT: Contact = { p: new THREE.Vector3(), n: new THREE.Vector3() };
 const rnd = (a = 1) => (Math.random() * 2 - 1) * a;
 
 let cam: THREE.Camera | null = null;
+const WORLD_MUZZLE = new THREE.Vector3();
+let worldMuzzle = false;
+/** Third-person gun origin; first-person and remote effects retain their own paths. */
+export function setWorldMuzzle(p: THREE.Vector3 | null) {
+  worldMuzzle = p !== null;
+  if (p) WORLD_MUZZLE.copy(p);
+}
 /** the local gun's muzzle this frame (world) */
 const MUZZLE = new THREE.Vector3();
 let viewKind: VisKind = VK.PISTOL;
@@ -229,6 +239,7 @@ export function aimDir(out: THREE.Vector3, fwd: THREE.Vector3, count: number, sp
 
 /** the local gun's muzzle in world space, from the camera (used at the moment of firing) */
 function localMuzzle(kind: VisKind, flags: number, out: THREE.Vector3) {
+  if (worldMuzzle) return out.copy(WORLD_MUZZLE);
   const lk = LOOKS[kind];
   const z = kind === VK.PISTOL && flags & VF.MAGNUM ? -0.48 : lk.muzzle[1];
   if (viewModel && viewModel.visible) {
@@ -248,7 +259,13 @@ const MUZ_REMOTE = new THREE.Vector3();
 function remoteMuzzle(r: RemoteState, out: THREE.Vector3) {
   const th = r.ry + Math.PI;
   const c = Math.cos(th), s = Math.sin(th);
-  return out.set(r.rx + 0.45 * c + 0.6 * s, 1.1, r.rz - 0.45 * s + 0.6 * c);
+  const lift = alpine.active ? alpine.lift : null;
+  const seat = lift && (r.rc ?? -1) >= 0 ? riderEye(lift,r.rc!) : null;
+  const gy = groundY(r.rx,r.rz);
+  const feet = seat ? seat.y - 1.6 : (r.az ? remoteFloorY(r.az,r.ay,gy) : gy) + (r.jy ?? 0);
+  const pitch = r.pitch ?? 0;
+  return out.set((seat?.x ?? r.rx) - .24 * c + .7 * Math.cos(pitch) * s,
+    feet + 1.24 + .7 * Math.sin(pitch), (seat?.z ?? r.rz) + .24 * s + .7 * Math.cos(pitch) * c);
 }
 
 // ---------------------------------------------------------------- hooks for Game.tsx
@@ -303,7 +320,7 @@ export function fxFired(
   f.t = lk.flash.life * (flags & VF.MAGNUM ? 1.4 : 1);
   f.kind = kind;
   f.flags = flags;
-  f.fixed = !!at;
+  f.fixed = !!at || worldMuzzle;
   f.p.copy(muz);
   f.d.copy(dir);
   if (!at) {
@@ -727,7 +744,7 @@ function trail(P: Proj, dt: number) {
 function tether(P: Proj, tx: number, ty: number, tz: number) {
   let ax: number, ay: number, az: number;
   if (P.owner === null) {
-    if (!viewModel?.visible) return;
+    if (!worldMuzzle && !viewModel?.visible) return;
     ax = MUZZLE.x; ay = MUZZLE.y; az = MUZZLE.z;
   } else {
     const r = remotesRef?.get(P.owner);
@@ -974,7 +991,8 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
   add.setPixel(px);
   alpha.setPixel(px);
 
-  if (vm && vm.visible) {
+  if (worldMuzzle) MUZZLE.copy(WORLD_MUZZLE);
+  else if (vm && vm.visible) {
     const lk = LOOKS[viewKind];
     MUZZLE.set(0, lk.muzzle[0], lk.muzzle[1]).multiplyScalar(0.7).applyQuaternion(vm.quaternion).add(vm.position);
   }

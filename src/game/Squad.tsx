@@ -1,3 +1,4 @@
+import { presentationCamera } from "./PlayerView";
 // Co-op squad play: pings (middle mouse or G) and downed / revive (hold R), plus the HUD
 // layer that draws them over the 3D view (world-anchored markers, the downed teammates'
 // direction and distance, the revive ring, the map-event banner).
@@ -88,7 +89,7 @@ export function SquadDriver({
   useFrame((_, raw) => {
     // real seconds (bleed-outs and revives shouldn't stretch when the host's frames dip)
     const dt = Math.min(raw, 0.25);
-    hudView.camera = camera;
+    hudView.camera = presentationCamera(camera);
     me.x = camera.position.x;
     me.z = camera.position.z;
     const n = cb.current.net;
@@ -108,7 +109,7 @@ export function SquadDriver({
     if (pingReq.current) {
       pingReq.current = false;
       if (w && s.playing && s.hp > 0) {
-        const p = aimPing(camera, w, me.id, cb.current.myNum);
+        const p = aimPing(presentationCamera(camera), w, me.id, cb.current.myNum);
         if (p) {
           playPing(p.kind === "enemy", true);
           n?.broadcast(pingMsg(p));

@@ -21,6 +21,7 @@ export type RemoteState = {
   x: number;
   z: number;
   yaw: number;
+  pitch?: number;
   hp: number;
   weapon: string;
   color: string;
