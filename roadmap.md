@@ -31,3 +31,7 @@
 - [x] Version 1.0.1
 - [x] Bigger waves (1.25x on wave 1, +0.10x each wave), shuffled spawn order, tougher boss round
 - [x] Version 1.0.2
+- [ ] Fix forest/map object loading (tree geometry, themed decor, tighter collision)
+- [ ] Themed interactive map hazards (shootable, per-theme effect, co-op synced)
+- [ ] Endless mode past wave 12 with wave mutators + high-wave record
+- [ ] Version 1.0.4
