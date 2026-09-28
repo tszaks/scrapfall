@@ -19,7 +19,7 @@ import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMus
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
-import { hazardFor, HAZARD_COUNT } from "./hazards";
+import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { MUTATORS, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 
 
