@@ -1846,6 +1846,17 @@ function World({
       }
       // a hazard someone else shot: show the blast without re-applying the damage
       if (m.type === "haz") hazardBlow.current(Number(m.i), !isH);
+      // the host decides where the hazard props stand each round
+      if (m.type === "hazset" && !isH) {
+        const p = m.p as [number, number][];
+        hazards.current.forEach((h, i) => {
+          const spot = p[i];
+          if (!spot) { h.alive = false; return; }
+          h.x = spot[0];
+          h.z = spot[1];
+          h.alive = true;
+        });
+      }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
