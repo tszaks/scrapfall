@@ -1,4 +1,5 @@
 import { westernBelfry } from "./belfry";
+import { overhangTriangles } from "./cliffs";
 // Builds Dry Gulch's merged, chunked geometry from the layout (layout.ts). Every building,
 // prop, rock face and rail tie goes through one vertex format (cityGeo.ts's Geo) and one
 // facade material (a texture array, textures.ts), so a whole 200 m chunk of town draws in
@@ -4771,8 +4772,29 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   const hv = rockMesh(L, chunkAt);
   for (const b of L.overhangs) {
     const G = chunkAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2).main;
-    G.colLinear(b.tone, b.tone * 0.89, b.tone * 0.78);
-    boxP(G, WL.ROCK, b.x0, b.y0, b.z0, b.x1, b.y1, b.z1, true, true);
+    const [tu, tv] = TILE_M[WL.ROCK]!;
+    for (const [a, c, d] of overhangTriangles(b)) {
+      const u = new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2]),
+        v = new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2]),
+        normal = u.cross(v).normalize();
+      const cap = Math.abs(normal.y) > 0.8;
+      G.mat(cap ? WL.SAND : WL.ROCK, 0.5, 0);
+      if (cap) {
+        const k = normal.y > 0 ? 0.6 : 0.5;
+        G.colLinear(k * 1.05, k * 0.62, k * 0.46);
+      } else G.colLinear(b.tone, b.tone * 0.93, b.tone * 0.88);
+      for (const [x, y, z] of [a, c, d])
+        G.v(
+          x,
+          y,
+          z,
+          normal.x,
+          normal.y,
+          normal.z,
+          Math.abs(normal.y) > 0.8 ? x / tu : (x + z * 0.7) / tu,
+          Math.abs(normal.y) > 0.8 ? z / tv : y / tv,
+        );
+    }
   }
 
   // talus at the cliff feet: fallen blocks and rubble heaped where the walls meet the desert.
