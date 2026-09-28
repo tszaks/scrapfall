@@ -52,7 +52,8 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       } else {
         // on a roof, in a lobby or riding a car: the height they report (riders follow the car)
         const gy = groundY(p.rx, p.rz);
-        g.position.set(p.rx, (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : 0), p.rz);
+        // (+ their jump: feet above the ground, input/movement.ts)
+        g.position.set(p.rx, (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : (p.jy ?? 0)), p.rz);
       }
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.order = "YXZ";

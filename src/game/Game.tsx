@@ -6,7 +6,7 @@ import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
   closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
-  BEACH_SIZE, setPosts,
+  BEACH_SIZE, setPosts, jumpBody, shotBlocked, shotStop, clearShot,
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
@@ -25,7 +25,6 @@ import { WesternTrain } from "./western/Train";
 import { WesternWeather } from "./western/Weather";
 import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
-import { DesperadoModel, IronMarshalParts } from "./western/enemies";
 import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
@@ -35,10 +34,9 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, jumpClimb, raised, strictNav, groundOwnsHits, groundSpeed, groundY, setTerrain, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
-import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
@@ -61,10 +59,25 @@ import {
   type AICtx, type Ord,
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
+import { RobotModel } from "./art/RobotModel";
+import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
+import { hasArtBoss } from "./art/robots/bosses";
+import { hasArtSpecial } from "./art/robots/specials";
+import { GunView } from "./art/GunView";
+import { gunKick, gunReload } from "./art/gunFx";
+import { bomberInputs, classicRobot, shooterInputs, specterInputs, swingInputs } from "./art/robots/classic";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
+import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
+import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
+import { clearControls, installControls, padHooks, padLook, padOut, rumbleFor, sprintPose, stepMove, stepPadActions, takeJump } from "./input/controls";
+import { PadLayer } from "./input/PadLayer";
+import { useInputDevice } from "./input/useInputDevice";
+import { ControlsHelp, KeyHint } from "./input/Glyph";
+import { PadSettingsPanel } from "./input/PadSettings";
+import { SprintMeter } from "./input/SprintMeter";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -590,7 +603,6 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
-  if (b.shape === "plough") return <PloughBody theme={theme} />;
   const skin = <meshLambertMaterial color={b.body} flatShading />;
   const limb = <meshLambertMaterial color={b.limb} flatShading />;
   const glow = <meshBasicMaterial color={b.glow} fog={false} />;
@@ -638,8 +650,6 @@ function BossBody({ theme }: { theme: Theme }) {
         <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
         <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
       </>)}
-      {b.shape === "marshal" && <IronMarshalParts b={b} />}
-      {b.shape === "kraken" && <KrakenRig b={b} />}
       {b.shape === "drake" && (<>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
@@ -650,68 +660,6 @@ function BossBody({ theme }: { theme: Theme }) {
           <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
         ))}
       </>)}
-    </group>
-  );
-}
-
-// THE KRAKEN RIG (Pacific Pier): a rusted pressure hull on a drilling derrick, dragging six
-// segmented steel tentacles.
-function KrakenRig({ b }: { b: Theme["boss"] }) {
-  const hull = <meshLambertMaterial color={b.body} flatShading />;
-  const steel = <meshLambertMaterial color={b.limb} flatShading />;
-  const brass = <meshLambertMaterial color={b.weapon} flatShading />;
-  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
-  const eye = <meshBasicMaterial color={b.eye} fog={false} />;
-  return (
-    <group>
-      <mesh position-y={1.7} castShadow><cylinderGeometry args={[1.2, 1.5, 2.8, 10]} />{hull}</mesh>
-      <mesh position-y={3.15} castShadow><sphereGeometry args={[1.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />{hull}</mesh>
-      {[0.9, 1.9, 2.8].map((y) => (
-        <mesh key={y} position-y={y}><torusGeometry args={[1.36 - y * 0.05, 0.07, 5, 14]} />{brass}</mesh>
-      ))}
-      <mesh position={[0, 2.1, 1.18]}><sphereGeometry args={[0.46, 12, 10]} />{eye}</mesh>
-      <mesh position={[0, 2.1, 1.12]} rotation-x={Math.PI / 2}><torusGeometry args={[0.52, 0.09, 6, 16]} />{brass}</mesh>
-      {[-0.75, 0.75].map((x) => (
-        <mesh key={x} position={[x, 1.25, 1.02]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.1, 10]} />{glow}</mesh>
-      ))}
-      {/* derrick */}
-      {[0, 1, 2, 3].map((k) => {
-        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
-        return (
-          <mesh key={k} position={[Math.sin(a) * 0.45, 4.7, Math.cos(a) * 0.45]} rotation={[Math.cos(a) * -0.18, 0, Math.sin(a) * 0.18]}>
-            <boxGeometry args={[0.1, 2.6, 0.1]} />{steel}
-          </mesh>
-        );
-      })}
-      {[4.1, 4.9, 5.6].map((y) => (
-        <mesh key={y} position-y={y}><boxGeometry args={[1.1 - (y - 4.1) * 0.45, 0.07, 1.1 - (y - 4.1) * 0.45]} />{steel}</mesh>
-      ))}
-      <mesh position-y={6.05}><sphereGeometry args={[0.2, 8, 6]} />{glow}</mesh>
-      {/* tentacles: jointed steel segments curling out and up from the base */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const a = (i / 6) * Math.PI * 2 + 0.3;
-        const segs: { y: number; r: number; th: number; k: number }[] = [];
-        let py = 0.3;
-        let pr = 1.35;
-        for (let k = 0; k < 6; k++) {
-          // tentacles curl up tight so the rig stays within its standoff (see KRAKEN_R)
-          const th = 0.35 + k * 0.38 + (i % 2) * 0.08;
-          const L = 0.55 - k * 0.04;
-          segs.push({ y: py + (Math.sin(th) * L) / 2, r: pr + (Math.cos(th) * L) / 2, th, k });
-          py += Math.sin(th) * L;
-          pr += Math.cos(th) * L;
-        }
-        return (
-          <group key={i} rotation-y={a}>
-            {segs.map((sg) => (
-              <mesh key={sg.k} position={[0, sg.y, sg.r]} rotation-x={Math.PI / 2 - sg.th} castShadow>
-                <cylinderGeometry args={[0.2 - sg.k * 0.025, 0.27 - sg.k * 0.025, 0.74, 7]} />{sg.k % 2 ? brass : steel}
-              </mesh>
-            ))}
-            <mesh position={[0, py, pr]}><sphereGeometry args={[0.13, 6, 5]} />{glow}</mesh>
-          </group>
-        );
-      })}
     </group>
   );
 }
@@ -727,12 +675,7 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
     if (part.current) {
       if (sp.type === "stalker") part.current.rotation.x = -0.6 + Math.sin(t * 6) * 0.25;
       else if (sp.type === "spore") part.current.scale.setScalar(1 + Math.sin(t * 3) * 0.12);
-      else if (sp.type === "leaper") part.current.position.y = (data.aux ?? 0) > 0 ? 1.4 : Math.abs(Math.sin(t * 5)) * 0.15;
       else if (sp.type === "wyrm") part.current.rotation.z = Math.sin(t * 2) * 0.3;
-      else if (sp.type === "crawler") {
-        part.current.rotation.z = Math.sin(t * 16) * 0.07;
-        part.current.position.y = Math.abs(Math.sin(t * 16)) * 0.05;
-      }
       else part.current.rotation.z = Math.sin(t * 4) * 0.15;
     }
   });
@@ -803,21 +746,6 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         </group>
         <mesh position-y={-0.9}><coneGeometry args={[0.2, 0.5, 6]} />{G}</mesh>
       </group>)}
-      {sp.type === "leaper" && (<group ref={part}>
-        <mesh position-y={1.1} castShadow><boxGeometry args={[0.8, 0.6, 0.7]} />{B}</mesh>
-        <mesh position={[0, 1.2, 0.36]}><sphereGeometry args={[0.1, 8, 8]} />{G}</mesh>
-        <mesh position={[0, 1.45, 0]}><boxGeometry args={[0.5, 0.15, 0.5]} />{A}</mesh>
-        {[-0.3, 0.3].map((x) => (
-          <group key={x} position={[x, 0.5, 0]}>
-            <mesh rotation-x={0.4}><cylinderGeometry args={[0.07, 0.07, 0.6, 6]} />{A}</mesh>
-            <mesh position-y={-0.25}><torusGeometry args={[0.1, 0.03, 4, 8]} />{A}</mesh>
-            <mesh position={[0, -0.4, 0.1]}><boxGeometry args={[0.2, 0.08, 0.35]} />{B}</mesh>
-          </group>
-        ))}
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={`s${x}`} position={[x, 1.1, 0.35]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.28, 0.28, 0.04, 10]} />{A}</mesh>
-        ))}
-      </group>)}
       {sp.type === "shinobi" && (<group>
         <mesh position-y={0.9} castShadow><cylinderGeometry args={[0.2, 0.32, 1.1, 7]} />{B}</mesh>
         <mesh position-y={0.9}><torusGeometry args={[0.26, 0.05, 4, 10]} />{A}</mesh>
@@ -867,35 +795,6 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
         <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
       </group>)}
-      {sp.type === "desperado" && <DesperadoModel sp={sp} data={data} />}
-      {sp.type === "crawler" && (<group ref={part}>
-        <mesh position-y={0.62} scale={[1.15, 0.42, 0.9]} castShadow><sphereGeometry args={[0.62, 12, 8]} />{B}</mesh>
-        {[-0.28, 0, 0.28].map((x) => (
-          <mesh key={x} position={[x, 0.86, -0.05]} scale={[0.16, 0.08, 0.5]}><sphereGeometry args={[0.6, 6, 5]} />{A}</mesh>
-        ))}
-        {[-0.18, 0.18].map((x) => (
-          <group key={`e${x}`} position={[x, 0.9, 0.4]}>
-            <mesh position-y={0.12}><cylinderGeometry args={[0.03, 0.035, 0.26, 5]} />{A}</mesh>
-            <mesh position-y={0.28}><sphereGeometry args={[0.07, 8, 6]} />{G}</mesh>
-          </group>
-        ))}
-        {[-1, 1].map((sd) => (
-          <group key={`c${sd}`} position={[sd * 0.55, 0.6, 0.45]} rotation-y={sd * -0.5}>
-            <mesh position-z={0.22} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.09, 0.45, 6]} />{B}</mesh>
-            <mesh position={[0, 0.02, 0.55]} scale={[0.9, 0.55, 1.2]}><sphereGeometry args={[0.2, 8, 6]} />{B}</mesh>
-            <mesh position={[sd * 0.06, 0.1, 0.76]} rotation-x={0.35}><boxGeometry args={[0.1, 0.06, 0.3]} />{B}</mesh>
-            <mesh position={[sd * 0.06, -0.06, 0.76]} rotation-x={-0.35}><boxGeometry args={[0.1, 0.06, 0.26]} />{A}</mesh>
-          </group>
-        ))}
-        {[-1, 1].map((sd) =>
-          [-0.3, 0, 0.3].map((z) => (
-            <mesh key={`l${sd}${z}`} position={[sd * 0.72, 0.32, z]} rotation={[0, 0, sd * 0.9]}>
-              <cylinderGeometry args={[0.035, 0.05, 0.7, 5]} />{A}
-            </mesh>
-          )),
-        )}
-        <mesh position-y={0.05} rotation-x={-Math.PI / 2}><ringGeometry args={[0.7, 0.85, 18]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
-      </group>)}
       {sp.type === "bile" && (<group>
         <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
         <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
@@ -919,14 +818,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
-  const drifter = useRef<THREE.Group>(null);
-  const brute = useRef<THREE.Group>(null);
-  const shooter = useRef<THREE.Group>(null);
   const specter = useRef<THREE.Group>(null);
-  const bomber = useRef<THREE.Group>(null);
-  const vanguard = useRef<THREE.Group>(null);
   const bossGrp = useRef<THREE.Group>(null);
-  const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Group>(null);
@@ -939,8 +832,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "boss" || k === "vanguard" || isNewKind(k); // newer types animate themselves
-    const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
+    const heavy = k === "brute" || k === "runner" || k === "special" || k === "shooter" || k === "bomber" || k === "boss" || k === "vanguard" || isNewKind(k); // walkers: feet stay on the ground
+    const bob = heavy ? 0 : Math.sin(t * 4 + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : k === "hornet" ? 1.3 : 1;
@@ -960,19 +853,12 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
       }
     }
 
-    if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
-    if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
-    if (shooter.current) shooter.current.visible = k === "shooter";
     if (specter.current) {
       specter.current.visible = k === "specter";
       specter.current.rotation.y = t * 1.6;
     }
-    if (bomber.current) bomber.current.visible = k === "bomber";
-    if (vanguard.current) vanguard.current.visible = k === "vanguard";
-    if (drifter.current) drifter.current.rotation.y = k === "runner" ? t * 8 : 0;
     const swingRot = data.swing > 0 ? -1.4 + (1 - data.swing / 0.4) * 2.4 : -1.4;
-    if (club.current) club.current.rotation.x = swingRot;
     if (bossArm.current) bossArm.current.rotation.x = swingRot;
   });
   return (
@@ -1008,109 +894,13 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
         ))}
       </group>
 
-      {/* DRIFTER / RUNNER: floating core inside a caged shell */}
-      {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
-        <mesh>
-          <octahedronGeometry args={[0.8, 0]} />
-          <meshLambertMaterial color={c.drifter.body} flatShading emissive={c.drifter.emissive} />
-        </mesh>
-        <mesh rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.82, 0.07, 6, 12]} />
-          <meshLambertMaterial color={c.brute.clubHead} flatShading />
-        </mesh>
-        <mesh rotation-z={Math.PI / 2}>
-          <torusGeometry args={[0.7, 0.05, 6, 12]} />
-          <meshLambertMaterial color={c.brute.club} flatShading />
-        </mesh>
-        <mesh position={[0, 0, 0.65]}>
-          <sphereGeometry args={[0.15, 8, 8]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        <mesh position={[0, 0, 0.72]} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.24, 0.04, 5, 10]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        {[-0.55, 0.55].map((x) => (
-          <mesh key={x} position={[x, -0.35, -0.2]} rotation-z={x * 0.5}>
-            <coneGeometry args={[0.14, 0.4, 5]} />
-            <meshLambertMaterial color={c.brute.club} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, -0.78, 0]}>
-          <sphereGeometry args={[0.18, 8, 6]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-      </group> )}
-      {/* BRUTE: hulking bruiser with layered plating and a power maul */}
-      {(kind==="brute") && (<group ref={brute}>
-        <mesh position-y={1.1}>
-          <boxGeometry args={[1.4, 1.8, 1]} />
-          <meshLambertMaterial color={c.brute.body} flatShading />
-        </mesh>
-        <mesh position={[0, 1.55, 0.53]}>
-          <boxGeometry args={[1.05, 0.75, 0.16]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 1.05, 0.58]}>
-          <boxGeometry args={[0.3, 0.12, 0.06]} />
-          <meshBasicMaterial color={c.brute.eye} />
-        </mesh>
-        {[-0.82, 0.82].map((x) => (
-          <mesh key={x} position={[x, 1.85, 0]} rotation-z={x * 0.25}>
-            <boxGeometry args={[0.5, 0.42, 1.05]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        {[-0.3, 0.3].map((x) => (
-          <mesh key={`v${x}`} position={[x, 2.05, -0.5]}>
-            <cylinderGeometry args={[0.1, 0.13, 0.5, 6]} />
-            <meshLambertMaterial color={c.brute.club} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 2.25, 0]}>
-          <boxGeometry args={[0.8, 0.6, 0.7]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 2.3, 0.36]}>
-          <boxGeometry args={[0.55, 0.12, 0.05]} />
-          <meshBasicMaterial color={c.brute.eye} />
-        </mesh>
-        {[-0.45, 0.45].map((x) => (
-          <mesh key={`h${x}`} position={[x, 2.6, 0]} rotation-z={x * 0.6}>
-            <coneGeometry args={[0.1, 0.42, 4]} />
-            <meshLambertMaterial color={c.brute.clubHead} flatShading />
-          </mesh>
-        ))}
-        {[-0.4, 0.4].map((x) => (
-          <mesh key={`l${x}`} position={[x, 0.15, 0]}>
-            <boxGeometry args={[0.42, 0.5, 0.52]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        <group ref={club} position={[0.85, 1.6, 0]}>
-          <mesh position={[0, 0.7, 0]}>
-            <boxGeometry args={[0.18, 1.4, 0.18]} />
-            <meshLambertMaterial color={c.brute.club} />
-          </mesh>
-          <mesh position={[0, 1.45, 0]}>
-            <boxGeometry args={[0.4, 0.4, 0.4]} />
-            <meshLambertMaterial color={c.brute.clubHead} flatShading />
-          </mesh>
-          <mesh position={[0, 1.45, 0]}>
-            <boxGeometry args={[0.46, 0.1, 0.46]} />
-            <meshBasicMaterial color={c.brute.eye} />
-          </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[s * 0.28, 1.45, 0]} rotation-z={-s * Math.PI / 2}>
-              <coneGeometry args={[0.13, 0.22, 4]} />
-              <meshLambertMaterial color={c.brute.clubHead} flatShading />
-            </mesh>
-          ))}
-        </group>
-      </group> )}
+      {/* the regular robots (art/robots): detailed skinned models, one draw call each */}
+      {kind === "drifter" && <RobotModel kind={classicRobot("drifter", theme)} data={data} />}
+      {kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
+      {kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
       {(kind==="boss") && (<group ref={bossGrp}>
-        <BossBody theme={theme} />
-        <group ref={bossArm} position={[1.05, 1.9, 0]}>
+        {hasArtBoss(theme) ? <ArtBoss theme={theme} data={data} /> : <BossBody theme={theme} />}
+        <group ref={bossArm} position={[1.05, 1.9, 0]} visible={!hasArtBoss(theme)}>
           <mesh position={[0, 0.9, 0]}>
             <boxGeometry args={[0.24, 1.8, 0.24]} />
             <meshLambertMaterial color={theme.boss.limb} flatShading />
@@ -1133,172 +923,32 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
           </mesh>
         </group>
       </group> )}
-      {/* SHOOTER: sensor-headed gunner on a tripod chassis */}
-      {(kind==="shooter") && (<group ref={shooter} position-y={1.3}>
-        <mesh>
-          <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
-          <meshLambertMaterial color={c.shooter.body} flatShading />
-        </mesh>
-        <mesh position-y={0.62}>
-          <cylinderGeometry args={[0.5, 0.42, 0.22, 6]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position-y={0.8}>
-          <sphereGeometry args={[0.3, 8, 6]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position={[0, 0.82, 0.26]}>
-          <boxGeometry args={[0.36, 0.1, 0.06]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={x} position={[x, 0.15, -0.1]} rotation-z={x * 0.35}>
-            <boxGeometry args={[0.12, 0.8, 0.3]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        {[-0.42, 0, 0.42].map((x) => (
-          <mesh key={`leg${x}`} position={[x, -1.0, 0]} rotation-z={x * 0.5}>
-            <cylinderGeometry args={[0.07, 0.05, 0.9, 5]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.2, 0.55]} rotation-x={Math.PI / 2}>
-          <cylinderGeometry args={[0.12, 0.12, 0.7, 8]} />
-          <meshLambertMaterial color={c.shooter.barrel} />
-        </mesh>
-        <mesh position={[0, 0.2, 0.86]}>
-          <torusGeometry args={[0.16, 0.04, 5, 10]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, 0.4]}>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-      </group> )}
-      {/* SPECTER: drifting, see-through wraith that blinks toward you */}
+      {kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
+      {kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
+      {/* SPECTER: a skeletal wraith-drone inside a see-through energy shroud that blinks toward you */}
+      {kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
       {(kind==="specter") && (<group ref={specter} position-y={1.5}>
         <mesh>
-          <coneGeometry args={[0.6, 1.8, 6]} />
-          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
+          <coneGeometry args={[0.6, 1.8, 10, 1, true]} />
+          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
         </mesh>
         <mesh position-y={-0.75} rotation-x={Math.PI}>
-          <coneGeometry args={[0.45, 1.1, 6]} />
-          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.3} emissive={c.drifter.emissive} />
+          <coneGeometry args={[0.45, 1.1, 10, 1, true]} />
+          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.16} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
         </mesh>
         <mesh position-y={0.1} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.72, 0.05, 5, 14]} />
+          <torusGeometry args={[0.72, 0.03, 5, 20]} />
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
         <mesh position-y={-0.3} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.5, 0.04, 5, 12]} />
+          <torusGeometry args={[0.5, 0.025, 5, 16]} />
           <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        <mesh position-y={0.55}>
-          <sphereGeometry args={[0.2, 8, 6]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, 0.35]}>
-          <sphereGeometry args={[0.14, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, -0.35]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-      </group> )}
-      {/* BOMBER: squat mortar unit that lobs shells over cover */}
-      {(kind==="bomber") && (<group ref={bomber} position-y={0.8}>
-        <mesh>
-          <sphereGeometry args={[0.75, 8, 6]} />
-          <meshLambertMaterial color={c.brute.body} flatShading />
-        </mesh>
-        <mesh position-y={0.1} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.76, 0.08, 6, 12]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7}>
-          <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position={[0, 1.05, 0.33]} rotation-x={-0.7}>
-          <torusGeometry args={[0.24, 0.05, 5, 10]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
-        </mesh>
-        {[-0.62, 0.62].map((x) => (
-          <mesh key={x} position={[x, 0.35, -0.1]} rotation-z={x * 0.6}>
-            <boxGeometry args={[0.24, 0.4, 0.34]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={`f${x}`} position={[x, -0.55, 0.2]} rotation-z={x * 0.5}>
-            <cylinderGeometry args={[0.09, 0.14, 0.5, 5]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.3, 0.6]}>
-          <sphereGeometry args={[0.13, 8, 8]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
+      {kind === "special" && (hasArtSpecial(theme) ? <ArtSpecial theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
-      {(kind==="vanguard") && (<group ref={vanguard}>
-        <mesh position-y={1.2}>
-          <boxGeometry args={[1.2, 2, 0.9]} />
-          <meshLambertMaterial color={c.shooter.body} flatShading />
-        </mesh>
-        <mesh position={[0, 1.55, 0.48]}>
-          <boxGeometry args={[0.95, 0.9, 0.14]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        {[-0.72, 0.72].map((x) => (
-          <mesh key={x} position={[x, 1.95, 0]} rotation-z={x * 0.3}>
-            <boxGeometry args={[0.42, 0.38, 0.95]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 2.45, 0]}>
-          <boxGeometry args={[0.7, 0.55, 0.7]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 2.5, 0.37]}>
-          <boxGeometry args={[0.45, 0.1, 0.05]} />
-          <meshBasicMaterial color={c.brute.eye} />
-        </mesh>
-        <mesh position={[0, 2.78, 0]}>
-          <boxGeometry args={[0.16, 0.34, 0.16]} />
-          <meshLambertMaterial color={c.brute.clubHead} flatShading />
-        </mesh>
-        {[-0.38, 0.38].map((x) => (
-          <mesh key={`lg${x}`} position={[x, 0.2, 0]}>
-            <boxGeometry args={[0.38, 0.55, 0.48]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 1.3, 0.75]}>
-          <boxGeometry args={[1.7, 2.1, 0.18]} />
-          <meshLambertMaterial color={c.brute.clubHead} flatShading />
-        </mesh>
-        {[-0.6, 0.6].map((x) => (
-          <mesh key={`r${x}`} position={[x, 1.3, 0.86]}>
-            <boxGeometry args={[0.16, 2, 0.08]} />
-            <meshLambertMaterial color={c.shooter.body} flatShading />
-          </mesh>
-        ))}
-        {[-0.7, 0, 0.7].map((y) => (
-          <mesh key={`b${y}`} position={[0, 1.3 + y, 0.86]} rotation-z={Math.PI / 4}>
-            <boxGeometry args={[0.18, 0.18, 0.05]} />
-            <meshBasicMaterial color={theme.enemyBullet} />
-          </mesh>
-        ))}
-        <mesh position={[0, 1.3, 0.86]}>
-          <boxGeometry args={[0.3, 0.9, 0.04]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
-        </mesh>
-      </group> )}
+      {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
     </group>
   );
 });
@@ -1404,163 +1054,9 @@ function addGunRim(m: THREE.Material) {
 }
 
 function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
+  // detailed PBR models, first-person animation and the pistol mod looks live in art/
   const g = GUNS[w];
-  const glow = <meshBasicMaterial color={g.color} fog={false} />;
-  const body = <meshLambertMaterial color={g.body} />;
-  const mg = w === "pistol" && mods?.magnum;
-  return (
-    <group>
-      {w === "pistol" && (<>
-        {/* magnum: longer gold-trimmed barrel */}
-        <mesh position={[0, 0, mg ? -0.22 : -0.15]}><boxGeometry args={[0.1, 0.12, mg ? 0.5 : 0.35]} />{body}</mesh>
-        <mesh position={[0, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.08, 0.18, 0.1]} />{body}</mesh>
-        <mesh position={[0, 0.07, mg ? -0.44 : -0.3]}><boxGeometry args={[0.03, 0.03, 0.03]} />{glow}</mesh>
-        {mg && (<>
-          <mesh position={[0, 0.075, -0.2]}><boxGeometry args={[0.11, 0.02, 0.46]} /><meshBasicMaterial color="#e8b93a" fog={false} /></mesh>
-          <mesh position={[0, 0, -0.03]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.075, 0.075, 0.12, 6]} /><meshLambertMaterial color="#8a6a24" /></mesh>
-        </>)}
-        {/* burst: extended magazine + triple muzzle vents */}
-        {mods?.burst && (<>
-          <mesh position={[0, -0.27, 0]} rotation-x={0.3}><boxGeometry args={[0.06, 0.14, 0.07]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
-          {[-0.03, 0, 0.03].map((x) => (
-            <mesh key={x} position={[x, -0.035, mg ? -0.48 : -0.33]}><boxGeometry args={[0.018, 0.018, 0.04]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
-          ))}
-        </>)}
-        {/* incendiary: glowing fuel canister under the barrel */}
-        {mods?.incend && (
-          <mesh position={[0, -0.09, -0.2]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.22, 8]} /><meshBasicMaterial color="#ff5a1f" fog={false} /></mesh>
-        )}
-        {/* extended mag: chunky drum at the grip base */}
-        {mods?.extmag && (
-          <mesh position={[0, -0.25, 0.02]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.09, 10]} /><meshLambertMaterial color="#2a2a2a" /></mesh>
-        )}
-        {/* shredder: serrated muzzle brake */}
-        {mods?.shred && [0, 1, 2].map((k) => (
-          <mesh key={k} position={[0, 0, (mg ? -0.47 : -0.32) - (mods?.suppr ? 0.2 : 0) - k * 0.035]} rotation-z={k * 0.5}><boxGeometry args={[0.14, 0.14, 0.02]} /><meshLambertMaterial color="#9a9a9a" /></mesh>
-        ))}
-        {/* laser sight: emitter + beam */}
-        {mods?.laser && (<>
-          <mesh position={[0.07, -0.05, -0.22]}><boxGeometry args={[0.04, 0.04, 0.12]} /><meshLambertMaterial color="#222" /></mesh>
-          <mesh position={[0.07, -0.05, -3.3]}><boxGeometry args={[0.006, 0.006, 6]} /><meshBasicMaterial color="#ff2020" fog={false} transparent opacity={0.6} /></mesh>
-        </>)}
-        {/* compensator: squared ported block on the tip */}
-        {mods?.comp && !mods?.suppr && (<>
-          <mesh position={[0, 0, mg ? -0.5 : -0.36]}><boxGeometry args={[0.13, 0.13, 0.08]} /><meshLambertMaterial color="#4a4a4a" /></mesh>
-          <mesh position={[0, 0.066, mg ? -0.5 : -0.36]}><boxGeometry args={[0.06, 0.01, 0.05]} /><meshBasicMaterial color="#111" /></mesh>
-        </>)}
-        {/* suppressor: long matte shroud */}
-        {mods?.suppr && (
-          <mesh position={[0, 0, mg ? -0.57 : -0.43]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.055, 0.055, 0.22, 12]} /><meshLambertMaterial color="#141414" /></mesh>
-        )}
-        {/* executioner: serrated hammer on the rear */}
-        {mods?.exec && (<>
-          <mesh position={[0, 0.1, 0.06]} rotation-x={-0.5}><boxGeometry args={[0.04, 0.1, 0.05]} /><meshLambertMaterial color="#6a1010" /></mesh>
-          <mesh position={[0, 0.15, 0.09]}><boxGeometry args={[0.1, 0.03, 0.03]} /><meshLambertMaterial color="#b8b8b8" /></mesh>
-        </>)}
-        {/* holster: skeletonized match grip panels */}
-        {mods?.holster && [-0.045, 0.045].map((x) => (
-          <mesh key={x} position={[x, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.012, 0.16, 0.09]} /><meshLambertMaterial color="#3fae5a" /></mesh>
-        ))}
-        {/* bounty: glowing capacitor under the trigger guard */}
-        {mods?.bounty && (
-          <mesh position={[0, -0.09, -0.06]}><boxGeometry args={[0.05, 0.04, 0.07]} /><meshBasicMaterial color="#39c6ff" fog={false} /></mesh>
-        )}
-      </>)}
-      {w === "scatter" && (<>
-        <mesh position={[-0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
-        <mesh position={[0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
-        <mesh position={[0, -0.04, 0.05]}><boxGeometry args={[0.14, 0.14, 0.3]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-        <mesh position={[0, -0.06, -0.2]}><boxGeometry args={[0.16, 0.05, 0.12]} />{glow}</mesh>
-      </>)}
-      {w === "smg" && (<>
-        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.14, 0.45]} />{body}</mesh>
-        <mesh position={[0, 0, -0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.025, 0.025, 0.2, 6]} /><meshLambertMaterial color="#111" /></mesh>
-        <mesh position={[0, -0.16, -0.12]}><boxGeometry args={[0.06, 0.22, 0.08]} />{body}</mesh>
-        <mesh position={[0.065, 0.02, -0.15]}><boxGeometry args={[0.01, 0.04, 0.3]} />{glow}</mesh>
-      </>)}
-      {w === "rail" && (<>
-        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.09, 0.09, 0.8]} />{body}</mesh>
-        {[-0.5, -0.35, -0.2].map((z) => (
-          <mesh key={z} position={[0, 0, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.08, 0.018, 6, 12]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, -0.1, 0.05]}><boxGeometry args={[0.08, 0.16, 0.14]} /><meshLambertMaterial color="#555" /></mesh>
-      </>)}
-      {w === "cannon" && (<>
-        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.1, 0.55, 12]} />{body}</mesh>
-        <mesh position={[0, 0, -0.53]} rotation-x={Math.PI / 2}><torusGeometry args={[0.13, 0.03, 6, 14]} />{glow}</mesh>
-        <mesh position={[0, 0.16, -0.15]}><sphereGeometry args={[0.06, 8, 8]} />{glow}</mesh>
-      </>)}
-      {w === "rebound" && (<>
-        <mesh position={[0, 0, -0.18]}><boxGeometry args={[0.11, 0.16, 0.42]} />{body}</mesh>
-        <mesh position={[0, 0.06, -0.42]} rotation-y={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.03, 10]} />{glow}</mesh>
-        <mesh position={[0, -0.14, 0]}><boxGeometry args={[0.07, 0.2, 0.1]} />{body}</mesh>
-      </>)}
-      {w === "harpoon" && (<>
-        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.07, 0.08, 0.7]} />{body}</mesh>
-        <mesh position={[0, 0.02, -0.25]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.012, 0.012, 0.44, 6]} /><meshLambertMaterial color="#8c7f66" /></mesh>
-        <mesh position={[0, 0.02, -0.62]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.05, 0.18, 6]} />{glow}</mesh>
-        <mesh position={[0, -0.12, 0.02]}><boxGeometry args={[0.07, 0.18, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "cryo" && (<>
-        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.1, 0.13, 0.5]} />{body}</mesh>
-        <mesh position={[0, 0.11, -0.2]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.06, 0.06, 0.3, 8]} />{glow}</mesh>
-        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.07, 0.16, 6]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "flak" && (<>
-        <mesh position={[0, 0, -0.28]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.1, 0.14, 0.5, 8]} />{body}</mesh>
-        <mesh position={[0, 0, -0.55]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.15, 0.11, 0.12, 8]} />{glow}</mesh>
-        <mesh position={[0, 0.14, -0.06]}><boxGeometry args={[0.1, 0.12, 0.22]} /><meshLambertMaterial color="#6b6450" /></mesh>
-        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "revolver" && (<>
-        <mesh position={[0, 0.02, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.45, 8]} />{body}</mesh>
-        <mesh position={[0, 0, -0.05]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.08, 0.08, 0.14, 6]} /><meshLambertMaterial color="#8a7a66" /></mesh>
-        <mesh position={[0, 0.07, -0.46]}><boxGeometry args={[0.02, 0.03, 0.03]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.06]} rotation-x={0.35}><boxGeometry args={[0.07, 0.2, 0.1]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-      </>)}
-      {w === "minigun" && (<>
-        {[0, 1, 2, 3, 4, 5].map((k) => (
-          <mesh key={k} position={[Math.cos(k) * 0.05, Math.sin(k) * 0.05, -0.32]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.018, 0.018, 0.55, 6]} /><meshLambertMaterial color="#222" /></mesh>
-        ))}
-        <mesh position={[0, 0, -0.05]}><boxGeometry args={[0.18, 0.18, 0.25]} />{body}</mesh>
-        <mesh position={[0, 0, -0.58]} rotation-x={Math.PI / 2}><torusGeometry args={[0.07, 0.015, 6, 12]} />{glow}</mesh>
-      </>)}
-      {w === "crossbow" && (<>
-        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.07, 0.08, 0.55]} />{body}</mesh>
-        <mesh position={[0, 0.02, -0.4]}><boxGeometry args={[0.5, 0.03, 0.04]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-        <mesh position={[0, 0.06, -0.35]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.008, 0.008, 0.45, 4]} />{glow}</mesh>
-      </>)}
-      {w === "plasma" && (<>
-        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.14, 0.12, 0.45]} />{body}</mesh>
-        {[-0.06, 0, 0.06].map((x) => (
-          <mesh key={x} position={[x, 0.02, -0.46]}><sphereGeometry args={[0.03, 8, 8]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "voidorb" && (<>
-        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.12, 0.35]} />{body}</mesh>
-        <mesh position={[0, 0.03, -0.45]}><sphereGeometry args={[0.1, 12, 12]} />{glow}</mesh>
-        <mesh position={[0, 0.03, -0.45]} rotation-x={Math.PI / 2}><torusGeometry args={[0.14, 0.015, 6, 16]} /><meshLambertMaterial color="#444" /></mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "shatter" && (<>
-        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.09, 0.12, 0.5, 6]} />{body}</mesh>
-        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.1, 0.12, 6]} />{glow}</mesh>
-        <mesh position={[0, 0.13, -0.2]}><octahedronGeometry args={[0.06]} />{glow}</mesh>
-        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "tesla" && (<>
-        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.11, 0.12, 0.5]} />{body}</mesh>
-        {[-0.42, -0.3].map((z) => (
-          <mesh key={z} position={[0, 0.08, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.09, 0.022, 6, 12]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, 0.2, -0.36]}><sphereGeometry args={[0.07, 10, 10]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-
-    </group>
-  );
+  return <GunView w={w} mods={mods} color={g.color} body={g.body} />;
 }
 
 function World({
@@ -1743,6 +1239,7 @@ function World({
     const s2 = stats.current;
     if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    rumbleFor.hit();
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
@@ -1797,7 +1294,8 @@ function World({
     fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])));
     const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
     fxEnv({
-      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      // (with a height: the same world test the bullets use, so holes land where rounds stop)
+      solid: (x, z, y) => (y === undefined ? blocked(blocks, x, z, 0.05) : shotStop(blocks, x, y, z)),
       car: (x, y, z) => (city !== null || western !== null) && hitsTraffic(x, y, z),
       half: () => HALF,
       waterZ: city ? city.waterZ : null,
@@ -1904,7 +1402,10 @@ function World({
     knock.current.x = kx;
     knock.current.z = kz;
     knock.current.shake = Math.max(knock.current.shake, shake);
-    if (shake > 0) playSfx("thud");
+    if (shake > 0) {
+      playSfx("thud");
+      rumbleFor.bump(shake);
+    }
     if (dmg > 0) takeHit(dmg);
   };
 
@@ -1955,6 +1456,7 @@ function World({
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
     r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
     r.rc = Number(m.rc ?? -1);
+    r.jy = Number(m.jy ?? 0) || 0; // mid-jump height (the avatar hops)
     r.last = performance.now();
   };
 
@@ -2091,7 +1593,7 @@ function World({
           onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
           if (m.banner) {
             // a new wave: guests get the same fresh sidearm magazine the host's spawnWave hands out
-            ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+            ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
             onAmmo(ammo.current[weapon.current]);
             syncInv();
           }
@@ -2148,7 +1650,7 @@ function World({
     }
     dropOrder.current = pool;
     // a full sidearm from the first frame (the HUD used to flash "PISTOL 0" until wave 1)
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
     onAmmo(ammo.current.pistol);
     syncInv();
     bullets.current.forEach((b) => (b.active = false));
@@ -2185,6 +1687,7 @@ function World({
     }
     camera.position.set(x, EYE + (big ? groundY(x, z) : 0), z);
     camGround.current = camera.position.y - EYE;
+    cancelJump(camGround.current);
   };
   // the roster (my player number) can arrive just after the new arena: re-place before the match starts
   const lastSpawnNum = useRef(0);
@@ -2498,8 +2001,13 @@ function World({
       const [lo, hi] = hitBand(e.kind);
       const ey = groundY(e.x, e.z);
       if (y < ey + lo - r || y > ey + hi + r) continue; // far above or below (a roof, a hornet)
-      if (d > er + 0.3 && !clearLine(blocks, x, z, e.x, e.z, 0.1)) continue;
-      const k = 1 - 0.65 * Math.min(1, dd / r);
+      // walls shield; low cover shields the body but not the head (half the splash)
+      let cover = 1;
+      if (d > er + 0.3 && !clearShot(blocks, x, y, z, e.x, ey + (lo + hi) / 2, e.z)) {
+        if (!clearShot(blocks, x, y, z, e.x, ey + hi - 0.15, e.z)) continue;
+        cover = 0.5;
+      }
+      const k = (1 - 0.65 * Math.min(1, dd / r)) * cover;
       // at the centre the blast travels the way the shell was flying
       const [kx, kz] = d > 0.3 ? [dx / d, dz / d] : [vx, vz];
       applyHit(e, i, dmg * k, { kb: 2.4 * k, kx, kz, direct: true }, from);
@@ -2518,6 +2026,7 @@ function World({
     const pd = Math.hypot(c.x - x, c.z - z);
     if (pd < r && Math.abs(c.y - EYE - y) < r) {
       const push = 4 * (1 - pd / r);
+      rumbleFor.blast(1 - pd / r);
       knock.current.x += ((c.x - x) / (pd || 1)) * push;
       knock.current.z += ((c.z - z) / (pd || 1)) * push;
     }
@@ -2569,6 +2078,7 @@ function World({
     fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
+    gunKick();
   };
 
   const fire = () => {
@@ -2607,7 +2117,7 @@ function World({
       ammo.current[w] = 0;
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
     equip("pistol");
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2618,7 +2128,9 @@ function World({
       if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
     };
     const onUp = () => (trigger.current = false);
-    const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
+    // fire = hold the left mouse button (Space jumps: input/controls.ts); Enter still fires
+    // for keyboard-only players on the arrow keys
+    const isFire = (e: KeyboardEvent) => e.code === "Enter" || e.code === "NumpadEnter";
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
@@ -2666,7 +2178,7 @@ function World({
 
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
-    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul); gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
@@ -2824,13 +2336,26 @@ function World({
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
     // sea); every other map: under the ground or into a solid cell
     // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
-    ((shotHits(p.x, p.y, p.z) ??
-      (groundOwnsHits() ? groundHits(p.x, p.y, p.z) : p.y < groundY(p.x, p.z) || blocked(blocks, p.x, p.z, 0.05))) ||
+    // (level.ts shotStop: one height-aware test; low cover stops only what is below its top)
+    (shotStop(blocks, p.x, p.y, p.z) ||
     Math.abs(p.x) > HALF ||
     Math.abs(p.z) > HALF ||
     (big !== null && hitsTraffic(p.x, p.y, p.z)));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) => playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
+  // controller aim assist: the middle of each live robot's body, and a clear line to it
+  const aimPt = { x: 0, y: 0, z: 0 };
+  function* aimTargets() {
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const [lo, hi] = hitBand(e.kind);
+      aimPt.x = e.x;
+      aimPt.z = e.z;
+      aimPt.y = groundY(e.x, e.z) + (lo + hi) / 2;
+      yield aimPt;
+    }
+  }
+  const aimVisible = (t: { x: number; z: number }) => clearLine(blocks, camera.position.x, camera.position.z, t.x, t.z, 0.1);
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
@@ -2860,6 +2385,8 @@ function World({
         touchInput.lookX = 0;
         touchInput.lookY = 0;
       }
+      // controller right stick (+ aim assist on the nearest robot in view)
+      padLook(delta, look.current, cam.position, aimTargets, aimVisible);
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -2874,6 +2401,9 @@ function World({
     const isH = isHostRef.current;
     const spectating = deadRef.current;
 
+    // controller buttons: one-shots go through touchInput below; A / X press the floor button
+    // in an elevator car
+    stepPadActions({ inCar: accessActive() && accPlayer.inCar });
     // on-screen controls
     if (touchInput.ability) {
       touchInput.ability = false;
@@ -2913,9 +2443,10 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if ((trigger.current || touchInput.fire) && !spectating && fireCd.current <= 0) {
+    } else if ((trigger.current || touchInput.fire || padOut.fire) && canFire() && !spectating && fireCd.current <= 0) {
       const w = weapon.current;
       fire();
+      rumbleFor.fire(GUNS[w].damage, GUNS[w].count, !!GUNS[w].blast);
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
         * (overdrive.current > 0 ? 0.5 : 1);
@@ -2929,8 +2460,20 @@ function World({
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
+    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
+    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX;
+    // sprint / tactical sprint (input/movement.ts): not while down, seated on the lift, in an
+    // elevator car, spectating or holding revive
+    const runMul = stepMove(
+      delta,
+      Math.max(-1, Math.min(1, fwd)),
+      trigger.current || touchInput.fire || padOut.fire,
+      spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar) || touchInput.revive || k.has("KeyR"),
+    );
+    // mid-jump, low props (benches, barrels) and flat ledges under the feet don't block
+    jumpBody.lift = moveState.airborne ? moveState.lift : 0;
+    jumpClimb.feet = moveState.airborne ? moveState.feet : -Infinity;
+    jumpClimb.top = moveState.airborne ? moveState.fallTop : -Infinity;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
@@ -2946,6 +2489,7 @@ function World({
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1)
       * groundSpeed(cam.position.x, cam.position.z) // deep snow off the paths
+      * runMul // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
       * (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
@@ -2954,6 +2498,11 @@ function World({
       const nz = cam.position.z + slide.current.z * delta;
       if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
       if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
+    }
+    // mid-jump into a roof's parapet: over the edge and down (input/fall.ts)
+    if (accPlayer.zone === 2 && moving && !spectating) {
+      const ml = Math.hypot(MOVE.x, MOVE.z) || 1;
+      tryRoofExit(cam.position, MOVE.x / ml, MOVE.z / ml, blocks);
     }
     // weather: blizzard gusts shove you downwind (not while you wait on a loading line)
     const onLoadingLine =
@@ -2983,6 +2532,9 @@ function World({
       kn.x *= decay;
       kn.z *= decay;
     }
+    jumpBody.lift = 0;
+    jumpClimb.feet = -Infinity;
+    jumpClimb.top = -Infinity;
 
     // enemies are solid: push the player back out of any body it walked into and let it slide
     // round. Walls win (an enemy can never shove you into a building). Every client resolves
@@ -3023,15 +2575,39 @@ function World({
       // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
       // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
       // stairs, the car and the roof decide the floor under you
-      const gy = accessActive()
+      // (falling past a building from its roof: the street / lower roof is the floor, no doors)
+      const falling = moveState.airborne && accPlayer.zone === 0 && moveState.lift > 1.5;
+      const gy = accessActive() && !falling
         ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
         : groundY(cam.position.x, cam.position.z);
       const dg = gy - camGround.current;
       camGround.current =
         !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3 ? gy : camGround.current + dg * Math.min(1, delta * 16);
+      // jump (Space / A / JUMP): not in an elevator car, on the chairlift, down or spectating
+      const noJump = spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar);
+      if (takeJump()) tryJump(!noJump);
+      if (noJump && moveState.airborne) cancelJump(gy);
+      stepJump(delta, gy);
+      if (moveState.airborne) camGround.current = gy;
+      if (moveState.landed >= 0) {
+        camGround.current = gy;
+        if (accessActive()) landZone(cam.position.x, cam.position.z); // a lower roof, or the street
+        slideOffFace(cam.position, blocks); // never left standing on a ledge's face
+        // fall damage by the drop (input/fall.ts FALL_TABLE); a downing fall downs you
+        const fd = spectating ? 0 : fallDamage(moveState.landed, stats.current.maxHp, healthRef.current, !netRef.current);
+        if (moveState.landed > 2.5) {
+          kn.shake = Math.max(kn.shake, Math.min(1, moveState.landed / 12));
+          playSfx("thud");
+          rumbleFor.bump(Math.min(1, moveState.landed / 10));
+        }
+        if (fd > 0) {
+          onStat("taken", fd);
+          onHurt(fd);
+        }
+      }
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
-    cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    cam.position.y = (moveState.airborne ? moveState.feet : camGround.current) + (downedRef.current ? 0.45 : EYE) - moveState.dip + Math.sin(bob.current) * 0.03 * bobAmt.current;
     if (accessActive()) {
       // elevator cars (the host decides, guests follow the snapshot) and the auto doors
       const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
@@ -3087,6 +2663,7 @@ function World({
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
           ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press } : {}),
           ...(alpineMap ? { rc: ride.chair } : {}),
+          ...(moveState.airborne ? { jy: Math.round(moveState.lift * 100) / 100 } : {}),
         });
       }
     }
@@ -3518,7 +3095,7 @@ function World({
       if (!spectating) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone(), air: ride.chair >= 0 });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
-          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z));
+          const ry = alpineMap && (r.rc ?? -1) >= 0 ? riderEye(alpineMap.alpine.lift, r.rc!).y : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
           targets.push({ id: r.id, x: r.x, z: r.z, y: ry, fx: -Math.sin(r.yaw), fz: -Math.cos(r.yaw), zn: remoteZone(r), air: (r.rc ?? -1) >= 0 });
         }
       });
@@ -4091,7 +3668,7 @@ function World({
         if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
-          if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          if (shotBlocked(blocks, b.pos.x, b.pos.y, pz) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
           else b.vel.z *= -1;
           b.pos.set(px, b.pos.y, pz);
           fxBounce(i);
@@ -4273,6 +3850,7 @@ function World({
     v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
+    sprintPose(v); // lowered while sprinting, raised for a tactical sprint
     // the gun joins the transparent queue at the very end, after a depth clear (see below)
     v.traverse((o) => {
       if (o.renderOrder < 999) o.renderOrder = 1000;
@@ -4343,6 +3921,7 @@ function World({
           if (deadRef.current) return;
           if (kx || kz) shove(kx, kz);
           knock.current.shake = Math.max(knock.current.shake, shake);
+          if (shake > 0.2) rumbleFor.bump(shake);
           if (dmg > 0) takeHit(dmg);
         }}
         movePlayer={(dx, dz) => {
@@ -4640,6 +4219,7 @@ export function Game() {
   const [inv, setInv] = useState<{ w: Weapon; ammo: number }[]>([{ w: "pistol", ammo: 0 }]);
   const slotOf = (w: Weapon) => inv.findIndex((s) => s.w === w) + 1;
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dev = useInputDevice(); // keyboard / controller / touch: which hints to show
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
@@ -5062,15 +4642,17 @@ export function Game() {
         pauseAll();
       }
     };
+    const pauseNow = () => {
+      setLocked(false);
+      if (document.pointerLockElement) document.exitPointerLock();
+      pauseAll();
+    };
     const onKey = (e: KeyboardEvent) => {
       // P is the pause key on desktop; Escape still works since the browser
       // drops pointer lock on it anyway
-      if (e.code === "Escape" || e.code === "KeyP") {
-        setLocked(false);
-        if (document.pointerLockElement) document.exitPointerLock();
-        pauseAll();
-      }
+      if (e.code === "Escape" || e.code === "KeyP") pauseNow();
     };
+    padHooks.pause = pauseNow; // Start / Options / + on a controller
 
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
@@ -5079,6 +4661,7 @@ export function Game() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("beforeunload", onUnload);
       window.removeEventListener("pagehide", onUnload);
+      padHooks.pause = null;
     };
   }, []);
 
@@ -5180,6 +4763,7 @@ export function Game() {
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
     setLocked(true);
+    clearControls(); // no jump / sprint press queued from the menus
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
     if (touchUi) {
@@ -5358,6 +4942,8 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
+      {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
+      <PadLayer menus={!locked || ended} />
       <Canvas shadows="percentage" dpr={liveDpr()} gl={{ powerPreference: "high-performance", antialias: antialiasAtLoad }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <QualityGovernor />
         <StableWorld
@@ -5551,7 +5137,7 @@ export function Game() {
 
         {/* in an elevator car: how to ride (world.ts pressCarButton) */}
         <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
-          E · FLOOR BUTTON
+          <KeyHint action="use" /> · FLOOR BUTTON
         </div>
 
         {bossHp > 0 && locked && !ended && (
@@ -5578,7 +5164,7 @@ export function Game() {
 
         {pickupMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
-            {GUNS[weapon].name} ACQUIRED · PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}
+            {GUNS[weapon].name} ACQUIRED · {dev.kind === "pad" ? <><KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP</> : <>PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}</>}
           </div>
         )}
         {crateMsg && locked && !ended && (
@@ -5586,9 +5172,12 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
+        {locked && !ended && (
+          <SprintMeter className={touchUi ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75" : "absolute bottom-[3.9rem] left-5"} />
+        )}
         {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
-            [F] {ABILITIES[ability].name} ·{" "}
+            [<KeyHint action="ability" />] {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
           </div>
         )}
@@ -5607,7 +5196,7 @@ export function Game() {
         {miniSrc && started && !ended && (
           // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
           // list sits under the shards, so a smaller map sits just left of the buttons
-          <div className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
+          <div data-minimap className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
             <Minimap
               src={miniSrc}
               feed={mapFeed}
@@ -5620,9 +5209,10 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
+        <div data-pad-shop className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
+            {dev.kind === "pad" && <> · <KeyHint action="shopPick" /> PICK · <KeyHint action="shopBuy" /> BUY</>}
           </div>
           <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
             <button
@@ -5885,9 +5475,8 @@ export function Game() {
             )}
             {!paused && (
               <p className="mt-4 text-xs leading-relaxed opacity-60">
-                {touchUi
-                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · USE for elevators · PING · hold REVIVE by a downed teammate · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · E in an elevator car for the floor button · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · P to pause"}
+                {/* keys, controller glyphs or touch, whichever was used last (input/Glyph.tsx) */}
+                <ControlsHelp touch={touchUi} />
               </p>
             )}
             {multiplayer && !isHost && (ended || !started) ? (
@@ -6113,7 +5702,6 @@ export function Game() {
                     </button>
                   </div>
                   <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                    <QualitySettings />
                     <label className="block">
                       FIELD OF VIEW · {fov}°
                       <input type="range" min={50} max={110} step={1} value={fov}
@@ -6150,6 +5738,8 @@ export function Game() {
                         onChange={(e) => setAmbVol(Number(e.target.value))}
                         className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
                     </label>
+                    <QualitySettings />
+                    <PadSettingsPanel />
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}
@@ -6214,8 +5804,10 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
         <div className="flex-1">
           <div className="h-56 w-full overflow-hidden rounded bg-[#1a1410]">
             <Canvas camera={{ position: [0.9, 0.35, 0.9], fov: 40 }}>
-              <ambientLight intensity={0.8} />
-              <directionalLight position={[2, 3, 2]} intensity={1.4} />
+              {/* a small studio for the PBR gun: sky / floor fill, a warm key and a cool rim */}
+              <hemisphereLight args={["#e8ecf4", "#3a3028", 1.1]} />
+              <directionalLight position={[2, 3, 2]} intensity={2.2} color="#fff2e0" />
+              <directionalLight position={[-2, 1, -2.5]} intensity={1.6} color="#9fc0ff" />
               <Spin><group position={[0, -0.05, 0.15]}><GunModel w={sel} /></group></Spin>
             </Canvas>
           </div>

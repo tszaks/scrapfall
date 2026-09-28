@@ -26,7 +26,8 @@ export const VF = { MAGNUM: 1, INCEND: 2, CRIT: 4, TRACER: 8 } as const;
 
 export type FxEnemy = { x: number; z: number; alive: boolean; kind: string };
 export type FxEnv = {
-  solid: (x: number, z: number) => boolean;
+  /** a wall at (x, z); with `y`: height-aware (low cover only stops what is below its top) */
+  solid: (x: number, z: number, y?: number) => boolean;
   car: (x: number, y: number, z: number) => boolean;
   half: () => number;
   /** z of the city's waterfront (the sea lies beyond it), or null when the map has no water */
@@ -123,6 +124,7 @@ export function chips(x: number, y: number, z: number, n: number, col: number, s
 }
 
 const P = new THREE.Vector3();
+const FACE = new THREE.Vector3();
 const D = new THREE.Vector3();
 const Q = new THREE.Vector3();
 /** a jagged lightning bolt between two points, drawn for this frame only (redraw every frame to crackle) */
@@ -224,7 +226,7 @@ export function classify(prev: THREE.Vector3, pos: THREE.Vector3, vel: THREE.Vec
     return "car";
   }
   // (on maps with terrain, solids have a height: shots fly over walls they clear)
-  const solidAt = (q: THREE.Vector3) => shotHits(q.x, q.y, q.z) ?? env.solid(q.x, q.z);
+  const solidAt = (q: THREE.Vector3) => shotHits(q.x, q.y, q.z) ?? env.solid(q.x, q.z, q.y);
   if (solidAt(pos)) {
     // walk back to the face it crossed
     let lo = 0, hi = 1;
@@ -235,7 +237,10 @@ export function classify(prev: THREE.Vector3, pos: THREE.Vector3, vel: THREE.Vec
     }
     out.p.lerpVectors(prev, pos, lo);
     P.lerpVectors(prev, pos, hi);
-    if (env.solid(P.x, out.p.z)) out.n.set(-Math.sign(vel.x) || 1, 0, 0);
+    // came down onto a low block's top (it was already over the footprint): the hole faces up
+    if (solidAt(FACE.set(prev.x, out.p.y - 0.06, prev.z))) out.n.set(0, 1, 0);
+    // which side: moving only along x into the solid? (height-aware, like the hit itself)
+    else if (solidAt(FACE.set(P.x, out.p.y, out.p.z))) out.n.set(-Math.sign(vel.x) || 1, 0, 0);
     else out.n.set(0, 0, -Math.sign(vel.z) || 1);
     return "wall";
   }

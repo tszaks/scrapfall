@@ -197,7 +197,7 @@ export type WesternLayout = {
   /** the saloon's outside staircase: the alley strip it climbs, bottom to top */
   saloonStairs: { x0: number; x1: number; zBottom: number; zTop: number; zEdge: number } | null;
   /** thin collision circles for small props and porch posts (see level.ts setPosts) */
-  posts: { x: number; z: number; r: number }[];
+  posts: { x: number; z: number; r: number; h?: number }[];
   extent: number;
 };
 
@@ -297,7 +297,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const buildings: WBld[] = [];
   const props: WProp[] = [];
   /** thin collision circles (porch posts, cactus, barrels...), installed through level.ts setPosts */
-  const posts: { x: number; z: number; r: number }[] = [];
+  const posts: { x: number; z: number; r: number; h?: number }[] = [];
   const S = soloHalf(half);
   const RING = S + 1; // centre of the ring cells
   const seedN = Math.floor(rand() * 1e6);
@@ -1543,8 +1543,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     "saguaro", "pear", "barrelcactus", "deadtree", "pole", "streetlamp", "crossbuck", "horse",
     "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross",
   ]);
+  // low props a jump clears (their height to clear, m; input/movement.ts): everything else
+  // in THIN blocks at any height
+  const LOW: Partial<Record<WPropKind, number>> = {
+    bench: 0.55, barrels: 0.8, crates: 0.8, sacks: 0.6, hay: 0.8, anvil: 0.55, grave: 0.6,
+    barrelcactus: 0.5,
+  };
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
-  const thin = (x: number, z: number, rot: number, w: number, d: number) => {
+  const thin = (x: number, z: number, rot: number, w: number, d: number, h?: number) => {
     const long = Math.max(w, d);
     const short = Math.min(w, d);
     const r = short / 2;
@@ -1554,7 +1560,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const n = Math.max(1, Math.ceil(span / Math.max(0.3, r * 1.2)) + 1);
     for (let k = 0; k < n; k++) {
       const t = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
-      posts.push({ x: x + ax * t, z: z + az * t, r });
+      posts.push(h === undefined ? { x: x + ax * t, z: z + az * t, r } : { x: x + ax * t, z: z + az * t, r, h });
     }
   };
   for (const pr of props) {
@@ -1568,7 +1574,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     if (THIN.has(pr.k) && FOOT[pr.k]) {
       const [fw, fd] = FOOT[pr.k]!;
-      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s);
+      // (a big one stays a wall: a jump clears ~1 m at most)
+      const lh = LOW[pr.k] !== undefined ? LOW[pr.k]! * pr.s : undefined;
+      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s, lh !== undefined && lh <= 0.95 ? lh : undefined);
       continue;
     }
     if (pr.k === "fence") {

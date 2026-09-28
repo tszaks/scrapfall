@@ -1,26 +1,37 @@
-// The GRAPHICS row of the settings panel: AUTO / HIGH / MEDIUM / LOW (quality.ts).
-// Self-contained (reads and writes the quality store itself), so any settings screen can
-// drop it in.
+// The GRAPHICS section of the Settings panel: AUTO / HIGH / MEDIUM / LOW (quality.ts), in the
+// same style as the CONTROLLER section next to it. Self-contained: it reads and writes the
+// quality store itself.
 import { QUALITY_PREFS, antialiasAtLoad, setQualityPref, useQuality } from "./quality";
+
+const HINT = {
+  auto: "HOLDS A SMOOTH FRAME RATE: LOWERS THE RESOLUTION, THEN DETAIL, WHEN IT HAS TO",
+  high: "FULL RESOLUTION, 2K SHADOWS, STREET REFLECTIONS, LIT ROOMS",
+  medium: "LOWER RESOLUTION, SOFTER SHADOWS, CHEAPER REFLECTIONS, LESS RAIN",
+  low: "NO SHADOWS OR REFLECTIONS, PLAIN WINDOWS, FEWER EFFECTS",
+} as const;
 
 export function QualitySettings() {
   const q = useQuality();
+  const pill = (on: boolean) =>
+    `pointer-events-auto rounded px-3 py-1 text-[11px] font-bold tracking-widest ${on ? "bg-[#b4653f]" : "bg-white/10 opacity-80 hover:opacity-100"}`;
   return (
-    <div className="block">
-      GRAPHICS · {q.pref === "auto" ? `AUTO (${q.tier.toUpperCase()})` : q.pref.toUpperCase()}
-      <div className="mt-1 grid grid-cols-4 gap-1">
+    <div className="space-y-2 border-t border-white/10 pt-4">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold tracking-[0.3em]">GRAPHICS</span>
+        <span className="text-[9px] tracking-widest opacity-60">
+          {q.pref === "auto" ? `AUTO · NOW ${q.tier.toUpperCase()}` : q.pref.toUpperCase()}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
         {QUALITY_PREFS.map((qp) => (
-          <button
-            key={qp}
-            onClick={() => setQualityPref(qp)}
-            className={`pointer-events-auto rounded px-1 py-2 text-[10px] tracking-widest ${q.pref === qp ? "bg-[#b4653f] text-[#f3e6cf]" : "bg-white/10 opacity-70 hover:opacity-100"}`}
-          >
+          <button key={qp} onClick={() => setQualityPref(qp)} className={pill(q.pref === qp)}>
             {qp.toUpperCase()}
           </button>
         ))}
       </div>
+      <div className="text-[9px] tracking-widest opacity-60">{HINT[q.pref]}</div>
       {q.spec.antialias !== antialiasAtLoad && (
-        <div className="mt-1 text-[10px] opacity-60">ANTIALIASING CHANGES ON THE NEXT LOAD</div>
+        <div className="text-[9px] tracking-widest opacity-60">ANTIALIASING CHANGES ON THE NEXT LOAD</div>
       )}
     </div>
   );
