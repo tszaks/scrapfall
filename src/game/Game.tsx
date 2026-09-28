@@ -2299,6 +2299,18 @@ function World({
       if (!isH) n?.broadcast({ type: "take", what: "heal" });
     }
 
+    // hazard props: keep each one parked on its spot until it is blown open
+    hazards.current.forEach((hz, i) => {
+      const g = hazardMeshes.current[i];
+      if (!g) return;
+      g.visible = hz.alive;
+      if (hz.alive) {
+        g.position.set(hz.x, 0, hz.z);
+        g.rotation.y = i * 1.3;
+      }
+    });
+
+
     // supply crate pickup
     const ck = crate.current;
     if (crateKindRef.current !== ck.kind) {
