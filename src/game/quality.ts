@@ -3,10 +3,9 @@
 // A tier is a bundle of the settings that cost the most on the GPU and CPU: the render
 // resolution (device pixel ratio), the sun's shadow map, the wet streets' mirror pass, the
 // rain streak count, the rooms behind the city's windows, effect particle counts and
-// antialiasing. AUTO starts at HIGH's look (at the old 1.6 resolution cap; MEDIUM and at most
-// 1.5 on phones) and lets the
-// governor (QualityGovernor.tsx) lower the resolution first, then step the tier down, when
-// frames run slow, and back up when there is headroom again.
+// antialiasing. AUTO starts at HIGH's look (at the old 1.6 resolution cap; MEDIUM and at
+// most 1.5 on phones) and lets the governor (QualityGovernor.tsx) lower the resolution
+// first, then step the tier down, when frames run slow, and back up when there is headroom.
 //
 // `?quality=auto|high|medium|low` overrides the saved choice for one visit (testing).
 import { useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
