@@ -72,6 +72,9 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
       else if (p.k === "hydrant" || p.k === "trash" || p.k === "news")
         out.push({ x: p.x, z: p.z, r: 0.3 });
       else if (p.k === "bench") out.push({ x: p.x, z: p.z, r: 0.55 });
+      // tree and palm trunks (the canopies stay walk-under)
+      else if (p.k === "palm") out.push({ x: p.x, z: p.z, r: 0.32 });
+      else if (p.k === "tree") out.push({ x: p.x, z: p.z, r: 0.28 * (p.s ?? 1) });
     }
   }
   return out;
@@ -146,4 +149,51 @@ export function movePropsFromDoors(
     props.push(...keep);
   }
   return { moved, removed: drop.size };
+}
+
+/** collision radius of a city prop (mapPosts' circles; 0 = not solid) */
+function cityPropR(p: { k: string; s?: number }) {
+  if (p.k === "light" || p.k === "lightLED" || p.k === "meter" || p.k === "bollard") return 0.2;
+  if (p.k === "hydrant" || p.k === "trash" || p.k === "news") return 0.3;
+  if (p.k === "bench") return 0.55;
+  if (p.k === "palm") return 0.32;
+  if (p.k === "tree") return 0.28 * (p.s ?? 1);
+  return 0;
+}
+
+/**
+ * A thin prop standing a little off a wall or planter (less than a body's width away) makes a
+ * slot bodies can't pass but the 2 m nav grid thinks is open: enemies path into it and wedge
+ * (a lamp in the break of a planter wall, a tree just off a planter's end). Such props are
+ * snugged against the nearest solid cell, so the slot closes and the other side stays wide.
+ * City only. `solid` tests the block grid (no posts). Returns how many props moved.
+ */
+export function snugPropsToWalls(city: CityLayout, solid: (x: number, z: number) => boolean) {
+  const cellC = (v: number) => Math.floor(v / 2) * 2 + 1;
+  const BODY = 0.9; // a body's width, with a margin
+  let moved = 0;
+  for (const p of city.props) {
+    const r = cityPropR(p);
+    if (!r) continue;
+    let best: { c: number; nx: number; nz: number } | null = null;
+    for (let dx = -2; dx <= 2; dx += 2)
+      for (let dz = -2; dz <= 2; dz += 2) {
+        const cx = cellC(p.x) + dx;
+        const cz = cellC(p.z) + dz;
+        if (!solid(cx, cz)) continue;
+        const nx = Math.max(cx - 1, Math.min(cx + 1, p.x));
+        const nz = Math.max(cz - 1, Math.min(cz + 1, p.z));
+        const c = Math.hypot(nx - p.x, nz - p.z) - r;
+        if (c > 0 && c < BODY && (!best || c < best.c)) best = { c, nx, nz };
+      }
+    if (!best) continue;
+    const d = best.c + r;
+    const x = p.x + ((best.nx - p.x) / d) * best.c;
+    const z = p.z + ((best.nz - p.z) / d) * best.c;
+    if (solid(x, z)) continue;
+    p.x = x;
+    p.z = z;
+    moved++;
+  }
+  return moved;
 }

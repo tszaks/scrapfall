@@ -204,17 +204,20 @@ export function spawnNear(
 ) {
   if (players.length === 0) return randomSpawn(blocks, rand);
   let fallback: { x: number; z: number } | null = null;
-  for (let i = 0; i < 96; i++) {
+  // hidden = out of every player's sight. An open plaza can leave the first ring all in view:
+  // a second, wider ring (to 1.6x) is tried before settling for a spot someone can see
+  for (let i = 0; i < (hidden ? 160 : 96); i++) {
     const p = players[Math.floor(rand() * players.length)]!;
     const a = rand() * Math.PI * 2;
-    const d = rMin + rand() * (rMax - rMin);
+    const wide = i >= 96 ? 1.6 : 1;
+    const d = rMin + rand() * (rMax * wide - rMin);
     const x = p.x + Math.sin(a) * d;
     const z = p.z + Math.cos(a) * d;
     if (Math.abs(x) > PLAY_HALF - 3 || Math.abs(z) > PLAY_HALF - 3) continue;
     if (blocked(blocks, x, z, radius) || !ok(x, z)) continue;
     if (players.some((q) => Math.hypot(q.x - x, q.z - z) < rMin * 0.8)) continue;
-    if (!hidden || !clearLine(blocks, p.x, p.z, x, z, 0.1)) return { x, z };
-    fallback ??= { x, z };
+    if (!hidden || !players.some((q) => clearLine(blocks, q.x, q.z, x, z, 0.1))) return { x, z };
+    if (i < 96) fallback ??= { x, z };
   }
   if (fallback) return fallback;
   // tight spot (e.g. deep in an alley, or out on a narrow pier): anything open near the first

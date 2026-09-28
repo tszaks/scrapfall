@@ -518,8 +518,12 @@ export function CityRain({
       fb.fog = fog;
       fb.near = liveLook.fogNear;
       fb.far = liveLook.fogFar;
-      fog.near = fb.near * (1 - 0.55 * rain);
-      fog.far = fb.far * (1 - 0.5 * rain);
+      // up on a roof you look out over the rain, not through a street of it: the rain's fog
+      // thins with height (a quarter of it from ~170 m up), so the skyline stays
+      const up = Math.min(0.75, Math.max(0, (state.camera.position.y - 20) / 200));
+      const rf = rain * (1 - up);
+      fog.near = fb.near * (1 - 0.55 * rf);
+      fog.far = fb.far * (1 - 0.5 * rf);
     }
 
     if (rain <= 0.001) return;

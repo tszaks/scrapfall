@@ -235,6 +235,7 @@ export type Part = {
 
 const GLASS = 0x1b2530;
 const TRIM = 0x2a2b2e;
+const BUS_GLASS = 0x5d7482;
 const CHROME = 0x9a9ea4;
 
 /** Break a vehicle into scaled unit parts. */
@@ -270,8 +271,14 @@ export function vehicleParts(v: Vehicle): Part[] {
       L * 0.98,
       v.color === 0xf0efe8 ? 0x1aa8a0 : 0xf2f2ee,
     );
-    box("paint", 0, baseY + 1.62, -0.3, W + 0.03, 0.8, L * 0.8, GLASS);
-    box("paint", 0, baseY + 1.35, L / 2 + 0.01, W * 0.9, 1.3, 0.04, GLASS);
+    // side windows: a lighter, sky-catching tint split into panes by body-coloured pillars
+    // (one flat dark band read as a solid black stripe)
+    const bandL = L * 0.8;
+    box("paint", 0, baseY + 1.62, -0.3, W + 0.03, 0.8, bandL, BUS_GLASS);
+    const panes = Math.max(3, Math.round(bandL / 1.5));
+    for (let i = 0; i <= panes; i++) box("paint", 0, baseY + 1.62, -0.3 - bandL / 2 + (i * bandL) / panes, W + 0.05, 0.8, 0.12, v.color);
+    box("paint", 0, baseY + 2.04, -0.3, W + 0.05, 0.06, bandL, v.color); // header rail
+    box("paint", 0, baseY + 1.35, L / 2 + 0.01, W * 0.9, 1.3, 0.04, BUS_GLASS);
     box("paint", 0, topY + 0.12, -0.5, W * 0.6, 0.24, 2.2, 0xcfd2d6); // roof AC pod
     box("sign", 0, topY - 0.25, L / 2 + 0.02, W * 0.7, 0.22, 0.03, 0xffa21a); // route sign
   } else if (v.type === "van") {
