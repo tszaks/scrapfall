@@ -31,9 +31,10 @@ export type PadType = "xbox" | "ps" | "switch" | "generic";
  * Vendor: 045e Product: 0b13)", Safari: "DualSense Wireless Controller", Firefox: "054c-0ce6-..."). */
 export function padTypeOf(id: string): PadType {
   const s = id.toLowerCase();
-  if (/054c|dualsense|dualshock|playstation|wireless controller \(|ps4|ps5/.test(s)) return "ps";
-  if (/057e|nintendo|pro controller|joy-con|switch/.test(s)) return "switch";
+  // (Xbox first: "Xbox Wireless Controller" must not read as Sony's "Wireless Controller")
   if (/045e|xbox|xinput|microsoft/.test(s)) return "xbox";
+  if (/057e|nintendo|pro controller|joy-con|switch/.test(s)) return "switch";
+  if (/054c|dualsense|dualshock|playstation|ps4|ps5/.test(s)) return "ps";
   // Safari names a DualShock 4 just "Wireless Controller"
   if (s.startsWith("wireless controller")) return "ps";
   return "generic";

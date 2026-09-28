@@ -27,8 +27,8 @@ export function PadSettingsPanel() {
   const dev = useInputDevice();
   const s = padSettings;
   const slider = "pointer-events-auto mt-1 w-full accent-[#b4653f]";
-  const toggle = (on: boolean) =>
-    `pointer-events-auto rounded px-3 py-1 text-[11px] font-bold tracking-widest ${on ? "bg-[#b4653f]" : "bg-white/10"}`;
+  const pill = (on: boolean) =>
+    `rounded px-3 py-1 text-[11px] font-bold tracking-widest ${on ? "bg-[#b4653f]" : "bg-white/10"}`;
   return (
     <div className="space-y-4 border-t border-white/10 pt-4">
       <div className="flex items-center justify-between">
@@ -87,21 +87,21 @@ export function PadSettingsPanel() {
           className={slider}
         />
       </label>
-      <div className="flex items-center justify-between">
+      {/* whole-row buttons, so the controller's focus walks onto them from the sliders */}
+      <button
+        onClick={() => setPadSettings({ invertY: !s.invertY })}
+        className="pointer-events-auto flex w-full items-center justify-between rounded py-0.5 text-left tracking-widest"
+      >
         <span>INVERT LOOK UP/DOWN</span>
-        <button
-          onClick={() => setPadSettings({ invertY: !s.invertY })}
-          className={toggle(s.invertY)}
-        >
-          {s.invertY ? "ON" : "OFF"}
-        </button>
-      </div>
-      <div className="flex items-center justify-between">
+        <span className={pill(s.invertY)}>{s.invertY ? "ON" : "OFF"}</span>
+      </button>
+      <button
+        onClick={() => setPadSettings({ rumble: !s.rumble })}
+        className="pointer-events-auto flex w-full items-center justify-between rounded py-0.5 text-left tracking-widest"
+      >
         <span>RUMBLE</span>
-        <button onClick={() => setPadSettings({ rumble: !s.rumble })} className={toggle(s.rumble)}>
-          {s.rumble ? "ON" : "OFF"}
-        </button>
-      </div>
+        <span className={pill(s.rumble)}>{s.rumble ? "ON" : "OFF"}</span>
+      </button>
     </div>
   );
 }
