@@ -1564,6 +1564,14 @@ function World({
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  // shootable map hazards (fuel drums, cryo condensers, spore pods, ...)
+  const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
+    Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
+  );
+  const hazardMeshes = useRef<(THREE.Group | null)[]>([]);
+  const hazardDef = hazardFor(theme);
+  const hazardRef = useRef(hazardDef);
+  hazardRef.current = hazardDef;
   const thornsPending = useRef(0);
   // ---- active ability (F) ----
   const abilityRef = useRef<AbilityId>(ability);
