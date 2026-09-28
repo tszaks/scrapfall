@@ -2470,6 +2470,36 @@ function World({
       }
     };
 
+    /** A shot hazard prop goes off: everything close takes the map's own effect. */
+    const blowHazard = (idx: number, share = true) => {
+      const h = hazards.current[idx];
+      if (!h || !h.alive) return;
+      h.alive = false;
+      const def = hazardRef.current;
+      playFx(def.core, 0.6, def.radius, 0.45, h.x, h.z);
+      playSfx("boom");
+      for (let ei = 0; ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        const d = Math.hypot(e.x - h.x, e.z - h.z);
+        if (d > def.radius) continue;
+        const dx = e.x - h.x;
+        const dz = e.z - h.z;
+        if (def.effect === "fire") hurtEnemy(e, def.damage, ei, 0, 3, 3, dx, dz);
+        else if (def.effect === "freeze") { e.frozen = 3; hurtEnemy(e, def.damage, ei, 3); }
+        else if (def.effect === "toxic") hurtEnemy(e, def.damage, ei, 2.5, 2.5);
+        else if (def.effect === "shock") hurtEnemy(e, def.damage, ei, 1.5, 0, 2, dx, dz);
+        else if (def.effect === "root") hurtEnemy(e, def.damage, ei, 4);
+        else hurtEnemy(e, def.damage, ei, 1, 0, Math.max(0, d - 1), -dx, -dz); // pull
+      }
+      // players standing in a blast get singed too, so they stay dangerous
+      if (!spectating && Math.hypot(cam.position.x - h.x, cam.position.z - h.z) < def.radius * 0.7) takeHit(2);
+      if (share) netRef.current?.broadcast({ type: "haz", i: idx });
+    };
+    hazardBlow.current = (i: number) => blowHazard(i, false);
+
+
+
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
     if (thornsPending.current > 0) {
       thornsPending.current = 0;
