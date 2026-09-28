@@ -133,7 +133,10 @@ export class RobotRig {
     });
     this.mesh.bind(new THREE.Skeleton(this.bones, kind.inverses), new THREE.Matrix4());
     this.mesh.frustumCulled = true;
-    this.mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0), kind.radius);
+    this.mesh.boundingSphere = new THREE.Sphere(
+      kind.near.boundingSphere?.center.clone() ?? new THREE.Vector3(0, 1, 0),
+      kind.radius,
+    );
     this.pose = {
       t: 0,
       dt: 0,
