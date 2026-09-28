@@ -2291,9 +2291,11 @@ function World({
     if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    const mut = mutator.current?.id;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1);
+      * (overdrive.current > 0 ? 1.3 : 1)
+      * (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1); // CRYO SURGE / HEAVY GRAVITY drag you down
     if (dashT.current > 0) {
       // dash burst: carry the impulse, easing off, instead of snapping to walk speed
       dashT.current -= delta;
