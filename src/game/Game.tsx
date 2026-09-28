@@ -4212,6 +4212,15 @@ export function Game() {
             ⚠ {eventMsg} ⚠
           </div>
         )}
+        {/* overtime condition for this round */}
+        {mutId !== "none" && locked && !ended && (
+          <div
+            className="absolute left-1/2 top-[13%] -translate-x-1/2 rounded-md border px-4 py-1 text-center text-[11px] font-bold tracking-[0.3em]"
+            style={{ color: MUTATORS[mutId].color, borderColor: `${MUTATORS[mutId].color}80`, background: "#2b211899" }}
+          >
+            {MUTATORS[mutId].name} · {MUTATORS[mutId].desc}
+          </div>
+        )}
         {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
