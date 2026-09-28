@@ -1466,7 +1466,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     } else if (r < 0.82) {
       if (desertCell(x, z, 0)) prop("bush", x, z, rand() * 6.28, 0.6 + rand() * 0.9);
     } else if (r < 0.9) {
-      if (desertCell(x, z, 0)) prop("tumble", x, z, rand() * 6.28, 0.6 + rand() * 0.5);
+      // (a tumbleweed only rests where something stopped it: against a bush or a cactus)
+      if (r < 0.83 && desertCell(x, z, 0)) plant("bush", x, z, 0.6 + rand() * 0.6, 0);
     } else if (r < 0.905) {
       if (desertCell(x, z, 0)) prop("bones", x, z, rand() * 6.28, 1);
     } else if (r < 0.915) {

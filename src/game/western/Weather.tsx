@@ -18,6 +18,7 @@ import { setAmbienceWeather } from "../ambience";
 import { puffTexture, softGlow } from "./textures";
 import { trainClock } from "./trainSim";
 import { stormAt } from "./storm";
+import { tumbleweedGeometry } from "./tumbleweed";
 
 const MOTES = 700;
 const DUST = 280;
@@ -27,6 +28,8 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
+const _q2 = new THREE.Quaternion();
+const _axis = new THREE.Vector3();
 const _c = new THREE.Color();
 
 function dustMaterial() {
@@ -111,18 +114,9 @@ export function WesternWeather({
       a: Math.random(),
     })),
   );
-  const weedGeo = useMemo(() => {
-    const g = new THREE.IcosahedronGeometry(0.5, 1);
-    return g;
-  }, []);
-  const weedMat = useMemo(
-    () => new THREE.MeshLambertMaterial({ color: "#a08452", wireframe: true }),
-    [],
-  );
-  const weedCore = useMemo(
-    () => new THREE.MeshLambertMaterial({ color: "#8a7046", transparent: true, opacity: 0.55 }),
-    [],
-  );
+  // a real tumbleweed: a loose ball of curling twigs (tumbleweed.ts), rolling on the ground
+  const weedGeo = useMemo(() => tumbleweedGeometry(0.5, 70, 4, 11), []);
+  const weedMat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
   const weeds = useRef(
     Array.from({ length: WEEDS }, (_, i) => ({
       x: 0,
@@ -130,9 +124,12 @@ export function WesternWeather({
       ph: i * 1.7,
       alive: false,
       s: 0.7 + (i % 4) * 0.15,
+      q: new THREE.Quaternion(),
+      hop: 0,
+      vy: 0,
     })),
   );
-  const wallGeo = useMemo(() => new THREE.SphereGeometry(44, 24, 12), []);
+  const wallGeo = useMemo(() => new THREE.SphereGeometry(900, 24, 12), []);
   const wallMat = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -148,15 +145,14 @@ export function WesternWeather({
   useEffect(
     () => () => {
       [motes, dustGeo, weedGeo, wallGeo].forEach((g) => g.dispose());
-      [moteMat, dustMat, weedMat, weedCore, wallMat].forEach((m) => m.dispose());
+      [moteMat, dustMat, weedMat, wallMat].forEach((m) => m.dispose());
     },
-    [motes, dustGeo, weedGeo, wallGeo, moteMat, dustMat, weedMat, weedCore, wallMat],
+    [motes, dustGeo, weedGeo, wallGeo, moteMat, dustMat, weedMat, wallMat],
   );
 
   const moteRef = useRef<THREE.Points>(null);
   const dustRef = useRef<THREE.InstancedMesh>(null);
   const weedRef = useRef<THREE.InstancedMesh>(null);
-  const coreRef = useRef<THREE.InstancedMesh>(null);
   const wallRef = useRef<THREE.Mesh>(null);
   // the fog we tint during a storm (captured afresh whenever the game swaps its fog)
   const base = useRef<{
@@ -211,16 +207,20 @@ export function WesternWeather({
       b.sunK = liveLook.hazeK;
     }
     if (fog) {
+      // a dust storm is a depth haze, not a curtain: things 20 m off keep most of their
+      // colour and contrast, the far buildings go soft, the mesas become silhouettes, and
+      // nothing past ~160 m shows (readable, but you can't snipe across town)
       _c.set(look.storm);
-      fog.near = b.near + (2 - b.near) * k;
-      fog.far = b.far + (42 - b.far) * k;
+      fog.near = b.near + (4 - b.near) * k;
+      fog.far = b.far + (165 - b.far) * k;
       fog.color.copy(b.color).lerp(_c, k);
-      skyFog.fogSunK.value = b.sunK * (1 - k * 0.85);
+      skyFog.fogSunK.value = b.sunK * (1 - k * 0.6);
     }
     const wall = wallRef.current;
     if (wall) {
+      // the sky dims to a dusty glow (the sun still shows through as a brighter smudge)
       wall.position.copy(cam);
-      wallMat.opacity = Math.min(0.97, k * 1.1);
+      wallMat.opacity = Math.min(0.72, k * 0.8);
       wall.visible = k > 0.01;
     }
 
@@ -279,8 +279,7 @@ export function WesternWeather({
 
     // ---- tumbleweeds: a lazy one now and then, a stampede in the storm ----
     const wm = weedRef.current;
-    const cm = coreRef.current;
-    if (wm && cm) {
+    if (wm) {
       const want = Math.round(2 + k * (WEEDS - 2));
       let n = 0;
       weeds.current.forEach((w, i) => {
@@ -288,36 +287,48 @@ export function WesternWeather({
           w.alive = false;
           return;
         }
-        const speed = 2.2 + k * 9 + (i % 3);
+        const speed = 1.6 + k * 8 + (i % 3) * 0.6;
         if (!w.alive || Math.hypot(w.x - cam.x, w.z - cam.z) > 70) {
           // enter upwind of the player
           const a = Math.atan2(st.wz, st.wx) + Math.PI + (Math.random() - 0.5) * 1.6;
           w.x = cam.x + Math.cos(a) * (40 + Math.random() * 20);
           w.z = cam.z + Math.sin(a) * (40 + Math.random() * 20);
           w.alive = true;
+          w.hop = 0;
+          w.vy = 0;
         }
-        const nx = w.x + st.wx * speed * dt;
-        const nz = w.z + st.wz * speed * dt;
+        const dx = st.wx * speed * dt;
+        const dz = st.wz * speed * dt;
+        const nx = w.x + dx;
+        const nz = w.z + dz;
         if (!blocked(blocks, nx, nz, 0.4)) {
           w.x = nx;
           w.z = nz;
         } else {
           w.alive = false; // snagged: respawn upwind
         }
-        w.ph += dt * speed * 1.4;
-        const hop = Math.abs(Math.sin(w.ph * 0.5)) * (0.4 + k * 1.1);
-        _q.setFromEuler(_e.set(w.ph, 0, w.ph * 0.4));
+        // it rolls: turns about the axis across its travel by distance / radius
+        const r = 0.5 * w.s;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 1e-5) {
+          _axis.set(dz, 0, -dx).normalize();
+          _q2.setFromAxisAngle(_axis, dist / r);
+          w.q.premultiply(_q2);
+        }
+        // and bounces now and then when a gust or a stone kicks it up
+        w.vy -= 9.8 * dt;
+        w.hop += w.vy * dt;
+        if (w.hop <= 0) {
+          w.hop = 0;
+          w.vy = Math.random() < (0.02 + k * 0.08) ? 1.2 + Math.random() * (1 + k * 2.5) : 0;
+        }
         const gy = groundY(w.x, w.z);
-        _m.compose(_p.set(w.x, gy + 0.45 * w.s + hop, w.z), _q, _s.set(w.s, w.s, w.s));
+        _m.compose(_p.set(w.x, gy + r * 0.92 + w.hop, w.z), w.q, _s.set(w.s, w.s, w.s));
         wm.setMatrixAt(n, _m);
-        _m.compose(_p.set(w.x, gy + 0.45 * w.s + hop, w.z), _q, _s.set(w.s * 0.8, w.s * 0.8, w.s * 0.8));
-        cm.setMatrixAt(n, _m);
         n++;
       });
       wm.count = n;
-      cm.count = n;
       wm.instanceMatrix.needsUpdate = true;
-      cm.instanceMatrix.needsUpdate = true;
     }
 
     // ---- the wind shoves you downwind (the game applies it, with collision) ----
@@ -344,7 +355,6 @@ export function WesternWeather({
         frustumCulled={false}
         castShadow
       />
-      <instancedMesh ref={coreRef} args={[weedGeo, weedCore, WEEDS]} frustumCulled={false} />
       <mesh ref={wallRef} geometry={wallGeo} material={wallMat} renderOrder={4} visible={false} />
     </group>
   );

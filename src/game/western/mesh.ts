@@ -28,6 +28,7 @@ import {
   type WProp,
 } from "./layout";
 import { FAC_COLS, FAC_ROWS, MODULE_W, TILE_M, WL, signUV } from "./textures";
+import { tumbleweedGeometry } from "./tumbleweed";
 
 export const CHUNK = 200;
 export const DETAIL_RANGE = 280;
@@ -1756,17 +1757,11 @@ function templates() {
     for (const x of [-0.7, 0.7]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.2, x + 0.05, 0.42, 0.2);
   });
   make("tumble", (d) => {
-    d.col("#a8905e");
-    const ico = new THREE.IcosahedronGeometry(0.45, 1);
-    d.mat(WL.PAINT);
-    d.add(ico, new THREE.Matrix4().makeTranslation(0, 0.42, 0));
-    ico.dispose();
-    d.col("#8a7448");
-    for (let i = 0; i < 8; i++) {
-      const a = r() * 6.28;
-      const e = (r() - 0.5) * 2;
-      beam(d, 0, 0.42, 0, Math.cos(a) * 0.55, 0.42 + e * 0.3, Math.sin(a) * 0.55, 0.03);
-    }
+    // a dry tumbleweed fetched up against something: a loose ball of curling twigs
+    d.col("#b49c68").mat(WL.PAINT);
+    const tw = tumbleweedGeometry(0.45, 40, 3, 5);
+    d.add(tw, new THREE.Matrix4().makeTranslation(0, 0.4, 0));
+    tw.dispose();
   });
   make("bones", (d) => {
     d.col("#ece4d2").mat(WL.PAINT);
