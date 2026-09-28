@@ -5,7 +5,7 @@ import { setWorldMuzzle } from "./projectiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { firstShotTarget, type ShotTarget } from "./enemyProjectiles";
+import { firstShotImpact, type ShotTarget } from "./enemyProjectiles";
 
 import {
   ARENA,
@@ -3875,7 +3875,7 @@ function World({
     }
   };
 
-  const outOfBounds = (p: THREE.Vector3) =>
+  const outOfBounds = (p: { x: number; y: number; z: number }) =>
     bulletBlocked(p.x, p.y, p.z) ??
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
     // sea); every other map: under the ground or into a solid cell
@@ -5775,11 +5775,11 @@ function World({
           enemyShotFrom.copy(b.pos);
           b.pos.addScaledVector(b.vel, delta);
           b.life -= delta;
-          if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
+          if (b.life <= 0) b.active = false;
           else {
-            const hit = firstShotTarget(enemyShotFrom, b.pos, enemyShotTargets.current);
+            const hit = firstShotImpact(enemyShotFrom, b.pos, enemyShotTargets.current, outOfBounds);
+            if (hit !== undefined) b.active = false;
             if (hit) {
-              b.active = false;
               if (hit.id === null) takeHit(b.damage, b.src || "shot");
               else n?.sendTo(hit.id, { type: "hurt", dmg: b.damage, src: b.src || "shot" });
             }
