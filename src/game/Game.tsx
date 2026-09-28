@@ -3615,6 +3615,23 @@ export function Game() {
     .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
     .filter((p): p is { id: PerkId; label: string } => p.label !== null);
 
+  // every purchased card, with what it does and how many times it was bought
+  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => {
+    const info = PERK_INFO[id];
+    const lvl = perks[id];
+    const mod = PISTOL_MODS.includes(id);
+    const effects: { text: string; bad?: boolean }[] = [];
+    if (info.pros?.length || info.cons?.length) {
+      info.pros?.forEach((t) => effects.push({ text: t }));
+      info.cons?.forEach((t) => effects.push({ text: t, bad: true }));
+    } else if (info.desc) {
+      effects.push({ text: info.desc });
+    }
+    const total = mod ? null : perkBadge(id, lvl);
+    if (total && lvl > 1) effects.push({ text: `Total: ${total}` });
+    return { id, name: info.name, color: info.color === "#000" ? "#2b2118" : info.color, lvl, mod, effects };
+  });
+
 
 
   return (
