@@ -1,12 +1,12 @@
-// Moving traffic for the city map (parked cars are static chunk geometry, see cityMesh.ts).
-// Every vehicle part is an instance in one of three InstancedMeshes (paint / wheels / lamps),
-// updated in one useFrame.
+// Moving traffic for the city map, and the map's parked cars. Every vehicle draws through one
+// CarBatch (art/cars.ts): an InstancedMesh per vehicle type and LOD, plus shared wheel, glass
+// and lamp meshes, updated in one useFrame.
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { type CityLayout } from "./cityLayout";
-import { vehicleParts, type Part, type Vehicle } from "./vehicles";
+import { CarBatch } from "./art/cars";
 import { liveCars, pursuitDots, trafficClock, type TrafficLink } from "./trafficCore";
 import {
   ROLE_COP,
@@ -80,15 +80,6 @@ const sirenDebug: ({
   yelp: boolean;
 } | null)[] = [];
 
-function partMatrix(p: Part) {
-  const m = new THREE.Matrix4();
-  // wheel geometry is a unit cylinder lying along x: scale x = tyre width, y/z = diameter
-  if (p.kind === "wheel") m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(p.sz, p.sy, p.sx));
-  else m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(p.sx, p.sy, p.sz));
-  return m;
-}
-
-type Slot = { mesh: "paint" | "wheel" | "lamp"; index: number; local: THREE.Matrix4; part: Part };
 /** lightbar state: 0 off, 1 red lit, 2 blue lit */
 type Bar = 0 | 1 | 2;
 /** flasher phase for car `i` at traffic time `t`: each cruiser flashes out of step with the others */
@@ -135,25 +126,15 @@ export function CityTraffic({
     [seed, roadX, roadZ, city.spawn, carCount],
   );
 
-  // ---- instance slots for every part of every vehicle (parked first, then moving) ----
-  const { slots, counts, parkedCount } = useMemo(() => {
-    const slots: Slot[][] = [];
-    const counts = { paint: 0, wheel: 0, lamp: 0 };
-    const add = (v: Vehicle) => {
-      const mine: Slot[] = [];
-      for (const part of vehicleParts(v)) {
-        const mesh = part.kind === "paint" ? "paint" : part.kind === "wheel" ? "wheel" : "lamp";
-        mine.push({ mesh, index: counts[mesh]++, local: partMatrix(part), part });
-      }
-      slots.push(mine);
-    };
-    cars.forEach((c) => add(c.v));
-    return { slots, counts, parkedCount: 0 };
-  }, [cars]);
-
+  // ---- one batch for every vehicle: the moving cars first, then the parked ones ----
+  const parked = city.parked;
+  const parkedCount = cars.length; // index of the first parked car in the batch
+  const batch = useMemo(
+    () => new CarBatch([...cars.map((c) => c.v), ...parked.map((pc) => pc.v)]),
+    [cars, parked],
+  );
+  useEffect(() => () => batch.dispose(), [batch]);
   const geo = useMemo(() => {
-    const wheel = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
-    wheel.rotateZ(Math.PI / 2);
     const cone = new THREE.ConeGeometry(1.7, 7.5, 14, 1, true);
     cone.translate(0, -3.75, 0); // apex at the origin
     cone.rotateX(-Math.PI / 2); // opening toward +z (forward)
@@ -164,13 +145,10 @@ export function CityTraffic({
     const spill = new THREE.PlaneGeometry(1, 1);
     spill.rotateX(-Math.PI / 2);
     const halo = new THREE.PlaneGeometry(1, 1);
-    return { box: new THREE.BoxGeometry(1, 1, 1), wheel, cone, pool, spill, halo };
+    return { cone, pool, spill, halo };
   }, []);
   const mats = useMemo(
     () => ({
-      paint: new THREE.MeshLambertMaterial({ color: 0xffffff }),
-      wheel: new THREE.MeshLambertMaterial({ color: 0xffffff }),
-      lamp: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
       cone: new THREE.MeshBasicMaterial({
         color: 0xfff0c8,
         transparent: true,
@@ -216,51 +194,18 @@ export function CityTraffic({
     [geo, mats],
   );
 
-  const paintRef = useRef<THREE.InstancedMesh>(null);
-  const wheelRef = useRef<THREE.InstancedMesh>(null);
-  const lampRef = useRef<THREE.InstancedMesh>(null);
   const coneRef = useRef<THREE.InstancedMesh>(null);
   const poolRef = useRef<THREE.InstancedMesh>(null);
   const spillRef = useRef<THREE.InstancedMesh>(null);
   const haloRef = useRef<THREE.InstancedMesh>(null);
 
-  const meshOf = (k: Slot["mesh"]) =>
-    k === "paint" ? paintRef.current : k === "wheel" ? wheelRef.current : lampRef.current;
-
-  /** lamp colours (lights are on at night and at dusk) depend on whether the car is moving,
-   * and the police lightbar (dark unless the siren is on, then red and blue take turns) */
-  const lampColor = (part: Part, moving: boolean, bar: Bar) => {
-    if (part.kind === "head") return _c.set(moving ? 0xfff6d8 : 0x3a3a36);
-    if (part.kind === "tail") return _c.set(moving ? 0xff2a1a : 0x3a0a08);
-    if (part.kind === "sign") return _c.set(part.color);
-    if (part.kind === "barR") return _c.set(bar === 1 ? 0xff2020 : 0x5a1010);
-    if (part.kind === "barB") return _c.set(bar === 2 ? 0x3060ff : 0x10205a);
-    return _c.set(part.color);
-  };
-
-  const placeCar = (i: number, x: number, z: number, yaw: number, moving: boolean, bar: Bar) => {
-    _car.compose(_p.set(x, 0, z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
-    for (const sl of slots[i]!) {
-      const mesh = meshOf(sl.mesh);
-      if (!mesh) continue;
-      _m.multiplyMatrices(_car, sl.local);
-      mesh.setMatrixAt(sl.index, _m);
-      if (sl.mesh === "lamp") mesh.setColorAt(sl.index, lampColor(sl.part, moving, bar));
-    }
-  };
-
-  // static colours, once per layout
+  // parked cars: placed once, lights off
   useLayoutEffect(() => {
-    for (const sl of slots.flat()) {
-      if (sl.mesh === "lamp") continue;
-      meshOf(sl.mesh)?.setColorAt(sl.index, _c.set(sl.part.color));
-    }
-    for (const m of [paintRef.current, wheelRef.current, lampRef.current]) {
-      if (!m) continue;
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-    }
-  }, [slots]);
+    parked.forEach((pc, i) =>
+      batch.place(parkedCount + i, pc.x, (pc as { y?: number }).y ?? 0, pc.z, pc.rot),
+    );
+  }, [batch, parked, parkedCount]);
+  const lastPos = useRef<Float32Array>(new Float32Array(0));
 
   const rand = useMemo(() => mulberry(seed ^ 0x7a11c), [seed]);
   // guest: latest host state per car + when it arrived
@@ -416,6 +361,7 @@ export function CityTraffic({
       if (steps === 6) acc.current = 0; // hopelessly behind (tab was hidden): don't spiral
     }
     const t = trafficClock.t;
+    if (lastPos.current.length !== cars.length * 2) lastPos.current = new Float32Array(cars.length * 2);
     // headlight beams and road pools: full at night, faint in the dusk light
     mats.cone.opacity = liveCity.cone;
     mats.pool.opacity = liveCity.headPool;
@@ -496,7 +442,12 @@ export function CityTraffic({
       const siren = (flags & F_SIREN) !== 0;
       const bar: Bar = siren ? barAt(t, ci) : 0;
       // ---- draw ----
-      placeCar(parkedCount + ci, np.x, np.z, c.yawVis, true, bar);
+      // wheel roll: metres moved since the last frame (a snap / respawn is not a roll)
+      const lp = lastPos.current;
+      const moved = Math.hypot(np.x - lp[ci * 2]!, np.z - lp[ci * 2 + 1]!);
+      lp[ci * 2] = np.x;
+      lp[ci * 2 + 1] = np.z;
+      batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: true, bar, roll: moved < 3 ? moved : 0 });
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       liveCars.push({ x: np.x, z: np.z, sin, cos, hl: half, hw: c.v.wid / 2, h: c.h });
@@ -619,10 +570,8 @@ export function CityTraffic({
         yelp: s.d < 50,
       };
     }
+    batch.commit(cam);
     for (const m of [
-      paintRef.current,
-      wheelRef.current,
-      lampRef.current,
       coneRef.current,
       poolRef.current,
       spillRef.current,
@@ -638,28 +587,7 @@ export function CityTraffic({
 
   return (
     <group>
-      {counts.paint > 0 && (
-        <instancedMesh
-          ref={paintRef}
-          args={[geo.box, mats.paint, counts.paint]}
-          receiveShadow
-          frustumCulled={false}
-        />
-      )}
-      {counts.wheel > 0 && (
-        <instancedMesh
-          ref={wheelRef}
-          args={[geo.wheel, mats.wheel, counts.wheel]}
-          frustumCulled={false}
-        />
-      )}
-      {counts.lamp > 0 && (
-        <instancedMesh
-          ref={lampRef}
-          args={[geo.box, mats.lamp, counts.lamp]}
-          frustumCulled={false}
-        />
-      )}
+      <primitive object={batch.group} />
       {cars.length > 0 && (
         <>
           <instancedMesh
