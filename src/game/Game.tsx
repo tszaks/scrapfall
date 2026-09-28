@@ -4023,6 +4023,8 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          onMutator={setMutId}
+          endless={endlessRef}
 
 
 
