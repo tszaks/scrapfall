@@ -37,8 +37,7 @@ export const CLOSING = 1;
 export const MOVING = 2;
 export const OPENING = 3;
 export const DOOR_T = 1.1; // seconds for the doors to slide
-const HOLD_T = 1.4; // an occupied car waits this long with its doors open, then goes
-const ARRIVE_T = 5; // ...plus this long after an arrival, so riders can step out
+const HOLD_T = 2.0; // a rider who boarded here waits this long with the doors open, then goes
 const DWELL_T = 3.5; // an empty car stays open at least this long before answering a call
 // the call spot: standing at the call button beside the landing doors (build.ts
 // landingDoorFrame: the plate at a 1.15..1.33 on the core front), not anywhere near the doors
@@ -56,6 +55,9 @@ export type Car = {
   /** host only: per floor, may a player at the call button call the car? A call is served
    * once: whoever is still standing there after the car has come must step away to call again */
   armed: [boolean, boolean];
+  /** host only: did the car arrive with riders aboard? They are not carried back on their
+   * own: the car waits for a button press */
+  carried: boolean;
   /** events for the renderer / audio: bumped on each departure and arrival */
   departs: number;
   arrivals: number;
@@ -75,6 +77,8 @@ export type PlayerAcc = {
   climb: number;
   /** floor height under the player */
   y: number;
+  /** car button presses so far (E in the car); sent to the host, which compares counts */
+  press: number;
 };
 
 export type Remote = { x: number; z: number; az?: number; hp: number; last: number };
@@ -91,7 +95,7 @@ type AccWorld = {
 };
 
 let W: AccWorld | null = null;
-export const player: PlayerAcc = { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0 };
+export const player: PlayerAcc = { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0, press: 0 };
 
 export function accessList(): AccessBuilding[] {
   return W ? W.list : [];
@@ -107,7 +111,7 @@ export function portalDoor(b: number, which: 0 | 1) {
 }
 
 function newCar(): Car {
-  return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, armed: [true, true], departs: 0, arrivals: 0 };
+  return { phase: IDLE, level: 0, from: 0, t: 0, hold: 0, armed: [true, true], carried: false, departs: 0, arrivals: 0 };
 }
 
 /** A way up a map built by hand (Dry Gulch's saloon and belfry stairs): pingable and on the
@@ -195,6 +199,13 @@ export function installAccess(list: AccessBuilding[] | null, extra: AccessMarker
   };
 }
 
+/** E in the car: press the other floor's button (the car goes once its doors are clear) */
+export function pressCarButton() {
+  if (!player.inCar) return false;
+  player.press++;
+  return true;
+}
+
 export function resetPlayer() {
   Object.assign(player, { zone: 0, b: -1, level: 0, inCar: false, lap: 0, region: 0, climb: 0, y: 0 });
 }
@@ -257,9 +268,19 @@ type Who = { a: number; d: number; code: number };
  * Host: run every car. `people` are all live players as access zone codes plus positions
  * (the host's own player and the guests' last reported states).
  */
-export function stepCars(dt: number, people: { x: number; z: number; az: number }[], host: boolean) {
+/** host: each player's last seen button-press count (a higher count = a new press) */
+const pressSeen = new Map<string, number>();
+export function stepCars(dt: number, people: { x: number; z: number; az: number; id?: string; press?: number }[], host: boolean) {
   const w = W;
   if (!w) return;
+  // new button presses this frame, by the building the presser rides in
+  const pressedIn = new Set<number>();
+  for (const p of people) {
+    if (p.id === undefined || p.press === undefined) continue;
+    const seen = pressSeen.get(p.id);
+    pressSeen.set(p.id, p.press);
+    if (seen !== undefined && p.press > seen && p.az > 0 && azCode(p.az) === AZ_CAR) pressedIn.add(azBuilding(p.az));
+  }
   w.list.forEach((b, k) => {
     const E = b.elev;
     if (!E) return;
@@ -293,12 +314,13 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number 
     const called = callAt[other] && c.armed[other];
     if (c.phase === IDLE) {
       if (inCar.length > 0) {
-        // riders who just arrived get time to walk out (hold starts negative on arrival);
-        // anyone still aboard after that rides back
+        // a rider pressed the button: go. One who boarded here rides after a moment; riders
+        // the car just brought stay until they press (never carried back on their own)
         c.hold += dt;
-        if (c.hold > HOLD_T && !inDoor) start(c, CLOSING);
+        if (!inDoor && (pressedIn.has(k) || (!c.carried && c.hold > HOLD_T))) start(c, CLOSING);
       } else {
         c.hold = 0;
+        c.carried = false;
         // an empty car stays open a while (c.t counts from the doors opening), then answers
         if (called && c.t >= DWELL_T && !inDoor) start(c, CLOSING);
       }
@@ -318,11 +340,12 @@ export function stepCars(dt: number, people: { x: number; z: number; az: number 
       if (c.t >= E.ride) {
         start(c, OPENING);
         c.arrivals++;
+        c.carried = inCar.length > 0;
       }
     } else if (c.phase === OPENING) {
       if (c.t >= DOOR_T) {
         start(c, IDLE);
-        c.hold = -ARRIVE_T;
+        c.hold = 0;
       }
     }
   });
