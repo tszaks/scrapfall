@@ -2,7 +2,7 @@ import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
 import { generateAlpine } from "./alpine/layout";
 import { generateBeach } from "./beach/beachLayout";
-import { groundY, raised, strictNav } from "./terrain";
+import { groundHits, groundOwnsHits, groundY, raised, shotHits, strictNav } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number };
 export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western";
@@ -88,12 +88,13 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
 // Collision lookups go through a per-array cell grid: the city map has hundreds of
 // blocks and enemies ray-march clearLine every frame. Blocks sitting exactly on a
 // cell centre (all of them, today) go in the grid; anything else is checked linearly.
-type BlockGrid = { cells: number; half: number; g: Uint8Array; loose: Block[] };
+type BlockGrid = { cells: number; half: number; g: Uint8Array; h: Float32Array; loose: Block[] };
 const gridCache = new WeakMap<Block[], BlockGrid>();
 function gridFor(blocks: Block[]): BlockGrid {
   const hit = gridCache.get(blocks);
   if (hit && hit.cells === CELLS && hit.half === HALF) return hit;
   const g = new Uint8Array(CELLS * CELLS);
+  const hg = new Float32Array(CELLS * CELLS);
   const loose: Block[] = [];
   for (const b of blocks) {
     const i = Math.round((b.x + HALF - BLOCK / 2) / BLOCK);
@@ -101,10 +102,13 @@ function gridFor(blocks: Block[]): BlockGrid {
     const inside = i >= 0 && j >= 0 && i < CELLS && j < CELLS;
     const centred = Math.abs(cellCenter(i) - b.x) < 1e-6 && Math.abs(cellCenter(j) - b.z) < 1e-6;
     const onGrid = inside && centred;
-    if (onGrid) g[i * CELLS + j] = 1;
-    else loose.push(b);
+    if (onGrid) {
+      g[i * CELLS + j] = 1;
+      // (a cell's shot height: its tallest block; a missing height counts as full)
+      hg[i * CELLS + j] = Math.max(hg[i * CELLS + j]!, b.h > 0 ? b.h : FULL_H);
+    } else loose.push(b);
   }
-  const grid = { cells: CELLS, half: HALF, g, loose };
+  const grid = { cells: CELLS, half: HALF, g, h: hg, loose };
   gridCache.set(blocks, grid);
   return grid;
 }
@@ -117,7 +121,19 @@ export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | un
 
 /** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
  * that the 2 m block grid can't express. Each map installs its own list (or none). */
-export type Post = { x: number; z: number; r: number; /** also stops shots (a horse, a hay bale) */ shot?: boolean };
+export type Post = {
+  x: number;
+  z: number;
+  r: number;
+  /** a low prop's height (m): a jumping player whose feet are higher passes over it.
+   * Absent = blocks at any height (posts, railings, porch posts, blockades). */
+  h?: number;
+  /** also stops shots (a horse, a hay bale) */
+  shot?: boolean;
+};
+/** the local player's feet above the ground while jumping (input/movement.ts); 0 on foot.
+ * Set only around the player's own movement, so enemies are never affected. */
+export const jumpBody = { lift: 0 };
 let postGrid: Map<number, Post[]> | null = null;
 const postKey = (i: number, j: number) => i * 65536 + j;
 export function setPosts(list: Post[] | null) {
@@ -145,8 +161,24 @@ function hitsPost(x: number, z: number, radius: number, shotsOnly = false) {
     for (let j = j0; j <= j1; j++) {
       const a = postGrid.get(postKey(i, j));
       if (!a) continue;
-      for (const p of a) if ((!shotsOnly || p.shot) && Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+      for (const p of a) {
+        if (shotsOnly ? !p.shot : p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
+        if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+      }
     }
+  return false;
+}
+/** shot-stopping posts (horses, hay, walk-in walls) at height y: a low one (h) only below its top */
+function shotPost(x: number, y: number, z: number) {
+  if (!postGrid) return false;
+  const a = postGrid.get(postKey(Math.floor(x / 4), Math.floor(z / 4)));
+  if (!a) return false;
+  let base = NaN;
+  for (const p of a) {
+    if (!p.shot || Math.hypot(p.x - x, p.z - z) >= p.r + 0.05) continue;
+    if (Number.isNaN(base)) base = groundY(x, z);
+    if (y < base + (p.h ?? 4.5)) return true;
+  }
   return false;
 }
 
@@ -176,6 +208,73 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
     if (Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
   }
   return false;
+}
+
+/** Blocks this tall or more stop shots at any height (buildings: their upper storeys are not
+ * all on the grid); lower ones (cars, barriers, planters, boards, fences) only stop shots
+ * below their top, so you can shoot over cover and a bullet hole lands on the real surface. */
+export const FULL_H = 3;
+
+/**
+ * Height-aware version of blocked(blocks, x, z, 0.05) for projectiles at height y: map edges,
+ * the roof hook and tall blocks stop everything; low blocks stop only what is below their top.
+ */
+export function shotBlocked(blocks: Block[], x: number, y: number, z: number) {
+  const r = 0.05;
+  if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
+  if (blockHook.fn) {
+    const h = blockHook.fn(x, z, r);
+    if (h !== undefined) return h;
+  }
+  if (shotPost(x, y, z)) return true;
+  const half = BLOCK / 2 + r;
+  const grid = gridFor(blocks);
+  const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
+  const i1 = Math.min(CELLS - 1, Math.ceil((x + half + HALF - BLOCK / 2) / BLOCK));
+  const j0 = Math.max(0, Math.floor((z - half + HALF - BLOCK / 2) / BLOCK));
+  const j1 = Math.min(CELLS - 1, Math.ceil((z + half + HALF - BLOCK / 2) / BLOCK));
+  let base = NaN;
+  for (let i = i0; i <= i1; i++) {
+    if (Math.abs(x - cellCenter(i)) >= half) continue;
+    for (let j = j0; j <= j1; j++) {
+      if (!grid.g[i * CELLS + j] || Math.abs(z - cellCenter(j)) >= half) continue;
+      const h = grid.h[i * CELLS + j]!;
+      if (h >= FULL_H) return true;
+      if (Number.isNaN(base)) base = groundY(x, z);
+      if (y < base + h) return true;
+    }
+  }
+  for (const b of grid.loose) {
+    if (Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) {
+      if (!(b.h > 0) || b.h >= FULL_H) return true;
+      if (Number.isNaN(base)) base = groundY(x, z);
+      if (y < base + b.h) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The one shot test for the world (minus traffic and building interiors): the alpine
+ * heightfield's solids, the pier's decks / railings / sea, or the ground plus height-aware
+ * blocks everywhere else. True when a projectile at (x, y, z) has hit something.
+ */
+export function shotStop(blocks: Block[], x: number, y: number, z: number) {
+  return (
+    shotHits(x, y, z) ??
+    (groundOwnsHits() ? groundHits(x, y, z) : y < groundY(x, z) || shotBlocked(blocks, x, y, z))
+  );
+}
+
+/** a clear flight from a to b (3D, samples every 0.4 m): nothing shotStop()s it */
+export function clearShot(blocks: Block[], ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+  const len = Math.hypot(bx - ax, by - ay, bz - az);
+  const steps = Math.ceil(len / 0.4);
+  for (let s = 1; s < steps; s++) {
+    const t = s / steps;
+    if (shotStop(blocks, ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t)) return false;
+  }
+  return true;
 }
 
 export function randomSpawn(blocks: Block[], rand: () => number) {

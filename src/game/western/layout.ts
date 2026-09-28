@@ -222,7 +222,7 @@ export type WesternLayout = {
   navWalls: { ax: number; az: number; bx: number; bz: number }[];
   navDoors: { x: number; z: number }[];
   /** thin collision circles for small props and porch posts (see level.ts setPosts) */
-  posts: { x: number; z: number; r: number; shot?: boolean }[];
+  posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[];
   extent: number;
 };
 
@@ -322,7 +322,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const buildings: WBld[] = [];
   const props: WProp[] = [];
   /** thin collision circles (porch posts, cactus, barrels...), installed through level.ts setPosts */
-  const posts: { x: number; z: number; r: number; shot?: boolean }[] = [];
+  const posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[] = [];
   /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
   const boardY = new Map<string, number>();
   const stairFeet: { x: number; z: number; label: string }[] = [{ x: -150, z: -7.15, label: "STAIRS · BELFRY" }];
@@ -1784,9 +1784,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     "saguaro", "pear", "barrelcactus", "deadtree", "pole", "streetlamp", "crossbuck", "horse",
     "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross", "barrel", "crate", "brokencrate", "brokenbarrel",
   ]);
+  // low props a jump clears (their height to clear, m; input/movement.ts): everything else
+  // in THIN blocks at any height
+  const LOW: Partial<Record<WPropKind, number>> = {
+    bench: 0.55, barrels: 0.8, crates: 0.8, sacks: 0.6, hay: 0.8, anvil: 0.55, grave: 0.6,
+    barrelcactus: 0.5, barrel: 0.9, crate: 0.75, brokencrate: 0.45, brokenbarrel: 0.5,
+  };
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
   const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks", "barrel", "crate"]);
-  const thin = (x: number, z: number, rot: number, w: number, d: number, shot = false) => {
+  const thin = (x: number, z: number, rot: number, w: number, d: number, shot = false, h?: number) => {
     const long = Math.max(w, d);
     const short = Math.min(w, d);
     const r = short / 2;
@@ -1796,7 +1802,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const n = Math.max(1, Math.ceil(span / Math.max(0.3, r * 1.2)) + 1);
     for (let k = 0; k < n; k++) {
       const t = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
-      posts.push(shot ? { x: x + ax * t, z: z + az * t, r, shot } : { x: x + ax * t, z: z + az * t, r });
+      const p: { x: number; z: number; r: number; shot?: boolean; h?: number } = { x: x + ax * t, z: z + az * t, r };
+      if (shot) p.shot = true;
+      if (h !== undefined) p.h = h;
+      posts.push(p);
     }
   };
   for (const pr of props) {
@@ -1810,7 +1819,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     if (THIN.has(pr.k) && FOOT[pr.k]) {
       const [fw, fd] = FOOT[pr.k]!;
-      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s, SHOT_STOP.has(pr.k));
+      // (a big one stays a wall: a jump clears ~1 m at most)
+      const lh = LOW[pr.k] !== undefined ? LOW[pr.k]! * pr.s : undefined;
+      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s, SHOT_STOP.has(pr.k), lh !== undefined && lh <= 0.95 ? lh : undefined);
       continue;
     }
     if (pr.k === "fence") {
