@@ -1933,22 +1933,35 @@ function World({
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
-    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
-    const rolls = Math.max(1, Math.round(lootMul));
-    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
-    for (let i = 0; i < rolls; i++) {
+    // weapons: one new gun per wave at 80%, doubled after two dry waves.
+    // co-op multiplies the number of guns by the player count.
+    const players = Math.max(1, 1 + extra);
+    const pity = dryWaves.current >= 2;
+    const wantSolo = pity ? 2 : Math.random() < 0.8 ? 1 : 0;
+    let want = wantSolo * players;
+    let placed = 0;
+    while (want > 0) {
+      want--;
       // in co-op a gun you are carrying can still drop for your teammates
-      const candidates = dropOrder.current.filter(
+      const fresh = dropOrder.current.filter(
         (w) =>
           (coopRef.current || !owned.current.has(w)) &&
           !lostQueue.current.includes(w) &&
           !(pickup.current.active && pickup.current.gun === w),
       );
-      const drop = candidates[0];
-      if (!drop || Math.random() >= chance) continue;
+      // a gun you just ran dry on almost never comes straight back
+      const ready = fresh.filter((w) => {
+        const d = depletedWave.current[w];
+        return d === undefined || n - d >= 2 || Math.random() < 0.05;
+      });
+      const drop = ready[0] ?? (pity ? fresh[0] : undefined);
+      if (!drop) break;
+      delete depletedWave.current[drop];
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
+      placed++;
     }
+    dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
 
