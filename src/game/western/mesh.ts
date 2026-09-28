@@ -165,7 +165,8 @@ function boxP(
   y1: number,
   z1: number,
   top = true,
-  bottom = false,
+  // (anything off the ground gets a bottom: cornices, lintels, rails and caps are seen from below)
+  bottom = y0 > 1.0,
 ) {
   wallP(G, layer, x1, z0, x0, z0, y0, y1);
   wallP(G, layer, x1, z1, x1, z0, y0, y1);
@@ -338,6 +339,7 @@ function slope(
   ex: number,
   ez: number,
   ye: number,
+  under = true,
 ) {
   const [tu, tv] = TILE_M[layer] ?? [4, 4];
   const len = Math.hypot(r1x - r0x, r1z - r0z);
@@ -350,6 +352,15 @@ function slope(
     len / tu,
     run / tv,
   ]);
+  // the underside (the same quad wound the other way): eaves, porch roofs and awnings are
+  // seen from below, and a one-sided roof would vanish from under it
+  if (under)
+    G.quad(r0x, yr, r0z, r1x, yr, r1z, r1x + ex, ye, r1z + ez, r0x + ex, ye, r0z + ez, [
+      0,
+      run / tv,
+      len / tu,
+      0,
+    ]);
 }
 /** vertical triangle (gable end) facing the direction of travel's left, see wallq */
 function gable(
@@ -856,7 +867,7 @@ function building(b: WBld, r: () => number): BGeo {
     if (b.porch === 1) {
       const roofL2 = r() < 0.6 ? WL.TIN : WL.SHINGLE;
       G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff");
-      slope(G, roofL2, x0 + 0.01, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py);
+      slope(G, roofL2, x0 + 0.01, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py, false);
       G.col("#ffffff", 0.55).mat(WL.DECK);
       G.quad(
         x1 - 0.01,
@@ -914,8 +925,6 @@ function building(b: WBld, r: () => number): BGeo {
         // the lean-to over the rest of the porch, shingled on top and boarded underneath
         G.col("#ffffff");
         slope(G, WL.SHINGLE, x0 + 0.01, bd + 0.02, x1 - 0.01, bd + 0.02, py - 0.02, 0, pz + 0.35 - (bd + 0.02), py - 0.35);
-        G.col("#ffffff", 0.55).mat(WL.DECK);
-        G.quad(x1 - 0.01, py - 0.37, pz + 0.35, x0 + 0.01, py - 0.37, pz + 0.35, x0 + 0.01, py - 0.04, bd + 0.02, x1 - 0.01, py - 0.04, bd + 0.02, [0, 0, W / 4, 0.6]);
       } else {
         G.col("#ffffff", 0.9);
         boxP(G, WL.DECK, x0 + 0.01, py, -0.1, x1 - 0.01, py + 0.18, pz + 0.3, true, true);
