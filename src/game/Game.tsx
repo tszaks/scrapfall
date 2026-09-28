@@ -2500,8 +2500,12 @@ function World({
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
-      if (stats.current.steal > 0 && dmg > 0) {
-        stealBank.current += dmg * stats.current.steal;
+      const mid = mutator.current?.id;
+      if (mid === "cryo" && slow < 1.2) slow = 1.2; // CRYO SURGE: every shot chills
+      if (mid === "gravity") kb *= 2; // HEAVY GRAVITY: hits shove much harder
+      const siphon = stats.current.steal * (mid === "blood" ? 2 : 1); // BLOOD MOON doubles life siphon
+      if (siphon > 0 && dmg > 0) {
+        stealBank.current += dmg * siphon;
         if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
       }
       if (kb > 0 && e.kind !== "boss") {
