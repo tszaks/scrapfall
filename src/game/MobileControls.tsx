@@ -159,7 +159,7 @@ export function MobileControls({
       )}
 
       {/* SPRINT sits on the left edge above where the movement thumb rests */}
-      <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 150px)" }}>
+      <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 120px)" }}>
         <SprintButton />
       </div>
 

@@ -16,16 +16,31 @@ Play it at **https://tylerszakacs.com/game**.
 
 ## Controls
 
-| Key            | Action        |
-| -------------- | ------------- |
-| W A S D        | Move          |
-| Mouse / arrows | Look          |
-| Click          | Shoot         |
-| 1-0            | Switch weapon |
-| F              | Ability       |
-| E              | Use (elevator, ladder, revive) |
-| N              | Day / night   |
-| P / Esc        | Pause         |
+| Keyboard + mouse     | Controller (Xbox / PlayStation / Switch Pro) | Action |
+| -------------------- | -------------------------------------------- | ------ |
+| W A S D              | Left stick                                   | Move |
+| Mouse / arrows       | Right stick (aim assist, Settings)           | Look |
+| Hold left click (or Enter) | RT / R2 / ZR                           | Shoot |
+| Space                | A / ✕ / B                                    | Jump (A / ✕ presses the floor button in an elevator car) |
+| Hold Shift           | Click left stick                             | Sprint (1.5x; no shooting while sprinting) |
+| Double-tap Shift     | Double-click left stick                      | Tactical sprint (1.9x for 3 s, recharges in 6 s) |
+| F                    | B / ○ / A                                    | Ability |
+| 1-0, Q / E           | LB / RB, d-pad up / down                     | Switch weapon |
+| E (in an elevator car) | X / □ / Y                                  | Floor button |
+| G / middle mouse     | Y / △ / X                                    | Ping |
+| Hold R               | Hold right stick in                          | Revive a teammate |
+| Z X C, V, R          | D-pad left / right, then X / □ / Y           | Shop |
+| M                    | View / Create / −                            | Big map |
+| N                    |                                              | Day / night |
+| P / Esc              | Menu / Options / +                           | Pause |
+
+Menus work with the d-pad or left stick, A to press and B to go back. On-screen hints
+switch to the controller's own glyphs when you use it, and back when you touch the
+keyboard. Phones get JUMP and SPRINT buttons (tap SPRINT twice for a tactical sprint).
+
+A jump clears low props (benches, barrels, bins, hydrants) but not walls, railings or
+blockades. Jumping over a roof's parapet drops you to the street: falls hurt by the
+number of floors (7+ floors downs you; solo, that is game over).
 
 URL options: `?map=city`, `?night=1` / `?night=0`, `?shadows=0` / `?shadows=1`.
 

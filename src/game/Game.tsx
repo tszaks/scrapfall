@@ -5605,7 +5605,7 @@ export function Game() {
           </div>
         )}
         {locked && !ended && (
-          <SprintMeter className={touchUi ? "absolute left-5 top-44 scale-90 origin-top-left" : "absolute bottom-[3.9rem] left-5"} />
+          <SprintMeter className={touchUi ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75" : "absolute bottom-[3.9rem] left-5"} />
         )}
         {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
