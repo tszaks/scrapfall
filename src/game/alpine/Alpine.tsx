@@ -326,16 +326,20 @@ vec2 wp = vAWorld.xz;
 bool inPlay = abs(wp.x) < 399.0 && abs(wp.y) < 399.0;
 vec4 sf = inPlay ? texture2D(uSurf, (wp + 400.0) / 800.0) : vec4(0.0);
 float ao = inPlay ? texture2D(uAO, (wp + 400.0) / 800.0).r : 0.0;
+// piste = green alone, ploughed road = green on packed (so neither bleeds into the ice's
+// blue channel as the bilinear filter crosses a lake shore)
+float pisteK = sf.g * (1.0 - sf.r);
+float roadK = min(sf.g, sf.r);
 // footpath trails and ski tracks across the open snow (contours of a slow noise field)
 float tn = aNoise(wp * 0.021);
 float trail = (1.0 - smoothstep(0.006, 0.016, abs(tn - 0.5))) * (1.0 - sf.r) * (1.0 - sf.b) * step(abs(wp.x), 399.0);
 float tn2 = aNoise(wp * 0.017 + 40.0);
-float ski = (1.0 - smoothstep(0.0015, 0.004, abs(abs(tn2 - 0.5) - 0.012))) * sf.g;
+float ski = (1.0 - smoothstep(0.0015, 0.004, abs(abs(tn2 - 0.5) - 0.012))) * pisteK;
 {
   float pk = clamp(sf.r + trail, 0.0, 1.0);
   float e = 0.25;
-  float h0 = aSnowH(wp, pk, sf.g);
-  aBump = vec2(aSnowH(wp + vec2(e, 0.0), pk, sf.g) - h0, aSnowH(wp + vec2(0.0, e), pk, sf.g) - h0) / e;
+  float h0 = aSnowH(wp, pk, pisteK);
+  aBump = vec2(aSnowH(wp + vec2(e, 0.0), pk, pisteK) - h0, aSnowH(wp + vec2(0.0, e), pk, pisteK) - h0) / e;
   aBump *= (1.0 - smoothstep(60.0, 160.0, length(vAWorld - cameraPosition))) * inPlayK(wp);
 }
 float farForest = inPlay ? 0.0 : texture2D(uForest, (wp + ${FOREST_EXTENT}.0) / ${FOREST_EXTENT * 2}.0).r;
@@ -353,12 +357,13 @@ packed *= 0.94 + 0.06 * aNoise(vec2(wp.x * 0.4, wp.y * 4.0));
 packed = mix(packed, vec3(0.6, 0.57, 0.55), smoothstep(0.86, 0.95, aNoise(wp * 2.3)) * 0.35);
 col = mix(col, packed, sf.r * 0.85);
 // ploughed road: darker, grit
-col = mix(col, vec3(0.55, 0.55, 0.58) * (0.9 + 0.2 * n3), sf.b < 0.2 ? smoothstep(0.1, 0.2, sf.b) * 0.8 : 0.0);
+col = mix(col, vec3(0.55, 0.55, 0.58) * (0.9 + 0.2 * n3), roadK * 0.8);
 // groomed piste: smooth and bright with faint corduroy
 float cord = 0.97 + 0.03 * sin((wp.x + wp.y) * 9.0);
-col = mix(col, vec3(0.96, 0.97, 1.0) * cord, sf.g * 0.7);
-// ice: lake, creek, rink
-aIce = smoothstep(0.6, 0.9, sf.b);
+col = mix(col, vec3(0.96, 0.97, 1.0) * cord, pisteK * 0.7);
+// ice: lake, creek, rink. The shore wanders with a noise so it never follows the 2 m cell
+// grid in straight runs and square corners
+aIce = smoothstep(0.42, 0.58, sf.b + (aNoise(wp * 0.23) - 0.5) * 0.55 + (aNoise(wp * 0.9) - 0.5) * 0.18);
 vec3 ice = mix(vec3(0.55, 0.68, 0.8), vec3(0.72, 0.84, 0.92), aNoise(wp * 0.35));
 ice = mix(ice, vec3(0.93, 0.96, 1.0), smoothstep(0.55, 0.8, aNoise(wp * 0.9 + 3.0)) * 0.7);
 col = mix(col, ice, aIce);
@@ -374,7 +379,7 @@ col = mix(col, vec3(0.74, 0.78, 0.82) * (0.9 + 0.15 * n3), sf.a * 0.45);
 float canopy = smoothstep(0.15, 0.7, farForest) * (0.55 + 0.45 * aNoise(wp * 0.08)) * smoothstep(650.0, 900.0, max(abs(wp.x), abs(wp.y)));
 col = mix(col, mix(vec3(0.13, 0.18, 0.17), vec3(0.7, 0.75, 0.8), step(0.72, n2) * 0.6), canopy * 0.85);
 // rock on steep faces and outcrops, snow held in the ledges
-float rock = smoothstep(0.42, 0.62, slope + (n2 - 0.5) * 0.25) + smoothstep(0.3, 0.4, sf.b) * (1.0 - aIce);
+float rock = smoothstep(0.42, 0.62, slope + (n2 - 0.5) * 0.25);
 vec3 rockC = mix(vec3(0.34, 0.34, 0.37), vec3(0.5, 0.5, 0.53), n3);
 col = mix(col, rockC, clamp(rock, 0.0, 1.0) * (1.0 - step(0.8, n1 * n2 * 2.0) * 0.6));
 // glaciers: blue-white ice fields high on the gentler slopes
