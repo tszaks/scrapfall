@@ -2110,6 +2110,7 @@ function World({
       h.z = p.z;
       h.alive = true;
     });
+    netRef.current?.broadcast({ type: "hazset", p: hazards.current.map((h) => [Math.round(h.x * 10) / 10, Math.round(h.z * 10) / 10]) });
 
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
