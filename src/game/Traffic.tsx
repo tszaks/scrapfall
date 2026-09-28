@@ -13,6 +13,7 @@ import {
   ROLE_NORMAL,
   ROLE_SUSPECT,
   SIM_DT,
+  markFar,
   headingOf,
   spawnTraffic,
   posOf as simPos,
@@ -215,7 +216,6 @@ export function CityTraffic({
     [geo, mats],
   );
 
-
   const paintRef = useRef<THREE.InstancedMesh>(null);
   const wheelRef = useRef<THREE.InstancedMesh>(null);
   const lampRef = useRef<THREE.InstancedMesh>(null);
@@ -394,10 +394,7 @@ export function CityTraffic({
       const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
       // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step;
       // pursuit cars always run at the full rate
-      for (const c of cars)
-        c.far =
-          c.role === ROLE_NORMAL &&
-          !players.some((p) => Math.abs(p.x - c.x) < FAR_SIM && Math.abs(p.z - c.z) < FAR_SIM);
+      markFar(cars, players, FAR_SIM);
       acc.current += dt;
       let steps = 0;
       while (acc.current >= SIM_DT && steps < 6) {
