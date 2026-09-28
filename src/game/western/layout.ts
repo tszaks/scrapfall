@@ -197,7 +197,7 @@ export type WesternLayout = {
   /** the saloon's outside staircase: the alley strip it climbs, bottom to top */
   saloonStairs: { x0: number; x1: number; zBottom: number; zTop: number; zEdge: number } | null;
   /** thin collision circles for small props and porch posts (see level.ts setPosts) */
-  posts: { x: number; z: number; r: number }[];
+  posts: { x: number; z: number; r: number; shot?: boolean }[];
   extent: number;
 };
 
@@ -297,7 +297,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const buildings: WBld[] = [];
   const props: WProp[] = [];
   /** thin collision circles (porch posts, cactus, barrels...), installed through level.ts setPosts */
-  const posts: { x: number; z: number; r: number }[] = [];
+  const posts: { x: number; z: number; r: number; shot?: boolean }[] = [];
   const S = soloHalf(half);
   const RING = S + 1; // centre of the ring cells
   const seedN = Math.floor(rand() * 1e6);
@@ -704,12 +704,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     W["FEED & SEED"],
     W["LAND OFFICE"],
     W["EATS"],
-    W["TELEGRAPH"],
-    W["DRY GOODS"],
-    W["BARBER"],
     W["POST OFFICE"],
-    W["ASSAY OFFICE"],
-  ];
+  ]; // (not the landmark shops' names: a second BARBER next door read as a copy)
   let fillerAt = Math.floor(rand() * PAINT_FILLER.length);
   const nextFiller = () => PAINT_FILLER[fillerAt++ % PAINT_FILLER.length]!;
   const pickMat = (): WMat => {
@@ -1544,7 +1540,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross",
   ]);
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
-  const thin = (x: number, z: number, rot: number, w: number, d: number) => {
+  const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks"]);
+  const thin = (x: number, z: number, rot: number, w: number, d: number, shot = false) => {
     const long = Math.max(w, d);
     const short = Math.min(w, d);
     const r = short / 2;
@@ -1554,7 +1551,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const n = Math.max(1, Math.ceil(span / Math.max(0.3, r * 1.2)) + 1);
     for (let k = 0; k < n; k++) {
       const t = n === 1 ? 0 : -span / 2 + (span * k) / (n - 1);
-      posts.push({ x: x + ax * t, z: z + az * t, r });
+      posts.push(shot ? { x: x + ax * t, z: z + az * t, r, shot } : { x: x + ax * t, z: z + az * t, r });
     }
   };
   for (const pr of props) {
@@ -1568,7 +1565,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     if (THIN.has(pr.k) && FOOT[pr.k]) {
       const [fw, fd] = FOOT[pr.k]!;
-      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s);
+      thin(pr.x, pr.z, pr.rot, fw * pr.s, fd * pr.s, SHOT_STOP.has(pr.k));
       continue;
     }
     if (pr.k === "fence") {
