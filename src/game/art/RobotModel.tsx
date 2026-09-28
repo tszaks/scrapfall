@@ -1,9 +1,10 @@
 // React side of the skinned robots: one RobotRig per enemy slot, posed every frame from the
 // enemy's synced state (position, facing is on the parent group, telegraph values here).
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type * as THREE from "three";
 
+import { debrisFrame, spawnDebris } from "./debris";
 import { artFrame } from "./kit";
 import { RobotRig, robotMaterial, type RobotKind } from "./rig";
 
@@ -36,6 +37,7 @@ export function RobotModel({
   wear,
   gait = 1,
   onPose,
+  noDebris = false,
 }: {
   kind: RobotKind;
   data: RobotData;
@@ -44,17 +46,29 @@ export function RobotModel({
   /** stride scale (a robot drawn at 0.6x takes shorter steps) */
   gait?: number;
   onPose?: (rig: RobotRig, state: { camera: THREE.Camera }) => void;
+  /** skip the break-apart burst on death (previews, or kinds with their own death) */
+  noDebris?: boolean;
 }) {
   const rig = useMemo(
     () => new RobotRig(kind, robotMaterial("base", wear ?? kind.def.wear ?? 0.75)),
     [kind, wear],
   );
   useEffect(() => () => rig.dispose(), [rig]);
+  const wasAlive = useRef(false);
   useFrame((state, delta) => {
+    debrisFrame(state.gl.info.render.frame, Math.min(delta, 0.05));
     if (!data.alive) {
+      // it just died: break it into chunks where it stood
+      if (wasAlive.current && !noDebris) {
+        const g = rig.mesh.parent;
+        const y = g ? g.position.y : 0;
+        spawnDebris(state.scene, kind, data.x, y, data.z, g ? g.scale.x : 1);
+      }
+      wasAlive.current = false;
       rig.reset();
       return;
     }
+    wasAlive.current = true;
     artFrame();
     const cam = state.camera.position;
     const d = Math.hypot(cam.x - data.x, cam.z - data.z);
