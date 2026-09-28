@@ -14,6 +14,10 @@ export function rollMutator(rand: () => number): Mutator {
   return MUTATORS[Math.floor(rand() * MUTATORS.length)] ?? MUTATORS[0]!;
 }
 
+export function mutatorById(id: MutatorId): Mutator | null {
+  return MUTATORS.find((m) => m.id === id) ?? null;
+}
+
 export const HIGH_WAVE_KEY = "scrapfall-high-wave";
 
 export function readHighWave(): number {
