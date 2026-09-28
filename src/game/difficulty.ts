@@ -24,6 +24,8 @@ export type Difficulty = {
   countMul: number;
   /** multiplies enemy health */
   hpMul: number;
+  /** multiplies the map boss's health */
+  bossMul: number;
   /** extra enemy health per wave after the first (0.09 = +9% a wave) */
   hpRamp: number;
   /** multiplies the damage you take, by wave */
@@ -53,8 +55,9 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     table: "curve",
     countMul: 0.6,
     hpMul: 0.7,
+    bossMul: 0.5,
     hpRamp: 0.05,
-    dmgMul: () => 0.55,
+    dmgMul: () => 0.5,
     tempo: () => 1.5,
     introShift: 2,
     healGap: () => 1,
@@ -68,14 +71,15 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     desc: "Relaxed: a gentler curve with room to breathe and plenty of repairs.",
     color: "#5b8a9a",
     table: "curve",
-    countMul: 0.8,
-    hpMul: 0.85,
+    countMul: 0.7,
+    hpMul: 0.8,
+    bossMul: 0.75,
     hpRamp: 0.06,
-    dmgMul: ramp(0.6, 0.85, 1, 10),
-    tempo: ramp(1.4, 1.15, 1, 10),
+    dmgMul: ramp(0.5, 0.75, 1, 10),
+    tempo: ramp(1.5, 1.25, 1, 10),
     introShift: 1,
-    healGap: (w) => (w <= 8 ? 1 : 2),
-    surpriseFrom: 6,
+    healGap: () => 1,
+    surpriseFrom: 7,
     surpriseMax: () => 1,
     hitCap: () => 0.3,
   },
@@ -87,6 +91,7 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     table: "curve",
     countMul: 1,
     hpMul: 1,
+    bossMul: 1,
     hpRamp: 0.07,
     dmgMul: (w) => (w >= 10 ? 1.1 : ramp(0.7, 1, 1, 8)(w)),
     tempo: ramp(1.3, 1, 1, 8),
@@ -104,6 +109,7 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     table: "legacy",
     countMul: 1,
     hpMul: 1,
+    bossMul: 1,
     hpRamp: 0.09,
     dmgMul: () => 1,
     tempo: () => 1,
@@ -119,10 +125,11 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     desc: "Brutal: more, tougher, harder-hitting robots, faster fire, scarce repairs.",
     color: "#7a1f1f",
     table: "legacy",
-    countMul: 1.2,
+    countMul: 1.3,
     hpMul: 1.15,
+    bossMul: 1.2,
     hpRamp: 0.1,
-    dmgMul: () => 1.25,
+    dmgMul: () => 1.35,
     tempo: () => 0.85,
     introShift: 0,
     healGap: () => 3,

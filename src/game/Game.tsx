@@ -1738,6 +1738,7 @@ function World({
   };
   // test handle: every incoming hit, what caused it, and what it cost after difficulty scaling
   const hitLog = useRef<{ dmg: number; t: number; src: string; got?: number }[]>([]);
+  const aimStats = useRef({ shot: 0, hit: 0 });
   const diffRef = useRef(difficultyOf(difficulty));
   diffRef.current = difficultyOf(difficulty);
   const shownWave = useRef(1); // guests don't run the wave director: the host's status tells them
@@ -1789,6 +1790,8 @@ function World({
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
       Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy, blastAt });
+      // balance harness: health, pickups, line of sight, and shots / direct hits
+      Object.assign(handle, { healthRef, heal, crate, pickup, aimStats, los: (ax: number, az: number, bx: number, bz: number) => clearLine(blocks, ax, az, bx, bz, 0.1) });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
         for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
@@ -2577,6 +2580,7 @@ function World({
       );
       if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
+      aimStats.current.shot++;
     }
     fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
     playGun(w, w === "pistol" && s2.suppr);
@@ -2689,7 +2693,13 @@ function World({
     const enemyMul = (1 + 0.6 * extra) * waveMul;
     const lootMul = 1 + 0.65 * extra;
     const spec = waveLineup(diff, n, WAVES) as WaveSpec;
-    const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
+    // the curve rounds each count up or down at random, so a crowd multiplier of 1.5 doesn't
+    // turn every lone newcomer into a pair (the old table keeps its plain rounding)
+    const scale = (v: number) => {
+      if (v <= 0) return 0;
+      const x = v * enemyMul;
+      return Math.max(1, diff.table === "curve" ? Math.floor(x) + (rand() < x - Math.floor(x) ? 1 : 0) : Math.round(x));
+    };
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
     // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
@@ -2744,8 +2754,8 @@ function World({
         kind,
         x: p.x,
         z: p.z,
-        hp: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
-        max: kind === "boss" ? Math.round(BOSS_HP + 100 * extra) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        hp: kind === "boss" ? Math.round((BOSS_HP + 100 * extra) * diff.bossMul) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
+        max: kind === "boss" ? Math.round((BOSS_HP + 100 * extra) * diff.bossMul) : Math.max(1, Math.round(STATS[kind].hp * hpMul)),
         shredUntil: 0,
         aux: 0,
         alive: false,
@@ -3492,7 +3502,7 @@ function World({
           e.alive = true;
           delete e.lastX;
           e.stuckFor = 0;
-          if (e.kind === "boss") onBoss(BOSS_HP);
+          if (e.kind === "boss") onBoss(e.max ?? BOSS_HP);
           pending.current[i] = null;
         }
       });
@@ -4170,6 +4180,7 @@ function World({
               });
               fxHit(i, b, e);
               onStat("hit", 1);
+              aimStats.current.hit++;
               onStat("dmg", dmg);
 
               if (b.chain > 0) {
@@ -5525,7 +5536,7 @@ export function Game() {
 
             <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
             <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
-              <div className="h-full bg-[#b3261e]" style={{ width: `${Math.min(100, (bossHp / BOSS_HP) * 100)}%` }} />
+              <div className="h-full bg-[#b3261e]" style={{ width: `${Math.min(100, (bossHp / (BOSS_HP * DIFFICULTIES[difficulty].bossMul)) * 100)}%` }} />
             </div>
           </div>
         )}
