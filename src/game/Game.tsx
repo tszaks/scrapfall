@@ -4532,7 +4532,8 @@ export function Game() {
                 <div className="mt-5 text-left text-black">
                   <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
                   <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                    <div>WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>WAVES SURVIVED · {status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>BEST EVER · WAVE {highWave}</div>
                     <div>KILLS · {mine.kills}</div>
                     <div>DAMAGE DEALT · {mine.dmg}</div>
                     <div>ACCURACY · {acc}%</div>
