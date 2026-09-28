@@ -34,7 +34,9 @@ export function Prewarm({
   /** also draw into an HDR render target (the city's rain mirror) */
   withTarget?: boolean;
 }) {
-  const { gl, scene, camera } = useThree();
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const left = useRef(delay);
   useEffect(() => {
     left.current = delay;

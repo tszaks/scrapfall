@@ -899,7 +899,8 @@ export const AlpineScene = memo(function AlpineScene({
   // the time of day in 1/64 steps (the match runs from sunset into night)
   const nk = useTodK();
   const nl = (n: number, s: number) => s + (n - s) * nk;
-  const { scene, camera } = useThree();
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const built = useMemo(() => {
     const t0 = performance.now();
     const b = build(layout);
