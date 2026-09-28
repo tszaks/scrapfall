@@ -9,6 +9,7 @@ import { mapEvent } from "./events/mapEvents";
 import { playDowned, playPing, playRevive } from "./events/sfx";
 import { colorFor, type NetHandle, type RemoteState } from "./net";
 import { groundY } from "./terrain";
+import { touchInput } from "./touch";
 import { aimPing, pingFromMsg, pingMsg, pings, tickPings, type PingWorld } from "./ping";
 import {
   DOWN,
@@ -49,6 +50,7 @@ export function SquadDriver({
   const { camera } = useThree();
   const pingReq = useRef(false);
   const holdR = useRef(false);
+  const touchHeld = useRef(false);
   const cb = useRef({ onRevived, onBleedOut, net, myNum });
   cb.current = { onRevived, onBleedOut, net, myNum };
   useEffect(() => {
@@ -91,6 +93,15 @@ export function SquadDriver({
     const n = cb.current.net;
     const s = self.current;
     const w = world.current;
+    // ---- touch buttons (MobileControls): PING, hold REVIVE ----
+    if (touchInput.ping) {
+      touchInput.ping = false;
+      pingReq.current = true;
+    }
+    if (touchInput.revive !== touchHeld.current) {
+      touchHeld.current = touchInput.revive;
+      holdR.current = touchInput.revive;
+    }
     // ---- pings ----
     if (w) tickPings(w.enemies, w.ground, w.band);
     if (pingReq.current) {

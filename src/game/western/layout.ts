@@ -39,9 +39,9 @@ export const STOREY = 3.5;
 export const TRESTLE_Y = 6.5;
 /** the saloon balcony floor and the church belfry floor: high ground you can climb to */
 export const BALCONY_Y = 3.5;
-/** where the saloon's walkable gallery starts, out from its facade: the gallery runs along the
- * porch's street edge, and the walkway under the rest of the porch stays open at deck height */
-export const SALOON_GALLERY = 2.1;
+/** depth of the saloon's balcony, out from its facade (across the front only, the width of
+ * the building). The porch in front of it stays open at deck height. */
+export const SALOON_BALCONY = 2.0;
 export const BELFRY_Y = 9.5;
 /** the dry riverbed is carved this far below grade, its banks sloping out over RIVER_BANK m */
 export const RIVER_D = 1.3;
@@ -1675,11 +1675,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const st = sal.stairs;
     const sl = sal.lot;
     const dir = sl.north ? 1 : -1; // toward the street
-    // the gallery along the porch's street edge (exact edges: a deck, not heightfield samples,
-    // so the walkway under it along the facade stays open) and the stair's landing in the alley
-    const zg = sl.zf + dir * SALOON_GALLERY;
-    const ze = sl.zf + dir * (BOARD_D - 0.1);
-    platforms.push({ x0: sl.x0, x1: st.x0, z0: Math.min(zg, ze), z1: Math.max(zg, ze), y: BALCONY_Y });
+    // the balcony across the saloon's front (exact edges: a deck, not heightfield samples),
+    // and the stair's landing in the alley at its east end
+    const ze = sl.zf + dir * SALOON_BALCONY;
+    platforms.push({ x0: sl.x0, x1: st.x0, z0: Math.min(sl.zf, ze), z1: Math.max(sl.zf, ze), y: BALCONY_Y });
     // the stair's boarded side and handrail: thin posts, so nobody stands outside the rail
     for (let z = Math.min(st.zBottom, st.zTop); z <= Math.max(st.zBottom, st.zTop); z += 0.35)
       posts.push({ x: st.x1 - 0.25, z, r: 0.08 });

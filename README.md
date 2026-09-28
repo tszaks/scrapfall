@@ -1,12 +1,16 @@
-# Vice Heights
+# Scrapfall · Vice Heights
 
-A GTA-style city shooter by Tyler Szakacs. Fight waves of robots through a real-scale
+Scrapfall is Toby Szakacs's arena shooter (this build is based on his 1.0.2 release:
+classes, loadouts, the shop, touch controls). This fork by Tyler Szakacs adds four
+real-scale maps and the systems around them.
+
+Fight waves of robots through a real-scale
 downtown (1 unit = 1 metre): about 600 x 600 m solo and 800 x 800 m in co-op, with a
 480 m landmark tower, glass skyscrapers, walk-ups, a park, a boardwalk, live traffic
 that stops at the lights, day and night, and up to four players in co-op.
 
-Other arenas (the original procedural maps) are still in the rotation; add `?map=city`
-to the URL to go straight to the city.
+The map picker offers the four big maps (Vice Heights, Dry Gulch, Pacific Pier,
+Whiteout Pass) plus Random; add `?map=city` to the URL to go straight to the city.
 
 Play it at **https://tylerszakacs.com/game**.
 
@@ -19,8 +23,9 @@ Play it at **https://tylerszakacs.com/game**.
 | Click          | Shoot         |
 | 1-0            | Switch weapon |
 | F              | Ability       |
+| E              | Use (elevator, ladder, revive) |
 | N              | Day / night   |
-| Esc            | Pause         |
+| P / Esc        | Pause         |
 
 URL options: `?map=city`, `?night=1` / `?night=0`, `?shadows=0` / `?shadows=1`.
 

@@ -14,9 +14,14 @@ import { spec, type DecalPool, type MeshPool, type RingPool, type SegPool } from
 export const VK = {
   PISTOL: 0, SCATTER: 1, SMG: 2, RAIL: 3, CANNON: 4, REBOUND: 5, HARPOON: 6, CRYO: 7, FLAK: 8, TESLA: 9,
   TURRET: 10, FRAG: 11, MORTAR: 12,
+  // Toby's six guns (Scrapfall 1.0.x), after the non-gun kinds so the old numbers stay put
+  REVOLVER: 13, MINIGUN: 14, CROSSBOW: 15, PLASMA: 16, VOIDORB: 17, SHATTER: 18,
 } as const;
 export type VisKind = (typeof VK)[keyof typeof VK];
 /** per-shot look modifiers */
+/** splash radii (m): the damage (Game.tsx) and the drawn blast ring use the same numbers */
+export const BOOMER_R = 4.5;
+export const FLAK_R = 3;
 export const VF = { MAGNUM: 1, INCEND: 2, CRIT: 4, TRACER: 8 } as const;
 
 export type FxEnemy = { x: number; z: number; alive: boolean; kind: string };
@@ -302,7 +307,7 @@ export function splash(x: number, y: number, z: number, k = 1) {
 }
 
 /** BOOMER shell: fireball, light flash, ground shockwave, debris, lingering smoke column, scorch */
-export function explosion(x: number, y: number, z: number, scale = 1) {
+export function explosion(x: number, y: number, z: number, scale = 1, ringR = 6.5 * scale) {
   const pool = FX.add;
   if (pool) {
     // the fake light: a huge soft flash that is gone in a blink
@@ -332,8 +337,9 @@ export function explosion(x: number, y: number, z: number, scale = 1) {
     }
   }
   const low = y < 2.2;
-  FX.rings?.add(x, low ? 0.06 : y, z, 0.5, 6.5 * scale, 0.75, 0xffc070, low);
-  FX.rings?.add(x, low ? 0.07 : y, z, 0.3, 3.5 * scale, 0.45, 0xfff0d0, low);
+  // the outer ring marks the damage radius
+  FX.rings?.add(x, low ? 0.06 : y, z, 0.5, ringR, 0.75, 0xffc070, low);
+  FX.rings?.add(x, low ? 0.07 : y, z, 0.3, ringR * 0.54, 0.45, 0xfff0d0, low);
   if (low) FX.decals?.add(x, 0.01, z, 0, 1, 0, 3.2 * scale, 1, 12, 1);
   sound("boom", x, y, z);
   const d = Math.hypot(x - FX.ear.x, z - FX.ear.z);
@@ -342,12 +348,12 @@ export function explosion(x: number, y: number, z: number, scale = 1) {
 }
 
 /** FLAK: mid-air burst, dark smoke cloud, flash and a ring */
-export function airBurst(x: number, y: number, z: number) {
+export function airBurst(x: number, y: number, z: number, ringR = FLAK_R) {
   glow(x, y, z, 5.5, 0xffc070, 0.13, 0.9, 1, 70);
   glow(x, y, z, 1.8, 0xffffff, 0.07, 1, 1, 30);
   sparks(x, y, z, 24, 0xff9a30, 9, 0, 0.2, 0, 1.2, -9, 0.5, 0.06);
   puffs(x, y, z, 9, 0x6e665e, 0.8, 1.8, 0.6, 1.2, 0.25, 0, 0, 0, 3, 0x38322c);
-  FX.rings?.add(x, y, z, 0.2, 3, 0.3, 0xa05020, false);
+  FX.rings?.add(x, y, z, 0.2, ringR, 0.3, 0xa05020, false);
   sound("burst", x, y, z);
   const d = Math.hypot(x - FX.ear.x, z - FX.ear.z);
   if (d < 12) FX.kick.shake = Math.max(FX.kick.shake, (1 - d / 12) * 0.35);

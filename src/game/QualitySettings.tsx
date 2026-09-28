@@ -13,7 +13,7 @@ export function QualitySettings() {
           <button
             key={qp}
             onClick={() => setQualityPref(qp)}
-            className={`pointer-events-auto rounded px-1 py-1 text-[10px] tracking-widest ${q.pref === qp ? "bg-[#b4653f] text-[#f3e6cf]" : "bg-black/20 opacity-70 hover:opacity-100"}`}
+            className={`pointer-events-auto rounded px-1 py-2 text-[10px] tracking-widest ${q.pref === qp ? "bg-[#b4653f] text-[#f3e6cf]" : "bg-white/10 opacity-70 hover:opacity-100"}`}
           >
             {qp.toUpperCase()}
           </button>

@@ -51,17 +51,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 const DESCRIPTION =
-  "A GTA-style city shooter by Tyler Szakacs: fight waves of robots through a real-scale downtown with traffic, day and night, and co-op.";
+  "Scrapfall, with Vice Heights and three more real-scale maps by Tyler Szakacs: fight waves of robots through a city, a Western town, a beach pier and an alpine pass, solo or in co-op.";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Vice Heights: GTA-style city shooter by Tyler Szakacs" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" },
+      { title: "Scrapfall · Vice Heights by Tyler Szakacs" },
       { name: "description", content: DESCRIPTION },
       { name: "author", content: "Tyler Szakacs" },
-      { property: "og:title", content: "Vice Heights: GTA-style city shooter" },
+      { property: "og:title", content: "Scrapfall · Vice Heights" },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

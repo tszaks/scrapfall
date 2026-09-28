@@ -4,7 +4,7 @@ import { groundY, shotHits } from "./terrain";
 import { playGun } from "./audio";
 import { DecalPool, MeshPool, RingPool, SegPool, spec } from "./fxCore";
 import {
-  FX, VF, VK, airBurst, beam, bolt, chips, classify, explosion, glow, impact, punchThrough, puffs,
+  BOOMER_R, FX, VF, VK, airBurst, beam, bolt, chips, classify, explosion, glow, impact, punchThrough, puffs,
   robotAt, seg, shatter, sound, sparks, type Contact, type FxEnemy, type FxEnv, type Surface, type VisKind,
 } from "./impacts";
 import type { NetHandle, NetMsg, RemoteState } from "./net";
@@ -91,6 +91,9 @@ const GEO = {
     { geo: at(new THREE.OctahedronGeometry(0.05, 0).scale(0.7, 2.4, 0.7), 0.06, -0.08, 0.02, 0, -0.5), color: () => 0xd8f8ff },
     { geo: at(new THREE.OctahedronGeometry(0.045, 0).scale(0.7, 2.2, 0.7), -0.05, -0.12, -0.03, 0.4, 0.45), color: () => 0xbff0ff },
   ]),
+  // Toby's guns: PLASMA FAN's pink bolt and VOID ORB's violet orb
+  orbPink: build([{ geo: new THREE.IcosahedronGeometry(0.13, 2), color: () => 0xffb0f0 }]),
+  orbVoid: build([{ geo: new THREE.IcosahedronGeometry(0.2, 2), color: (y) => (y > 0.1 ? 0xe8d0ff : 0x9a5cff) }]),
   casing: build([{ geo: new THREE.CylinderGeometry(0.009, 0.009, 0.032, 6), color: (y) => (y < -0.02 ? 0x8a6a24 : 0xd8a847) }]),
 };
 type GeoKey = keyof typeof GEO;
@@ -115,10 +118,26 @@ const LOOKS: Record<VisKind, Look> = {
   [VK.TESLA]: { geo: "orbBlue", base: 0.14, col: 0x5f9bff, core: 0xe0ecff, glowCol: 0x5f9bff, len: 1.2, coreW: 0.02, glowW: 0.08, power: 1.2, kick: 0.012, flash: { w: 0.34, spikes: 0, len: 0, col: 0x7fb0ff, smoke: 0, life: 0.07 }, muzzle: [0, -0.48] },
   [VK.TURRET]: { geo: "bullet", base: 0.14, col: 0x4fe3ff, core: 0xd8fbff, glowCol: 0x4fe3ff, len: 2, coreW: 0.025, glowW: 0.1, power: 0.6, kick: 0, flash: { w: 0.3, spikes: 4, len: 0.3, col: 0x9ff0ff, smoke: 0, life: 0.05 }, muzzle: [0, 0] },
   [VK.FRAG]: { geo: "pellet", base: 0.14, col: 0xff9d3b, core: 0xffd8a0, glowCol: 0xff8a2b, len: 0.5, coreW: 0.025, glowW: 0.09, power: 0.5, kick: 0, flash: { w: 0, spikes: 0, len: 0, col: 0, smoke: 0, life: 0 }, muzzle: [0, 0] },
+  [VK.REVOLVER]: { geo: "bullet", base: 0.13, col: 0xffcf6b, core: 0xfff0c8, glowCol: 0xffb040, len: 2.4, coreW: 0.04, glowW: 0.16, power: 1.8, kick: 0.03, flash: { w: 0.4, spikes: 5, len: 0.4, col: 0xffb050, smoke: 2, life: 0.06 }, muzzle: [0.02, -0.48] },
+  [VK.MINIGUN]: { geo: "bullet", base: 0.14, col: 0xffe14f, core: 0xfff6c0, glowCol: 0xffd040, len: 1.4, coreW: 0.02, glowW: 0.07, power: 0.6, kick: 0.004, flash: { w: 0.26, spikes: 4, len: 0.28, col: 0xffd890, smoke: 0, life: 0.035 }, muzzle: [0, -0.6] },
+  [VK.CROSSBOW]: { geo: "harpoon", base: 0.07, col: 0xc8f07a, core: 0xf4ffd8, glowCol: 0xc8f07a, len: 1, coreW: 0.02, glowW: 0.06, power: 1.4, kick: 0.015, flash: { w: 0.12, spikes: 0, len: 0, col: 0xe8ffc0, smoke: 0, life: 0.04 }, muzzle: [0, -0.5] },
+  [VK.PLASMA]: { geo: "orbPink", base: 0.15, col: 0xff4fd8, core: 0xffe0f8, glowCol: 0xff4fd8, len: 1, coreW: 0.02, glowW: 0.09, power: 1.2, kick: 0.012, flash: { w: 0.36, spikes: 0, len: 0, col: 0xff7fe0, smoke: 0, life: 0.06 }, muzzle: [0, -0.48] },
+  [VK.VOIDORB]: { geo: "orbVoid", base: 0.36, col: 0xb06bff, core: 0xf0e0ff, glowCol: 0xb06bff, len: 0.6, coreW: 0.03, glowW: 0.14, power: 1.8, kick: 0.03, flash: { w: 0.5, spikes: 0, len: 0, col: 0xc090ff, smoke: 0, life: 0.09 }, muzzle: [0, -0.5] },
+  [VK.SHATTER]: { geo: "ice", base: 0.2, col: 0xb8f4ff, core: 0xf0fcff, glowCol: 0x9fe8ff, len: 0.8, coreW: 0.03, glowW: 0.12, power: 1.4, kick: 0.03, flash: { w: 0.4, spikes: 0, len: 0, col: 0x9fe8ff, smoke: 2, life: 0.06 }, muzzle: [0, -0.56] },
   [VK.MORTAR]: { geo: "flak", base: 0.3, col: 0xff9d3b, core: 0xffd0a0, glowCol: 0xff9d3b, len: 0.8, coreW: 0.035, glowW: 0.14, power: 1.6, kick: 0.04, flash: { w: 0.55, spikes: 6, len: 0.5, col: 0xffa040, smoke: 4, life: 0.07 }, muzzle: [0, -0.4] },
 };
-/** the gun names Game.tsx uses, in VK order (for sounds and ghost stats) */
-const GUN_IDS = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"] as const;
+/** the gun names Game.tsx uses, by VK number (for sounds and ghost stats); 10-12 are not guns */
+const GUN_IDS = [
+  "pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla",
+  "", "", "",
+  "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter",
+] as const;
+/** the look for a gun name (Game.tsx's Weapon); unknown names fall back on the pistol */
+export function visOf(weapon: string): VisKind {
+  const i = weapon ? GUN_IDS.indexOf(weapon as (typeof GUN_IDS)[number]) : -1;
+  return (i >= 0 ? i : 0) as VisKind;
+}
+const isGun = (kind: number) => !!GUN_IDS[kind];
 
 // ---------------------------------------------------------------- per-round state
 
@@ -133,11 +152,13 @@ type Proj = {
   owner: string | null;
   // ghost-only simulation
   life: number; bounce: number; pierce: number; cluster: number; chain: number;
+  /** BOOMER: the local shot's blast radius (0 = the default) */
+  blastR: number;
 };
 const mkProj = (): Proj => ({
   on: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), prev: new THREE.Vector3(), spawn: new THREE.Vector3(),
   vo: new THREE.Vector3(), kind: VK.PISTOL, flags: 0, age: 0, trailT: 0, scale: 1, conv: 7, owner: null,
-  life: 0, bounce: 0, pierce: 0, cluster: 0, chain: 0,
+  life: 0, bounce: 0, pierce: 0, cluster: 0, chain: 0, blastR: 0,
 });
 /** local rounds, indexed by Game.tsx's bullet slot */
 const L: Proj[] = [];
@@ -145,7 +166,7 @@ const L: Proj[] = [];
 const GHOSTS = 160;
 const G: Proj[] = Array.from({ length: GHOSTS }, mkProj);
 
-type BulletLike = { pos: THREE.Vector3; vel: THREE.Vector3; active: boolean; size: number; color: string; pierce: number };
+type BulletLike = { pos: THREE.Vector3; vel: THREE.Vector3; active: boolean; size: number; color: string; pierce: number; blast?: number };
 
 type Arc = { a: FxEnemy | null; ax: number; az: number; b: FxEnemy; t: number };
 const arcs: Arc[] = [];
@@ -264,6 +285,7 @@ export function fxShot(i: number, b: BulletLike, kind: VisKind, flags = 0, from?
   P.owner = null;
   const muz = from ?? (kind === VK.FRAG ? null : localMuzzle(kind, flags, V1));
   start(P, b.pos, kind, flags, b.size, muz);
+  P.blastR = b.blast ?? 0; // the drawn blast matches the local shot's (perk-widened) radius
 }
 
 /**
@@ -309,8 +331,8 @@ export function fxChain(e: FxEnemy, o: FxEnemy) {
   chainArc(e, o);
 }
 /** a FLAK / mortar shell's cluster just burst */
-export function fxBurst(b: BulletLike) {
-  airBurst(b.pos.x, b.pos.y, b.pos.z);
+export function fxBurst(b: BulletLike, r?: number) {
+  airBurst(b.pos.x, b.pos.y, b.pos.z, r);
 }
 /** a local round stopped: `wall` = it hit something solid, else it ran out of life */
 export function fxDie(i: number, wall: boolean) {
@@ -380,7 +402,7 @@ function hitVis(P: Proj, e: FxEnemy, terminal: boolean) {
   CONTACT.n.set(-P.vel.x, 0, -P.vel.z).normalize();
   switch (P.kind) {
     case VK.CANNON:
-      explosion(p.x, p.y, p.z, 2);
+      explosion(p.x, p.y, p.z, 2, P.blastR || BOOMER_R);
       break;
     case VK.CRYO:
       shatter(CONTACT, "robot");
@@ -422,7 +444,7 @@ function dieVis(P: Proj, wall: boolean) {
   const c = CONTACT.p;
   switch (P.kind) {
     case VK.CANNON:
-      explosion(c.x, c.y, c.z, 2);
+      explosion(c.x, c.y, c.z, 2, P.blastR || BOOMER_R);
       return;
     case VK.CRYO:
       shatter(CONTACT, surf);
@@ -636,7 +658,16 @@ function trail(P: Proj, dt: number) {
     case VK.TURRET:
     case VK.SCATTER:
     case VK.FRAG:
+    case VK.REVOLVER:
+    case VK.MINIGUN:
+    case VK.CROSSBOW:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol);
+      break;
+    case VK.PLASMA:
+    case VK.VOIDORB:
+      streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.6);
+      glow(hx, hy, hz, lk.glowW * 6, lk.glowCol, 0, 0.7, 1, 16);
+      glow(hx, hy, hz, lk.glowW * 2, 0xffffff, 0, 0.9, 1, 6);
       break;
     case VK.RAIL:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol);
@@ -664,6 +695,7 @@ function trail(P: Proj, dt: number) {
       tether(P, tx, ty, tz);
       break;
     case VK.CRYO:
+    case VK.SHATTER:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol, 0.6);
       if (tick(0.018)) {
         puffs(tx, ty, tz, 1, 0xe4f8ff, 0.13, 0.65, 0.32, 0.12, 0.04, 0, 0, 0, 3.6, 0x9fd8f0);
@@ -798,9 +830,10 @@ function flushFire() {
 
 let remotesRef: Map<string, RemoteState> | null = null;
 type GhostGun = { count: number; spread: number; life: number; size: number; bounce?: number; pierce?: number; cluster?: number; chain?: number };
-let ghostGuns: GhostGun[] = [];
+/** ghost stats by VK number (Game.tsx passes every gun under its visOf number) */
+let ghostGuns: Partial<Record<number, GhostGun>> = {};
 /** Game.tsx hands over its gun table so ghost rounds fly exactly like the real ones */
-export function fxGuns(guns: GhostGun[]) {
+export function fxGuns(guns: Partial<Record<number, GhostGun>>) {
   ghostGuns = guns;
 }
 const EXTRA_GUNS: Partial<Record<VisKind, GhostGun>> = {
@@ -817,7 +850,7 @@ export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
   const r = remotes.get(id);
   for (let j = 0; j + GROUP <= s.length; j += GROUP) {
     const kind = s[j]! as VisKind;
-    const g = kind < 10 ? ghostGuns[kind] : EXTRA_GUNS[kind];
+    const g = isGun(kind) ? ghostGuns[kind] : EXTRA_GUNS[kind];
     if (!g || !LOOKS[kind]) continue;
     const flags = s[j + 8]!, speed = s[j + 9]!, n = Math.min(4, s[j + 10]!);
     V1.set(s[j + 1]!, s[j + 2]!, s[j + 3]!);
@@ -830,7 +863,7 @@ export function fxRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     f.p.copy(muz);
     f.d.copy(V2);
     const dist = Math.hypot(muz.x - FX.ear.x, muz.z - FX.ear.z);
-    if (dist < 60 && kind < 10) playGun(GUN_IDS[kind as number] ?? "pistol", dist > 14);
+    if (dist < 60 && isGun(kind)) playGun(GUN_IDS[kind as number] || "pistol", dist > 14);
     if (kind === VK.RAIL) railBeam(muz, V1, V2, speed * g.life);
     fxNetStats.recvShots += n;
     for (let c = 0; c < n; c++) {
@@ -931,8 +964,7 @@ function frame(dt: number, camera: THREE.Camera, vm: THREE.Object3D | null, bull
   cam = camera;
   viewModel = vm;
   FX.ear.copy(camera.position);
-  const wi = GUN_IDS.indexOf(weapon as (typeof GUN_IDS)[number]);
-  viewKind = (wi >= 0 ? wi : 0) as VisKind;
+  viewKind = visOf(weapon);
   const add = FX.add, alpha = FX.alpha;
   if (!add || !alpha) return;
   add.step(dt);
@@ -1100,7 +1132,7 @@ export function fxCreate(): FxObjects {
   const stuckPool = new MeshPool(GEO.harpoon, basic, 10);
   const casing = new MeshPool(GEO.casing, new THREE.MeshBasicMaterial({ vertexColors: true }), 40);
   const ghosts: Partial<Record<GeoKey, MeshPool>> = {};
-  for (const k of ["bullet", "pellet", "slug", "shell", "flak", "orbGreen", "orbBlue", "harpoon", "ice"] as GeoKey[]) {
+  for (const k of ["bullet", "pellet", "slug", "shell", "flak", "orbGreen", "orbBlue", "orbPink", "orbVoid", "harpoon", "ice"] as GeoKey[]) {
     ghosts[k] = new MeshPool(GEO[k], basic, k === "pellet" || k === "bullet" ? 64 : 24);
   }
   return { add, alpha, decals, rings, stuckPool, casing, ghosts };

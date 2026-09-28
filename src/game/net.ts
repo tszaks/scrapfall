@@ -44,11 +44,13 @@ export type RemoteState = {
 export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
 export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
-const PREFIX = "dustfield-arena-v1-";
+// Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
+// big-map build speak different message sets, so they must not join each other's rooms.
+const PREFIX = "scrapfall-ts-arena-v1-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
-const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping"]);
+const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping", "pick"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {

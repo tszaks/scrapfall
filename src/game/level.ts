@@ -178,12 +178,40 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
 }
 
 export function randomSpawn(blocks: Block[], rand: () => number) {
-  for (let i = 0; i < 60; i++) {
-    const x = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
-    const z = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
-    if (!blocked(blocks, x, z, 1) && Math.hypot(x, z) > 10) return { x, z };
+  // wide clearance first so even the biggest enemies never appear inside cover
+  // (PLAY_HALF keeps solo big-map spawns inside the fenced play square)
+  for (const clear of [1.8, 1.4, 1.1]) {
+    for (let i = 0; i < 80; i++) {
+      const x = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
+      const z = (rand() - 0.5) * (PLAY_HALF * 2 - 6);
+      if (!blocked(blocks, x, z, clear) && Math.hypot(x, z) > 10) return { x, z };
+    }
   }
-  return { x: HALF - 4, z: HALF - 4 };
+  // last resort: scan the grid for any genuinely open cell
+  const cells = Math.floor((PLAY_HALF * 2) / BLOCK);
+  for (let i = 0; i < cells; i++) {
+    for (let j = 0; j < cells; j++) {
+      const x = -PLAY_HALF + BLOCK / 2 + i * BLOCK;
+      const z = -PLAY_HALF + BLOCK / 2 + j * BLOCK;
+      if (!blocked(blocks, x, z, 1.1) && Math.hypot(x, z) > 10) return { x, z };
+    }
+  }
+  return { x: 0, z: 0 };
+}
+
+/** Nearest open spot to (x,z) — used to free anything wedged inside cover. */
+export function pushOut(blocks: Block[], x: number, z: number, radius: number) {
+  if (!blocked(blocks, x, z, radius)) return { x, z };
+  for (let ring = 1; ring <= 8; ring++) {
+    const step = ring * 0.5;
+    for (let a = 0; a < 12; a++) {
+      const ang = (a / 12) * Math.PI * 2;
+      const nx = x + Math.cos(ang) * step;
+      const nz = z + Math.sin(ang) * step;
+      if (!blocked(blocks, nx, nz, radius)) return { x: nx, z: nz };
+    }
+  }
+  return { x, z };
 }
 
 /**

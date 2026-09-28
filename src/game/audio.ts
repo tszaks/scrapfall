@@ -4,6 +4,7 @@ import { makeReverb, playClop, playJingle, playVoice, type MusicOut } from "./mu
 
 let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
+let musicFilter: BiquadFilterNode | null = null;
 let sfxGain: GainNode | null = null;
 /** background soundscapes (ambience.ts) sit on their own bus, under the music and effects */
 let ambGain: GainNode | null = null;
@@ -11,6 +12,8 @@ let musicVerb: ConvolverNode | null = null;
 /** the music's stage level: it gets louder as the run builds (setMusicProgress / boss) */
 let musicStage: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
+/** menu/lounge mode: Toby's menu march plays instead of the map track */
+let menuMode = false;
 let muffle: BiquadFilterNode | null = null;
 /** the limiter at the end of the chain: everything audible goes through it */
 let out: AudioNode | null = null;
@@ -69,11 +72,15 @@ function buildGraph(c: AudioContext) {
     out = limiter;
     master.connect(muffle).connect(limiter);
     musicGain = ctx.createGain();
+    musicFilter = ctx.createBiquadFilter();
+    musicFilter.type = "lowpass";
+    musicFilter.frequency.value = menuMode ? 5000 : 18000;
     sfxGain = ctx.createGain();
     ambGain = ctx.createGain();
     musicStage = ctx.createGain();
     musicStage.gain.value = STAGE_GAIN[0]!;
-    musicGain.connect(musicStage).connect(master);
+    // music -> menu lowpass (Toby's "blast doors") -> stage level -> master
+    musicGain.connect(musicFilter).connect(musicStage).connect(master);
     sfxGain.connect(master);
     ambGain.connect(master);
     // one shared reverb for the music's bells, whistles and surf guitar
@@ -128,9 +135,20 @@ export function hookAudioUnlock() {
 
 
 function applyVol() {
-  if (musicGain) musicGain.gain.value = vol.music * 0.35;
+  if (musicGain) musicGain.gain.value = vol.music * (menuMode ? 0.26 : 0.35);
   if (sfxGain) sfxGain.gain.value = vol.sfx * 0.6;
   if (ambGain) ambGain.gain.value = vol.amb * 0.5;
+}
+/** Menu screens play the menu march, muffled through "blast doors" (Toby); combat opens it up. */
+export function setMusicMenu(on: boolean) {
+  if (menuMode === on) return;
+  menuMode = on;
+  applyVol();
+  if (musicFilter && ctx) {
+    musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
+    musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, ctx.currentTime);
+    musicFilter.frequency.exponentialRampToValueAtTime(on ? 5000 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
+  }
 }
 /** the sfx bus for systems that synthesise their own sounds (elevator hum and chime) */
 export function sfxBus(): { ctx: AudioContext; out: GainNode } | null {
@@ -184,6 +202,12 @@ const GUN_SOUNDS: Record<string, Tone[]> = {
   harpoon: [{ wave: "sawtooth", f0: 700, f1: 200, dur: 0.18, gain: 0.3, noise: 0.5, cut: 5000, q: 6 }],
   cryo: [{ wave: "sine", f0: 1800, f1: 2600, dur: 0.12, gain: 0.25, noise: 0.2, cut: 8000, q: 10 }],
   flak: [{ wave: "square", f0: 220, f1: 60, dur: 0.35, gain: 0.45, noise: 1, cut: 1600 }],
+  revolver: [{ wave: "square", f0: 300, f1: 60, dur: 0.3, gain: 0.5, noise: 1.1, cut: 2500 }],
+  minigun: [{ wave: "square", f0: 700, f1: 250, dur: 0.04, gain: 0.16, noise: 0.5, cut: 4000 }],
+  crossbow: [{ wave: "triangle", f0: 900, f1: 180, dur: 0.12, gain: 0.3, noise: 0.3, cut: 3500, q: 5 }],
+  plasma: [{ wave: "sawtooth", f0: 500, f1: 1500, dur: 0.15, gain: 0.25, noise: 0, cut: 5000, q: 6 }],
+  voidorb: [{ wave: "sine", f0: 90, f1: 400, dur: 0.5, gain: 0.5, noise: 0.2, cut: 2000, q: 8 }],
+  shatter: [{ wave: "triangle", f0: 2200, f1: 400, dur: 0.25, gain: 0.3, noise: 0.8, cut: 7000 }],
   tesla: [
     { wave: "sawtooth", f0: 1200, f1: 400, dur: 0.14, gain: 0.25, noise: 0.3, cut: 7000, q: 12 },
     { wave: "square", f0: 60, f1: 50, dur: 0.14, gain: 0.2, noise: 0, cut: 800 },
@@ -471,8 +495,39 @@ function musicOut(): MusicOut | null {
   return ctx && musicGain && noiseBuf ? { ctx, out: musicGain, verb: musicVerb, noise: noiseBuf } : null;
 }
 
+// Dedicated menu theme: slow, dark D-minor march — its own piece, not a map track.
+const MENU_BPM = 72;
+const MENU_ROOTS = [38, 34, 36, 33]; // D, Bb, C, A
+const MENU_MOTIF = [[12, 10, 7, 5], [10, 7, 5, 3], [7, 10, 12, 15], [12, 13, 12, 7]];
+function scheduleMenuStep(s: number, t: number, stepDur: number) {
+  if (!musicGain) return;
+  const bar = Math.floor(s / 16) % 4;
+  const phrase = Math.floor(s / 64) % 2;
+  const i = s % 16;
+  const root = MENU_ROOTS[bar]!;
+  const barLen = stepDur * 16;
+  if (i === 0) {
+    tone({ wave: "sine", f0: midi(root), f1: midi(root), dur: barLen, gain: 0.4, noise: 0, cut: 400 }, musicGain, t);
+    const third = bar === 3 ? 16 : 15;
+    [12, third, 19].forEach((iv) =>
+      tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: barLen, gain: 0.06, noise: 0, cut: 1100, q: 2 }, musicGain, t));
+  }
+  // war-drum pulse
+  if (i === 0 || i === 3 || i === 8 || (bar === 3 && (i === 12 || i === 14))) {
+    tone({ wave: "sine", f0: 95, f1: 38, dur: 0.45, gain: i === 0 ? 0.8 : 0.5, noise: 0.15, cut: 500 }, musicGain, t);
+  }
+  if (i === 8 && phrase === 1) tone({ wave: "triangle", f0: 200, f1: 110, dur: 0.3, gain: 0.25, noise: 0.9, cut: 2200 }, musicGain, t);
+  // solemn horn motif, second phrase only
+  if (phrase === 1 && i % 4 === 0) {
+    const n = root + 24 + MENU_MOTIF[bar]![i / 4]!;
+    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.13, noise: 0, cut: 2400 }, musicGain, t);
+    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.04, noise: 0, cut: 1400 }, musicGain, t + stepDur * 3);
+  }
+}
+
 function scheduleStep(s: number, t0: number, stepDur: number) {
   if (!musicGain) return;
+  if (menuMode) { scheduleMenuStep(s, t0, stepDur); return; }
   const S = style;
   const bar = Math.floor(s / 16) % 4;
   const i = s % 16;
@@ -562,7 +617,8 @@ export function startMusic() {
 /** schedule every step due in the next 120 ms (the timer calls this; so does the offline harness) */
 export function pumpMusic() {
   if (!ctx) return;
-  const stepDur = 60 / (style.bpm + (intense ? 20 : 0)) / 4;
+  const bpm = menuMode ? MENU_BPM : style.bpm + (intense ? 20 : 0);
+  const stepDur = 60 / bpm / 4;
   // after a tab switch or a late unlock the clock jumps; never replay the backlog
   if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.02;
   while (nextT < ctx.currentTime + 0.12) {

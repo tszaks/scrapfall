@@ -3,13 +3,16 @@
 // A tier is a bundle of the settings that cost the most on the GPU and CPU: the render
 // resolution (device pixel ratio), the sun's shadow map, the wet streets' mirror pass, the
 // rain streak count, the rooms behind the city's windows, effect particle counts and
-// antialiasing. AUTO starts at HIGH's look (at the old 1.6 resolution cap) and lets the
+// antialiasing. AUTO starts at HIGH's look (at the old 1.6 resolution cap; MEDIUM and at most
+// 1.5 on phones) and lets the
 // governor (QualityGovernor.tsx) lower the resolution first, then step the tier down, when
 // frames run slow, and back up when there is headroom again.
 //
 // `?quality=auto|high|medium|low` overrides the saved choice for one visit (testing).
 import { useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
 import type * as THREE from "three";
+
+import { isTouchDevice } from "./touch";
 
 export type QualityPref = "auto" | "high" | "medium" | "low";
 export type Tier = "high" | "medium" | "low";
@@ -39,13 +42,18 @@ export const QUALITY_PREFS = PREFS;
 
 const dpr0 = () => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
 
+/** phones and tablets (the touch build): a 3x screen and a phone GPU, so a lower resolution
+ * range, and AUTO starts one tier down (the governor still steps up with headroom) */
+export const MOBILE =
+  typeof window !== "undefined" && isTouchDevice() && !!window.matchMedia?.("(pointer: coarse)").matches;
+
 export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
   const dev = dpr0();
   if (tier === "high")
     return {
       // HIGH picked by hand: full Retina resolution (up to 2); AUTO keeps the old 1.6 cap
-      dprMin: pref === "high" ? Math.min(dev, 2) : 1,
-      dprMax: pref === "high" ? Math.min(dev, 2) : Math.min(dev, 1.6),
+      dprMin: pref === "high" ? Math.min(dev, 2) : MOBILE ? 0.85 : 1,
+      dprMax: pref === "high" ? Math.min(dev, 2) : Math.min(dev, MOBILE ? 1.5 : 1.6),
       shadowMap: 2048,
       reflScale: 0.5,
       reflEvery: 2,
@@ -56,7 +64,7 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
     };
   if (tier === "medium")
     return {
-      dprMin: pref === "medium" ? Math.min(dev, 1.25) : 1,
+      dprMin: pref === "medium" ? Math.min(dev, 1.25) : MOBILE ? 0.85 : 1,
       dprMax: Math.min(dev, pref === "medium" ? 1.25 : 1.4),
       shadowMap: 1024,
       reflScale: 0.33,
@@ -67,7 +75,7 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
       antialias: true,
     };
   return {
-    dprMin: pref === "low" ? 1 : 0.85,
+    dprMin: pref === "low" ? 1 : MOBILE ? 0.7 : 0.85,
     dprMax: 1,
     shadowMap: 0,
     reflScale: 0,
@@ -94,7 +102,7 @@ function readPref(): QualityPref {
 
 type State = { pref: QualityPref; tier: Tier; spec: QualitySpec };
 const initialPref = readPref();
-const initialTier: Tier = initialPref === "auto" ? "high" : initialPref;
+const initialTier: Tier = initialPref === "auto" ? (MOBILE ? "medium" : "high") : initialPref;
 let state: State = { pref: initialPref, tier: initialTier, spec: specFor(initialTier, initialPref) };
 let dprNow = Math.round(state.spec.dprMax * 100) / 100;
 /** the resolution the governor picked (the Canvas's `dpr` prop) */

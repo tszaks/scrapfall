@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import {
-  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
+  ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, navTarget, fineField, fineStep, toCell, type FineField, nextWaypoint, clearLine, toNav, spawnNear,
   closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
   BEACH_SIZE, setPosts,
@@ -63,13 +63,15 @@ import {
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
+import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
+import { MobileControls } from "./MobileControls";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
-import { aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
-import { FX, VF, VK, type VisKind } from "./impacts";
-import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
+import { visOf, aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
+import { BOOMER_R, FLAK_R, FX, VF, VK, type VisKind } from "./impacts";
+import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
@@ -79,8 +81,9 @@ import { power } from "./events/power";
 import { HudOverlay, SquadDriver } from "./Squad";
 import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, type PingWorld } from "./ping";
-import { REVIVE_HP, reviveInterrupted, squad } from "./revive";
+import { DOWN, REVIVE_HP, REVIVE_RANGE, me as squadMe, reviveInterrupted, squad, squad as downTable } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { QualityGovernor } from "./QualityGovernor";
 import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
@@ -94,25 +97,36 @@ skipHiddenMatrixUpdates();
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
-  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla";
+  | "rebound" | "harpoon" | "cryo" | "flak" | "tesla"
+  | "revolver" | "minigun" | "crossbow" | "plasma" | "voidorb" | "shatter";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
   bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
+  /** splash radius (m): the round explodes on impact with anything, or at max range */
+  blast?: number;
+  /** splash damage as a share of the round's damage (full at the centre, 35% at the edge) */
+  blastMul?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
   pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
   scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
-  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
+  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6, blast: BOOMER_R, blastMul: 1 },
   rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
   harpoon: { name: "HARPOON", wave: 6, cooldown: 0.8, count: 1, spread: 0, speed: 40, life: 2, damage: 3, size: 0.1, color: "#f2ead6", body: "#4a4238", ammo: 12, pierce: 3 },
   cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
-  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4 },
+  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4, blast: FLAK_R, blastMul: 0.5 },
   tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
+  revolver: { name: "HAND CANNON", wave: 3, cooldown: 0.55, count: 1, spread: 0, speed: 30, life: 2, damage: 4, size: 0.13, color: "#ffcf6b", body: "#5a4a3a", ammo: 24, pierce: 1 },
+  minigun: { name: "SHREDDER", wave: 7, cooldown: 0.05, count: 1, spread: 0.06, speed: 28, life: 1.3, damage: 1, size: 0.08, color: "#ffe14f", body: "#3a3a3a", ammo: 220 },
+  crossbow: { name: "CROSSBOW", wave: 5, cooldown: 0.75, count: 1, spread: 0, speed: 44, life: 2, damage: 4, size: 0.09, color: "#c8f07a", body: "#6b4a2c", ammo: 14, pierce: 2, slow: 1 },
+  plasma: { name: "PLASMA FAN", wave: 6, cooldown: 0.45, count: 3, spread: 0.05, speed: 24, life: 1.6, damage: 2, size: 0.15, color: "#ff4fd8", body: "#3a2050", ammo: 30, bounce: 1 },
+  voidorb: { name: "VOID ORB", wave: 8, cooldown: 1.1, count: 1, spread: 0, speed: 8, life: 4, damage: 3, size: 0.36, color: "#b06bff", body: "#1c1030", ammo: 10, chain: 4, pierce: 4 },
+  shatter: { name: "SHATTERGUN", wave: 9, cooldown: 0.9, count: 1, spread: 0, speed: 18, life: 1.8, damage: 3, size: 0.25, color: "#b8f4ff", body: "#2a4a5a", ammo: 12, cluster: 5, slow: 2 },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla"];
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 // wire order for co-op snapshots: only ever append (index 9 on are the newer types)
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special", ...NEW_KINDS];
@@ -140,7 +154,9 @@ type Enemy = {
   swing: number; // >0 while swinging
   flash: number; // hit flash timer
   shot: number; // boss volley timer
-  slow: number; // frozen timer
+  slow: number; // slowed timer
+  frozen?: number; // cryo nova: fully frozen timer (host sim)
+  iceUntil?: number; // cryo nova: performance.now() until which the ice shell shows (the caster's client)
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
@@ -172,11 +188,12 @@ type Enemy = {
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
   bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
+  blast: number; blastMul: number;
 };
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
 
-const BOSS_HP = 300;
+const BOSS_HP = 450; // 1.5x tougher arena boss
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
   brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
@@ -196,7 +213,7 @@ const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: numb
 // so a round's total pressure stays close to what it was. The city multiplies counts by 1.75.
 type WaveSpec = Partial<Record<Kind, number>>;
 const WAVES: WaveSpec[] = [
-  { drifter: 5 },
+  { drifter: 5, brute: 1 },
   { drifter: 5, shooter: 1, runner: 1, hornet: 3 },
   { drifter: 5, brute: 1, shooter: 1, specter: 1, special: 1, flanker: 1, grenadier: 1 },
   { drifter: 4, brute: 2, shooter: 2, runner: 2, bomber: 1, special: 1, hornet: 3, sniper: 1 },
@@ -213,6 +230,10 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
+/** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
+const GAME_VERSION = "1.0.2";
+const PATCH_COST = 6; // permanent emergency heal slot in the shop
+
 
 
 const BULLET_SPEED = 22;
@@ -908,6 +929,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
   const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
+  const flame = useRef<THREE.Group>(null);
+  const ice = useRef<THREE.Mesh>(null);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
@@ -926,6 +949,17 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
       aura.current.visible = !!data.elite;
       aura.current.rotation.y = t * 1.2;
     }
+    if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > performance.now();
+    if (flame.current) {
+      const burning = data.burn > 0;
+      flame.current.visible = burning;
+      if (burning) {
+        flame.current.rotation.y = t * 6;
+        const f = 0.85 + Math.sin(t * 24 + data.x) * 0.18 + Math.sin(t * 37) * 0.07;
+        flame.current.scale.set(f, 1.05 + Math.sin(t * 19 + data.z) * 0.3, f);
+      }
+    }
+
     if (drifter.current) drifter.current.visible = k === "drifter" || k === "runner";
     if (brute.current) brute.current.visible = k === "brute";
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
@@ -954,6 +988,26 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
           <meshBasicMaterial color="#ffd24a" fog={false} />
         </mesh>
       </group>
+      {/* burning: flame tongues shown only while incendiary damage ticks */}
+      <mesh ref={ice} visible={false} position-y={0.9}>
+        <icosahedronGeometry args={[0.95, 0]} />
+        <meshStandardMaterial color="#bff4ff" emissive="#5fd8ff" emissiveIntensity={0.5} transparent opacity={0.45} flatShading roughness={0.1} />
+      </mesh>
+      <group ref={flame} visible={false} position-y={0.75}>
+        {[
+          [0, 0.55, 0, 0.42, 1.5, "#ffe066"],
+          [0.38, 0.3, 0.1, 0.3, 1.0, "#ff8c1a"],
+          [-0.34, 0.25, -0.16, 0.28, 0.9, "#ff5a1a"],
+          [0.08, 0.15, 0.4, 0.26, 0.8, "#e02a12"],
+          [-0.12, 0.2, -0.42, 0.24, 0.85, "#ffb020"],
+        ].map(([x, y, z, r, h, col], i) => (
+          <mesh key={i} position={[x as number, y as number, z as number]}>
+            <coneGeometry args={[r as number, h as number, 6]} />
+            <meshBasicMaterial color={col as string} transparent opacity={0.8} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+      </group>
+
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
@@ -1261,6 +1315,7 @@ const BULLET_GEO = new THREE.LatheGeometry(
 );
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
+const BLAST_AT = new THREE.Vector3();
 
 
 const BulletPool = memo(function BulletPool({
@@ -1297,12 +1352,13 @@ function shieldUp(e: Enemy, host: boolean) {
   return host ? (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 : (((e.vis ?? 0) >> 6) & 1) === 1;
 }
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number; blast?: number; blastMul?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
+    blast: fx.blast ?? 0, blastMul: fx.blastMul ?? 0,
   };
   const i = pool.findIndex((b) => !b.active);
   const slot = pool[i];
@@ -1457,6 +1513,43 @@ function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
         <mesh position={[0, 0.14, -0.06]}><boxGeometry args={[0.1, 0.12, 0.22]} /><meshLambertMaterial color="#6b6450" /></mesh>
         <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
       </>)}
+      {w === "revolver" && (<>
+        <mesh position={[0, 0.02, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.45, 8]} />{body}</mesh>
+        <mesh position={[0, 0, -0.05]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.08, 0.08, 0.14, 6]} /><meshLambertMaterial color="#8a7a66" /></mesh>
+        <mesh position={[0, 0.07, -0.46]}><boxGeometry args={[0.02, 0.03, 0.03]} />{glow}</mesh>
+        <mesh position={[0, -0.13, 0.06]} rotation-x={0.35}><boxGeometry args={[0.07, 0.2, 0.1]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
+      </>)}
+      {w === "minigun" && (<>
+        {[0, 1, 2, 3, 4, 5].map((k) => (
+          <mesh key={k} position={[Math.cos(k) * 0.05, Math.sin(k) * 0.05, -0.32]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.018, 0.018, 0.55, 6]} /><meshLambertMaterial color="#222" /></mesh>
+        ))}
+        <mesh position={[0, 0, -0.05]}><boxGeometry args={[0.18, 0.18, 0.25]} />{body}</mesh>
+        <mesh position={[0, 0, -0.58]} rotation-x={Math.PI / 2}><torusGeometry args={[0.07, 0.015, 6, 12]} />{glow}</mesh>
+      </>)}
+      {w === "crossbow" && (<>
+        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.07, 0.08, 0.55]} />{body}</mesh>
+        <mesh position={[0, 0.02, -0.4]}><boxGeometry args={[0.5, 0.03, 0.04]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
+        <mesh position={[0, 0.06, -0.35]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.008, 0.008, 0.45, 4]} />{glow}</mesh>
+      </>)}
+      {w === "plasma" && (<>
+        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.14, 0.12, 0.45]} />{body}</mesh>
+        {[-0.06, 0, 0.06].map((x) => (
+          <mesh key={x} position={[x, 0.02, -0.46]}><sphereGeometry args={[0.03, 8, 8]} />{glow}</mesh>
+        ))}
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+      {w === "voidorb" && (<>
+        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.12, 0.35]} />{body}</mesh>
+        <mesh position={[0, 0.03, -0.45]}><sphereGeometry args={[0.1, 12, 12]} />{glow}</mesh>
+        <mesh position={[0, 0.03, -0.45]} rotation-x={Math.PI / 2}><torusGeometry args={[0.14, 0.015, 6, 16]} /><meshLambertMaterial color="#444" /></mesh>
+        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
+      </>)}
+      {w === "shatter" && (<>
+        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.09, 0.12, 0.5, 6]} />{body}</mesh>
+        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.1, 0.12, 6]} />{glow}</mesh>
+        <mesh position={[0, 0.13, -0.2]}><octahedronGeometry args={[0.06]} />{glow}</mesh>
+        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
+      </>)}
       {w === "tesla" && (<>
         <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.11, 0.12, 0.5]} />{body}</mesh>
         {[-0.42, -0.3].map((z) => (
@@ -1581,7 +1674,7 @@ function World({
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
-  const ammo = useRef<Record<Weapon, number>>({ pistol: GUNS.pistol.ammo, scatter: 0, smg: 0, rail: 0, cannon: 0, rebound: 0, harpoon: 0, cryo: 0, flak: 0, tesla: 0 });
+  const ammo = useRef<Record<Weapon, number>>(Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<Weapon, number>);
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
   const bob = useRef(0);
@@ -1615,8 +1708,26 @@ function World({
   const poolTicks = useRef(0);
   const poolTimer = useRef(0);
   const flareTimer = useRef(0);
+  const strikeAt = useRef({ x: 0, z: 0 });
+  const stealBank = useRef(0);
   const barrierMesh = useRef<THREE.Mesh>(null);
+  // ---- visible ability effects ----
+  const ringMesh = useRef<THREE.Mesh>(null);
+  const ringFx = useRef({ t: 0, dur: 0, r0: 1, r1: 9, x: 0, y: 0.12, z: 0, color: "#ffffff" });
+  const boltMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const boltFx = useRef({ t: 0, dur: 0 });
+  const strikeRing = useRef<THREE.Mesh>(null);
+  const strikeBeam = useRef<THREE.Mesh>(null);
+  const strikeFlash = useRef({ t: 0 });
+  // (big maps: the ring sits on the ground there, or at your feet on a roof / in a car)
+  const fxFloor = (x: number, z: number) =>
+    Math.hypot(x - camera.position.x, z - camera.position.z) < 0.5 ? camera.position.y - EYE : groundY(x, z);
+  const playFx = (color: string, r0: number, r1: number, dur: number, x: number, z: number, y = fxFloor(x, z) + 0.12) => {
+    ringFx.current = { t: dur, dur, r0, r1, x, y, z, color };
+  };
   const cdReport = useRef(0);
+
+
   // armour soaks damage; getting hit can discharge a shock ring
   // knocked back by a ram / blast: same decaying push as a car bump
   const shove = (kx: number, kz: number) => {
@@ -1630,11 +1741,13 @@ function World({
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     reviveInterrupted(); // taking damage breaks off a revive in progress
     const s2 = stats.current;
+    if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
     const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
   };
+
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     c.fov = fov;
@@ -1665,7 +1778,7 @@ function World({
       const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
-      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy, blastAt });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
         for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
@@ -1681,7 +1794,7 @@ function World({
   }, [gl, scene, camera, city, western, gaps, remotes, enemies]); // eslint-disable-line react-hooks/exhaustive-deps -- test handle: the functions read refs, so the first render's copies stay valid
   // combat effects need to know the world: what is solid, where the robots are, the gun table
   useEffect(() => {
-    fxGuns(ORDER.map((w) => GUNS[w]));
+    fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])));
     const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
     fxEnv({
       solid: (x, z) => blocked(blocks, x, z, 0.05),
@@ -1878,7 +1991,7 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0 };
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0, blast: 0, blastMul: 0 };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -1943,9 +2056,13 @@ function World({
             applyHit(e, i, Number(m.dmg) || 0, {
               slow: Number(m.slow ?? 0), burn: Number(m.burn ?? 0), kb: Number(m.kb ?? 0),
               kx: Number(m.kx ?? 0), kz: Number(m.kz ?? 0), direct: m.d === 1,
-              shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1,
+              shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1, freeze: Number(m.fz ?? 0),
             }, String(m.from));
           }
+        } else if (m.type === "blast") {
+          // a guest's BOOMER / FLAK exploded: the host resolves the splash and credits the guest
+          applyBlast(Number(m.x), Number(m.y), Number(m.z), Math.min(8, Number(m.r) || 0), Number(m.d) || 0,
+            Number(m.vx) || 0, Number(m.vz) || 0, Number(m.s ?? -1), String(m.from));
         } else if (m.type === "shield") {
           const e = enemies[Number(m.i)];
           if (e?.alive && e.kind === "bulwark") drainShield(e, Number(m.dmg));
@@ -2250,7 +2367,7 @@ function World({
   // knockback, shred / executioner / bounty flags, shot direction) and the host runs
   // applyHit exactly as for its own shots. Kill credit and kill rewards go back to the
   // shooter, so nothing is lost and nothing is counted twice.
-  type HitFx = { slow?: number; burn?: number; kb?: number; kx?: number; kz?: number; direct?: boolean; shred?: boolean; exec?: boolean; bounty?: boolean };
+  type HitFx = { slow?: number; burn?: number; kb?: number; kx?: number; kz?: number; direct?: boolean; shred?: boolean; exec?: boolean; bounty?: boolean; freeze?: number };
   /** kill credit and kill rewards, on the client of whoever landed the blow */
   const creditKill = (e: Enemy, elite: boolean, bounty: boolean) => {
     onScore();
@@ -2284,6 +2401,9 @@ function World({
     }
     const elite = !!e.elite;
     e.elite = 0;
+    // elites, mini-bosses and bosses always leave a medkit behind (Toby); only on open ground
+    // (not up on a roof, where the pack would drop into the building below)
+    if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5)) heal.current = { x: e.x, z: e.z, active: true };
     if (from === null) creditKill(e, elite, bounty);
     else netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
   };
@@ -2307,18 +2427,27 @@ function World({
       const kz = h.kz ?? 0;
       const len = Math.hypot(kx, kz) || 1;
       const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
-      // (a shove never lifts it onto a balcony or up the tower's face)
-      const tx = e.x + (kx / len) * push;
-      const tz = e.z + (kz / len) * push;
-      if (climbable(e.x, e.z, tx, tz)) {
-        e.x = tx;
-        e.z = tz;
+      // walk the push in small steps so a shove never drives anyone into cover (Toby), and
+      // never lifts it onto a balcony or up the tower's face (climbable)
+      const er = Math.min(STATS[e.kind].radius, 0.8);
+      const steps = Math.max(1, Math.ceil(push / 0.35));
+      const sx = (kx / len) * (push / steps);
+      const sz = (kz / len) * (push / steps);
+      for (let s = 0; s < steps; s++) {
+        const nx = e.x + sx;
+        const nz = e.z + sz;
+        const okX = !blocked(blocks, nx, e.z, er) && climbable(e.x, e.z, nx, e.z);
+        if (okX) e.x = nx;
+        const okZ = !blocked(blocks, e.x, nz, er) && climbable(e.x, e.z, e.x, nz);
+        if (okZ) e.z = nz;
+        if (!okX && !okZ) break;
       }
     }
     e.hp -= dmg;
     e.flash = 0.1;
     e.hitT = 2; // cloakers flicker into view when hurt
     if ((h.slow ?? 0) > 0) e.slow = h.slow!;
+    if ((h.freeze ?? 0) > 0) e.frozen = Math.max(e.frozen ?? 0, h.freeze!); // cryo nova
     if ((h.burn ?? 0) > 0) { e.burn = h.burn!; e.burnTick = 1; e.burnFrom = from; }
     if (h.shred) e.shredUntil = now + 3000;
     if (e.kind === "boss") onBoss(Math.max(0, e.hp));
@@ -2326,6 +2455,11 @@ function World({
   };
   /** this client's player deals damage: applied on the host, sent to the host from a guest */
   const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0, fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {}) => {
+    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the damage
+    if (stats.current.steal > 0 && dmg > 0 && e.alive) {
+      stealBank.current += dmg * stats.current.steal;
+      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+    }
     if (!isHostRef.current) {
       netRef.current?.broadcast({
         type: "hit", i: idx, dmg,
@@ -2337,11 +2471,60 @@ function World({
         ...(fx.shred ? { sh: 1 } : {}),
         ...(fx.exec ? { ex: 1 } : {}),
         ...(fx.bounty ? { bo: 1 } : {}),
+        ...(fx.freeze ? { fz: fx.freeze } : {}),
       });
       e.flash = 0.1;
       return;
     }
     applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
+  };
+  /**
+   * BOOMER / FLAK splash, host only: every robot within `r` of the blast (and in its line of
+   * sight: walls shield what is behind them) takes `dmg` with falloff, 100% at the centre and
+   * 35% at the edge, plus a shove away from the centre. Each hit runs through applyHit as a
+   * direct hit from the blast's direction, so a bulwark facing the blast blocks it, and the
+   * kill credit goes to the shooter (`from`).
+   */
+  const applyBlast = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip: number, from: string | null) => {
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      if (!e.alive || i === skip) continue;
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const d = Math.hypot(dx, dz);
+      const er = STATS[e.kind].radius;
+      const dd = Math.max(0, d - er);
+      if (dd > r) continue;
+      const [lo, hi] = hitBand(e.kind);
+      const ey = groundY(e.x, e.z);
+      if (y < ey + lo - r || y > ey + hi + r) continue; // far above or below (a roof, a hornet)
+      if (d > er + 0.3 && !clearLine(blocks, x, z, e.x, e.z, 0.1)) continue;
+      const k = 1 - 0.65 * Math.min(1, dd / r);
+      // at the centre the blast travels the way the shell was flying
+      const [kx, kz] = d > 0.3 ? [dx / d, dz / d] : [vx, vz];
+      applyHit(e, i, dmg * k, { kb: 2.4 * k, kx, kz, direct: true }, from);
+    }
+  };
+  /** this client's round exploded: resolved on the host (a guest sends one "blast" message) */
+  const blastAt = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip = -1) => {
+    onStat("hit", 1);
+    onStat("dmg", dmg);
+    if (stats.current.steal > 0) {
+      stealBank.current += dmg * stats.current.steal;
+      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+    }
+    // no friendly fire, but a close blast gives your own player a gentle push
+    const c = camera.position;
+    const pd = Math.hypot(c.x - x, c.z - z);
+    if (pd < r && Math.abs(c.y - EYE - y) < r) {
+      const push = 4 * (1 - pd / r);
+      knock.current.x += ((c.x - x) / (pd || 1)) * push;
+      knock.current.z += ((c.z - z) / (pd || 1)) * push;
+    }
+    const q = (v: number) => Math.round(v * 100) / 100;
+    const vl = Math.hypot(vx, vz) || 1;
+    if (isHostRef.current) applyBlast(x, y, z, r, dmg, vx / vl, vz / vl, skip, null);
+    else netRef.current?.broadcast({ type: "blast", x: q(x), y: q(y), z: q(z), r: q(r), d: q(dmg), vx: q(vx / vl), vz: q(vz / vl), s: skip });
   };
   const burstTimer = useRef(0);
 
@@ -2355,7 +2538,7 @@ function World({
     // seeded spread so co-op viewers can replay the exact same pellets
     const seed = (Math.random() * 1e9) | 0;
     const spread = rng(seed);
-    const kind = ORDER.indexOf(w) as VisKind;
+    const kind = visOf(w);
     let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
     if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
@@ -2365,12 +2548,15 @@ function World({
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
       const fx: Fx = {
         bounce: (g.bounce ?? 0) + (Math.random() < s2.ricochet ? 1 : 0),
-        pierce: g.pierce ?? 0,
+        pierce: (g.pierce ?? 0) + s2.pierce,
         slow: g.slow ?? 0,
         cluster: g.cluster ?? 0,
         chain: g.chain ?? 0,
         knock: s2.knock + (isP && s2.comp ? 0.8 : 0),
         burn: isP && s2.incend ? 3 : 0,
+        // Combustion (perks, the Bio-Siphon class, Cluster Charge) widens the blast a little
+        blast: g.blast ? g.blast * (1 + 0.5 * s2.boom) : 0,
+        blastMul: g.blastMul ?? 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
       const slot = fireInto(
@@ -2484,15 +2670,21 @@ function World({
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    // the real-scale city hides enemies behind blocks and streets, so it sends a bigger crowd
-    const enemyMul = (1 + 0.6 * extra) * (big ? 1.75 : 1);
+    // arenas: Toby's fuller waves as the run goes (1.25x on wave 1, +0.10x every wave after).
+    // The big real-scale maps keep their own tuned crowd (1.75x: enemies hide behind blocks).
+    const waveMul = big ? 1.75 : 1.25 + 0.1 * (n - 1);
+    const enemyMul = (1 + 0.6 * extra) * waveMul;
     const lootMul = 1 + 0.65 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
-    const scale = (v: number) => Math.round(v * enemyMul);
+    const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
+    // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
+    const surprisePool: Kind[] = n >= 5 ? ["brute", "specter", "bomber", "vanguard", "special"] : n >= 3 ? ["brute", "shooter", "specter", "special"] : ["brute", "shooter", "runner"];
+    const surprises = Array<Kind>(1 + Math.floor(rand() * 2)).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
     const roster: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
+      .concat(surprises)
       .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
     // arrival order: the boss first, then a shuffled mix, so the newer types turn up through
     // the wave instead of all at the end; hornets arrive as one pack of 3-5 from one spot
@@ -2594,13 +2786,14 @@ function World({
       onEvent(event);
       netRef.current?.broadcast({ type: "event", name: event });
     }
-    // health: random; solo waits 2 waves between packs, co-op packs come more often
+    // health: guaranteed pack every wave in co-op, every other wave solo
     const healGap = extra > 0 ? 1 : 2;
-    if (n >= 2 && n - lastHealWave.current >= healGap && rand() < Math.min(0.95, 0.5 * lootMul)) {
+    if (n >= 2 && n - lastHealWave.current >= healGap) {
       const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
     }
+
     // supply crate: turret kit, barrier, cryo mine or ammo cache
     if (!crate.current.active) { // exactly one supply drop per wave
       const c = spot(8, 28, false);
@@ -2660,6 +2853,13 @@ function World({
         -1.2,
         Math.min(1.2, look.current.pitch + ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) * TURN_SPEED * sensY * 0.7 * delta),
       );
+      // touch drag look (right thumb)
+      if (touchInput.lookX || touchInput.lookY) {
+        look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current;
+        look.current.pitch = Math.max(-1.2, Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current));
+        touchInput.lookX = 0;
+        touchInput.lookY = 0;
+      }
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -2673,6 +2873,31 @@ function World({
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
+
+    // on-screen controls
+    if (touchInput.ability) {
+      touchInput.ability = false;
+      abilFire.current = true;
+    }
+    // touch USE: the elevator car's floor button (E on a keyboard)
+    if (touchInput.use) {
+      touchInput.use = false;
+      if (accessActive()) pressCarButton();
+    }
+    if (touchInput.swap) {
+      const dir = touchInput.swap;
+      touchInput.swap = 0;
+      const list = [...owned.current];
+      const i = list.indexOf(weapon.current);
+      const next = list[(i + (dir > 0 ? 1 : list.length - 1)) % list.length];
+      if (next) equip(next);
+    }
+    if (touchInput.pick) {
+      const want = touchInput.pick as Weapon;
+      touchInput.pick = null;
+      if (owned.current.has(want)) equip(want);
+    }
+
 
     fireCd.current -= delta;
     if (burstQueue.current > 0 && !spectating) {
@@ -2688,7 +2913,7 @@ function World({
           burstQueue.current = 0;
         }
       }
-    } else if (trigger.current && !spectating && fireCd.current <= 0) {
+    } else if ((trigger.current || touchInput.fire) && !spectating && fireCd.current <= 0) {
       const w = weapon.current;
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
@@ -2704,15 +2929,15 @@ function World({
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
-    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
+    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ;
+    const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX;
     cam.getWorldDirection(FORWARD);
     FORWARD.y = 0;
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
-    const moving = MOVE.lengthSq() > 0;
-    if (moving) MOVE.normalize();
+    const moving = MOVE.lengthSq() > 0.0004;
+    if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
     worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
@@ -3063,20 +3288,75 @@ function World({
       poolTimer.current -= delta;
       if (poolTimer.current <= 0) { poolTimer.current = 1; poolTicks.current--; onLeech(); }
     }
+    // --- orbital strike: targeting marker, then a beam crashing out of the sky ---
     if (flareTimer.current > 0) {
       flareTimer.current -= delta;
       if (flareTimer.current <= 0) {
         for (let ei = 0; ei < enemies.length; ei++) {
           const e = enemies[ei]!;
-          if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 9) hurtEnemy(e, 3, ei);
+          if (e.alive && Math.hypot(e.x - strikeAt.current.x, e.z - strikeAt.current.z) < 5) hurtEnemy(e, 7, ei);
+        }
+        strikeFlash.current.t = 0.5;
+        playFx("#ffd46a", 1, 10, 0.5, strikeAt.current.x, strikeAt.current.z);
+      }
+    }
+    if (strikeRing.current) {
+      const aiming = flareTimer.current > 0;
+      strikeRing.current.visible = aiming;
+      if (aiming) {
+        const p = 1 - flareTimer.current / 1.2;
+        strikeRing.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 0.08, strikeAt.current.z);
+        strikeRing.current.rotation.z = state.clock.elapsedTime * 3;
+        strikeRing.current.scale.setScalar(5 * (1.7 - p * 0.7));
+        (strikeRing.current.material as THREE.MeshBasicMaterial).opacity = 0.45 + Math.sin(state.clock.elapsedTime * 26) * 0.3;
+      }
+    }
+    if (strikeBeam.current) {
+      const f = strikeFlash.current;
+      if (f.t > 0) f.t -= delta;
+      strikeBeam.current.visible = f.t > 0;
+      if (f.t > 0) {
+        const k = f.t / 0.5;
+        strikeBeam.current.position.set(strikeAt.current.x, groundY(strikeAt.current.x, strikeAt.current.z) + 22, strikeAt.current.z);
+        strikeBeam.current.scale.set(1 + (1 - k) * 1.6, 1, 1 + (1 - k) * 1.6);
+        (strikeBeam.current.material as THREE.MeshBasicMaterial).opacity = Math.min(1, k * 1.2);
+      }
+    }
+    // --- shared ground shockwave ring used by the other abilities ---
+    if (ringMesh.current) {
+      const r = ringFx.current;
+      if (r.t > 0) r.t -= delta;
+      ringMesh.current.visible = r.t > 0;
+      if (r.t > 0) {
+        const p = 1 - r.t / r.dur;
+        ringMesh.current.position.set(r.x, r.y, r.z);
+        ringMesh.current.scale.setScalar(r.r0 + (r.r1 - r.r0) * p);
+        const mat = ringMesh.current.material as THREE.MeshBasicMaterial;
+        mat.color.set(r.color);
+        mat.opacity = 0.85 * (1 - p);
+      }
+    }
+    // --- chain storm lightning arcs ---
+    {
+      const b = boltFx.current;
+      if (b.t > 0) {
+        b.t -= delta;
+        const flick = b.t > 0 ? 0.35 + Math.random() * 0.65 : 0;
+        for (let bi = 0; bi < 6; bi++) {
+          const m = boltMeshes.current[bi];
+          if (!m || !m.visible) continue;
+          if (b.t <= 0) { m.visible = false; continue; }
+          m.rotateOnAxis(BULLET_UP, delta * 24);
+          (m.material as THREE.MeshBasicMaterial).opacity = flick;
         }
       }
     }
+
     if (abilFire.current) {
       abilFire.current = false;
       const id = abilityRef.current;
       if (!spectating && abilCd.current <= 0) {
-        abilCd.current = ABILITIES[id].cd;
+        abilCd.current = ABILITIES[id].cd * (1 - stats.current.haste);
         playSfx("buy");
         cam.getWorldDirection(FORWARD);
         FORWARD.y = 0;
@@ -3093,27 +3373,55 @@ function World({
           knock.current.x += FORWARD.x * 26;
           knock.current.z += FORWARD.z * 26;
           invuln.current = 0.7;
-        } else if (id === "pool") {
-          poolTicks.current = 3;
-          poolTimer.current = 0.1;
+          playFx("#bfe9ff", 0.6, 5, 0.35, cam.position.x, cam.position.z);
+        } else if (id === "well") {
+          const cx = cam.position.x + FORWARD.x * 6, cz = cam.position.z + FORWARD.z * 6;
+          for (let ei = 0; ei < enemies.length; ei++) {
+            const e = enemies[ei]!;
+            const d = Math.hypot(cx - e.x, cz - e.z);
+            if (e.alive && d < 13) hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
+          }
+          // collapsing vortex ring at the well's centre
+          playFx("#a55cff", 13, 0.6, 0.9, cx, cz);
         } else if (id === "repulse") {
           near(9, (e, ei) => hurtEnemy(e, 2, ei, 0, 0, 7, e.x - cam.position.x, e.z - cam.position.z));
+          playFx("#68d0ff", 0.6, 9, 0.45, cam.position.x, cam.position.z);
         } else if (id === "nova") {
-          near(8, (e, ei) => hurtEnemy(e, 1, ei, 3.5));
-        } else if (id === "flare") {
-          near(12, (e, ei) => hurtEnemy(e, 1, ei, 4));
-          flareTimer.current = 4;
-        } else if (id === "mortar") {
-          const pos = cam.position.clone().addScaledVector(FORWARD, 0.8);
-          pos.y -= 0.2;
-          const ms = fireInto(bullets.current, pos, FORWARD.clone().multiplyScalar(18), 2.2, 4, "#ff9d3b", 0.34, { cluster: 5 });
-          if (ms >= 0) fxShot(ms, bullets.current[ms]!, VK.MORTAR);
-          fxFired(VK.MORTAR, 0, pos, FORWARD, 0, 18, n);
+          // frozen solid on the host (guests send the freeze with the hit); the ice shows here at once
+          near(8, (e, ei) => { e.iceUntil = performance.now() + 3500; hurtEnemy(e, 1, ei, 3.5, 0, 0, 0, 0, { freeze: 3.5 }); });
+          playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
+        } else if (id === "storm") {
+          const list = enemies.map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
+            .filter((o) => o.e.alive && o.d < 20).sort((a, b) => a.d - b.d).slice(0, 6);
+          list.forEach((o) => hurtEnemy(o.e, 4, o.i));
+          // draw a lightning arc from the player to every zapped enemy
+          boltFx.current = { t: 0.42, dur: 0.42 };
+          for (let bi = 0; bi < 6; bi++) {
+            const m = boltMeshes.current[bi];
+            if (!m) continue;
+            const tgt = list[bi];
+            m.visible = !!tgt;
+            if (!tgt) continue;
+            const ax = cam.position.x, az = cam.position.z, ay = cam.position.y - 0.4;
+            const bx = tgt.e.x, bz = tgt.e.z, by = groundY(bx, bz) + 1.1;
+            const len = Math.hypot(bx - ax, bz - az, by - ay);
+            m.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+            m.scale.set(1, len, 1);
+            TMP_DIR.set(bx - ax, by - ay, bz - az).normalize();
+            m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
+          }
+          playFx("#7fdcff", 0.6, 20, 0.35, cam.position.x, cam.position.z);
+        } else if (id === "warp") {
+          near(9999, (e, ei) => hurtEnemy(e, 0, ei, 5));
+          playFx("#c9a6ff", 0.6, 40, 0.8, cam.position.x, cam.position.z);
+        } else if (id === "strike") {
+          strikeAt.current = { x: cam.position.x + FORWARD.x * 10, z: cam.position.z + FORWARD.z * 10 };
+          flareTimer.current = 1.2;
         } else if (id === "barrier") {
           invuln.current = 6;
-        } else if (id === "overdrive") {
-          overdrive.current = 4;
+          playFx("#7ad7ff", 0.6, 3.2, 0.5, cam.position.x, cam.position.z);
         }
+
       } else if (abilCd.current > 0) {
         playSfx("deny");
       }
@@ -3121,7 +3429,7 @@ function World({
     cdReport.current -= delta;
     if (cdReport.current <= 0) {
       cdReport.current = 0.2;
-      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd);
+      onAbilityCd(abilCd.current, ABILITIES[abilityRef.current].cd * (1 - stats.current.haste));
     }
 
     // cryo mines freeze and hurt whatever walks onto them
@@ -3191,7 +3499,7 @@ function World({
         if (nextWaveTimer.current <= 0) {
           wave.current++;
           spawnWave(wave.current);
-          nextWaveTimer.current = 10; // shopping break before the next wave
+          nextWaveTimer.current = 15; // shopping break before the next wave
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
@@ -3369,6 +3677,14 @@ function World({
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
+        if ((e.frozen ?? 0) > 0) {
+          // frozen solid: no moving, no attacking, attack timers paused
+          e.frozen! -= delta;
+          if (e.burn > 0) { e.burn -= delta; }
+          e.cooldown += delta;
+          e.shot += delta;
+          continue;
+        }
         if (e.burn > 0) {
           e.burn -= delta;
           e.burnTick -= delta;
@@ -3474,6 +3790,13 @@ function World({
         // mountain face under the chairlift, another zone, past a blockade)
         if (ghost) { if (ghostOK(nx, nz)) { e.x = nx; e.z = nz; } }
         else {
+          // arenas: if anything ever ends up wedged inside cover, slide it back out (Toby). The
+          // big maps have roofs and raised ground; they keep their own unstick below.
+          if (!big && blocked(blocks, e.x, e.z, r)) {
+            const out = pushOut(blocks, e.x, e.z, r);
+            e.x = out.x;
+            e.z = out.z;
+          }
           const ox = e.x;
           const oz = e.z;
           // (and only steps it could walk: no hopping up a balcony edge or the tower's face)
@@ -3738,11 +4061,17 @@ function World({
     }
 
     // player bullets
-    const burst = (b: Bullet) => {
+    const burst = (b: Bullet, at: THREE.Vector3 = b.pos, skip = -1) => {
+      const blastR = b.blast;
+      if (b.blast > 0) {
+        const r = b.blast;
+        b.blast = 0;
+        blastAt(at.x, at.y, at.z, r, b.damage * b.blastMul, b.vel.x, b.vel.z, skip);
+      }
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
-      fxBurst(b);
+      fxBurst(b, blastR || undefined);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
@@ -3755,10 +4084,11 @@ function World({
       if (b.active) {
         const px = b.pos.x;
         const pz = b.pos.z;
+        BLAST_AT.copy(b.pos); // a shell that hits a wall explodes just in front of it
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
         const hitWall = outOfBounds(b.pos);
-        if (hitWall && b.bounce > 0) {
+        if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
@@ -3766,7 +4096,7 @@ function World({
           b.pos.set(px, b.pos.y, pz);
           fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
-          burst(b);
+          burst(b, hitWall ? BLAST_AT : b.pos);
           fxDie(i, hitWall);
           b.active = false;
         } else {
@@ -3804,6 +4134,13 @@ function World({
             const [lo, hi] = hitBand(e.kind);
             const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
+              if (b.blast > 0 && b.blastMul >= 1) {
+                // BOOMER: the shell detonates on the robot; the blast does all the damage
+                fxHit(i, b, e);
+                burst(b);
+                b.active = false;
+                break;
+              }
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
               // executioner / shredder / bounty are judged on the host (it has the true health)
@@ -3829,7 +4166,7 @@ function World({
               }
               if (b.pierce > 0) b.pierce--;
               else {
-                burst(b);
+                burst(b, b.pos, ei); // (FLAK's splash spares the robot it just hit directly)
                 b.active = false;
               }
               break;
@@ -4059,7 +4396,29 @@ function World({
           </mesh>
         </group>
       ))}
+      {/* ability shockwave ring (unit radius, scaled per effect) */}
+      <mesh ref={ringMesh} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.86, 1, 48]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.8} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {/* chain storm arcs */}
+      {Array.from({ length: 6 }, (_, i) => (
+        <mesh key={`bolt${i}`} ref={(m) => { boltMeshes.current[i] = m; }} visible={false}>
+          <cylinderGeometry args={[0.05, 0.05, 1, 3, 1, true]} />
+          <meshBasicMaterial color="#9fe8ff" transparent opacity={0.9} fog={false} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </mesh>
+      ))}
+      {/* orbital strike: ground marker + falling beam */}
+      <mesh ref={strikeRing} visible={false} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[0.72, 1, 6]} />
+        <meshBasicMaterial color="#ff5a28" transparent opacity={0.7} fog={false} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh ref={strikeBeam} visible={false}>
+        <cylinderGeometry args={[4.4, 2.6, 44, 20, 1, true]} />
+        <meshBasicMaterial color="#ffd77a" transparent opacity={0.9} fog={false} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
       <group ref={pickupMesh} visible={false}>
+
         <mesh position-y={0.2} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[0.7, 0.9, 24]} />
           <meshBasicMaterial color={GUNS[dropGun].color} fog={false} />
@@ -4223,11 +4582,16 @@ function initialMapChoice(): number | null {
 }
 
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
- * guests (who derive the map from the shared seed) land on the same one. */
-function newSeed(choice: number | null) {
+ * guests (who derive the map from the shared seed) land on the same one. Random only rolls
+ * the offered maps (the four big ones) and, given the previous seed, never repeats its map
+ * (Toby's anti-repeat roll). */
+function newSeed(choice: number | null, prev?: number) {
   let s = Math.floor(Math.random() * 1e9);
-  // Random never lands on a work-in-progress map
-  while (choice === null && !offered(THEMES[s % THEMES.length]!)) s = Math.floor(Math.random() * 1e9);
+  const prevMap = prev === undefined ? -1 : prev % THEMES.length;
+  const pool = THEMES.filter((t) => offered(t)).length;
+  const reroll = (v: number) =>
+    !offered(THEMES[v % THEMES.length]!) || (pool > 1 && v % THEMES.length === prevMap);
+  while (choice === null && reroll(s)) s = Math.floor(Math.random() * 1e9);
   return choice === null ? s : s - (s % THEMES.length) + choice;
 }
 
@@ -4292,7 +4656,35 @@ export function Game() {
     const saved = window.localStorage.getItem("df-ability") as AbilityId | null;
     return saved && ABILITIES[saved] ? saved : "dash";
   });
+  /** starter class, chosen on the loadout screen alongside the ability */
+  const [cls, setCls] = useState<ClassId>(() => {
+    if (typeof window === "undefined") return "vanguard";
+    const saved = window.localStorage.getItem("df-class") as ClassId | null;
+    return saved && CLASSES[saved] ? saved : "vanguard";
+  });
+  /** ability pick screen shown after pressing START, before the match begins */
+  const [picking, setPicking] = useState(false);
+  /** what every squad member has chosen, keyed by player number */
+  const [picks, setPicks] = useState<Record<number, AbilityId>>({});
+  const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
+  /** phones and tablets play with on-screen controls instead of mouse + keyboard */
+  useEffect(() => {
+    if (!locked) resetTouchInput();
+  }, [locked]);
+  const [touchUi, setTouchUi] = useState(false);
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    setTouchUi(isTouchDevice());
+    const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
   const [eventMsg, setEventMsg] = useState<string | null>(null);
   // run tally for the post-game recap
   const run = useRef({ shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 });
@@ -4300,9 +4692,14 @@ export function Game() {
   const [perks, setPerks] = useState<Perks>(NO_PERKS);
   const perksRef = useRef(perks);
   perksRef.current = perks;
-  const statsRef = useRef<Derived>(derive(perks));
-  statsRef.current = derive(perks);
+  const clsMods = CLASSES[cls].mods;
+  const clsRef = useRef(clsMods);
+  clsRef.current = clsMods;
+  const statsRef = useRef<Derived>(derive(perks, clsMods));
+  statsRef.current = derive(perks, clsMods);
+
   const maxHp = statsRef.current.maxHp;
+
 
   // ---------- co-op room ----------
   const [net, setNet] = useState<NetHandle | null>(null);
@@ -4361,7 +4758,7 @@ export function Game() {
       setSquad({});
       setSeed(Number(m.seed));
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
@@ -4372,6 +4769,15 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "pick") {
+      const num = Number(m.num);
+      const id = String(m.ability) as AbilityId;
+      const c = String(m.cls) as ClassId;
+      if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
+      if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
+      return;
+    }
+
     if (m.type === "statline") {
       const num = Number(m.num);
       setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
@@ -4399,7 +4805,7 @@ export function Game() {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current).maxHp : h));
+    if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -4459,21 +4865,23 @@ export function Game() {
     setNet(null);
     setPeerCount(0);
     setAllDown(false);
+    setPicks({});
   };
 
   /** quit a match in progress and go back to the title screen */
   const leaveGame = () => {
     leaveRoom();
     setLocked(false);
+    setPicking(false);
     setStarted(false);
     setScore(0);
-    setHealth(MAX_HP);
+    setHealth(derive(NO_PERKS, clsRef.current).maxHp);
     setPerks(NO_PERKS);
     setShards(0);
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
     setWeapon("pistol");
-    setSeed(newSeed(mapChoiceRef.current));
+    setSeed((p) => newSeed(mapChoiceRef.current, p));
     if (document.pointerLockElement) document.exitPointerLock();
   };
 
@@ -4493,7 +4901,8 @@ export function Game() {
 
   useEffect(() => {
     try {
-      const v = JSON.parse(localStorage.getItem("dustfield-settings") ?? "{}");
+      // (the key was "dustfield-settings" before the Scrapfall rename: carry those over)
+      const v = JSON.parse(localStorage.getItem("scrapfall-settings") ?? localStorage.getItem("dustfield-settings") ?? "{}");
       if (typeof v.fov === "number") setFov(v.fov);
       if (typeof v.sensX === "number") setSensX(v.sensX);
       else if (typeof v.sens === "number") setSensX(v.sens);
@@ -4505,7 +4914,7 @@ export function Game() {
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("dustfield-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
   }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
@@ -4654,11 +5063,15 @@ export function Game() {
       }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Escape") {
+      // P is the pause key on desktop; Escape still works since the browser
+      // drops pointer lock on it anyway
+      if (e.code === "Escape" || e.code === "KeyP") {
         setLocked(false);
+        if (document.pointerLockElement) document.exitPointerLock();
         pauseAll();
       }
     };
+
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
     return () => {
@@ -4672,6 +5085,10 @@ export function Game() {
   useEffect(() => {
     if (typeof window !== "undefined") window.localStorage.setItem("df-ability", ability);
   }, [ability]);
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("df-class", cls);
+  }, [cls]);
+
   useEffect(() => {
     if (!eventMsg) return;
     const t = window.setTimeout(() => setEventMsg(null), 3500);
@@ -4706,6 +5123,13 @@ export function Game() {
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
+  // keep my own pick in the squad list and tell everyone else about it
+  useEffect(() => {
+    setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
+    setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
+  }, [ability, cls, myNum, roster.length, picking]);
+
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -4733,18 +5157,19 @@ export function Game() {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     const resuming = started && !ended;
+    setPicking(false);
     if (!resuming) beginMatchTime();
     setStarted(true);
     if (ended && !fromNet) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
-        const s = newSeed(mapChoiceRef.current);
+        const s = newSeed(mapChoiceRef.current, seed);
         setSeed(s);
         net?.broadcast({ type: "seed", seed: s });
       }
       setScore(0);
-      setHealth(MAX_HP);
+      setHealth(derive(NO_PERKS, clsRef.current).maxHp);
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
@@ -4752,9 +5177,24 @@ export function Game() {
       setWeapon("pistol");
       setBossHp(0);
     }
+    // fresh run: start at the class's full max HP (e.g. Vanguard 16)
+    if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
     setLocked(true);
     // the whole squad starts and resumes together
     if (!fromNet && net && (resuming || isHost)) net.broadcast({ type: resuming ? "resume" : "begin" });
+    if (touchUi) {
+      resetTouchInput();
+      try {
+        const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+        if (!document.fullscreenElement) {
+          const r = el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.();
+          (r as Promise<void> | undefined)?.then?.(() => (screen.orientation as unknown as { lock?: (o: string) => Promise<void> }).lock?.("landscape").catch(() => {})).catch?.(() => {});
+        }
+      } catch {
+        /* fullscreen not supported (iPhone Safari) */
+      }
+      return; // touch devices steer with the on-screen controls, no pointer lock
+    }
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
@@ -4777,23 +5217,63 @@ export function Game() {
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
-  const [shopLeft, setShopLeft] = useState(10);
+  const [shopLeft, setShopLeft] = useState(15);
+  const [rerolls, setRerolls] = useState(0);
   const lastOffered = useRef<PerkId[]>([]);
-  useEffect(() => {
-    if (!shopBreak) return;
-    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+  // reroll price climbs with the wave: +1 +1 +1 +2 +2 +2 +3 ... and doubles
+  // for every reroll bought inside the same break
+  const rerollBase = (w: number) => {
+    let p = 4;
+    for (let i = 2; i <= w; i++) p += Math.ceil((i - 1) / 3);
+    return p;
+  };
+  const freeRerolls = statsRef.current.freeRerolls;
+  const freeLeft = Math.max(0, freeRerolls - rerolls);
+  const rerollCost = freeLeft > 0 ? 0 : rerollBase(status.wave) * Math.pow(2, Math.max(0, rerolls - freeRerolls));
+  const drawOffers = () => {
     const avail = PERK_IDS.filter((p) => perkAvailable(p, perksRef.current));
     let pool = avail.filter((p) => !lastOffered.current.includes(p));
     if (pool.length < 3) pool = avail;
     const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
     lastOffered.current = picks;
     setOffers(picks);
+  };
+  useEffect(() => {
+    if (!shopBreak) return;
+    // cards can repeat, just never two rounds in a row; maxed pistol mods drop out
+    drawOffers();
     setBought([]);
-    setShopLeft(10);
+    setShopLeft(15);
+    setRerolls(0);
     // the countdown holds while the game is paused
     const id = setInterval(() => { if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1)); }, 1000);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
+  const rerollRef = useRef<() => void>(() => {});
+  rerollRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < rerollCost) { playSfx("deny"); return; }
+    setShards((s) => s - rerollCost);
+    setRerolls((r) => r + 1);
+    setBought([]);
+    drawOffers();
+
+    playSfx("buy");
+  };
+  const reviveNearbyRef = useRef<() => boolean>(() => false);
+  reviveNearbyRef.current = () =>
+    [...remotes.current.values()].some(
+      (r) => downTable.get(r.id)?.st === DOWN && Math.hypot(r.x - squadMe.x, r.z - squadMe.z) <= REVIVE_RANGE,
+    );
+  const patchRef = useRef<() => void>(() => {});
+  patchRef.current = () => {
+    if (!shopOpen) return;
+    if (shards < PATCH_COST) { playSfx("deny"); return; }
+    if (health >= maxHp) { playSfx("deny"); return; }
+    setShards((s) => s - PATCH_COST);
+    setHealth((h) => Math.min(maxHp, h + 5));
+    playSfx("buy");
+  };
   const buyRef = useRef<(i: number) => void>(() => {});
   buyRef.current = (i: number) => {
     const id = offers[i];
@@ -4811,30 +5291,36 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       const i = SHOP_KEYS.indexOf(e.code);
       if (i >= 0) buyRef.current(i);
+      // R is also "hold to revive": next to a downed teammate it revives instead of rerolling
+      else if (e.code === "KeyR" && !e.repeat && !reviveNearbyRef.current()) rerollRef.current();
+      else if (e.code === "KeyV") patchRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+
   }, []);
 
   // regen perk
+  const regenRate = statsRef.current.regen;
   useEffect(() => {
-    if (!perks.regen || !started || !locked || ended || dead) return;
-    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / perks.regen);
+    if (!regenRate || !started || !locked || ended || dead) return;
+    const id = window.setInterval(() => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)), 14000 / regenRate);
     return () => window.clearInterval(id);
-  }, [perks.regen, started, locked, ended, dead, maxHp]);
+  }, [regenRate, started, locked, ended, dead, maxHp]);
 
-  // soundtrack
+  // soundtrack: Toby's menu march plays on the menus (muffled); the map's track opens up in
+  // combat, and the background soundscape plays (and pauses) with the match
   useEffect(() => { hookAudioUnlock(); }, []);
+  const inCombat = started && locked && !ended;
   useEffect(() => {
-    if (started && locked && !ended) startMusic();
-    else stopMusic();
-    // the background soundscape plays (and pauses) with the music
-    setAmbienceActive(started && locked && !ended);
-  }, [started, locked, ended]);
-  // if the browser blocked sound until now, the next click/keypress restarts it
+    setMusicMenu(!inCombat);
+    startMusic();
+    setAmbienceActive(inCombat);
+  }, [inCombat]);
+  // if the browser blocked sound until now, the next click/keypress starts it
   useEffect(() => {
-    if (!(started && locked && !ended)) return;
     const retry = () => { initAudio(); startMusic(); };
+    retry();
     window.addEventListener("pointerdown", retry);
     window.addEventListener("keydown", retry);
     document.addEventListener("visibilitychange", retry);
@@ -4843,7 +5329,7 @@ export function Game() {
       window.removeEventListener("keydown", retry);
       document.removeEventListener("visibilitychange", retry);
     };
-  }, [started, locked, ended]);
+  }, []);
 
   useEffect(() => {
     const boss = status.wave === WAVES.length && !status.won;
@@ -4871,7 +5357,7 @@ export function Game() {
 
 
   return (
-    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
+    <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
       <Canvas shadows="percentage" dpr={liveDpr()} gl={{ powerPreference: "high-performance", antialias: antialiasAtLoad }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
         <QualityGovernor />
         <StableWorld
@@ -4892,6 +5378,7 @@ export function Game() {
             setStatus({ wave, remaining, won });
             if (showBanner) {
               setBanner(true);
+              if (perksRef.current.mend > 0 && wave > 1) setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
               if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
             }
           }}
@@ -4981,9 +5468,9 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className="pointer-events-none fixed inset-0 z-10 font-mono">
+      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className="flex flex-col items-start gap-2">
+          <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {theme.name.toUpperCase()}
             </div>
@@ -4996,7 +5483,7 @@ export function Game() {
 
 
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className={`flex flex-col items-end gap-2`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               {"♦".repeat(Math.max(0, health))}
               <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
@@ -5004,27 +5491,50 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
+        {multiplayer && locked && !ended && (
+          <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
+            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}</div>
+            {[...remotes.current.values()].map((r) => (
+              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
+                {r.hp > 0 ? (
+                  <span>
+                    {/* (a class can lift max health past 10: Vanguard has 16) */}
+                    {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
+                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
+                  </span>
+                ) : (
+                  <span className="text-[#b3261e]">DOWN</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2 transition-opacity [.rs-incar_&]:opacity-0">
+        <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
             return (
               <div
                 key={slot.w}
-                className={`relative rounded-md border px-3 py-1.5 text-xs tracking-widest ${
+                onPointerDown={touchUi ? () => { touchInput.pick = slot.w; } : undefined}
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
                     : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className="absolute -left-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[10px] font-bold text-[#f7eeda]"
+                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "h-3 w-3 text-[7px]" : "h-4 w-4 text-[10px]"}`}
                 >
                   {i === 9 ? 0 : i + 1}
                 </span>
+
+
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
                 {slot.w === "pistol" && (
@@ -5076,12 +5586,13 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
-        {locked && !ended && (
+        {locked && !ended && !touchUi && (
           <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
             [F] {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? <span className="opacity-50">{Math.ceil(abilCd.left)}s</span> : <b>READY</b>}
           </div>
         )}
+
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
             ⚠ {eventMsg} ⚠
@@ -5094,7 +5605,9 @@ export function Game() {
           </div>
         )}
         {miniSrc && started && !ended && (
-          <div className="absolute bottom-5 right-5">
+          // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
+          // list sits under the shards, so a smaller map sits just left of the buttons
+          <div className={touchUi ? "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "absolute bottom-5 right-5"}>
             <Minimap
               src={miniSrc}
               feed={mapFeed}
@@ -5104,53 +5617,113 @@ export function Game() {
             />
           </div>
         )}
-        {multiplayer && locked && !ended && (
-          <div className="absolute right-5 top-[7.5rem] space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
-            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}</div>
-            {[...remotes.current.values()].map((r) => (
-              <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
-                <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
-                {r.hp > 0 ? (
-                  <span>
-                    {"♦".repeat(Math.max(0, Math.min(MAX_HP, Math.round(r.hp))))}
-                    <span className="opacity-30">{"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}</span>
-                  </span>
-                ) : (
-                  <span className="text-[#b3261e]">DOWN</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {shopOpen && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-10 font-mono text-[#2b2118]">
+        <div className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}>
           <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
             SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
           </div>
-          <div className="flex justify-center gap-3">
+          <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
+            <button
+              onClick={() => patchRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">V</span>
+              <span className="font-bold tracking-widest">FIELD DRESSING</span>
+              <span className="opacity-60">+5 HP · {health}/{maxHp}</span>
+              <span className="font-bold">◆ {PATCH_COST}</span>
+            </button>
+            <button
+              onClick={() => rerollRef.current()}
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">R</span>
+              <span className="font-bold tracking-widest">REROLL</span>
+              <span className="opacity-60">
+                {freeLeft > 0 ? `${freeLeft} FREE LEFT` : rerolls > 0 ? `USED ${rerolls}x` : "DOUBLES EACH USE"}
+              </span>
+              <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
+            </button>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
+
+
             {offers.map((id, i) => {
               const info = PERK_INFO[id];
               const cost = perkCost(id, perks[id]);
               if (bought.includes(i)) return null;
-              const sold = false;
+              const isMod = PISTOL_MODS.includes(id);
               return (
-                <div
+                <button
                   key={i}
-                  className="relative w-44 rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 p-3 text-center text-[#000]"
+                  onClick={() => buyRef.current(i)}
+                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
+                  
                 >
                   <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
                     {SHOP_KEYS[i]!.slice(3)}
                   </span>
+                  {isMod && <PistolBadge />}
                   <div className="text-xs font-bold tracking-widest">{info.name}</div>
-                  <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  {info.pros ? (
+                    <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
+                      {info.pros.map((t) => (
+                        <div key={t} className="font-bold text-[#1d7a37]">▲ {t}</div>
+                      ))}
+                      {info.cons?.map((t) => (
+                        <div key={t} className="font-bold text-[#b3261e]">▼ {t}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                  )}
                   {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
-                  <div className="mt-2 text-sm font-bold">{sold ? "BOUGHT" : `◆ ${cost}`}</div>
-                </div>
+                  <div className="mt-2 text-sm font-bold">◆ {cost}</div>
+                </button>
+
               );
             })}
+          </div>
+
+
+        </div>
+      )}
+
+      {touchUi && locked && !ended && (
+        <MobileControls
+          onPause={() => {
+            setLocked(false);
+            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+          }}
+          abilityName={ABILITIES[ability].name}
+          abilityLeft={abilCd.left}
+          coop={multiplayer}
+        />
+      )}
+      {touchUi && locked && !ended && (
+        <button
+          aria-label="Pause"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setLocked(false);
+            if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
+          }}
+          style={{ left: "max(0.75rem, env(safe-area-inset-left))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+          className="fixed z-40 flex h-10 w-10 touch-none items-center justify-center rounded-full border-2 border-[#f3e6cf]/80 bg-[#2b2118]/60 text-[#f3e6cf] shadow-lg backdrop-blur-sm active:scale-95 active:bg-[#2b2118]"
+        >
+          <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true">
+            <rect x="1" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+            <rect x="9" y="1" width="4" height="14" rx="1.6" fill="currentColor" />
+          </svg>
+        </button>
+
+      )}
+      {touchUi && portrait && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b2118] p-8 text-center font-mono text-[#f3e6cf]">
+          <div>
+            <div className="text-2xl font-bold tracking-[0.2em]">ROTATE YOUR DEVICE</div>
+            <div className="mt-2 text-xs tracking-[0.25em] opacity-60">SCRAPFALL PLAYS IN LANDSCAPE</div>
           </div>
         </div>
       )}
@@ -5163,44 +5736,185 @@ export function Game() {
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
-          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · ESC TO PAUSE</div>
+          <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">WALK AROUND FREELY · P TO PAUSE</div>
         </div>
       )}
 
 
-      {(!locked || ended) && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#2b2118]/70 p-6">
-          <div className="max-h-full max-w-sm overflow-y-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
-            </h1>
-            <p className="mt-2 text-sm opacity-70">
-              {gameOver
-                ? `You fell on wave ${status.wave} with ${score} kills.`
-                : status.won
-                  ? `All ${WAVES.length} waves survived · ${score} kills.`
-                  : paused
-                    ? `Wave ${status.wave} · ${score} kills so far.`
-                    : `Survive ${WAVES.length} waves, then face ${theme.boss.name}. Die and you lose every gun but the pistol.`}
-            </p>
-            {!paused && (
-              <p className="mt-4 text-xs leading-relaxed opacity-60">
-                WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your
-                ability · 1-0 / Q E swap guns · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · Esc to pause
-              </p>
+      {(!locked || ended) && picking && (
+        <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
+          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
+            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
+            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
+
+            <div className="mt-4 grid grid-cols-5 gap-1">
+              {CLASS_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setCls(id)}
+                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  }`}
+                  style={cls === id ? { background: CLASSES[id].color } : undefined}
+                >
+                  {CLASSES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
+            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
+              {CLASSES[cls].pros.map((t) => (
+                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
+              ))}
+              {CLASSES[cls].cons.map((t) => (
+                <span key={t} className="text-[#b3261e]">▼ {t}</span>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-1">
+              {ABILITY_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setAbility(id)}
+                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
+                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  }`}
+                >
+                  {ABILITIES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
+
+            {/* map: Tyler's four big maps + Random (themes.ts offered()); the host picks */}
+            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">{isHost ? "MAP" : "MAP · THE HOST PICKS"}</p>
+            <div className="mt-2 grid grid-cols-5 gap-1">
+              {([null, ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
+                const on = isHost ? mapChoice === i : i === seed % THEMES.length;
+                return (
+                  <button
+                    key={i ?? "random"}
+                    onClick={() => pickMap(i)}
+                    disabled={!isHost}
+                    className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                      on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
+                    } ${isHost ? "" : "cursor-default"}`}
+                  >
+                    {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => { pinTime(null); cycleTimeMode(); }}
+              title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
+              className="pointer-events-auto mt-2 w-full rounded bg-[#2b2118]/10 px-2 py-1.5 text-[10px] font-bold tracking-wider"
+            >
+              {timeMode === "auto"
+                ? "TIME · AUTO (SUNSET INTO NIGHT)"
+                : timeMode === "night"
+                  ? "TIME · ☾ NIGHT (LOCKED)"
+                  : "TIME · SUNSET (LOCKED)"}
+            </button>
+
+            {multiplayer && (
+              <div className="mt-5 text-left">
+                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
+                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
+                  {connected.map((p) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
+                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
+                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
+                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
+                      </span>
+                      <span className="opacity-60">
+                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
+                      </span>
+                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-            {multiplayer && !isHost && (ended || !started) ? (
+
+
+            {multiplayer && !isHost ? (
               <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
+                WAITING FOR THE HOST TO START
               </div>
             ) : (
               <button
                 onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
               >
-                {ended ? "NEW ARENA" : started ? "RESUME" : "CLICK TO PLAY"}
+                ENTER ARENA
               </button>
             )}
+            <div>
+              <button
+                onClick={() => setPicking(false)}
+                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
+              >
+                BACK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!locked || ended) && !picking && (
+        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
+          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
+
+
+            {!started && !ended && !paused && (
+              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+            )}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
+            </h1>
+            {(gameOver || status.won || paused) && (
+              <p className="mt-2 text-sm opacity-70">
+                {gameOver
+                  ? `You fell on wave ${status.wave} with ${score} kills.`
+                  : status.won
+                    ? `All ${WAVES.length} waves survived · ${score} kills.`
+                    : `Wave ${status.wave} · ${score} kills so far.`}
+              </p>
+            )}
+            {!paused && (
+              <p className="mt-4 text-xs leading-relaxed opacity-60">
+                {touchUi
+                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · USE for elevators · PING · hold REVIVE by a downed teammate · tap a gun to swap · pause button up top"
+                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · E in an elevator car for the floor button · middle mouse or G to ping · hold R to revive a teammate · N locks night/sunset · P to pause"}
+              </p>
+            )}
+            {multiplayer && !isHost && (ended || !started) ? (
+              <div className="mt-6">
+                <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
+                  {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
+                </div>
+                <button
+                  onClick={() => { initAudio(); setPicking(true); }}
+                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+                >
+                  CHOOSE LOADOUT
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  if (started && !ended) { start(); return; } // resume straight back in
+                  initAudio();
+                  setPicking(true);
+                }}
+                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+              >
+                {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
+              </button>
+            )}
+
 
             {ended && (() => {
               const r = run.current;
@@ -5252,70 +5966,37 @@ export function Game() {
               );
             })()}
 
-            {(!started || ended) && !paused && (
-              <div className="mt-5 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">
-                  {isHost ? "MAP" : "MAP · THE HOST PICKS"}
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-1">
-                  {([null, ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
-                    const on = isHost ? mapChoice === i : i === seed % THEMES.length;
-                    return (
-                      <button
-                        key={i ?? "random"}
-                        onClick={() => pickMap(i)}
-                        disabled={!isHost}
-                        className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
-                          on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                        } ${isHost ? "" : "cursor-default"}`}
-                      >
-                        {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 text-[9px] tracking-[0.25em] opacity-50">ABILITY · PRESS F IN GAME</div>
-                <div className="mt-2 grid grid-cols-2 gap-1">
-                  {ABILITY_IDS.map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => setAbility(id)}
-                      className={`pointer-events-auto rounded px-2 py-1 text-[10px] font-bold tracking-wider ${
-                        ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                      }`}
-                    >
-                      {ABILITIES[id].name}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug opacity-60">{ABILITIES[ability].desc}</div>
+
+            {paused && (
+              <div className="w-full max-w-sm px-4">
+                <StatSheet d={statsRef.current} cls={cls} />
+                {(activeMods.length > 0 || activePerks.length > 0) && (
+                  <div className="mt-3 text-left text-black">
+                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                      {activeMods.map((id) => (
+                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
+                          {perkBadge(id, 1)}
+                        </span>
+                      ))}
+                      {activePerks.map(({ id, label }) => (
+                        <span key={id} className="text-[10px] tracking-wider text-black">
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {paused && (activeMods.length > 0 || activePerks.length > 0) && (
-              <div className="mt-5 w-full max-w-sm px-4 py-3 text-left text-black">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  {activeMods.map((id) => (
-                    <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                      {perkBadge(id, 1)}
-                    </span>
-                  ))}
-                  {activePerks.map(({ id, label }) => (
-                    <span key={id} className="text-[10px] tracking-wider text-black">
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
 
 
             {paused || (multiplayer && ended) ? (
               <div className="mt-3">
                 <button
                   onClick={leaveGame}
-                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-2 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform hover:scale-105"
+                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
                 >
                   {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
                 </button>
@@ -5357,7 +6038,7 @@ export function Game() {
                         <div key={p.id} className="flex items-center gap-2">
                           <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                           <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">· CONNECTED</span>
+                          <span className="opacity-50">· {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}</span>
                           {p.num === myNum && <span className="opacity-50">(YOU)</span>}
                         </div>
                       ))}
@@ -5383,7 +6064,7 @@ export function Game() {
                 <button
                   onClick={() => { pinTime(null); cycleTimeMode(); }}
                   title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
-                  className="pointer-events-auto mt-4 block w-full rounded-md border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]"
+                  className={`pointer-events-auto mt-4 w-full rounded-md ${paused ? "block" : "hidden"} border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]`}
                 >
                   {timeMode === "auto"
                     ? "TIME · AUTO (SUNSET INTO NIGHT)"
@@ -5397,11 +6078,12 @@ export function Game() {
                   </div>
                 )}
                 <button
-                  onClick={() => setShowSettings((v) => !v)}
+                  onClick={() => setShowSettings(true)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
                 >
-                  {showSettings ? "HIDE SETTINGS" : "SETTINGS"}
+                  SETTINGS
                 </button>
+
                 {!paused && <button
                   onClick={() => setShowWeapons(true)}
                   className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
@@ -5419,46 +6101,70 @@ export function Game() {
               </div>
             )}
             {showSettings && (
-              <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                <QualitySettings />
-                <label className="block">
-                  FIELD OF VIEW · {fov}°
-                  <input type="range" min={50} max={110} step={1} value={fov}
-                    onChange={(e) => setFov(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sensX}
-                    onChange={(e) => setSensX(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                  <input type="range" min={0.2} max={3} step={0.1} value={sensY}
-                    onChange={(e) => setSensY(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                  <input type="range" min={0} max={1} step={0.05} value={musicVol}
-                    onChange={(e) => setMusicVol(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                  <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                    onChange={(e) => setSfxVol(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
-                <label className="block">
-                  AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
-                  <input type="range" min={0} max={1} step={0.05} value={ambVol}
-                    onChange={(e) => setAmbVol(Number(e.target.value))}
-                    className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                </label>
+              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6] sm:items-center">
+                <div className="w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
+                    <button
+                      onClick={() => setShowSettings(false)}
+                      className="rounded px-3 py-1 text-xs tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
+                    >
+                      CLOSE
+                    </button>
+                  </div>
+                  <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
+                    <QualitySettings />
+                    <label className="block">
+                      FIELD OF VIEW · {fov}°
+                      <input type="range" min={50} max={110} step={1} value={fov}
+                        onChange={(e) => setFov(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
+                      <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                        onChange={(e) => setSensX(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
+                      <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                        onChange={(e) => setSensY(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      MUSIC VOLUME · {Math.round(musicVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={musicVol}
+                        onChange={(e) => setMusicVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                        onChange={(e) => setSfxVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                    <label className="block">
+                      AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
+                      <input type="range" min={0} max={1} step={0.05} value={ambVol}
+                        onChange={(e) => setAmbVol(Number(e.target.value))}
+                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
+                    </label>
+                  </div>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="pointer-events-auto mt-5 w-full rounded bg-[#b4653f] py-3 text-sm font-bold tracking-widest active:scale-95"
+                  >
+                    DONE
+                  </button>
+                  <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
+                    SCRAPFALL · v{GAME_VERSION} · TS BUILD
+                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER</div>
+                  </div>
+                </div>
               </div>
             )}
+
           </div>
         </div>
       )}
@@ -5477,6 +6183,12 @@ const GUN_INFO: Record<Weapon, string> = {
   cryo: "Rapid icy shots that freeze enemies, slowing them to half speed.",
   flak: "Fires a shell that bursts into shrapnel when it hits something or runs out of range.",
   tesla: "Electric shots that chain lightning to 2 more nearby enemies.",
+  revolver: "Heavy six-shooter. Slow, but each round hits for 4 and punches through one enemy.",
+  minigun: "Spins up a huge wall of lead. 220 rounds, sprays wide.",
+  crossbow: "Silent bolts that pierce 2 enemies and briefly slow them.",
+  plasma: "Fans out 3 pink plasma bolts that bounce off a wall once.",
+  voidorb: "A slow drifting orb that passes through enemies and arcs lightning to 4 more.",
+  shatter: "Frozen shell that bursts into 5 icy shards, slowing everything it hits.",
 };
 
 function Spin({ children }: { children: React.ReactNode }) {
@@ -5516,6 +6228,86 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
           </div>
           <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">CLOSE</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** tiny pistol silhouette shown on pistol-mod shop cards */
+function PistolBadge() {
+  return (
+    <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
+      <path
+        d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z"
+        fill="#2b2118"
+      />
+      <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
+    </svg>
+  );
+}
+
+type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
+
+/** Brotato-style stat sheet: green above baseline, red below */
+export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
+  const [tab, setTab] = useState<"combat" | "survival">("combat");
+  const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
+  const combat: StatRow[] = [
+    { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
+    { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
+    { label: "Crit Protocol", value: `${Math.round(d.crit * 100)}%`, tone: pct(d.crit, 0) },
+    { label: "Piercing", value: `${d.pierce}`, tone: pct(d.pierce, 0) },
+    { label: "Ricochet", value: `${Math.round(d.ricochet * 100)}%`, tone: pct(d.ricochet, 0) },
+    { label: "Combustion", value: `${Math.round(d.boom * 100)}%`, tone: pct(d.boom, 0) },
+    { label: "Impact Force", value: `${Math.round(d.knock * 100)}%`, tone: pct(d.knock, 0) },
+    { label: "Ammo Capacity", value: `${Math.round(d.ammoMul * 100)}%`, tone: pct(d.ammoMul) },
+  ];
+  const survival: StatRow[] = [
+    { label: "Hull Integrity", value: `${d.maxHp}`, tone: pct(d.maxHp, 10) },
+    { label: "Armor Plating", value: `${Math.round(d.armor * 100)}%`, tone: pct(d.armor, 0) },
+    { label: "Phase Shift", value: `${Math.round(d.dodge * 100)}%`, tone: pct(d.dodge, 0) },
+    { label: "Life Siphon", value: `${Math.round(d.steal * 100)}%`, tone: pct(d.steal, 0) },
+    { label: "Nano-Regen", value: d.regen ? `x${d.regen}` : "0", tone: d.regen ? 1 : 0 },
+    { label: "Shock Thorns", value: `${Math.round(d.thorns * 100)}%`, tone: pct(d.thorns, 0) },
+    { label: "Thruster Speed", value: `${Math.round(d.speed * 100)}%`, tone: pct(d.speed) },
+    { label: "Flux Magnet", value: `${d.magnet.toFixed(1)}m`, tone: pct(d.magnet, 2) },
+    { label: "Salvage Yield", value: `${Math.round(d.greed * 100)}%`, tone: pct(d.greed) },
+    { label: "Recharge Haste", value: `${Math.round(d.haste * 100)}%`, tone: pct(d.haste, 0) },
+    { label: "Free Rerolls", value: `${d.freeRerolls}`, tone: pct(d.freeRerolls, 0) },
+  ];
+  const rows = tab === "combat" ? combat : survival;
+  return (
+    <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
+      <div className="flex items-center justify-between">
+        <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
+        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+          {CLASSES[cls].name}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {(["combat", "survival"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`pointer-events-auto flex-1 rounded px-2 py-1 text-[10px] font-bold tracking-widest ${
+              tab === t ? "bg-[#f3e6cf] text-[#2b2118]" : "bg-[#f3e6cf]/10 text-[#f3e6cf]/70"
+            }`}
+          >
+            {t === "combat" ? "COMBAT" : "SURVIVAL"}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 space-y-0.5 text-[11px]">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between">
+            <span className={r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : "text-[#f3e6cf]/75"}>
+              {r.label}
+            </span>
+            <span className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}>
+              {r.value}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
