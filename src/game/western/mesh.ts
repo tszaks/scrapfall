@@ -12,6 +12,7 @@ import * as THREE from "three";
 
 import { Geo, type Tmpl } from "../cityGeo";
 import {
+  LEAN_D,
   BALCONY_Y,
   SALOON_BALCONY,
   BELFRY_Y,
@@ -627,6 +628,97 @@ function falseFront(
   void r;
 }
 
+/** Main Street kinds: false-front businesses with a back lot */
+const STREET_KINDS = new Set(["store", "hotel", "saloon", "opera", "bank", "sheriff"]);
+/**
+ * The parts a building's back and base need to look built rather than extruded: a stone
+ * or timber sill round the foot of frame walls, a framed back door with a stoop, a stove pipe
+ * through the roof, and on some Main Street buildings a lean-to on the back wall.
+ */
+function backWorks(
+  B: BGeo,
+  b: WBld,
+  W: number,
+  D: number,
+  H: number,
+  paint: string,
+  plainL: number,
+  seed: number,
+  r: () => number,
+) {
+  const G = B.main;
+  const x0 = -W / 2;
+  const x1 = W / 2;
+  const z0 = -D;
+  const frame = b.mat === "clap" || b.mat === "board" || b.mat === "barn" || b.mat === "log" || b.mat === "white";
+  // footing: fieldstone under the sill on three sides (the boardwalk or porch covers the front)
+  if (frame) {
+    G.col(b.mat === "log" ? "#8a8272" : "#9a9080");
+    boxP(G, WL.P_STONE, x0 - 0.07, 0, z0 - 0.07, x1 + 0.07, 0.32, z0 + 0.12, false);
+    boxP(G, WL.P_STONE, x0 - 0.07, 0, z0 + 0.12, x0 + 0.05, 0.32, -0.02, false);
+    boxP(G, WL.P_STONE, x1 - 0.05, 0, z0 + 0.12, x1 + 0.07, 0.32, -0.02, false);
+    G.col("#6a5038");
+    boxP(G, WL.TIMBER, x0 - 0.04, 0.32, z0 - 0.04, x1 + 0.04, 0.44, z0 + 0.1, true, false);
+  }
+  const street = STREET_KINDS.has(b.t);
+  const home = b.t === "house" || b.t === "shack" || b.t === "ranch";
+  if (!street && !home) return;
+  // the back door, near the left corner of the back wall, framed, with a plank stoop
+  const dxc = x0 + 1.25;
+  const dw = 0.95;
+  const dh = 2.1;
+  G.col("#5a4030");
+  boxP(G, WL.TIMBER, dxc - dw / 2 - 0.12, 0, z0 - 0.08, dxc - dw / 2, dh + 0.12, z0);
+  boxP(G, WL.TIMBER, dxc + dw / 2, 0, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.12, z0);
+  boxP(G, WL.TIMBER, dxc - dw / 2 - 0.12, dh, z0 - 0.08, dxc + dw / 2 + 0.12, dh + 0.14, z0);
+  G.col(pick(["#6a3a2a", "#3a4a3a", "#5a5048", "#7a5a3a"], r)).mat(WL.P_BOARD, 0, 0);
+  G.quad(dxc + dw / 2, 0.05, z0 - 0.03, dxc - dw / 2, 0.05, z0 - 0.03, dxc - dw / 2, dh, z0 - 0.03, dxc + dw / 2, dh, z0 - 0.03, [0, 0, 0.5, 1]);
+  G.col("#2a2420");
+  boxP(G, WL.IRON, dxc + dw / 2 - 0.16, 1.0, z0 - 0.07, dxc + dw / 2 - 0.1, 1.08, z0 - 0.03);
+  G.col("#8a6a4a");
+  boxP(G, WL.DECK, dxc - 0.8, 0, z0 - 0.9, dxc + 0.8, 0.2, z0);
+  // a stove pipe up the back of the roof, with its rain cap
+  if (street || r() < 0.5) {
+    const px = x0 + W * (0.55 + r() * 0.3);
+    const pz = z0 + 1.2;
+    B.detail.col("#34302c");
+    cylP(B.detail, WL.IRON, px, H - 0.5, pz, 0.11, 2.4 + (b.roof === "gable" ? W * 0.25 : 1), 7);
+    const top = H - 0.5 + 2.4 + (b.roof === "gable" ? W * 0.25 : 1);
+    cylP(B.detail, WL.IRON, px, top, pz, 0.24, 0.06, 7, 0.02);
+  }
+  // a lean-to on the back wall (a kitchen or store room): board walls, a shed roof, a window
+  // and a door of its own
+  if (b.lean) {
+    const s = b.front === 2 ? 1 : -1;
+    const lc = ((b.leanAt ?? 0.5) - 0.5) * W * s;
+    const la = Math.max(x0 + 0.3, lc - b.lean / 2);
+    const lb = Math.min(x1 - 0.3, lc + b.lean / 2);
+    const lz = z0 - LEAN_D;
+    const hi = Math.min(H - 0.3, 3.0);
+    const lo = 2.2;
+    G.col("#a08a6c").mat(WL.P_BOARD, seed, AO);
+    wallP(G, WL.P_BOARD, lb, lz, la, lz, 0, lo);
+    G.quad(la, 0, lz, la, 0, z0, la, hi, z0, la, lo, lz, [0, 0, LEAN_D / 2, hi / 2]);
+    G.quad(lb, 0, z0, lb, 0, lz, lb, lo, lz, lb, hi, z0, [0, 0, LEAN_D / 2, hi / 2]);
+    G.col("#b8b0a4");
+    slope(G, WL.TIN, lb + 0.2, z0, la - 0.2, z0, hi + 0.08, 0, -LEAN_D - 0.3, lo - 0.08);
+    // its window (a small four-pane sash) and a plank door
+    const wx = (la + lb) / 2 + 0.8;
+    G.col("#3a2a1c");
+    boxP(G, WL.TIMBER, wx - 0.5, 0.9, lz - 0.06, wx + 0.5, 1.75, lz);
+    G.col("#6a8090").mat(WL.PAINT, 0, 0);
+    G.quad(wx + 0.42, 0.97, lz - 0.07, wx - 0.42, 0.97, lz - 0.07, wx - 0.42, 1.68, lz - 0.07, wx + 0.42, 1.68, lz - 0.07, [0, 0, 1, 1]);
+    G.col("#3a2a1c");
+    boxP(G, WL.TIMBER, wx - 0.02, 0.97, lz - 0.09, wx + 0.02, 1.68, lz - 0.07);
+    boxP(G, WL.TIMBER, wx - 0.42, 1.31, lz - 0.09, wx + 0.42, 1.35, lz - 0.07);
+    const ldx = la + 0.9;
+    G.col("#5a4636").mat(WL.P_BOARD, 0, 0);
+    G.quad(ldx + 0.45, 0.05, lz - 0.03, ldx - 0.45, 0.05, lz - 0.03, ldx - 0.45, 1.95, lz - 0.03, ldx + 0.45, 1.95, lz - 0.03, [0, 0, 0.5, 1]);
+  }
+  void paint;
+  void plainL;
+}
+
 function building(b: WBld, r: () => number): BGeo {
   const B: BGeo = { main: new Geo(), detail: new Geo(), glow: new Geo(), pools: new Geo() };
   const { W, D } = frameOf(b);
@@ -677,7 +769,7 @@ function building(b: WBld, r: () => number): BGeo {
   // upper-storey row (so they match the front)
   {
     const winCol = (k: number) => (b.mat === "barn" ? (k % 2 ? 3 : 0) : (k + uOff) % FAC_COLS);
-    const wallWindows = (ax: number, az: number, bx: number, bz: number) => {
+    const wallWindows = (ax: number, az: number, bx: number, bz: number, skipLast = false) => {
       const len = Math.hypot(bx - ax, bz - az);
       const nWin = Math.floor((len - 1.2) / 3.6);
       if (nWin < 1) return;
@@ -690,6 +782,8 @@ function building(b: WBld, r: () => number): BGeo {
         const y0 = st * STOREY + 0.8;
         const y1 = y0 + 2.0;
         for (let k = 0; k < nWin; k++) {
+          // (the ground-floor bay by the back door has the door instead)
+          if (skipLast && st === 0 && k === nWin - 1) continue;
           const tc = ((k + 0.5) / nWin) * len;
           const c = winCol(k + st);
           const uv = [c * 0.25 + 0.05, 0.295, c * 0.25 + 0.2, 0.465] as const;
@@ -700,7 +794,7 @@ function building(b: WBld, r: () => number): BGeo {
       }
     };
     wallWindows(x1, 0, x1, z0);
-    wallWindows(x1, z0, x0, z0);
+    wallWindows(x1, z0, x0, z0, STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch");
     wallWindows(x0, z0, x0, 0);
     // a painted advertisement on one tall side wall of the bigger stores
     if (b.storeys >= 2 && D >= 14 && b.sign >= 0 && b.mat !== "adobe") {
@@ -736,6 +830,9 @@ function building(b: WBld, r: () => number): BGeo {
       boxP(G, WL.P_STONE, cx - 0.35, 0, -0.1, cx + 0.35, H, 0.22); // pilasters
     boxP(G, WL.P_STONE, x0 - 0.13, 0, -0.13, x1 + 0.13, 0.5, 0.25); // plinth, proud of the pilasters
   }
+
+  // ---- the lived-in back and the footings ----
+  backWorks(B, b, W, D, H, paint, plainL, seed, r);
 
   // ---- the roof ----
   const eave = 0.45;
@@ -1881,13 +1978,49 @@ function templates() {
       beam(d, x - 0.06, 0.22, z, x + 0.06, 0.22, z, 0.44, WL.IRON);
   });
   make("woodpile", (d) => {
-    d.col("#9a7a52");
-    for (let row = 0; row < 4; row++)
-      for (let i = 0; i < 7 - row; i++) {
-        const x = -1.05 + i * 0.32 + row * 0.16;
-        cylP(d, WL.TIMBER, x, 0, 0, 0.001, 0.001, 3, 0.001, false);
-        beam(d, x, 0.15 + row * 0.27, -0.5, x, 0.15 + row * 0.27, 0.5, 0.28);
+    // split firewood stacked between two end posts: round-ish logs with pale cut ends
+    const log = (x: number, y: number, rad: number, len: number) => {
+      const seg = 6;
+      const ends: [number, number][] = [];
+      for (let i = 0; i < seg; i++) {
+        const a = (i / seg) * Math.PI * 2 + r() * 0.3;
+        ends.push([x + Math.cos(a) * rad, y + Math.sin(a) * rad]);
       }
+      const bark = pick(["#6a5038", "#7a5a3e", "#5a4430"], r);
+      for (let i = 0; i < seg; i++) {
+        const [ax, ay] = ends[i]!;
+        const [bx, by] = ends[(i + 1) % seg]!;
+        d.col(bark).mat(WL.TIMBER);
+        d.quad(bx, by, -len / 2, ax, ay, -len / 2, ax, ay, len / 2, bx, by, len / 2, [0, 0, 0.3, len]);
+      }
+      // the sawn ends: pale wood
+      d.col(pick(["#c8a878", "#d8b888", "#b89868"], r)).mat(WL.PAINT);
+      for (const [z, sgn] of [
+        [len / 2, 1],
+        [-len / 2, -1],
+      ] as const) {
+        for (let i = 0; i < seg; i++) {
+          const [ax, ay] = ends[i]!;
+          const [bx, by] = ends[(i + 1) % seg]!;
+          if (sgn > 0) {
+            d.v(x, y, z, 0, 0, 1, 0.5, 0.5);
+            d.v(ax, ay, z, 0, 0, 1, 0, 0);
+            d.v(bx, by, z, 0, 0, 1, 1, 0);
+          } else {
+            d.v(x, y, z, 0, 0, -1, 0.5, 0.5);
+            d.v(bx, by, z, 0, 0, -1, 1, 0);
+            d.v(ax, ay, z, 0, 0, -1, 0, 0);
+          }
+        }
+      }
+    };
+    for (let row = 0; row < 5; row++)
+      for (let i = 0; i < 8 - (row > 2 ? 1 : 0); i++) {
+        const x = -0.98 + i * 0.27 + (row % 2) * 0.13 + (r() - 0.5) * 0.03;
+        log(x, 0.12 + row * 0.22, 0.1 + r() * 0.03, 0.9 + r() * 0.12);
+      }
+    d.col("#6a5038");
+    for (const x of [-1.18, 1.1]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 1.3, 0.05);
   });
   make("outhouse", (d) => {
     d.col("#ffffff").mat(WL.P_BOARD);

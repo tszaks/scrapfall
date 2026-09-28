@@ -115,7 +115,14 @@ export type WBld = {
   roof: "gable" | "shed" | "flat" | "hip";
   /** exists only outside the solo square (co-op only content) */
   coop?: boolean;
+  /** a lean-to annex on the back wall: its width (m), 0 or absent for none */
+  lean?: number;
+  /** the lean-to's centre along the back wall, as a fraction of the width from the left */
+  leanAt?: number;
 };
+
+/** depth of a lean-to annex behind a building */
+export const LEAN_D = 2.8;
 
 export type WPropKind =
   | "barrel"
@@ -799,6 +806,19 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         ff: p.ff ?? (mat === "adobe" ? 0 : ((1 + Math.floor(rand() * 3)) as 1 | 2 | 3)),
         roof: mat === "adobe" ? "flat" : rand() < 0.7 ? "gable" : "shed",
       });
+      // a lean-to on the back of some (a kitchen, a store room): collision behind the lot
+      {
+        const made = buildings[buildings.length - 1]!;
+        if (p.t !== "saloon" && p.t !== "stable" && p.w >= 10 && rand() < 0.5) {
+          const lw = Math.min(p.w - 2, 4 + Math.round(rand() * 4));
+          const lat = 0.2 + rand() * 0.6;
+          made.lean = lw;
+          made.leanAt = lat;
+          const cxw = made.x0 + (made.x1 - made.x0) * lat;
+          if (north) markSolid(cxw - lw / 2, made.z0 - LEAN_D, cxw + lw / 2, made.z0, 3);
+          else markSolid(cxw - lw / 2, made.z1, cxw + lw / 2, made.z1 + LEAN_D, 3);
+        }
+      }
       // boardwalk in front (walkable deck), hitching rail + trough on the street edge
       setGround(
         x,
@@ -873,7 +893,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       if (porch > 0)
         prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
       // back lot clutter
-      const back = north ? bz0 - 3 : bz1 + 3;
+      const backOff = buildings[buildings.length - 1]!.lean ? 4.4 : 3;
+      const back = north ? bz0 - backOff : bz1 + backOff;
       if (rand() < 0.35)
         solidProp(
           "outhouse",
@@ -886,6 +907,17 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         );
       else if (rand() < 0.4) prop("woodpile", x + p.w / 2, back, rand() * 0.3, 1);
       else if (rand() < 0.3) prop("barrels", x + p.w / 2, back, rand(), 1);
+      // by the back door: a rain barrel, and the store's empties stacked up
+      {
+        const wz = north ? bz0 - 0.9 : bz1 + 0.9;
+        const bxw = x + (north ? p.w - 1.1 : 1.1);
+        prop("barrel", bxw, wz, rand() * 6.28, 1);
+        if (p.t === "store" && rand() < 0.6) {
+          const cxw = x + p.w * (0.35 + rand() * 0.3);
+          const czw = north ? bz0 - (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1) : bz1 + (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1);
+          prop(rand() < 0.5 ? "crates" : "crate", cxw, czw, rand() * 0.6, 0.9);
+        }
+      }
       x += p.w + gap;
     }
   };
@@ -1142,7 +1174,6 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     const [rbx, rbz] = at2(side * (w / 2 - 0.5), 0.6);
     prop("barrel", rbx, rbz, rand() * 6.28, 1);
-    posts.push({ x: rbx, z: rbz, r: 0.35, shot: true });
     if (rand() < 0.55) {
       const [gx, gz] = at2(-side * (w / 2 - 2), 7 + rand() * 2);
       prop("garden", gx, gz, rot + Math.PI / 2, 1);
@@ -1647,6 +1678,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     bench: [1.7, 0.5],
     barrels: [1.3, 1.3],
     crates: [1.5, 1.5],
+    crate: [0.85, 0.85],
+    barrel: [0.7, 0.7],
     sacks: [1.1, 1.1],
     woodpile: [2.2, 1.1],
     hay: [1.2, 0.8],
@@ -1665,10 +1698,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // per barrel or porch post left invisible walls metres wide. Bigger ones keep their cells.
   const THIN = new Set<WPropKind>([
     "saguaro", "pear", "barrelcactus", "deadtree", "pole", "streetlamp", "crossbuck", "horse",
-    "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross",
+    "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross", "barrel", "crate",
   ]);
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
-  const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks"]);
+  const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks", "barrel", "crate"]);
   const thin = (x: number, z: number, rot: number, w: number, d: number, shot = false) => {
     const long = Math.max(w, d);
     const short = Math.min(w, d);
