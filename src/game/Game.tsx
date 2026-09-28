@@ -1637,7 +1637,7 @@ function World({
   /** active overtime condition, null during the normal 12 waves */
   const mutator = useRef<Mutator | null>(null);
   /** set inside the frame loop so network messages can trigger a blast too */
-  const hazardBlow = useRef<(i: number) => void>(() => {});
+  const hazardBlow = useRef<(i: number, visualOnly?: boolean) => void>(() => {});
   // shootable map hazards (fuel drums, cryo condensers, spore pods, ...)
   const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
     Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
