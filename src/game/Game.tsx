@@ -1571,6 +1571,8 @@ function World({
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  /** active overtime condition, null during the normal 12 waves */
+  const mutator = useRef<Mutator | null>(null);
   // shootable map hazards (fuel drums, cryo condensers, spore pods, ...)
   const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
     Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
