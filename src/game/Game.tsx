@@ -7859,7 +7859,7 @@ export function Game() {
       <PadLayer menus={!locked || ended} />
       <UiStyles />
       <Canvas
-        shadows="soft"
+        shadows="percentage"
         dpr={liveDpr()}
         gl={{ powerPreference: "high-performance", antialias: antialiasAtLoad }}
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}
