@@ -70,3 +70,41 @@ export function wheelRailPosts(w:Wheel) {
  }
  return out;
 }
+
+const cabinU = new Float64Array(CABINS), cabinY = new Float64Array(CABINS);
+let cachedWheel: Wheel | null = null, cachedTime = NaN;
+/** Moving visible cabin/frame geometry also stops camera booms and shots. Allocation free. */
+export function wheelSolid(p: {x:number;y:number;z:number}) {
+ const w=wheelWorld.wheel;
+ if(!w||Math.abs(p.y-w.y)>w.r+3.2||Math.abs(p.x-w.x)>w.r+6||Math.abs(p.z-w.z)>w.r+6)return false;
+ const dx=p.x-w.x,dz=p.z-w.z,c=Math.cos(w.rot),s=Math.sin(w.rot);
+ const u=dx*c-dz*s,n=dx*s+dz*c,y=p.y-w.y;
+ if(Math.abs(n)>4.8)return false;
+ const radius=Math.hypot(u,y),angle=Math.atan2(y,u),time=trafficClock.t;
+ if(cachedWheel!==w||cachedTime!==time) {
+   cachedWheel=w;cachedTime=time;
+   for(let i=0;i<CABINS;i++){const t=wheelAngle(time)+i*TAU/CABINS;cabinU[i]=Math.cos(t)*w.r;cabinY[i]=Math.sin(t)*w.r;}
+ }
+ // The hub, rims and spokes (the two spoke planes taper inward at the hub).
+ if(radius<1.4&&Math.abs(n)<1.2)return true;
+ if(Math.abs(Math.abs(n)-2.4)<.19&&Math.abs(radius-w.r)<.19)return true;
+ if(Math.abs(Math.abs(n)-2.4)<.11&&Math.abs(radius-w.r*.86)<.11)return true;
+ const spokeAngle=((angle-wheelAngle(time)+TAU*100)%(TAU/CABINS));
+ const spokeDistance=Math.min(spokeAngle,TAU/CABINS-spokeAngle)*radius;
+ if(radius<w.r&&spokeDistance<.11&&Math.abs(Math.abs(n)-2.4*(.3+.7*radius/w.r))<.11)return true;
+ for(let i=0;i<CABINS;i++) {
+   const a=u-cabinU[i]!,h=y-cabinY[i]!;
+   if(Math.abs(a)>1.18)continue;
+   // Axle between rims, roof and floor; cabin is hollow above its waist panels.
+   if(Math.abs(a)<.08&&Math.abs(h)<.08&&Math.abs(n)<2.4)return true;
+   if(Math.abs(a)<=1.16&&Math.abs(n)<=.96&&h>=-.95&&h<=-.79)return true;
+   if(Math.abs(a)<=.96&&Math.abs(n)<=.76&&h>=-2.92&&h<=-2.78)return true;
+   if(h>=-2.83&&h<=-1.81) {
+     if(Math.abs(Math.abs(a)-.95)<.06&&Math.abs(n)<=.81)return true;
+     if(Math.abs(a)<=.96&&Math.abs(n+.75)<.06)return true;
+   }
+   if(h>=-2.76&&h<=-.84&&Math.abs(Math.abs(a)-.95)<.06&&Math.abs(Math.abs(n)-.75)<.06)return true;
+   if(h>=-.96&&h<=.05&&Math.abs(Math.abs(a)-.85)<.07&&Math.abs(n)<.07)return true;
+ }
+ return false;
+}

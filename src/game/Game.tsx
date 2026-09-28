@@ -1,4 +1,4 @@
-import { wheelRide, wheelWorld, wheelEye, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
+import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
 import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
 import { getViewMode } from "./viewMode";
 import { setWorldMuzzle } from "./projectiles";
@@ -2529,6 +2529,7 @@ function World({
   const bobAmt = useRef(0);
   /** smoothed ground height under the player (decks, stairs, bowls on maps with relief) */
   const camGround = useRef(0);
+  const wheelHint = useRef(false);
 
   // what a ping can land on (read by the SquadDriver)
   useEffect(() => {
@@ -3876,7 +3877,7 @@ function World({
   };
 
   const outOfBounds = (p: { x: number; y: number; z: number }) =>
-    bulletBlocked(p.x, p.y, p.z) ??
+    wheelSolid(p) || (bulletBlocked(p.x, p.y, p.z) ??
     // the beach's ground decides shots itself (they fly over railings, stop on decks and the
     // sea); every other map: under the ground or into a solid cell
     // (alpine: solids have a height, so shots fly over walls and mountain slopes they clear)
@@ -3884,7 +3885,7 @@ function World({
     (shotStop(blocks, p.x, p.y, p.z) ||
       Math.abs(p.x) > HALF ||
       Math.abs(p.z) > HALF ||
-      (big !== null && hitsTraffic(p.x, p.y, p.z)));
+      (big !== null && hitsTraffic(p.x, p.y, p.z))));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) =>
     playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
@@ -4239,6 +4240,11 @@ function World({
     }
 
     if (isBeach(city)) {
+      const wasAboard = wheelRide.cabin >= 0;
+      const line = wheelLoading(city.beach.wheel);
+      const near = Math.hypot(cam.position.x-line.x, cam.position.z-line.z)<4 && Math.abs(cam.position.y-line.y-EYE)<1;
+      if (near && !wheelHint.current && !wasAboard && !spectating) showToast("FERRIS WHEEL · WAIT ON THE YELLOW LINE TO RIDE");
+      wheelHint.current = near || wasAboard;
       if (spectating && wheelRide.cabin >= 0) {
         leaveWheel(cam.position, city.beach.wheel);
         camGround.current = cam.position.y - EYE;
@@ -4247,6 +4253,7 @@ function World({
         !n || n.role === "host" ? 1 : (slots.current[n.self] ?? 2), !!n)) {
         slide.current.x = 0; slide.current.z = 0;
       }
+      if (!wasAboard && wheelRide.cabin >= 0) showToast("FERRIS WHEEL · ENJOY THE FULL CIRCUIT");
     }
 
     // minimap feed (the HUD reads it)
