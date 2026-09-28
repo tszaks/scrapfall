@@ -1845,7 +1845,7 @@ function World({
         else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
       }
       // a hazard someone else shot: show the blast without re-applying the damage
-      if (m.type === "haz") hazardBlow.current(Number(m.i));
+      if (m.type === "haz") hazardBlow.current(Number(m.i), !isH);
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
 
