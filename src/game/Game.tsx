@@ -401,6 +401,130 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
+/** Small scatter prop that belongs to the map it sits in. */
+function Decor({ theme, seed }: { theme: Theme; seed: number }) {
+  const s = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  // forests: mushroom clusters and mossy stones
+  if (s === "tree" || s === "pagoda") {
+    const cap = s === "tree" ? "#c8543a" : "#f0a0b8";
+    return (
+      <group>
+        <mesh position-y={0.1} receiveShadow>
+          <sphereGeometry args={[0.42, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.1 + seed * 6;
+          const h = 0.26 + ((i + seed) % 1) * 0.22;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.34, 0, Math.sin(a) * 0.34]}>
+              <mesh position-y={h / 2} castShadow>
+                <cylinderGeometry args={[0.055, 0.075, h, 6]} />
+                <meshLambertMaterial color="#e8dcc4" flatShading />
+              </mesh>
+              <mesh position-y={h} castShadow>
+                <sphereGeometry args={[0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshLambertMaterial color={cap} flatShading />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // ice fields: frost shards pushing out of the snow
+  if (s === "crystal" || s === "berg") {
+    return (
+      <group>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.3 + seed * 5;
+          const h = 0.5 + ((i * 7 + seed * 10) % 5) * 0.14;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.3, h / 2, Math.sin(a) * 0.3]} rotation-z={Math.cos(a) * 0.25} castShadow>
+              <coneGeometry args={[0.13, h, 5]} />
+              <meshLambertMaterial color="#e8f7ff" flatShading emissive="#5fd8ff" emissiveIntensity={0.12} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // volcanic and dry maps: cracked slabs with an ember seam
+  if (s === "basalt" || s === "monument" || s === "butte") {
+    return (
+      <group>
+        <mesh position-y={0.14} rotation-y={seed * 3} castShadow receiveShadow>
+          <boxGeometry args={[0.9, 0.28, 0.7]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={0.3} rotation-x={-Math.PI / 2}>
+          <planeGeometry args={[0.7, 0.09]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // deep sea: kelp fronds swaying off a rock
+  if (s === "coral") {
+    return (
+      <group>
+        <mesh position-y={0.12} receiveShadow>
+          <dodecahedronGeometry args={[0.32, 0]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.2 + seed * 4;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.22, 0.6, Math.sin(a) * 0.22]} rotation-z={Math.cos(a) * 0.35} castShadow>
+              <cylinderGeometry args={[0.03, 0.07, 1.1, 5]} />
+              <meshLambertMaterial color={theme.blocks[0]} flatShading emissive={glow} emissiveIntensity={0.15} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // neon city: a low conduit box with a lit strip
+  if (s === "server") {
+    return (
+      <group>
+        <mesh position-y={0.22} castShadow receiveShadow>
+          <boxGeometry args={[0.7, 0.44, 0.5]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.26]}>
+          <boxGeometry args={[0.5, 0.06, 0.03]} />
+          <meshBasicMaterial color={theme.grid[0]} fog={false} />
+        </mesh>
+        <mesh position-y={0.58} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.13, 0.03, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // industrial: a leaking pipe stub with a puddle
+  return (
+    <group>
+      <mesh position-y={0.3} rotation-z={Math.PI / 2} castShadow>
+        <cylinderGeometry args={[0.13, 0.13, 0.8, 8]} />
+        <meshLambertMaterial color={theme.blocks[1]} flatShading />
+      </mesh>
+      <mesh position-y={0.02} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.45, 14]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.45} fog={false} />
+      </mesh>
+    </group>
+  );
+}
+
 const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
