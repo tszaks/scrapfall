@@ -3336,6 +3336,7 @@ export function Game() {
   const [banner, setBanner] = useState(false);
   /** overtime past the map boss, plus the round condition it rolled */
   const endlessRef = useRef(false);
+  const goingOvertime = useRef(false);
   const [mutId, setMutId] = useState<Mutator["id"]>("none");
   const [highWave, setHighWave] = useState(0);
   useEffect(() => setHighWave(readHighWave()), []);
