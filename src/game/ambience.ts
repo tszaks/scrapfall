@@ -1286,9 +1286,13 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
   pier(R) {
     bed(R, { name: "surf", src: "brown", filters: [{ type: "lowpass", f: 800, q: 0.5 }], gain: 0.26, spot: "shore", ref: 25, range: 450, level: always, swell: [0.35, 1, 2.5, 6] });
     bed(R, { name: "surf hiss", src: "white", filters: [{ type: "bandpass", f: 2600, q: 0.5 }], gain: 0.05, spot: "shore", ref: 15, range: 180, level: always, swell: [0.15, 1, 2.5, 6] });
-    windBed(R, "sea breeze", 0.08, 0.9, (e) => 0.6 + e.hazard * 0.4);
-    crowdBed(R, "boardwalk crowd", 0.1, "crowd", 12, 110, (e) => (e.night ? 0.7 : 1) * (1 - e.hazard * 0.4));
-    tuneLayer(R, "carnival organ", "carnival", 0.9, 10, 130, (e) => 1 - e.hazard * 0.5, calliope(R));
+    // the ocean is never out of earshot in a beach town: a low far-off surf floor everywhere,
+    // and a town bed (traffic on PCH, the promenade) away from the water
+    bed(R, { name: "far surf", src: "brown", filters: [{ type: "lowpass", f: 380, q: 0.5 }], gain: 0.11, level: always, swell: [0.5, 1, 3, 8] });
+    bed(R, { name: "town wash", src: "pink", filters: [{ type: "bandpass", f: 520, q: 0.6 }, { type: "lowpass", f: 1800 }], gain: 0.05, level: (e) => (e.night ? 0.75 : 1), swell: [0.6, 1, 3, 8] });
+    windBed(R, "sea breeze", 0.1, 0.9, (e) => 0.6 + e.hazard * 0.4);
+    crowdBed(R, "boardwalk crowd", 0.16, "crowd", 14, 150, (e) => (e.night ? 0.7 : 1) * (1 - e.hazard * 0.4));
+    tuneLayer(R, "carnival organ", "carnival", 1.8, 18, 200, (e) => 1 - e.hazard * 0.5, calliope(R));
     bed(R, { name: "wheel motor", src: { osc: "sawtooth", f: [48, 96.5] }, filters: [{ type: "lowpass", f: 260, q: 1.5 }], gain: 0.06, spot: "wheel", ref: 6, range: 45, level: always });
     ev(R, "breaker", [3.5, 8], "shore", always, (o, t) => waveCrash(R, o, t, 0.3), 160);
     ev(R, "gulls", [7, 20], "far", (e) => (e.night ? 0.1 : 1), (o, t) => gull(R, o, t));

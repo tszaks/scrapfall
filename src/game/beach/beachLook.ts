@@ -111,7 +111,7 @@ export function beachLook(time: TimeOfDay): BeachLook {
       env: 0.9,
       wheel: 2.4,
       hazardFog: [5, 80],
-      hazardCol: "#202838",
+      hazardCol: "#56607a",
     };
   }
   cache[time] = out;

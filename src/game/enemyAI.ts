@@ -2,7 +2,7 @@
 // rockets, blasts). Every attack goes through a visible wind-up first; the wind-up state is
 // written to `e.vis` so co-op guests draw exactly the same telegraph (see enemyKinds.ts).
 
-import { HALF, NAV_SCALE, blocked, clearLine, toNav, type Block, type NavGrid } from "./level";
+import { HALF, NAV_SCALE, blocked, clearLine, toNav, type Block, type NavGrid, fineStep, type FineField } from "./level";
 import { climbable, groundY } from "./terrain";
 import {
   NEW_STATS, FLYERS, PH_ACT, PH_AFTER, PH_IDLE, PH_WIND, packVis, type NewKind,
@@ -93,6 +93,8 @@ export type AICtx = {
   enemies: Bot[];
   rand: () => number;
   fieldFor: (t: Target) => Float32Array | undefined;
+  /** stacked-ground maps: a fine 2 m field round the target (level.ts fineField) */
+  fineFor?: (t: Target) => FineField | undefined;
   hurtTarget: (t: Target, dmg: number, kx?: number, kz?: number) => void;
   shoot: (x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, dmg: number, size: number) => void;
   ords: Ord[];
@@ -139,6 +141,9 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
 /** Next point on the way to the target: straight if the line is clear, else the flow field. */
 function waypoint(e: Bot, t: Target, ctx: AICtx) {
   if (clearLine(ctx.blocks, e.x, e.z, t.x, t.z, rad(e) * 0.9)) return { x: t.x, z: t.z };
+  const ff = ctx.fineFor?.(t);
+  const fs = ff ? fineStep(ff, e.x, e.z) : null;
+  if (fs) return fs;
   const dist = ctx.fieldFor(t);
   if (!dist) return { x: t.x, z: t.z };
   return descend(ctx.solid, dist, e.x, e.z, null) ?? { x: t.x, z: t.z };
@@ -185,7 +190,7 @@ function descend(
     }
   }
   const k = bi * n + bj;
-  if (bi === ci && bj === cj && bias) return null;
+  if (bi === ci && bj === cj && (bias || best === 0)) return null; // at the target's cell: go straight
   return { x: nav.px[k]!, z: nav.pz[k]! };
 }
 
