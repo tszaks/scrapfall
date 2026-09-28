@@ -61,7 +61,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   mine: { name: "CRYO MINE", color: "#9fe8ff" },
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
-const TURRET_LIFE = 15;
+const TURRET_LIFE = 30;
 
 type Enemy = {
   kind: Kind;
@@ -1331,6 +1331,7 @@ function World({
   net,
   remotes,
   dead,
+  waveNum,
   players,
   msgSink,
   health,
@@ -1368,6 +1369,7 @@ function World({
   net: NetHandle | null;
   remotes: React.MutableRefObject<Map<string, RemoteState>>;
   dead: boolean;
+  waveNum: number;
   players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
   health: number;
@@ -1778,6 +1780,14 @@ function World({
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // every player (host and guests) gets a full sidearm when a new wave starts
+  useEffect(() => {
+    if (waveNum < 1) return;
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    onAmmo(ammo.current[weapon.current]);
+    syncInv();
+  }, [waveNum]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
 
   useEffect(() => {
@@ -1826,7 +1836,7 @@ function World({
     // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
     const waveMul = 1.25 + 0.1 * (n - 1);
     const enemyMul = waveMul * (1 + 0.6 * extra);
-    const lootMul = 1 + 0.65 * extra;
+    const lootMul = 1 + 1.1 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
@@ -1902,7 +1912,7 @@ function World({
     }
     // health: guaranteed pack every wave in co-op, every other wave solo
     const healGap = extra > 0 ? 1 : 2;
-    if (n >= 2 && n - lastHealWave.current >= healGap) {
+    if (n >= (extra > 0 ? 1 : 2) && n - lastHealWave.current >= healGap) {
       const h = randomSpawn(blocks, rand);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
@@ -2111,11 +2121,8 @@ function World({
       if (ck.kind === "mine" && mines.current.length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
-          if (w === "pistol") return;
-          ammo.current[w] = Math.min(
-            Math.round(GUNS[w].ammo * stats.current.ammoMul),
-            ammo.current[w] + Math.round(GUNS[w].ammo * 0.5),
-          );
+          const cap = Math.round((w === "pistol" && stats.current.extmag ? 220 : GUNS[w].ammo) * stats.current.ammoMul);
+          ammo.current[w] = Math.min(cap, ammo.current[w] + Math.round(cap * 0.5));
         });
         onAmmo(ammo.current[weapon.current]);
         syncInv();
@@ -3358,6 +3365,13 @@ export function Game() {
 
   const multiplayer = !!net;
   const dead = health <= 0;
+  const [deathMsg, setDeathMsg] = useState(false);
+  useEffect(() => {
+    if (!dead) { setDeathMsg(false); return; }
+    setDeathMsg(true);
+    const t = window.setTimeout(() => setDeathMsg(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [dead]);
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
@@ -3453,7 +3467,7 @@ export function Game() {
   // ---- shop: open during the break after a cleared wave ----
   // NOTE: the break itself does not depend on pointer lock, so pausing and
   // resuming keeps the same cards and remembers the ones already bought.
-  const shopBreak = started && !ended && !dead && status.remaining === 0 && fought === status.wave && status.wave < WAVES.length;
+  const shopBreak = started && !ended && (multiplayer || !dead) && status.remaining === 0 && fought === status.wave && status.wave < WAVES.length;
   const shopOpen = shopBreak && locked;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
@@ -3504,7 +3518,7 @@ export function Game() {
   patchRef.current = () => {
     if (!shopOpen) return;
     if (shards < PATCH_COST) { playSfx("deny"); return; }
-    if (health >= maxHp) { playSfx("deny"); return; }
+    if (health <= 0 || health >= maxHp) { playSfx("deny"); return; }
     setShards((s) => s - PATCH_COST);
     setHealth((h) => Math.min(maxHp, h + 5));
     playSfx("buy");
@@ -3518,9 +3532,9 @@ export function Game() {
     setShards((s) => s - cost);
     setBought((b) => [...b, i]);
     playSfx("buy");
-    if (id === "heal") { setHealth((h) => Math.min(maxHp, h + 5)); return; }
+    if (id === "heal") { setHealth((h) => (h > 0 ? Math.min(maxHp, h + 5) : h)); return; }
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
-    if (id === "maxhp") setHealth((h) => h + 2);
+    if (id === "maxhp") setHealth((h) => (h > 0 ? h + 2 : h));
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -3619,6 +3633,7 @@ export function Game() {
           net={net}
           remotes={remotes}
           dead={dead}
+          waveNum={status.wave}
           players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
           health={health}
@@ -3914,7 +3929,7 @@ export function Game() {
           +3 HEALTH
         </div>
       )}
-      {multiplayer && dead && !ended && locked && (
+      {multiplayer && dead && deathMsg && !ended && locked && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
