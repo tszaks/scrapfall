@@ -1517,6 +1517,9 @@ function World({
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
+  onMutator: (id: Mutator["id"]) => void;
+  /** overtime: keep spawning waves past the map boss instead of winning */
+  endless: React.MutableRefObject<boolean>;
 
 }) {
 
