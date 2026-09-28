@@ -112,6 +112,12 @@ export function spec(): Spec {
   return SPEC;
 }
 
+/** graphics quality: the fraction of short-lived particles actually emitted (quality.ts) */
+let particleK = 1;
+export function setParticleScale(k: number) {
+  particleK = Math.max(0, Math.min(1, k));
+}
+
 export class SegPool {
   readonly cap: number;
   n = 0;
@@ -177,6 +183,8 @@ export class SegPool {
 
   emit(s: Spec) {
     if (this.n >= this.cap) return -1;
+    // lower quality tiers thin the spray (tracers and one-shot flashes always draw)
+    if (particleK < 1 && !s.once && Math.random() > particleK) return -1;
     const i = this.n++;
     const i3 = i * 3;
     this.p[i3] = s.x; this.p[i3 + 1] = s.y; this.p[i3 + 2] = s.z;

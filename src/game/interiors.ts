@@ -877,6 +877,11 @@ function roomsParam() {
   return new URLSearchParams(window.location.search).get("rooms") === "0" ? 0 : 1;
 }
 
+/** the graphics quality turns the rooms on or off (`?rooms=0` keeps them off) */
+export function setRoomsEnabled(on: boolean) {
+  interiorUniforms.uRoomOn.value = on ? roomsParam() : 0;
+}
+
 export function addInteriorUniforms(sh: { uniforms: Record<string, THREE.IUniform> }) {
   interiorUniforms.uRooms.value = roomAtlas();
   sh.uniforms["uRooms"] = interiorUniforms.uRooms;

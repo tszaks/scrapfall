@@ -5,7 +5,8 @@
 //   drips     - drops running off the awning edges, splashing on the pavement below
 //   sky       - an overcast deck that hides the stars and glows with the city's light
 //   reflection- the wet streets' mirror: the scene rendered upside down about the street
-//               plane into a half-resolution HDR target (planar reflection), only while the
+//               plane into a half-resolution HDR target (planar reflection; lower quality
+//               tiers: smaller and refreshed less often, or off), only while the
 //               streets are wet. The facade shader (cityWeather.ts, WET_GLSL) blurs and stretches it.
 //
 // Planar reflection was picked over screen-space reflections: SSR needs a depth + colour
@@ -23,6 +24,7 @@ import type { TimeOfDay } from "./lighting";
 import { liveLook, tod, todSmooth } from "./timeOfDay";
 import { blackTexture, resetWeather, tickWeather, weather, wetUniforms } from "./cityWeather";
 import { player as accessPlayer } from "./access/world";
+import { quality } from "./quality";
 
 const BOX = new THREE.Vector3(38, 26, 38);
 const STREAKS = 10000;
@@ -387,12 +389,14 @@ export function CityRain({
       }
       // the mirror refreshes every other frame (60 Hz at 120 fps): the facade samples it
       // through the projector it was rendered with, so a frame-old image still lines up
+      // (lower quality tiers refresh it less often, at a lower resolution: quality.ts)
+      const qs = quality().spec;
       refl.frame++;
-      if (refl.frame % 2 === 1 && wetUniforms.uReflOn.value > 0) return;
+      if (refl.frame % qs.reflEvery !== 0 && wetUniforms.uReflOn.value > 0) return;
       const c = cam as THREE.PerspectiveCamera;
       renderer.getDrawingBufferSize(size);
-      const w = Math.max(16, Math.round(size.x / 2));
-      const h = Math.max(16, Math.round(size.y / 2));
+      const w = Math.max(16, Math.round(size.x * qs.reflScale));
+      const h = Math.max(16, Math.round(size.y * qs.reflScale));
       if (refl.rt.width !== w || refl.rt.height !== h) refl.rt.setSize(w, h);
       camPos.setFromMatrixPosition(c.matrixWorld);
       if (camPos.y < PLANE_Y + 0.05) {
@@ -504,7 +508,10 @@ export function CityRain({
     wetUniforms.uWet.value = wet;
     wetUniforms.uRainK.value = rain;
     wetUniforms.uRainT.value = t;
-    refl.on = REFL_ALLOWED && wet > 0.02;
+    const qs = quality().spec;
+    refl.on = REFL_ALLOWED && wet > 0.02 && qs.reflScale > 0;
+    // lower quality tiers draw fewer streaks (the same field, thinned)
+    streaks.g.instanceCount = Math.round(STREAKS * qs.rain);
     const g0 = group.current;
     // (no rain indoors: the lobbies, cars and stairwells of the access buildings)
     if (g0) g0.visible = rain > 0.001 && accessPlayer.zone !== 1;

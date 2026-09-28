@@ -81,7 +81,10 @@ import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, type PingWorld } from "./ping";
 import { REVIVE_HP, reviveInterrupted, squad } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { QualityGovernor, liveDpr } from "./QualityGovernor";
 import { Prewarm } from "./Prewarm";
+import { antialiasAtLoad } from "./quality";
+import { QualitySettings } from "./QualitySettings";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
@@ -4830,7 +4833,8 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
-      <Canvas shadows="percentage" dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows="percentage" dpr={liveDpr()} gl={{ powerPreference: "high-performance", antialias: antialiasAtLoad }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+        <QualityGovernor />
         <StableWorld
           blocks={blocks}
           enemies={enemies}
@@ -5377,6 +5381,7 @@ export function Game() {
             )}
             {showSettings && (
               <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
+                <QualitySettings />
                 <label className="block">
                   FIELD OF VIEW · {fov}°
                   <input type="range" min={50} max={110} step={1} value={fov}

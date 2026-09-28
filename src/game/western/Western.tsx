@@ -3,6 +3,7 @@
 // a single splat-blended plane; chunks cull by frustum and their prop layer by distance.
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useSunShadow } from "../quality";
 import * as THREE from "three";
 
 import type { TimeOfDay } from "../lighting";
@@ -572,12 +573,6 @@ function mergeGeos(list: THREE.BufferGeometry[]) {
   return out;
 }
 
-/** `?shadows=0` forces shadows off, `?shadows=1` keeps them on (no auto fallback). */
-function shadowParam(): boolean | null {
-  if (typeof window === "undefined") return null;
-  const v = new URLSearchParams(window.location.search).get("shadows");
-  return v === "0" ? false : v === "1" ? true : null;
-}
 const SUN_RANGE = 90;
 const SUN_MAP = 2048;
 const SUN_DIST = 900;
@@ -585,14 +580,11 @@ const SUN_DIST = 900;
 /**
  * Dry Gulch's sun (or moon): a directional light whose shadow frustum follows the player,
  * snapped to shadow texels so edges don't shimmer. The low sunset sun throws shadows the
- * length of a building lot down Main Street. Slow frames switch shadows off automatically.
+ * length of a building lot down Main Street. The shadow follows the graphics quality tier.
  */
 export function WesternSun(_props: { time?: TimeOfDay }) {
   const ref = useRef<THREE.DirectionalLight>(null);
-  const forced = useMemo(shadowParam, []);
-  const [low, setLow] = useState(forced === false);
-  const ema = useRef(1 / 60);
-  const slowFor = useRef(0);
+  const shadow = useSunShadow(ref, SUN_MAP);
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;
@@ -601,30 +593,17 @@ export function WesternSun(_props: { time?: TimeOfDay }) {
     const dir = [d.x, d.y, d.z] as const;
     l.color.copy(liveLook.sunColor);
     l.intensity = liveLook.sunI;
-    const texel = (SUN_RANGE * 2) / SUN_MAP;
+    const texel = (SUN_RANGE * 2) / shadow.size;
     const cx = Math.round(state.camera.position.x / texel) * texel;
     const cz = Math.round(state.camera.position.z / texel) * texel;
     l.target.position.set(cx, 0, cz);
     l.target.updateMatrixWorld();
     l.position.set(cx + dir[0] * SUN_DIST, dir[1] * SUN_DIST, cz + dir[2] * SUN_DIST);
-    if (forced !== null || low) return;
-    ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
-    if (ema.current > 0.04) {
-      slowFor.current += raw;
-      if (slowFor.current > 3) {
-        console.info(
-          "[western] frames are slow: switching shadows off (use ?shadows=1 to keep them)",
-        );
-        setLow(true);
-      }
-    } else slowFor.current = 0;
   });
   return (
     <directionalLight
       ref={ref}
-      castShadow={!low}
-      shadow-mapSize-width={SUN_MAP}
-      shadow-mapSize-height={SUN_MAP}
+      castShadow={shadow.cast}
       shadow-camera-left={-SUN_RANGE}
       shadow-camera-right={SUN_RANGE}
       shadow-camera-top={SUN_RANGE}

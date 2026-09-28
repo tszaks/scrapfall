@@ -4,6 +4,7 @@
 // Chunks cull by frustum (three.js) and their detail layers cull by distance (the LOD).
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useSunShadow } from "./quality";
 import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
@@ -695,11 +696,6 @@ export const CityScene = memo(function CityScene({
 });
 
 /** `?shadows=0` forces city shadows off, `?shadows=1` keeps them on (no auto fallback). */
-function shadowParam(): boolean | null {
-  if (typeof window === "undefined") return null;
-  const v = new URLSearchParams(window.location.search).get("shadows");
-  return v === "0" ? false : v === "1" ? true : null;
-}
 
 const SUN_RANGE = 80; // shadow frustum half-size around the player, metres
 const SUN_MAP = 2048;
@@ -708,8 +704,8 @@ const SUN_DIST = 900;
 /**
  * The city's sun: a low, warm light whose shadow frustum follows the player (snapped to
  * shadow texels so edges don't shimmer). The frustum is long enough that towers well away
- * from the player still throw their shadows across the street. If frames stay slow for a
- * few seconds, shadows switch off automatically (weak GPUs / laptops on battery).
+ * from the player still throw their shadows across the street. The shadow map's size (or no
+ * shadows) follows the graphics quality tier (quality.ts).
  */
 export function CitySun(_props: {
   time?: TimeOfDay;
@@ -719,10 +715,7 @@ export function CitySun(_props: {
   dir?: [number, number, number];
 }) {
   const ref = useRef<THREE.DirectionalLight>(null);
-  const forced = useMemo(shadowParam, []);
-  const [low, setLow] = useState(forced === false);
-  const ema = useRef(1 / 60);
-  const slowFor = useRef(0);
+  const shadow = useSunShadow(ref, SUN_MAP);
   useFrame((state, raw) => {
     const l = ref.current;
     if (!l) return;
@@ -730,7 +723,7 @@ export function CitySun(_props: {
     const dir = liveLook.sunDir;
     l.color.copy(liveLook.sunColor);
     l.intensity = liveLook.sunI;
-    const texel = (SUN_RANGE * 2) / SUN_MAP;
+    const texel = (SUN_RANGE * 2) / shadow.size;
     const cx = Math.round(state.camera.position.x / texel) * texel;
     const cz = Math.round(state.camera.position.z / texel) * texel;
     // the frustum follows the player up onto rooftops too (access buildings), so a roof
@@ -739,22 +732,11 @@ export function CitySun(_props: {
     l.target.position.set(cx, cy, cz);
     l.target.updateMatrixWorld();
     l.position.set(cx + dir.x * SUN_DIST, cy + dir.y * SUN_DIST, cz + dir.z * SUN_DIST);
-    if (forced !== null || low) return;
-    ema.current += (Math.min(raw, 0.25) - ema.current) * 0.05;
-    if (ema.current > 0.04) {
-      slowFor.current += raw;
-      if (slowFor.current > 3) {
-        console.info("[city] frames are slow: switching shadows off (use ?shadows=1 to keep them)");
-        setLow(true);
-      }
-    } else slowFor.current = 0;
   });
   return (
     <directionalLight
       ref={ref}
-      castShadow={!low}
-      shadow-mapSize-width={SUN_MAP}
-      shadow-mapSize-height={SUN_MAP}
+      castShadow={shadow.cast}
       shadow-camera-left={-SUN_RANGE}
       shadow-camera-right={SUN_RANGE}
       shadow-camera-top={SUN_RANGE}

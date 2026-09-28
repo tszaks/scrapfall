@@ -10,6 +10,7 @@ import * as THREE from "three";
 
 import { power } from "./events/power";
 import { skyFog } from "./skyFog";
+import { useSunShadow } from "./quality";
 import type { Theme } from "./themes";
 import {
   blendLook,
@@ -50,6 +51,7 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
   const hemi = useRef<THREE.HemisphereLight>(null);
   const amb = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
+  const shadow = useSunShadow(sun, 1024);
   const seen = useRef(-1);
   useEffect(() => {
     const prev = scene.fog;
@@ -99,9 +101,7 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
       {!ownSun && (
         <directionalLight
           ref={sun}
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
+          castShadow={shadow.cast}
         />
       )}
     </>
