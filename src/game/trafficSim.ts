@@ -156,6 +156,11 @@ export const trafficStats = {
 /** the car that produced the last scan result, and a car the scans must skip */
 let scanHit: Car | null = null;
 let scanSkip: Car[] = [];
+const NO_SKIP: Car[] = [];
+const _near: Car[] = [];
+const _specials: Car[] = [];
+const _braking: number[] = [];
+const _index = new Map<Car, number>();
 
 /** lateral offset of a lane from the road centre line */
 export const laneOffset = (road: Road, axis: 0 | 1, dir: 1 | -1, lane: number) => {
@@ -460,55 +465,31 @@ type Path = {
 };
 const _pp = { x: 0, z: 0, tx: 0, tz: 0 };
 
+/** the one path in use (a path is consumed by scanPath before the next is made: no garbage) */
+const _path: Path = { x0: 0, z0: 0, fx: 0, fz: 0, L0: 0, ex: 0, ez: 0, nx: 0, nz: 0, R: 1, d0: 0, len: 0 };
+function setPath(x0: number, z0: number, fx: number, fz: number, L0: number, ex: number, ez: number, nx: number, nz: number, R: number, d0: number, len: number) {
+  const P = _path;
+  P.x0 = x0; P.z0 = z0; P.fx = fx; P.fz = fz; P.L0 = L0; P.ex = ex; P.ez = ez;
+  P.nx = nx; P.nz = nz; P.R = R; P.d0 = d0; P.len = len;
+  return P;
+}
+
 function pathOf(c: Car, geom: Geom | null, ownRoad: Road, turn: -1 | 0 | 1): Path {
   const a = c.arc;
-  if (a)
-    return {
-      x0: c.x,
-      z0: c.z,
-      fx: a.fx,
-      fz: a.fz,
-      L0: 0,
-      ex: a.ex,
-      ez: a.ez,
-      nx: a.nx,
-      nz: a.nz,
-      R: a.R,
-      d0: a.d,
-      len: a.len,
-    };
+  if (a) return setPath(c.x, c.z, a.fx, a.fz, 0, a.ex, a.ez, a.nx, a.nz, a.R, a.d, a.len);
   const fx = c.axis === 0 ? c.dir : 0;
   const fz = c.axis === 1 ? c.dir : 0;
-  if (!geom || turn === 0)
-    return {
-      x0: c.x,
-      z0: c.z,
-      fx,
-      fz,
-      L0: Infinity,
-      ex: 0,
-      ez: 0,
-      nx: 0,
-      nz: 0,
-      R: 1,
-      d0: 0,
-      len: 0,
-    };
+  if (!geom || turn === 0) return setPath(c.x, c.z, fx, fz, Infinity, 0, 0, 0, 0, 1, 0, 0);
   const perp = ownRoad.c + c.lat;
-  return {
-    x0: c.x,
-    z0: c.z,
-    fx,
-    fz,
-    L0: Math.max(0, (geom.sStart - c.s) * c.dir),
-    ex: c.axis === 0 ? geom.sStart : perp,
-    ez: c.axis === 0 ? perp : geom.sStart,
-    nx: turn === 1 ? -fz : fz,
-    nz: turn === 1 ? fx : -fx,
-    R: geom.R,
-    d0: 0,
-    len: (geom.R * Math.PI) / 2,
-  };
+  return setPath(
+    c.x, c.z, fx, fz,
+    Math.max(0, (geom.sStart - c.s) * c.dir),
+    c.axis === 0 ? geom.sStart : perp,
+    c.axis === 0 ? perp : geom.sStart,
+    turn === 1 ? -fz : fz,
+    turn === 1 ? fx : -fx,
+    geom.R, 0, (geom.R * Math.PI) / 2,
+  );
 }
 
 /** point and tangent `s` metres along a path (written into _pp) */
@@ -547,7 +528,8 @@ function pathAt(P: Path, s: number) {
 function scanPath(c: Car, list: Car[], P: Path, range: number, margin: number) {
   const half = c.v.len / 2;
   const hw = c.v.wid / 2;
-  const near: Car[] = [];
+  const near = _near;
+  near.length = 0;
   scanHit = null;
   for (const o of list)
     if (
@@ -690,7 +672,8 @@ function clampLat(road: Road, axis: 0 | 1, dir: 1 | -1, lat: number, wid: number
 /**
  * Advance cars by exactly `dt`. `only` limits the step to near (false) or far (true) cars,
  * so far cars can run at a lower rate with a larger dt. Returns the indices of cars that
- * are braking for the local player (so the caller can honk).
+ * are braking for the local player (so the caller can honk): a reused array, read it before
+ * the next call.
  */
 export function stepCars(
   cars: Car[],
@@ -700,11 +683,20 @@ export function stepCars(
   only: boolean | null = null,
 ) {
   const { roadX, roadZ, rand } = env;
-  const brakingForLocal: number[] = [];
-  const specials: Car[] = [];
+  // (reused between calls: this runs up to ~150 times a second, and fresh arrays and a
+  // Map per call were the biggest source of garbage in the game)
+  const brakingForLocal = _braking;
+  brakingForLocal.length = 0;
+  const specials = _specials;
+  specials.length = 0;
   for (const o of cars) if (o.role !== ROLE_NORMAL || o.park) specials.push(o);
-  const index = new Map<Car, number>();
-  cars.forEach((o, i) => index.set(o, i));
+  const index = _index;
+  let stale = index.size !== cars.length;
+  for (let i = 0; i < cars.length && !stale; i++) stale = index.get(cars[i]!) !== i;
+  if (stale) {
+    index.clear();
+    for (let i = 0; i < cars.length; i++) index.set(cars[i]!, i);
+  }
   for (let ci = 0; ci < cars.length; ci++) {
     const c = cars[ci]!;
     if (only !== null && !!c.far !== only) continue;
@@ -732,7 +724,7 @@ export function stepCars(
         trafficStats.deadlockBreaks++;
       }
     }
-    scanSkip = [];
+    scanSkip = NO_SKIP;
     if (c.ghost.length) {
       c.ghostT += dt;
       const apart = c.ghost.every((g) => Math.hypot(cars[g]!.x - c.x, cars[g]!.z - c.z) > 14);
