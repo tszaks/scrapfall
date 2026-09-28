@@ -4108,6 +4108,40 @@ function World({
   );
 }
 
+/**
+ * Stable stand-ins for a component's function props: each calls the latest version, so a
+ * memoised child keeps the same props while the parent re-renders with new inline callbacks.
+ */
+function useStableCallbacks<T extends object>(props: T): T {
+  const latest = useRef(props);
+  latest.current = props;
+  const cache = useRef(new Map<string, unknown>());
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(props)) {
+    if (typeof v !== "function") {
+      out[k] = v;
+      continue;
+    }
+    let f = cache.current.get(k);
+    if (!f) {
+      f = (...a: unknown[]) => (latest.current as Record<string, (...b: unknown[]) => unknown>)[k]!(...a);
+      cache.current.set(k, f);
+    }
+    out[k] = f;
+  }
+  return out as T;
+}
+
+/**
+ * The world only re-renders when something it draws from changes. The HUD's state (ammo on
+ * every shot, kills, shards, the ability cooldown...) lives in Game, and each of those
+ * updates used to re-render the whole world too: dozens of times a second in a firefight.
+ */
+const WorldMemo = memo(World);
+function StableWorld(props: React.ComponentProps<typeof World>) {
+  return <WorldMemo {...useStableCallbacks(props)} />;
+}
+
 /** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
 function debugHandles() {
   if (import.meta.env.DEV) return true;
@@ -4797,7 +4831,7 @@ export function Game() {
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair select-none">
       <Canvas shadows="percentage" dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
-        <World
+        <StableWorld
           blocks={blocks}
           enemies={enemies}
           rand={rand}
