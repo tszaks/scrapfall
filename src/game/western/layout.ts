@@ -1900,19 +1900,22 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     for (const it of plan.items) {
       if (it.k === "stair") {
         // rises from the floor at zLow to the landing at zHigh
-        const a0 = toWorld(b, it.x0, it.zLow);
-        const a1 = toWorld(b, it.x1, it.zHigh);
-        const xa = Math.min(a0[0], a1[0]);
-        const xb = Math.max(a0[0], a1[0]);
-        const za = Math.min(a0[1], a1[1]);
-        const zb = Math.max(a0[1], a1[1]);
-        const lowW = toWorld(b, 0, it.zLow);
-        const highW = toWorld(b, 0, it.zHigh);
-        const alongZ = b.front === 0 || b.front === 2;
-        tbox(xa, za, xb, zb, (x, z) => {
-          const t = alongZ ? (z - lowW[1]) / (highW[1] - lowW[1]) : (x - lowW[0]) / (highW[0] - lowW[0]);
-          return plan.floor + (it.y - plan.floor) * Math.min(1, Math.max(0, t));
-        });
+        // one exact deck per tread (the same steps the mesh draws): a stair only 1.5 m wide
+        // can't be told by 1 m heightfield samples
+        const n = Math.max(8, Math.round((it.y - plan.floor) / 0.19));
+        for (let i = 0; i < n; i++) {
+          const za = it.zLow + ((it.zHigh - it.zLow) * i) / n;
+          const zb = it.zLow + ((it.zHigh - it.zLow) * (i + 1)) / n;
+          const c0 = toWorld(b, it.x0, za);
+          const c1 = toWorld(b, it.x1, zb + 0.02);
+          platforms.push({
+            x0: Math.min(c0[0], c1[0]),
+            z0: Math.min(c0[1], c1[1]),
+            x1: Math.max(c0[0], c1[0]),
+            z1: Math.max(c0[1], c1[1]),
+            y: plan.floor + ((it.y - plan.floor) * (i + 1)) / n,
+          });
+        }
         // the stair's open side toward the room: a balustrade (thin posts) above knee height
         const roomSide = it.x0 < 0 ? it.x1 + 0.05 : it.x0 - 0.05;
         for (let lz = it.zLow + 1.6; lz <= it.zHigh; lz += 0.3) {
