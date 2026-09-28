@@ -4432,6 +4432,7 @@ export function Game() {
                 onClick={() => {
                   initAudio();
                   endlessRef.current = true;
+                  goingOvertime.current = true;
                   setStatus((s) => ({ ...s, won: false }));
                   net?.broadcast({ type: "ot" });
                   start();
