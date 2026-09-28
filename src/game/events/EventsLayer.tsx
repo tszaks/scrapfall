@@ -205,7 +205,7 @@ function Flashlight() {
     l.castShadow = false;
     return l;
   }, []);
-  const st = useRef({ inScene: false, compiling: false, idle: 0 });
+  const st = useRef({ inScene: false, compiling: false, idle: 0, warm: 30 });
   useEffect(
     () => () => {
       scene.remove(light);
@@ -218,12 +218,21 @@ function Flashlight() {
   useFrame((state, raw) => {
     const dt = Math.min(raw, 0.05);
     const S = st.current;
-    if (power.out && !S.inScene && !S.compiling) {
+    // shortly after the map is built (behind the start menu, usually), compile the lit
+    // variants in the background once, so the blackout's own compile finds them all cached
+    const warmNow = S.warm > 0 && --S.warm === 0;
+    if ((warmNow || (power.out && !S.inScene)) && !S.compiling) {
       S.compiling = true;
       const probe = new THREE.Scene();
       probe.add(new THREE.SpotLight("#ffffff", 0));
+      // compile() builds each program for the TARGET scene's fog and environment: without
+      // these the variants made here missed every real one (no fog), and the first dark frame
+      // compiled all ~70 lit programs again, synchronously (a 1.5 s freeze measured in WebKit)
+      probe.fog = scene.fog;
+      probe.environment = scene.environment;
       const join = () => {
         S.compiling = false;
+        if (!power.out) return; // (the warm-up pass)
         if (!S.inScene) {
           scene.add(light);
           S.inScene = true;

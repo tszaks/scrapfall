@@ -81,6 +81,7 @@ import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, type PingWorld } from "./ping";
 import { REVIVE_HP, reviveInterrupted, squad } from "./revive";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
+import { Prewarm } from "./Prewarm";
 
 
 type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "bomber" | "vanguard" | "special" | NewKind;
@@ -3940,6 +3941,8 @@ function World({
 
   return (
     <>
+      {/* every material compiled (drawn once, unseen) before the player walks into it */}
+      <Prewarm when={seed} />
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
