@@ -3610,10 +3610,6 @@ export function Game() {
   phase.current = { started, ended };
 
   // HUD status lists
-  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
-  const activePerks = PERK_IDS.filter((id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0)
-    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
-    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
 
   // every purchased card, with what it does and how many times it was bought
   const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => {
