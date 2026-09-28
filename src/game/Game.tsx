@@ -3090,7 +3090,7 @@ function World({
             if (!hz.alive) continue;
             if (Math.hypot(b.pos.x - hz.x, b.pos.z - hz.z) < 0.85 && b.pos.y < 2) {
               if (b.track === 1) { onStat("hit", 1); b.track = 2; }
-              blowHazard(hi);
+              blowHazard(hi, true, !isH); // the host works out who the blast hurts
               burst(b);
               b.active = false;
               popped = true;
