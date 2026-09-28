@@ -2013,7 +2013,27 @@ function World({
       rest[j] = tmp;
     }
     const kinds: Kind[] = boss.concat(rest).slice(0, MAX_ENEMIES);
-    const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+    // later rounds send sturdier enemies; overtime ramps harder still
+    const hpMul = n <= WAVES.length
+      ? 1 + 0.09 * (n - 1)
+      : 1 + 0.09 * (WAVES.length - 1) + 0.15 * (n - WAVES.length);
+    // overtime rolls a new global condition every round
+    if (n > WAVES.length) {
+      const m = rollMutator(rand);
+      mutator.current = m;
+      onMutator(m.id);
+      netRef.current?.broadcast({ type: "mut", id: m.id });
+    } else if (mutator.current) {
+      mutator.current = null;
+      onMutator("none");
+    }
+    // hazard props reset each round so there is always something to shoot open
+    hazards.current.forEach((h) => {
+      const p = randomSpawn(blocks, rand);
+      h.x = p.x;
+      h.z = p.z;
+      h.alive = true;
+    });
 
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
