@@ -2,6 +2,7 @@
 // (a along the entrance facade, d depth into the building), the lobby / car / vestibule or the
 // stairwell, the doorways, the rooftop penthouse and the rooftop props. Pure data, no three.js,
 // so every co-op client derives the identical building from the shared layout.
+import type { Spiral } from "./spiral";
 import type { AccessSpec, Facing, LRect, Portal, Rect, RoofProp } from "./types";
 
 /** player body radius used by the movement code */
@@ -39,6 +40,7 @@ export const VEST_CEIL = VEST_H;
 export const BULKHEAD_H = BULK_H;
 
 export type StairInfo = {
+  spiral?: Spiral | undefined;
   /** width, landing depths, flight run (metres) */
   W: number;
   Ls: number;
@@ -273,12 +275,17 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     // stairs (ladders use the same stairwell core today; see the report)
     const laps = Math.max(1, spec.floors);
     const h = rise / laps;
-    const steps = Math.ceil(h / 2 / RISER_MAX);
-    const Lr = steps * TREAD;
-    const v0 = HALL + WALL + 0.05;
-    const W = STAIR_W;
-    const depth = v0 + LAND_S + Lr + LAND_N;
-    stair = { W, Ls: LAND_S, Ln: LAND_N, Lr, v0, h, steps, laps, doorD: v0 + LAND_S / 2 };
+    const isSpiral = spec.stairStyle === "spiral";
+    const steps = Math.ceil(h / (isSpiral ? 1 : 2) / RISER_MAX);
+    const radius = 1.9;
+    const gap = 0.65;
+    const Lr = isSpiral ? radius * (1 + Math.cos(gap)) : steps * TREAD;
+    const v0 = isSpiral ? Math.max(HALL + WALL + 0.05, fitL.d0 + WALL + .05) : HALL + WALL + 0.05;
+    const W = isSpiral ? radius * 2 : STAIR_W;
+    const Ln = isSpiral ? 0 : LAND_N;
+    const depth = v0 + LAND_S + Lr + Ln;
+    stair = { W, Ls: LAND_S, Ln, Lr, v0, h, steps, laps, doorD: v0 + LAND_S / 2,
+      spiral: isSpiral ? { inner: 0.3, outer: radius, centerD: v0 + LAND_S + radius * Math.cos(gap), gap } : undefined };
     pent = { a0: -W / 2 - WALL, a1: W / 2 + WALL, d0: v0 - WALL, d1: depth + WALL };
     pentH = room ? 0 : BULK_H + 0.25;
     const outer: LRect = { a0: -W / 2 - WALL, a1: W / 2 + WALL, d0: 0, d1: depth + WALL };

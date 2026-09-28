@@ -81,6 +81,7 @@ export function alpineAccessFull(
       const m = faceMid(tower, f);
       const spec: AccessSpec = {
         kind: "stairs",
+        stairStyle: "spiral",
         footprint: tower,
         roof: inset(tower, 0.4),
         roofY: floorY - 0.02,

@@ -43,6 +43,9 @@ function roofRect(b: Bld, p: Part): Rect | null {
     x1 = cx + (x1 - cx) * k;
     z0 = cz + (z0 - cz) * k;
     z1 = cz + (z1 - cz) * k;
+  } else if (shape === "deco") {
+    const inset = Math.min(x1 - x0, z1 - z0) * .3;
+    x0 += inset; x1 -= inset; z0 += inset; z1 -= inset;
   } else if (shape !== "box") return null;
   return { x0: x0 + RIM, z0: z0 + RIM, x1: x1 - RIM, z1: z1 - RIM };
 }
@@ -75,6 +78,7 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
   type Cand = { b: Bld; a: AccessBuilding; score: number };
   const elevs: Cand[] = [];
   const stairs: Cand[] = [];
+  const spirals: Cand[] = [];
   city.buildings.forEach((b, bi) => {
     if (b.backdrop || b.access || !bInside(b)) return;
     const okType =
@@ -82,15 +86,16 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
       b.t === "low" || b.t === "corner" || b.t === "warehouse" || b.t === "garage";
     if (!okType) return;
     const floors = floorsOf(b);
-    const k: AccessKind = floors <= 4 ? "stairs" : "elevator";
+    const deco = b.parts.some(p => p.shape === "deco");
+    const k: AccessKind = deco || floors <= 4 ? "stairs" : "elevator";
     // stairs only on single-volume buildings (no roofs part-way up the stairwell)
-    if (k === "stairs" && b.parts.length !== 1) return;
+    if (k === "stairs" && !deco && b.parts.length !== 1) return;
     const tp = topPart(b);
     const roof = roofRect(b, tp);
     if (!roof) return;
     // the ground part holding the entrance: the biggest volume standing on the street
     const ground = b.parts
-      .filter((p) => p.y0 < 0.1 && (p.shape ?? "box") === "box")
+      .filter((p) => p.y0 < 0.1 && ((p.shape ?? "box") === "box" || p.shape === "deco"))
       .sort((p, q) => (q.x1 - q.x0) * (q.z1 - q.z0) - (p.x1 - p.x0) * (p.z1 - p.z0))[0];
     if (!ground) return;
     // an arcade (cantilevered upper block over a recessed ground floor) hides the facade
@@ -113,6 +118,7 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
           : [-2, 2, -3, 3, -1, 1, -4, 4, 0, -5, 5, -6, 6];
     const spec0 = {
       kind: k,
+      stairStyle: deco ? "spiral" as const : undefined,
       footprint: { x0: ground.x0, z0: ground.z0, x1: ground.x1, z1: ground.z1 },
       roof,
       roofY: tp.y0 + tp.h,
@@ -143,7 +149,7 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
       const a = layoutAccess(spec, 0);
       if (!a) continue;
       const score = k === "elevator" ? (b.t === "super" ? 1e6 : b.h) : b.t === "garage" ? 1e5 : b.h + 10 * floors;
-      (k === "elevator" ? elevs : stairs).push({ b, a, score });
+      (deco ? spirals : k === "elevator" ? elevs : stairs).push({ b, a, score });
       break;
     }
   });
@@ -160,9 +166,10 @@ export function cityAccess(city: CityLayout, playHalf: number | null = null): Ac
     }
     return out;
   };
-  const E = pick(elevs, coop ? 12 : 6, coop ? 95 : 80, [], 0);
+  const D = pick(spirals, 1, 0, [], 0);
+  const E = pick(elevs, coop ? 12 : 6, coop ? 95 : 80, D, 45);
   const S = pick(stairs, coop ? 7 : 5, coop ? 70 : 60, E, 45);
-  const chosen = [...E, ...S];
+  const chosen = [...D, ...E, ...S];
   return chosen.map((c, id) => {
     const a = layoutAccess(c.a.spec, id)!;
     const p0 = a.portals[0];

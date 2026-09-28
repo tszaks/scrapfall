@@ -1,3 +1,4 @@
+import { spiralContains, spiralRegion, spiralRise, spiralPoint, TAU } from "./spiral";
 // The building-access runtime: one installed set of access buildings for the current map.
 //
 // Zones. Everyone is in exactly one zone:
@@ -474,6 +475,7 @@ function elevRects(b: AccessBuilding, st: PlayerAcc, c: Car, doors: [number, num
 
 function stairRegion(b: AccessBuilding, a: number, d: number) {
   const s = b.stair!;
+  if (s.spiral) return spiralRegion(s.spiral, a, d);
   const v = d - s.v0;
   if (v < s.Ls) return 0;
   if (v > s.Ls + s.Lr) return 2;
@@ -482,6 +484,7 @@ function stairRegion(b: AccessBuilding, a: number, d: number) {
 export function stairY(b: AccessBuilding, a: number, d: number, lap: number) {
   const s = b.stair!;
   const base = b.groundY + lap * s.h;
+  if (s.spiral) return base + spiralRise(s.spiral, a, d) * s.h;
   const v = d - s.v0;
   if (v < s.Ls) return base;
   if (v > s.Ls + s.Lr) return base + s.h / 2;
@@ -496,6 +499,11 @@ function stairRects(b: AccessBuilding, st: PlayerAcc, doors: [number, number]): 
   const out: LRect[] = [];
   const S: LRect = { a0: -W2, a1: W2, d0: st.lap === 0 ? 0.3 : s.v0, d1: s.v0 + s.Ls };
   out.push(S);
+  if (s.spiral) {
+    if (st.lap === 0 && st.region === 0 && doors[0] > 0.6) out.push(portalRect(b.portals[0]));
+    if (st.lap >= s.laps && st.region === 0 && doors[1] > 0.6) out.push(portalRect(b.portals[1]));
+    return out;
+  }
   out.push({ a0: -W2, a1: W2, d0: s.v0 + s.Ls + s.Lr, d1: s.v0 + s.Ls + s.Lr + s.Ln });
   const laneA: LRect = { a0: -W2, a1: -g, d0: s.v0 + s.Ls - ov, d1: s.v0 + s.Ls + s.Lr + ov };
   const laneB: LRect = { a0: g, a1: W2, d0: s.v0 + s.Ls - ov, d1: s.v0 + s.Ls + s.Lr + ov };
@@ -509,6 +517,11 @@ function stairRects(b: AccessBuilding, st: PlayerAcc, doors: [number, number]): 
   return out;
 }
 
+function insideStair(b: AccessBuilding, st: PlayerAcc, rects: LRect[], a: number, d: number, r: number) {
+  const s = b.stair;
+  return s?.spiral ? spiralContains(s.spiral, a, d, r, rects, st.lap, s.laps, st.region) : inRects(rects, a, d, r);
+}
+
 /** interior collision for the local player, `undefined` outside (use the normal grid) */
 export function playerBlocked(x: number, z: number, r: number): boolean | undefined {
   const w = W;
@@ -518,7 +531,7 @@ export function playerBlocked(x: number, z: number, r: number): boolean | undefi
   if (b.ladder) return true; // on a ladder the climb moves you (stepPlayer)
   const [a, d] = toLocal(b, x, z);
   const rects = b.elev ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!) : stairRects(b, p, w.doors[p.b]!);
-  return !inRects(rects, a, d, r);
+  return !insideStair(b, p, rects, a, d, r);
 }
 
 const CLIMB = 2.4; // m/s up or down a ladder
@@ -625,7 +638,7 @@ export function stepPlayer(
     // safety net: if the body ever ends up outside the walkable space (a door shut on it, a
     // network correction), put it back at the nearest valid spot instead of freezing it
     const rects = b.elev ? elevRects(b, p, w.cars[k]!, w.doors[k]!) : stairRects(b, p, w.doors[k]!);
-    if (!inRects(rects, a, d, BODY_R)) {
+    if (!insideStair(b, p, rects, a, d, BODY_R)) {
       let best: [number, number] | null = null;
       let bd = Infinity;
       for (const q of rects) {
@@ -637,6 +650,15 @@ export function stepPlayer(
         if (dd < bd) {
           bd = dd;
           best = [ca, cd];
+        }
+      }
+      if (b.stair?.spiral) {
+        const sp = b.stair.spiral;
+        for (let i = 0; i < 120; i++) {
+          const [ca, cd] = spiralPoint(sp, i * TAU / 120, (sp.inner + sp.outer) / 2);
+          if (!insideStair(b, p, rects, ca, cd, BODY_R)) continue;
+          const dist = Math.hypot(ca - a, cd - d);
+          if (dist < bd) { bd = dist; best = [ca, cd]; }
         }
       }
       if (best && bd < 1.5) {

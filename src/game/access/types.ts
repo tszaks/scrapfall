@@ -12,6 +12,8 @@ export type AccessKind = "stairs" | "elevator" | "ladder";
 
 export type AccessSpec = {
   kind: AccessKind;
+  /** Explicit spiral geometry and collision; ordinary stairs remain switchbacks. */
+  stairStyle?: "spiral" | undefined;
   /** the building's ground-floor massing (solid to the street), containing the lobby */
   footprint: Rect;
   /** the walkable roof: the inner face of the parapet, at `roofY` */

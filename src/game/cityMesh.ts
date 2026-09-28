@@ -1075,7 +1075,7 @@ function massPart(C: Ctx, p: Part, st: Style, b: Bld, store: boolean): { poly: P
     for (let k = 0; k < 4; k++) {
       const ya = y0 + p.h * fr[k]!;
       const yb = y0 + p.h * fr[k + 1]!;
-      walls(G, poly, ya, yb, st, b.street, store && k === 0 && y0 < 0.1);
+      walls(G, poly, ya, yb, st, b.street, store && k === 0 && y0 < 0.1, st.layer, st.tint, st.fh, k === 0 && y0 < 0.1 ? b.access?.door : undefined);
       const next = insetPoly(poly, ms * 0.1);
       if (k < 3) {
         G.mat(L.plain, st.seed, 1).col(st.tint, 1.08);
@@ -1185,9 +1185,12 @@ function building(b: Bld, C: Ctx) {
   for (let k = 1; k < tops.length; k++) if (tops[k]!.y > tops[hi]!.y) hi = k;
   tops.forEach((t, k) => {
     if (k === hi) return;
+    const shaft = b.access?.hole;
+    const hole = shaft && shaft.x0 >= t.p.x0 && shaft.x1 <= t.p.x1 && shaft.z0 >= t.p.z0 && shaft.z1 <= t.p.z1 ? shaft : undefined;
     const inner = roof(G, t.poly, t.y + k * 0.03, st, 0.9, 0.35, st.roof, (p, q, ya, yb) =>
-      openSpans(vols, t.i, p, q, ya, yb),
+      openSpans(vols, t.i, p, q, ya, yb), hole,
     );
+    if (hole) return; // no garden cap or randomly placed equipment across the continuous shaft
     if (t.p.role === "podium" && st.r() < 0.35) {
       // podium roof garden
       G.mat(L.plain, st.seed, 0).col("#6a8f45");

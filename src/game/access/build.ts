@@ -7,6 +7,7 @@
 // (1.5 cm or more), nothing is coplanar with the city's facades (the hole cut in the facade is
 // lined by reveals, frames sit on the face with their back faces omitted), verticals vertical.
 import * as THREE from "three";
+import { buildSpiral } from "./spiralMesh";
 
 import {
   localRect,
@@ -743,6 +744,7 @@ function buildVestibule(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
 
 function buildStairs(b: AccessBuilding, S: Set4) {
   const s = b.stair!;
+  if (s.spiral) { buildSpiral(b, S.conc, S.base, S.glow); return; }
   const G = S.conc; // concrete: walls, slabs, steps
   const P = S.base; // paint and metal: stripes, doors, rails, sign plates, the extinguisher
   const W2 = s.W / 2;
