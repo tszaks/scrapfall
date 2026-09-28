@@ -143,20 +143,33 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const glow = theme.enemyBullet;
 
   if (shape === "tree") {
-    const trunk = 1 + b.h * 0.25;
+    // trunk stays slim, canopy sits directly on top of it and tapers upward so
+    // the tiers never float apart or read as hollow cones
+    const trunk = 1.1 + b.h * 0.22;
+    const canopy = b.h * 0.85 + 1.4;
     return (
-      <group position={[b.x, 0, b.z]}>
-        <mesh position-y={trunk / 2} castShadow>
-          <cylinderGeometry args={[0.3, 0.4, trunk, 6]} />
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        {/* root flare keeps the base planted in the ground */}
+        <mesh position-y={0.18} castShadow receiveShadow>
+          <cylinderGeometry args={[0.42, 0.68, 0.36, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={trunk / 2 + 0.2} castShadow>
+          <cylinderGeometry args={[0.26, 0.4, trunk, 7]} />
           <meshLambertMaterial color="#4a3320" flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.45} castShadow>
-          <coneGeometry args={[1.3, b.h * 0.9 + 1, 7]} />
+        {/* three overlapping tiers, each seated inside the one below it */}
+        <mesh position-y={trunk + canopy * 0.18} castShadow>
+          <coneGeometry args={[1.35, canopy * 0.6, 8]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={trunk + canopy * 0.42} castShadow>
+          <coneGeometry args={[1.08, canopy * 0.55, 8]} />
           <meshLambertMaterial color={color} flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.9} castShadow>
-          <coneGeometry args={[0.9, b.h * 0.6 + 0.6, 7]} />
-          <meshLambertMaterial color={color} flatShading />
+        <mesh position-y={trunk + canopy * 0.68} castShadow>
+          <coneGeometry args={[0.78, canopy * 0.5, 8]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
         </mesh>
       </group>
     );
