@@ -21,7 +21,7 @@ export function Atmosphere({
   look: Look;
   city: boolean;
 }) {
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const { color: sunHaze, k } = look.fogSun;
   useEffect(() => {
     const d = city ? SUN_DIR[time] : ARENA_SUN[time];

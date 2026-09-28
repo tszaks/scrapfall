@@ -62,7 +62,8 @@ export function WesternWeather({
   blocks: Block[];
   link: React.MutableRefObject<TrafficLink>;
 }) {
-  const { scene, camera } = useThree();
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
   const look = WESTERN_LOOK[time];
 
   // ---- motes: a box of tiny glowing specks that travels with the camera ----
