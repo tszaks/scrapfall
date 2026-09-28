@@ -1,11 +1,14 @@
 // React side of the skinned robots: one RobotRig per enemy slot, posed every frame from the
 // enemy's synced state (position, facing is on the parent group, telegraph values here).
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import type * as THREE from "three";
 
+import { groundY } from "../terrain";
+
 import { debrisFrame, spawnDebris } from "./debris";
 import { artFrame } from "./kit";
+import { claimShadow, placeShadow, releaseShadow } from "./shadows";
 import { RobotRig, robotMaterial, type RobotKind } from "./rig";
 
 /** the enemy fields the robots read (a structural subset of Game.tsx's Enemy) */
@@ -25,6 +28,13 @@ export type RobotData = {
 
 export type RobotInputs = (d: RobotData) => { wind: number; aux: number };
 const NONE = { wind: 0, aux: 0 };
+
+/** contact-shadow radius from the model's footprint (fliers get a smaller, fainter one) */
+function footprint(kind: RobotKind) {
+  const bb = kind.near.boundingBox ?? (kind.near.computeBoundingBox(), kind.near.boundingBox!);
+  const r = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 0.42;
+  return { r: bb.min.y > 0.5 ? r * 0.6 : r };
+}
 
 /**
  * Draw `kind` for enemy `data`. `inputs` maps the enemy state to the attack wind-up and a
@@ -55,6 +65,16 @@ export function RobotModel({
   );
   useEffect(() => () => rig.dispose(), [rig]);
   const wasAlive = useRef(false);
+  const scene = useThree((st) => st.scene);
+  const shadow = useRef(-1);
+  useEffect(() => {
+    shadow.current = claimShadow(scene);
+    return () => {
+      releaseShadow(shadow.current);
+      shadow.current = -1;
+    };
+  }, [scene]);
+  const foot = useMemo(() => footprint(kind), [kind]);
   useFrame((state, delta) => {
     debrisFrame(state.gl.info.render.frame, Math.min(delta, 0.05));
     if (!data.alive) {
@@ -66,6 +86,7 @@ export function RobotModel({
       }
       wasAlive.current = false;
       rig.reset();
+      placeShadow(shadow.current, 0, 0, 0, 0);
       return;
     }
     wasAlive.current = true;
@@ -92,6 +113,17 @@ export function RobotModel({
           : robotMaterial("base", w);
     if (rig.mesh.material !== want) rig.mesh.material = want;
     onPose?.(rig, state);
+    const g = rig.mesh.parent;
+    if (g && g.visible) {
+      const k = g.scale.x;
+      placeShadow(
+        shadow.current,
+        data.x,
+        groundY(data.x, data.z),
+        data.z,
+        foot.r * k * (d > 70 ? 0 : 1),
+      );
+    } else placeShadow(shadow.current, 0, 0, 0, 0);
   });
   return <primitive object={rig.mesh} />;
 }
