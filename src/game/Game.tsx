@@ -1697,6 +1697,8 @@ function World({
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
+  /** stops the victory status from firing on every frame once the boss is down */
+  const wonLatch = useRef(false);
   const pending = useRef<({ x: number; z: number; t: number } | null)[]>([]);
   const markMeshes = useRef<(THREE.Group | null)[]>([]);
 
