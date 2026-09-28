@@ -3771,6 +3771,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
     }
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
