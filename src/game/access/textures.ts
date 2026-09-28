@@ -280,25 +280,28 @@ export class CopPanel {
     this.key = key;
     const g = this.g;
     const lit = emergency ? "#ff4a2a" : "#ffb030";
-    g.fillStyle = "#c9ccd0";
+    // on the battery the whole plate sinks into the car's dim red (it is an unlit material,
+    // so the texture itself carries the light)
+    const face = emergency ? ["#3a100d", "#2c0b09", "#1e0706", "#4a1511", "#1a0605"] : ["#c9ccd0", "#b2b5ba", "#8e9196", "#e9eaec", "#2b2d31"];
+    g.fillStyle = face[0]!;
     g.fillRect(0, 0, 128, 320);
-    g.fillStyle = "#b2b5ba";
+    g.fillStyle = face[1]!;
     g.fillRect(6, 6, 116, 308);
     const btn = (x: number, y: number, label: string, on: boolean, r = 11) => {
       g.beginPath();
       g.arc(x, y, r + 2, 0, Math.PI * 2);
-      g.fillStyle = "#8e9196";
+      g.fillStyle = face[2]!;
       g.fill();
       g.beginPath();
       g.arc(x, y, r, 0, Math.PI * 2);
-      g.fillStyle = on ? lit : "#e9eaec";
+      g.fillStyle = on ? lit : face[3]!;
       if (on) {
         g.shadowColor = lit;
         g.shadowBlur = 10;
       }
       g.fill();
       g.shadowBlur = 0;
-      g.fillStyle = on ? "#3a1a00" : "#2b2d31";
+      g.fillStyle = on ? "#3a1a00" : emergency ? "#7a2a22" : face[4]!;
       g.font = `700 ${label.length > 2 ? 9 : 11}px Arial, sans-serif`;
       g.textAlign = "center";
       g.textBaseline = "middle";
@@ -318,7 +321,7 @@ export class CopPanel {
       btn(22 + col * 28, 290 - rowI * 38, String(f), f === floor);
     }
     // alarm and door buttons
-    g.fillStyle = "#d8b02a";
+    g.fillStyle = emergency ? "#5a1a12" : "#d8b02a";
     g.fillRect(30, 54, 68, 4);
     this.tex.needsUpdate = true;
   }

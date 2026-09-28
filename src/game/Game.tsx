@@ -51,7 +51,7 @@ import { AccessScene } from "./access/AccessScene";
 import {
   accessActive, accessList, accessMarkers, azBuilding, bulletBlocked, debugState as accessDebug, decodeCars, doorstep,
   encodeCars, installAccess, patchNav, player as accPlayer, playerAz, playerBlocked, playerZoneKey,
-  roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz, ROOF_KEY,
+  pressCarButton, roofCount, roofSpot, stepCars, stepDoors, stepPlayer, zoneAt, zoneKeyOfAz, ROOF_KEY,
 } from "./access/world";
 import { Stars } from "@react-three/drei";
 import { ENEMY_FIELDS, packEnemy, unpackEnemy } from "./enemySync";
@@ -1818,7 +1818,8 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.hp = Number(m.hp ?? MAX_HP);
     r.weapon = String(m.w ?? "pistol");
-    r.az = Number(m.az ?? 0); // building access: which zone (roof / lobby / car) and floor height
+    r.az = Number(m.az ?? 0);
+    if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
     r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
     r.rc = Number(m.rc ?? -1);
     r.last = performance.now();
@@ -2421,6 +2422,8 @@ function World({
         if (w) equip(w);
       }
       if (e.code === "KeyF") abilFire.current = true;
+      // in an elevator car, E presses the floor button (instead of the next weapon)
+      if (e.code === "KeyE" && accessActive() && pressCarButton()) return;
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -2786,13 +2789,19 @@ function World({
     cam.position.y = camGround.current + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
     if (accessActive()) {
       // elevator cars (the host decides, guests follow the snapshot) and the auto doors
-      const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current }];
+      const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
       const now = performance.now();
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) people.push({ x: r.x, z: r.z, az: r.az ?? 0, y: r.ay ?? 0 });
+        if (r.hp > 0 && now - r.last < 4000) people.push({ x: r.x, z: r.z, az: r.az ?? 0, y: r.ay ?? 0, id: r.id, press: r.ap ?? 0 });
       });
       stepCars(delta, people, isH);
       stepDoors(delta, people);
+    }
+    // in a car the floor counter sits where the ammo pills are: the HUD hides them (CSS)
+    const inCarNow = accessActive() && accPlayer.inCar;
+    if (inCarNow !== inCarHud) {
+      inCarHud = inCarNow;
+      if (typeof document !== "undefined") document.documentElement.classList.toggle("rs-incar", inCarNow);
     }
     // alpine chairlift: stand on a loading line to board; seated, the chair carries you
     if (alpineMap && spectating && ride.chair >= 0) leaveRide(cam, alpineMap.alpine); // died on the chair
@@ -2831,7 +2840,7 @@ function World({
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
-          ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100 } : {}),
+          ...(accPlayer.zone !== 0 ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press } : {}),
           ...(alpineMap ? { rc: ride.chair } : {}),
         });
       }
@@ -4093,6 +4102,9 @@ function seedParam(): number | null {
   return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
+/** is the HUD in its in-elevator-car state (the html element's rs-incar class)? */
+let inCarHud = false;
+
 const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
 /** Every visit opens on the city unless `?map=` names another; the start-menu picker
  * switches for the rest of the visit. null = random. */
@@ -4884,7 +4896,7 @@ export function Game() {
           </div>
         </div>
 
-        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2">
+        <div className="absolute left-1/2 top-5 flex max-w-[calc(100vw-26rem)] -translate-x-1/2 flex-wrap justify-center gap-2 transition-opacity [.rs-incar_&]:opacity-0">
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
             const active = slot.w === weapon;
@@ -4914,6 +4926,11 @@ export function Game() {
               </div>
             );
           })}
+        </div>
+
+        {/* in an elevator car: how to ride (world.ts pressCarButton) */}
+        <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
+          E · FLOOR BUTTON
         </div>
 
         {bossHp > 0 && locked && !ended && (

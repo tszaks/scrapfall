@@ -125,6 +125,28 @@ function rail(G: IGeo, a: number, y0: number, d0: number, y1: number, d1: number
 
 // ------------------------------------------------------------------ exterior
 
+/** a small wall light: back plate, arm, shade and a lit glass under it. `at` maps
+ * (across u0..u1, out from the wall v0..v1, height ya..yb, faces) into the local box args;
+ * `top` = the shade's height, `face` = the side facing out from the wall */
+function wallLight(
+  E: IGeo,
+  GL: IGeo,
+  top: number,
+  at: (u0: number, u1: number, v0: number, v1: number, ya: number, yb: number, f?: string) => [number, number, number, number, number, number, string | undefined],
+  face: string,
+) {
+  E.color("#26282c");
+  const bx = (g: IGeo, ...a: [number, number, number, number, number, number, string | undefined]) => g.box(a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+  bx(E, ...at(-0.08, 0.08, 0, 0.03, top - 0.3, top - 0.02, `b${face}`)); // back plate
+  bx(E, ...at(-0.02, 0.02, 0.03, 0.2, top - 0.06, top - 0.02)); // arm
+  bx(E, ...at(-0.13, 0.13, 0.12, 0.34, top, top + 0.035)); // shade
+  bx(E, ...at(-0.11, 0.11, 0.14, 0.32, top - 0.02, top)); // shade skirt
+  GL.color("#ffe2b0");
+  bx(GL, ...at(-0.07, 0.07, 0.16, 0.3, top - 0.13, top - 0.02)); // the glass
+  E.color("#26282c");
+  bx(E, ...at(-0.08, 0.08, 0.15, 0.31, top - 0.15, top - 0.13)); // its bottom rim
+}
+
 function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding, pre: IGeo | null = null) {
   const elev = b.kind === "elevator";
   const q = b.portals[0];
@@ -242,8 +264,7 @@ function penthouse(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding, bea
     E.box(q.a - 0.95, q.a + 0.95, y0 + dh + 0.3, y0 + dh + 0.72, P.d0 - 0.05, P.d0, "b+d");
     SG.color("#ffffff");
     signD(SG, b.kind === "elevator" ? SIGN.ELEVATOR : SIGN.ROOF, q.a, y0 + dh + 0.33, y0 + dh + 0.69, P.d0 - 0.066, 1.8, -1);
-    GL.color("#ffe7c0");
-    GL.box(q.a + q.half + 0.35, q.a + q.half + 0.6, y0 + dh + 0.05, y0 + dh + 0.25, P.d0 - 0.16, P.d0, "+d");
+    wallLight(E, GL, y0 + dh + 0.3, (u0, u1, v0, v1, ya, yb, f) => [q.a + q.half + 0.48 + u0, q.a + q.half + 0.48 + u1, ya, yb, P.d0 - v1, P.d0 - v0, f], "+d");
     PL.color("#ffcf96", 0.8);
     PL.quad([q.a - 2.2, y0 + 0.03, P.d0 - 0.05], [q.a + 2.2, y0 + 0.03, P.d0 - 0.05], [q.a + 2.2, y0 + 0.03, P.d0 - 3.2], [q.a - 2.2, y0 + 0.03, P.d0 - 3.2]);
   } else {
@@ -264,8 +285,7 @@ function penthouse(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding, bea
     E.box(P.a1, P.a1 + 0.05, y0 + dh + 0.24, y0 + dh + 0.56, q.d - 0.7, q.d + 0.7, "b-a");
     SG.color("#ffffff");
     signA(SG, SIGN.ROOF, q.d, y0 + dh + 0.26, y0 + dh + 0.54, P.a1 + 0.066, 1.3, 1);
-    GL.color("#ffe7c0");
-    GL.box(P.a1, P.a1 + 0.16, y0 + dh - 0.2, y0 + dh, q.d + q.half + 0.3, q.d + q.half + 0.55, "-a");
+    wallLight(E, GL, y0 + dh + 0.05, (u0, u1, v0, v1, ya, yb, f) => [P.a1 + v0, P.a1 + v1, ya, yb, q.d + q.half + 0.45 + u0, q.d + q.half + 0.45 + u1, f], "-a");
     PL.color("#ffcf96", 0.8);
     PL.quad([P.a1 + 0.05, y0 + 0.03, q.d - 2], [P.a1 + 0.05, y0 + 0.03, q.d + 2], [P.a1 + 3, y0 + 0.03, q.d + 2], [P.a1 + 3, y0 + 0.03, q.d - 2]);
   }
