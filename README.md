@@ -8,7 +8,7 @@ that stops at the lights, day and night, and up to four players in co-op.
 Other arenas (the original procedural maps) are still in the rotation; add `?map=city`
 to the URL to go straight to the city.
 
-Play it at **https://tylerszakacs.com/gta**.
+Play it at **https://tylerszakacs.com/game**.
 
 ## Controls
 
@@ -30,24 +30,24 @@ Needs Node.js 20.19 or newer.
 
 ```sh
 npm ci
-npm run dev            # Vite dev server; open the printed URL + /gta/
+npm run dev            # Vite dev server; open the printed URL + /game/
 ```
 
 ## Build and hosting
 
-The game is a static single-page app served under the `/gta/` base path. There is no
+The game is a static single-page app served under the `/game/` base path. There is no
 server runtime: TanStack Start runs in SPA mode and prerenders one HTML shell.
 
 ```sh
-npm run build          # vite build, then stages dist/client into dist/site/gta/
-npm run serve:static   # serves dist/site like the deployment: http://localhost:4173/gta/
+npm run build          # vite build, then stages dist/client into dist/site/game/
+npm run serve:static   # serves dist/site like the deployment: http://localhost:4173/game/
 ```
 
 - Build command: `npm run build`
-- Output directory: `dist/site` (the game lives in `dist/site/gta/`)
+- Output directory: `dist/site` (the game lives in `dist/site/game/`)
 - `vercel.json` sets the install / build commands and output directory, and rewrites
-  `/gta` and any unknown `/gta/*` path to `/gta/index.html`, so hard refreshes work.
-- tylerszakacs.com proxies `/gta/*` to this project's deployment.
+  `/game` and any unknown `/game/*` path to `/game/index.html`, so hard refreshes work.
+- tylerszakacs.com proxies `/game/*` to this project's deployment.
 
 ## Code map
 
