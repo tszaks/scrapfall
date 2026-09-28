@@ -76,7 +76,10 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
   return {
     dprMin: pref === "low" ? 1 : MOBILE ? 0.7 : 0.85,
     dprMax: 1,
-    shadowMap: 0,
+    // LOW picked by hand turns sun shadows off (a one-time recompile, in the menu); AUTO keeps a
+    // small map instead, because switching shadows on or off recompiles every lit shader,
+    // a multi-second freeze mid-fight
+    shadowMap: pref === "low" ? 0 : 512,
     reflScale: 0,
     reflEvery: 4,
     rain: 0.35,
