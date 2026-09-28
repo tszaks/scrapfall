@@ -3,7 +3,7 @@
 //
 // OVERCLOCK (the default) plays the curve below: a gentle first wave, the newer enemy types
 // introduced one at a time with room to learn each, a big-map crowd that grows from 1.0x to
-// 1.6x instead of starting at 1.75x, and enemy damage / attack tempo that ramp up to full by
+// 1.5x (1.65x by the boss) instead of a flat 1.75x, and enemy damage / attack tempo that ramp up to full by
 // wave 8. MELTDOWN is the game as it was before this rebalance (the old wave table, the flat
 // 1.75x big-map crowd, random heavies from wave 1). RUST BUCKET and SALVAGE soften the curve;
 // SCRAPFALL sharpens the old game.
@@ -53,17 +53,17 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     desc: "Very forgiving: fewer, weaker, slower robots and a health pack every wave.",
     color: "#8a9a5b",
     table: "curve",
-    countMul: 0.6,
-    hpMul: 0.7,
+    countMul: 0.45,
+    hpMul: 0.6,
     bossMul: 0.35,
-    hpRamp: 0.05,
-    dmgMul: () => 0.5,
-    tempo: () => 1.5,
+    hpRamp: 0.03,
+    dmgMul: () => 0.35,
+    tempo: () => 1.6,
     introShift: 2,
     healGap: () => 1,
     surpriseFrom: 9,
     surpriseMax: () => 1,
-    hitCap: () => 0.25,
+    hitCap: () => 0.2,
   },
   salvage: {
     id: "salvage",
@@ -71,11 +71,11 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     desc: "Relaxed: a gentler curve with room to breathe and plenty of repairs.",
     color: "#5b8a9a",
     table: "curve",
-    countMul: 0.65,
+    countMul: 0.6,
     hpMul: 0.8,
     bossMul: 0.6,
     hpRamp: 0.06,
-    dmgMul: ramp(0.5, 0.75, 1, 10),
+    dmgMul: ramp(0.45, 0.7, 1, 10),
     tempo: ramp(1.5, 1.25, 1, 10),
     introShift: 1,
     healGap: () => 1,
@@ -92,8 +92,8 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     countMul: 1,
     hpMul: 1,
     bossMul: 1,
-    hpRamp: 0.07,
-    dmgMul: (w) => (w >= 10 ? 1.1 : ramp(0.7, 1, 1, 8)(w)),
+    hpRamp: 0.06,
+    dmgMul: ramp(0.7, 1, 1, 8),
     tempo: ramp(1.3, 1, 1, 8),
     introShift: 0,
     healGap: (w) => (w <= 6 ? 1 : 2),
@@ -182,8 +182,8 @@ export function waveLineup(d: Difficulty, n: number, legacy: WaveSpec[]): WaveSp
  * behind blocks, so they send more; the curve grows that crowd instead of starting at full. */
 export function crowdMul(d: Difficulty, n: number, big: boolean) {
   if (d.table === "legacy") return big ? 1.75 : 1.25 + 0.1 * (n - 1);
-  if (big) return n >= 10 ? 1.6 + 0.05 * (n - 9) : ramp(1, 1.6, 1, 9)(n);
-  return 1 + 0.09 * (n - 1);
+  if (big) return n >= 10 ? 1.5 + 0.05 * (n - 9) : ramp(1, 1.5, 1, 9)(n);
+  return 1 + 0.08 * (n - 1);
 }
 
 /** the damage you actually take from one hit: difficulty scaling (rounded up or down at random
