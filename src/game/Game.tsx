@@ -3717,6 +3717,16 @@ export function Game() {
   }, [dead]);
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
+  // keep the deepest wave ever reached, overtime included
+  useEffect(() => {
+    if (!ended) return;
+    const reached = status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1);
+    setHighWave((h) => {
+      if (reached <= h) return h;
+      saveHighWave(reached);
+      return reached;
+    });
+  }, [ended, status.won, status.wave]);
   const isHost = !net || net.role === "host";
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
