@@ -73,6 +73,8 @@ export type Ord = {
   /** blast radius */
   r: number;
   tgt: string | null;
+  /** the kind that launched it (cause-of-death log) */
+  src?: string;
 };
 export const newOrd = (): Ord => ({ on: false, tp: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, T: 1, lx: 0, lz: 0, yaw: 0, r: 0, tgt: null });
 
@@ -95,7 +97,9 @@ export type AICtx = {
   fieldFor: (t: Target) => Float32Array | undefined;
   /** stacked-ground maps: a fine 2 m field round the target (level.ts fineField) */
   fineFor?: (t: Target) => FineField | undefined;
-  hurtTarget: (t: Target, dmg: number, kx?: number, kz?: number) => void;
+  hurtTarget: (t: Target, dmg: number, kx?: number, kz?: number, src?: string) => void;
+  /** attack clock step: delta scaled by the difficulty's tempo (cooldowns, wind-ups) */
+  tdelta?: number;
   shoot: (x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, dmg: number, size: number) => void;
   ords: Ord[];
   /** hornets share one sting cooldown, so a pack cannot land five hits in one frame */
@@ -224,7 +228,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
   const g = groundY(e.x, e.z); // 0 on flat maps; shots and ordnance start from the enemy's ground
   const spd = speedOf(e);
   const st = e.st ?? 0;
-  e.t1 = (e.t1 ?? 0) - dt;
+  e.t1 = (e.t1 ?? 0) - (ctx.tdelta ?? dt);
   if ((e.hitT ?? 0) > 0) e.hitT = e.hitT! - dt;
   if ((e.blockT ?? 0) > 0) e.blockT = e.blockT! - dt;
   const stats = NEW_STATS[e.kind as NewKind];
@@ -390,7 +394,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const y0 = g + 2.1;
           const T = Math.max(0.8, Math.min(1.7, Math.hypot(lx - sx, lz - sz) / 11));
           Object.assign(o, {
-            on: true, tp: ORD_GRENADE, x: sx, y: y0, z: sz,
+            on: true, tp: ORD_GRENADE, src: "grenadier", x: sx, y: y0, z: sz,
             vx: (lx - sx) / T, vz: (lz - sz) / T, vy: (groundY(lx, lz) + 0.25 - y0) / T + 0.5 * GRAVITY * T,
             t: 0, T, lx, lz, r: GRENADE_RADIUS, tgt: null,
           });
@@ -622,7 +626,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       } else if (st === 2) {
         // it tracks slowly: strafing round it at close range outpaces the barrels
         turn(e, face, 0.65, dt);
-        e.shots = (e.shots ?? 0) - dt;
+        e.shots = (e.shots ?? 0) - (ctx.tdelta ?? dt);
         if (e.shots <= 0) {
           e.shots += 1 / 5;
           // the barrels sit off to the right; the stream converges on where the body faces,
@@ -656,7 +660,7 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         if (o) {
           const sx = e.x + Math.cos(face) * 0.45 + Math.sin(face) * 0.6;
           const sz = e.z - Math.sin(face) * 0.45 + Math.cos(face) * 0.6;
-          Object.assign(o, { on: true, tp: ORD_ROCKET, x: sx, y: g + 2.2, z: sz, vx: 0, vy: 0, vz: 0, t: 0, T: ROCKET_LIFE, lx: 0, lz: 0, yaw: face, r: ROCKET_RADIUS, tgt: target.id });
+          Object.assign(o, { on: true, tp: ORD_ROCKET, src: "rocketeer", x: sx, y: g + 2.2, z: sz, vx: 0, vy: 0, vz: 0, t: 0, T: ROCKET_LIFE, lx: 0, lz: 0, yaw: face, r: ROCKET_RADIUS, tgt: target.id });
         }
         e.st = 0;
         e.cooldown = 5 + ctx.rand() * 1.5;
@@ -741,7 +745,7 @@ export function stepOrds(ctx: AICtx) {
         o.on = false;
         for (const t of ctx.targets) {
           const dd = Math.hypot(t.x - o.x, t.z - o.z);
-          if (dd < o.r && Math.abs(eyeOf(t) - o.y) < o.r + 1.5) ctx.hurtTarget(t, 2, ((t.x - o.x) / (dd || 1)) * 6, ((t.z - o.z) / (dd || 1)) * 6);
+          if (dd < o.r && Math.abs(eyeOf(t) - o.y) < o.r + 1.5) ctx.hurtTarget(t, 2, ((t.x - o.x) / (dd || 1)) * 6, ((t.z - o.z) / (dd || 1)) * 6, o.src ?? "grenadier");
         }
         blast(ctx.ords, o.x, o.z, o.r);
       }
@@ -766,7 +770,7 @@ export function stepOrds(ctx: AICtx) {
       o.on = false;
       for (const q of ctx.targets) {
         const dd = Math.hypot(q.x - o.x, q.z - o.z);
-        if (dd < o.r && Math.abs(eyeOf(q) - o.y) < o.r + 1.5) ctx.hurtTarget(q, 3, ((q.x - o.x) / (dd || 1)) * 8, ((q.z - o.z) / (dd || 1)) * 8);
+        if (dd < o.r && Math.abs(eyeOf(q) - o.y) < o.r + 1.5) ctx.hurtTarget(q, 3, ((q.x - o.x) / (dd || 1)) * 8, ((q.z - o.z) / (dd || 1)) * 8, o.src ?? "rocketeer");
       }
       blast(ctx.ords, o.x, o.z, o.r, o.y);
     }

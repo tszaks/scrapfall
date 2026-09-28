@@ -61,6 +61,7 @@ import {
   type AICtx, type Ord,
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
+import { DIFFICULTIES, DIFFICULTY_IDS, DIFFICULTY_KEY, DEFAULT_DIFFICULTY, crowdMul, difficultyOf, scaleHit, waveLineup, type DifficultyId } from "./difficulty";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
@@ -182,6 +183,8 @@ type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
   bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
   blast: number; blastMul: number;
+  /** enemy rounds: which kind fired it (the balance harness's cause-of-death log) */
+  src?: string;
 };
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
@@ -1346,9 +1349,11 @@ function shieldUp(e: Enemy, host: boolean) {
 }
 
 type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number; blast?: number; blastMul?: number };
+/** which enemy is acting right now (host AI loop), for attributing the damage it deals */
+const hitSrc = { v: "" };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
-    life, active: true, damage, color, size,
+    life, active: true, damage, color, size, src: hitSrc.v,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
     blast: fx.blast ?? 0, blastMul: fx.blastMul ?? 0,
@@ -1592,6 +1597,7 @@ function World({
   seed,
   time,
   ability,
+  difficulty,
   onAbilityCd,
   onStat,
   onEvent,
@@ -1640,6 +1646,8 @@ function World({
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
   mapFeed: React.MutableRefObject<MapFeed>;
+  /** the host's difficulty (synced to guests like the map pick) */
+  difficulty: DifficultyId;
   /** co-op: out of health but not yet bled out (crawling, waiting for a revive) */
   downed: boolean;
   /** what pings can hit (filled here, read by the SquadDriver) */
@@ -1728,14 +1736,23 @@ function World({
     knock.current.z = kz;
     knock.current.shake = Math.max(knock.current.shake, 0.5);
   };
-  const hitLog = useRef<{ dmg: number; t: number }[]>([]); // test handle: every incoming hit
-  const takeHit = (dmg: number) => {
-    if (hitLog.current.length < 400) hitLog.current.push({ dmg, t: performance.now() });
+  // test handle: every incoming hit, what caused it, and what it cost after difficulty scaling
+  const hitLog = useRef<{ dmg: number; t: number; src: string; got?: number }[]>([]);
+  const diffRef = useRef(difficultyOf(difficulty));
+  diffRef.current = difficultyOf(difficulty);
+  const shownWave = useRef(1); // guests don't run the wave director: the host's status tells them
+  const takeHit = (dmg: number, src = "") => {
+    if (hitLog.current.length >= 400) hitLog.current.shift();
+    hitLog.current.push({ dmg, t: performance.now(), src: src || hitSrc.v });
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
     reviveInterrupted(); // taking damage breaks off a revive in progress
     const s2 = stats.current;
     if (s2.dodge > 0 && Math.random() < s2.dodge) return; // phase shift: the blow passes through
-    const d = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    const d0 = Math.max(1, Math.round(dmg * (1 - s2.armor)));
+    // difficulty: scaled damage (random rounding keeps the average) and a per-hit cap
+    const d = scaleHit(diffRef.current, Math.max(wave.current, shownWave.current), d0, s2.maxHp);
+    if (hitLog.current.length) hitLog.current[hitLog.current.length - 1]!.got = d;
+    if (d <= 0) return;
     if (s2.thorns > 0 && Math.random() < s2.thorns) thornsPending.current = 1;
     onStat("taken", d);
     onHurt(d);
@@ -1898,7 +1915,7 @@ function World({
     knock.current.z = kz;
     knock.current.shake = Math.max(knock.current.shake, shake);
     if (shake > 0) playSfx("thud");
-    if (dmg > 0) takeHit(dmg);
+    if (dmg > 0) takeHit(dmg, "car");
   };
 
   const playersRef = useRef(players);
@@ -2081,6 +2098,7 @@ function World({
       } else {
         if (m.type === "snap") applySnap(m);
         else if (m.type === "status") {
+          shownWave.current = Number(m.w) || 1;
           onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
           if (m.banner) {
             // a new wave: guests get the same fresh sidearm magazine the host's spawnWave hands out
@@ -2096,7 +2114,7 @@ function World({
         }
         else if (m.type === "hurt") {
           if (m.kx !== undefined && invuln.current <= 0) shove(Number(m.kx), Number(m.kz));
-          takeHit(Number(m.dmg) || 1);
+          takeHit(Number(m.dmg) || 1, String(m.src ?? ""));
         }
       }
     };
@@ -2114,6 +2132,7 @@ function World({
     placeAtSpawn();
     resetRide();
     wave.current = 0;
+    shownWave.current = 1;
     nextWaveTimer.current = 1.5;
     pending.current = [];
     weapon.current = "pistol";
@@ -2663,22 +2682,24 @@ function World({
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
-    // arenas: Toby's fuller waves as the run goes (1.25x on wave 1, +0.10x every wave after).
-    // The big real-scale maps keep their own tuned crowd (1.75x: enemies hide behind blocks).
-    const waveMul = big ? 1.75 : 1.25 + 0.1 * (n - 1);
+    // the difficulty decides the lineup (the curve or the old table), the map's crowd
+    // multiplier (the curve grows it wave by wave) and an overall count multiplier
+    const diff = diffRef.current;
+    const waveMul = crowdMul(diff, n, !!big) * diff.countMul;
     const enemyMul = (1 + 0.6 * extra) * waveMul;
     const lootMul = 1 + 0.65 * extra;
-    const spec: WaveSpec = WAVES[n - 1] ?? {};
+    const spec = waveLineup(diff, n, WAVES) as WaveSpec;
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
     // a couple of slots each wave are rolled from the heavier pool, so no two runs feel identical
     const surprisePool: Kind[] = n >= 5 ? ["brute", "specter", "bomber", "vanguard", "special"] : n >= 3 ? ["brute", "shooter", "specter", "special"] : ["brute", "shooter", "runner"];
-    const surprises = Array<Kind>(1 + Math.floor(rand() * 2)).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
+    const surpriseN = n < diff.surpriseFrom ? 0 : Math.min(diff.surpriseMax(n), 1 + Math.floor(rand() * 2));
+    const surprises = Array<Kind>(surpriseN).fill("drifter").map(() => surprisePool[Math.floor(rand() * surprisePool.length)] ?? "brute");
     const roster: Kind[] = ([] as Kind[])
       .concat(...KINDS.map((k) => Array<Kind>(k === "boss" ? (spec.boss ?? 0) : scale(spec[k] ?? 0)).fill(k)))
       .concat(surprises)
-      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(8)).fill("drifter").concat(Array<Kind>(scale(4)).fill("runner")) : []);
+      .concat(event === "DRIFTER HORDE" ? Array<Kind>(scale(diff.table === "curve" ? 5 : 8)).fill("drifter").concat(Array<Kind>(scale(diff.table === "curve" ? 2 : 4)).fill("runner")) : []);
     // arrival order: the boss first, then a shuffled mix, so the newer types turn up through
     // the wave instead of all at the end; hornets arrive as one pack of 3-5 from one spot
     const units: Kind[][] = roster.filter((k) => k !== "hornet" && k !== "boss").map((k) => [k]);
@@ -2702,7 +2723,7 @@ function World({
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
     waveTotal.current = Math.max(1, kinds.length); // the time of day follows how much is cleared
-    const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+    const hpMul = diff.hpMul * (1 + diff.hpRamp * (n - 1)); // later rounds send sturdier enemies
     // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
     const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
 
@@ -2780,7 +2801,7 @@ function World({
       netRef.current?.broadcast({ type: "event", name: event });
     }
     // health: guaranteed pack every wave in co-op, every other wave solo
-    const healGap = extra > 0 ? 1 : 2;
+    const healGap = extra > 0 ? 1 : diff.healGap(n);
     if (n >= 2 && n - lastHealWave.current >= healGap) {
       const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
@@ -3235,7 +3256,7 @@ function World({
           b.pos.addScaledVector(b.vel, delta);
           if (!spectating && b.pos.distanceTo(cam.position) < 0.8) {
             b.active = false;
-            takeHit(b.damage);
+            takeHit(b.damage, "shot");
 
             n?.broadcast({ type: "ebhit", i });
           }
@@ -3248,6 +3269,7 @@ function World({
     }
 
     const status = (w: number, rem: number, won: boolean, bannerOn: boolean) => {
+      shownWave.current = w;
       onStatus(w, rem, won, bannerOn);
       if (isH) n?.broadcast({ type: "status", w, rem, won, banner: bannerOn });
     };
@@ -3518,11 +3540,12 @@ function World({
       if (targets.length === 0) targets.push({ id: null, x: cam.position.x, z: cam.position.z, y: cam.position.y, ...lf, zn: myZone() });
       const accOn = accessActive();
 
-      const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0) => {
+      const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0, src = "") => {
+        const from = src || hitSrc.v;
         if (t.id === null) {
           if ((kx || kz) && invuln.current <= 0) shove(kx, kz);
-          takeHit(dmg);
-        } else n?.sendTo(t.id, kx || kz ? { type: "hurt", dmg, kx, kz } : { type: "hurt", dmg });
+          takeHit(dmg, from);
+        } else n?.sendTo(t.id, kx || kz ? { type: "hurt", dmg, kx, kz, src: from } : { type: "hurt", dmg, src: from });
       };
       const aiCtx: AICtx = {
         delta,
@@ -3541,7 +3564,10 @@ function World({
         hornetCd: hornetCd.current,
         navOpen,
       };
-      hornetCd.current.v -= delta;
+      // difficulty: the enemies' attack clock (cooldowns, wind-ups, telegraphs) runs slower on easier levels
+      const atkDt = delta / diffRef.current.tempo(Math.max(1, wave.current));
+      aiCtx.tdelta = atkDt;
+      hornetCd.current.v -= atkDt;
 
       // flow field per target cell (cached)
       const used = new Set<number>();
@@ -3668,7 +3694,8 @@ function World({
         const e = enemies[ei]!;
         if (!e.alive) continue;
         e.flash -= delta;
-        e.cooldown -= delta;
+        e.cooldown -= atkDt;
+        hitSrc.v = e.kind; // anything this enemy fires or hits this tick is credited to its kind
         if (e.slow > 0) e.slow -= delta;
         if ((e.frozen ?? 0) > 0) {
           // frozen solid: no moving, no attacking, attack timers paused
@@ -3817,7 +3844,7 @@ function World({
         }
         // SPECTER: blinks in behind whoever it is hunting, then slashes
         if (e.kind === "specter") {
-          e.shot -= delta;
+          e.shot -= atkDt;
           if (e.shot <= 0 && d > 9) {
             e.shot = 5 + rand() * 3;
             const a = rand() * Math.PI * 2;
@@ -3837,7 +3864,7 @@ function World({
           const reach = e.kind === "boss" ? (theme.boss.shape === "kraken" ? KRAKEN_R + 2.2 : 3.6) : e.kind === "vanguard" ? 2.6 : 2.4;
           if (e.swing > 0) {
             const before = e.swing;
-            e.swing -= delta;
+            e.swing -= atkDt;
             if (before > 0.2 && e.swing <= 0.2 && dm < reach) hurtTarget(target, st.dmg);
           } else if (dm < reach - 0.2 && e.cooldown <= 0) {
             e.swing = 0.4;
@@ -3853,7 +3880,7 @@ function World({
         }
         // BOMBER: heavy shells lobbed from above, they clear low cover
         if (e.kind === "bomber") {
-          e.shot -= delta;
+          e.shot -= atkDt;
           if (e.shot <= 0 && d < 30) {
             e.shot = 3 + rand();
             const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 3.2, e.z);
@@ -3863,7 +3890,7 @@ function World({
           }
         }
         if (spType) {
-          e.shot -= delta;
+          e.shot -= atkDt;
           const aim = (y0: number, spd: number, spread: number, n: number, dmg: number, life = 3.5, size = 0.2) => {
             const y = y0 + groundY(e.x, e.z);
             const from = new THREE.Vector3(e.x, y, e.z);
@@ -3930,7 +3957,7 @@ function World({
           // the lasso lands: 1 damage and a yank toward him (a shove, synced like any hit)
           marshalTick(e, inReach ? d : Math.max(d, 3.5), dx, dz, delta, aimB, (kx, kz) => hurtTarget(target, 1, kx, kz));
         } else if (e.kind === "boss") {
-          e.shot -= delta;
+          e.shot -= atkDt;
           if (e.shot <= 0 && d < 30) {
             e.shot = 1.8;
             const from = new THREE.Vector3(e.x, groundY(e.x, e.z) + 2.6, e.z);
@@ -3969,6 +3996,7 @@ function World({
       }
 
       // grenades and homing rockets
+      hitSrc.v = "";
       stepOrds(aiCtx);
 
       // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
@@ -4195,7 +4223,7 @@ function World({
           if (b.life <= 0 || outOfBounds(b.pos)) b.active = false;
           else if (!spectating && b.pos.distanceTo(cam.position) < 0.6) {
             b.active = false;
-            takeHit(b.damage);
+            takeHit(b.damage, b.src || "shot");
 
           }
         }
@@ -4333,7 +4361,7 @@ function World({
           if (deadRef.current) return;
           if (kx || kz) shove(kx, kz);
           knock.current.shake = Math.max(knock.current.shake, shake);
-          if (dmg > 0) takeHit(dmg);
+          if (dmg > 0) takeHit(dmg, "event");
         }}
         movePlayer={(dx, dz) => {
           const p = camera.position;
@@ -4349,7 +4377,7 @@ function World({
           // as a wave's arrivals, a red X first; they count toward the wave
           if (!(KINDS as string[]).includes(kindName) || kindName === "boss") return 0;
           const kind = kindName as Kind;
-          const hpMul = 1 + 0.09 * (Math.max(1, wave.current) - 1);
+          const hpMul = diffRef.current.hpMul * (1 + diffRef.current.hpRamp * (Math.max(1, wave.current) - 1));
           let placed = 0;
           for (let i = 0; i < enemies.length && placed < n; i++) {
             const e = enemies[i]!;
@@ -4584,6 +4612,13 @@ export function Game() {
     const saved = window.localStorage.getItem("df-class") as ClassId | null;
     return saved && CLASSES[saved] ? saved : "vanguard";
   });
+  /** difficulty, picked on the loadout screen and remembered; in co-op the host's applies to all */
+  const [difficulty, setDifficulty] = useState<DifficultyId>(() => {
+    if (typeof window === "undefined") return DEFAULT_DIFFICULTY;
+    return difficultyOf(window.localStorage.getItem(DIFFICULTY_KEY)).id;
+  });
+  const difficultyRef = useRef(difficulty);
+  difficultyRef.current = difficulty;
   /** ability pick screen shown after pressing START, before the match begins */
   const [picking, setPicking] = useState(false);
   /** what every squad member has chosen, keyed by player number */
@@ -4710,6 +4745,7 @@ export function Game() {
       if (document.pointerLockElement) document.exitPointerLock();
       return;
     }
+    if (m.type === "diff") { setDifficulty(difficultyOf(String(m.d)).id); return; } // the host's pick
     if (m.type === "resume") { startRef.current(true); return; }
     if (m.type === "begin") { startRef.current(true); return; }
     if (m.type === "joined") {
@@ -4719,6 +4755,7 @@ export function Game() {
         for (let n = 2; n <= 4; n++) if (!used.has(n)) { slots.current[id] = n; break; }
       }
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
+      netHolder.current?.sendTo(id, { type: "diff", d: difficultyRef.current });
       publishRoster();
       // a match is already running: the newcomer drops straight into it
       if (phase.current.started && !phase.current.ended) netHolder.current?.sendTo(id, { type: "begin" });
@@ -5010,6 +5047,13 @@ export function Game() {
   useEffect(() => {
     if (typeof window !== "undefined") window.localStorage.setItem("df-class", cls);
   }, [cls]);
+  /** the host (or solo player) picks the difficulty; it is saved and sent to the squad */
+  const pickDifficulty = (d: DifficultyId) => {
+    if (net && net.role !== "host") return;
+    setDifficulty(d);
+    if (typeof window !== "undefined") window.localStorage.setItem(DIFFICULTY_KEY, d);
+    net?.broadcast({ type: "diff", d });
+  };
 
   useEffect(() => {
     if (!eventMsg) return;
@@ -5356,6 +5400,7 @@ export function Game() {
           }}
           onEvent={setEventMsg}
           mapFeed={mapFeed}
+          difficulty={difficulty}
           downed={downed}
           pingWorld={pingWorld}
 
@@ -5393,7 +5438,7 @@ export function Game() {
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {theme.name.toUpperCase()}
+              {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
             </div>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               WAVE {status.wave}/{WAVES.length}
@@ -5726,6 +5771,24 @@ export function Game() {
                 );
               })}
             </div>
+            {/* difficulty: five levels, the host picks (Overclock is the default) */}
+            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">{isHost ? "DIFFICULTY" : "DIFFICULTY · THE HOST PICKS"}</p>
+            <div className="mt-2 grid grid-cols-5 gap-1">
+              {DIFFICULTY_IDS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => pickDifficulty(id)}
+                  disabled={!isHost}
+                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
+                    difficulty === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
+                  } ${isHost ? "" : "cursor-default"}`}
+                  style={difficulty === id ? { background: DIFFICULTIES[id].color } : undefined}
+                >
+                  {DIFFICULTIES[id].name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 text-[11px] leading-snug opacity-70">{DIFFICULTIES[difficulty].desc}</div>
             <button
               onClick={() => { pinTime(null); cycleTimeMode(); }}
               title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
@@ -5798,10 +5861,10 @@ export function Game() {
             {(gameOver || status.won || paused) && (
               <p className="mt-2 text-sm opacity-70">
                 {gameOver
-                  ? `You fell on wave ${status.wave} with ${score} kills.`
+                  ? `You fell on wave ${status.wave} with ${score} kills · ${DIFFICULTIES[difficulty].name}.`
                   : status.won
-                    ? `All ${WAVES.length} waves survived · ${score} kills.`
-                    : `Wave ${status.wave} · ${score} kills so far.`}
+                    ? `All ${WAVES.length} waves survived · ${score} kills · ${DIFFICULTIES[difficulty].name}.`
+                    : `Wave ${status.wave} · ${score} kills so far · ${DIFFICULTIES[difficulty].name}.`}
               </p>
             )}
             {!paused && (
