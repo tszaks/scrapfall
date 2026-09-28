@@ -2778,9 +2778,13 @@ function World({
       if (remaining === 0 && (endless.current || wave.current <= WAVES.length)) {
         // clearing the map boss ends the run — unless overtime is switched on
         if (wave.current === WAVES.length && !endless.current) {
-          status(WAVES.length, 0, true, false);
+          if (!wonLatch.current) {
+            wonLatch.current = true;
+            status(WAVES.length, 0, true, false);
+          }
           return;
         }
+        wonLatch.current = false;
         // wave cleared: tell everyone so the shop opens during the break
         if (wave.current > 0 && lastRemaining.current !== 0) {
           lastRemaining.current = 0;
