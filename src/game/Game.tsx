@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toNav, spawnNear,
-  setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
+  closeRaised, setArenaSize, SOLO_ARENA, COOP_ARENA, CITY_COOP, PLAY_HALF,
   BEACH_SIZE, setPosts,
 } from "./level";
 
@@ -35,7 +35,7 @@ import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, setTimeMode, setWaveClock, tod, toggleTimeLock, useTodMode, useTodNearest, waveStage } from "./timeOfDay";
-import { climbable, ghostOK, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
+import { climbable, ghostOK, raised, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { PloughBody, SkierModel } from "./alpine/enemies";
@@ -1711,7 +1711,7 @@ function World({
   }, [blocks, enemies, theme, pingWorld]);
 
   // (roofs of access buildings get their own nav cells, walled off from the street)
-  const solid = useMemo(() => patchNav(solidGrid(blocks)), [blocks]);
+  const solid = useMemo(() => closeRaised(patchNav(solidGrid(blocks))), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
@@ -2109,7 +2109,7 @@ function World({
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
-  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)];
+  const navOpen = (x: number, z: number) => !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
   /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
   const liveZones = () => {
     const z = new Set<number>();
@@ -2286,8 +2286,13 @@ function World({
       const kz = h.kz ?? 0;
       const len = Math.hypot(kx, kz) || 1;
       const push = kb * (e.kind === "brute" || e.kind === "vanguard" || HEAVY_NEW.has(e.kind) ? 0.5 : 1);
-      e.x += (kx / len) * push;
-      e.z += (kz / len) * push;
+      // (a shove never lifts it onto a balcony or up the tower's face)
+      const tx = e.x + (kx / len) * push;
+      const tz = e.z + (kz / len) * push;
+      if (climbable(e.x, e.z, tx, tz)) {
+        e.x = tx;
+        e.z = tz;
+      }
     }
     e.hp -= dmg;
     e.flash = 0.1;
@@ -2440,12 +2445,14 @@ function World({
 
   /** an open spot right next to (x, z): hornet pack members land around their leader */
   const besides = (x: number, z: number) => {
-    for (let k = 0; k < 8; k++) {
-      const qx = x + (rand() - 0.5) * 2.4;
-      const qz = z + (rand() - 0.5) * 2.4;
-      if (!blocked(blocks, qx, qz, 0.5)) return { x: qx, z: qz };
+    // close beside the leader first, then a little wider; never a blocked or stair-only spot
+    for (let k = 0; k < 20; k++) {
+      const w = k < 8 ? 2.4 : 7;
+      const qx = x + (rand() - 0.5) * w;
+      const qz = z + (rand() - 0.5) * w;
+      if (!blocked(blocks, qx, qz, 0.5) && !raised(qx, qz)) return { x: qx, z: qz };
     }
-    return { x, z };
+    return spot(25, 45, true);
   };
 
   const spawnWave = (n: number) => {
@@ -2668,8 +2675,11 @@ function World({
 
     // a step is allowed when nothing solid is there and it isn't a wall-steep climb (terrain)
     // (building access: interiors have their own walls, see pBlocked)
+    // (already overlapping something, e.g. dropped onto a thin post: step out with a slimmer
+    // body instead of being frozen in place)
+    const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
-      !pBlocked(x, z, 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
+      !pBlocked(x, z, overlapping ? 0.1 : 0.4) && (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0);
     const strafe = (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0);
@@ -3287,18 +3297,20 @@ function World({
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
-            } else if (e.kind !== "boss") {
+            } else {
               // wedged on a corner the coarse nav grid thinks is open: once it has made no
               // progress for 3 s and nobody can see it, it re-enters from another hidden spot
+              // (the boss too: a wedged boss is a turret, and a sealed-in one never dies)
               const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
               // (a melee type standing still short of its target is stuck too, even in plain sight)
               const melee = e.kind === "drifter" || e.kind === "runner" || e.kind === "brute" || e.kind === "vanguard";
               e.stuckFor = moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
+                const hidden = e.kind !== "boss";
                 const q = accOn
-                  ? spot(25, 45, true, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
-                  : spot(25, 45, true, zoneFor(e.x, e.z));
+                  ? spot(25, 45, hidden, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
+                  : spot(25, 45, hidden, zoneFor(e.x, e.z));
                 e.x = q.x;
                 e.z = q.z;
                 e.stuckFor = 0;
@@ -3416,8 +3428,10 @@ function World({
         else {
           const ox = e.x;
           const oz = e.z;
-          if (!blocked(blocks, nx, e.z, r)) e.x = nx;
-          if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+          // (and only steps it could walk: no hopping up a balcony edge or the tower's face)
+          const can = (fx: number, fz: number, tx: number, tz: number) => !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz);
+          if (can(e.x, e.z, nx, e.z)) e.x = nx;
+          if (can(e.x, e.z, e.x, nz)) e.z = nz;
           // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
           // sideways round it instead of pushing into it forever
           const want = Math.hypot(nx - ox, nz - oz);
@@ -3428,7 +3442,7 @@ function World({
             for (const sgn of [side, -side]) {
               const sx = ox + px * sgn;
               const sz = oz + pz * sgn;
-              if (!blocked(blocks, sx, sz, r)) { e.x = sx; e.z = sz; break; }
+              if (can(ox, oz, sx, sz)) { e.x = sx; e.z = sz; break; }
             }
           }
         }
@@ -3506,8 +3520,8 @@ function World({
               e.aux = (e.aux ?? 0) - delta;
               const lx = e.x + (dx / d) * 14 * delta;
               const lz = e.z + (dz / d) * 14 * delta;
-              if (!blocked(blocks, lx, e.z, 0.6)) e.x = lx;
-              if (!blocked(blocks, e.x, lz, 0.6)) e.z = lz;
+              if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z)) e.x = lx;
+              if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz)) e.z = lz;
               if (dm < 1.4) { e.aux = 0; hurtTarget(target, 2); }
             } else if (ready && d < 10) { e.shot = 4; e.aux = 0.5; }
           }
@@ -3613,8 +3627,9 @@ function World({
       const nudge = (e: Enemy, px: number, pz: number) => {
         const rr = Math.min(STATS[e.kind].radius, 0.8);
         const ghost = e.kind === "specter";
-        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr)) e.x += px;
-        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr)) e.z += pz;
+        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
+        if (ghost ? ghostOK(e.x + px, e.z) : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)) e.x += px;
+        if (ghost ? ghostOK(e.x, e.z + pz) : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)) e.z += pz;
       };
       for (let ei = 0; ei < enemies.length; ei++) {
         const a = enemies[ei]!;

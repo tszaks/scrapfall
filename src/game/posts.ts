@@ -53,11 +53,8 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
     return out;
   }
   if (western) {
-    for (const p of western.props) {
-      if (p.k === "streetlamp" || p.k === "pole" || p.k === "sign" || p.k === "cross")
-        out.push({ x: p.x, z: p.z, r: 0.22 });
-      else if (p.k === "bench") bar(out, p.x, p.z, p.rot, 0.6, 0.35);
-    }
+    // Dry Gulch builds its own list: porch posts, cactus, barrels, crosses, poles, benches...
+    out.push(...western.posts);
     return out;
   }
   if (city) {

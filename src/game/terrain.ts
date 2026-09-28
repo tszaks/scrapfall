@@ -148,9 +148,28 @@ export function strictNav() {
 export function climbable(x0: number, z0: number, x1: number, z1: number) {
   const g = G;
   if (!g || g.maxSlope === undefined) return true;
-  const rise = Math.abs(g.height(x1, z1) - g.height(x0, z0));
-  if (rise <= 0.05) return true;
-  return rise <= Math.hypot(x1 - x0, z1 - z0) * g.maxSlope + 0.02;
+  // judge the local slope over at least 0.25 m in the direction of travel: a crowd of tiny
+  // nudges (each rising less than any threshold) must not walk a body up a wall
+  let dx = x1 - x0;
+  let dz = z1 - z0;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-6) return true;
+  const probe = Math.max(d, 0.25);
+  dx = (dx / d) * probe;
+  dz = (dz / d) * probe;
+  const h0 = g.height(x0, z0);
+  const rise = Math.abs(g.height(x0 + dx, z0 + dz) - h0);
+  if (rise > 0.05 && rise > probe * g.maxSlope + 0.02) return false;
+  // and never uphill onto ground steeper than the limit, whatever the angle: slanting across a
+  // wall face (a crowd zig-zagging against the tower) would otherwise climb it by switchbacks
+  const h1 = g.height(x1, z1);
+  if (h1 > h0 + 0.001) {
+    const e = 0.2;
+    const gx = (g.height(x1 + e, z1) - g.height(x1 - e, z1)) / (2 * e);
+    const gz = (g.height(x1, z1 + e) - g.height(x1, z1 - e)) / (2 * e);
+    if (Math.hypot(gx, gz) > g.maxSlope * 1.25) return false;
+  }
+  return true;
 }
 
 /** The bare heightfield (what the terrain mesh draws), ignoring decks; groundY elsewhere. */
@@ -169,5 +188,15 @@ export function shotHits(x: number, y: number, z: number): boolean | null {
 
 /** May a wall-passing ghost enemy stand at (x, z)? (see Terrain.ghost) */
 export function ghostOK(x: number, z: number) {
+  if (raised(x, z)) return false;
   return G?.ghost ? G.ghost(x, z) : true;
+}
+
+/**
+ * Raised walkable ground that is only reached by its stair (Dry Gulch's saloon balcony, the
+ * church stair, landing and belfry): enemies never spawn, blink or route there. Only grounds
+ * with a climbing limit have such places.
+ */
+export function raised(x: number, z: number) {
+  return G?.maxSlope !== undefined && G.height(x, z) > 1.2;
 }

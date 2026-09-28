@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { Geo, type Tmpl } from "../cityGeo";
 import {
   BALCONY_Y,
+  SALOON_GALLERY,
   BELFRY_Y,
   BOARD_D,
   DECK_Y,
@@ -831,8 +832,8 @@ function building(b: WBld, r: () => number): BGeo {
   if (b.ff) {
     const ffTop = Math.max(ridgeY + 0.6, H + 1.8 + (b.storeys === 1 ? 0.6 : 0));
     falseFront(B, b, W, H, ffTop, facL, plainL, paint, trimC, r);
-  } else if (b.sign >= 0) {
-    // signboard on the wall above the door
+  } else if (b.sign >= 0 && b.t !== "stable" && b.t !== "barn") {
+    // signboard on the wall above the door (a stable's board goes under its hay hood instead)
     signBoard(G, b.sign, 0, Math.min(H - 1.2, STOREY + 0.1), 0.02, Math.min(W * 0.7, 7), 0.95);
   }
 
@@ -875,22 +876,30 @@ function building(b: WBld, r: () => number): BGeo {
       lantern(B, x0 + W * 0.3, py - 0.6, pz - 0.35);
       if (W > 10) lantern(B, x1 - W * 0.3, py - 0.6, pz - 0.35);
     } else {
-      // balcony: a floor on the porch beams with a railing
+      // balcony: a floor on the porch beams with a railing. The saloon's is a gallery along the
+      // porch's street edge (up the alley stair), over an open walkway along its facade
+      const saloon = b.t === "saloon";
+      const bz0 = saloon ? SALOON_GALLERY : -0.1;
       G.col("#ffffff", 0.9);
-      boxP(G, WL.DECK, x0 + 0.01, py, -0.1, x1 - 0.01, py + 0.18, pz + 0.3);
+      boxP(G, WL.DECK, x0 + 0.01, py, bz0, x1 - 0.01, py + 0.18, pz + 0.3);
       const ry = py + 0.18;
       D2.col(postC);
-      boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, pz + 0.12, x1 + 0.1, ry + 1.05, pz + 0.26);
-      boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.1, pz + 0.14, x1 + 0.1, ry + 0.16, pz + 0.24);
-      for (let x = x0; x <= x1; x += 0.42)
-        boxP(D2, WL.TIMBER, x - 0.03, ry, pz + 0.16, x + 0.03, ry + 0.96, pz + 0.22, false);
+      const rail = (z: number) => {
+        boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, z - 0.07, x1 + 0.1, ry + 1.05, z + 0.07);
+        boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.1, z - 0.05, x1 + 0.1, ry + 0.16, z + 0.05);
+        for (let x = x0; x <= x1; x += 0.42)
+          boxP(D2, WL.TIMBER, x - 0.03, ry, z - 0.03, x + 0.03, ry + 0.96, z + 0.03, false);
+      };
+      rail(pz + 0.19);
+      if (saloon) rail(bz0 + 0.05);
       // (the saloon's east end stays open: its outside stair lands there)
-      const sides = b.t === "saloon" ? [x0] : [x0, x1];
+      const sides = saloon ? [x0] : [x0, x1];
+      const zs0 = saloon ? bz0 + 0.3 : 0.3;
       for (const sx of sides)
-        for (let z = 0.3; z < pz; z += 0.42)
+        for (let z = zs0; z < pz; z += 0.42)
           boxP(D2, WL.TIMBER, sx - 0.03, ry, z - 0.03, sx + 0.03, ry + 0.96, z + 0.03, false);
-      boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, 0, x0 + 0.04, ry + 1.05, pz + 0.26);
-      if (b.t !== "saloon") boxP(D2, WL.TIMBER, x1 - 0.04, ry + 0.95, 0, x1 + 0.1, ry + 1.05, pz + 0.26);
+      boxP(D2, WL.TIMBER, x0 - 0.1, ry + 0.95, saloon ? bz0 : 0, x0 + 0.04, ry + 1.05, pz + 0.26);
+      if (!saloon) boxP(D2, WL.TIMBER, x1 - 0.04, ry + 0.95, 0, x1 + 0.1, ry + 1.05, pz + 0.26);
       lantern(B, x0 + W * 0.25, py - 0.6, pz - 0.3);
       lantern(B, x1 - W * 0.25, py - 0.6, pz - 0.3);
       lantern(B, 0, ry + 1.6, 0.35, 3);
@@ -957,12 +966,11 @@ function building(b: WBld, r: () => number): BGeo {
   }
   // ---- per-type extras ----
   if (b.t === "saloon") {
-    // the porch under the balcony is railed off at street level (the balcony is up the stair)
+    // the porch's street edge is railed at ground level (the gallery above it is reached by
+    // the alley stair); its ends are open, so the walkway along the facade runs through
     B.detail.col("#e8dcc0");
     const pzr = BOARD_D - 0.15;
     for (const y of [0.75, 1.15]) boxP(B.detail, WL.TIMBER, x0, DECK_Y + y, pzr - 0.05, x1, DECK_Y + y + 0.08, pzr + 0.05);
-    for (const sx of [x0 + 0.05, x1 - 0.05])
-      for (const y of [0.75, 1.15]) boxP(B.detail, WL.TIMBER, sx - 0.05, DECK_Y + y, 0, sx + 0.05, DECK_Y + y + 0.08, pzr);
     for (let x = x0 + 0.4; x < x1; x += 0.5) boxP(B.detail, WL.TIMBER, x - 0.03, DECK_Y, pzr - 0.03, x + 0.03, DECK_Y + 1.2, pzr + 0.03, false);
     // batwing doors in the middle bay, a big lit glow spilling out at night
     B.detail.col("#7a3a22");
@@ -2636,16 +2644,17 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
       boxP(G, WL.TIMBER, xb, h, z - 0.05, xb + 0.1, h + 1.0, z + 0.05);
     }
     // the landing: a deck at balcony height on posts, railed on its open sides
-    const zl0 = Math.min(st.zTop, st.zEdge);
-    const zl1 = Math.max(st.zTop, st.zEdge);
+    const edge = st.zEdge;
+    const zl0 = Math.min(st.zTop, edge);
+    const zl1 = Math.max(st.zTop, edge);
     G.col("#b89a78");
     boxP(G, WL.DECK, st.x0 - 0.1, BALCONY_Y - 0.18, zl0, xb + 0.1, BALCONY_Y, zl1);
     G.col("#6a4a30");
-    boxP(G, WL.TIMBER, xb - 0.1, 0, st.zEdge - 0.1, xb + 0.1, BALCONY_Y, st.zEdge + 0.1);
+    boxP(G, WL.TIMBER, xb - 0.1, 0, edge - 0.1, xb + 0.1, BALCONY_Y, edge + 0.1);
     G.col("#e8dcc0");
-    boxP(G, WL.TIMBER, st.x0 - 0.1, BALCONY_Y + 0.95, st.zEdge - 0.06, xb + 0.1, BALCONY_Y + 1.05, st.zEdge + 0.06);
+    boxP(G, WL.TIMBER, st.x0 - 0.1, BALCONY_Y + 0.95, edge - 0.06, xb + 0.1, BALCONY_Y + 1.05, edge + 0.06);
     boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
-    for (let x = st.x0; x <= xb; x += 0.42) boxP(G, WL.TIMBER, x - 0.03, BALCONY_Y, st.zEdge - 0.03, x + 0.03, BALCONY_Y + 0.96, st.zEdge + 0.03, false);
+    for (let x = st.x0; x <= xb; x += 0.42) boxP(G, WL.TIMBER, x - 0.03, BALCONY_Y, edge - 0.03, x + 0.03, BALCONY_Y + 0.96, edge + 0.03, false);
   }
   // the church: a stair along the nave's north wall up to a landing beside the tower
   {
