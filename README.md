@@ -11,9 +11,9 @@ Solo or co-op with up to four players. No install, no account.
 
 ---
 
-Scrapfall is **Toby Szakacs's** arena shooter: classes, loadouts, the shop and touch
-controls. This build, by **Tyler Szakacs**, is based on Scrapfall 1.0.2 and adds four
-large real-scale maps, a compact Nuketown arena, and the systems that bring them to life.
+A standalone game by **Tyler Szakacs**. Fight twelve waves of scrap-built robots across
+four large real-scale maps and a compact Nuketown arena. Each map has its own boss,
+hazard, traffic and events.
 
 ## Maps
 
@@ -132,6 +132,5 @@ in through pull requests.
 
 ## Credits
 
-- **Toby Szakacs**: Scrapfall, the original game and its 1.0.2 base.
-- **Tyler Szakacs**: Vice Heights, Dry Gulch, Pacific Pier, Whiteout Pass, Nuketown and
-  this build.
+Created by **Tyler Szakacs**. It grew out of **Scrapfall**, the arena shooter by
+**Toby Szakacs**, whose classes, loadouts, shop and touch controls live on here.
