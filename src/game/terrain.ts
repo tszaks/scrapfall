@@ -164,7 +164,11 @@ function ledgeOK(g: Ground, x0: number, z0: number, x1: number, z1: number, ux: 
   const hp = g.height(px, pz);
   const top = Math.max(h1, hp);
   if (f < top - 0.02) return false;
-  if (Math.abs(top - h0) > JUMP_LEDGE || Math.abs(Math.min(h1, hp) - h0) > JUMP_LEDGE) return false;
+  // off raised ground (a balcony, the belfry: only reached by its stair) a jump may drop any
+  // height (fall damage applies); everywhere else only ledges within JUMP_LEDGE, so nobody
+  // drops into a gully they can't climb out of
+  const drop = h0 > 1.2 && top < h0;
+  if (!drop && (Math.abs(top - h0) > JUMP_LEDGE || Math.abs(Math.min(h1, hp) - h0) > JUMP_LEDGE)) return false;
   const hq = g.height(px + ux * 0.3, pz + uz * 0.3);
   return Math.abs(hq - hp) <= 0.3 * g.maxSlope + 0.03;
 }

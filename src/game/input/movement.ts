@@ -53,6 +53,12 @@ export const moveState = {
   lift: 0,
   jumps: 0,
   clock: 0,
+  /** highest feet height since leaving the ground (a fall's drop is measured from here) */
+  fallTop: 0,
+  /** set on the frame the feet land: how far they dropped (m); -1 otherwise */
+  landed: -1,
+  /** camera dip after a hard landing (m), easing back to 0 */
+  dip: 0,
 };
 
 export type MoveInput = {
@@ -164,8 +170,18 @@ export function tryJump(canJump: boolean) {
   if (!canJump || s.airborne) return false;
   s.airborne = true;
   s.vy = MOVE.jumpV;
+  s.fallTop = s.feet;
   s.jumps++;
   return true;
+}
+
+/** Leave the ground without a jump (stepping off a roof edge): gravity takes over. */
+export function startFall() {
+  const s = moveState;
+  if (s.airborne) return;
+  s.airborne = true;
+  s.vy = 0;
+  s.fallTop = s.feet;
 }
 
 /**
@@ -174,6 +190,8 @@ export function tryJump(canJump: boolean) {
  */
 export function stepJump(dt: number, ground: number) {
   const s = moveState;
+  s.landed = -1;
+  s.dip = Math.max(0, s.dip - dt * 1.6);
   if (!s.airborne) {
     s.feet = ground;
     s.vy = 0;
@@ -182,10 +200,14 @@ export function stepJump(dt: number, ground: number) {
   }
   s.vy -= MOVE.gravity * dt;
   s.feet += s.vy * dt;
+  s.fallTop = Math.max(s.fallTop, s.feet);
   if (s.feet <= ground && s.vy <= 0) {
     s.feet = ground;
     s.vy = 0;
     s.airborne = false;
+    s.landed = Math.max(0, s.fallTop - ground);
+    // a hard landing dips the view (a normal jump barely)
+    if (s.landed > 2) s.dip = Math.min(0.55, 0.12 + s.landed * 0.02);
   } else if (s.feet < ground) {
     // rising past a step up (a deck edge): the ground carries you
     s.feet = ground;

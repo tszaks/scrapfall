@@ -8,6 +8,8 @@
 // ping, revive) are written into touchInput, so the game has one path for them. Movement,
 // the trigger and the look are returned / applied here.
 import { touchInput } from "../touch";
+import { jumpBody } from "../level";
+import { climbable, jumpClimb } from "../terrain";
 import { BTN, loadPadSettings, padSettings } from "./bindings";
 import {
   consumePress,
@@ -19,6 +21,7 @@ import {
 } from "./gamepad";
 import { aimAssist, type AimTarget } from "./aimAssist";
 import { MOVE, moveState, stepSprint, sprintMul } from "./movement";
+import { FALL_TABLE, fallDamage, fallShare } from "./fall";
 
 /** set by the Game component: pause the match (Start on the controller) */
 export const padHooks: { pause: (() => void) | null } = { pause: null };
@@ -59,6 +62,11 @@ export function installControls() {
       padOut,
       inputDevice,
       pollPad,
+      // (test handle: what a jump clears)
+      jumpBody,
+      jumpClimb,
+      climbable,
+      fall: { FALL_TABLE, fallDamage, fallShare },
     };
   }
 }

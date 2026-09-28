@@ -66,6 +66,7 @@ import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
 import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
+import { fallDamage, landZone, tryRoofExit } from "./input/fall";
 import { clearControls, installControls, padHooks, padLook, padOut, rumbleFor, sprintPose, stepMove, stepPadActions, takeJump } from "./input/controls";
 import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
@@ -2995,6 +2996,11 @@ function World({
       if (walkTo(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
       if (walkTo(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
+    // mid-jump into a roof's parapet: over the edge and down (input/fall.ts)
+    if (accPlayer.zone === 2 && moving && !spectating) {
+      const ml = Math.hypot(MOVE.x, MOVE.z) || 1;
+      tryRoofExit(cam.position, MOVE.x / ml, MOVE.z / ml, blocks);
+    }
     // weather: blizzard gusts shove you downwind (not while you wait on a loading line)
     const onLoadingLine =
       !!alpineMap &&
@@ -3065,7 +3071,9 @@ function World({
       // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
       // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
       // stairs, the car and the roof decide the floor under you
-      const gy = accessActive()
+      // (falling past a building from its roof: the street / lower roof is the floor, no doors)
+      const falling = moveState.airborne && accPlayer.zone === 0 && moveState.lift > 1.5;
+      const gy = accessActive() && !falling
         ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
         : groundY(cam.position.x, cam.position.z);
       const dg = gy - camGround.current;
@@ -3077,9 +3085,24 @@ function World({
       if (noJump && moveState.airborne) cancelJump(gy);
       stepJump(delta, gy);
       if (moveState.airborne) camGround.current = gy;
+      if (moveState.landed >= 0) {
+        camGround.current = gy;
+        if (accessActive()) landZone(cam.position.x, cam.position.z); // a lower roof, or the street
+        // fall damage by the drop (input/fall.ts FALL_TABLE); a downing fall downs you
+        const fd = spectating ? 0 : fallDamage(moveState.landed, stats.current.maxHp, healthRef.current, !netRef.current);
+        if (moveState.landed > 2.5) {
+          kn.shake = Math.max(kn.shake, Math.min(1, moveState.landed / 12));
+          playSfx("thud");
+          rumbleFor.bump(Math.min(1, moveState.landed / 10));
+        }
+        if (fd > 0) {
+          onStat("taken", fd);
+          onHurt(fd);
+        }
+      }
     }
     // DOWN in co-op: the view drops to the ground (a crawl)
-    cam.position.y = (moveState.airborne ? moveState.feet : camGround.current) + (downedRef.current ? 0.45 : EYE) + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    cam.position.y = (moveState.airborne ? moveState.feet : camGround.current) + (downedRef.current ? 0.45 : EYE) - moveState.dip + Math.sin(bob.current) * 0.03 * bobAmt.current;
     if (accessActive()) {
       // elevator cars (the host decides, guests follow the snapshot) and the auto doors
       const people = [{ x: cam.position.x, z: cam.position.z, az: spectating ? 0 : playerAz(), y: camGround.current, id: "me", press: accPlayer.press }];
