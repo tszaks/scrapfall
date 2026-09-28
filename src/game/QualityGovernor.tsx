@@ -16,8 +16,16 @@ import { useEffect, useRef } from "react";
 
 import { setParticleScale } from "./fxCore";
 import { setRoomsEnabled } from "./interiors";
-import { holdQuality, liveDpr, quality, qualityHeld, setAutoTier, setLiveDpr, useQuality, type Tier } from "./quality";
-
+import {
+  holdQuality,
+  liveDpr,
+  quality,
+  qualityHeld,
+  setAutoTier,
+  setLiveDpr,
+  useQuality,
+  type Tier,
+} from "./quality";
 
 const STEP_DOWN = 0.15;
 const STEP_UP = 0.1;
@@ -25,8 +33,16 @@ const MISS_60 = 18.5; // ms: a frame that missed a 60 Hz vsync
 const TIERS: Tier[] = ["low", "medium", "high"];
 
 type Log = { t: number; what: string };
-const debug = { dpr: liveDpr(), tier: quality().tier, vsync: 16.7, miss: 0, cpu: 0, log: [] as Log[] };
-if (typeof window !== "undefined") (window as unknown as { __rsQuality?: unknown }).__rsQuality = debug;
+const debug = {
+  dpr: liveDpr(),
+  tier: quality().tier,
+  vsync: 16.7,
+  miss: 0,
+  cpu: 0,
+  log: [] as Log[],
+};
+if (typeof window !== "undefined")
+  (window as unknown as { __rsQuality?: unknown }).__rsQuality = debug;
 
 export function QualityGovernor() {
   const setDpr = useThree((s) => s.setDpr);
@@ -99,7 +115,8 @@ export function QualityGovernor() {
     debug.tier = q.tier;
     setRoomsEnabled(spec.rooms);
     setParticleScale(spec.particles);
-    const want = pref === "auto" ? Math.min(spec.dprMax, Math.max(spec.dprMin, liveDpr())) : spec.dprMax;
+    const want =
+      pref === "auto" ? Math.min(spec.dprMax, Math.max(spec.dprMin, liveDpr())) : spec.dprMax;
     apply(want, `tier ${q.tier}`);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps -- apply only reads refs
 
@@ -155,7 +172,8 @@ export function QualityGovernor() {
       }
       const hard = miss60 > 0.08;
       const cpuBound = cpuMed > 13;
-      if (cpuBound && hard && tier !== "low") tierDown(tier, `cpu ${cpuMed.toFixed(1)}ms`); else if (cpuBound) {
+      if (cpuBound && hard && tier !== "low") tierDown(tier, `cpu ${cpuMed.toFixed(1)}ms`);
+      else if (cpuBound) {
         // nothing left to trade that would help
       } else if (liveDpr() - STEP_DOWN >= spec.dprMin - 1e-3) apply(liveDpr() - STEP_DOWN, "slow");
       else if (liveDpr() > spec.dprMin + 1e-3) apply(spec.dprMin, "slow");
@@ -166,7 +184,12 @@ export function QualityGovernor() {
         S.good = 0;
         S.lastUp = S.clock;
         apply(Math.min(spec.dprMax, liveDpr() + STEP_UP), "headroom");
-      } else if (liveDpr() + 0.01 >= spec.dprMax && tier !== "high" && S.good >= 10 && S.clock - S.tierAt > S.tierWait) {
+      } else if (
+        liveDpr() + 0.01 >= spec.dprMax &&
+        tier !== "high" &&
+        S.good >= 10 &&
+        S.clock - S.tierAt > S.tierWait
+      ) {
         S.good = 0;
         S.lastUp = S.clock;
         S.tierAt = S.clock;

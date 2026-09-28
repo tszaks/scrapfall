@@ -31,7 +31,9 @@ export function QualitySettings() {
       </div>
       <div className="text-[9px] tracking-widest opacity-60">{HINT[q.pref]}</div>
       {q.spec.antialias !== antialiasAtLoad && (
-        <div className="text-[9px] tracking-widest opacity-60">ANTIALIASING CHANGES ON THE NEXT LOAD</div>
+        <div className="text-[9px] tracking-widest opacity-60">
+          ANTIALIASING CHANGES ON THE NEXT LOAD
+        </div>
       )}
     </div>
   );

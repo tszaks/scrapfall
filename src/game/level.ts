@@ -115,9 +115,10 @@ function gridFor(blocks: Block[]): BlockGrid {
 
 /** Extra collision layered over the block grid: the building-access system (access/world.ts)
  * answers for points on a walkable roof (its parapet and rooftop props), `undefined` elsewhere. */
-export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | undefined) | null } = {
-  fn: null,
-};
+export const blockHook: { fn: ((x: number, z: number, r: number) => boolean | undefined) | null } =
+  {
+    fn: null,
+  };
 
 /** Thin solid props (lamp posts, sign poles, benches, hydrants): small collision circles
  * that the 2 m block grid can't express. Each map installs its own list (or none). */
@@ -128,6 +129,8 @@ export type Post = {
   /** a low prop's height (m): a jumping player whose feet are higher passes over it.
    * Absent = blocks at any height (posts, railings, porch posts, blockades). */
   h?: number;
+  /** also stops shots (a horse, a hay bale) */
+  shot?: boolean;
 };
 /** the local player's feet above the ground while jumping (input/movement.ts); 0 on foot.
  * Set only around the player's own movement, so enemies are never affected. */
@@ -149,7 +152,7 @@ export function setPosts(list: Post[] | null) {
         a.push(p);
       }
 }
-function hitsPost(x: number, z: number, radius: number) {
+function hitsPost(x: number, z: number, radius: number, shotsOnly = false) {
   if (!postGrid) return false;
   const i0 = Math.floor((x - radius - 1) / 4);
   const i1 = Math.floor((x + radius + 1) / 4);
@@ -160,10 +163,23 @@ function hitsPost(x: number, z: number, radius: number) {
       const a = postGrid.get(postKey(i, j));
       if (!a) continue;
       for (const p of a) {
-        if (p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
+        if (shotsOnly ? !p.shot : p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
         if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
       }
     }
+  return false;
+}
+/** shot-stopping posts (horses, hay, walk-in walls) at height y: a low one (h) only below its top */
+function shotPost(x: number, y: number, z: number) {
+  if (!postGrid) return false;
+  const a = postGrid.get(postKey(Math.floor(x / 4), Math.floor(z / 4)));
+  if (!a) return false;
+  let base = NaN;
+  for (const p of a) {
+    if (!p.shot || Math.hypot(p.x - x, p.z - z) >= p.r + 0.05) continue;
+    if (Number.isNaN(base)) base = groundY(x, z);
+    if (y < base + (p.h ?? 4.5)) return true;
+  }
   return false;
 }
 
@@ -173,8 +189,9 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
     const h = blockHook.fn(x, z, radius);
     if (h !== undefined) return h;
   }
-  // (thin posts only stop bodies, not bullets: shots test with a tiny radius)
-  if (radius >= 0.2 && hitsPost(x, z, radius)) return true;
+  // (thin posts only stop bodies, not bullets (shots test with a tiny radius), unless they're
+  // bulky enough to stop a shot: a tied horse, a hay bale, a crate stack)
+  if (radius >= 0.2 ? hitsPost(x, z, radius) : hitsPost(x, z, radius, true)) return true;
   const half = BLOCK / 2 + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes
@@ -210,6 +227,7 @@ export function shotBlocked(blocks: Block[], x: number, y: number, z: number) {
     const h = blockHook.fn(x, z, r);
     if (h !== undefined) return h;
   }
+  if (shotPost(x, y, z)) return true;
   const half = BLOCK / 2 + r;
   const grid = gridFor(blocks);
   const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
@@ -250,7 +268,15 @@ export function shotStop(blocks: Block[], x: number, y: number, z: number) {
 }
 
 /** a clear flight from a to b (3D, samples every 0.4 m): nothing shotStop()s it */
-export function clearShot(blocks: Block[], ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+export function clearShot(
+  blocks: Block[],
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+) {
   const len = Math.hypot(bx - ax, by - ay, bz - az);
   const steps = Math.ceil(len / 0.4);
   for (let s = 1; s < steps; s++) {
@@ -335,7 +361,12 @@ export function spawnNear(
     for (let i = 0; i < 80; i++) {
       const x = p.x + (rand() - 0.5) * rMax * 2;
       const z = p.z + (rand() - 0.5) * rMax * 2;
-      if (Math.abs(x) >= PLAY_HALF - 3 || Math.abs(z) >= PLAY_HALF - 3 || blocked(blocks, x, z, radius)) continue;
+      if (
+        Math.abs(x) >= PLAY_HALF - 3 ||
+        Math.abs(z) >= PLAY_HALF - 3 ||
+        blocked(blocks, x, z, radius)
+      )
+        continue;
       if (pass === 0 && (!ok(x, z) || Math.hypot(x - p.x, z - p.z) < rMin * 0.5)) continue;
       return { x, z };
     }
@@ -351,8 +382,34 @@ export let NAV_CELLS = CELLS;
 
 /** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level.
  * `playHalf` fences play into a smaller central square (solo on the big maps). */
+/** Thin walls the route planner must respect (walk-in buildings' walls are posts, which the
+ * nav grid can't see): segments, and the doorways that stay open through them. */
+let navWallSegs: { ax: number; az: number; bx: number; bz: number }[] = [];
+let navWallDoors: { x: number; z: number }[] = [];
+export function setNavWalls(walls: typeof navWallSegs | null, doors: typeof navWallDoors | null) {
+  navWallSegs = walls ?? [];
+  navWallDoors = doors ?? [];
+}
+function closeNavWalls(nav: NavGrid) {
+  if (!navWallSegs.length) return;
+  const cs = BLOCK * NAV_SCALE;
+  for (const w of navWallSegs) {
+    const len = Math.hypot(w.bx - w.ax, w.bz - w.az);
+    for (let d = 0; d <= len; d += cs * 0.25) {
+      const x = w.ax + ((w.bx - w.ax) * d) / len;
+      const z = w.az + ((w.bz - w.az) * d) / len;
+      if (navWallDoors.some((q) => Math.hypot(q.x - x, q.z - z) < cs * 0.6)) continue;
+      const i = Math.floor((x + HALF) / cs);
+      const j = Math.floor((z + HALF) / cs);
+      if (i < 0 || j < 0 || i >= nav.n || j >= nav.n) continue;
+      nav.g[i * nav.n + j] = 1;
+    }
+  }
+}
+
 /** Nav cells over raised stair-only ground (see terrain.ts raised) are solid for enemies. */
 export function closeRaised(nav: NavGrid): NavGrid {
+  closeNavWalls(nav);
   const cs = BLOCK * NAV_SCALE;
   for (let i = 0; i < nav.n; i++)
     for (let j = 0; j < nav.n; j++) {
@@ -518,7 +575,8 @@ export function fineField(blocks: Block[], x: number, z: number, R = 24): FineFi
       if (!open[k]) continue;
       if (da && db && (!open[(a + da) * w + b] || !open[a * w + b + db])) continue;
       // out of the target's own cell only onto its level (not over a railing to the sand below)
-      if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2) continue;
+      if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2)
+        continue;
       const nd = dist[c]! + (da && db ? 1.414 : 1);
       if (nd < dist[k]!) {
         dist[k] = nd;

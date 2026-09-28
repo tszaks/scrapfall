@@ -44,7 +44,9 @@ const dpr0 = () => (typeof window === "undefined" ? 1 : window.devicePixelRatio 
 /** phones and tablets (the touch build): a 3x screen and a phone GPU, so a lower resolution
  * range, and AUTO starts one tier down (the governor still steps up with headroom) */
 export const MOBILE =
-  typeof window !== "undefined" && isTouchDevice() && !!window.matchMedia?.("(pointer: coarse)").matches;
+  typeof window !== "undefined" &&
+  isTouchDevice() &&
+  !!window.matchMedia?.("(pointer: coarse)").matches;
 
 export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
   const dev = dpr0();
@@ -105,7 +107,11 @@ function readPref(): QualityPref {
 type State = { pref: QualityPref; tier: Tier; spec: QualitySpec };
 const initialPref = readPref();
 const initialTier: Tier = initialPref === "auto" ? (MOBILE ? "medium" : "high") : initialPref;
-let state: State = { pref: initialPref, tier: initialTier, spec: specFor(initialTier, initialPref) };
+let state: State = {
+  pref: initialPref,
+  tier: initialTier,
+  spec: specFor(initialTier, initialPref),
+};
 let dprNow = Math.round(state.spec.dprMax * 100) / 100;
 /** the resolution the governor picked (the Canvas's `dpr` prop) */
 export function liveDpr() {
@@ -118,7 +124,10 @@ export function setLiveDpr(v: number) {
  * the governor ignores frames until this time (performance.now ms). */
 let holdUntil = 0;
 export function holdQuality(ms: number) {
-  holdUntil = Math.max(holdUntil, (typeof performance === "undefined" ? 0 : performance.now()) + ms);
+  holdUntil = Math.max(
+    holdUntil,
+    (typeof performance === "undefined" ? 0 : performance.now()) + ms,
+  );
 }
 export function qualityHeld() {
   return performance.now() < holdUntil;

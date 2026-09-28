@@ -61,7 +61,9 @@ export function Prewarm({
     const spot = withSpot ? new THREE.SpotLight("#ffffff", 0) : null;
     // the wet streets' mirror renders the scene into a linear HDR target: every material needs
     // a second (linear output) variant, compiled the first time it rains at night otherwise
-    const rt = withTarget ? new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType, depthBuffer: true }) : null;
+    const rt = withTarget
+      ? new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType, depthBuffer: true })
+      : null;
     const prevRT = gl.getRenderTarget();
     try {
       gl.render(scene, camera);
@@ -89,7 +91,12 @@ export function Prewarm({
       for (const o of shown) o.visible = false;
       for (const o of culled) o.frustumCulled = true;
     }
-    warmLog.push({ frame: gl.info.render.frame, ms: Math.round(performance.now() - t0), programs: gl.info.programs?.length ?? 0, before });
+    warmLog.push({
+      frame: gl.info.render.frame,
+      ms: Math.round(performance.now() - t0),
+      programs: gl.info.programs?.length ?? 0,
+      before,
+    });
   }, -999);
   return null;
 }

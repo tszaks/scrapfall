@@ -47,7 +47,7 @@ export const WESTERN_LOOK: Record<TimeOfDay, WesternLook> = {
     motes: "#ffd28a",
     env: 1.0,
     disc: { color: "#ffffff", size: 760 },
-    storm: "#b8763e",
+    storm: "#b08664",
   },
   // lanterns in the windows, the moon over the buttes, stars, a glowing saloon, a campfire
   night: {
