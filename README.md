@@ -11,7 +11,7 @@ Solo or co-op with up to four players. No install, no account.
 
 ---
 
-A standalone game by **Tyler Szakacs**. Fight twelve waves of scrap-built robots across
+A standalone game by **Tyler and Toby Szakacs** ([Szakacs Media](https://szakacsmedia.com)). Fight twelve waves of scrap-built robots across
 four large real-scale maps and a compact Nuketown arena. Each map has its own boss,
 hazard, traffic and events.
 
@@ -132,5 +132,9 @@ in through pull requests.
 
 ## Credits
 
-Created by **Tyler Szakacs**. It grew out of **Scrapfall**, the arena shooter by
-**Toby Szakacs**, whose classes, loadouts, shop and touch controls live on here.
+Made by **Tyler Szakacs** and **Toby Szakacs** at [Szakacs Media](https://szakacsmedia.com).
+
+- **Toby:** Scrapfall's core game, including the classes, loadouts, abilities, shop,
+  guns and touch controls.
+- **Tyler:** the real-scale maps (Vice Heights, Dry Gulch, Pacific Pier, Whiteout Pass,
+  Nuketown) and the systems around them.
