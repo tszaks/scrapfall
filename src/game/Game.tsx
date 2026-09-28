@@ -4426,6 +4426,21 @@ export function Game() {
                   : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
               </p>
             )}
+            {/* beat the boss: bank the win, or push the run into overtime */}
+            {status.won && !gameOver && isHost && (
+              <button
+                onClick={() => {
+                  initAudio();
+                  endlessRef.current = true;
+                  setStatus((s) => ({ ...s, won: false }));
+                  net?.broadcast({ type: "ot" });
+                  start();
+                }}
+                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#2b2118] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+              >
+                OVERTIME // KEEP GOING
+              </button>
+            )}
             {multiplayer && !isHost && (ended || !started) ? (
               <div className="mt-6">
                 <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
