@@ -747,6 +747,8 @@ function building(b: WBld, r: () => number): BGeo {
         ? 0
         : LIT;
   const H = b.storeys * STOREY;
+  // this building's own boardwalk height (they step up and down along the street)
+  const DY = b.deck ?? DECK_Y;
   const uOff = Math.floor(r() * FAC_COLS);
   const x0 = -W / 2;
   const x1 = W / 2;
@@ -929,9 +931,21 @@ function building(b: WBld, r: () => number): BGeo {
     // flat roof with a parapet (adobe): vigas poke out under the roofline
     ridgeY = H + 0.6;
     G.col(paint, 1).mat(plainL, seed, 0);
-    boxP(G, plainL, x0, H, z0, x1, H + 0.6, 0, false);
+    boxP(G, plainL, x0, H, z0, x1, H + 0.6, 0, true);
+    // the parapet's inner faces round the roof (seen from anywhere higher)
+    wallP(G, plainL, x0 + 0.3, -0.3, x1 - 0.3, -0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x1 - 0.3, z0 + 0.3, x0 + 0.3, z0 + 0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x1 - 0.3, -0.3, x1 - 0.3, z0 + 0.3, H + 0.35, H + 0.6);
+    wallP(G, plainL, x0 + 0.3, z0 + 0.3, x0 + 0.3, -0.3, H + 0.35, H + 0.6);
     G.col("#b8966e");
     G.flat(x0 + 0.3, z0 + 0.3, x1 - 0.3, -0.3, H + 0.35, [0, 0, W / 5, D / 5]);
+    // canales: wooden spouts through the parapet that throw the rain off the roof
+    B.detail.col("#5a3e28");
+    for (const f of [0.3, 0.7]) {
+      const zc = z0 * f;
+      beam(B.detail, x1 - 0.4, H + 0.42, zc, x1 + 0.7, H + 0.36, zc, 0.16);
+      beam(B.detail, x0 + 0.4, H + 0.42, zc * 0.9 - 0.4, x0 - 0.7, H + 0.36, zc * 0.9 - 0.4, 0.16);
+    }
     B.detail.col("#6a4a30");
     for (let x = x0 + 0.8; x < x1 - 0.5; x += 1.3)
       cylP(B.detail, WL.TIMBER, x, H - 0.35, 0.3, 0.12, 0.01, 6, 0.12, false);
@@ -958,7 +972,7 @@ function building(b: WBld, r: () => number): BGeo {
     const n = Math.max(2, Math.round(W / 3.2));
     for (let i = 0; i <= n; i++) {
       const x = x0 + 0.15 + ((W - 0.3) * i) / n;
-      boxP(D2, WL.TIMBER, x - 0.09, DECK_Y, pz - 0.09, x + 0.09, py, pz + 0.09);
+      boxP(D2, WL.TIMBER, x - 0.09, DY, pz - 0.09, x + 0.09, py, pz + 0.09);
       // curved brackets
       beam(D2, x, py - 0.55, pz, x + (i === n ? -0.4 : 0.4), py - 0.02, pz, 0.07);
     }
@@ -966,24 +980,23 @@ function building(b: WBld, r: () => number): BGeo {
     boxP(G, WL.TIMBER, x0, py - 0.25, pz - 0.1, x1, py, pz + 0.1); // beam
     if (b.porch === 1) {
       const roofL2 = r() < 0.6 ? WL.TIN : WL.SHINGLE;
-      G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff");
-      slope(G, roofL2, x0 + 0.01, 0, x1 - 0.01, 0, py + 0.55, 0, pz + 0.35, py, false);
-      G.col("#ffffff", 0.55).mat(WL.DECK);
-      G.quad(
-        x1 - 0.01,
-        py - 0.02,
-        pz + 0.35,
-        x0 + 0.01,
-        py - 0.02,
-        pz + 0.35,
-        x0 + 0.01,
-        py + 0.53,
-        0,
-        x1 - 0.01,
-        py + 0.53,
-        0,
-        [0, 0, W / 4, 1],
-      ); // underside
+      // the awning sags a little between its posts (years of sun and snow), top and underside
+      const nSpan = Math.max(2, Math.round(W / 3.2));
+      const sagAmt = 0.04 + r() * 0.05;
+      const sagAt = (x: number) => sagAmt * Math.abs(Math.sin((Math.PI * (x - x0 - 0.15)) / ((W - 0.3) / nSpan)));
+      const [tu, tv] = TILE_M[roofL2] ?? [4, 4];
+      const run = Math.hypot(pz + 0.35, 0.55);
+      const steps = nSpan * 4;
+      for (let i = 0; i < steps; i++) {
+        const xa = x0 + 0.01 + ((W - 0.02) * i) / steps;
+        const xb = x0 + 0.01 + ((W - 0.02) * (i + 1)) / steps;
+        const ya = py - sagAt(xa);
+        const yb = py - sagAt(xb);
+        G.col(roofL2 === WL.TIN ? "#bdb6aa" : "#ffffff").mat(roofL2);
+        G.quad(xa, ya, pz + 0.35, xb, yb, pz + 0.35, xb, py + 0.55, 0, xa, py + 0.55, 0, [xa / tu, 0, xb / tu, run / tv]);
+        G.col("#ffffff", 0.55).mat(WL.DECK);
+        G.quad(xb, yb - 0.02, pz + 0.35, xa, ya - 0.02, pz + 0.35, xa, py + 0.53, 0, xb, py + 0.53, 0, [xb / 4, 0, xa / 4, 1]);
+      }
       lantern(B, x0 + W * 0.3, py - 0.6, pz - 0.35);
       if (W > 10) lantern(B, x1 - W * 0.3, py - 0.6, pz - 0.35);
     } else {
@@ -1016,12 +1029,12 @@ function building(b: WBld, r: () => number): BGeo {
         const nb = Math.max(2, Math.round(W / 3.2));
         for (let i = 0; i <= nb; i++) {
           const x = x0 + 0.15 + ((W - 0.3) * i) / nb;
-          boxP(D2, WL.TIMBER, x - 0.09, DECK_Y, bd - 0.2, x + 0.09, py, bd - 0.02);
+          boxP(D2, WL.TIMBER, x - 0.09, DY, bd - 0.2, x + 0.09, py, bd - 0.02);
         }
         for (const y of [0.75, 1.15])
-          boxP(D2, WL.TIMBER, x0, DECK_Y + y, bd - 0.15, x1, DECK_Y + y + 0.08, bd - 0.07, true, true);
+          boxP(D2, WL.TIMBER, x0, DY + y, bd - 0.15, x1, DY + y + 0.08, bd - 0.07, true, true);
         for (let x = x0 + 0.4; x < x1; x += 0.5)
-          boxP(D2, WL.TIMBER, x - 0.03, DECK_Y, bd - 0.14, x + 0.03, DECK_Y + 1.2, bd - 0.08, false);
+          boxP(D2, WL.TIMBER, x - 0.03, DY, bd - 0.14, x + 0.03, DY + 1.2, bd - 0.08, false);
         // the lean-to over the rest of the porch, shingled on top and boarded underneath
         G.col("#ffffff");
         slope(G, WL.SHINGLE, x0 + 0.01, bd + 0.02, x1 - 0.01, bd + 0.02, py - 0.02, 0, pz + 0.35 - (bd + 0.02), py - 0.35);
@@ -1056,15 +1069,34 @@ function building(b: WBld, r: () => number): BGeo {
     const dx1 = x1;
     G.col("#ffffff", 0.95);
     G.mat(WL.DECK);
-    G.quad(dx0, DECK_Y, BOARD_D, dx1, DECK_Y, BOARD_D, dx1, DECK_Y, 0, dx0, DECK_Y, 0, [
+    G.quad(dx0, DY, BOARD_D, dx1, DY, BOARD_D, dx1, DY, 0, dx0, DY, 0, [
       0,
       0,
       (dx1 - dx0) / 4,
       BOARD_D / 4,
     ]);
     G.col(DARK_WOOD);
-    boxP(G, WL.TIMBER, dx0, 0, BOARD_D - 0.12, dx1, DECK_Y, BOARD_D, false); // edge beam
-    boxP(G, WL.TIMBER, dx0, 0, 0, dx0 + 0.1, DECK_Y, BOARD_D, false);
+    boxP(G, WL.TIMBER, dx0, 0, BOARD_D - 0.12, dx1, DY, BOARD_D, false); // edge beam
+    boxP(G, WL.TIMBER, dx0, 0, 0, dx0 + 0.1, DY, BOARD_D, false);
+    boxP(G, WL.TIMBER, dx1 - 0.1, 0, 0, dx1, DY, BOARD_D, false);
+    // a plank step down to the street in front of the door when the walk stands high
+    if (DY > 0.34) {
+      G.col("#8a6a4a");
+      boxP(G, WL.DECK, -1.1, 0, BOARD_D, 1.1, DY * 0.5, BOARD_D + 0.45);
+    }
+  } else if (b.porch > 0 && b.t === "adobe") {
+    // an adobe's ramada: peeled pole posts, round vigas across, a roof of laid sticks
+    // (latillas) under packed brush
+    const D2 = B.detail;
+    const pd = 2.4;
+    D2.col("#8a6a48");
+    for (const x of [x0 + 0.4, x1 - 0.4]) cylP(D2, WL.TIMBER, x, 0, pd, 0.1, 2.5, 6, 0.09);
+    beam(D2, x0 + 0.2, 2.5, pd, x1 - 0.2, 2.5, pd, 0.18);
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 0.9) beam(D2, x, 2.62, -0.1, x, 2.62, pd + 0.3, 0.12);
+    G.col("#9a7a52");
+    for (let z = 0.1; z < pd + 0.2; z += 0.12) boxP(G, WL.TIMBER, x0 + 0.2, 2.68, z, x1 - 0.2, 2.72, z + 0.08, true, true);
+    G.col("#a88a5a").mat(WL.SAND);
+    G.flat(x0 + 0.25, 0.05, x1 - 0.25, pd + 0.25, 2.76, [0, 0, W / 3, 1]);
   } else if (b.porch > 0) {
     // houses: a small porch on posts
     G.col("#ffffff", 0.9);
@@ -1097,6 +1129,20 @@ function building(b: WBld, r: () => number): BGeo {
     }
   }
   // ---- per-type extras ----
+  if (b.t === "adobe") {
+    // by the door: a string of red chiles drying and clay ollas
+    const D2 = B.detail;
+    const rx = 1.0 + r() * 0.3;
+    for (let i = 0; i < 9; i++) {
+      D2.col(pick(["#a8281c", "#c0301e", "#8a2016"], r)).mat(WL.PAINT, 0, 0);
+      oboxP(D2, WL.PAINT, rx + (r() - 0.5) * 0.05, 2.2 - i * 0.13, 0.12, 0.12, 0.12, 0.12, r() * 3, true);
+    }
+    D2.col("#5a4a30");
+    beam(D2, rx, 2.35, 0.12, rx, 1.05, 0.12, 0.02, WL.PAINT);
+    D2.col("#a8643a");
+    cylP(D2, WL.P_ADOBE, -1.4, 0, 0.45, 0.2, 0.28, 8, 0.28, false);
+    cylP(D2, WL.P_ADOBE, -1.4, 0.28, 0.45, 0.28, 0.24, 8, 0.12);
+  }
   if (b.t === "saloon") {
     // batwing doors in the middle bay, a big lit glow spilling out at night
     B.detail.col("#7a3a22");
@@ -1105,10 +1151,10 @@ function building(b: WBld, r: () => number): BGeo {
     G.col("#1c140e").mat(WL.PAINT, 0, 0);
     G.quad(
       -0.85,
-      DECK_Y,
+      DY,
       0.03,
       0.85,
-      DECK_Y,
+      DY,
       0.03,
       0.85,
       2.5,
@@ -1119,7 +1165,7 @@ function building(b: WBld, r: () => number): BGeo {
       [0, 0, 0.1, 0.1],
     );
     B.glow.col("#ff9a40", 0.55);
-    B.glow.quad(-0.8, DECK_Y, 0.08, 0.8, DECK_Y, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
+    B.glow.quad(-0.8, DY, 0.08, 0.8, DY, 0.08, 0.8, 2.45, 0.08, -0.8, 2.45, 0.08);
     B.pools.col("#ffa050").mat(0, 0, 0);
     B.pools.flat(-4, 0.2, 4, 9, 0.07);
   }

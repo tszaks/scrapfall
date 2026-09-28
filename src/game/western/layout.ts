@@ -117,6 +117,8 @@ export type WBld = {
   coop?: boolean;
   /** a lean-to annex on the back wall: its width (m), 0 or absent for none */
   lean?: number;
+  /** boardwalk deck height in front (Main Street), m */
+  deck?: number;
   /** the lean-to's centre along the back wall, as a fraction of the width from the left */
   leanAt?: number;
 };
@@ -308,6 +310,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const props: WProp[] = [];
   /** thin collision circles (porch posts, cactus, barrels...), installed through level.ts setPosts */
   const posts: { x: number; z: number; r: number; shot?: boolean }[] = [];
+  /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
+  const boardY = new Map<string, number>();
   const S = soloHalf(half);
   const RING = S + 1; // centre of the ring cells
   const seedN = Math.floor(rand() * 1e6);
@@ -674,6 +678,18 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     buildings.push(full);
     markSolid(b.x0, b.z0, b.x1, b.z1, b.storeys * STOREY + 2);
     setGround(b.x0, b.z0, b.x1, b.z1, WK.LOT);
+    // an adobe's ramada: its two pole posts are thin collision
+    if (b.porch > 0 && b.t === "adobe") {
+      const W = b.front === 0 || b.front === 2 ? b.x1 - b.x0 : b.z1 - b.z0;
+      const cx = (b.x0 + b.x1) / 2;
+      const cz = (b.z0 + b.z1) / 2;
+      for (const lx of [-W / 2 + 0.4, W / 2 - 0.4]) {
+        const lz = 2.4;
+        const [wx, wz] =
+          b.front === 2 ? [cx + lx, b.z1 + lz] : b.front === 0 ? [cx - lx, b.z0 - lz] : b.front === 1 ? [b.x1 + lz, cz - lx] : [b.x0 - lz, cz + lx];
+        posts.push({ x: wx, z: wz, r: 0.14 });
+      }
+    }
     // a house's front porch (deck, posts, a little roof) blocks too
     if (b.porch > 0 && (b.t === "house" || b.t === "ranch")) {
       const d = 2.2;
@@ -819,7 +835,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
           else markSolid(cxw - lw / 2, made.z1, cxw + lw / 2, made.z1 + LEAN_D, 3);
         }
       }
-      // boardwalk in front (walkable deck), hitching rail + trough on the street edge
+      // boardwalk in front (walkable deck), hitching rail + trough on the street edge. Each
+      // building laid its own walk, so they step up and down along the street (the saloon's
+      // keeps the standard height: its balcony and stair are measured from it)
+      const deck = p.t === "saloon" ? DECK_Y : 0.2 + Math.round(rand() * 6) * 0.05;
+      buildings[buildings.length - 1]!.deck = deck;
       setGround(
         x,
         north ? zf : zf - BOARD_D,
@@ -827,6 +847,9 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         north ? zf + BOARD_D : zf,
         WK.BOARD,
       );
+      for (let bx = Math.ceil(x); bx <= Math.floor(x + p.w); bx++)
+        for (let bzz = Math.ceil(north ? zf : zf - BOARD_D); bzz <= Math.floor(north ? zf + BOARD_D : zf); bzz++)
+          boardY.set(`${bx},${bzz}`, deck);
       const edge = north ? -STREET_HALF + 0.6 : STREET_HALF - 0.6;
       // the porch row (between the street and the walkway along the shopfronts): posts and
       // clutter stand here, so the walkway behind them stays clear
@@ -1815,7 +1838,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const k = at(x + 0.01, z + 0.01);
       if (k < 0) continue;
       const g = ground[k]!;
-      if (g === WK.BOARD) th[i * (tn + 1) + j] = DECK_Y;
+      if (g === WK.BOARD) th[i * (tn + 1) + j] = boardY.get(`${x},${z}`) ?? DECK_Y;
       else if (g === WK.PLATFORM) th[i * (tn + 1) + j] = 0.34;
       else if (rock[k]! === 0 && Math.abs(x) < half - RIVER_END) {
         // the dry wash, carved below grade with gentle banks you can walk down
