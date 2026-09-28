@@ -62,7 +62,7 @@ import {
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import { RobotModel } from "./art/RobotModel";
-import { classicRobot, swingInputs } from "./art/robots/classic";
+import { bomberInputs, classicRobot, shooterInputs, specterInputs, swingInputs } from "./art/robots/classic";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
@@ -914,12 +914,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
   const ref = useRef<THREE.Group>(null);
-  const shooter = useRef<THREE.Group>(null);
   const specter = useRef<THREE.Group>(null);
-  const bomber = useRef<THREE.Group>(null);
-  const vanguard = useRef<THREE.Group>(null);
   const bossGrp = useRef<THREE.Group>(null);
-  const club = useRef<THREE.Group>(null);
   const bossArm = useRef<THREE.Group>(null);
   const aura = useRef<THREE.Group>(null);
   const flame = useRef<THREE.Group>(null);
@@ -932,7 +928,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "runner" || k === "boss" || k === "vanguard" || isNewKind(k); // these animate themselves
+    const heavy = k === "brute" || k === "runner" || k === "shooter" || k === "bomber" || k === "boss" || k === "vanguard" || isNewKind(k); // walkers: feet stay on the ground
     const bob = heavy ? 0 : Math.sin(t * 4 + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
@@ -954,15 +950,11 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     }
 
     if (bossGrp.current) bossGrp.current.visible = k === "boss";
-    if (shooter.current) shooter.current.visible = k === "shooter";
     if (specter.current) {
       specter.current.visible = k === "specter";
       specter.current.rotation.y = t * 1.6;
     }
-    if (bomber.current) bomber.current.visible = k === "bomber";
-    if (vanguard.current) vanguard.current.visible = k === "vanguard";
     const swingRot = data.swing > 0 ? -1.4 + (1 - data.swing / 0.4) * 2.4 : -1.4;
-    if (club.current) club.current.rotation.x = swingRot;
     if (bossArm.current) bossArm.current.rotation.x = swingRot;
   });
   return (
@@ -1027,172 +1019,32 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
           </mesh>
         </group>
       </group> )}
-      {/* SHOOTER: sensor-headed gunner on a tripod chassis */}
-      {(kind==="shooter") && (<group ref={shooter} position-y={1.3}>
-        <mesh>
-          <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
-          <meshLambertMaterial color={c.shooter.body} flatShading />
-        </mesh>
-        <mesh position-y={0.62}>
-          <cylinderGeometry args={[0.5, 0.42, 0.22, 6]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position-y={0.8}>
-          <sphereGeometry args={[0.3, 8, 6]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position={[0, 0.82, 0.26]}>
-          <boxGeometry args={[0.36, 0.1, 0.06]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={x} position={[x, 0.15, -0.1]} rotation-z={x * 0.35}>
-            <boxGeometry args={[0.12, 0.8, 0.3]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        {[-0.42, 0, 0.42].map((x) => (
-          <mesh key={`leg${x}`} position={[x, -1.0, 0]} rotation-z={x * 0.5}>
-            <cylinderGeometry args={[0.07, 0.05, 0.9, 5]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.2, 0.55]} rotation-x={Math.PI / 2}>
-          <cylinderGeometry args={[0.12, 0.12, 0.7, 8]} />
-          <meshLambertMaterial color={c.shooter.barrel} />
-        </mesh>
-        <mesh position={[0, 0.2, 0.86]}>
-          <torusGeometry args={[0.16, 0.04, 5, 10]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, 0.4]}>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-      </group> )}
-      {/* SPECTER: drifting, see-through wraith that blinks toward you */}
+      {kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
+      {kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
+      {/* SPECTER: a skeletal wraith-drone inside a see-through energy shroud that blinks toward you */}
+      {kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
       {(kind==="specter") && (<group ref={specter} position-y={1.5}>
         <mesh>
-          <coneGeometry args={[0.6, 1.8, 6]} />
-          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
+          <coneGeometry args={[0.6, 1.8, 10, 1, true]} />
+          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
         </mesh>
         <mesh position-y={-0.75} rotation-x={Math.PI}>
-          <coneGeometry args={[0.45, 1.1, 6]} />
-          <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.3} emissive={c.drifter.emissive} />
+          <coneGeometry args={[0.45, 1.1, 10, 1, true]} />
+          <meshBasicMaterial color={c.drifter.body} transparent opacity={0.16} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
         </mesh>
         <mesh position-y={0.1} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.72, 0.05, 5, 14]} />
+          <torusGeometry args={[0.72, 0.03, 5, 20]} />
           <meshBasicMaterial color={c.shooter.eye} />
         </mesh>
         <mesh position-y={-0.3} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.5, 0.04, 5, 12]} />
+          <torusGeometry args={[0.5, 0.025, 5, 16]} />
           <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        <mesh position-y={0.55}>
-          <sphereGeometry args={[0.2, 8, 6]} />
-          <meshBasicMaterial color={c.drifter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, 0.35]}>
-          <sphereGeometry args={[0.14, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-        <mesh position={[0, 0.5, -0.35]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshBasicMaterial color={c.shooter.eye} />
-        </mesh>
-      </group> )}
-      {/* BOMBER: squat mortar unit that lobs shells over cover */}
-      {(kind==="bomber") && (<group ref={bomber} position-y={0.8}>
-        <mesh>
-          <sphereGeometry args={[0.75, 8, 6]} />
-          <meshLambertMaterial color={c.brute.body} flatShading />
-        </mesh>
-        <mesh position-y={0.1} rotation-x={Math.PI / 2}>
-          <torusGeometry args={[0.76, 0.08, 6, 12]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 0.75, 0.1]} rotation-x={-0.7}>
-          <cylinderGeometry args={[0.24, 0.3, 0.9, 8]} />
-          <meshLambertMaterial color={c.shooter.barrel} flatShading />
-        </mesh>
-        <mesh position={[0, 1.05, 0.33]} rotation-x={-0.7}>
-          <torusGeometry args={[0.24, 0.05, 5, 10]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
-        </mesh>
-        {[-0.62, 0.62].map((x) => (
-          <mesh key={x} position={[x, 0.35, -0.1]} rotation-z={x * 0.6}>
-            <boxGeometry args={[0.24, 0.4, 0.34]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={`f${x}`} position={[x, -0.55, 0.2]} rotation-z={x * 0.5}>
-            <cylinderGeometry args={[0.09, 0.14, 0.5, 5]} />
-            <meshLambertMaterial color={c.shooter.barrel} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 0.3, 0.6]}>
-          <sphereGeometry args={[0.13, 8, 8]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
       {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
-      {(kind==="vanguard") && (<group ref={vanguard}>
-        <mesh position-y={1.2}>
-          <boxGeometry args={[1.2, 2, 0.9]} />
-          <meshLambertMaterial color={c.shooter.body} flatShading />
-        </mesh>
-        <mesh position={[0, 1.55, 0.48]}>
-          <boxGeometry args={[0.95, 0.9, 0.14]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        {[-0.72, 0.72].map((x) => (
-          <mesh key={x} position={[x, 1.95, 0]} rotation-z={x * 0.3}>
-            <boxGeometry args={[0.42, 0.38, 0.95]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 2.45, 0]}>
-          <boxGeometry args={[0.7, 0.55, 0.7]} />
-          <meshLambertMaterial color={c.brute.head} flatShading />
-        </mesh>
-        <mesh position={[0, 2.5, 0.37]}>
-          <boxGeometry args={[0.45, 0.1, 0.05]} />
-          <meshBasicMaterial color={c.brute.eye} />
-        </mesh>
-        <mesh position={[0, 2.78, 0]}>
-          <boxGeometry args={[0.16, 0.34, 0.16]} />
-          <meshLambertMaterial color={c.brute.clubHead} flatShading />
-        </mesh>
-        {[-0.38, 0.38].map((x) => (
-          <mesh key={`lg${x}`} position={[x, 0.2, 0]}>
-            <boxGeometry args={[0.38, 0.55, 0.48]} />
-            <meshLambertMaterial color={c.brute.head} flatShading />
-          </mesh>
-        ))}
-        <mesh position={[0, 1.3, 0.75]}>
-          <boxGeometry args={[1.7, 2.1, 0.18]} />
-          <meshLambertMaterial color={c.brute.clubHead} flatShading />
-        </mesh>
-        {[-0.6, 0.6].map((x) => (
-          <mesh key={`r${x}`} position={[x, 1.3, 0.86]}>
-            <boxGeometry args={[0.16, 2, 0.08]} />
-            <meshLambertMaterial color={c.shooter.body} flatShading />
-          </mesh>
-        ))}
-        {[-0.7, 0, 0.7].map((y) => (
-          <mesh key={`b${y}`} position={[0, 1.3 + y, 0.86]} rotation-z={Math.PI / 4}>
-            <boxGeometry args={[0.18, 0.18, 0.05]} />
-            <meshBasicMaterial color={theme.enemyBullet} />
-          </mesh>
-        ))}
-        <mesh position={[0, 1.3, 0.86]}>
-          <boxGeometry args={[0.3, 0.9, 0.04]} />
-          <meshBasicMaterial color={theme.enemyBullet} />
-        </mesh>
-      </group> )}
+      {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
     </group>
   );
 });
