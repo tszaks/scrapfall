@@ -4,8 +4,8 @@
 //
 //   const batch = new CarBatch(vehicles);      // one slot per vehicle, fixed for its life
 //   scene.add(batch.group);
-//   batch.place(i, x, y, z, yaw, { lit, bar, spin });   // every frame for movers, once for parked
-//   batch.commit(camera.position);             // once per frame: LOD buckets + GPU upload
+//   batch.place(i, x, y, z, yaw, { lit, bar, roll });   // every frame for movers, once for parked
+//   batch.commit(camera);                      // once per frame: cull, LOD buckets, upload
 //   batch.dispose();
 //
 // Every vehicle type is a `VehicleModel` (see `vehicleModel()`): a near body (paint-masked
@@ -1194,12 +1194,16 @@ type Slot = {
   frame: THREE.Matrix4;
   body: THREE.Matrix4;
   x: number;
+  y: number;
   z: number;
   spin: number;
   wheels: WheelSpot[];
   lamps: Lamp[];
   extras: ExtraKey[];
   placed: boolean;
+  /** the type's meshes, and the paint colour (linear rgb) */
+  group?: Group;
+  rgb: [number, number, number];
   lit: boolean;
   bar: 0 | 1 | 2;
   /** bounding radius (m) for frustum culling */
@@ -1222,8 +1226,15 @@ export class CarBatch {
   private wheel: THREE.InstancedMesh;
   private lamp: THREE.InstancedMesh | null = null;
   private extras = new Map<ExtraKey, THREE.InstancedMesh>();
+  private ln = 0;
+  private wn = 0;
+  /** slots below this index move every frame; the rest are static (culled per grid cell) */
+  private dynamic: number;
+  private cells: { x: number; y: number; z: number; r: number; slots: Slot[] }[] | null = null;
 
-  constructor(vehicles: Vehicle[]) {
+  /** `staticFrom`: index of the first vehicle that is placed once and never moves (parked) */
+  constructor(vehicles: Vehicle[], staticFrom = vehicles.length) {
+    this.dynamic = staticFrom;
     const M = mats();
     const counts = new Map<string, number>();
     const exCounts = new Map<ExtraKey, number>();
@@ -1239,6 +1250,7 @@ export class CarBatch {
         frame: new THREE.Matrix4(),
         body: new THREE.Matrix4(),
         x: 0,
+        y: 0,
         z: 0,
         spin: 0,
         wheels: model.wheels(v),
@@ -1248,6 +1260,7 @@ export class CarBatch {
         lit: false,
         bar: 0,
         rad: Math.hypot(v.len, v.wid) / 2 + 0.6,
+        rgb: _c.set(v.color).toArray() as [number, number, number],
       });
       lamps += ls.length;
       counts.set(v.type, (counts.get(v.type) ?? 0) + 1);
@@ -1277,6 +1290,9 @@ export class CarBatch {
         this.group.add(glass);
       }
       this.groups.set(type, { near, far, glass });
+    }
+    for (const sl of this.slots) {
+      sl.group = this.groups.get(sl.type)!;
     }
     this.wheel = inst(wheelGeometry(), M.plain, vehicles.length * 4, false);
     for (const [k, n] of exCounts) this.extras.set(k, inst(extraOf(k), M.plain, n, false));
@@ -1311,7 +1327,9 @@ export class CarBatch {
     const sl = this.slots[i];
     if (!sl) return;
     sl.placed = true;
+    if (i >= this.dynamic) this.cells = null; // a static vehicle moved: regrid
     sl.x = x;
+    sl.y = y;
     sl.z = z;
     sl.frame.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, yaw), _s.set(1, 1, 1));
     const md = sl.model;
@@ -1330,26 +1348,27 @@ export class CarBatch {
   commit(camera: THREE.Camera) {
     artFrame();
     const cam = camera.position;
+    camera.updateMatrixWorld(); // this frame's pose, not last frame's
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_proj);
     const lamp = this.lamp;
-    let ln = 0;
     for (const g of this.groups.values()) {
       g.near.count = 0;
       g.far.count = 0;
     }
     for (const ex of this.extras.values()) ex.count = 0;
-    let wn = 0;
     const near2 = CAR_NEAR * CAR_NEAR;
     const far2 = CAR_FAR * CAR_FAR;
-    for (const sl of this.slots) {
-      if (!sl.placed) continue;
+    this.ln = 0;
+    this.wn = 0;
+    const visit = (sl: Slot) => {
+      if (!sl.placed) return;
       const d2 = (sl.x - cam.x) ** 2 + (sl.z - cam.z) ** 2;
-      if (d2 > far2) continue;
-      _sphere.center.set(sl.x, 1.2, sl.z);
+      if (d2 > far2) return;
+      _sphere.center.set(sl.x, sl.y + 1.2, sl.z);
       _sphere.radius = sl.rad;
-      if (!_frustum.intersectsSphere(_sphere)) continue;
-      const g = this.groups.get(sl.type)!;
+      if (!_frustum.intersectsSphere(_sphere)) return;
+      const g = sl.group!;
       if (lamp)
         for (const L of sl.lamps) {
           const on =
@@ -1357,9 +1376,9 @@ export class CarBatch {
             (L.kind === "barR" ? sl.bar === 1 : L.kind === "barB" ? sl.bar === 2 : sl.lit);
           if (!on) continue;
           _m.compose(_p.set(L.x, L.y, L.z), _q.identity(), _s.set(L.sx, L.sy, L.sz));
-          lamp.setMatrixAt(ln, _m2.multiplyMatrices(sl.frame, _m));
+          lamp.setMatrixAt(this.ln, _m2.multiplyMatrices(sl.frame, _m));
           lamp.setColorAt(
-            ln++,
+            this.ln++,
             _c.set(
               L.kind === "head"
                 ? 0xfff6d8
@@ -1373,29 +1392,36 @@ export class CarBatch {
             ),
           );
         }
-      _c.set(sl.v.color);
       if (d2 < near2) {
-        g.near.setMatrixAt(g.near.count, sl.body);
-        g.near.setColorAt(g.near.count, _c);
-        g.near.count++;
+        put(g.near, sl);
         for (const w of sl.wheels) {
           _m.compose(
             _p.set(w.x, w.y, w.z),
             _q.setFromAxisAngle(_x, sl.spin),
             _s.set(w.w, w.r, w.r),
           );
-          this.wheel.setMatrixAt(wn++, _m2.multiplyMatrices(sl.frame, _m));
+          this.wheel.setMatrixAt(this.wn++, _m2.multiplyMatrices(sl.frame, _m));
         }
         for (const k of sl.extras) {
           const ex = this.extras.get(k)!;
           ex.setMatrixAt(ex.count++, sl.body);
         }
       } else {
-        g.far.setMatrixAt(g.far.count, sl.body);
-        g.far.setColorAt(g.far.count, _c);
-        g.far.count++;
+        put(g.far, sl);
       }
+    };
+    for (let i = 0; i < this.dynamic; i++) visit(this.slots[i]!);
+    // static vehicles (parked) are culled a grid cell at a time first
+    for (const cell of this.staticCells()) {
+      const d = Math.hypot(cell.x - cam.x, cell.z - cam.z) - cell.r;
+      if (d > CAR_FAR) continue;
+      _sphere.center.set(cell.x, cell.y + 1.2, cell.z);
+      _sphere.radius = cell.r;
+      if (!_frustum.intersectsSphere(_sphere)) continue;
+      for (const sl of cell.slots) visit(sl);
     }
+    const ln = this.ln;
+    const wn = this.wn;
     this.wheel.count = wn;
     this.wheel.visible = wn > 0;
     this.wheel.instanceMatrix.needsUpdate = true;
@@ -1422,6 +1448,34 @@ export class CarBatch {
     }
   }
 
+  /** the static vehicles, grouped into 48 m grid cells with a bounding circle each */
+  private staticCells() {
+    if (this.cells) return this.cells;
+    const map = new Map<string, Slot[]>();
+    for (let i = this.dynamic; i < this.slots.length; i++) {
+      const sl = this.slots[i]!;
+      if (!sl.placed) continue;
+      const k = `${Math.floor(sl.x / 48)},${Math.floor(sl.z / 48)}`;
+      let list = map.get(k);
+      if (!list) map.set(k, (list = []));
+      list.push(sl);
+    }
+    this.cells = [...map.values()].map((slots) => {
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (const sl of slots) {
+        x += sl.x / slots.length;
+        y += sl.y / slots.length;
+        z += sl.z / slots.length;
+      }
+      let r = 0;
+      for (const sl of slots) r = Math.max(r, Math.hypot(sl.x - x, sl.z - z) + sl.rad);
+      return { x, y, z, r: r + 3, slots };
+    });
+    return this.cells;
+  }
+
   /** the lamps of vehicle `i` in car space (police lightbar spots, sign positions) */
   lampsOf(i: number) {
     return this.slots[i]?.lamps ?? [];
@@ -1434,6 +1488,16 @@ export class CarBatch {
     });
     this.group.clear();
   }
+}
+
+/** append a vehicle's body instance (matrix + paint) straight into an InstancedMesh's arrays */
+function put(im: THREE.InstancedMesh, sl: Slot) {
+  const i = im.count++;
+  (im.instanceMatrix.array as Float32Array).set(sl.body.elements, i * 16);
+  const c = im.instanceColor!.array as Float32Array;
+  c[i * 3] = sl.rgb[0];
+  c[i * 3 + 1] = sl.rgb[1];
+  c[i * 3 + 2] = sl.rgb[2];
 }
 
 // ---------------------------------------------------------------- baked cars

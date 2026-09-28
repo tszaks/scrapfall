@@ -130,7 +130,7 @@ export function CityTraffic({
   const parked = city.parked;
   const parkedCount = cars.length; // index of the first parked car in the batch
   const batch = useMemo(
-    () => new CarBatch([...cars.map((c) => c.v), ...parked.map((pc) => pc.v)]),
+    () => new CarBatch([...cars.map((c) => c.v), ...parked.map((pc) => pc.v)], cars.length),
     [cars, parked],
   );
   useEffect(() => () => batch.dispose(), [batch]);
@@ -299,8 +299,9 @@ export function CityTraffic({
         __rsPursuit: director,
         __rsTrafficStats: trafficStats,
         __rsSiren: sirenDebug,
+        __rsCarBatch: batch,
       });
-  }, [cars, director]);
+  }, [cars, director, batch]);
 
   // a moving car touched an enemy (host only). Small ones get thrown aside and hurt;
   // big ones (brute, vanguard, elites, mini-boss, boss) stop the car and just take a knock.
