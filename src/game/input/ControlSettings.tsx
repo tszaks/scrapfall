@@ -205,7 +205,7 @@ export function ControlSettings() {
           </button>
         ))}
       </div>
-      <p className="text-[10px] opacity-60">
+      <p className="text-[11px] opacity-70">
         Right mouse / left trigger aims by default. Aim steadies the weapon and slows look speed.
         Physical rounds drop over distance; bolts and shells arc more.
       </p>
@@ -221,7 +221,7 @@ export function ControlSettings() {
           </button>
         ))}
       </div>
-      <p className="text-[10px] opacity-60">
+      <p className="text-[11px] opacity-70">
         {dev.padConnected
           ? "Controller connected."
           : "Connect a controller and press a button to detect it."}{" "}
@@ -282,7 +282,7 @@ export function ControlSettings() {
       >
         RESTORE {tab === "kbm" ? "KEYBOARD / MOUSE" : "CONTROLLER"} DEFAULTS
       </button>
-      <p className="text-[10px] opacity-60">
+      <p className="text-[11px] opacity-70">
         Interact takes priority in elevators. Revive takes priority near a downed teammate. The
         default keys share these context actions.
       </p>

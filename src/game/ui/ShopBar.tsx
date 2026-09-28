@@ -19,7 +19,7 @@ function PistolBadge() {
 
 function KeyPip({ action }: { action: ControlAction }) {
   return (
-    <span className="flex min-h-4 min-w-4 items-center justify-center rounded-sm border border-[#f3e6cf]/25 bg-[#2b2118] px-1 text-[9px] font-bold text-[#f7eeda]">
+    <span className="flex min-h-4 min-w-4 items-center justify-center rounded-sm border border-[#f3e6cf]/25 bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]">
       <KeyHint action={action} />
     </span>
   );
@@ -68,10 +68,13 @@ export function ShopBar({
   return (
     <div
       data-pad-shop
-      className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}
+      className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${
+        // phones: sit in the band between the left thumb zone and the minimap/buttons corner
+        touchUi ? "bottom-2 left-[15rem] right-[20.5rem]" : "bottom-6"
+      }`}
     >
-      <div className="mx-auto w-fit max-w-[calc(100vw-1rem)] rounded-lg border-2 border-[#2b2118] bg-[#f3e6cf]/95 px-3 pt-1.5 pb-2 shadow-[3px_3px_0_0_rgba(43,33,24,0.6)]">
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[10px] font-bold tracking-[0.22em]">
+      <div className="mx-auto w-fit max-w-full rounded-lg border-2 border-[#2b2118] bg-[#f3e6cf]/95 px-3 pt-1.5 pb-2 shadow-[3px_3px_0_0_rgba(43,33,24,0.6)]">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[11px] font-bold tracking-[0.22em]">
           <span style={{ color: C.rust }}>SCRAP SHOP</span>
           <span className="opacity-70">NEXT WAVE IN {shopLeft}s</span>
           <span>
@@ -84,26 +87,30 @@ export function ShopBar({
             </span>
           )}
         </div>
-        <div className="mt-1.5 flex flex-wrap items-stretch justify-center gap-1.5">
+        <div
+          className={`mt-1.5 flex items-stretch gap-1.5 ${
+            touchUi ? "ui-scroll justify-start overflow-x-auto overscroll-contain" : "flex-wrap justify-center"
+          }`}
+        >
           {!multiplayer && (
             <button
               disabled={kitReady || health <= 0 || shards < SELF_REVIVE_COST}
               onClick={onKit}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[10px] disabled:opacity-40"
+              className="pointer-events-auto flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[11px] disabled:opacity-40"
             >
               <KeyPip action="shopRevive" />
               <b>SELF REVIVE</b>
-              <span className="opacity-60">{kitReady ? "KIT READY" : `◆ ${SELF_REVIVE_COST}`}</span>
+              <span className="opacity-70">{kitReady ? "KIT READY" : `◆ ${SELF_REVIVE_COST}`}</span>
             </button>
           )}
           <button
             onClick={onPatch}
             disabled={health <= 0 || health >= maxHp || shards < patchCost}
-            className="pointer-events-auto flex items-center gap-2 rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[10px] disabled:opacity-40"
+            className="pointer-events-auto flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[11px] disabled:opacity-40"
           >
             <KeyPip action="shopHeal" />
             <b>FIELD DRESSING</b>
-            <span className="opacity-60">
+            <span className="opacity-70">
               +5 HP · {health}/{maxHp}
             </span>
             <b>◆ {patchCost}</b>
@@ -111,11 +118,11 @@ export function ShopBar({
           <button
             onClick={onReroll}
             disabled={shards < rerollCost}
-            className="pointer-events-auto flex items-center gap-2 rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[10px] disabled:opacity-40"
+            className="pointer-events-auto flex shrink-0 items-center gap-2 whitespace-nowrap rounded-md border-2 border-[#2b2118] bg-[#2b2118]/8 px-2.5 py-1.5 text-[11px] disabled:opacity-40"
           >
             <KeyPip action="shopReroll" />
             <b>REROLL</b>
-            <span className="opacity-60">
+            <span className="opacity-70">
               {freeLeft > 0
                 ? `${freeLeft} FREE LEFT`
                 : rerolls > 0
@@ -126,7 +133,13 @@ export function ShopBar({
           </button>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
+      <div
+        className={`mt-2 flex gap-2 px-3 sm:gap-3 ${
+          touchUi
+            ? "ui-scroll justify-start overflow-x-auto overscroll-contain pb-1"
+            : "flex-wrap justify-center"
+        }`}
+      >
         {offers.map((id, i) => {
           const info = PERK_INFO[id];
           const cost = perkCost(id, perks[id]);
@@ -137,7 +150,7 @@ export function ShopBar({
             <button
               key={i}
               onClick={() => onBuy(i)}
-              className={`pointer-events-auto relative rounded-lg border-2 border-[#2b2118] bg-[#f3e6cf]/95 text-center shadow-[3px_3px_0_0_rgba(43,33,24,0.6)] transition-transform duration-100 [@media(hover:hover)]:hover:-translate-y-0.5 ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"} ${afford ? "" : "opacity-70"}`}
+              className={`pointer-events-auto relative rounded-lg border-2 border-[#2b2118] bg-[#f3e6cf]/95 text-center shadow-[3px_3px_0_0_rgba(43,33,24,0.6)] transition-transform duration-100 [@media(hover:hover)]:hover:-translate-y-0.5 ${touchUi ? "w-32 shrink-0 p-2" : "w-36 p-3 sm:w-44"} ${afford ? "" : "opacity-70"}`}
             >
               <span className="absolute -left-2 -top-2 flex min-h-6 min-w-6 items-center justify-center rounded border border-[#f3e6cf]/30 bg-[#2b2118] px-1 text-xs font-bold text-[#f7eeda]">
                 <KeyHint action={`shop${i + 1}` as ControlAction} />
@@ -160,7 +173,7 @@ export function ShopBar({
               ) : (
                 <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
               )}
-              {id !== "heal" && <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>}
+              {id !== "heal" && <div className="mt-1 text-[11px] opacity-70">LEVEL {perks[id]}</div>}
               <div className={`mt-2 text-sm font-bold ${afford ? "" : "text-[#b3261e]"}`}>
                 ◆ {cost}
               </div>
