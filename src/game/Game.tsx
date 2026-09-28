@@ -2775,9 +2775,9 @@ function World({
       });
       // waves
       const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
-      if (remaining === 0 && wave.current <= WAVES.length) {
-        if (wave.current === WAVES.length) {
-          wave.current++;
+      if (remaining === 0 && (endless.current || wave.current <= WAVES.length)) {
+        // clearing the map boss ends the run — unless overtime is switched on
+        if (wave.current === WAVES.length && !endless.current) {
           status(WAVES.length, 0, true, false);
           return;
         }
