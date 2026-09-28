@@ -205,7 +205,7 @@ function Flashlight() {
     l.castShadow = false;
     return l;
   }, []);
-  const st = useRef({ inScene: false, compiling: false, idle: 0, warm: 30 });
+  const st = useRef({ inScene: false, compiling: false, idle: 0, frame: 0 });
   useEffect(
     () => () => {
       scene.remove(light);
@@ -220,7 +220,9 @@ function Flashlight() {
     const S = st.current;
     // shortly after the map is built (behind the start menu, usually), compile the lit
     // variants in the background once, so the blackout's own compile finds them all cached
-    const warmNow = S.warm > 0 && --S.warm === 0;
+    // (again a little later: materials whose textures arrive late get new variants)
+    S.frame++;
+    const warmNow = (S.frame === 30 || S.frame === 240 || S.frame === 900) && !S.inScene && !power.out;
     if ((warmNow || (power.out && !S.inScene)) && !S.compiling) {
       S.compiling = true;
       const probe = new THREE.Scene();

@@ -4286,7 +4286,7 @@ function World({
   return (
     <>
       {/* every material compiled (drawn once, unseen) before the player walks into it */}
-      <Prewarm when={seed} />
+      <Prewarm when={seed} withSpot={theme.blockShape === "city"} />
       <WarmKinds enemies={enemies} when={seed} idle={() => !lockedRef.current && wave.current === 0 && pending.current.every((p) => !p)} />
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />

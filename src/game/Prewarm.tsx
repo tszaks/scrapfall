@@ -9,14 +9,20 @@
 // overwrites it, so it is never seen.
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
-import type * as THREE from "three";
+import * as THREE from "three";
 
 import { holdQuality } from "./quality";
 
 const warmLog: { frame: number; ms: number; programs: number; before: number }[] = [];
 if (typeof window !== "undefined") (window as unknown as { __rsWarm?: unknown }).__rsWarm = warmLog;
 
-export function Prewarm({ when, delay = 20 }: { when: unknown; delay?: number }) {
+/**
+ * `withSpot`: also draw it once more with a (dark) spot light in the scene: the blackout's
+ * flashlight is a spot light, and every lit material needs a variant for it. Compiling them
+ * is not enough on Safari/Metal: the first real draw still builds the pipelines (a 0.5-1.7 s
+ * freeze at the blackout's first dark frame), so they are drawn here, unseen.
+ */
+export function Prewarm({ when, delay = 20, withSpot = false }: { when: unknown; delay?: number; withSpot?: boolean }) {
   const { gl, scene, camera } = useThree();
   const left = useRef(delay);
   useEffect(() => {
@@ -41,9 +47,18 @@ export function Prewarm({ when, delay = 20 }: { when: unknown; delay?: number })
         culled.push(o);
       }
     });
+    const spot = withSpot ? new THREE.SpotLight("#ffffff", 0) : null;
     try {
       gl.render(scene, camera);
+      if (spot) {
+        scene.add(spot);
+        gl.render(scene, camera);
+      }
     } finally {
+      if (spot) {
+        scene.remove(spot);
+        spot.dispose();
+      }
       for (const o of shown) o.visible = false;
       for (const o of culled) o.frustumCulled = true;
     }
