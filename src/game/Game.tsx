@@ -2275,7 +2275,8 @@ function World({
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
-        * (overdrive.current > 0 ? 0.5 : 1);
+        * (overdrive.current > 0 ? 0.5 : 1)
+        * (mutator.current?.id === "surge" ? 0.77 : 1); // OVERDRIVE round: everyone shoots faster
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
