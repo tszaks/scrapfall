@@ -1,3 +1,4 @@
+import { wheelWorld, wheelEye } from "./beach/wheelRide";
 import { createPortal, useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
 import { remoteFloorY } from "./access/world";
@@ -5,8 +6,6 @@ import { alpine } from "./alpine/weather";
 import { riderEye } from "./alpine/ride";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { newPlayerRig } from "./art/player";
-import { GunView } from "./art/GunView";
-import type { GunId } from "./art/guns";
 import * as THREE from "three";
 
 import type { RemoteState } from "./net";
@@ -18,9 +17,10 @@ const PIPS = 10;
 
 /** Low-poly teammate avatars, driven imperatively from the shared map. */
 export function RemotePlayers({
-  remotes,
+  remotes, renderGun,
 }: {
   remotes: React.MutableRefObject<Map<string, RemoteState>>;
+  renderGun: (weapon: string) => React.ReactNode;
 }) {
   const groups = useRef<(THREE.Group | null)[]>([]);
   const visors = useRef<(THREE.Mesh | null)[]>([]);
@@ -56,7 +56,10 @@ export function RemotePlayers({
       p.ry += dy * k;
       // a teammate riding the chairlift sits on their chair (its position is the shared lift clock)
       const lift = alpine.active ? alpine.lift : null;
-      if (lift && (p.rc ?? -1) >= 0 && !down) {
+      if (wheelWorld.wheel && (p.wr ?? -1) >= 0 && !down) {
+        const e = wheelEye(wheelWorld.wheel, p.wr!);
+        p.rx = e.x; p.rz = e.z; g.position.set(e.x, e.y - 1.6, e.z);
+      } else if (lift && (p.rc ?? -1) >= 0 && !down) {
         const e = riderEye(lift, p.rc!);
         p.rx = e.x;
         p.rz = e.z;
@@ -79,6 +82,8 @@ export function RemotePlayers({
         down ? Math.sin(performance.now() / 400) * 0.08 : 0,
       );
       const since = (performance.now() - (REMOTE_SHOT.get(p.id) ?? -1e9)) / 1000;
+      rigs[i]!.pose.seated = (p.rc ?? -1) >= 0;
+      rigs[i]!.pose.airborne = (p.jy ?? 0) > .1;
       rigs[i]!.update(
         now / 1000,
         delta,
@@ -137,7 +142,7 @@ export function RemotePlayers({
           )}
           {createPortal(
             <group rotation-y={Math.PI} scale={0.65}>
-              <GunView w={weapons[i] as GunId} color="#d2b68e" body="#586068" />
+              {renderGun(weapons[i] ?? "pistol")}
             </group>,
             rigs[i]!.byName["hands"]!,
           )}

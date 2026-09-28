@@ -1,3 +1,4 @@
+import { wheelRailPosts } from "./beach/wheelRide";
 // Thin solid props for every big map: lamp posts, sign poles, benches, hydrants, bins. The
 // 2 m block grid can't hold them (a whole cell per lamp post is far too fat), so each map's
 // props become small collision circles (level.ts setPosts). Trees and palms keep whatever
@@ -45,6 +46,7 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
     return out;
   }
   if (isBeach(city)) {
+    out.push(...wheelRailPosts(city.beach.wheel));
     for (const p of city.beach.props) {
       // posts at every height: the ground under the pier deck is part of the deck (you can't
       // stand beneath it), so a post up there only ever blocks the deck, and the clifftop's

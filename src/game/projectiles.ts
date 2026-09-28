@@ -1,3 +1,4 @@
+import { wheelWorld, wheelEye } from "./beach/wheelRide";
 import { remoteFloorY } from "./access/world";
 import { alpine } from "./alpine/weather";
 import { riderEye } from "./alpine/ride";
@@ -260,7 +261,7 @@ function remoteMuzzle(r: RemoteState, out: THREE.Vector3) {
   const th = r.ry + Math.PI;
   const c = Math.cos(th), s = Math.sin(th);
   const lift = alpine.active ? alpine.lift : null;
-  const seat = lift && (r.rc ?? -1) >= 0 ? riderEye(lift,r.rc!) : null;
+  const seat = wheelWorld.wheel && (r.wr ?? -1) >= 0 ? wheelEye(wheelWorld.wheel,r.wr!) : lift && (r.rc ?? -1) >= 0 ? riderEye(lift,r.rc!) : null;
   const gy = groundY(r.rx,r.rz);
   const feet = seat ? seat.y - 1.6 : (r.az ? remoteFloorY(r.az,r.ay,gy) : gy) + (r.jy ?? 0);
   const pitch = r.pitch ?? 0;

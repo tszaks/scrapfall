@@ -1,3 +1,4 @@
+import { wheelGround } from "./wheelRide";
 // Runtime ground for Pacific Pier: walkable height, movement speed and projectile collision,
 // all answered from the layout's cell grids plus a few analytic shapes (ramps, bowls).
 // Cheap enough to call per enemy and per bullet every frame.
@@ -50,6 +51,8 @@ export function beachTerrain(city: BeachLayout): Ground {
     return h;
   };
   const height = (x: number, z: number) => {
+    const platform = wheelGround(beach.wheel, x, z);
+    if (platform !== null) return platform;
     const c = cellOf(x, z);
     if (c >= 0) {
       const rg = regionOf[c]!;

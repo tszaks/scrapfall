@@ -1,3 +1,4 @@
+import { wheelRails, wheelGround } from "./wheelRide";
 // Turns the Pacific Pier layout into merged geometry, one set of meshes per 200 m chunk:
 //   ground - the terrain: beach, bowls, bluff, streets (its own material: wet sand shines)
 //   main   - buildings, the pier structure, railings, palms (always drawn; casts shadows)
@@ -1979,10 +1980,31 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       G.cyl(hub[0], hub[1], hub[2], 0.9, 1.6, 10);
     }
     G.col("#c8c4bc");
-    G.obox(w.x, DECK, w.z, 20, 1.2, 9, w.rot);
+    G.obox(w.x, DECK, w.z, 20, 1.8, 9, w.rot);
+    // The rendered treads use the same rise/run as wheelGround.
+    for (let i=0;i<10;i++) {
+      const p=WP(0,DECK,9.3-(i+.5)*.48);
+      G.obox(p[0],DECK,p[2],4,(i+1)*.18,.48,w.rot);
+    }
+    G.col("#d8d5cb");
+    for (const [u0,n0,u1,n1] of wheelRails()) {
+      const a=WP(u0,0,n0),b=WP(u1,0,n1);
+      a[1]=(wheelGround(w,a[0],a[2]) ?? DECK)+1.05;
+      b[1]=(wheelGround(w,b[0],b[2]) ?? DECK)+1.05;
+      legQuad(G,a,b,.065);
+      const count=Math.ceil(Math.hypot(u1-u0,n1-n0)/1.5);
+      for(let i=0;i<=count;i++) {
+        const p=WP(u0+(u1-u0)*i/count,0,n0+(n1-n0)*i/count);
+        const y=wheelGround(w,p[0],p[2]) ?? DECK;
+        G.cyl(p[0],y,p[2],.045,1.05,6);
+      }
+    }
+    // Loading line directly beside the next cabin, clear of the ticket booth.
+    const line=WP(0,DECK+1.81,2.1);
+    G.col("#e4c159").obox(line[0],line[1],line[2],2.4,.025,.18,w.rot);
     G.col("#2f5f8a");
-    const booth = WP(0, DECK + 1.2, 4.6);
-    G.obox(booth[0], booth[1], booth[2], 8, 2.6, 1.2, w.rot);
+    const booth = WP(-6.2, DECK + 1.8, 3.5);
+    G.obox(booth[0], booth[1], booth[2], 3.4, 2.6, 1.6, w.rot);
     // axle
     G.col("#8a8e94");
     G.obox(w.x, w.y - 0.35, w.z, 0.7, 0.7, 7.2, w.rot);

@@ -26,6 +26,9 @@ export type Pose = {
   aux: number;
   /** per-robot random 0..1, to desync idles */
   seed: number;
+  /** Player-only pose flags; enemy animation ignores these. */
+  seated?: boolean;
+  airborne?: boolean;
 };
 
 export type RobotDef<N extends string = string> = {

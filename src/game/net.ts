@@ -36,6 +36,8 @@ export type RemoteState = {
   jy?: number;
   /** alpine: the chairlift chair this player is riding, -1 on foot */
   rc?: number;
+  /** Pacific Pier Ferris cabin, -1 on foot. */
+  wr?: number;
   last: number;
   // render smoothing
   rx: number;

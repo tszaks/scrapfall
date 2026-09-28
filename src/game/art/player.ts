@@ -66,7 +66,13 @@ const player = defineRobot({
     m.box(0.13, 0.1, 0.13, [-0.08, 1.2, 0.35], boot, S.leather, { bevel: 0.02 });
   },
   animate(b, p) {
-    walkLegs(b, p, 0.55);
+    if (!p.seated && !p.airborne) walkLegs(b, p, 0.55);
+    else {
+      b.legL.rotation.x = p.seated ? -1.25 : -.25;
+      b.legR.rotation.x = p.seated ? -1.25 : .2;
+      b.shinL.rotation.x = p.seated ? 1.4 : .6;
+      b.shinR.rotation.x = p.seated ? 1.4 : .45;
+    }
     idle(b.body, p, 0.45);
     b.hands.rotation.x = p.aux;
     b.hands.position.z -= p.wind * 0.065;

@@ -1,3 +1,4 @@
+import { wheelPoint, wheelLoading, wheelGround } from "../src/game/beach/wheelRide";
 // Collision audit for Pacific Pier: points sampled inside every rendered solid thing must be
 // blocked for the player. Run: npx jiti scripts/beach-collision.ts [seeds]
 import { setArenaSize, generateLevel, blocked, BEACH_SIZE } from "../src/game/level";
@@ -36,7 +37,19 @@ for (const solo of [true, false])
     }
     for (const t of B.towers) inside("lifeguard tower", t.x - 1.5, t.z - 1.5, t.x + 1.5, t.z + 1.5);
     const w = B.wheel;
-    inside("ferris wheel base", w.x - 8, w.z - 3, w.x + 8, w.z + 3);
+    for (const u of [-9,9]) for (const n of [-4.4,4.4]) {
+      const p=wheelPoint(w,u,0,n); add("ferris support",blocked(lv.blocks,p.x,p.z,.4));
+    }
+    let prev=wheelPoint(w,0,0,9.6);
+    for(let n=9.5;n>=2.1;n-=.1) {
+      const p=wheelPoint(w,0,0,n);
+      add("ferris approach",!blocked(lv.blocks,p.x,p.z,.4));
+      add("ferris climb",climbable(prev.x,prev.z,p.x,p.z));
+      add("ferris descend",climbable(p.x,p.z,prev.x,prev.z));
+      prev=p;
+    }
+    const loading=wheelLoading(w);
+    add("ferris loading height",Math.abs(groundAt(loading.x,loading.z)-loading.y)<.01);
     inside("carousel", B.carousel.x - 5, B.carousel.z - 5, B.carousel.x + 5, B.carousel.z + 5);
     inside("drop tower", B.drop.x - 1.1, B.drop.z - 1.1, B.drop.x + 1.1, B.drop.z + 1.1, 0);
     // Both directions must be usable; collision behind and beside the deck stays solid.

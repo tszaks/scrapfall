@@ -62,8 +62,19 @@ export function updateViewCamera(camera: THREE.Camera, stop: Stop) {
   viewCamera.getWorldDirection(shoulderView.direction);
   return viewCamera;
 }
-export const playerMuzzle = (camera: THREE.Camera, out: THREE.Vector3) =>
-  out.set(0.24, -0.36, -0.7).applyQuaternion(camera.quaternion).add(camera.position);
+const muzzleEnd = new THREE.Vector3(), muzzleProbe = new THREE.Vector3();
+export function playerMuzzle(camera: THREE.Camera, out: THREE.Vector3, stop?: Stop) {
+  muzzleEnd.set(.24, -.36, -.7).applyQuaternion(camera.quaternion).add(camera.position);
+  if (!stop) return out.copy(muzzleEnd);
+  out.copy(camera.position);
+  const n = Math.ceil(muzzleEnd.distanceTo(camera.position) / .06);
+  for (let i = 1; i <= n; i++) {
+    muzzleProbe.lerpVectors(camera.position, muzzleEnd, i / n);
+    if (stop(muzzleProbe)) break;
+    out.copy(muzzleProbe);
+  }
+  return out;
+}
 export type AimBody = { x: number; z: number; bottom: number; top: number; radius: number };
 /** Reticle-to-muzzle convergence, using the same world collision and enemy hit bands as combat. */
 export function shoulderAim(
@@ -106,7 +117,12 @@ export function shoulderAim(
     }
     if (lo <= hi && lo < distance) distance = lo;
   }
-  return out.copy(o).addScaledVector(d, distance).sub(muzzle).normalize();
+  out.copy(o).addScaledVector(d, distance).sub(muzzle).normalize();
+  camera.getWorldDirection(direction);
+  // A close obstruction can sit behind the muzzle's reticle intersection: fire into it,
+  // never turn the projectile back toward the player.
+  if (out.dot(direction) <= .05) out.copy(direction);
+  return out;
 }
 
 export function PlayerView({
@@ -115,6 +131,7 @@ export function PlayerView({
   look,
   recoil,
   downed,
+  seated, airborne,
   stop,
   children,
 }: {
@@ -123,6 +140,8 @@ export function PlayerView({
   look: MutableRefObject<{ yaw: number; pitch: number }>;
   recoil: MutableRefObject<number>;
   downed: MutableRefObject<boolean>;
+  seated: () => boolean;
+  airborne: () => boolean;
   stop: Stop;
   children: ReactNode;
 }) {
@@ -145,7 +164,7 @@ export function PlayerView({
   useFrame(({ camera, gl, scene, clock }, dt) => {
     artFrame();
     eye.copy(camera.position);
-    const on = !hidden.current && getViewMode() === "third";
+    const on = (!hidden.current || downed.current) && getViewMode() === "third";
     shoulderView.active = on;
     rig.mesh.visible = false;
     if (on) {
@@ -154,6 +173,8 @@ export function PlayerView({
       rig.mesh.visible = distance > 0.85;
       rig.mesh.position.set(eye.x, eye.y - (downed.current ? 0.15 : 1.6), eye.z);
       rig.mesh.rotation.set(downed.current ? -Math.PI / 2 : 0, look.current.yaw + Math.PI, 0);
+      rig.pose.seated = seated();
+      rig.pose.airborne = airborne();
       rig.update(
         clock.elapsedTime,
         Math.min(dt, 0.05),

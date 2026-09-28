@@ -1,3 +1,4 @@
+import { wheelRide, wheelWorld, wheelEye, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
 import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
 import { getViewMode } from "./viewMode";
 import { setWorldMuzzle } from "./projectiles";
@@ -2442,6 +2443,8 @@ function World({
         healthRef,
         ammo,
         shoulderView,
+        wheelRide,
+        wheelWorld,
         enemyBullets,
         heal,
         crate,
@@ -2731,6 +2734,7 @@ function World({
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
     r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
     r.rc = Number(m.rc ?? -1);
+    r.wr = Number.isInteger(m.wr) && m.wr >= 0 && m.wr < 20 ? m.wr : -1;
     r.jy = Number(m.jy ?? 0) || 0; // mid-jump height (the avatar hops)
     r.last = performance.now();
   };
@@ -2958,6 +2962,7 @@ function World({
     };
     placeAtSpawn();
     resetRide();
+    resetWheel(isBeach(city) ? city.beach.wheel : null);
     wave.current = 0;
     shownWave.current = 1;
     nextWaveTimer.current = 1.5;
@@ -3128,13 +3133,13 @@ function World({
   const myZone = () => {
     const k = playerZoneKey();
     if (k !== 0) return k;
-    if (alpineMap && ride.chair >= 0) return -1;
+    if ((alpineMap && ride.chair >= 0) || wheelRide.cabin >= 0) return -1;
     return baseZone(camera.position.x, camera.position.z);
   };
   const remoteZone = (r: RemoteState) => {
     const k = zoneKeyOfAz(r.az);
     if (k !== 0) return k;
-    if (alpineMap && (r.rc ?? -1) >= 0) return -1;
+    if ((alpineMap && (r.rc ?? -1) >= 0) || (r.wr ?? -1) >= 0) return -1;
     return baseZone(r.x, r.z);
   };
   /** building access: every live player with their zone */
@@ -3510,7 +3515,7 @@ function World({
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     const third = getViewMode() === "third";
-    const pos = third ? playerMuzzle(camera, new THREE.Vector3()) : camera.position.clone().addScaledVector(FORWARD, 0.6);
+    const pos = third ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds) : camera.position.clone().addScaledVector(FORWARD, 0.6);
     if (!third) pos.y -= 0.25;
     if (third) shoulderAim(camera, pos, outOfBounds, enemies.filter(e => e.alive).map(e => {
       const [lo, hi] = hitBand(e.kind), gy = groundY(e.x,e.z);
@@ -4034,7 +4039,7 @@ function World({
       trigger.current || touchInput.fire || padOut.fire,
       spectating ||
         downedRef.current ||
-        ride.chair >= 0 ||
+        ride.chair >= 0 || wheelRide.cabin >= 0 ||
         (accessActive() && accPlayer.inCar) ||
         touchInput.revive ||
         k.has("KeyR"),
@@ -4048,6 +4053,7 @@ function World({
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
     MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
+    if (wheelRide.cabin >= 0) MOVE.set(0, 0, 0);
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
@@ -4083,7 +4089,7 @@ function World({
       [alpineMap.alpine.ride.boardUp, alpineMap.alpine.ride.boardDown].some(
         ([bx, bz]) => Math.hypot(cam.position.x - bx, cam.position.z - bz) < 5,
       );
-    if ((wind.x !== 0 || wind.z !== 0) && !onLoadingLine) {
+    if ((wind.x !== 0 || wind.z !== 0) && !onLoadingLine && wheelRide.cabin < 0) {
       const wx = cam.position.x + wind.x * delta;
       const wz = cam.position.z + wind.z * delta;
       if (walkTo(wx, cam.position.z)) cam.position.x = wx;
@@ -4114,7 +4120,7 @@ function World({
     // its own player against the enemies it sees; fliers pass overhead; the phase dash goes
     // straight through ("shrug off every hit").
     const phasing = invuln.current > 0 && abilityRef.current === "dash";
-    if (!spectating && !phasing) {
+    if (!spectating && !phasing && wheelRide.cabin < 0) {
       for (let pass = 0; pass < 2; pass++) {
         for (const e of enemies) {
           if (!e.alive || FLYERS.has(e.kind)) continue;
@@ -4164,7 +4170,7 @@ function World({
           : camGround.current + dg * Math.min(1, delta * 16);
       // jump (Space / A / JUMP): not in an elevator car, on the chairlift, down or spectating
       const noJump =
-        spectating || downedRef.current || ride.chair >= 0 || (accessActive() && accPlayer.inCar);
+        spectating || downedRef.current || ride.chair >= 0 || wheelRide.cabin >= 0 || (accessActive() && accPlayer.inCar);
       if (takeJump()) tryJump(!noJump);
       if (noJump && moveState.airborne) cancelJump(gy);
       stepJump(delta, gy);
@@ -4232,6 +4238,17 @@ function World({
       slide.current.z = 0;
     }
 
+    if (isBeach(city)) {
+      if (spectating && wheelRide.cabin >= 0) {
+        leaveWheel(cam.position, city.beach.wheel);
+        camGround.current = cam.position.y - EYE;
+        cancelJump(camGround.current);
+      } else if (!spectating && stepWheel(cam.position, city.beach.wheel, delta,
+        !n || n.role === "host" ? 1 : (slots.current[n.self] ?? 2), !!n)) {
+        slide.current.x = 0; slide.current.z = 0;
+      }
+    }
+
     // minimap feed (the HUD reads it)
     if (big) {
       const mf = mapFeed.current;
@@ -4271,6 +4288,7 @@ function World({
             ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press }
             : {}),
           ...(alpineMap ? { rc: ride.chair } : {}),
+          ...(isBeach(city) ? { wr: wheelRide.cabin } : {}),
           ...(moveState.airborne ? { jy: Math.round(moveState.lift * 100) / 100 } : {}),
         });
       }
@@ -4801,11 +4819,12 @@ function World({
           y: cam.position.y,
           ...lf,
           zn: myZone(),
-          air: ride.chair >= 0,
+          air: ride.chair >= 0 || wheelRide.cabin >= 0,
         });
       remotes.current.forEach((r) => {
         if (r.hp > 0 && now - r.last < 4000) {
           const ry =
+            isBeach(city) && (r.wr ?? -1) >= 0 ? wheelEye(city.beach.wheel,r.wr!).y :
             alpineMap && (r.rc ?? -1) >= 0
               ? riderEye(alpineMap.alpine.lift, r.rc!).y
               : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
@@ -4817,7 +4836,7 @@ function World({
             fx: -Math.sin(r.yaw),
             fz: -Math.cos(r.yaw),
             zn: remoteZone(r),
-            air: (r.rc ?? -1) >= 0,
+            air: (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0,
           });
         }
       });
@@ -5868,7 +5887,7 @@ function World({
       if (m && !Array.isArray(m) && !m.transparent) m.transparent = true;
       if (m && !Array.isArray(m)) addGunRim(m);
     });
-    setWorldMuzzle(getViewMode() === "third" ? playerMuzzle(cam, TMP_DIR) : null);
+    setWorldMuzzle(getViewMode() === "third" ? playerMuzzle(cam, TMP_DIR, outOfBounds) : null);
     fxFrame(delta, cam, v, bullets.current, weapon.current); // combat effects, after the gun is posed
   });
 
@@ -6180,10 +6199,10 @@ function World({
         </mesh>
         <GunModel w={held} mods={renderStats} />
       </group>
-      <PlayerView active={locked && !gameOver} hidden={deadRef} look={look} recoil={recoil} downed={downedRef} stop={outOfBounds}>
+      <PlayerView active={locked && !gameOver} hidden={deadRef} look={look} recoil={recoil} downed={downedRef} seated={() => ride.chair >= 0} airborne={() => moveState.airborne} stop={outOfBounds}>
         <GunModel w={held} />
       </PlayerView>
-      <RemotePlayers remotes={remotes} />
+      <RemotePlayers remotes={remotes} renderGun={(w) => <GunModel w={w in GUNS ? w as Weapon : "pistol"} />} />
       <CombatFx />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
@@ -6768,6 +6787,7 @@ export function Game() {
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
+    resetWheel(isBeach(level.city) ? level.city.beach.wheel : null);
     // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
     // moves along the facade and stays solid (before the map's meshes are built from it)
     setPosts(null);

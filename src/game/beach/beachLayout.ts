@@ -1,3 +1,4 @@
+import { wheelGround, wheelPoint, type Wheel } from "./wheelRide";
 // Pacific Pier: a deterministic, real-scale Southern California beach town (1 unit = 1 m,
 // 2 m collision cells). Pure data, no three.js, so every co-op client builds the identical
 // map from the seed.
@@ -403,7 +404,10 @@ export function generateBeach(
     });
     return idx;
   };
+  let wheel: Wheel | null = null;
   const heightAt = (x: number, z: number) => {
+    const platform = wheel && wheelGround(wheel, x, z);
+    if (platform !== null) return platform;
     const i = ci(x);
     const j = ci(z);
     const rg = inside(i, j) ? regionOf[i * n + j]! : -1;
@@ -834,8 +838,14 @@ export function generateBeach(
 
   // ---- 6. amusement park and pier buildings ----
   // the wheel's disc is turned 45 degrees so it reads from the beach, the boardwalk and the pier
-  const wheel = { x: -96, z: -20, y: DECK + 21.6, r: 17, rot: Math.PI / 4 };
-  solidify(rect(-106, -30, -86, -10), DECK - 8, DECK + 3); // wheel base + A-frame feet
+  wheel = { x: -96, z: -20, y: DECK + 21.6, r: 17, rot: Math.PI / 4 };
+  // Only the four A-frame feet and ticket booth are solid; the platform and approach work.
+  for (const u of [-9,9]) for (const n of [-4.4,4.4]) {
+    const p = wheelPoint(wheel,u,0,n);
+    solidify(rect(p.x-1,p.z-1,p.x+1,p.z+1),DECK,DECK+3.5);
+  }
+  const booth = wheelPoint(wheel,-6.2,0,3.5);
+  solidify(rect(booth.x-1.3,booth.z-1.3,booth.x+1.3,booth.z+1.3),DECK,DECK+4.4);
   bld({ ...rect(-76, -30, -44, -14), t: "arcade", y0: DECK, h: 8.5, floors: 2, front: 2, sign: 8 });
   const drop = { x: -32, z: -24, h: 38 };
   solidify(rect(-36, -28, -28, -20), DECK - 8, DECK + drop.h);
@@ -1218,6 +1228,7 @@ export function generateBeach(
     for (let j = 0; j < n; j++) {
       const c = i * n + j;
       if (solid[c] || deep[c] || regionOf[c]! < 0) continue;
+      if (wheel && wheelGround(wheel, cx(i), cx(j)) !== null) continue; // exact thin rails around the rotated loading platform
       for (let di = -1; di <= 1; di++)
         for (let dj = -1; dj <= 1; dj++) {
           if (!di && !dj) continue;
@@ -1409,7 +1420,7 @@ export function generateBeach(
       blockades,
       gaps,
       soloHalf: soloH,
-      wheel,
+      wheel: wheel!,
       coaster: { pts: coaster, station },
       carousel,
       drop,

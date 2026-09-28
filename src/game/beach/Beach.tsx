@@ -1,3 +1,5 @@
+import { wheelAngle, wheelCabin, CABINS } from "./wheelRide";
+import { trafficClock } from "../trafficCore";
 // Renders Pacific Pier: the merged chunk geometry from beachMesh.ts (facade atlas, one shared
 // sign atlas, per-chunk frustum culling and a distance LOD on the clutter), the sea with a
 // moving waterline and breaking-wave foam, instanced palms, and the moving set pieces: the
@@ -708,7 +710,7 @@ class Acc {
   }
 }
 
-const GONDOLAS = 20;
+const GONDOLAS = CABINS;
 function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
   const w = city.beach.wheel;
   const geo = useMemo(() => {
@@ -804,8 +806,11 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
       b.dispose();
     };
     box(0, -0.9, 0, 0.12, 1.2, 0.12, "#d8d8d8");
-    box(0, -2.3, 0, 2.0, 0.9, 1.6, "#ffffff");
-    box(0, -1.5, 0, 2.3, 0.14, 1.9, "#ffffff");
+    // Hollow cabin: usable floor, waist-high panels and real headroom.
+    for (const x of [-.95,.95]) box(x,-2.32,0,.1,1,1.6,"#ffffff");
+    box(0,-2.32,-.75,1.9,1,.1,"#ffffff");
+    for (const x of [-.95,.95]) for (const z of [-.75,.75]) box(x,-1.8,z,.08,1.9,.08,"#d8d8d8");
+    box(0, -.87, 0, 2.3, 0.14, 1.9, "#ffffff");
     box(0, -2.85, 0, 1.9, 0.12, 1.5, "#2a2a2a");
     return {
       frame: frame.build(),
@@ -843,20 +848,18 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
   }, [geo]);
   useFrame((state) => {
     // one full turn every ~70 s
-    const a = state.clock.elapsedTime * ((Math.PI * 2) / 70);
+    const a = wheelAngle();
     const g = wheelRef.current;
     if (g) g.rotation.z = a;
     const m = gonRef.current;
     if (!m) return;
     for (let i = 0; i < GONDOLAS; i++) {
-      const t = a + (i / GONDOLAS) * Math.PI * 2;
-      const sway = Math.sin(state.clock.elapsedTime * 0.9 + i) * 0.03;
+      const p = wheelCabin(w, i);
+      const sway = Math.sin(trafficClock.t * 0.9 + i) * 0.012;
       _e.set(0, w.rot, sway);
       _m4.compose(
         _v.set(
-          w.x + Math.cos(t) * w.r * Math.cos(w.rot),
-          w.y + Math.sin(t) * w.r,
-          w.z - Math.cos(t) * w.r * Math.sin(w.rot),
+          p.x, p.y, p.z,
         ),
         _q.setFromEuler(_e),
         _s.set(1, 1, 1),
