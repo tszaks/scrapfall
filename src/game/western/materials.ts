@@ -19,6 +19,9 @@ export function syncEnv(mat: THREE.MeshStandardMaterial) {
   mat.needsUpdate = true;
 }
 
+/** seconds, for the lamps' flicker (Western.tsx advances it) */
+export const facadeTime = { value: 0 };
+
 /** The western facade material: MeshStandard + the texture array, lamp-lit windows at night,
  * reflective window glass, and a little ground-level darkening on walls. */
 export function facadeMaterial(nightK: { value: number }) {
@@ -34,6 +37,7 @@ export function facadeMaterial(nightK: { value: number }) {
     sh.uniforms["uDay"] = { value: arr.day };
     sh.uniforms["uNight"] = { value: arr.night };
     sh.uniforms["uNightK"] = nightK;
+    sh.uniforms["uTime"] = facadeTime;
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
@@ -51,6 +55,7 @@ precision highp sampler2DArray;
 uniform sampler2DArray uDay;
 uniform sampler2DArray uNight;
 uniform float uNightK;
+uniform float uTime;
 varying vec2 vFuv;
 varying vec3 vFac;
 varying float vWy;
@@ -175,7 +180,12 @@ if (rockBump.x != 0.0 || rockBump.y != 0.0) {
 } else if (uNightK > 0.0 && litMode > 0.5) {
   vec4 nt = texture(uNight, vec3(vFuv, vFac.x));
   float hf = wHash(floor(vFuv * 4.0) + vec2(vFac.y * 97.0, vFac.y * 13.0));
-  float on = litMode > 1.5 ? 1.0 : step(0.42, hf);
+  // the lamps come on one window at a time as the light goes (a few already at sunset),
+  // each flickering as it's lit; the odd one gutters now and then all night
+  float onFrac = 0.1 + 0.6 * smoothstep(0.2, 0.95, uNightK);
+  float edge = onFrac - hf;
+  float flick = 0.75 + 0.25 * sin(uTime * (7.0 + hf * 9.0) + hf * 40.0) * sin(uTime * (3.1 + hf * 5.0));
+  float on = litMode > 1.5 ? 1.0 : smoothstep(0.0, 0.03, edge) * (edge < 0.06 ? flick : 1.0) * (hf > 0.93 ? 0.8 + 0.2 * flick : 1.0);
   // 1: some windows lit, 2: all lit bright, 3: all lit softly (candles)
   float k = litMode > 2.5 ? 1.05 : litMode > 1.5 ? 1.7 : 1.0;
   totalEmissiveRadiance += nt.rgb * nt.a * on * k * uNightK;
@@ -186,7 +196,7 @@ if (rockBump.x != 0.0 || rockBump.y != 0.0) {
 totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.66, 0.95) * 0.3 * rockFill * smoothstep(0.5, 1.0, uNightK);`,
       );
   };
-  mat.customProgramCacheKey = () => "western-facade-v6";
+  mat.customProgramCacheKey = () => "western-facade-v7";
   return mat;
 }
 

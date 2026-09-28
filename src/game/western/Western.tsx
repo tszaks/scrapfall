@@ -23,7 +23,7 @@ import {
   type WesternLayout,
 } from "./layout";
 import { WESTERN_LOOK, type WesternLook } from "./look";
-import { facadeMaterial, westernBackground, westernEnv } from "./materials";
+import { facadeMaterial, facadeTime, westernBackground, westernEnv } from "./materials";
 import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
@@ -454,6 +454,7 @@ export const WesternScene = memo(function WesternScene({
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
+    facadeTime.value = t;
     const cam = state.camera;
     // the disc: always straight toward the sun/moon, far away, facing the camera
     const disc = discRef.current;
