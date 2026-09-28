@@ -222,8 +222,10 @@ export function setWindNoise(k: number) {
     src.connect(windFilter).connect(windGain).connect(ctx.destination);
     src.start();
   }
-  const g = Math.max(0, Math.min(1, k)) * 0.22 * vol.sfx;
-  windGain.gain.setTargetAtTime(g, ctx.currentTime, 0.3);
+  // an ambience layer: the ambience volume sets it, and it falls silent with the game (pause,
+  // menus: whenever the music is stopped)
+  const g = timer === null ? 0 : Math.max(0, Math.min(1, k)) * 0.22 * 0.8 * vol.amb;
+  windGain.gain.setTargetAtTime(g, ctx.currentTime, timer === null ? 0.05 : 0.3);
   windFilter?.frequency.setTargetAtTime(380 + k * 520, ctx.currentTime, 0.4);
 }
 
@@ -526,6 +528,8 @@ export function pumpMusic() {
 export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
+  // the blizzard wind is outside the other buses: hush it right away
+  if (ctx && windGain) windGain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
 }
 
 // ---- projectile / impact sounds (combat effects) ----

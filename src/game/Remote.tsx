@@ -22,7 +22,9 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
-    const list = [...remotes.current.values()].slice(0, MAX_REMOTE);
+    // a teammate we haven't heard from in 6 s is gone (the network drops them shortly)
+    const now = performance.now();
+    const list = [...remotes.current.values()].filter((r) => now - r.last < 6000).slice(0, MAX_REMOTE);
     for (let i = 0; i < MAX_REMOTE; i++) {
       const g = groups.current[i];
       if (!g) continue;

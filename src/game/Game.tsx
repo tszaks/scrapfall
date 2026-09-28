@@ -1976,12 +1976,11 @@ function World({
 
   useEffect(() => {
     // the city starts on the landmark's plaza, looking up the tower
-    camera.position.set(big ? big.spawn.x : 0, EYE + (city ? groundY(city.spawn.x, city.spawn.z) : 0), big ? big.spawn.z : 0);
-    camGround.current = camera.position.y - EYE;
     look.current = {
       yaw: western ? western.spawnYaw : isBeach(city) ? city.spawnYaw : alpineMap ? alpineMap.alpine.spawnYaw : 0,
       pitch: city ? 0.12 : 0,
     };
+    placeAtSpawn();
     resetRide();
     wave.current = 0;
     nextWaveTimer.current = 1.5;
@@ -2010,12 +2009,57 @@ function World({
       [pool[i], pool[j]] = [pool[j]!, pool[i]!];
     }
     dropOrder.current = pool;
-    onAmmo(0);
+    // a full sidearm from the first frame (the HUD used to flash "PISTOL 0" until wave 1)
+    ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    onAmmo(ammo.current.pistol);
+    syncInv();
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
     ords.current.forEach((o) => (o.on = false));
     onStatus(1, 0, false, true);
   }, [blocks, camera]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // co-op players stand side by side at the spawn (a small ring by player number), not inside
+  // each other
+  const spawnNum = () => (!net || net.role === "host" ? 1 : (slots.current[net.self] ?? 2));
+  const placeAtSpawn = () => {
+    const sx = big ? big.spawn.x : 0;
+    const sz = big ? big.spawn.z : 0;
+    const num = spawnNum();
+    let x = sx;
+    let z = sz;
+    if (num > 1) {
+      // to the right, left, then behind the host, relative to the spawn facing
+      const yaw = look.current.yaw;
+      const rx = Math.cos(yaw);
+      const rz = -Math.sin(yaw);
+      const bx = Math.sin(yaw);
+      const bz = Math.cos(yaw);
+      const offs: [number, number][] = num === 2 ? [[2.4, 0], [-2.4, 0], [0, 2.4]] : num === 3 ? [[-2.4, 0], [2.4, 0], [0, 2.4]] : [[0, 2.4], [2.4, 2.4], [-2.4, 2.4]];
+      for (const r of [1, 1.6, 2.2]) {
+        const hit = offs.find(([a, b]) => !blocked(blocks, sx + (rx * a + bx * b) * r, sz + (rz * a + bz * b) * r, 0.5));
+        if (hit) {
+          x = sx + (rx * hit[0] + bx * hit[1]) * r;
+          z = sz + (rz * hit[0] + bz * hit[1]) * r;
+          break;
+        }
+      }
+    }
+    camera.position.set(x, EYE + (big ? groundY(x, z) : 0), z);
+    camGround.current = camera.position.y - EYE;
+  };
+  // the roster (my player number) can arrive just after the new arena: re-place before the match starts
+  const lastSpawnNum = useRef(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const num = spawnNum();
+      if (num !== lastSpawnNum.current && wave.current === 0 && !lockedRef.current) {
+        lastSpawnNum.current = num;
+        placeAtSpawn();
+      }
+    }, 300);
+    return () => window.clearInterval(id);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -3247,9 +3291,11 @@ function World({
               // wedged on a corner the coarse nav grid thinks is open: once it has made no
               // progress for 3 s and nobody can see it, it re-enters from another hidden spot
               const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
-              e.stuckFor = moved < 0.5 && dmin > 18 ? (e.stuckFor ?? 0) + 1 : 0;
+              // (a melee type standing still short of its target is stuck too, even in plain sight)
+              const melee = e.kind === "drifter" || e.kind === "runner" || e.kind === "brute" || e.kind === "vanguard";
+              e.stuckFor = moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
-              if (e.stuckFor >= 3 && !seen) {
+              if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
                 const q = accOn
                   ? spot(25, 45, true, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
                   : spot(25, 45, true, zoneFor(e.x, e.z));
@@ -3368,8 +3414,23 @@ function World({
         // mountain face under the chairlift, another zone, past a blockade)
         if (ghost) { if (ghostOK(nx, nz)) { e.x = nx; e.z = nz; } }
         else {
+          const ox = e.x;
+          const oz = e.z;
           if (!blocked(blocks, nx, e.z, r)) e.x = nx;
           if (!blocked(blocks, e.x, nz, r)) e.z = nz;
+          // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
+          // sideways round it instead of pushing into it forever
+          const want = Math.hypot(nx - ox, nz - oz);
+          if (want > 1e-4 && Math.hypot(e.x - ox, e.z - oz) < want * 0.2) {
+            const px = -(nz - oz);
+            const pz = nx - ox;
+            const side = Math.sin(ei * 12.9898 + (performance.now() / 1500 | 0)) > 0 ? 1 : -1;
+            for (const sgn of [side, -side]) {
+              const sx = ox + px * sgn;
+              const sz = oz + pz * sgn;
+              if (!blocked(blocks, sx, sz, r)) { e.x = sx; e.z = sz; break; }
+            }
+          }
         }
 
         if ((e.kind === "drifter" || e.kind === "runner") && dm < 1.3 && meleeCooldown.current <= 0) {
@@ -4194,6 +4255,8 @@ export function Game() {
       }
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
       publishRoster();
+      // a match is already running: the newcomer drops straight into it
+      if (phase.current.started && !phase.current.ended) netHolder.current?.sendTo(id, { type: "begin" });
     }
     if (m.type === "left") {
       delete slots.current[String(m.from)];
@@ -4282,7 +4345,8 @@ export function Game() {
     if (!net || net.role !== "host") return;
     const id = window.setInterval(() => {
       const list = [...remotes.current.values()].filter((r) => performance.now() - r.last < 5000);
-      if (healthRef.current <= 0 && list.length > 0 && list.every((r) => r.hp <= 0)) {
+      // nobody left standing, including nobody left at all (the teammates quit): the run ends
+      if (phase.current.started && !phase.current.ended && healthRef.current <= 0 && list.every((r) => r.hp <= 0)) {
         net.broadcast({ type: "over" });
         setAllDown(true);
       }
@@ -4434,7 +4498,13 @@ export function Game() {
 
   useEffect(() => {
     // pausing puts the whole squad on hold
+    // closing the tab releases the pointer lock too: that must not pause everyone else
+    let unloading = false;
+    const onUnload = () => (unloading = true);
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("pagehide", onUnload);
     const pauseAll = () => {
+      if (unloading || document.visibilityState === "hidden") return;
       if (phase.current.started && !phase.current.ended) netHolder.current?.broadcast({ type: "pause" });
     };
     const wasLocked = { v: false };
@@ -4457,6 +4527,8 @@ export function Game() {
     return () => {
       document.removeEventListener("pointerlockchange", onChange);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("beforeunload", onUnload);
+      window.removeEventListener("pagehide", onUnload);
     };
   }, []);
 
@@ -4891,7 +4963,7 @@ export function Game() {
         )}
         {multiplayer && locked && !ended && (
           <div className="absolute right-5 top-[7.5rem] space-y-1 text-right font-mono text-xs tracking-widest text-[#2b2118]">
-            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
+            <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}</div>
             {[...remotes.current.values()].map((r) => (
               <div key={r.id} className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1">
                 <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
@@ -4997,9 +5069,12 @@ export function Game() {
                 .sort((a, b) => a.num - b.num);
               const badges: string[] = [];
               if (acc >= 60) badges.push("SHARPSHOOTER");
-              if (rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
-              if (rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
-              if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              // best-in-squad badges need a squad (and something to be best at)
+              if (rows.length > 1) {
+                if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
+                if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
+                if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
+              }
               if (status.won) badges.push("BOSS SLAYER");
               return (
                 <div className="mt-5 text-left text-black">
