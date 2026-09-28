@@ -657,7 +657,7 @@ diffuseColor.rgb = mix(diffuseColor.rgb, uTint.rgb * (0.4 + 0.6 * dot(artBase, v
         `#include <normal_fragment_maps>
 {
   // a faint hammered / pitted bump from the same noise (surface-gradient bump mapping)
-  float h = (aN2 * 0.6 + aN1 * 0.4) * 0.012 * uWear + aScr * 0.004;
+  float h = ((aN2 * 0.6 + aN1 * 0.4) * 0.012 * uWear + aScr * 0.004) * min(1.0, 3.0 / uNScale); // dents stay world-sized on small props
   vec3 dpx = dFdx(-vViewPosition); vec3 dpy = dFdy(-vViewPosition);
   float hx = dFdx(h); float hy = dFdy(h);
   vec3 r1 = cross(dpy, normal); vec3 r2 = cross(normal, dpx);
