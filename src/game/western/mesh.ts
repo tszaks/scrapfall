@@ -605,6 +605,8 @@ function falseFront(
     G.col(trimC);
     G.mat(WL.TIMBER);
     G.quad(ax, ay, 0.12, bx, by, 0.12, bx, by, -t, ax, ay, -t, [0, 0, 1, 0.1]);
+    // (the lip it overhangs the face by, seen from the street below)
+    G.quad(ax, ay - 0.001, 0, bx, by - 0.001, 0, bx, by - 0.001, 0.12, ax, ay - 0.001, 0.12, [0, 0, 1, 0.1]);
     G.col(paint, 1);
   }
   // side edges of the slab
@@ -1435,9 +1437,10 @@ function backWorks(
   // footing: fieldstone under the sill on three sides (the boardwalk or porch covers the front)
   if (frame) {
     G.col(b.mat === "log" ? "#8a8272" : "#9a9080");
-    boxP(G, WL.P_STONE, x0 - 0.07, 0, z0 - 0.07, x1 + 0.07, 0.32, z0 + 0.12, false);
-    boxP(G, WL.P_STONE, x0 - 0.07, 0, z0 + 0.12, x0 + 0.05, 0.32, -0.02, false);
-    boxP(G, WL.P_STONE, x1 - 0.05, 0, z0 + 0.12, x1 + 0.07, 0.32, -0.02, false);
+    // (0.1 m proud: clear of the corner boards, which stand 0.06 off the wall)
+    boxP(G, WL.P_STONE, x0 - 0.1, 0, z0 - 0.1, x1 + 0.1, 0.32, z0 + 0.12, false);
+    boxP(G, WL.P_STONE, x0 - 0.1, 0, z0 + 0.12, x0 + 0.05, 0.32, -0.02, false);
+    boxP(G, WL.P_STONE, x1 - 0.05, 0, z0 + 0.12, x1 + 0.1, 0.32, -0.02, false);
     G.col("#6a5038");
     boxP(G, WL.TIMBER, x0 - 0.04, 0.32, z0 - 0.04, x1 + 0.04, 0.44, z0 + 0.1, true, false);
   }
@@ -1943,9 +1946,9 @@ function building(b: WBld, r: () => number): BGeo {
     boxP(G, WL.DECK, x0 + 0.3, 0, 0, x1 - 0.3, 1.05, 2.5, true, false);
     G.col("#5a4030");
     for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.8) boxP(G, WL.TIMBER, x - 0.1, 0, 2.3, x + 0.1, 1.0, 2.5, false);
-    boxP(G, WL.TIMBER, x0 + 0.3, 0.85, 2.44, x1 - 0.3, 1.05, 2.56);
+    boxP(G, WL.TIMBER, x0 + 0.3, 0.83, 2.44, x1 - 0.3, 1.03, 2.56); // edge beam, just under the planks' top
     // wooden steps down at one end
-    for (let k = 0; k < 4; k++) boxP(G, WL.DECK, x1 - 1.6, 0, 2.5 + k * 0.3, x1 - 0.4, 1.05 - k * 0.26, 2.8 + k * 0.3);
+    for (let k = 0; k < 4; k++) boxP(G, WL.DECK, x1 - 1.6, 0, 2.56 + k * 0.3, x1 - 0.4, 1.02 - k * 0.26, 2.86 + k * 0.3);
     // the doors: plank leaves on an iron rail, one slid half open
     G.col("#7a5a3e").mat(WL.P_BOARD);
     for (const [xa, xb] of [
@@ -2705,7 +2708,10 @@ function templates() {
     // a picket fence section, 2 m along x: two posts, two rails, pointed pickets; whitewash
     // gone grey and patchy
     d.col("#aaa290");
-    for (const x of [-1, 1]) boxP(d, WL.TIMBER, x - 0.05, 0, -0.05, x + 0.05, 1.05, 0.05);
+    // (the right-hand post is a touch stouter and lower: where sections meet it encloses the
+    // next section's left post instead of sharing its faces)
+    boxP(d, WL.TIMBER, -1.05, 0, -0.05, -0.95, 1.05, 0.05);
+    boxP(d, WL.TIMBER, 0.935, 0, -0.065, 1.065, 1.0, 0.065);
     d.col("#a49c8a");
     for (const y of [0.25, 0.75]) boxP(d, WL.PAINT, -1, y, 0.05, 1, y + 0.07, 0.09);
     for (let x = -0.93; x < 0.95; x += 0.13) {
