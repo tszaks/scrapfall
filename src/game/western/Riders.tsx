@@ -13,6 +13,8 @@ import { liveCars, pursuitDots, type TrafficLink } from "../trafficCore";
 import { mapEvent } from "../events/mapEvents";
 import { facadeMaterial, syncEnv } from "./materials";
 import { propTemplate } from "./mesh";
+import { CAR_NEAR, CarBatch } from "../art/cars";
+import { COACH_WHEELS, horseVehicle, registerCoaches, woodWheelGeometry, wheelMaterial, type HorseKind } from "./coaches";
 import { BOX, ROLE_OUTLAW, ROLE_POSSE, ROLE_TOWN, TOWNFOLK, coastSim, decodeSim, encodeSim, newSim, stepSim, type Agent, type Sim } from "./riderSim";
 import { pistolShot } from "./sound";
 import type { WesternLayout } from "./layout";
@@ -35,6 +37,8 @@ const _s = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
 const _up = new THREE.Vector3(0, 1, 0);
 const _x = new THREE.Vector3(1, 0, 0);
+const _fr = new THREE.Matrix4();
+const _ws = new THREE.Vector3();
 
 function geoOf(key: Parameters<typeof propTemplate>[0]) {
   const t = propTemplate(key);
@@ -77,17 +81,44 @@ export function WesternRiders({
       torso: geoOf("riderTorso"),
       hat: geoOf("riderHat"),
       legs: geoOf("riderLegs"),
-      coach: geoOf("stagecoach"),
-      wagon: geoOf("wagon"),
     }),
     [],
   );
+  // the stagecoach and buckboards (moving, one slot per sim agent that drives one) and the
+  // parked ones on the street, through the shared vehicle batch
+  const coaches = useMemo(() => {
+    registerCoaches();
+    const slotOf = new Map<number, number>();
+    const kinds: HorseKind[] = [];
+    const vs = sim.current.agents.flatMap((a, i) => {
+      if (a.kind === 0) return [];
+      const k: HorseKind = a.kind === 2 ? "stagecoach" : "buckboard";
+      slotOf.set(i, kinds.length);
+      kinds.push(k);
+      return [horseVehicle(k, k === "stagecoach" ? 0x8a2a22 : [0x5a6a4a, 0x4a5a6a, 0x8a4a2a][i % 3]!)];
+    });
+    const movers = vs.length;
+    const parked = layout.props.filter((p) => p.k === "stagecoach" || p.k === "wagon");
+    parked.forEach((p, n) => {
+      const k: HorseKind = p.k === "stagecoach" ? "stagecoach" : "buckboard";
+      kinds.push(k);
+      vs.push(horseVehicle(k, k === "stagecoach" ? 0x2a4a3a : [0x7a6a4a, 0x6a3a2a, 0x3a4a5a][n % 3]!));
+    });
+    const batch = new CarBatch(vs, movers);
+    parked.forEach((p, n) => batch.place(movers + n, p.x, groundY(p.x, p.z), p.z, p.rot));
+    return { batch, slotOf, kinds, movers, parked, roll: new Float32Array(vs.length) };
+  }, [layout]);
+  const wheelGeo = useMemo(() => woodWheelGeometry(), []);
+  const wheelMat = useMemo(() => wheelMaterial(), []);
   useEffect(
     () => () => {
       Object.values(geos).forEach((g) => g.dispose());
       mat.dispose();
+      coaches.batch.dispose();
+      wheelGeo.dispose();
+      wheelMat.dispose();
     },
-    [geos, mat],
+    [geos, mat, coaches, wheelGeo, wheelMat],
   );
   const refs = {
     body: useRef<THREE.InstancedMesh>(null),
@@ -95,8 +126,7 @@ export function WesternRiders({
     torso: useRef<THREE.InstancedMesh>(null),
     hat: useRef<THREE.InstancedMesh>(null),
     legs: useRef<THREE.InstancedMesh>(null),
-    coach: useRef<THREE.InstancedMesh>(null),
-    wagon: useRef<THREE.InstancedMesh>(null),
+    wheel: useRef<THREE.InstancedMesh>(null),
   };
   const flash = useRef<THREE.Mesh>(null);
   const flashT = useRef(0);
@@ -118,7 +148,6 @@ export function WesternRiders({
       riderSync.decode = null;
     };
   }, []);
-  void layout;
 
   useFrame((state, raw) => {
     const dt = Math.min(raw, 0.05);
@@ -222,15 +251,27 @@ export function WesternRiders({
     const torso = r.torso.current;
     const hat = r.hat.current;
     const legs = r.legs.current;
-    const coach = r.coach.current;
-    const wagon = r.wagon.current;
-    if (!body || !leg || !torso || !hat || !legs || !coach || !wagon) return;
+    const wheel = r.wheel.current;
+    if (!body || !leg || !torso || !hat || !legs || !wheel) return;
+    const C = coaches;
+    const lit = nightK.value > 0.45;
+    let nwh = 0;
+    const near2 = CAR_NEAR * CAR_NEAR;
+    /** the four wooden wheels of batch slot `si` at (x, y, z) facing yaw */
+    const wheels = (si: number, x: number, y: number, z: number, yaw: number) => {
+      if ((x - cam.x) ** 2 + (z - cam.z) ** 2 > near2) return;
+      _fr.compose(_p.set(x, y, z), _q.setFromAxisAngle(_up, yaw), _s);
+      for (const w of COACH_WHEELS[C.kinds[si]!]) {
+        _qa.setFromAxisAngle(_x, C.roll[si]! / w.r);
+        _m.compose(_p.set(w.x, w.y, w.z), _qa, _ws.set(w.w, w.r, w.r));
+        wheel.setMatrixAt(nwh++, _m.premultiply(_fr));
+      }
+    };
     let nh = 0;
     let nl = 0;
     let nr = 0;
-    let nc = 0;
-    let nw = 0;
-    for (const a of S.agents) {
+    for (let ai = 0; ai < S.agents.length; ai++) {
+      const a = S.agents[ai]!;
       if (a.hold === Infinity) continue;
       if (Math.hypot(a.x - cam.x, a.z - cam.z) > 420) continue;
       const gy = groundY(a.x, a.z);
@@ -273,18 +314,30 @@ export function WesternRiders({
       hat.setColorAt(nr, _c.set(a.role === ROLE_POSSE ? "#e8e0cc" : a.role === ROLE_OUTLAW ? "#141210" : HATS[a.look % HATS.length]!));
       legs.setMatrixAt(nr, _m);
       nr++;
-      if (a.kind === 2) {
-        coach.setMatrixAt(nc++, _m.compose(at(0, -2.3, 0), _q, _s));
-      } else if (a.kind === 1) {
-        wagon.setMatrixAt(nw++, _m.compose(at(0, -1.7, 0), _q, _s));
+      const si = C.slotOf.get(ai);
+      if (si !== undefined) {
+        const p = at(0, a.kind === 2 ? -2.3 : -1.5, 0);
+        const px = p.x;
+        const pz = p.z;
+        C.roll[si] = (C.roll[si]! + a.speed * dt) % 1e4;
+        C.batch.place(si, px, groundY(px, pz), pz, a.yaw, { lit });
+        wheels(si, px, groundY(px, pz), pz, a.yaw);
+        _q.setFromAxisAngle(_up, a.yaw);
       }
     }
+    // (a coach off stage or out of range is parked far off the map, where the batch culls it)
+    S.agents.forEach((a, ai) => {
+      const si = C.slotOf.get(ai);
+      if (si !== undefined && (a.hold === Infinity || Math.hypot(a.x - cam.x, a.z - cam.z) > 420)) C.batch.place(si, 1e5, 0, 1e5, 0);
+    });
+    C.parked.forEach((p, n) => wheels(C.movers + n, p.x, groundY(p.x, p.z), p.z, p.rot));
+    C.batch.commit(state.camera);
+    wheel.count = nwh;
+    wheel.instanceMatrix.needsUpdate = true;
     body.count = nh;
     leg.count = nl;
     torso.count = hat.count = legs.count = nr;
-    coach.count = nc;
-    wagon.count = nw;
-    for (const m of [body, leg, torso, hat, legs, coach, wagon]) {
+    for (const m of [body, leg, torso, hat, legs]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
@@ -312,8 +365,8 @@ export function WesternRiders({
       {inst("torso", TOWNFOLK + 4, true)}
       {inst("hat", TOWNFOLK + 4, true)}
       {inst("legs", TOWNFOLK + 4, false)}
-      {inst("coach", 2, false)}
-      {inst("wagon", 4, false)}
+      <primitive object={coaches.batch.group} />
+      <instancedMesh ref={refs.wheel} args={[wheelGeo, wheelMat, Math.max(1, coaches.kinds.length * 4)]} frustumCulled={false} castShadow />
       <mesh ref={flash} visible={false}>
         <sphereGeometry args={[0.18, 8, 6]} />
         <meshBasicMaterial color="#ffe0a0" toneMapped={false} />

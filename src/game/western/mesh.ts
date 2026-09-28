@@ -4023,7 +4023,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     const ch = chunkAt(p.x, p.z);
     // props stand on the walkable surface (boardwalk decks, the carved riverbed)
     const y = p.k === "lantern" ? (p.a ?? 2.8) : sampleTerrain(L.terrain, p.x, p.z);
-    if (p.k === "horse" || p.k === "stagecoach") void 0;
+    // (the parked stagecoach and buckboards draw through the vehicle batch: Riders.tsx)
+    if (p.k === "stagecoach" || p.k === "wagon") continue;
     // a light per-instance tint so repeated props don't read as clones
     const k = 0.9 + ((((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453) % 1) + 1) % 1) * 0.2;
     tint.setRGB(k, k, k);
@@ -4033,7 +4034,6 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
       p.k === "windmill" ||
       p.k === "arch" ||
       p.k === "covered" ||
-      p.k === "wagon" ||
       p.k === "well" ||
       p.k === "tank" ||
       p.k === "pole" ||
