@@ -111,6 +111,15 @@ export function liveDpr() {
 export function setLiveDpr(v: number) {
   dprNow = v;
 }
+/** A new map loading (shader compiles, textures, the pre-warm frame) is slow on purpose:
+ * the governor ignores frames until this time (performance.now ms). */
+let holdUntil = 0;
+export function holdQuality(ms: number) {
+  holdUntil = Math.max(holdUntil, (typeof performance === "undefined" ? 0 : performance.now()) + ms);
+}
+export function qualityHeld() {
+  return performance.now() < holdUntil;
+}
 /** antialiasing is fixed when the WebGL context is made: the value the Canvas mounted with */
 export const antialiasAtLoad = state.spec.antialias;
 

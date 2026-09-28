@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 
 import { setParticleScale } from "./fxCore";
 import { setRoomsEnabled } from "./interiors";
-import { liveDpr, quality, setAutoTier, setLiveDpr, useQuality, type Tier } from "./quality";
+import { holdQuality, liveDpr, quality, qualityHeld, setAutoTier, setLiveDpr, useQuality, type Tier } from "./quality";
 
 
 const STEP_DOWN = 0.15;
@@ -50,6 +50,7 @@ export function QualityGovernor() {
     cpu: [] as number[],
     t0: 0,
   });
+  useEffect(() => holdQuality(8000), []);
   // CPU per frame: from the first frame callback to the end of the main render. When frames
   // are slow but the CPU is the long pole, fewer pixels won't help: step the tier instead.
   useFrame(() => {
@@ -108,6 +109,14 @@ export function QualityGovernor() {
     S.clock += raw;
     // tab switches, pauses, pointer-lock prompts: not a performance signal
     if (ms > 1000 || document.hidden) return;
+    // a map is loading / warming up: not a performance signal either
+    if (qualityHeld()) {
+      S.win = [];
+      S.winT = 0;
+      S.bad = 0;
+      S.good = 0;
+      return;
+    }
     S.win.push(ms);
     S.winT += ms;
     if (S.winT < 1000) return;

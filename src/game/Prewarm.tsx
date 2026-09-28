@@ -11,6 +11,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import type * as THREE from "three";
 
+import { holdQuality } from "./quality";
+
 const warmLog: { frame: number; ms: number; programs: number; before: number }[] = [];
 if (typeof window !== "undefined") (window as unknown as { __rsWarm?: unknown }).__rsWarm = warmLog;
 
@@ -19,6 +21,8 @@ export function Prewarm({ when, delay = 20 }: { when: unknown; delay?: number })
   const left = useRef(delay);
   useEffect(() => {
     left.current = delay;
+    // the map's first seconds (and this warm frame) are slow by design: keep AUTO from reacting
+    holdQuality(8000);
   }, [when, delay]);
   useFrame(() => {
     if (left.current < 0) return;
