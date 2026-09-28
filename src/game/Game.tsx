@@ -3950,6 +3950,7 @@ function World({
     <>
       {/* every material compiled (drawn once, unseen) before the player walks into it */}
       <Prewarm when={seed} />
+      <WarmKinds enemies={enemies} when={seed} idle={() => !lockedRef.current && wave.current === 0 && pending.current.every((p) => !p)} />
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
@@ -4113,6 +4114,40 @@ function World({
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
     </>
   );
+}
+
+/**
+ * Shader warm-up for the enemies: a body only mounts (and its materials only compile) when an
+ * enemy of that kind first appears, so each new kind used to stall the frame it arrived in
+ * (46 programs, up to 84 ms each, compiled during a wave 9-10 fight). Before a match starts,
+ * one of every kind stands for a moment far off in a corner, so Prewarm (which draws
+ * everything, unseen) compiles them with the rest of the map.
+ */
+function WarmKinds({ enemies, when, idle }: { enemies: Enemy[]; when: unknown; idle: () => boolean }) {
+  const frame = useRef(0);
+  const placed = useRef<number[]>([]);
+  useEffect(() => {
+    frame.current = 0;
+  }, [when]);
+  useFrame(() => {
+    const n = ++frame.current;
+    if (n === 4 && idle() && enemies.every((e) => !e.alive)) {
+      const c = HALF - 6;
+      placed.current = [];
+      KINDS.forEach((kind, i) => {
+        const e = enemies[i];
+        if (!e) return;
+        Object.assign(e, { kind, alive: true, x: c - (i % 5) * 1.2, z: c - Math.floor(i / 5) * 1.2, hp: 9999, max: 9999, flash: 0, swing: 0, slow: 0, burn: 0, elite: 0 });
+        placed.current.push(i);
+      });
+    }
+    // (Prewarm runs at frame 20; keep them until it has)
+    if (n === 40 && placed.current.length) {
+      for (const i of placed.current) if (enemies[i]) enemies[i]!.alive = false;
+      placed.current = [];
+    }
+  });
+  return null;
 }
 
 /**
