@@ -2985,6 +2985,21 @@ function World({
           burst(b);
           b.active = false;
         } else {
+          // shooting a hazard prop sets it off before anything else
+          let popped = false;
+          for (let hi = 0; hi < hazards.current.length; hi++) {
+            const hz = hazards.current[hi]!;
+            if (!hz.alive) continue;
+            if (Math.hypot(b.pos.x - hz.x, b.pos.z - hz.z) < 0.85 && b.pos.y < 2) {
+              if (b.track === 1) { onStat("hit", 1); b.track = 2; }
+              blowHazard(hi);
+              burst(b);
+              b.active = false;
+              popped = true;
+              break;
+            }
+          }
+          if (popped) { if (m) m.visible = false; return; }
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
