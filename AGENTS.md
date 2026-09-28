@@ -1,10 +1,9 @@
-<!-- LOVABLE:BEGIN -->
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-<!-- LOVABLE:END -->
+# Working in this repo
+
+- `main` deploys to production (https://szakacsmedia.com/game/) and is protected: every
+  change goes through a pull request. Never force-push.
+- Before opening a PR, run: `npm test`, `npx tsc --noEmit` and `npm run build`.
+- Check changes in the real game at eye height, on every affected map, at night and at
+  sunset. The worst frame is the bar, not the best one.
+- Keep new work in its own modules with small hooks into `src/game/Game.tsx`.
+- Co-op is host-authoritative. Append new enemy kinds or sync fields; never reorder them.
