@@ -9,7 +9,7 @@ import {
   BEACH_SIZE, setPosts,
 } from "./level";
 
-import { THEMES, layoutOf, type Theme } from "./themes";
+import { THEMES, layoutOf, offered, type Theme } from "./themes";
 import { isBeach } from "./beach/beachLayout";
 import { mapPosts, movePropsFromDoors } from "./posts";
 import { BeachWorld } from "./beach/Beach";
@@ -4090,7 +4090,7 @@ function initialMapChoice(): number | null {
 function newSeed(choice: number | null) {
   let s = Math.floor(Math.random() * 1e9);
   // Random never lands on a work-in-progress map
-  while (choice === null && THEMES[s % THEMES.length]!.wip) s = Math.floor(Math.random() * 1e9);
+  while (choice === null && !offered(THEMES[s % THEMES.length]!)) s = Math.floor(Math.random() * 1e9);
   return choice === null ? s : s - (s % THEMES.length) + choice;
 }
 
@@ -5115,7 +5115,7 @@ export function Game() {
                   {isHost ? "MAP" : "MAP · THE HOST PICKS"}
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-1">
-                  {([null, ...THEMES.flatMap((t, i) => (t.wip && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
+                  {([null, ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i]))] as (number | null)[]).map((i) => {
                     const on = isHost ? mapChoice === i : i === seed % THEMES.length;
                     return (
                       <button

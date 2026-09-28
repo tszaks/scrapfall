@@ -389,3 +389,10 @@ export const THEMES: Theme[] = [
 export function layoutOf(t: Theme): "scatter" | "city" | "alpine" | "beach" | "western" {
   return t.layout ?? (t.blockShape === "city" ? "city" : "scatter");
 }
+
+/** Maps offered in the picker and the random roll on this build: Tyler's four big maps
+ * (the small arenas stay in the code, reachable only with ?map=, and hidden work-in-progress
+ * maps are never offered). */
+export function offered(t: Theme): boolean {
+  return !t.wip && layoutOf(t) !== "scatter";
+}
