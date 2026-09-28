@@ -905,8 +905,12 @@ function walkIn(
       const pb = [w.ax + ux * h.u1, w.az + uz * h.u1] as const;
       const ya = Math.max(yb + 0.3, h.y0);
       // the glass sits in the middle of the wall's thickness
-      G.col("#b8cad4").mat(WL.PAINT, 0, INT);
-      wallq(G, pa[0] - nx * 0.06, pa[1] - nz * 0.06, pb[0] - nx * 0.06, pb[1] - nz * 0.06, ya, h.y1, [0, 0, 1, 1]);
+      // (the view through old wavy glass: the dusty street low, pale sky above the far roofs)
+      const ym = ya + (h.y1 - ya) * 0.42;
+      G.col("#a08466").mat(WL.PAINT, 0, INT);
+      wallq(G, pa[0] - nx * 0.06, pa[1] - nz * 0.06, pb[0] - nx * 0.06, pb[1] - nz * 0.06, ya, ym, [0, 0, 1, 0.42]);
+      G.col("#98aab4");
+      wallq(G, pa[0] - nx * 0.06, pa[1] - nz * 0.06, pb[0] - nx * 0.06, pb[1] - nz * 0.06, ym, h.y1, [0, 0.42, 1, 1]);
       // reveals
       G.col("#8a7258").mat(WL.P_BOARD);
       G.quad(pa[0], ya, pa[1], pa[0] - nx * 0.06, ya, pa[1] - nz * 0.06, pa[0] - nx * 0.06, h.y1, pa[1] - nz * 0.06, pa[0], h.y1, pa[1], [0, 0, 0.1, 1]);
@@ -2399,7 +2403,7 @@ function tipple(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
 // ---------------------------------------------------------------------------------------
 // prop templates (local space, origin at the base centre, +z = front)
 
-type PKey = WProp["k"] | "wheelL" | "horsebody" | "horseleg" | "riderTorso" | "riderHat" | "riderLegs";
+type PKey = WProp["k"] | "wheelL" | "pebble" | "horsebody" | "horseleg" | "riderTorso" | "riderHat" | "riderLegs";
 let TM: Partial<Record<PKey, { d: Tmpl; g?: Tmpl; p?: Tmpl }>> | null = null;
 
 function templates() {
@@ -2594,6 +2598,22 @@ function templates() {
     addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.25, 0), WL.SAND);
     ico.dispose();
   });
+  make("pebble", (d) => {
+    // a cheap stone (20 faces) for the scree at the cliffs' feet
+    const ico = new THREE.IcosahedronGeometry(1, 0);
+    const pos = ico.getAttribute("position");
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const k = 0.8 + fbm(x * 2 + 1, z * 2 + y, 3) * 0.4;
+      pos.setXYZ(i, x * k, Math.max(-0.3, y) * k, z * k);
+    }
+    ico.computeVertexNormals();
+    d.col("#c8a080");
+    addUV(d, ico, new THREE.Matrix4().makeTranslation(0, 0.3, 0), WL.SAND);
+    ico.dispose();
+  });
   make("deadtree", (d) => {
     d.col("#7a6a5a");
     const limb = (
@@ -2738,17 +2758,45 @@ function templates() {
     boxP(d, WL.TIMBER, -1.7, 0, 1.95, 1.7, 0.14, 2.1, false);
     boxP(d, WL.TIMBER, -1.7, 0, -2.1, -1.55, 0.14, 2.1, false);
     boxP(d, WL.TIMBER, 1.55, 0, -2.1, 1.7, 0.14, 2.1, false);
+    const leaf = new THREE.IcosahedronGeometry(1, 0);
     for (let row = 0; row < 4; row++) {
       const x = -1.15 + row * 0.77;
-      for (let z = -1.7; z < 1.75; z += 0.42) {
-        const s = 0.14 + r() * 0.1;
-        d.col(pick(["#5a7a3a", "#6a8a40", "#4a6a32"], r)).mat(WL.CACTUS);
-        oboxP(d, WL.CACTUS, x + (r() - 0.5) * 0.08, 0.04, z, s * 1.4, s, s * 1.4, r() * 3);
+      // a hilled furrow of darker soil under each row
+      d.col("#5a3e28");
+      boxP(d, WL.MUD, x - 0.2, 0.04, -1.85, x + 0.2, 0.1, 1.5, false);
+      for (let z = -1.7; z < 1.4; z += 0.36) {
+        const s = 0.13 + r() * 0.09;
+        // a leafy clump: a squashed, lumpy ball of bright greens (not a cube)
+        d.col(pick(["#7aa048", "#8ab050", "#6a9440", "#a0b858"], r));
+        addUV(
+          d,
+          leaf,
+          new THREE.Matrix4()
+            .makeTranslation(x + (r() - 0.5) * 0.08, 0.1 + s * 0.45, z)
+            .multiply(new THREE.Matrix4().makeRotationY(r() * 3))
+            .multiply(new THREE.Matrix4().makeScale(s * 1.3, s * 0.75, s * 1.3)),
+          WL.CANVAS,
+        );
       }
     }
-    // bean poles at one end
-    d.col("#8a7258");
-    for (const x of [-1.15, -0.38, 0.39, 1.16]) beam(d, x - 0.1, 0, 1.85, x, 1.5, 1.7, 0.03);
+    // bean poles at one end, with vines twining up them
+    for (const x of [-1.15, -0.38, 0.39, 1.16]) {
+      d.col("#8a7258");
+      beam(d, x - 0.1, 0, 1.85, x, 1.5, 1.7, 0.03);
+      d.col(pick(["#5a8a3a", "#6a9a44"], r));
+      for (let k = 0; k < 5; k++) {
+        const t = 0.15 + k * 0.18;
+        addUV(
+          d,
+          leaf,
+          new THREE.Matrix4()
+            .makeTranslation(x - 0.1 + 0.1 * t, t * 1.5, 1.85 - 0.15 * t)
+            .multiply(new THREE.Matrix4().makeScale(0.11, 0.13, 0.11)),
+          WL.CANVAS,
+        );
+      }
+    }
+    leaf.dispose();
   });
   make("grave", (d) => {
     d.col("#a8a090");
@@ -4082,6 +4130,24 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
         ] as const) {
           if (rk(i + di, j + dj) > 0) continue;
           const r = hash(i * 4 + di + 2, j * 4 + dj + 2);
+          // a scatter of pebbles fanning out onto the ground at most foot edges (ankle-high,
+          // so they don't need collision), and the heavier talus at a third of them
+          const pr = hash(i * 4 + di + 7, j * 4 + dj + 3);
+          if (pr < 0.62) {
+            const n = 1 + Math.floor(pr * 4.5);
+            for (let q = 0; q < n; q++) {
+              const u = hash(i * 13 + q, j * 7 + di * 3 + dj);
+              const w = hash(j * 11 + q, i * 5 + dj * 3 + di);
+              const out = 0.9 + u * 1.1; // metres out from the rock cell's centre
+              const along = (w - 0.5) * 1.8;
+              const px = -half + 1 + i * 2 + di * out + (di === 0 ? along : 0);
+              const pz = -half + 1 + j * 2 + dj * out + (dj === 0 ? along : 0);
+              const sc = (0.18 + w * 0.22) * (1.3 - u * 0.5);
+              const kk = 0.78 + u * 0.25;
+              rubble.setRGB(kk * 1.05, kk * 0.72, kk * 0.6);
+              chunkAt(px, pz).detail.stamp(T.pebble!.d, px, -0.08, pz, (u + w) * 20, sc * 1.2, sc * 0.45, sc, rubble);
+            }
+          }
           if (r > 0.34) continue;
           const cx = -half + 1 + i * 2 + di * 0.35 + (hash(i, j + 9) - 0.5) * 0.8 * (1 - Math.abs(di));
           const cz = -half + 1 + j * 2 + dj * 0.35 + (hash(i + 9, j) - 0.5) * 0.8 * (1 - Math.abs(dj));
