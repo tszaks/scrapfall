@@ -138,3 +138,8 @@ Made by **Tyler Szakacs** and **Toby Szakacs** at [Szakacs Media](https://szakac
   guns and touch controls.
 - **Tyler:** the real-scale maps (Vice Heights, Dry Gulch, Pacific Pier, Whiteout Pass,
   Nuketown) and the systems around them.
+
+## License
+
+The source is public to read and learn from. All rights reserved: see [LICENSE](LICENSE).
+Please ask before reusing the code or assets.
