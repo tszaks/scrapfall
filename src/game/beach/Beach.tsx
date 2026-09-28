@@ -1,3 +1,4 @@
+import { matchEnvironment, rainyMatch } from "../matchEnvironment";
 import { registerStaticGeometry } from "../staticCollision";
 import { MarineLife } from "../life/MarineLife";
 import { wheelAngle, wheelCabin, CABINS } from "./wheelRide";
@@ -41,7 +42,42 @@ const _c = new THREE.Color();
 
 /** the look part-way from sunset (0) to night (1): the waves carry the match into night */
 const blended = new Map<number, BeachLook>();
+const dayLooks = new Map<string, BeachLook>();
 function beachLookAt(k: number): BeachLook {
+  const kind = matchEnvironment.kind;
+  if (kind === "sunny" || kind === "rain") {
+    let l = dayLooks.get(kind);
+    if (!l) {
+      const rain = kind === "rain",
+        s = beachLook("sunset");
+      l = {
+        ...s,
+        look: {
+          ...s.look,
+          fog: [80, rain ? 850 : 2100],
+          fogColor: rain ? "#929fa7" : "#bddae3",
+          fogSun: { color: "#c9dce4", k: 0.04 },
+        },
+        sunDir: [-0.5, 0.82, 0.28],
+        lightDir: [-0.5, 0.82, 0.28],
+        water: {
+          color: rain ? "#406779" : "#207c97",
+          roughness: rain ? 0.36 : 0.23,
+          metalness: 0.12,
+          foam: "#e7f7fa",
+          env: 0.22,
+        },
+        hazardCol: "#abb8bd",
+        hazardFog: [20, 360],
+        windows: rain ? 0.5 : 0.05,
+        dark: 0.65,
+        pools: rain ? 0.18 : 0.03,
+        env: 0.18,
+      };
+      dayLooks.set(kind, l);
+    }
+    return l;
+  }
   if (k <= 0) return beachLook("sunset");
   if (k >= 1) return beachLook("night");
   const key = Math.round(k * 256);
@@ -439,6 +475,7 @@ const BeachScene = memo(function BeachScene({
     mats.sea.color.set(B.water.color);
     mats.sea.roughness = B.water.roughness;
     mats.sea.metalness = B.water.metalness;
+    mats.sea.envMapIntensity = B.water.env;
     foamCol.value.set(B.water.foam);
     moon.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2], nk);
     nightK.value = B.windows;
@@ -507,7 +544,7 @@ const BeachScene = memo(function BeachScene({
     // directional haze points at our own sun (the shared Atmosphere assumes the city's)
     skyFog.fogSunDir.value.set(B.sunDir[0], B.sunDir[1], B.sunDir[2]);
     // MARINE LAYER: in the boss round the fog rolls in off the sea
-    haze.current += ((worldFx.hazard ? 1 : 0) - haze.current) * Math.min(1, dt * 0.35);
+    haze.current += ((rainyMatch() ? 1 : 0) - haze.current) * Math.min(1, dt * 0.35);
     const fog = scene.fog as THREE.Fog | null;
     if (fog) {
       const h = haze.current;
@@ -652,7 +689,7 @@ function SetPieces({ city }: { city: BeachLayout; time?: TimeOfDay }) {
   const haze = useRef(0);
   useFrame((state, dt) => {
     ledTime.value = state.clock.elapsedTime;
-    haze.current += ((worldFx.hazard ? 1 : 0) - haze.current) * Math.min(1, dt * 0.35);
+    haze.current += ((rainyMatch() ? 1 : 0) - haze.current) * Math.min(1, dt * 0.35);
     ledK.value = B.wheel * (1 - 0.35 * haze.current);
   });
   return (

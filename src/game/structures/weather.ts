@@ -8,12 +8,20 @@ export function shelterUniforms() {
   const plans = structureList();
   const rooms = [
     ...plans
-      .filter((p) => p.kind !== "colonnade")
-      .map((p) => ({
-        bounds: p.bounds,
-        top:
-          p.kind === "garage" || p.kind === "frame" ? Math.max(...p.floors.map((f) => f.y)) : p.top,
-      })),
+      .filter((p) => p.kind !== "colonnade" || p.shelters)
+      .flatMap((p) =>
+        p.shelters
+          ? p.shelters.map((b) => ({ bounds: b, top: b.y }))
+          : [
+              {
+                bounds: p.bounds,
+                top:
+                  p.kind === "garage" || p.kind === "frame"
+                    ? Math.max(...p.floors.map((f) => f.y))
+                    : p.top,
+              },
+            ],
+      ),
     ...accessList()
       .filter((b) => b.room)
       .map((b) => ({ bounds: b.spec.roomRect ?? b.spec.roof, top: b.top + b.roomH })),

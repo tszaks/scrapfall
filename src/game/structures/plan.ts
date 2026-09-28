@@ -20,6 +20,12 @@ export type Flight = Rect & {
 };
 export type Structure = {
   id: string;
+  /** This plan adds to physical rendered geometry instead of replacing a host shell. */
+  includeStatic?: boolean;
+  /** Navigation footprints for separately rendered props; exact player collision stays in their mesh. */
+  navObstacles?: Rect[];
+  /** Exact covered footprints, when the navigation bounds include open courtyards. */
+  shelters?: (Rect & { y: number })[];
   bounds: Rect;
   base: number;
   top: number;

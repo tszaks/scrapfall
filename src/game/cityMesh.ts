@@ -1651,10 +1651,38 @@ function construction(b: Bld, st: Style, C: Ctx) {
   G.box(mx + dir * 1.8, mh - 3, mz + 1.4, 2, 2.4, 2);
   // hook and a load of steel hanging from the trolley
   const hx = mx + dir * jl * 0.6;
+  const loadY = built * 4 + 4.8,
+    hookY = loadY + 2.1;
+  G.col("#514c43");
+  G.box(hx, mh - 0.3, mz, 1.5, 0.45, 1.8); // trolley embraces the jib
   G.col("#2a2a2a");
-  G.box(hx, built * 4 + 6, mz, 0.06, mh - built * 4 - 6, 0.06);
+  for (const dz of [-0.13, 0.13]) G.box(hx, hookY, mz + dz, 0.055, mh - hookY, 0.055);
+  G.col("#e8b020");
+  G.box(hx, hookY - 0.35, mz, 0.4, 0.4, 0.32); // pulley block
+  G.col("#3a3530");
+  // Four taut lifting slings run all the way from the block to the beam bundle.
+  for (const dx of [-1.9, 1.9])
+    for (const dz of [-0.43, 0.43]) {
+      const a = new THREE.Vector3(hx, hookY - 0.35, mz),
+        b = new THREE.Vector3(hx + dx, loadY + 0.48, mz + dz);
+      const cable = new THREE.CylinderGeometry(0.028, 0.028, a.distanceTo(b), 6);
+      const matrix = new THREE.Matrix4().compose(
+        a.clone().add(b).multiplyScalar(0.5),
+        new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          b.clone().sub(a).normalize(),
+        ),
+        new THREE.Vector3(1, 1, 1),
+      );
+      G.add(cable, matrix);
+      cable.dispose();
+    }
   G.col("#8a5a3a");
-  G.box(hx, built * 4 + 4.8, mz, 6, 0.6, 1.2);
+  for (const dz of [-0.34, 0.34]) {
+    G.box(hx, loadY, mz + dz, 6, 0.07, 0.48);
+    G.box(hx, loadY + 0.07, mz + dz, 6, 0.34, 0.065);
+    G.box(hx, loadY + 0.41, mz + dz, 6, 0.07, 0.48);
+  }
   beacon(C, mx + dir * jl, mh + 1.6, mz);
   // hoarding round the site
   const D = C.detail;
@@ -2006,7 +2034,7 @@ function templates(): Tmpls {
     bench: t((g) => {
       g.col("#7a5234");
       g.box(0, 0.42, 0, 1.7, 0.07, 0.45);
-      g.obox(0, 0.52, -0.22, 1.7, 0.42, 0.06, 0);
+      g.obox(0, 0.48, -0.22, 1.7, 0.42, 0.06, 0);
       g.col("#2a2c30");
       g.box(-0.7, 0, 0, 0.07, 0.42, 0.4);
       g.box(0.7, 0, 0, 0.07, 0.42, 0.4);
@@ -2474,15 +2502,21 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
     }
     case "fountain": {
       const s = p.s ?? 5;
-      D.mat(L.plain, 0.5, 0).col("#cfc8b8");
-      D.cyl(p.x, 0, p.z, s, 0.7, 24);
-      D.col("#6fb4d8");
-      D.decoration(() => D.cyl(p.x, 0.55, p.z, s - 0.35, 0.02, 24));
+      D.mat(L.plain, 0.5, 0).col("#918779");
+      D.cyl(p.x, 0, p.z, s, 0.16, 48);
       D.col("#cfc8b8");
-      D.cyl(p.x, 0, p.z, 0.5, 1.8, 10);
-      D.cyl(p.x, 1.8, p.z, s * 0.3, 0.3, 16);
-      D.col("#8fd0f0");
-      D.decoration(() => D.cyl(p.x, 2.1, p.z, 0.12, 1.2, 6, true, 0.02));
+      D.ring(p.x, 0.16, p.z, s, s - 0.38, 0.47);
+      D.col("#ebe2d0");
+      D.ring(p.x, 0.63, p.z, s + 0.06, s - 0.43, 0.12);
+      D.col("#607f78");
+      D.cyl(p.x, 0.17, p.z, s - 0.39, 0.035, 48); // visible tiled basin floor
+      D.col("#b9af9e");
+      D.cyl(p.x, 0.2, p.z, 0.68, 0.22, 24, true, 0.48);
+      D.cyl(p.x, 0.42, p.z, 0.37, 1.25, 24, true, 0.26);
+      D.cyl(p.x, 1.67, p.z, 0.3, 0.24, 32, true, s * 0.24);
+      D.ring(p.x, 1.91, p.z, s * 0.24, s * 0.24 - 0.12, 0.18, 32);
+      D.col("#526565");
+      D.cyl(p.x, 1.92, p.z, 0.075, 0.22, 12);
       break;
     }
     case "manhole":

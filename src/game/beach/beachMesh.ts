@@ -270,7 +270,7 @@ function templates(): Tmpls {
     bench: t((g) => {
       g.col("#6a4a30");
       g.box(0, 0.42, 0, 1.8, 0.06, 0.45);
-      g.obox(0, 0.5, -0.22, 1.8, 0.4, 0.05, 0);
+      g.obox(0, 0.47, -0.22, 1.8, 0.4, 0.05, 0);
       g.col("#2e3034");
       g.box(-0.75, 0, 0, 0.08, 0.42, 0.42);
       g.box(0.75, 0, 0, 0.08, 0.42, 0.42);
@@ -2454,7 +2454,7 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       break;
     }
     case "bench":
-      D.stamp(T.bench, p.x, y + 0.15, p.z, p.rot);
+      D.stamp(T.bench, p.x, y + 0.02, p.z, p.rot);
       break;
     case "trash":
       D.stamp(T.trash, p.x, y, p.z, 0);

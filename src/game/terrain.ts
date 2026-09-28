@@ -294,5 +294,11 @@ export function ghostOK(x: number, z: number) {
  * with a climbing limit have such places.
  */
 export function raised(x: number, z: number) {
-  return G?.maxSlope !== undefined && G.height(x, z) > 1.2;
+  return G?.maxSlope !== undefined && G.height(x, z) - (G.baseHeight?.(x, z) ?? 0) > 1.2;
+}
+
+/** Bare-earth climbing is independent of frame rate and ignores discrete stair treads. */
+export function terrainStep(x0: number, z0: number, x1: number, z1: number, feet: number) {
+  if (!G?.baseHeight || G.maxSlope === undefined || G.baseHeight(x1, z1) <= feet) return true;
+  return walkable({ height: G.baseHeight }, G.maxSlope, x0, z0, x1, z1);
 }

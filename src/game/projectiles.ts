@@ -1,3 +1,6 @@
+import { shieldBlocks } from "./enemyAI";
+import { bodyContacts, worldContact, type Body, type WorldContact } from "./projectileContact";
+import { advanceBallistic, bulletGravity } from "./ballistics";
 import { readGunMuzzle, remoteGunRoots } from "./art/muzzle";
 import { firstWorldHit } from "./enemyProjectiles";
 import * as THREE from "three";
@@ -223,6 +226,19 @@ type Look = {
   flash: { w: number; spikes: number; len: number; col: number; smoke: number; life: number };
 };
 const LOOKS: Record<VisKind, Look> = {
+  [VK.SNIPER]: {
+    geo: "bullet",
+    base: 0.14,
+    col: 0xe9c98a,
+    core: 0xffedd2,
+    glowCol: 0xe9c98a,
+    len: 2.8,
+    coreW: 0.018,
+    glowW: 0.07,
+    power: 2.4,
+    kick: 0.045,
+    flash: { w: 0.36, spikes: 5, len: 0.5, col: 0xffcd81, smoke: 2, life: 0.045 },
+  },
   [VK.PISTOL]: {
     geo: "bullet",
     base: 0.14,
@@ -492,6 +508,7 @@ const GUN_IDS = [
   "plasma",
   "voidorb",
   "shatter",
+  "sniper",
 ] as const;
 /** the look for a gun name (Game.tsx's Weapon); unknown names fall back on the pistol */
 export function visOf(weapon: string): VisKind {
@@ -503,6 +520,7 @@ const isGun = (kind: number) => !!GUN_IDS[kind];
 // ---------------------------------------------------------------- per-round state
 
 type Proj = {
+  hitBodies: Map<Body, number>;
   on: boolean;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
@@ -528,6 +546,7 @@ type Proj = {
   blastR: number;
 };
 const mkProj = (): Proj => ({
+  hitBodies: new Map(),
   on: false,
   pos: new THREE.Vector3(),
   vel: new THREE.Vector3(),
@@ -701,6 +720,7 @@ function start(
   size: number,
   from: THREE.Vector3 | null,
 ) {
+  P.hitBodies.clear();
   P.on = true;
   P.kind = kind;
   P.flags = flags;
@@ -764,9 +784,9 @@ export function fxFired(
   queueFire(kind, flags, origin, dir, seed, speed, net);
 }
 
-export function fxBounce(i: number) {
+export function fxBounce(i: number, contact?: WorldContact) {
   const P = L[i];
-  if (P?.on) bounceVis(P);
+  if (P?.on) bounceVis(P, contact);
 }
 export function fxHit(i: number, b: BulletLike, e: FxEnemy) {
   const P = L[i];
@@ -783,10 +803,10 @@ export function fxBurst(b: BulletLike, r?: number) {
   airBurst(b.pos.x, b.pos.y, b.pos.z, r);
 }
 /** a local round stopped: `wall` = it hit something solid, else it ran out of life */
-export function fxDie(i: number, wall: boolean) {
+export function fxDie(i: number, wall: boolean, contact?: WorldContact) {
   const P = L[i];
   if (!P?.on) return;
-  dieVis(P, wall);
+  dieVis(P, wall, contact);
   P.on = false;
 }
 
@@ -829,8 +849,8 @@ function orient(q: THREE.Quaternion, vel: THREE.Vector3, spin: number) {
 
 // ---------------------------------------------------------------- shared visuals
 
-function bounceVis(P: Proj) {
-  const p = P.pos;
+function bounceVis(P: Proj, contact?: WorldContact) {
+  const p = contact?.point ?? P.pos;
   glow(p.x, p.y, p.z, 1.5, 0x7cff4f, 0.18, 1, 1.2, 44);
   glow(p.x, p.y, p.z, 0.55, 0xffffff, 0.07, 1, 1, 12);
   V1.copy(P.vel).normalize();
@@ -882,9 +902,14 @@ function hitVis(P: Proj, e: FxEnemy, terminal: boolean) {
   }
 }
 
-function dieVis(P: Proj, wall: boolean) {
+function dieVis(P: Proj, wall: boolean, contact?: WorldContact) {
   const lk = LOOKS[P.kind];
-  const surf: Surface = wall ? classify(P.prev, P.pos, P.vel, CONTACT) : "air";
+  let surf: Surface = wall ? classify(P.prev, contact?.point ?? P.pos, P.vel, CONTACT) : "air";
+  if (contact) {
+    CONTACT.p.copy(contact.point);
+    CONTACT.n.copy(contact.normal);
+    if (surf === "air") surf = contact.normal.y > 0.6 ? "ground" : "wall";
+  }
   if (!wall) {
     CONTACT.p.copy(P.pos);
     CONTACT.n.set(0, 1, 0);
@@ -1247,6 +1272,7 @@ function trail(P: Proj, dt: number) {
     case VK.SCATTER:
     case VK.FRAG:
     case VK.REVOLVER:
+    case VK.SNIPER:
     case VK.MINIGUN:
     case VK.CROSSBOW:
       streak(lk.len, lk.coreW, lk.glowW, lk.core, lk.glowCol);
@@ -1494,19 +1520,8 @@ function queueFire(
   if (!net) return;
   netRef = net;
   fxNetStats.shots++;
-  // a burst of the same gun inside one 50 ms window rides along as a count
-  for (let j = 0; j < pending.length; j += GROUP) {
-    if (pending[j] === kind) {
-      pending[j + 10] = pending[j + 10]! + 1;
-      pending[j + 1] = r2(o.x);
-      pending[j + 2] = r2(o.y);
-      pending[j + 3] = r2(o.z);
-      pending[j + 4] = r3(d.x);
-      pending[j + 5] = r3(d.y);
-      pending[j + 6] = r3(d.z);
-      return;
-    }
-  }
+  // Every trigger keeps its own seed, muzzle pose and ADS flags. The 50 ms envelope
+  // still batches transport, without changing the trajectories inside it.
   pending.push(
     kind,
     r2(o.x),
@@ -1594,7 +1609,14 @@ function replayRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     for (let c = 0; c < n; c++) {
       const rand = rng(s[j + 7]! + c);
       for (let p = 0; p < g.count; p++) {
-        const d = aimDir(V3, V2, g.count, g.spread, p, rand);
+        const d = aimDir(
+          V3,
+          V2,
+          g.count,
+          g.spread * (flags & VF.ADS ? (kind === VK.SNIPER ? 0 : 0.65) : 1),
+          p,
+          rand,
+        );
         spawnGhost(kind, flags, V1, d.multiplyScalar(speed), g, muz, id);
       }
     }
@@ -1629,57 +1651,64 @@ function spawnGhost(
 }
 
 function ghostStep(P: Proj, dt: number) {
+  dt = Math.min(dt, Math.max(0, P.life));
   const env = FX.env;
   P.prev.copy(P.pos);
-  const px = P.pos.x,
-    pz = P.pos.z;
-  P.pos.addScaledVector(P.vel, dt);
+  advanceBallistic(P.pos, P.vel, bulletGravity(P.kind), dt);
   P.life -= dt;
-  const p = P.pos;
-  const h = env ? env.half() : 1e9;
-  const wallAt = env
-    ? firstWorldHit(
-        P.prev,
-        p,
-        (q) =>
-          Math.abs(q.x) > h ||
-          Math.abs(q.z) > h ||
-          env.solid(q.x, q.z, q.y) ||
-          env.car(q.x, q.y, q.z),
-      )
-    : undefined;
-  const wall = wallAt !== undefined;
-  if (wallAt !== undefined) p.lerpVectors(P.prev, p, wallAt);
-  if (wall && P.bounce > 0 && env) {
-    P.bounce--;
-    if (env.solid(p.x, pz, p.y) || Math.abs(p.x) > h) P.vel.x *= -1;
-    else P.vel.z *= -1;
-    p.set(px, p.y, pz);
-    bounceVis(P);
-    return;
-  }
-  if (P.life <= 0 || wall) {
-    ghostDie(P, wall);
-    return;
-  }
-  const e = robotAt(p, 0.2);
-  if (e) {
-    const terminal = P.pierce <= 0;
-    hitVis(P, e, terminal);
-    if (P.kind === VK.TESLA && P.chain > 0 && env) {
-      let left = P.chain;
-      for (const o of env.enemies) {
-        if (left <= 0) break;
-        if (!o.alive || o === e) continue;
-        if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
-          chainArc(e, o);
-          left--;
+  const end = P.pos.clone(),
+    h = env?.half() ?? 1e9;
+  const stop = (q: { x: number; y: number; z: number }) =>
+    Math.abs(q.x) > h ||
+    Math.abs(q.z) > h ||
+    !!env?.solid(q.x, q.z, q.y) ||
+    !!env?.car(q.x, q.y, q.z);
+  const wall = env ? firstWorldHit(P.prev, end, stop) : undefined;
+  if (env)
+    for (const { e, t } of bodyContacts(
+      P.prev,
+      end,
+      env.enemies,
+      env.radius,
+      P.hitBodies,
+      wall ?? 1.000001,
+    )) {
+      P.pos.lerpVectors(P.prev, end, t);
+      P.hitBodies.set(e, e.generation ?? 0);
+      const terminal =
+        P.pierce <= 0 || shieldBlocks(e, P.vel.x, P.vel.z, (((e.vis ?? 0) >> 6) & 1) === 1);
+      hitVis(P, e, terminal);
+      if (P.kind === VK.TESLA && P.chain > 0) {
+        let left = P.chain;
+        for (const o of env.enemies) {
+          if (left <= 0) break;
+          if (o.alive && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 6) {
+            chainArc(e, o);
+            left--;
+          }
         }
       }
+      if (terminal) {
+        ghostDie(P, false, true);
+        return;
+      }
+      P.pierce--;
     }
-    if (terminal) ghostDie(P, false, true);
-    else P.pierce--;
+  P.pos.copy(end);
+  if (wall !== undefined) {
+    const hit = worldContact(P.prev, end, wall, stop);
+    P.pos.copy(hit.safe);
+    if (P.bounce > 0) {
+      P.bounce--;
+      P.vel.reflect(hit.normal);
+      bounceVis(P, hit);
+      return;
+    }
+    dieVis(P, true, hit);
+    ghostDie(P, true, true);
+    return;
   }
+  if (P.life <= 0) ghostDie(P, false);
 }
 
 function ghostDie(P: Proj, wall: boolean, alreadyHit = false) {

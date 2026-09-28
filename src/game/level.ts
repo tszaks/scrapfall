@@ -20,7 +20,7 @@ import {
 } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number; boundary?: boolean };
-export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western";
+export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western" | "nuketown";
 
 export const SOLO_ARENA = 44;
 export const COOP_ARENA = 62;
@@ -59,6 +59,22 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
   let city: CityLayout | null = null;
   let western: WesternLayout | null = null;
 
+  if (mode === "nuketown") {
+    // Coarse navigation only; the rendered fence and vehicle models own precise contact.
+    for (let i = 0; i < cells; i++)
+      for (let j = 0; j < cells; j++) {
+        const x = -HALF + i * BLOCK + 1,
+          z = -HALF + j * BLOCK + 1;
+        if (
+          Math.abs(x) > 33 ||
+          Math.abs(z) > 43 ||
+          (x > -11.5 && x < -0.5 && z > -4.3 && z < -1.3) ||
+          (x > 3 && x < 13.5 && z > 1.5 && z < 4.5)
+        )
+          blocks.push({ x, z, h: 4, tone: 0 });
+      }
+    return { blocks, seed, rand, city, western };
+  }
   if (mode === "beach") {
     // the full map in solo and co-op; solo seals a smaller square with blockades. The caller
     // installs its ground (beachTerrain) through terrain.ts, like the alpine heightfield.

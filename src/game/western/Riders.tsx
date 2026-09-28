@@ -173,7 +173,11 @@ export function WesternRiders({
       const k: HorseKind = p.k === "stagecoach" ? "stagecoach" : "buckboard";
       kinds.push(k);
       vs.push(
-        horseVehicle(k, k === "stagecoach" ? 0x2a4a3a : [0x7a6a4a, 0x6a3a2a, 0x3a4a5a][n % 3]!),
+        horseVehicle(
+          k,
+          k === "stagecoach" ? 0x2a4a3a : [0x7a6a4a, 0x6a3a2a, 0x3a4a5a][n % 3]!,
+          true,
+        ),
       );
     });
     const batch = new CarBatch(vs, movers);
@@ -197,13 +201,13 @@ export function WesternRiders({
         [0.19, -0.6],
       ])
         entries.push({
-          geometry: geos.leg,
+          geometry: z! < 0 ? geos.hind : geos.leg,
           matrix: frame.clone().multiply(new THREE.Matrix4().makeTranslation(x!, 1.05, z!)),
         });
     }
     for (const p of coaches.parked) {
       const kind = p.k === "stagecoach" ? "stagecoach" : "buckboard",
-        model = vehicleModel(kind);
+        model = vehicleModel(`${kind}-parked`);
       const frame = new THREE.Matrix4()
         .makeRotationY(p.rot)
         .setPosition(p.x, groundY(p.x, p.z), p.z);
@@ -232,6 +236,7 @@ export function WesternRiders({
   const refs = {
     body: useRef<THREE.InstancedMesh>(null),
     leg: useRef<THREE.InstancedMesh>(null),
+    hind: useRef<THREE.InstancedMesh>(null),
     torso: useRef<THREE.InstancedMesh>(null),
     hat: useRef<THREE.InstancedMesh>(null),
     legs: useRef<THREE.InstancedMesh>(null),
@@ -332,11 +337,12 @@ export function WesternRiders({
     const r = refs;
     const body = r.body.current;
     const leg = r.leg.current;
+    const hind = r.hind.current;
     const torso = r.torso.current;
     const hat = r.hat.current;
     const legs = r.legs.current;
     const wheel = r.wheel.current;
-    if (!body || !leg || !torso || !hat || !legs || !wheel) return;
+    if (!body || !leg || !hind || !torso || !hat || !legs || !wheel) return;
     const C = coaches;
     const lit = tod.v > 0.45;
     let nwh = 0;
@@ -415,9 +421,11 @@ export function WesternRiders({
         for (const [hxo, hzo, off] of hips) {
           const sw = Math.sin(a.ph + off + k) * amp;
           _qa.setFromAxisAngle(_x, sw).premultiply(_q);
-          leg.setMatrixAt(nl, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
-          remember(geos.leg, _m);
-          leg.setColorAt(
+          const limb = hzo < 0 ? hind : leg;
+          limb.setMatrixAt(nl, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
+          (hzo < 0 ? leg : hind).setMatrixAt(nl, _fr.makeScale(0, 0, 0));
+          remember(hzo < 0 ? geos.hind : geos.leg, _m);
+          limb.setColorAt(
             nl,
             a.role === ROLE_OUTLAW
               ? _c.set("#1e1a18")
@@ -487,8 +495,10 @@ export function WesternRiders({
         [0.19, -0.6],
       ]) {
         _m.makeTranslation(x!, 1.05, z!).premultiply(_fr);
-        leg.setMatrixAt(nl, _m);
-        leg.setColorAt(nl++, _c.set(COATS[h.coat]!));
+        const limb = z! < 0 ? hind : leg;
+        limb.setMatrixAt(nl, _m);
+        (z! < 0 ? leg : hind).setMatrixAt(nl, _m.makeScale(0, 0, 0));
+        limb.setColorAt(nl++, _c.set(COATS[h.coat]!));
       }
     }
     // (a coach off stage or out of range is parked far off the map, where the batch culls it)
@@ -601,9 +611,9 @@ export function WesternRiders({
     wheel.count = nwh;
     wheel.instanceMatrix.needsUpdate = true;
     body.count = nh;
-    leg.count = nl;
+    leg.count = hind.count = nl;
     torso.count = hat.count = legs.count = nr;
-    for (const m of [body, leg, torso, hat, legs]) {
+    for (const m of [body, leg, hind, torso, hat, legs]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
@@ -628,6 +638,7 @@ export function WesternRiders({
     <group>
       {inst("body", horseCapacity, true)}
       {inst("leg", horseCapacity * 4, true)}
+      {inst("hind", horseCapacity * 4, true)}
       {inst("torso", TOWNFOLK + 4, true)}
       {inst("hat", TOWNFOLK + 4, true)}
       {inst("legs", TOWNFOLK + 4, false)}

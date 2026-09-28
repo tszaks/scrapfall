@@ -1,3 +1,4 @@
+import { matchEnvironment } from "../matchEnvironment";
 import { registerStaticGeometry } from "../staticCollision";
 // Renders Dry Gulch from the merged chunk geometry built in mesh.ts. One facade material
 // (the western texture array) draws every building, prop, rock face and rail; the ground is
@@ -204,6 +205,36 @@ diffuseColor.rgb *= col;`,
   return { mat, splat };
 }
 
+/** Indexed terrain and collision sample the identical fixed diagonal in every cell. */
+function earthMesh(L: WesternLayout) {
+  const t = L.earth,
+    side = t.n + 1,
+    p = new Float32Array(side * side * 3),
+    uv = new Float32Array(side * side * 2),
+    indices: number[] = [];
+  for (let i = 0; i <= t.n; i++)
+    for (let j = 0; j <= t.n; j++) {
+      const k = i * side + j,
+        x = -t.half + i * t.cell,
+        z = -t.half + j * t.cell;
+      p.set([x, t.h[k]!, z], k * 3);
+      uv.set([i / t.n, j / t.n], k * 2);
+      if (i < t.n && j < t.n) {
+        const a = k,
+          b = k + side,
+          c = k + 1,
+          d = k + side + 1;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** the dry riverbed: a strip of ground carved below grade along the wash, following the
  * layout's terrain (so you walk exactly on what you see); its edge tucks just under the plain */
 function riverbedMesh(L: WesternLayout) {
@@ -348,6 +379,7 @@ export const WesternScene = memo(function WesternScene({
   );
   const ground = useMemo(() => groundMaterial(layout, true), [layout]);
   const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
+  const earthGeo = useMemo(() => earthMesh(layout), [layout]);
   const riverGeo = useMemo(() => riverbedMesh(layout), [layout]);
   useEffect(
     () => () => {
@@ -356,8 +388,9 @@ export const WesternScene = memo(function WesternScene({
       riverMat.mat.dispose();
       riverMat.splat.dispose();
       riverGeo.dispose();
+      earthGeo.dispose();
     },
-    [ground, riverMat, riverGeo],
+    [ground, riverMat, riverGeo, earthGeo],
   );
 
   // reflection env maps: a small PMREM of each sky
@@ -483,15 +516,17 @@ export const WesternScene = memo(function WesternScene({
     // the disc: always straight toward the sun/moon, far away, facing the camera
     const disc = discRef.current;
     if (disc) {
+      const daylight = matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain";
       const d = SKY_DIR[mode];
+      disc.visible = matchEnvironment.kind !== "rain";
       const dist = 3000;
       disc.position.set(
-        cam.position.x + d[0] * dist,
-        cam.position.y + d[1] * dist,
-        cam.position.z + d[2] * dist,
+        cam.position.x + (daylight ? liveLook.sunDir.x : d[0]) * dist,
+        cam.position.y + (daylight ? liveLook.sunDir.y : d[1]) * dist,
+        cam.position.z + (daylight ? liveLook.sunDir.z : d[2]) * dist,
       );
       disc.quaternion.copy(cam.quaternion);
-      disc.scale.setScalar(look.disc.size);
+      disc.scale.setScalar(daylight ? 280 : look.disc.size);
     }
     // windmills turn in the evening breeze
     const bm = bladeRef.current;
@@ -545,9 +580,28 @@ export const WesternScene = memo(function WesternScene({
       <SkyDome sunset={skies.sunset} night={skies.night} />
       <InteriorLights lamps={layout.lamps} />
       {/* the desert floor, out to the horizon */}
-      <mesh rotation-x={-Math.PI / 2} position-y={0} material={ground.mat} receiveShadow>
-        <planeGeometry args={[ext * 2, ext * 2]} />
-      </mesh>
+      <mesh geometry={earthGeo} material={ground.mat} receiveShadow />
+      {/* Four horizon strips leave the playable terrain unobscured, including its wash. */}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <mesh
+            rotation-x={-Math.PI / 2}
+            position={[(s * (ext + layout.half)) / 2, -0.04, 0]}
+            material={ground.mat}
+            receiveShadow
+          >
+            <planeGeometry args={[ext - layout.half, ext * 2]} />
+          </mesh>
+          <mesh
+            rotation-x={-Math.PI / 2}
+            position={[0, -0.04, (s * (ext + layout.half)) / 2]}
+            material={ground.mat}
+            receiveShadow
+          >
+            <planeGeometry args={[layout.half * 2, ext - layout.half]} />
+          </mesh>
+        </group>
+      ))}
       <mesh geometry={riverGeo} material={riverMat.mat} receiveShadow />
       <mesh geometry={built.far} material={mats.facade} receiveShadow />
       {built.chunks.map((c, i) => (

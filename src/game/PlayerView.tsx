@@ -1,3 +1,4 @@
+import { aimState } from "./input/aim";
 import { firstWorldHit } from "./enemyProjectiles";
 import { KeyHint } from "./input/Glyph";
 import { actionLabel } from "./input/labels";
@@ -167,7 +168,8 @@ export function PlayerView({
     prepare.current = (camera, time, dt) => {
       artFrame();
       eye.copy(camera.position);
-      const on = (!hidden.current || downed.current) && getViewMode() === "third";
+      const on =
+        (!hidden.current || downed.current) && getViewMode() === "third" && !aimState.scoped;
       shoulderView.active = on;
       rig.mesh.visible = false;
       if (on) {

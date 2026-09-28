@@ -18,6 +18,7 @@ export function installStructures(next: Structure[]) {
     streetWalls.set(p, [
       ...p.solids.filter((v) => v.y1 > p.base + 0.2 && v.y0 < p.base + 1.8),
       ...p.stairs,
+      ...(p.navObstacles ?? []),
     ]);
     for (
       let i = Math.floor((p.bounds.x0 - 4) / cell);
@@ -67,7 +68,7 @@ export function structureShot(x: number, y: number, z: number): boolean | undefi
   let owns = false;
   for (const p of at(x, z)) {
     if (!contains(p.bounds, x, z, 0.02) || y > p.top + 0.02) continue;
-    owns = true;
+    owns ||= !p.includeStatic;
     if (y < p.base) return true;
     for (const v of p.solids) if (y >= v.y0 && y <= v.y1 && contains(v, x, z)) return true;
     for (const s of p.stairs)
@@ -90,7 +91,7 @@ export function structureBody(
   let owns = false;
   for (const p of at(x, z)) {
     if (!contains(p.bounds, x, z, r + 0.05) || feet > p.top + 0.2) continue;
-    owns = true;
+    owns ||= !p.includeStatic;
     for (const v of p.solids) {
       if (v.y1 <= feet + 0.2 || v.y0 >= feet + 1.8) continue;
       // A landing can meet the capsule rim before its centre reaches the last tread.
@@ -104,6 +105,7 @@ export function structureBody(
         continue;
       if (circleTouches(v, x, z, r)) return true;
     }
+    if (street && p.navObstacles?.some((v) => circleTouches(v, x, z, r))) return true;
     // Street enemies can enter furnished rooms, but have no navigation on player-only stairs.
     if (street && p.stairs.some((s) => contains(s, x, z, r))) return true;
     for (const s of p.stairs)

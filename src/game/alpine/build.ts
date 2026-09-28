@@ -621,7 +621,7 @@ function gableHouse(
   };
   const bigFront = o.cafe || o.shop;
   for (let f = 0; f < o.floors; f++) {
-    if(b.interior && f===0) continue;
+    if (b.interior && f === 0) continue;
     const fl = f >= 1 && !o.barn;
     if (!(f === 0 && bigFront) && !(o.barn && f === 0))
       place(
@@ -695,7 +695,8 @@ function gableHouse(
   // front door with a little snowy canopy
   if (o.door) {
     g.mat(T.door, r(), 0).col("#ffffff");
-    if(!b.interior) lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
+    if (!b.interior)
+      lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
     const dg = k.detail;
     dg.mat(T.board, 0, 0).col("#6a4424");
     const A = L3(F, doorAt - 1.1, y + 2.75, 0);
@@ -788,18 +789,71 @@ function hotel(k: Kit, b: ABld) {
   const g = k.main;
   const floors = b.floors;
   const top = y + floors * 3.2;
-  const hostFace=(g:Geo,F:Frame,ax:number,az:number,bx:number,bz:number,ya:number,yb:number,uv:readonly number[]=[0,ya/2,Math.hypot(bx-ax,bz-az)/2,yb/2])=>{
-    const a=F.P(ax,az),q=F.P(bx,bz);
-    for(const cut of facadePieces(a[0],a[1],q[0],q[1],ya,yb,b.grandWing?[b.grandWing]:[])) {
-      const u0=uv[0]!+(uv[2]!-uv[0]!)*cut.t0,u1=uv[0]!+(uv[2]!-uv[0]!)*cut.t1;
-      const v0=uv[1]!+(uv[3]!-uv[1]!)*(cut.y0-ya)/(yb-ya),v1=uv[1]!+(uv[3]!-uv[1]!)*(cut.y1-ya)/(yb-ya);
-      lface(g,F,ax+(bx-ax)*cut.t0,az+(bz-az)*cut.t0,ax+(bx-ax)*cut.t1,az+(bz-az)*cut.t1,cut.y0,cut.y1,[u0,v0,u1,v1]);
+  const hostFace = (
+    g: Geo,
+    F: Frame,
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    ya: number,
+    yb: number,
+    uv: readonly number[] = [0, ya / 2, Math.hypot(bx - ax, bz - az) / 2, yb / 2],
+  ) => {
+    const a = F.P(ax, az),
+      q = F.P(bx, bz);
+    for (const cut of facadePieces(
+      a[0],
+      a[1],
+      q[0],
+      q[1],
+      ya,
+      yb,
+      b.grandWing ? [b.grandWing] : [],
+    )) {
+      const u0 = uv[0]! + (uv[2]! - uv[0]!) * cut.t0,
+        u1 = uv[0]! + (uv[2]! - uv[0]!) * cut.t1;
+      const v0 = uv[1]! + ((uv[3]! - uv[1]!) * (cut.y0 - ya)) / (yb - ya),
+        v1 = uv[1]! + ((uv[3]! - uv[1]!) * (cut.y1 - ya)) / (yb - ya);
+      lface(
+        g,
+        F,
+        ax + (bx - ax) * cut.t0,
+        az + (bz - az) * cut.t0,
+        ax + (bx - ax) * cut.t1,
+        az + (bz - az) * cut.t1,
+        cut.y0,
+        cut.y1,
+        [u0, v0, u1, v1],
+      );
     }
   };
-  const hostWindow=(k:Kit,F:Frame,lx:number,lz:number,faceDir:0|1|2|3,wy:number,ww:number,hh:number,r:()=>number,flowers:boolean,shutter:string)=>{
-    const q=F.P(lx,lz),p=b.grandWing;
-    if(p&&q[0]>=p.bounds.x0-.25&&q[0]<=p.bounds.x1+.25&&q[1]>=p.bounds.z0-.25&&q[1]<=p.bounds.z1+.25&&wy<p.top&&wy+hh>p.base)return;
-    windowAt(k,F,lx,lz,faceDir,wy,ww,hh,r,flowers,shutter);
+  const hostWindow = (
+    k: Kit,
+    F: Frame,
+    lx: number,
+    lz: number,
+    faceDir: 0 | 1 | 2 | 3,
+    wy: number,
+    ww: number,
+    hh: number,
+    r: () => number,
+    flowers: boolean,
+    shutter: string,
+  ) => {
+    const q = F.P(lx, lz),
+      p = b.grandWing;
+    if (
+      p &&
+      q[0] >= p.bounds.x0 - 0.25 &&
+      q[0] <= p.bounds.x1 + 0.25 &&
+      q[1] >= p.bounds.z0 - 0.25 &&
+      q[1] <= p.bounds.z1 + 0.25 &&
+      wy < p.top &&
+      wy + hh > p.base
+    )
+      return;
+    windowAt(k, F, lx, lz, faceDir, wy, ww, hh, r, flowers, shutter);
   };
   // rusticated stone ground floor, cream plaster above
   g.mat(T.stone, 0, 1).col("#f0e8dc");
@@ -1845,16 +1899,36 @@ function propGeo(k: Kit, p: AProp, r: () => number) {
       break;
     }
     case "fountain": {
-      g.mat(T.stone, 0, 0).col("#ffffff");
-      g.cyl(x, y - 0.3, z, 2.2, 1.0, 8, false);
-      g.mat(T.ice, 0, 0).col("#ffffff");
-      g.cyl(x, y + 0.5, z, 2.0, 0.05, 8, true);
+      g.mat(T.stone, 0, 0).col("#d0c9bd");
+      g.cyl(x, y - 0.3, z, 2.2, 0.45, 32);
+      g.ring(x, y + 0.15, z, 2.2, 1.88, 0.53, 32);
+      g.mat(T.ice, 0, 0).col("#a2cbda");
+      g.decoration(() => g.cyl(x, y + 0.49, z, 1.87, 0.05, 32));
       g.mat(T.stone, 0, 0).col("#e0d8cc");
-      g.cyl(x, y + 0.5, z, 0.35, 2.2, 8, false, 0.25);
-      g.cyl(x, y + 2.7, z, 0.9, 0.2, 8, true);
+      g.cyl(x, y + 0.15, z, 0.35, 2.15, 16, true, 0.25);
+      g.cyl(x, y + 2.3, z, 0.25, 0.28, 24, true, 0.9);
+      g.ring(x, y + 2.58, z, 0.9, 0.76, 0.2, 32);
       g.mat(T.snow, 0, 0).col(SNOW);
-      g.cyl(x, y + 2.9, z, 0.85, 0.25, 8, true, 0.5);
-      g.cyl(x, y + 0.7, z, 2.25, 0.18, 8, true, 2.0);
+      g.ring(x, y + 0.68, z, 2.23, 1.87, 0.13, 48);
+      g.ring(x, y + 2.78, z, 0.92, 0.73, 0.1, 32);
+      g.mat(T.ice, 0, 0).col("#b4d9e4");
+      g.decoration(() => {
+        g.cyl(x, y + 2.66, z, 0.72, 0.035, 32);
+        for (let i = 0; i < 15; i++) {
+          const a = (i / 15) * Math.PI * 2,
+            h = 0.18 + (i % 4) * 0.1;
+          g.cyl(
+            x + Math.cos(a) * 0.88,
+            y + 2.72 - h,
+            z + Math.sin(a) * 0.88,
+            0.006,
+            h,
+            6,
+            true,
+            0.044,
+          );
+        }
+      });
       break;
     }
     case "xmas": {

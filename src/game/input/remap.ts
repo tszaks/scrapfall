@@ -10,6 +10,7 @@ export const ACTIONS = {
   lookUp: ["Look up", "ArrowUp"],
   lookDown: ["Look down", "ArrowDown"],
   fire: ["Shoot", "Enter"],
+  aim: ["Aim down sights", "Mouse2"],
   jump: ["Jump", "Space"],
   sprint: ["Sprint / double-tap tactical", "ShiftLeft"],
   ability: ["Ability", "KeyF"],
@@ -20,7 +21,7 @@ export const ACTIONS = {
   revive: ["Hold to revive", "KeyR"],
   camera: ["First / third person", "KeyV"],
   map: ["Big map", "KeyM"],
-  time: ["Lock night / sunset", "KeyN"],
+  time: ["Match weather (fixed)", ""],
   pause: ["Pause", "KeyP"],
   shop1: ["Buy shop item 1", "KeyZ"],
   shop2: ["Buy shop item 2", "KeyX"],
@@ -62,7 +63,7 @@ export const PAD_DEFAULTS_MAP: Partial<Record<ControlAction, number>> = {
   revive: 11,
   map: 8,
   pause: 9,
-  camera: 6,
+  aim: 6,
   shop1: 14,
   shop2: 12,
   shop3: 15,
@@ -72,6 +73,7 @@ const STORE = "scrapfall-controls-v1";
 export const controlSettings = {
   mode: "auto" as InputMode,
   swapSticks: false,
+  aimMode: "toggle" as "hold" | "toggle",
   keys: structuredClone(KEY_DEFAULTS),
   pad: { ...PAD_DEFAULTS_MAP },
 };
@@ -134,12 +136,24 @@ export function loadControls() {
     const d = JSON.parse(localStorage.getItem(STORE) || "{}");
     if (["auto", "kbm", "pad"].includes(d.mode)) controlSettings.mode = d.mode;
     if (typeof d.swapSticks === "boolean") controlSettings.swapSticks = d.swapSticks;
+    if (d.aimMode === "hold" || d.aimMode === "toggle") controlSettings.aimMode = d.aimMode;
     for (const a of ids) {
       if (Array.isArray(d.keys?.[a]) && d.keys[a].length <= 4 && d.keys[a].every(supportedToken))
         controlSettings.keys[a] = [...new Set(d.keys[a])];
       const b = d.pad?.[a];
       if (Number.isInteger(b) && b >= 0 && b < 16) controlSettings.pad[a] = b;
       else if (b === null) delete controlSettings.pad[a];
+    }
+    // Old default LT changed camera; it is now the conventional aim trigger.
+    // Non-default custom mappings keep priority over a newly introduced action.
+    if (!d.pad || !("aim" in d.pad)) {
+      if (controlSettings.pad.camera === 6) delete controlSettings.pad.camera;
+      if (Object.entries(controlSettings.pad).some(([a, b]) => a !== "aim" && b === 6))
+        delete controlSettings.pad.aim;
+    }
+    if (!d.keys || !("aim" in d.keys)) {
+      if (ids.some((a) => a !== "aim" && controlSettings.keys[a].includes("Mouse2")))
+        controlSettings.keys.aim = [];
     }
   } catch {
     /* defaults survive blocked or corrupt storage */
@@ -160,6 +174,10 @@ function save() {
   }
   version++;
   for (const f of listeners) f();
+}
+export function setAimMode(mode: "hold" | "toggle") {
+  controlSettings.aimMode = mode;
+  save();
 }
 export function setInputMode(mode: InputMode) {
   controlSettings.mode = mode;

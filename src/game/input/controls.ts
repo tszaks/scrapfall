@@ -1,3 +1,4 @@
+import { aimInput, clearAim, aimSensitivity } from "./aim";
 import {
   subscribeInputReset,
   installMappedInput,
@@ -50,12 +51,15 @@ export function installControls() {
   installMappedInput();
   subscribeInputReset(() => {
     clearControls();
+    clearAim();
     resetTouchInput();
     padOut.moveX = padOut.moveZ = 0;
     padOut.fire = false;
+    aimInput("pad", false);
     pad.reviveHeld = false;
   });
   subscribeActions((a, down, repeat) => {
+    if (a === "aim") aimInput("kbm", down, repeat);
     if (a === "sprint") {
       if (down && !repeat) kb.sprintPress = true;
       kb.shift = down;
@@ -112,8 +116,14 @@ function shopActivate() {
  * The controller's buttons for one frame of play. `inCar`: standing in an elevator car (A and
  * X press its floor button; there is no jumping in a car).
  */
+let padWasConnected = false;
 export function stepPadActions(env: { inCar: boolean }) {
   const p = pollPad();
+  if (padWasConnected && !p.connected) {
+    clearAim();
+    controlState.padNeutral = false;
+  }
+  padWasConnected = p.connected;
   if (
     !p.connected ||
     controlSettings.mode === "kbm" ||
@@ -123,6 +133,7 @@ export function stepPadActions(env: { inCar: boolean }) {
   ) {
     padOut.moveX = padOut.moveZ = 0;
     padOut.fire = false;
+    aimInput("pad", false);
     if (pad.reviveHeld) touchInput.revive = pad.reviveHeld = false;
     return;
   }
@@ -130,6 +141,7 @@ export function stepPadActions(env: { inCar: boolean }) {
     controlState.padNeutral = !p.down.some(Boolean) && Math.hypot(p.lx, p.ly, p.rx, p.ry) < 0.2;
     padOut.moveX = padOut.moveZ = 0;
     padOut.fire = false;
+    aimInput("pad", false);
     for (let i = 0; i < p.pressed.length; i++) if (p.pressed[i]) consumePress(i);
     return;
   }
@@ -154,6 +166,7 @@ export function stepPadActions(env: { inCar: boolean }) {
     return true;
   };
   padOut.fire = held("fire");
+  aimInput("pad", held("aim"));
   if (hit("jump")) {
     if (env.inCar) touchInput.use = true;
     else pad.jump = true;
@@ -259,8 +272,8 @@ export function padLook(
     }
   }
   if (x === 0 && y === 0) return;
-  look.yaw -= x * YAW_RATE * s.sens * slow * dt;
-  look.pitch -= y * PITCH_RATE * s.sens * slow * dt * (s.invertY ? -1 : 1);
+  look.yaw -= x * YAW_RATE * s.sens * slow * aimSensitivity() * dt;
+  look.pitch -= y * PITCH_RATE * s.sens * slow * aimSensitivity() * dt * (s.invertY ? -1 : 1);
   look.pitch = Math.max(-1.2, Math.min(1.2, look.pitch));
 }
 

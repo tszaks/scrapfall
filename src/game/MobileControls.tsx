@@ -1,3 +1,4 @@
+import { aimInput } from "./input/aim";
 import { useEffect, useRef, useState } from "react";
 import { touchInput } from "./touch";
 import { moveState } from "./input/movement";
@@ -39,7 +40,9 @@ function Btn({
       className={`pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 ${
         lit
           ? "border-[#e7b25c] bg-[#b4653f]/80 text-[#f7eeda]"
-          : dim ? "border-[#f3e6cf]/40 bg-[#2b2118]/35 text-[#f3e6cf]/60" : "border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70"
+          : dim
+            ? "border-[#f3e6cf]/40 bg-[#2b2118]/35 text-[#f3e6cf]/60"
+            : "border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70"
       }`}
     >
       <span>{label}</span>
@@ -87,7 +90,9 @@ export function MobileControls({
   /** in a co-op room: show the hold-to-revive button */
   coop?: boolean;
 }) {
-  const [stick, setStick] = useState<{ ox: number; oy: number; dx: number; dy: number } | null>(null);
+  const [stick, setStick] = useState<{ ox: number; oy: number; dx: number; dy: number } | null>(
+    null,
+  );
   const moveId = useRef<number | null>(null);
   const lookId = useRef<number | null>(null);
   const last = useRef({ x: 0, y: 0 });
@@ -149,27 +154,55 @@ export function MobileControls({
       {stick && (
         <div
           className="pointer-events-none absolute rounded-full border-2 border-[#f3e6cf]/60 bg-[#2b2118]/25"
-          style={{ left: stick.ox - RADIUS, top: stick.oy - RADIUS, width: RADIUS * 2, height: RADIUS * 2 }}
+          style={{
+            left: stick.ox - RADIUS,
+            top: stick.oy - RADIUS,
+            width: RADIUS * 2,
+            height: RADIUS * 2,
+          }}
         >
           <div
             className="absolute rounded-full bg-[#f3e6cf]/80"
-            style={{ left: RADIUS - 22 + stick.dx, top: RADIUS - 22 + stick.dy, width: 44, height: 44 }}
+            style={{
+              left: RADIUS - 22 + stick.dx,
+              top: RADIUS - 22 + stick.dy,
+              width: 44,
+              height: 44,
+            }}
           />
         </div>
       )}
 
       {/* SPRINT sits on the left edge above where the movement thumb rests */}
-      <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 120px)" }}>
+      <div
+        className="absolute"
+        style={{
+          left: "max(1.25rem, env(safe-area-inset-left))",
+          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 120px)",
+        }}
+      >
         <SprintButton />
       </div>
 
       {/* squad and building buttons (the big maps): ping, hold to revive, and the elevator
           car's floor button, which only shows while you stand in a car (html.rs-incar) */}
-      <div className="absolute flex flex-col items-end gap-2" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)" }}>
+      <div
+        className="absolute flex flex-col items-end gap-2"
+        style={{
+          right: "max(1.25rem, env(safe-area-inset-right))",
+          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)",
+        }}
+      >
         <div className="hidden [.rs-incar_&]:block">
           <Btn label="USE" sub="FLOOR" size={56} onTap={() => (touchInput.use = true)} />
         </div>
         <div className="flex items-end gap-2">
+          <Btn
+            label="AIM"
+            size={48}
+            onDown={() => aimInput("touch", true)}
+            onUp={() => aimInput("touch", false)}
+          />
           <Btn label="JUMP" size={60} onTap={() => (touchInput.jump = true)} />
           <Btn label="PING" size={48} onTap={() => (touchInput.ping = true)} />
           {coop && (
@@ -184,9 +217,17 @@ export function MobileControls({
       </div>
 
       {/* action buttons */}
-      <div className="absolute flex items-end gap-4" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+      <div
+        className="absolute flex items-end gap-4"
+        style={{
+          right: "max(1.25rem, env(safe-area-inset-right))",
+          bottom: "max(1.25rem, env(safe-area-inset-bottom))",
+        }}
+      >
         <Btn
-          label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
+          label={
+            abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()
+          }
           sub="ABILITY"
           size={66}
           dim={abilityLeft > 0}
@@ -199,7 +240,6 @@ export function MobileControls({
           onUp={() => (touchInput.fire = false)}
         />
       </div>
-
     </div>
   );
 }

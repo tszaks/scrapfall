@@ -1,3 +1,4 @@
+import { matchEnvironment } from "../matchEnvironment";
 // Dry Gulch's air: gold dust motes drifting in the low sun (or pale ones in the moonlight),
 // the odd tumbleweed, and the map's hazard - DUST STORMS. When a storm rolls in (on a
 // shared schedule, see weather.ts) the haze closes to ~25 m in a brown-orange wall, dust
@@ -207,6 +208,9 @@ export function WesternWeather({
     // ---- motes drift on the evening air; they thin out in the storm (the dust takes over) ----
     const mp = moteRef.current;
     if (mp) {
+      const weather = matchEnvironment.kind;
+      mp.visible = weather !== "rain";
+      moteMat.opacity = weather === "sunset" ? 0.35 : weather === "sunny" ? 0.09 : 0.06;
       mp.position.set(Math.round(cam.x / 60) * 60, 0, Math.round(cam.z / 60) * 60);
       const pos = motes.getAttribute("position") as THREE.BufferAttribute;
       const arr = pos.array as Float32Array;

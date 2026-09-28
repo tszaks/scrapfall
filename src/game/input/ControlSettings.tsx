@@ -12,6 +12,7 @@ import {
   resetBindings,
   setCapturing,
   setInputMode,
+  setAimMode,
   setSwapSticks,
   subscribeControls,
   tokenLabel,
@@ -25,6 +26,7 @@ import { consumePress, pollPad } from "./gamepad";
 import { useInputDevice } from "./useInputDevice";
 const PAD_ACTIONS: ControlAction[] = [
   "fire",
+  "aim",
   "jump",
   "sprint",
   "ability",
@@ -35,7 +37,6 @@ const PAD_ACTIONS: ControlAction[] = [
   "revive",
   "camera",
   "map",
-  "time",
   "pause",
   "shop1",
   "shop2",
@@ -180,13 +181,33 @@ export function ControlSettings() {
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
     return () => old?.focus();
   }, [capture, pending]);
-  const rows = tab === "kbm" ? (Object.keys(ACTIONS) as ControlAction[]) : PAD_ACTIONS;
+  const rows =
+    tab === "kbm"
+      ? (Object.keys(ACTIONS) as ControlAction[]).filter((action) => action !== "time")
+      : PAD_ACTIONS;
   return (
     <section className="space-y-3 border-t border-white/10 pt-4" aria-label="Custom controls">
       <h3 className="text-[11px] font-bold tracking-[.3em]">CONTROLS</h3>
       <p className="text-[11px] opacity-70">
         Choose an action, then press its new key, mouse button or controller button. Changes save
         automatically.
+      </p>
+      <div className="flex flex-wrap items-center gap-2" aria-label="Aim behavior">
+        <span className="text-[11px]">AIM DOWN SIGHTS</span>
+        {(["toggle", "hold"] as const).map((mode) => (
+          <button
+            key={mode}
+            className={button(controlSettings.aimMode === mode)}
+            aria-pressed={controlSettings.aimMode === mode}
+            onClick={() => setAimMode(mode)}
+          >
+            {mode.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] opacity-60">
+        Right mouse / left trigger aims by default. Aim steadies the weapon and slows look speed.
+        Physical rounds drop over distance; bolts and shells arc more.
       </p>
       <div className="flex flex-wrap gap-2" aria-label="Input mode">
         {(["auto", "kbm", "pad"] as InputMode[]).map((m) => (

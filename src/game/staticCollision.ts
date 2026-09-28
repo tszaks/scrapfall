@@ -300,6 +300,7 @@ export function staticPoint(x: number, y: number, z: number, r = 0.05) {
 export function staticRayContact(
   a: { x: number; y: number; z: number },
   b: { x: number; y: number; z: number },
+  outNormal?: Vector3,
 ) {
   const length = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
   if (length < 1e-9) return undefined;
@@ -325,7 +326,14 @@ export function staticRayContact(
       near = h.distance + 0.001;
       if (s.matrix) h.point.applyMatrix4(s.matrix);
       if (shotExempt?.(h.point.x, h.point.y, h.point.z)) continue;
-      best = Math.min(best, Math.hypot(h.point.x - a.x, h.point.y - a.y, h.point.z - a.z) / length);
+      const distance = Math.hypot(h.point.x - a.x, h.point.y - a.y, h.point.z - a.z) / length;
+      if (distance < best) {
+        best = distance;
+        if (outNormal && h.face) {
+          outNormal.copy(h.face.normal);
+          if (s.normal) outNormal.applyMatrix3(s.normal).normalize();
+        }
+      }
       break;
     }
   }

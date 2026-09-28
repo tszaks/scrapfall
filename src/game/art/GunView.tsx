@@ -1,3 +1,4 @@
+import { aimState } from "../input/aim";
 // The gun component: draws a gun from art/guns.ts and, in first person, animates it:
 // idle breathing, per-gun firing motion (slide, pump, cylinder, drum, spinning barrels,
 // coil glow, the spear / bolt being re-seated), a raise on every equip and a tilt-and-rack
@@ -13,7 +14,25 @@ import { gunFx as fx } from "./gunFx";
 
 function gunMaterial() {
   // small props: a finer wear pattern and lighter wear than the robots
-  return artMaterial({ wear: 0.45, scale: 16 });
+  const mat = artMaterial({ wear: 0.22, scale: 24 });
+  const compile = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    compile.call(mat, sh, r);
+    sh.fragmentShader = sh.fragmentShader.replace(
+      "float roughnessFactor = aRough;",
+      `
+      float roughnessFactor = aRough;
+      // Fine directional machining on metal, dry microtexture on moulded grips.
+      float brushed = sin(vArtPos.z * 3800.0 + sin(vArtPos.y * 280.0) * 2.0);
+      roughnessFactor = clamp(roughnessFactor + brushed * 0.025 * vSurf.y, 0.12, 1.0);
+      float wood = step(diffuseColor.g * 1.28, diffuseColor.r) * step(diffuseColor.b * 1.45, diffuseColor.g) * (1.0-vSurf.y);
+      float grain = sin(vArtPos.z * 1100.0 + sin(vArtPos.y * 29.0) * 5.0);
+      diffuseColor.rgb *= 1.0 - wood * (0.035 + grain * 0.035);
+    `,
+    );
+  };
+  mat.customProgramCacheKey = () => "scrapfall-gun-machining-v2";
+  return mat;
 }
 
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -99,10 +118,14 @@ export function GunView({
     const eq = 1 - ease((now - S.equip) / 350);
     const rl = (now - fx.reload) / 1000;
     const tilt = rl >= 0 && rl < 0.75 ? Math.sin((rl / 0.75) * Math.PI) : 0;
-    r.position.set(0, -0.14 * eq * eq - 0.04 * tilt + Math.sin(t * 1.3) * 0.002, 0.03 * tilt);
+    r.position.set(
+      0,
+      -0.14 * eq * eq - 0.04 * tilt + Math.sin(t * 1.3) * 0.002 * (1 - aimState.blend),
+      0.03 * tilt,
+    );
     r.rotation.set(
-      -0.9 * eq * eq - 0.28 * tilt + Math.sin(t * 1.3) * 0.008,
-      Math.sin(t * 0.9) * 0.01,
+      -0.9 * eq * eq - 0.28 * tilt + Math.sin(t * 1.3) * 0.008 * (1 - aimState.blend),
+      Math.sin(t * 0.9) * 0.01 * (1 - aimState.blend),
       0.55 * tilt,
     );
     // a rack (slide / pump / bolt) plays at the end of a raise or a refill as well as after shots
@@ -132,7 +155,11 @@ export function GunView({
           break;
         }
         case "bolt": {
-          if (w === "crossbow") {
+          if (w === "sniper") {
+            const open = kick(shotS - 0.16, 0.15, 0.42);
+            o.rotation.z = 0.9 * open;
+            o.position.z += 0.085 * kick(shotS - 0.27, 0.13, 0.22);
+          } else if (w === "crossbow") {
             // the bolt leaves, then a fresh one slides onto the rail
             const gone = shotS >= 0 && shotS < 0.2;
             o.visible = !gone;

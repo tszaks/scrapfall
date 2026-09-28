@@ -35,7 +35,14 @@ export type MinimapSource = {
   /** half-size of the playable square (solo); the area beyond it is dimmed */
   playHalf: number;
 };
-type MapEnemy = { x: number; z: number; alive: boolean; kind: string; elite?: number; vis?: number };
+type MapEnemy = {
+  x: number;
+  z: number;
+  alive: boolean;
+  kind: string;
+  elite?: number;
+  vis?: number;
+};
 type MapRemote = { id?: string; x: number; z: number; color: string; hp: number; last: number };
 
 const SIZE = 184; // css px
@@ -74,7 +81,7 @@ export function Minimap({
       last = now;
       const f = feed.current;
       const R = (SIZE / 2) * dpr;
-      const s = R / RANGE; // px per metre
+      const s = R / Math.min(RANGE, src.half * 1.1); // px per metre
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, cv.width, cv.height);
       g.save();
@@ -125,7 +132,7 @@ export function Minimap({
       // enemies
       for (const e of enemies) {
         if (!e.alive) continue;
-        if (e.kind === "cloaker" && ((e.vis ?? 0) >> 6) === 1) continue; // cloaked: off the radar too
+        if (e.kind === "cloaker" && (e.vis ?? 0) >> 6 === 1) continue; // cloaked: off the radar too
         const x = wx(e.x);
         const z = wz(e.z);
         if (x * x + z * z > R * R) continue;

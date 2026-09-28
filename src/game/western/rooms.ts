@@ -143,7 +143,7 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
       ...base,
       doors: [
         { wall: "front", a: dr.a, b: dr.b, h: 2.5, kind: "batwing" },
-        { wall: "back", a: x0 + 0.78, b: x0 + 1.72, h: 2.1, kind: "plain" },
+        { wall: "back", a: x0 + 0.78, b: x0 + 1.72, h: deck + 2.1, kind: "plain" },
       ],
       upperDoor: { a: x0 + 0.95, b: x0 + 1.95, y: up },
       items,
@@ -222,7 +222,7 @@ export function roomPlan(b: WBld, deck: number, storey: number): RoomPlan | null
       ...base,
       doors: [
         { wall: "front", a: -0.7, b: 0.7, h: 2.4, kind: "plain" },
-        { wall: "back", a: x0 + 0.78, b: x0 + 1.72, h: 2.1, kind: "plain" },
+        { wall: "back", a: x0 + 0.78, b: x0 + 1.72, h: deck + 2.1, kind: "plain" },
       ],
       items,
       finish: "boards",

@@ -1,3 +1,4 @@
+import { valleyEarth } from "./earth";
 import { cliffShelves, type RockOverhang } from "./cliffs";
 import { BELFRY_FOOT } from "./belfry";
 export { BELFRY_Y } from "./belfry";
@@ -70,6 +71,8 @@ export function sampleTerrain(t: Terrain, x: number, z: number) {
   const b = t.h[(i + 1) * s + j]!;
   const c = t.h[i * s + j + 1]!;
   const d = t.h[(i + 1) * s + j + 1]!;
+  if (t.triangular)
+    return u + v <= 1 ? a + (b - a) * u + (c - a) * v : d + (c - d) * (1 - u) + (b - d) * (1 - v);
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
@@ -251,6 +254,7 @@ export type WesternLayout = {
   /** walkable height (boardwalks, the saloon balcony and its stairs, the church stairs and
    * belfry): installed as the game's terrain, climb-limited so walls stay walls */
   terrain: Terrain;
+  earth: Terrain;
   /** the saloon's outside staircase: the alley strip it climbs, bottom to top */
   saloonStairs: { x0: number; x1: number; zBottom: number; zTop: number; zEdge: number } | null;
   /** the foot of every stair the access markers show (minimap badge, pings) */
@@ -922,7 +926,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const clutterZ = north ? zf + BOARD_D - 1 : zf - BOARD_D + 1;
       if (porch > 0) {
         const n0 = Math.max(2, Math.round(p.w / 3.2));
-        const n = p.walkIn && p.t !== "saloon" && n0 % 2 === 0 ? n0 + 1 : n0;
+        const n = n0 % 2 === 0 ? n0 + 1 : n0;
         for (let i = 0; i <= n; i++) {
           const px = x + 0.15 + ((p.w - 0.3) * i) / n;
           posts.push({ x: px, z: postZ, r: 0.14 });
@@ -939,8 +943,21 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         sal.lot = { x0: x, x1: x + p.w, zf, north };
       }
       if (p.t !== "smithy" && rand() < 0.75) {
-        const hx = x + p.w * (0.3 + rand() * 0.4);
-        prop("hitch", hx, edge, 0, Math.min(4, p.w * 0.4));
+        let hx = x + p.w * (0.3 + rand() * 0.4);
+        const length = Math.min(4, p.w * 0.4),
+          building = buildings[buildings.length - 1]!;
+        const entrances = roomPlan(building, deck, STOREY)
+          ?.doors.filter((d) => d.wall === "front")
+          .map((d) => toWorld(building, (d.a + d.b) / 2, 0)[0]) ?? [x + p.w / 2];
+        if (entrances.some((ex) => Math.abs(hx - ex) < length / 2 + 1)) {
+          const choices = [x + length / 2 + 0.35, x + p.w - length / 2 - 0.35];
+          hx = choices.sort(
+            (a, b) =>
+              Math.min(...entrances.map((ex) => Math.abs(b - ex))) -
+              Math.min(...entrances.map((ex) => Math.abs(a - ex))),
+          )[0]!;
+        }
+        prop("hitch", hx, edge, 0, length);
         // horses tied up at the rail, noses to it, one or two
         if (rand() < 0.62) {
           const nh = rand() < 0.4 ? 2 : 1;
@@ -967,7 +984,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         for (let t = 0; t < 6; t++) {
           const cx = t === 0 ? want : x + w / 2 + 0.3 + rand() * (p.w - w - 0.6);
           if (cx - w / 2 < x + 0.3 || cx + w / 2 > x + p.w - 0.3) continue;
-          if (p.walkIn && Math.abs(cx - doorWX) < w / 2 + 1.4) continue;
+          if (Math.abs(cx - doorWX) < w / 2 + 1.4 || Math.abs(cx - (x + p.w / 2)) < w / 2 + 1.2)
+            continue;
           if (taken.some(([a, b]) => cx + w / 2 + 0.3 > a && cx - w / 2 - 0.3 < b)) continue;
           taken.push([cx - w / 2, cx + w / 2]);
           prop(k, cx, clutterZ, rot, s);
@@ -2108,6 +2126,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // 9. Walkable height: boardwalks, the platform, the saloon balcony and its stair.
   //    The belfry uses shared spiral access. 1 m samples; climbs steeper than 1:1 are walls.
   // ======================================================================
+  const earth = valleyEarth(half, buildings, props, rock, cells, riverZ);
   const tn = half * 2;
   const th = new Float32Array((tn + 1) * (tn + 1));
   const tset = (x: number, z: number, h: number) => {
@@ -2137,6 +2156,10 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         }
       }
     }
+  // Add the same triangulated earth used by the visible ground beneath every surface.
+  for (let i = 0; i <= tn; i++)
+    for (let j = 0; j <= tn; j++)
+      th[i * (tn + 1) + j]! += sampleTerrain(earth, -half + i, -half + j);
   const platforms: { x0: number; z0: number; x1: number; z1: number; y: number }[] = [];
   const tbox = (
     x0: number,
@@ -2282,12 +2305,13 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     cell: 1,
     n: tn,
     h: th,
+    triangular: true,
     maxSlope: 1.0,
     platforms,
     extraShot: shelves.hits,
   };
 
-  terrain.baseHeight = (x, z) => riverSurface(terrain, x, z) ?? 0;
+  terrain.baseHeight = (x, z) => riverSurface(terrain, x, z) ?? sampleTerrain(earth, x, z);
   const layout: WesternLayout = {
     kind: "western",
     cells,
@@ -2310,6 +2334,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     spawnYaw: Math.PI / 2, // looking west, down Main Street at the church and the sunset
     campfire,
     terrain,
+    earth,
     saloonStairs: null,
     stairFeet,
     lamps,

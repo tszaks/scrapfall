@@ -211,6 +211,33 @@ export class Geo {
     }
     if (top && r1 > 0.001) this.cap(b, y0 + h);
   }
+  /** Hollow, capped masonry rim: open center stays open to rendering and collision. */
+  ring(x: number, y: number, z: number, outer: number, inner: number, h: number, seg = 48) {
+    this.cyl(x, y, z, outer, h, seg, false);
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * Math.PI * 2,
+        b = ((i + 1) / seg) * Math.PI * 2;
+      const ax = x + Math.cos(a) * inner,
+        az = z + Math.sin(a) * inner;
+      const bx = x + Math.cos(b) * inner,
+        bz = z + Math.sin(b) * inner;
+      this.quad(ax, y, az, bx, y, bz, bx, y + h, bz, ax, y + h, az);
+      this.quad(
+        ax,
+        y + h,
+        az,
+        bx,
+        y + h,
+        bz,
+        x + Math.cos(b) * outer,
+        y + h,
+        z + Math.sin(b) * outer,
+        x + Math.cos(a) * outer,
+        y + h,
+        z + Math.sin(a) * outer,
+      );
+    }
+  }
   /** pointed n-sided spire */
   cone(x: number, y0: number, z: number, r: number, h: number, seg = 4, rot = Math.PI / 4) {
     for (let i = 0; i < seg; i++) {

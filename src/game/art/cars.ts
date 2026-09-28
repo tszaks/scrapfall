@@ -538,7 +538,9 @@ function carBody(
   }
   if (type === "suv") {
     // black cladding, roof rails, spare wheel on the tailgate
-    m.both(() => m.box(0.04, 0.16, f.L - 0.4, [f.W / 2 + 0.01, f.y0 + 0.1, 0], TRIM, SURF.trim));
+    // Rocker cladding belongs between the wheel openings, never across the tyres.
+    const sill = Math.max(0.1, 2 * (f.wz - f.ra - 0.1));
+    m.both(() => m.box(0.04, 0.13, sill, [f.W / 2 + 0.01, f.y0 + 0.1, 0], TRIM, SURF.trim));
     m.both(() =>
       m.box(
         0.05,

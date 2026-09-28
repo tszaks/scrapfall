@@ -2,15 +2,21 @@
 
 Scrapfall is Toby Szakacs's arena shooter (this build is based on his 1.0.2 release:
 classes, loadouts, the shop, touch controls). This fork by Tyler Szakacs adds four
-real-scale maps and the systems around them.
+real-scale maps, a compact Nuketown arena and the systems around them.
 
 Fight waves of robots through a real-scale
 downtown (1 unit = 1 metre): about 600 x 600 m solo and 800 x 800 m in co-op, with a
 480 m landmark tower, glass skyscrapers, walk-ups, a park, a boardwalk, live traffic
 that stops at the lights, day and night, and up to four players in co-op.
 
-The map picker offers the four big maps (Vice Heights, Dry Gulch, Pacific Pier,
-Whiteout Pass) plus Random; add `?map=city` to the URL to go straight to the city.
+The map picker offers Vice Heights, Dry Gulch, Pacific Pier, Whiteout Pass and
+Nuketown, plus Random. Nuketown has opposing two-storey houses, accessible interiors,
+garages, balconies, backyards and a central bus/truck lane. Add `?map=city` to go
+straight to the city or `?map=nuketown` for the compact arena.
+
+Every match randomly chooses sunny, rainy, night or sunset conditions and keeps them
+for the entire run. Co-op players share the host's conditions, including late joins.
+Whiteout Pass uses snowfall for its wet-weather condition.
 
 Play it at **https://szakacsmedia.com/game/**.
 
@@ -25,6 +31,7 @@ Bindings and device preferences are saved; conflicts can be replaced and default
 | W A S D                    | Left stick                                   | Move                                             |
 | Mouse / arrows             | Right stick (aim assist, Settings)           | Look                                             |
 | Hold left click (or Enter) | RT / R2 / ZR                                 | Shoot                                            |
+| Right click                | LT / L2 / ZL                                 | Aim down sights (toggle or hold in Settings)     |
 | Space                      | A / ✕ / B                                    | Jump                                             |
 | Hold Shift                 | Click left stick                             | Sprint (1.5x; no shooting while sprinting)       |
 | Double-tap Shift           | Double-click left stick                      | Tactical sprint (1.9x for 3 s, recharges in 6 s) |
@@ -35,9 +42,8 @@ Bindings and device preferences are saved; conflicts can be replaced and default
 | Hold R                     | Hold right stick in                          | Revive yourself in solo or a teammate in co-op   |
 | Z X C, H, R                | LB / RB, then X / □ / Y                      | Shop items, field dressing, reroll               |
 | J                          | Select in shop, then X / □ / Y               | Buy a replacement solo self-revive kit           |
-| V                          | LT / L2 / ZL                                 | First / third person                             |
+| V                          | Assign in Settings                           | First / third person                             |
 | M                          | View / Create / −                            | Big map                                          |
-| N                          |                                              | Day / night                                      |
 | P / Esc                    | Menu / Options / +                           | Pause                                            |
 
 Menus work with the d-pad or left stick, A to press and B to go back. On-screen hints
@@ -55,10 +61,24 @@ and grants three seconds of protection. Carry one kit at a time; replacements co
 12 shards in the shop, with rare enemy drops from wave three onward (at most two finds
 per run, at least three waves apart). A new run resets the kit.
 
+Metal rounds drop under gravity; energy weapons retain their straight trajectories.
+The Longshot sniper becomes available from wave four, carries 12 rounds and uses a
+4× scope with a 50 m sight zero. Aiming reduces sway and look sensitivity; scoping
+from third person temporarily uses the eye view, then restores the shoulder view.
+
+Downed players attract no new attacks. Enemies pursue a standing co-op teammate or
+wander locally until a live player becomes available again.
+
+Dry Gulch now places its town in a valley with traversable hills, while roads,
+railways and building foundations retain level footing. Doorways, foundation trim,
+porch steps, furniture supports and horse/wagon assemblies share their visible
+geometry with collision.
+
 Dry Gulch tumbleweeds roll when bumped and break when shot. Their fragments remain
 where they settle for the rest of the run, including for co-op players joining later.
 
-URL options: `?map=city`, `?night=1` / `?night=0`, `?shadows=0` / `?shadows=1`.
+Solo diagnostic URL options: `?weather=sunny`, `?weather=rain`, `?weather=night`,
+`?weather=sunset`, `?shadows=0` / `?shadows=1`. Co-op ignores local weather overrides.
 
 ## Development
 
@@ -67,6 +87,7 @@ Needs Node.js 20.19 or newer.
 ```sh
 npm ci
 npm run dev            # Vite dev server; open the printed URL + /game/
+npm test               # deterministic physics and match-weather regressions
 ```
 
 ## Build and hosting
@@ -95,3 +116,8 @@ npm run serve:static   # serves dist/site like the deployment: http://localhost:
 - `src/game/trafficSim.ts`, `Traffic.tsx`: traffic simulation and rendering.
 - `src/game/Minimap.tsx`: the city minimap.
 - `src/game/net.ts`: co-op over PeerJS.
+- `src/game/nuketown/`: compact arena layout, shared structure/collision data and rendering.
+- `src/game/western/earth.ts`: matching Dry Gulch rendered and walkable terrain.
+- `src/game/ballistics.ts`, `projectileContact.ts`: trajectories and swept projectile hits.
+- `src/game/matchEnvironment.ts`, `MatchRain.tsx`: fixed match conditions and sheltered rain.
+- `src/game/input/aim.ts`, `ScopeOverlay.tsx`: remappable aiming and sniper scope.

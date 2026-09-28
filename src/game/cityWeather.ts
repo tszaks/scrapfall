@@ -1,3 +1,4 @@
+import { matchEnvironment, rainyMatch } from "./matchEnvironment";
 // Vice Heights weather: night rain and wet streets.
 //
 // The host owns the weather. Each match rolls a chance of starting in the rain; otherwise
@@ -40,49 +41,23 @@ function forcedRain(): number | null {
 }
 export const FORCED_RAIN = forcedRain();
 
-/** chance a match opens in the rain, and of a front rolling in at each later check */
-const START_CHANCE = 0.3;
-const ROLL_CHANCE = 0.35;
-
-/** New map: the host rolls whether the match opens in the rain. */
-export function resetWeather(active: boolean, isHost: boolean) {
+/** New map: weather is selected by the shared seed and remains fixed. */
+export function resetWeather(active: boolean, _isHost: boolean) {
   weather.active = active;
   weather.t = 0;
-  const start = FORCED_RAIN ?? (isHost && Math.random() < START_CHANCE ? 1 : 0);
-  weather.rain = start;
-  weather.target = start;
-  weather.wet = start;
-  weather.next = start ? 150 + Math.random() * 150 : 60 + Math.random() * 120;
+  weather.rain =
+    weather.target =
+    weather.wet =
+      (matchEnvironment.allowOverrides ? FORCED_RAIN : null) ?? (rainyMatch() ? 1 : 0);
+  weather.next = Infinity;
 }
-
-export function tickWeather(delta: number, isHost: boolean, playing: boolean) {
+export function tickWeather(delta: number, _isHost: boolean, _playing: boolean) {
   if (!weather.active) return;
   weather.t += delta;
-  if (isHost) {
-    if (playing) weather.next -= delta;
-    if (weather.next <= 0) {
-      if (weather.target > 0.5) {
-        // the shower passes
-        weather.target = 0;
-        weather.next = 90 + Math.random() * 150;
-      } else if (Math.random() < ROLL_CHANCE) {
-        weather.target = 1;
-        weather.next = 120 + Math.random() * 180;
-      } else weather.next = 60 + Math.random() * 90;
-    }
-    if (FORCED_RAIN !== null) weather.target = FORCED_RAIN;
-    // a front takes ~25 s to build up and ~15 s to clear
-    const rate = weather.target > weather.rain ? 0.04 : 0.065;
-    weather.rain +=
-      Math.sign(weather.target - weather.rain) *
-      Math.min(Math.abs(weather.target - weather.rain), rate * delta);
-  }
-  // streets soak through in ~15 s of real rain and take a couple of minutes to dry
-  const wetTarget = Math.min(1, weather.rain * 1.6);
-  weather.wet +=
-    wetTarget > weather.wet
-      ? Math.min(wetTarget - weather.wet, delta * 0.07 * (0.3 + weather.rain))
-      : Math.max(wetTarget - weather.wet, -delta * 0.008);
+  weather.rain =
+    weather.target =
+    weather.wet =
+      (matchEnvironment.allowOverrides ? FORCED_RAIN : null) ?? (rainyMatch() ? 1 : 0);
 }
 
 /** host -> guests: one number, the rain strength (null when not on the city map) */

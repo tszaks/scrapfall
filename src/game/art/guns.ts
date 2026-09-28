@@ -24,7 +24,8 @@ export type GunId =
   | "crossbow"
   | "plasma"
   | "voidorb"
-  | "shatter";
+  | "shatter"
+  | "sniper";
 
 export type PistolMods = Partial<
   Record<
@@ -90,6 +91,7 @@ const MUZZLES: Record<GunId, V3> = {
   plasma: [0, 0, -0.48],
   voidorb: [0, 0, -0.5],
   shatter: [0, 0, -0.56],
+  sniper: [0, 0, -0.96],
 };
 export function gunMuzzle(w: GunId, mods: PistolMods = {}): V3 {
   if (w !== "pistol") return MUZZLES[w];
@@ -138,13 +140,16 @@ function barrel(
   o: { x?: number; seg?: number; rb?: number } = {},
 ) {
   m.tubeZ(r, zBack - zFront, [o.x ?? 0, y, (zFront + zBack) / 2], color, surf, {
-    seg: o.seg ?? 16,
+    seg: o.seg ?? 24,
     ...(o.rb !== undefined ? { rb: o.rb } : {}),
   });
 }
 /** the dark bore at a muzzle face */
 function bore(m: Model, r: number, z: number, y: number, x = 0) {
-  m.tubeZ(r, 0.004, [x, y, z - 0.001], "#050506", S.rubber, { seg: 12 });
+  m.tubeZ(r, 0.003, [x, y, z - 0.001], "#040506", S.rubber, { seg: 24 });
+  m.torus(r * 1.08, Math.min(0.0018, r * 0.14), [x, y, z - 0.003], "#656970", S.brushed, {
+    seg: 24,
+  });
 }
 /** a row of rings along z (cooling fins, coil windings) */
 function rings(
@@ -205,6 +210,21 @@ function grip(
     surf,
     { bevel: 0.005 },
   );
+  // Diamond checkering follows the grip rake instead of a flat painted panel.
+  for (const sign of [-1, 1])
+    for (let row = 0; row < 8; row++)
+      for (let col = 0; col < 3; col++) {
+        const t = (row + 1) / 10;
+        m.box(
+          0.0018,
+          0.004,
+          0.004,
+          [sign * (width / 2 + 0.0035), y - len * t, -f + b * t + (col - 1) * 0.015],
+          "#22262a",
+          S.rubber,
+          { rot: [PI / 4, 0, 0], lod: 1 },
+        );
+      }
   // stippled panels
   side(
     m,
@@ -1524,7 +1544,73 @@ const shatter: Build = (m, add, col, body) => {
   m.box(0.06, 0.08, 0.02, [0, -0.01, 0.13], "#1c2a30", S.polymer, { bevel: 0.006 });
 };
 
+// LONGSHOT: a purpose-built bolt action, with a bedded receiver, free-floated barrel,
+// adjustable cheekpiece, recoil pad, detachable magazine and mounted magnified optic.
+const sniper: Build = (m, add) => {
+  side(
+    m,
+    [
+      [-0.34, -0.025],
+      [-0.32, -0.17],
+      [-0.23, -0.18],
+      [-0.09, -0.06],
+      [0.12, -0.08],
+      [0.55, -0.055],
+      [0.58, -0.015],
+      [0.2, 0.004],
+      [-0.12, 0.015],
+    ],
+    0.074,
+    "#555d45",
+    S.polymer,
+    { bevel: 0.008 },
+  );
+  m.box(0.084, 0.145, 0.025, [0, -0.095, 0.34], RUB, S.rubber, { bevel: 0.006 });
+  m.box(0.07, 0.035, 0.14, [0, 0.007, 0.23], "#33382e", S.rubber, { bevel: 0.01 });
+  barrel(m, 0.027, -0.2, 0.08, 0, GM, S.blued, { seg: 24 });
+  barrel(m, 0.015, -0.96, -0.16, 0, "#555c63", S.brushed, { seg: 24, rb: 0.023 });
+  bore(m, 0.006, -0.96, 0);
+  m.torus(0.013, 0.002, [0, 0, -0.959], STL, S.brushed, { seg: 24 });
+  grip(m, 0.02, -0.042, 0.115, 0.057, "#4d5540", S.polymer, 0.22);
+  trigger(m, 0.1, -0.053, 0.016, GM, S.gunmetal);
+  m.box(0.048, 0.073, 0.085, [0, -0.087, -0.16], GM, S.darkSteel, { bevel: 0.004 });
+  for (const x of [-0.026, 0.026])
+    for (let k = 0; k < 3; k++)
+      m.box(0.003, 0.054, 0.005, [x, -0.087, -0.183 + k * 0.023], "#191d20", S.rubber);
+  rail(m, -0.24, 0.07, 0.041, 0.045);
+  scope(m, -0.34, 0.065, 0.125, 0.027, "#8ba9ae");
+  barrel(m, 0.045, -0.39, -0.31, 0.125, BLK, S.gunmetal, { seg: 24 });
+  m.tubeZ(0.038, 0.004, [0, 0.125, -0.393], "#345268", S.lens, { seg: 24 });
+  for (const z of [-0.25, 0.012]) {
+    m.box(0.045, 0.065, 0.027, [0, 0.077, z], GM, S.gunmetal, { bevel: 0.003 });
+    m.torus(0.03, 0.004, [0, 0.125, z], "#61666b", S.brushed, { seg: 24 });
+  }
+  rings(m, 0.029, 0.002, 0.033, 0.06, 5, 0.125, GM, S.gunmetal);
+  // Bolt handle lifts and cycles; its root stays in the receiver.
+  add("bolt", [0, 0, 0.015], (p) => {
+    barrel(p, 0.017, -0.13, 0.04, 0.001, STL, S.brushed, { seg: 20 });
+    p.cable(
+      [
+        [0.01, 0.005, 0.023],
+        [0.047, -0.013, 0.025],
+        [0.061, -0.039, 0.031],
+      ],
+      0.007,
+      STL,
+      S.steel,
+    );
+    p.sphere(0.012, [0.061, -0.04, 0.031], BLK, S.polymer);
+  });
+  // Folded bipod attaches to the fore-end, sling loops to the stock.
+  for (const x of [-0.037, 0.037]) {
+    m.box(0.013, 0.016, 0.23, [x, -0.065, -0.4], GM, S.gunmetal, { bevel: 0.003 });
+    m.tubeX(0.014, 0.006, [x, -0.048, -0.3], STL, S.steel, { seg: 16 });
+    m.bolts([x, -0.026, -0.2], [x, -0.026, -0.08], 2, 0.004, STL);
+  }
+};
+
 const BUILDS: Record<Exclude<GunId, "pistol">, Build> = {
+  sniper,
   scatter,
   smg,
   rail: rail_,

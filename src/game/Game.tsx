@@ -1,3 +1,12 @@
+import { Nuketown } from "./nuketown/Nuketown";
+import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nuketown/layout";
+import { MatchRain } from "./MatchRain";
+import { ScopeOverlay } from "./ScopeOverlay";
+import { bodyContacts, worldContact, type Body } from "./projectileContact";
+import { abandonTarget } from "./enemyAI";
+import { configureEnvironment, matchEnvironment } from "./matchEnvironment";
+import { aimState, stepAim, aimSensitivity } from "./input/aim";
+import { advanceBallistic, bulletGravity, ballisticDirection } from "./ballistics";
 import { Tumbleweeds } from "./western/Tumbleweeds";
 import {
   weedWorld,
@@ -140,20 +149,17 @@ import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import {
   beginMatchTime,
-  cycleTimeMode,
   initialMode,
   pinTime,
   resetMatchTime,
   setTimeMode,
   setWaveClock,
   tod,
-  toggleTimeLock,
-  useTodMode,
   useTodNearest,
-  waveStage,
 } from "./timeOfDay";
 import {
   climbable,
+  terrainStep,
   ghostOK,
   jumpClimb,
   raised,
@@ -395,7 +401,8 @@ type Weapon =
   | "crossbow"
   | "plasma"
   | "voidorb"
-  | "shatter";
+  | "shatter"
+  | "sniper";
 type Gun = {
   name: string;
   wave: number;
@@ -420,6 +427,21 @@ type Gun = {
   blastMul?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
+  sniper: {
+    name: "LONGSHOT",
+    wave: 4,
+    cooldown: 1.35,
+    count: 1,
+    spread: 0.016,
+    speed: 120,
+    life: 3.5,
+    damage: 10,
+    size: 0.075,
+    color: "#e9c98a",
+    body: "#555d45",
+    ammo: 12,
+    pierce: 1,
+  },
   pistol: {
     name: "PISTOL",
     wave: 0,
@@ -679,6 +701,7 @@ const ORDER: Weapon[] = [
   "plasma",
   "voidorb",
   "shatter",
+  "sniper",
 ];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 // wire order for co-op snapshots: only ever append (index 9 on are the newer types)
@@ -705,6 +728,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
 const TURRET_LIFE = 15;
 
 type Enemy = {
+  generation?: number;
   kind: Kind;
   /** city unstick tracking: last sampled spot and seconds without progress */
   lastX?: number;
@@ -750,6 +774,8 @@ type Enemy = {
   burnFrom?: string | null;
 };
 type Bullet = {
+  hitBodies?: Map<Body, number>;
+  gravity: number;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   life: number;
@@ -2159,11 +2185,13 @@ function fireInto(
     mods: fx.mods ?? 0,
     blast: fx.blast ?? 0,
     blastMul: fx.blastMul ?? 0,
+    gravity: 0,
   };
   const i = pool.findIndex((b) => !b.active);
   const slot = pool[i];
   if (slot) {
     Object.assign(slot, base);
+    slot.hitBodies?.clear();
     slot.pos.copy(pos);
     slot.vel.copy(vel);
     return i;
@@ -2857,6 +2885,7 @@ function World({
         e.z = t.z;
         e.yaw = u.yaw;
       }
+      if (!e.alive && u.alive) e.generation = (e.generation ?? 0) + 1;
       e.alive = u.alive;
     }
     unpackOrds(ords.current, Array.isArray(m.od) ? (m.od as number[]) : [], ordTx.current);
@@ -2884,6 +2913,7 @@ function World({
           mods: 0,
           blast: 0,
           blastMul: 0,
+          gravity: 0,
         };
         enemyBullets.current.push(b);
       }
@@ -3142,7 +3172,7 @@ function World({
   const spawnNum = () => (!net || net.role === "host" ? 1 : (slots.current[net.self] ?? 2));
   const placeAtSpawn = () => {
     const sx = big ? big.spawn.x : 0;
-    const sz = big ? big.spawn.z : 0;
+    const sz = big ? big.spawn.z : layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
     const num = spawnNum();
     let x = sx;
     let z = sz;
@@ -3208,10 +3238,13 @@ function World({
         controlSettings.mode === "pad"
       )
         return;
-      look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
+      look.current.yaw -= e.movementX * 0.0022 * sensXRef.current * aimSensitivity();
       look.current.pitch = Math.max(
         -1.2,
-        Math.min(1.2, look.current.pitch - e.movementY * 0.0022 * sensYRef.current),
+        Math.min(
+          1.2,
+          look.current.pitch - e.movementY * 0.0022 * sensYRef.current * aimSensitivity(),
+        ),
       );
     };
     document.addEventListener("mousemove", onMove);
@@ -3247,14 +3280,22 @@ function World({
     const out: { x: number; z: number }[] = [];
     const ok = (x: number, z: number, onLift: boolean) =>
       !alpineMap || (!onLift && (zone === undefined || alpineZone(x, z) === zone));
-    if (!deadRef.current && ok(camera.position.x, camera.position.z, ride.chair >= 0))
+    if (
+      !deadRef.current &&
+      !downedRef.current &&
+      ok(camera.position.x, camera.position.z, ride.chair >= 0)
+    )
       out.push({ x: camera.position.x, z: camera.position.z });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000 && ok(r.x, r.z, (r.rc ?? -1) >= 0))
+      if (
+        r.hp > 0 &&
+        downTable.get(r.id)?.st !== DOWN &&
+        now - r.last < 4000 &&
+        ok(r.x, r.z, (r.rc ?? -1) >= 0)
+      )
         out.push({ x: r.x, z: r.z });
     });
-    if (out.length === 0) out.push({ x: camera.position.x, z: camera.position.z });
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
@@ -3287,11 +3328,11 @@ function World({
   /** building access: every live player with their zone */
   const zonePlayers = () => {
     const out: { x: number; z: number; zn: number; b: number }[] = [];
-    if (!deadRef.current)
+    if (!deadRef.current && !downedRef.current)
       out.push({ x: camera.position.x, z: camera.position.z, zn: myZone(), b: accPlayer.b });
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (r.hp > 0 && now - r.last < 4000)
+      if (r.hp > 0 && downTable.get(r.id)?.st !== DOWN && now - r.last < 4000)
         out.push({ x: r.x, z: r.z, zn: remoteZone(r), b: r.az ? azBuilding(r.az) : -1 });
     });
     return out;
@@ -3658,13 +3699,14 @@ function World({
     const g = gunFor(w);
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
-    const third = getViewMode() === "third";
-    const pos = third
-      ? playerMuzzle(camera, new THREE.Vector3(), outOfBounds, shotMuzzle.current)
-      : camera.position.clone().addScaledVector(FORWARD, 0.6);
+    const third = getViewMode() === "third" && !aimState.scoped;
+    const pos = playerMuzzle(camera, new THREE.Vector3(), outOfBounds, shotMuzzle.current);
     if (!third) {
-      pos.y -= 0.25;
-      playerMuzzle(camera, pos, outOfBounds, pos.clone());
+      // Calibrate sights at a fixed distance. Farther shots still drop naturally;
+      // the launch is the visible barrel, clipped against nearby cover.
+      const zero = w === "sniper" ? 50 : 30;
+      const target = camera.position.clone().addScaledVector(FORWARD, zero);
+      ballisticDirection(FORWARD, pos, target, g.speed, bulletGravity(visOf(w)));
     }
     if (third)
       shoulderAim(
@@ -3691,9 +3733,17 @@ function World({
     const spread = rng(seed);
     const kind = visOf(w);
     let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    if (aimState.on) vf |= VF.ADS;
     if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
     for (let s = 0; s < g.count; s++) {
-      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, g.spread, s, spread);
+      const dir = aimDir(
+        new THREE.Vector3(),
+        FORWARD,
+        g.count,
+        g.spread * (aimState.on ? (w === "sniper" ? 0 : 0.65) : 1),
+        s,
+        spread,
+      );
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -3722,7 +3772,10 @@ function World({
         crit ? g.size * 1.4 : g.size,
         fx,
       );
-      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
+      if (slot >= 0) {
+        bullets.current[slot]!.gravity = bulletGravity(kind);
+        fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
+      }
       onStat("shot", 1);
       aimStats.current.shot++;
     }
@@ -3916,7 +3969,7 @@ function World({
       });
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
-    waveTotal.current = Math.max(1, kinds.length); // the time of day follows how much is cleared
+    waveTotal.current = Math.max(1, kinds.length); // progress is retained for wave and network state
     const hpMul = diff.hpMul * (1 + diff.hpRamp * (n - 1)); // later rounds send sturdier enemies
     // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
     const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
@@ -3935,6 +3988,7 @@ function World({
       const lp = lead >= 0 ? pending.current[lead] : null;
       const p = lp ? besides(lp.x, lp.z) : kind === "boss" ? bossSpot() : spot(25, 45, true);
       Object.assign(e, {
+        generation: (e.generation ?? 0) + 1,
         kind,
         x: p.x,
         z: p.z,
@@ -4087,16 +4141,23 @@ function World({
     recoil.current = Math.max(0, recoil.current - delta * 6);
     const v = viewModel.current;
     if (!v) return;
-    v.visible = !deadRef.current && getViewMode() === "first"; // spectators carry no weapon
+    v.visible =
+      !deadRef.current &&
+      (getViewMode() === "first" || aimState.scoped) &&
+      !(weapon.current === "sniper" && aimState.blend > 0.96); // spectators carry no weapon
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
-    const sway = bobAmt.current;
-    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
+    const ads = aimState.blend;
+    const sway = bobAmt.current * (1 - ads * 0.9);
+    v.translateX(0.3 * (1 - ads) + Math.sin(bob.current * 0.5) * 0.012 * sway);
     v.translateY(
-      -0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03,
+      -0.28 +
+        ads * (weapon.current === "sniper" ? 0.155 : weapon.current === "pistol" ? 0.23 : 0.215) -
+        Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway +
+        recoil.current * 0.03,
     );
-    v.translateZ(-0.75 + recoil.current * 0.08);
+    v.translateZ(-0.75 + ads * 0.25 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
     sprintPose(v); // lowered while sprinting, raised for a tactical sprint
     // the gun joins the transparent queue at the very end, after a depth clear (see below)
@@ -4107,15 +4168,24 @@ function World({
       if (m && !Array.isArray(m)) addGunRim(m);
     });
     const rig = playerPose.current?.(cam, state.clock.elapsedTime, delta) ?? null;
-    const source = getViewMode() === "third" ? rig : v;
+    const source = getViewMode() === "third" && !aimState.scoped ? rig : v;
     if (!readGunMuzzle(source, shotMuzzle.current, weapon.current))
       shotMuzzle.current.copy(cam.position);
-    setLocalMuzzle(shotMuzzle.current, getViewMode() === "third");
+    setLocalMuzzle(shotMuzzle.current, getViewMode() === "third" && !aimState.scoped);
   };
 
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
+    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current);
+    aimState.scoped = weapon.current === "sniper" && aimState.blend > 0.1;
+    const lens = cam as THREE.PerspectiveCamera;
+    const wantedFov =
+      fov + ((weapon.current === "sniper" ? 20 : fov * 0.72) - fov) * aimState.blend;
+    if (Math.abs(lens.fov - wantedFov) > 0.001) {
+      lens.fov = wantedFov;
+      lens.updateProjectionMatrix();
+    }
     const k = keys.current;
     traffic.current.active = false;
     traffic.current.px = cam.position.x;
@@ -4141,7 +4211,11 @@ function World({
 
     if (!gameOver && locked) {
       look.current.yaw +=
-        ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
+        ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) *
+        TURN_SPEED *
+        sensX *
+        aimSensitivity() *
+        delta;
       look.current.pitch = Math.max(
         -1.2,
         Math.min(
@@ -4149,6 +4223,7 @@ function World({
           look.current.pitch +
             ((k.has("ArrowUp") ? 1 : 0) - (k.has("ArrowDown") ? 1 : 0)) *
               TURN_SPEED *
+              aimSensitivity() *
               sensY *
               0.7 *
               delta,
@@ -4156,10 +4231,13 @@ function World({
       );
       // touch drag look (right thumb)
       if (touchInput.lookX || touchInput.lookY) {
-        look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current;
+        look.current.yaw -= touchInput.lookX * 0.0032 * sensXRef.current * aimSensitivity();
         look.current.pitch = Math.max(
           -1.2,
-          Math.min(1.2, look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current),
+          Math.min(
+            1.2,
+            look.current.pitch - touchInput.lookY * 0.0032 * sensYRef.current * aimSensitivity(),
+          ),
         );
         touchInput.lookX = 0;
         touchInput.lookY = 0;
@@ -4218,10 +4296,7 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
-      (!staticCollisionReady() ||
-        baseGroundY(x, z) <= moveState.feet + 0.24 ||
-        accPlayer.zone !== 0 ||
-        !!structureFloor(x, z, moveState.feet)) &&
+      terrainStep(cam.position.x, cam.position.z, x, z, moveState.feet) &&
       (staticCollisionReady() ||
         structureFloor(x, z, camGround.current) !== undefined ||
         accPlayer.zone !== 0 ||
@@ -4236,7 +4311,8 @@ function World({
       delta,
       Math.max(-1, Math.min(1, fwd)),
       trigger.current || touchInput.fire || padOut.fire,
-      spectating ||
+      aimState.on ||
+        spectating ||
         downedRef.current ||
         ride.chair >= 0 ||
         wheelRide.cabin >= 0 ||
@@ -4841,7 +4917,7 @@ function World({
       enemyBullets.current.forEach((b, i) => {
         const m = enemyBulletMeshes.current[i];
         if (b.active) {
-          b.pos.addScaledVector(b.vel, delta);
+          advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
           // The host resolves hits for all players; snapshots never apply local damage.
         }
         if (m) {
@@ -5182,7 +5258,7 @@ function World({
       };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
       const targets: Target[] = [];
-      if (!spectating)
+      if (!spectating && !downedRef.current)
         targets.push({
           id: null,
           x: cam.position.x,
@@ -5193,7 +5269,7 @@ function World({
           air: ride.chair >= 0 || wheelRide.cabin >= 0,
         });
       remotes.current.forEach((r) => {
-        if (r.hp > 0 && now - r.last < 4000) {
+        if (r.hp > 0 && downTable.get(r.id)?.st !== DOWN && now - r.last < 4000) {
           const ry =
             isBeach(city) && (r.wr ?? -1) >= 0
               ? wheelEye(city.beach.wheel, r.wr!).y
@@ -5213,15 +5289,6 @@ function World({
         }
       });
       enemyShotTargets.current = targets.length ? targets : [];
-      if (targets.length === 0)
-        targets.push({
-          id: null,
-          x: cam.position.x,
-          z: cam.position.z,
-          y: cam.position.y,
-          ...lf,
-          zn: myZone(),
-        });
       const accOn = accessActive();
 
       const hurtTarget = (t: Target, dmg: number, kx = 0, kz = 0, src = "") => {
@@ -5292,8 +5359,9 @@ function World({
           });
       }
 
-      // the city is huge: enemies stranded far from every player get recycled nearby
-      if (big) {
+      // With no standing players, leave enemies in the world to patrol, never recycle
+      // the crowd around a downed camera.
+      if (big && targets.length > 0) {
         recycleT.current -= delta;
         if (recycleT.current <= 0) {
           recycleT.current = 1;
@@ -5441,7 +5509,7 @@ function World({
         const ez = accOn ? zoneOf(e.x, e.z) : alpineMap ? alpineZone(e.x, e.z) : 0;
         const same = alpineMap && !accOn ? targets.some((t) => alpineZone(t.x, t.z) === ez) : true;
         for (const t of targets) {
-          if (accOn && (t.zn ?? 0) !== ez) continue;
+          if ((t.zn ?? 0) < 0 || (accOn && (t.zn ?? 0) !== ez)) continue;
           if (alpineMap && !accOn && same && alpineZone(t.x, t.z) !== ez) continue;
           const dd = Math.hypot(t.x - e.x, t.z - e.z) || 1;
           if (dd < d) {
@@ -5449,7 +5517,21 @@ function World({
             target = t;
           }
         }
-        if (!target) continue;
+        if (!target) {
+          // No living target in this zone: abandon attack windups and patrol a local route.
+          if (!abandonTarget(e, delta, aiCtx.tdelta ?? delta, theme.boss.shape)) continue;
+          const a = state.clock.elapsedTime * 0.16 + ei * 2.39996;
+          const pace = Math.min(st.speed * 0.35, 1.2) * delta;
+          const nx = e.x + Math.sin(a) * pace,
+            nz = e.z + Math.cos(a) * pace;
+          if (!blocked(blocks, nx, nz, Math.min(st.radius, 0.8)) && climbable(e.x, e.z, nx, nz)) {
+            e.x = nx;
+            e.z = nz;
+            e.yaw = a;
+          }
+          e.stuckFor = 0;
+          continue;
+        }
         const dx = target.x - e.x;
         const dz = target.z - e.z;
         // melee needs vertical proximity on every map: a player up on a deck, a rooftop or a
@@ -6010,20 +6092,42 @@ function World({
           b.size * 0.45,
           { cluster: 0 },
         );
-        if (fs >= 0) fxShot(fs, bullets.current[fs]!, VK.FRAG);
+        if (fs >= 0) {
+          bullets.current[fs]!.gravity = bulletGravity(VK.FRAG);
+          fxShot(fs, bullets.current[fs]!, VK.FRAG);
+        }
       }
     };
     bullets.current.forEach((b, i) => {
       const m = bulletMeshes.current[i];
       if (b.active) {
-        const px = b.pos.x;
-        const pz = b.pos.z;
         BLAST_AT.copy(b.pos); // a shell that hits a wall explodes just in front of it
-        b.pos.addScaledVector(b.vel, delta);
+        advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
         b.life -= delta;
         const contact = firstWorldHit(BLAST_AT, b.pos, outOfBounds);
+        const end = b.pos.clone();
+        const hits = bodyContacts(
+          BLAST_AT,
+          end,
+          enemies,
+          (k) => STATS[k as Kind].radius,
+          (b.hitBodies ??= new Map()),
+          contact ?? 1.000001,
+        );
+        let stopAt = contact ?? 1.000001,
+          remainingPierce = b.pierce;
+        for (const h of hits) {
+          if (
+            (b.blast > 0 && b.blastMul >= 1) ||
+            shieldBlocks(h.e, b.vel.x, b.vel.z, shieldUp(h.e, isH)) ||
+            remainingPierce-- <= 0
+          ) {
+            stopAt = h.t;
+            break;
+          }
+        }
         if (western)
-          for (const hit of weedContacts(BLAST_AT, b.pos, contact ?? 1)) {
+          for (const hit of weedContacts(BLAST_AT, end, stopAt)) {
             if (isHostRef.current) breakWeed(hit.id, b.vel);
             else
               n?.broadcast({
@@ -6038,119 +6142,94 @@ function World({
                 b: [b.pos.x, b.pos.y, b.pos.z],
               });
           }
-        const hitWall = contact !== undefined;
-        if (contact !== undefined) {
-          WORLD_CONTACT.lerpVectors(BLAST_AT, b.pos, contact);
-          b.pos.lerpVectors(
-            BLAST_AT,
-            b.pos,
-            Math.max(0, contact - 0.003 / Math.max(0.001, b.pos.distanceTo(BLAST_AT))),
-          );
-        }
-        if (hitWall && b.bounce > 0 && b.blast <= 0) {
-          // bounce off whichever side it ran into
-          b.bounce--;
-          if (outOfBounds({ x: WORLD_CONTACT.x, y: BLAST_AT.y, z: pz }) || Math.abs(b.pos.x) > HALF)
-            b.vel.x *= -1;
-          else if (outOfBounds({ x: px, y: WORLD_CONTACT.y, z: pz })) b.vel.y *= -1;
-          else b.vel.z *= -1;
-          fxBounce(i);
-        } else if (b.life <= 0 || hitWall) {
-          burst(b, b.pos);
-          fxDie(i, hitWall);
-          b.active = false;
-        } else {
-          // a homing rocket can be shot down (the host has the final say in co-op)
-          const ri = rocketAt(ords.current, b.pos.x, b.pos.y, b.pos.z);
-          if (ri >= 0) {
-            const o = ords.current[ri]!;
-            o.on = false;
-            if (isH) blast(ords.current, o.x, o.z, 0.8, o.y);
-            else n?.broadcast({ type: "odhit", i: ri });
-            fxDie(i, true);
+        for (const { e, i: ei, t } of hits) {
+          if (!b.active) break;
+          b.pos.lerpVectors(BLAST_AT, end, t);
+          b.hitBodies!.set(e, e.generation ?? 0);
+          if (e.kind === "bulwark" && shieldUp(e, isH) && shieldBlocks(e, b.vel.x, b.vel.z, true)) {
+            if (isH) drainShield(e, b.damage);
+            else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
+            burst(b);
+            fxHit(i, b, e);
             b.active = false;
-            onStat("hit", 1);
+            break;
           }
-          for (let ei = 0; b.active && ei < enemies.length; ei++) {
-            const e = enemies[ei]!;
-            if (!e.alive) continue;
-            // bulwark: the shield face stops shots from the front, including ones aimed past it
-            if (e.kind === "bulwark" && shieldUp(e, isH)) {
-              const fx = Math.sin(e.yaw ?? 0);
-              const fz = Math.cos(e.yaw ?? 0);
-              const rx = b.pos.x - e.x;
-              const rz = b.pos.z - e.z;
-              const fwd = rx * fx + rz * fz;
-              const lat = rx * fz - rz * fx;
-              if (
-                fwd > 0.2 &&
-                fwd < 1.6 &&
-                Math.abs(lat) < 1.15 &&
-                b.pos.y - groundY(e.x, e.z) < 2.5 &&
-                shieldBlocks(e, b.vel.x, b.vel.z, true)
-              ) {
-                if (isH) drainShield(e, b.damage);
-                else n?.broadcast({ type: "shield", i: ei, dmg: b.damage });
-                burst(b);
-                fxDie(i, true); // the round sparks off the shield face
-                b.active = false;
-                break;
+          if (b.blast > 0 && b.blastMul >= 1) {
+            // BOOMER: the shell detonates on the robot; the blast does all the damage
+            fxHit(i, b, e);
+            burst(b);
+            b.active = false;
+            break;
+          }
+          // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
+          const dmg =
+            e.kind === "vanguard" && b.pierce <= 0
+              ? Math.max(1, Math.round(b.damage * 0.34))
+              : b.damage;
+          // executioner / shredder / bounty are judged on the host (it has the true health)
+          hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
+            direct: true,
+            shred: !!(b.mods & M_SHRED),
+            exec: !!(b.mods & M_EXEC),
+            bounty: !!(b.mods & M_BOUNTY),
+          });
+          fxHit(i, b, e);
+          onStat("hit", 1);
+          aimStats.current.hit++;
+          onStat("dmg", dmg);
+
+          if (b.chain > 0) {
+            let left = b.chain;
+            for (let oi = 0; oi < enemies.length; oi++) {
+              const o = enemies[oi]!;
+              if (left <= 0) break;
+              if (!o.alive || o === e) continue;
+              if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
+                hurtEnemy(o, b.damage, oi);
+                fxChain(e, o);
+                left--;
               }
             }
-            const [lo, hi] = hitBand(e.kind);
-            const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
-            if (
-              Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 &&
-              by < hi &&
-              by > lo
-            ) {
-              if (b.blast > 0 && b.blastMul >= 1) {
-                // BOOMER: the shell detonates on the robot; the blast does all the damage
-                fxHit(i, b, e);
-                burst(b);
-                b.active = false;
-                break;
-              }
-              // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
-              const dmg =
-                e.kind === "vanguard" && b.pierce <= 0
-                  ? Math.max(1, Math.round(b.damage * 0.34))
-                  : b.damage;
-              // executioner / shredder / bounty are judged on the host (it has the true health)
-              hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z, {
-                direct: true,
-                shred: !!(b.mods & M_SHRED),
-                exec: !!(b.mods & M_EXEC),
-                bounty: !!(b.mods & M_BOUNTY),
-              });
-              fxHit(i, b, e);
+          }
+          if (b.pierce > 0) b.pierce--;
+          else {
+            burst(b, b.pos, ei); // (FLAK's splash spares the robot it just hit directly)
+            b.active = false;
+          }
+        }
+        if (b.active) {
+          b.pos.copy(end);
+          if (contact !== undefined) {
+            const hit = worldContact(BLAST_AT, end, contact, outOfBounds);
+            b.pos.copy(hit.safe);
+            if (b.bounce > 0 && b.blast <= 0) {
+              b.bounce--;
+              b.vel.reflect(hit.normal);
+              fxBounce(i, hit);
+            } else {
+              burst(b, b.pos);
+              fxDie(i, true, hit);
+              b.active = false;
+            }
+          } else if (b.life <= 0) {
+            burst(b, b.pos);
+            fxDie(i, false);
+            b.active = false;
+          } else {
+            const ri = rocketAt(ords.current, b.pos.x, b.pos.y, b.pos.z);
+            if (ri >= 0) {
+              const o = ords.current[ri]!;
+              o.on = false;
+              if (isH) blast(ords.current, o.x, o.z, 0.8, o.y);
+              else n?.broadcast({ type: "odhit", i: ri });
+              fxDie(i, true);
+              b.active = false;
               onStat("hit", 1);
-              aimStats.current.hit++;
-              onStat("dmg", dmg);
-
-              if (b.chain > 0) {
-                let left = b.chain;
-                for (let oi = 0; oi < enemies.length; oi++) {
-                  const o = enemies[oi]!;
-                  if (left <= 0) break;
-                  if (!o.alive || o === e) continue;
-                  if (Math.hypot(o.x - e.x, o.z - e.z) < 6) {
-                    hurtEnemy(o, b.damage, oi);
-                    fxChain(e, o);
-                    left--;
-                  }
-                }
-              }
-              if (b.pierce > 0) b.pierce--;
-              else {
-                burst(b, b.pos, ei); // (FLAK's splash spares the robot it just hit directly)
-                b.active = false;
-              }
-              break;
             }
           }
         }
       }
+
       if (m) {
         m.visible = b.active;
         m.position.copy(b.pos);
@@ -6173,7 +6252,7 @@ function World({
         const m = enemyBulletMeshes.current[i];
         if (b.active) {
           enemyShotFrom.copy(b.pos);
-          b.pos.addScaledVector(b.vel, delta);
+          advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
           b.life -= delta;
           if (b.life <= 0) b.active = false;
           else {
@@ -6236,7 +6315,7 @@ function World({
             b,
             bh: boss ? [Math.max(0, boss.hp), boss.max ?? BOSS_HP] : [0, BOSS_HP],
             mk,
-            tk: Math.round(waveStage(tod.wave, tod.progress) * 1000), // the host's time of day
+            tk: Math.round(tod.k * 1000), // the host's time of day
             ...(od.length ? { od } : {}),
             ...(tw ? { tw } : {}),
             ...(tr ? { tr } : {}),
@@ -6288,7 +6367,7 @@ function World({
       />
       <WarmKinds enemies={enemies} theme={theme} />
       <Structures seed={seed} />
-      {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
+      {/* Fixed match lighting (timeOfDay.ts / TimeScene.tsx). */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
       {!big && (
@@ -6316,6 +6395,7 @@ function World({
       {alpineMap ? (
         <>
           <AlpineScene
+            key={seed}
             layout={alpineMap}
             time={time}
             isHost={isHost}
@@ -6324,7 +6404,17 @@ function World({
           <AlpineLife layout={alpineMap} link={traffic} />
         </>
       ) : isBeach(city) ? (
-        <BeachWorld city={city} seed={seed} time={time} link={traffic} look={look3} />
+        <>
+          <BeachWorld
+            key={`beach-${seed}`}
+            city={city}
+            seed={seed}
+            time={time}
+            link={traffic}
+            look={look3}
+          />
+          <MatchRain key={`rain-${seed}`} />
+        </>
       ) : city ? (
         <>
           <CityScene city={city} time={time} isHost={isHost} />
@@ -6334,12 +6424,15 @@ function World({
       ) : western ? (
         <>
           <WesternScene layout={western} time={time} />
+          <MatchRain key={seed} western={western} />
           <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
           <WesternRiders layout={western} seed={seed} link={traffic} />
           <Tumbleweeds />
           <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
           {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
+      ) : layoutOf(theme) === "nuketown" ? (
+        <Nuketown seed={seed} />
       ) : (
         <Level blocks={blocks} theme={theme} />
       )}
@@ -6739,25 +6832,14 @@ export function Game() {
   useEffect(() => {
     resetSoloRevive();
   }, [seed]);
-  // time of day (timeOfDay.ts): AUTO follows the waves from sunset into night; N locks
-  // this player's choice for the rest of the match. `?time=` overrides for testing.
+  // The seeded match environment owns lighting; solo diagnostic URLs may override it.
   const time = useTodNearest();
-  const timeMode = useTodMode();
+
   useEffect(() => {
     const init = initialMode();
     setTimeMode(init.mode);
     if (init.k !== null) pinTime(init.k);
   }, []);
-  useEffect(
-    () =>
-      subscribeActions((a, down, repeat) => {
-        if (a !== "time" || !down || repeat) return;
-        pinTime(null);
-        toggleTimeLock(phase.current.started && !phase.current.ended);
-        showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
-      }),
-    [],
-  );
 
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
@@ -6892,6 +6974,7 @@ export function Game() {
     if (handleSquadMsg(m, squadCb)) return;
     if (m.type === "roster") {
       slots.current = (m.slots ?? {}) as Record<string, number>;
+      setPeerCount(Object.keys(slots.current).length);
       setRoster(
         Object.entries(slots.current)
           .map(([id, num]) => ({ id, num: Number(num) }))
@@ -6997,7 +7080,9 @@ export function Game() {
     numOf: (id: string) => (id === "host" ? 1 : (slots.current[id] ?? 2)),
     onRevived: () => {
       setHealth((h) =>
-        h > 0 ? h : Math.max(1, Math.round(derive(perksRef.current).maxHp * REVIVE_HP)),
+        h > 0
+          ? h
+          : Math.max(1, Math.round(derive(perksRef.current, clsRef.current).maxHp * REVIVE_HP)),
       );
     },
     onBleedOut: () => setBledOut(true),
@@ -7032,12 +7117,12 @@ export function Game() {
     try {
       const h = await joinRoom(code, {
         onMsg: (m) => handleMsgRef.current(m),
-        onPeers: () => setPeerCount(1),
+        onPeers: () => setPeerCount(Math.max(1, Object.keys(slots.current).length)),
         onClose: () => setNetError("Lost connection to the host."),
       });
       netHolder.current = h;
       setNet(h);
-      setPeerCount(1);
+      setPeerCount(Math.max(1, Object.keys(slots.current).length));
     } catch {
       setNetError("No arena found with that code.");
     }
@@ -7156,10 +7241,12 @@ export function Game() {
     // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
     // and beach maps seal their own solo squares inside their generators.
     const mode = layoutOf(theme);
+    configureEnvironment(seed, !coop);
     const sealed = mode === "city" || mode === "western";
     if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
     else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
     else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
+    else if (mode === "nuketown") setArenaSize(NUKE_SIZE, 1);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
     resetStaticCollision();
     const level = generateLevel(seed, mode, !coop);
@@ -7188,6 +7275,7 @@ export function Game() {
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
     // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
     // the access adapters keep their doors clear of them
+    if (mode === "nuketown") installStructures(nuketownStructures());
     const posts0 = mapPosts(level.city, level.western ?? null);
     const accessList0 = !accessOn
       ? null
@@ -7252,7 +7340,7 @@ export function Game() {
         if (
           boundaryBlocked(level.blocks, x, z, 0.6) ||
           blocked(level.blocks, x, z, 0.6) ||
-          groundY(x, z) > 2 ||
+          raised(x, z) ||
           weedPositions.some((p) => Math.hypot(p.x - x, p.z - z) < 3)
         )
           continue;
@@ -7300,8 +7388,10 @@ export function Game() {
           ? cityMinimap(city, blocks, PLAY_HALF)
           : western
             ? westernMinimap(western, blocks, PLAY_HALF)
-            : null,
-    [city, western, blocks],
+            : layoutOf(theme) === "nuketown"
+              ? nuketownMinimap()
+              : null,
+    [city, western, blocks, theme],
   );
 
   useEffect(() => {
@@ -7689,7 +7779,7 @@ export function Game() {
     setMusicIntensity(boss);
     setMusicProgress(status.wave, WAVES.length);
     // the map's hazard (blizzard, dust storm, marine layer...) comes with the boss round
-    setAmbienceHazard(boss);
+    setAmbienceHazard(false);
   }, [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name, layoutOf(theme)), [theme]);
   useEffect(
@@ -7700,7 +7790,7 @@ export function Game() {
   useEffect(() => setVolumes(musicVol, sfxVol, ambVol), [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
-  // the time of day runs with the match; a new arena opens straight onto its wave-1 sunset
+  // A new arena snaps to its own fixed match environment.
   useEffect(() => {
     tod.playing = started;
   }, [started]);
@@ -7966,6 +8056,7 @@ export function Game() {
           })}
         </div>
 
+        <ScopeOverlay weapon={weapon} active={started && !ended && !paused} />
         {/* in an elevator car: how to ride (world.ts pressCarButton) */}
         <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
           <KeyHint action="use" /> · FLOOR BUTTON
@@ -8056,7 +8147,7 @@ export function Game() {
           </div>
         )}
         {locked && !ended && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 [.rs-scoped_&]:hidden">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
             <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
           </div>
@@ -8299,7 +8390,7 @@ export function Game() {
               {ABILITIES[ability].desc}
             </div>
 
-            {/* map: Tyler's four big maps + Random (themes.ts offered()); the host picks */}
+            {/* map: the five maps + Random (themes.ts offered()); the host picks */}
             <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
               {isHost ? "MAP" : "MAP · THE HOST PICKS"}
             </p>
@@ -8347,20 +8438,11 @@ export function Game() {
             <div className="mt-2 text-[11px] leading-snug opacity-70">
               {DIFFICULTIES[difficulty].desc}
             </div>
-            <button
-              onClick={() => {
-                pinTime(null);
-                cycleTimeMode();
-              }}
-              title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
-              className="pointer-events-auto mt-2 w-full rounded bg-[#2b2118]/10 px-2 py-1.5 text-[10px] font-bold tracking-wider"
-            >
-              {timeMode === "auto"
-                ? "TIME · AUTO (SUNSET INTO NIGHT)"
-                : timeMode === "night"
-                  ? "TIME · ☾ NIGHT (LOCKED)"
-                  : "TIME · SUNSET (LOCKED)"}
-            </button>
+            <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
+              {started
+                ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
+                : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
+            </div>
 
             {multiplayer && (
               <div className="mt-5 text-left">
@@ -8648,27 +8730,12 @@ export function Game() {
 
             {
               <div>
-                <button
-                  onClick={() => {
-                    pinTime(null);
-                    cycleTimeMode();
-                  }}
-                  title="AUTO: the match starts at sunset and darkens into night as the waves go on. N in a match locks your choice (auto off)."
-                  className={`pointer-events-auto mt-4 w-full rounded-md ${paused ? "block" : "hidden"} border border-[#2b2118]/30 px-3 py-1.5 text-xs font-semibold tracking-widest transition-transform hover:scale-[1.02]`}
-                >
-                  {timeMode === "auto"
-                    ? "TIME · AUTO (SUNSET INTO NIGHT)"
-                    : timeMode === "night"
-                      ? "TIME · ☾ NIGHT (LOCKED)"
-                      : "TIME · SUNSET (LOCKED)"}
-                </button>
-                {started && !ended && (
-                  <div className="mt-1 text-[10px] tracking-wider opacity-50">
-                    {timeMode === "auto"
-                      ? "N LOCKS YOUR LOOK FOR THIS MATCH (AUTO OFF)"
-                      : "LOCKED FOR THIS MATCH · CLICK FOR AUTO"}
-                  </div>
-                )}
+                <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
+                  {started
+                    ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
+                    : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
+                </div>
+
                 <button
                   onClick={() => setShowSettings(true)}
                   className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
@@ -8811,6 +8878,8 @@ export function Game() {
 }
 
 const GUN_INFO: Record<Weapon, string> = {
+  sniper:
+    "Longshot bolt-action rifle. Aim for a 4× scope; fast piercing rounds with gradual drop at long range. 12 rounds.",
   pistol: "Your trusty sidearm. 140 rounds, refilled at the start of every wave.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",

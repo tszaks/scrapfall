@@ -72,7 +72,7 @@ vec3 streak(vec3 head, vec3 tail, vec2 q, float width, out float alphaK) {
 }
 `;
 
-const STREAK_FRAG = /* glsl */ `
+export const STREAK_FRAG = /* glsl */ `
 uniform vec3 uColor;
 varying float vA;
 varying vec2 vQ;
@@ -83,7 +83,7 @@ void main() {
 }
 `;
 
-const RAIN_VERT = /* glsl */ `
+export const RAIN_VERT = /* glsl */ `
 ${SHELTER_GLSL}
 attribute vec4 aSeed;
 uniform float uTime;
@@ -497,7 +497,7 @@ export function CityRain({
     const delta = Math.min(dt, 0.1);
     tickWeather(delta, hostRef.current, true);
     // the rain belongs to the night: it fades in as the dusk darkens (timeOfDay.ts)
-    const nightF = todSmooth(0.55, 0.9, tod.v);
+    const nightF = 1;
     const shown = nightF > 0.001;
     weather.shown = shown;
     const rain = shown ? weather.rain * nightF : 0;

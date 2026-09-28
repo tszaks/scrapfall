@@ -1,3 +1,4 @@
+import { matchEnvironment, rainyMatch } from "../matchEnvironment";
 // Whiteout Pass weather and lift clock. The host runs the schedule (calm spells broken by
 // blizzards, and a blizzard for the whole boss round) and ships it to guests in the world
 // snapshot, so everyone sees the same whiteout and the same chairs on the cable.
@@ -28,8 +29,7 @@ export function resetAlpine(active: boolean, lift: Lift | null = null) {
   alpine.active = active;
   alpine.lift = lift;
   alpine.t = 0;
-  alpine.blizzard = 0;
-  alpine.target = 0;
+  alpine.blizzard = alpine.target = rainyMatch() ? 0.75 : 0;
   alpine.boss = false;
   alpine.windDir = 2.4;
   alpine.next = 75;
@@ -48,25 +48,16 @@ function forced(): number | null {
 }
 const FORCED = forced();
 
-export function tickAlpine(delta: number, isHost: boolean, playing: boolean) {
+export function tickAlpine(delta: number, isHost: boolean, _playing: boolean) {
   if (!alpine.active) return;
   alpine.t += delta;
-  if (isHost) {
-    if (playing) alpine.next -= delta;
-    if (alpine.next <= 0) {
-      const storm = alpine.target < 0.5;
-      alpine.target = storm ? 1 : 0;
-      alpine.next = storm ? 32 + Math.random() * 18 : 70 + Math.random() * 45;
-      alpine.windDir = 2.4 + (Math.random() - 0.5) * 1.2;
-    }
-    if (alpine.boss) alpine.target = 1;
-    if (FORCED !== null) alpine.target = FORCED;
-  }
+  if (isHost)
+    alpine.target = (matchEnvironment.allowOverrides ? FORCED : null) ?? (rainyMatch() ? 0.75 : 0);
   const rate = alpine.target > alpine.blizzard ? 0.16 : 0.11;
   alpine.blizzard +=
     Math.sign(alpine.target - alpine.blizzard) *
     Math.min(Math.abs(alpine.target - alpine.blizzard), rate * delta);
-  if (FORCED !== null && alpine.t < 1) alpine.blizzard = FORCED;
+  if (matchEnvironment.allowOverrides && FORCED !== null && alpine.t < 1) alpine.blizzard = FORCED;
   // gusty wind that shoves walkers downwind during a blizzard
   const b = alpine.blizzard;
   const gust = 0.55 + 0.45 * Math.sin(alpine.t * 0.9) * Math.sin(alpine.t * 0.37 + 1.3);

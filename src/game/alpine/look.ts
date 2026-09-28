@@ -1,3 +1,4 @@
+import { matchEnvironment } from "../matchEnvironment";
 // Whiteout Pass lighting and atmosphere, one entry per time of day (night is the default,
 // sunset is the alpenglow hero look). Everything the alpine scene needs to change between
 // the two lives here.
@@ -93,7 +94,37 @@ export function alpineLook(time: TimeOfDay): AlpineLook {
 
 /** the look part-way from sunset (k = 0) to night (k = 1): the waves carry the match into night */
 const blended = new Map<number, AlpineLook>();
+const DAY_LOOKS: Record<"sunny" | "rain", AlpineLook> = Object.fromEntries(
+  (["sunny", "rain"] as const).map((kind) => {
+    const rain = kind === "rain";
+    return [
+      kind,
+      {
+        ...ALPINE_LOOKS.sunset,
+        sky: rain ? "#8b9ba8" : "#75b6eb",
+        fog: [180, rain ? 1900 : 3600],
+        fogColor: rain ? "#aab6c1" : "#d4e6ef",
+        fogSun: { color: "#d4e6ef", k: 0.04 },
+        sunDir: [-0.5, 0.82, 0.28],
+        skyTop: rain ? "#6f8295" : "#287bc3",
+        skyMid: rain ? "#94a3ae" : "#7bbcf0",
+        skyHorizon: rain ? "#bbc5cc" : "#d4e6ef",
+        sunGlow: "#fff4dc",
+        peakLit: "#fff9e8",
+        peakShade: "#8cb4d1",
+        haze: rain ? "#adb8c1" : "#c5dcea",
+        windows: rain ? 0.5 : 0.08,
+        lamps: rain ? 0.45 : 0.05,
+        aurora: 0,
+        snow: "#eff7ff",
+        blizzard: "#b9c6d1",
+      },
+    ];
+  }),
+) as Record<"sunny" | "rain", AlpineLook>;
 export function alpineLookAt(k: number): AlpineLook {
+  if (matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain")
+    return DAY_LOOKS[matchEnvironment.kind];
   if (k <= 0) return ALPINE_LOOKS.sunset;
   if (k >= 1) return ALPINE_LOOKS.night;
   const key = Math.round(k * 256);

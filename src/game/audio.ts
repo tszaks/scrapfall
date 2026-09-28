@@ -28,7 +28,9 @@ let weather = 0;
 export function initAudio() {
   if (typeof window === "undefined") return;
   if (!ctx) {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
     buildGraph(new AC());
   }
@@ -40,7 +42,9 @@ export function initAudio() {
     s.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
     s.connect(ctx.destination);
     s.start(0);
-  } catch { /* already unlocked */ }
+  } catch {
+    /* already unlocked */
+  }
 }
 
 function buildGraph(c: AudioContext) {
@@ -65,7 +69,10 @@ function buildGraph(c: AudioContext) {
     for (let i = 0; i < curve.length; i++) {
       const x = (i / (curve.length - 1)) * 2 - 1;
       // linear up to 0.7, then a smooth tanh knee that never passes 0.98
-      curve[i] = Math.abs(x) <= 0.7 ? x : Math.sign(x) * (0.7 + 0.28 * Math.tanh((Math.abs(x) - 0.7) / 0.28));
+      curve[i] =
+        Math.abs(x) <= 0.7
+          ? x
+          : Math.sign(x) * (0.7 + 0.28 * Math.tanh((Math.abs(x) - 0.7) / 0.28));
     }
     clip.curve = curve;
     limiter.connect(clip).connect(ctx.destination);
@@ -127,12 +134,12 @@ export function hookAudioUnlock() {
   unlockHooked = true;
   const wake = () => initAudio();
   ["pointerdown", "touchstart", "keydown", "mousedown"].forEach((ev) =>
-    window.addEventListener(ev, wake, { passive: true }));
+    window.addEventListener(ev, wake, { passive: true }),
+  );
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && ctx && ctx.state === "suspended") void ctx.resume();
   });
 }
-
 
 function applyVol() {
   if (musicGain) musicGain.gain.value = vol.music * (menuMode ? 0.26 : 0.35);
@@ -147,7 +154,10 @@ export function setMusicMenu(on: boolean) {
   if (musicFilter && ctx) {
     musicFilter.frequency.cancelScheduledValues(ctx.currentTime);
     musicFilter.frequency.setValueAtTime(musicFilter.frequency.value, ctx.currentTime);
-    musicFilter.frequency.exponentialRampToValueAtTime(on ? 5000 : 18000, ctx.currentTime + (on ? 0.6 : 0.9));
+    musicFilter.frequency.exponentialRampToValueAtTime(
+      on ? 5000 : 18000,
+      ctx.currentTime + (on ? 0.6 : 0.9),
+    );
   }
 }
 /** the sfx bus for systems that synthesise their own sounds (elevator hum and chime) */
@@ -159,7 +169,16 @@ export function setVolumes(music: number, sfx: number, amb = vol.amb) {
   applyVol();
 }
 
-type Tone = { wave: OscillatorType; f0: number; f1: number; dur: number; gain: number; noise: number; cut: number; q?: number };
+type Tone = {
+  wave: OscillatorType;
+  f0: number;
+  f1: number;
+  dur: number;
+  gain: number;
+  noise: number;
+  cut: number;
+  q?: number;
+};
 function tone(t: Tone, out: AudioNode | null = sfxGain, at = 0) {
   if (!ctx || !out) return;
   const now = (at || ctx.currentTime) + 0.001;
@@ -196,16 +215,27 @@ const GUN_SOUNDS: Record<string, Tone[]> = {
   pistol: [{ wave: "square", f0: 520, f1: 140, dur: 0.1, gain: 0.35, noise: 0.6, cut: 3000 }],
   scatter: [{ wave: "sawtooth", f0: 180, f1: 50, dur: 0.28, gain: 0.4, noise: 1.2, cut: 2200 }],
   smg: [{ wave: "square", f0: 900, f1: 300, dur: 0.05, gain: 0.2, noise: 0.4, cut: 4500 }],
-  rail: [{ wave: "sawtooth", f0: 2400, f1: 120, dur: 0.45, gain: 0.35, noise: 0.2, cut: 6000, q: 8 }],
+  rail: [
+    { wave: "sawtooth", f0: 2400, f1: 120, dur: 0.45, gain: 0.35, noise: 0.2, cut: 6000, q: 8 },
+  ],
   cannon: [{ wave: "sine", f0: 120, f1: 30, dur: 0.6, gain: 0.8, noise: 0.9, cut: 900 }],
-  rebound: [{ wave: "triangle", f0: 300, f1: 900, dur: 0.16, gain: 0.45, noise: 0, cut: 3000, q: 4 }],
-  harpoon: [{ wave: "sawtooth", f0: 700, f1: 200, dur: 0.18, gain: 0.3, noise: 0.5, cut: 5000, q: 6 }],
+  rebound: [
+    { wave: "triangle", f0: 300, f1: 900, dur: 0.16, gain: 0.45, noise: 0, cut: 3000, q: 4 },
+  ],
+  harpoon: [
+    { wave: "sawtooth", f0: 700, f1: 200, dur: 0.18, gain: 0.3, noise: 0.5, cut: 5000, q: 6 },
+  ],
   cryo: [{ wave: "sine", f0: 1800, f1: 2600, dur: 0.12, gain: 0.25, noise: 0.2, cut: 8000, q: 10 }],
   flak: [{ wave: "square", f0: 220, f1: 60, dur: 0.35, gain: 0.45, noise: 1, cut: 1600 }],
+  sniper: [{ wave: "square", f0: 180, f1: 36, dur: 0.42, gain: 0.55, noise: 1.25, cut: 2100 }],
   revolver: [{ wave: "square", f0: 300, f1: 60, dur: 0.3, gain: 0.5, noise: 1.1, cut: 2500 }],
   minigun: [{ wave: "square", f0: 700, f1: 250, dur: 0.04, gain: 0.16, noise: 0.5, cut: 4000 }],
-  crossbow: [{ wave: "triangle", f0: 900, f1: 180, dur: 0.12, gain: 0.3, noise: 0.3, cut: 3500, q: 5 }],
-  plasma: [{ wave: "sawtooth", f0: 500, f1: 1500, dur: 0.15, gain: 0.25, noise: 0, cut: 5000, q: 6 }],
+  crossbow: [
+    { wave: "triangle", f0: 900, f1: 180, dur: 0.12, gain: 0.3, noise: 0.3, cut: 3500, q: 5 },
+  ],
+  plasma: [
+    { wave: "sawtooth", f0: 500, f1: 1500, dur: 0.15, gain: 0.25, noise: 0, cut: 5000, q: 6 },
+  ],
   voidorb: [{ wave: "sine", f0: 90, f1: 400, dur: 0.5, gain: 0.5, noise: 0.2, cut: 2000, q: 8 }],
   shatter: [{ wave: "triangle", f0: 2200, f1: 400, dur: 0.25, gain: 0.3, noise: 0.8, cut: 7000 }],
   tesla: [
@@ -215,8 +245,9 @@ const GUN_SOUNDS: Record<string, Tone[]> = {
 };
 
 export function playGun(w: string, quiet = false) {
-  (GUN_SOUNDS[w] ?? GUN_SOUNDS['pistol']!).forEach((t) =>
-    tone(quiet ? { ...t, gain: t.gain * 0.3, cut: Math.min(t.cut, 1400) } : t));
+  (GUN_SOUNDS[w] ?? GUN_SOUNDS["pistol"]!).forEach((t) =>
+    tone(quiet ? { ...t, gain: t.gain * 0.3, cut: Math.min(t.cut, 1400) } : t),
+  );
 }
 
 type Sfx = "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret" | "thud" | "horn";
@@ -233,16 +264,38 @@ export function playSfx(kind: Sfx) {
   if (kind === "turret") {
     // mechanical pneumatic pop + metallic ring, distinct from the music's square arps
     tone({ wave: "triangle", f0: 240, f1: 90, dur: 0.07, gain: 0.22, noise: 1.1, cut: 2600 });
-    if (ctx) tone({ wave: "sine", f0: 2100, f1: 1500, dur: 0.05, gain: 0.08, noise: 0, cut: 9000, q: 10 }, sfxGain, ctx.currentTime + 0.01);
+    if (ctx)
+      tone(
+        { wave: "sine", f0: 2100, f1: 1500, dur: 0.05, gain: 0.08, noise: 0, cut: 9000, q: 10 },
+        sfxGain,
+        ctx.currentTime + 0.01,
+      );
   }
 
-  if (kind === "shard") tone({ wave: "sine", f0: 1400 + Math.random() * 300, f1: 2400, dur: 0.08, gain: 0.18, noise: 0, cut: 9000 });
-  if (kind === "hurt") tone({ wave: "sawtooth", f0: 160, f1: 60, dur: 0.25, gain: 0.45, noise: 0.5, cut: 1200 });
-  if (kind === "pickup") tone({ wave: "triangle", f0: 500, f1: 1100, dur: 0.2, gain: 0.3, noise: 0, cut: 6000 });
-  if (kind === "deny") tone({ wave: "square", f0: 140, f1: 120, dur: 0.15, gain: 0.25, noise: 0, cut: 1200 });
+  if (kind === "shard")
+    tone({
+      wave: "sine",
+      f0: 1400 + Math.random() * 300,
+      f1: 2400,
+      dur: 0.08,
+      gain: 0.18,
+      noise: 0,
+      cut: 9000,
+    });
+  if (kind === "hurt")
+    tone({ wave: "sawtooth", f0: 160, f1: 60, dur: 0.25, gain: 0.45, noise: 0.5, cut: 1200 });
+  if (kind === "pickup")
+    tone({ wave: "triangle", f0: 500, f1: 1100, dur: 0.2, gain: 0.3, noise: 0, cut: 6000 });
+  if (kind === "deny")
+    tone({ wave: "square", f0: 140, f1: 120, dur: 0.15, gain: 0.25, noise: 0, cut: 1200 });
   if (kind === "buy") {
     tone({ wave: "square", f0: 660, f1: 660, dur: 0.1, gain: 0.25, noise: 0, cut: 5000 });
-    if (ctx) tone({ wave: "square", f0: 990, f1: 990, dur: 0.18, gain: 0.25, noise: 0, cut: 5000 }, sfxGain, ctx.currentTime + 0.09);
+    if (ctx)
+      tone(
+        { wave: "square", f0: 990, f1: 990, dur: 0.18, gain: 0.25, noise: 0, cut: 5000 },
+        sfxGain,
+        ctx.currentTime + 0.09,
+      );
   }
 }
 
@@ -269,7 +322,10 @@ export function setWindNoise(k: number) {
     windGain = ctx.createGain();
     windGain.gain.value = 0;
     // the wind bypasses the muffle filter (it is the thing doing the muffling)
-    src.connect(windFilter).connect(windGain).connect(out ?? ctx.destination);
+    src
+      .connect(windFilter)
+      .connect(windGain)
+      .connect(out ?? ctx.destination);
     src.start();
   }
   // an ambience layer: the ambience volume sets it, and it falls silent with the game (pause,
@@ -280,7 +336,13 @@ export function setWindNoise(k: number) {
 }
 
 // ---- police sirens: a couple of persistent voices steered every frame by the traffic ----
-type SirenVoice = { osc: OscillatorNode; osc2: OscillatorNode; filter: BiquadFilterNode; gain: GainNode; pan: StereoPannerNode | null };
+type SirenVoice = {
+  osc: OscillatorNode;
+  osc2: OscillatorNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+  pan: StereoPannerNode | null;
+};
 const sirenVoices: SirenVoice[] = [];
 /**
  * Drive siren voice `slot`: pitch in Hz, gain 0..~0.2 (0 = silent), stereo pan -1..1 and
@@ -327,40 +389,72 @@ export function setSiren(slot: number, freq: number, gain: number, pan: number, 
 }
 
 /** Enemy telegraph cues (newer enemy types). `vol` fades them with distance. */
-export type EnemySfx = "aim" | "lock" | "snipe" | "click" | "throw" | "charge" | "spin" | "launch" | "boom" | "heal" | "cloak" | "buzz" | "block";
+export type EnemySfx =
+  | "aim"
+  | "lock"
+  | "snipe"
+  | "click"
+  | "throw"
+  | "charge"
+  | "spin"
+  | "launch"
+  | "boom"
+  | "heal"
+  | "cloak"
+  | "buzz"
+  | "block";
 export function playEnemySfx(kind: EnemySfx, vol = 1) {
   if (!ctx || vol <= 0.02) return;
   const v = Math.min(1, vol);
   const at = ctx.currentTime;
-  const t = (x: Tone, delay = 0) => tone({ ...x, gain: x.gain * v }, sfxGain, delay ? at + delay : 0);
-  if (kind === "aim") t({ wave: "sine", f0: 880, f1: 900, dur: 0.12, gain: 0.12, noise: 0, cut: 6000 });
+  const t = (x: Tone, delay = 0) =>
+    tone({ ...x, gain: x.gain * v }, sfxGain, delay ? at + delay : 0);
+  if (kind === "aim")
+    t({ wave: "sine", f0: 880, f1: 900, dur: 0.12, gain: 0.12, noise: 0, cut: 6000 });
   if (kind === "lock") {
     t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 });
     t({ wave: "square", f0: 1760, f1: 1760, dur: 0.07, gain: 0.14, noise: 0, cut: 8000 }, 0.12);
   }
-  if (kind === "snipe") t({ wave: "sawtooth", f0: 1800, f1: 90, dur: 0.5, gain: 0.4, noise: 0.8, cut: 7000, q: 4 });
+  if (kind === "snipe")
+    t({ wave: "sawtooth", f0: 1800, f1: 90, dur: 0.5, gain: 0.4, noise: 0.8, cut: 7000, q: 4 });
   if (kind === "click") {
     t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 });
     t({ wave: "square", f0: 1200, f1: 900, dur: 0.04, gain: 0.14, noise: 0.3, cut: 5000 }, 0.14);
   }
-  if (kind === "throw") t({ wave: "triangle", f0: 300, f1: 700, dur: 0.18, gain: 0.18, noise: 0.4, cut: 3000 });
-  if (kind === "charge") t({ wave: "sawtooth", f0: 70, f1: 240, dur: 0.95, gain: 0.3, noise: 0.5, cut: 1200, q: 3 });
-  if (kind === "spin") t({ wave: "sawtooth", f0: 60, f1: 420, dur: 1.1, gain: 0.2, noise: 0.2, cut: 2000, q: 6 });
-  if (kind === "launch") t({ wave: "sawtooth", f0: 200, f1: 60, dur: 0.5, gain: 0.3, noise: 1.2, cut: 2500 });
+  if (kind === "throw")
+    t({ wave: "triangle", f0: 300, f1: 700, dur: 0.18, gain: 0.18, noise: 0.4, cut: 3000 });
+  if (kind === "charge")
+    t({ wave: "sawtooth", f0: 70, f1: 240, dur: 0.95, gain: 0.3, noise: 0.5, cut: 1200, q: 3 });
+  if (kind === "spin")
+    t({ wave: "sawtooth", f0: 60, f1: 420, dur: 1.1, gain: 0.2, noise: 0.2, cut: 2000, q: 6 });
+  if (kind === "launch")
+    t({ wave: "sawtooth", f0: 200, f1: 60, dur: 0.5, gain: 0.3, noise: 1.2, cut: 2500 });
   if (kind === "boom") {
     t({ wave: "sine", f0: 90, f1: 30, dur: 0.7, gain: 0.8, noise: 1.3, cut: 1100 });
     t({ wave: "square", f0: 55, f1: 35, dur: 0.3, gain: 0.3, noise: 0, cut: 500 });
   }
-  if (kind === "heal") t({ wave: "sine", f0: 660, f1: 1320, dur: 0.35, gain: 0.14, noise: 0, cut: 7000 });
-  if (kind === "cloak") t({ wave: "sine", f0: 2400, f1: 600, dur: 0.5, gain: 0.12, noise: 0.15, cut: 9000, q: 12 });
-  if (kind === "buzz") t({ wave: "sawtooth", f0: 190, f1: 230, dur: 0.35, gain: 0.12, noise: 0.1, cut: 2400, q: 5 });
-  if (kind === "block") t({ wave: "triangle", f0: 1500, f1: 700, dur: 0.08, gain: 0.12, noise: 0.2, cut: 7000, q: 6 });
+  if (kind === "heal")
+    t({ wave: "sine", f0: 660, f1: 1320, dur: 0.35, gain: 0.14, noise: 0, cut: 7000 });
+  if (kind === "cloak")
+    t({ wave: "sine", f0: 2400, f1: 600, dur: 0.5, gain: 0.12, noise: 0.15, cut: 9000, q: 12 });
+  if (kind === "buzz")
+    t({ wave: "sawtooth", f0: 190, f1: 230, dur: 0.35, gain: 0.12, noise: 0.1, cut: 2400, q: 5 });
+  if (kind === "block")
+    t({ wave: "triangle", f0: 1500, f1: 700, dur: 0.08, gain: 0.12, noise: 0.2, cut: 7000, q: 6 });
 }
 
 // ---- music: tiny lookahead step sequencer, one style per map ----
 export type Style = StyleExtras & {
-  roots: number[]; bpm: number; arp: number[]; lead: OscillatorType; leadCut: number;
-  bass: OscillatorType; kick: number[]; snare: number[]; hat: "odd" | "all" | "none" | "off"; pad?: boolean;
+  roots: number[];
+  bpm: number;
+  arp: number[];
+  lead: OscillatorType;
+  leadCut: number;
+  bass: OscillatorType;
+  kick: number[];
+  snare: number[];
+  hat: "odd" | "all" | "none" | "off";
+  pad?: boolean;
   /** lead plays every N sixteenths (default 2) */ arpRate?: number;
   /** lead octave shift in semitones (default 24) */ oct?: number;
   /** bass plays every N sixteenths (default 2) */ bassRate?: number;
@@ -371,20 +465,120 @@ export type Style = StyleExtras & {
 };
 const STYLES: Record<string, Style> = {
   // desert: swung, twangy minor groove with a walking bass
-  desert: { roots: [45, 41, 48, 43], bpm: 116, arp: [0, 3, 5, 6, 7, 10, 7, 3], lead: "sawtooth", leadCut: 1800, bass: "triangle", kick: [0, 7, 10], snare: [4, 12], hat: "off", arpRate: 3, oct: 12, bassRate: 4, swing: 0.28, leadLen: 1.6 },
+  desert: {
+    roots: [45, 41, 48, 43],
+    bpm: 116,
+    arp: [0, 3, 5, 6, 7, 10, 7, 3],
+    lead: "sawtooth",
+    leadCut: 1800,
+    bass: "triangle",
+    kick: [0, 7, 10],
+    snare: [4, 12],
+    hat: "off",
+    arpRate: 3,
+    oct: 12,
+    bassRate: 4,
+    swing: 0.28,
+    leadLen: 1.6,
+  },
   // ice: cold bells over a relentless sub pulse — freezing, not restful
-  ice: { roots: [50, 48, 45, 46], bpm: 104, arp: [0, 7, 12, 15, 19, 15, 12, 7], lead: "sine", leadCut: 9000, bass: "sine", kick: [0, 6, 8], snare: [4, 12], hat: "off", pad: true, arpRate: 2, oct: 12, bassRate: 2, leadLen: 1.2, echo: true },
+  ice: {
+    roots: [50, 48, 45, 46],
+    bpm: 104,
+    arp: [0, 7, 12, 15, 19, 15, 12, 7],
+    lead: "sine",
+    leadCut: 9000,
+    bass: "sine",
+    kick: [0, 6, 8],
+    snare: [4, 12],
+    hat: "off",
+    pad: true,
+    arpRate: 2,
+    oct: 12,
+    bassRate: 2,
+    leadLen: 1.2,
+    echo: true,
+  },
   // forest: primal war drums and a tense minor pluck line
-  forest: { roots: [45, 43, 41, 45], bpm: 128, arp: [0, 3, 7, 10, 12, 10, 7, 3], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 3, 6, 8, 11], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, wood: true },
+  forest: {
+    roots: [45, 43, 41, 45],
+    bpm: 128,
+    arp: [0, 3, 7, 10, 12, 10, 7, 3],
+    lead: "triangle",
+    leadCut: 3200,
+    bass: "square",
+    kick: [0, 3, 6, 8, 11],
+    snare: [4, 12],
+    hat: "odd",
+    arpRate: 1,
+    oct: 12,
+    bassRate: 2,
+    leadLen: 0.7,
+    wood: true,
+  },
   // magma: heavy, fast, distorted (kept as-is)
-  magma: { roots: [40, 40, 41, 38], bpm: 136, arp: [0, 1, 7, 6, 0, 12, 1, 7], lead: "sawtooth", leadCut: 1800, bass: "sawtooth", kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], hat: "all" },
+  magma: {
+    roots: [40, 40, 41, 38],
+    bpm: 136,
+    arp: [0, 1, 7, 6, 0, 12, 1, 7],
+    lead: "sawtooth",
+    leadCut: 1800,
+    bass: "sawtooth",
+    kick: [0, 3, 6, 8, 11, 14],
+    snare: [4, 12],
+    hat: "all",
+  },
   // blossom: driving ronin duel — sharp koto accents over taiko hits
-  blossom: { roots: [45, 41, 40, 43], bpm: 124, arp: [0, 1, 5, 7, 8, 7, 5, 1], lead: "triangle", leadCut: 3200, bass: "square", kick: [0, 4, 6, 10, 12], snare: [4, 12], hat: "odd", arpRate: 1, oct: 12, bassRate: 2, leadLen: 0.7, swing: 0.1 },
+  blossom: {
+    roots: [45, 41, 40, 43],
+    bpm: 124,
+    arp: [0, 1, 5, 7, 8, 7, 5, 1],
+    lead: "triangle",
+    leadCut: 3200,
+    bass: "square",
+    kick: [0, 4, 6, 10, 12],
+    snare: [4, 12],
+    hat: "odd",
+    arpRate: 1,
+    oct: 12,
+    bassRate: 2,
+    leadLen: 0.7,
+    swing: 0.1,
+  },
 
   // abyss: very slow, deep sub drones and a lonely sonar ping
-  abyss: { roots: [33, 36, 31, 34], bpm: 64, arp: [24, 19, 24, 31], lead: "sine", leadCut: 2500, bass: "sine", kick: [0, 10], snare: [], hat: "none", pad: true, arpRate: 8, oct: 12, bassRate: 16, leadLen: 5, echo: true },
+  abyss: {
+    roots: [33, 36, 31, 34],
+    bpm: 64,
+    arp: [24, 19, 24, 31],
+    lead: "sine",
+    leadCut: 2500,
+    bass: "sine",
+    kick: [0, 10],
+    snare: [],
+    hat: "none",
+    pad: true,
+    arpRate: 8,
+    oct: 12,
+    bassRate: 16,
+    leadLen: 5,
+    echo: true,
+  },
   // cyber: four-on-the-floor electro, octave-jumping saw bass, off-beat hats
-  cyber: { roots: [45, 45, 43, 48], bpm: 128, arp: [0, 12, 7, 12, 3, 12, 10, 12], lead: "square", leadCut: 6000, bass: "sawtooth", kick: [0, 4, 8, 12], snare: [4, 12], hat: "off", arpRate: 1, bassRate: 1, leadLen: 0.5 },
+  cyber: {
+    roots: [45, 45, 43, 48],
+    bpm: 128,
+    arp: [0, 12, 7, 12, 3, 12, 10, 12],
+    lead: "square",
+    leadCut: 6000,
+    bass: "sawtooth",
+    kick: [0, 4, 8, 12],
+    snare: [4, 12],
+    hat: "off",
+    arpRate: 1,
+    bassRate: 1,
+    leadLen: 0.5,
+  },
   // toxic: lurching industrial acid line, resonant squelch, broken beat
   // vice: 80s synthwave cruise, gated snare, echoing saw lead over pads
   vice: {
@@ -440,23 +634,49 @@ const STYLES: Record<string, Style> = {
       },
     ],
   },
-  toxic: { roots: [40, 43, 40, 38], bpm: 104, arp: [0, 0, 12, 3, 0, 6, 12, 1], lead: "sawtooth", leadCut: 900, bass: "square", kick: [0, 3, 10], snare: [6, 14], hat: "odd", arpRate: 1, oct: 12, bassRate: 1, leadLen: 0.8, swing: 0.15 },
+  toxic: {
+    roots: [40, 43, 40, 38],
+    bpm: 104,
+    arp: [0, 0, 12, 3, 0, 6, 12, 1],
+    lead: "sawtooth",
+    leadCut: 900,
+    bass: "square",
+    kick: [0, 3, 10],
+    snare: [6, 14],
+    hat: "odd",
+    arpRate: 1,
+    oct: 12,
+    bassRate: 1,
+    leadLen: 0.8,
+    swing: 0.15,
+  },
 };
 const MAP_STYLE: Record<string, string> = {
-  "Dust Basin": "desert", "Canyon Mesa": "desert", "Frost Shelf": "ice", "Glacier Rift": "ice",
-  "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
-  "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
+  "Dust Basin": "desert",
+  "Canyon Mesa": "desert",
+  "Frost Shelf": "ice",
+  "Glacier Rift": "ice",
+  "Mossy Woods": "forest",
+  "Ash Crater": "magma",
+  "Cherry Grove": "blossom",
+  "Sunken Abyss": "abyss",
+  "Neon Spire": "cyber",
+  "Toxic Hollow": "toxic",
   "Vice Heights": "vice",
   "Pacific Pier": "surf",
   "Whiteout Pass": "alpine",
 };
-let style: Style = STYLES['desert']!;
+let style: Style = STYLES["desert"]!;
 /**
  * Pick the soundtrack for a map. Unknown names fall back on the big-map layout (so a renamed
  * western / beach map still gets its style), then on the desert groove.
  */
 export function setMusicTheme(mapName: string, layout?: string) {
-  const key = EXTRA_MAP_STYLE[mapName] ?? MAP_STYLE[mapName] ?? (layout ? LAYOUT_STYLE[layout] : undefined) ?? "desert";
+  const key =
+    EXTRA_MAP_STYLE[mapName] ??
+    MAP_STYLE[mapName] ??
+    (layout ? LAYOUT_STYLE[layout] : undefined) ??
+    "desert";
   style = EXTRA_STYLES[key] ?? STYLES[key] ?? STYLES["desert"]!;
 }
 
@@ -492,13 +712,20 @@ export function musicStageLevel() {
 }
 
 function musicOut(): MusicOut | null {
-  return ctx && musicGain && noiseBuf ? { ctx, out: musicGain, verb: musicVerb, noise: noiseBuf } : null;
+  return ctx && musicGain && noiseBuf
+    ? { ctx, out: musicGain, verb: musicVerb, noise: noiseBuf }
+    : null;
 }
 
 // Dedicated menu theme: slow, dark D-minor march — its own piece, not a map track.
 const MENU_BPM = 72;
 const MENU_ROOTS = [38, 34, 36, 33]; // D, Bb, C, A
-const MENU_MOTIF = [[12, 10, 7, 5], [10, 7, 5, 3], [7, 10, 12, 15], [12, 13, 12, 7]];
+const MENU_MOTIF = [
+  [12, 10, 7, 5],
+  [10, 7, 5, 3],
+  [7, 10, 12, 15],
+  [12, 13, 12, 7],
+];
 function scheduleMenuStep(s: number, t: number, stepDur: number) {
   if (!musicGain) return;
   const bar = Math.floor(s / 16) % 4;
@@ -507,27 +734,81 @@ function scheduleMenuStep(s: number, t: number, stepDur: number) {
   const root = MENU_ROOTS[bar]!;
   const barLen = stepDur * 16;
   if (i === 0) {
-    tone({ wave: "sine", f0: midi(root), f1: midi(root), dur: barLen, gain: 0.4, noise: 0, cut: 400 }, musicGain, t);
+    tone(
+      { wave: "sine", f0: midi(root), f1: midi(root), dur: barLen, gain: 0.4, noise: 0, cut: 400 },
+      musicGain,
+      t,
+    );
     const third = bar === 3 ? 16 : 15;
     [12, third, 19].forEach((iv) =>
-      tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: barLen, gain: 0.06, noise: 0, cut: 1100, q: 2 }, musicGain, t));
+      tone(
+        {
+          wave: "sawtooth",
+          f0: midi(root + iv),
+          f1: midi(root + iv),
+          dur: barLen,
+          gain: 0.06,
+          noise: 0,
+          cut: 1100,
+          q: 2,
+        },
+        musicGain,
+        t,
+      ),
+    );
   }
   // war-drum pulse
   if (i === 0 || i === 3 || i === 8 || (bar === 3 && (i === 12 || i === 14))) {
-    tone({ wave: "sine", f0: 95, f1: 38, dur: 0.45, gain: i === 0 ? 0.8 : 0.5, noise: 0.15, cut: 500 }, musicGain, t);
+    tone(
+      { wave: "sine", f0: 95, f1: 38, dur: 0.45, gain: i === 0 ? 0.8 : 0.5, noise: 0.15, cut: 500 },
+      musicGain,
+      t,
+    );
   }
-  if (i === 8 && phrase === 1) tone({ wave: "triangle", f0: 200, f1: 110, dur: 0.3, gain: 0.25, noise: 0.9, cut: 2200 }, musicGain, t);
+  if (i === 8 && phrase === 1)
+    tone(
+      { wave: "triangle", f0: 200, f1: 110, dur: 0.3, gain: 0.25, noise: 0.9, cut: 2200 },
+      musicGain,
+      t,
+    );
   // solemn horn motif, second phrase only
   if (phrase === 1 && i % 4 === 0) {
     const n = root + 24 + MENU_MOTIF[bar]![i / 4]!;
-    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.13, noise: 0, cut: 2400 }, musicGain, t);
-    tone({ wave: "triangle", f0: midi(n), f1: midi(n), dur: stepDur * 3.6, gain: 0.04, noise: 0, cut: 1400 }, musicGain, t + stepDur * 3);
+    tone(
+      {
+        wave: "triangle",
+        f0: midi(n),
+        f1: midi(n),
+        dur: stepDur * 3.6,
+        gain: 0.13,
+        noise: 0,
+        cut: 2400,
+      },
+      musicGain,
+      t,
+    );
+    tone(
+      {
+        wave: "triangle",
+        f0: midi(n),
+        f1: midi(n),
+        dur: stepDur * 3.6,
+        gain: 0.04,
+        noise: 0,
+        cut: 1400,
+      },
+      musicGain,
+      t + stepDur * 3,
+    );
   }
 }
 
 function scheduleStep(s: number, t0: number, stepDur: number) {
   if (!musicGain) return;
-  if (menuMode) { scheduleMenuStep(s, t0, stepDur); return; }
+  if (menuMode) {
+    scheduleMenuStep(s, t0, stepDur);
+    return;
+  }
   const S = style;
   const bar = Math.floor(s / 16) % 4;
   const i = s % 16;
@@ -536,40 +817,111 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   const lvl0 = intense ? 3 : level;
   // late waves drive harder: syncopated kicks join
   const drive = lvl0 >= 2 && (i === 10 || i === 14);
-  if (S.kick.includes(i) || drive || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
+  if (S.kick.includes(i) || drive || (intense && i % 4 === 0))
+    tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
   if (S.snare.includes(i)) {
-    if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
-    else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
+    if (S.wood)
+      tone(
+        { wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 },
+        musicGain,
+        t,
+      );
+    else
+      tone(
+        { wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 },
+        musicGain,
+        t,
+      );
   }
   const lvl = intense ? 3 : level;
   const M = musicOut();
   // hats join from the second stage (maps built around a constant hat keep it)
-  const hat = ((S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2)) && (lvl >= 1 || S.hat === "all")) || intense;
-  if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
+  const hat =
+    ((S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2)) &&
+      (lvl >= 1 || S.hat === "all")) ||
+    intense;
+  if (hat)
+    tone(
+      {
+        wave: "square",
+        f0: 0,
+        f1: 0,
+        dur: S.hat === "off" ? 0.08 : 0.04,
+        gain: 0.12,
+        noise: 1,
+        cut: 9000,
+      },
+      musicGain,
+      t,
+    );
   // late waves: a quiet 16th shaker under everything
-  else if (lvl >= 2 && i % 2 === 1) tone({ wave: "square", f0: 0, f1: 0, dur: 0.03, gain: 0.06, noise: 1, cut: 10000 }, musicGain, t);
+  else if (lvl >= 2 && i % 2 === 1)
+    tone(
+      { wave: "square", f0: 0, f1: 0, dur: 0.03, gain: 0.06, noise: 1, cut: 10000 },
+      musicGain,
+      t,
+    );
   // the boss: a crash every two bars
-  if (intense && i === 0 && bar % 2 === 0) tone({ wave: "square", f0: 0, f1: 0, dur: 1.4, gain: 0.16, noise: 1, cut: 12000 }, musicGain, t);
+  if (intense && i === 0 && bar % 2 === 0)
+    tone(
+      { wave: "square", f0: 0, f1: 0, dur: 1.4, gain: 0.16, noise: 1, cut: 12000 },
+      musicGain,
+      t,
+    );
   // late waves and the boss: a sustained low chord that thickens the middle
-  if (lvl >= 2 && i === 0) [0, 7, 12].forEach((iv) => tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: stepDur * 15, gain: 0.03, noise: 0, cut: 1100 }, musicGain, t));
+  if (lvl >= 2 && i === 0)
+    [0, 7, 12].forEach((iv) =>
+      tone(
+        {
+          wave: "sawtooth",
+          f0: midi(root + iv),
+          f1: midi(root + iv),
+          dur: stepDur * 15,
+          gain: 0.03,
+          noise: 0,
+          cut: 1100,
+        },
+        musicGain,
+        t,
+      ),
+    );
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
     const bassNote = bRate === 1 ? (i % 2 ? root + 12 : root) : i % 4 === 2 ? root + 12 : root;
     const bDur = S.bassRate ? Math.min(2.5, stepDur * bRate * 0.9) : 0.14;
-    tone({ wave: S.bass, f0: midi(bassNote), f1: midi(bassNote), dur: bDur, gain: 0.35, noise: 0, cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700, q: bRate === 1 ? 10 : 6 }, musicGain, t);
+    tone(
+      {
+        wave: S.bass,
+        f0: midi(bassNote),
+        f1: midi(bassNote),
+        dur: bDur,
+        gain: 0.35,
+        noise: 0,
+        cut: S.bass === "square" && bRate === 1 ? 500 + (i % 8) * 180 : 700,
+        q: bRate === 1 ? 10 : 6,
+      },
+      musicGain,
+      t,
+    );
   }
   if (S.pad && i === 0) {
     (S.padIv ?? [0, 7, 15]).forEach((iv) => {
       const f = midi(root + 12 + iv);
       if (S.padVoice && M) playVoice(M, S.padVoice, f, t, stepDur * 15, 0.035);
-      else tone({ wave: "sine", f0: f, f1: f, dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 }, musicGain, t);
+      else
+        tone(
+          { wave: "sine", f0: f, f1: f, dur: stepDur * 16, gain: 0.08, noise: 0, cut: 3000 },
+          musicGain,
+          t,
+        );
     });
   }
   if (M) {
     if (S.clop?.includes(i)) playClop(M, t, S.clop.indexOf(i) % 2 === 0, intense ? 0.34 : 0.26);
     if (intense && S.clop && i % 2 === 1 && !S.clop.includes(i)) playClop(M, t, false, 0.14); // the boss round gallops
     if (S.jingle?.includes(i) && lvl >= 1) playJingle(M, t);
-    if (S.toll && lvl >= 2 && i === 0 && bar % 2 === 0) playVoice(M, "bell", midi(S.roots[0]!), t, 3, 0.07);
+    if (S.toll && lvl >= 2 && i === 0 && bar % 2 === 0)
+      playVoice(M, "bell", midi(S.roots[0]!), t, 3, 0.07);
     for (const p of S.parts ?? []) {
       if (lvl < p.from || i % p.rate !== 0) continue;
       const idx = Math.floor(s / p.rate) % p.notes.length;
@@ -579,7 +931,14 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
       let hold = 1;
       while (hold < 8 && p.notes[(idx + hold) % p.notes.length] === null) hold++;
       const base = p.rel === "key" ? S.roots[0]! : root;
-      playVoice(M, p.voice, midi(base + p.oct + off), t, Math.min(3, hold * p.rate * stepDur * 0.92), p.gain);
+      playVoice(
+        M,
+        p.voice,
+        midi(base + p.oct + off),
+        t,
+        Math.min(3, hold * p.rate * stepDur * 0.92),
+        p.gain,
+      );
     }
   }
   const rate = S.arpRate ?? 2;
@@ -595,11 +954,41 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
       playVoice(M, S.leadVoice, midi(n), t, dur, g * 0.9);
       if (S.echo && lvl >= 1) playVoice(M, S.leadVoice, midi(n), t + stepDur * 3, dur, g * 0.3);
     } else {
-      tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut }, musicGain, t);
-      if (S.echo && lvl >= 1) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
+      tone(
+        { wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut },
+        musicGain,
+        t,
+      );
+      if (S.echo && lvl >= 1)
+        tone(
+          {
+            wave: S.lead,
+            f0: midi(n),
+            f1: midi(n),
+            dur,
+            gain: g * 0.35,
+            noise: 0,
+            cut: S.leadCut * 0.6,
+          },
+          musicGain,
+          t + stepDur * 3,
+        );
     }
     // late waves: a quiet octave-up sparkle doubles every other lead note
-    if (lvl >= 2 && idx % 2 === 0) tone({ wave: "triangle", f0: midi(n + 12), f1: midi(n + 12), dur: dur * 0.8, gain: g * 0.3, noise: 0, cut: 7000 }, musicGain, t + stepDur);
+    if (lvl >= 2 && idx % 2 === 0)
+      tone(
+        {
+          wave: "triangle",
+          f0: midi(n + 12),
+          f1: midi(n + 12),
+          dur: dur * 0.8,
+          gain: g * 0.3,
+          noise: 0,
+          cut: 7000,
+        },
+        musicGain,
+        t + stepDur,
+      );
   }
 }
 
@@ -609,7 +998,10 @@ export function startMusic() {
   nextT = ctx.currentTime + 0.05;
   timer = window.setInterval(() => {
     if (!ctx) return;
-    if (ctx.state === "suspended") { void ctx.resume(); return; }
+    if (ctx.state === "suspended") {
+      void ctx.resume();
+      return;
+    }
     pumpMusic();
   }, 25);
 }
@@ -628,7 +1020,6 @@ export function pumpMusic() {
   }
 }
 
-
 export function stopMusic() {
   if (timer !== null) window.clearInterval(timer);
   timer = null;
@@ -638,7 +1029,18 @@ export function stopMusic() {
 
 // ---- projectile / impact sounds (combat effects) ----
 export type ImpactSound =
-  | "metal" | "wall" | "boom" | "burst" | "ricochet" | "shatter" | "zap" | "thunk" | "splash" | "crack" | "casing" | "fizz";
+  | "metal"
+  | "wall"
+  | "boom"
+  | "burst"
+  | "ricochet"
+  | "shatter"
+  | "zap"
+  | "thunk"
+  | "splash"
+  | "crack"
+  | "casing"
+  | "fizz";
 const IMPACTS: Record<ImpactSound, Tone[]> = {
   // bullet on robot plating: bright clank with a short ring
   metal: [
@@ -658,7 +1060,9 @@ const IMPACTS: Record<ImpactSound, Tone[]> = {
     { wave: "sine", f0: 120, f1: 40, dur: 0.45, gain: 0.35, noise: 0, cut: 500 },
   ],
   // REBOUNDER bounce: rising zing
-  ricochet: [{ wave: "triangle", f0: 1500, f1: 3800, dur: 0.16, gain: 0.16, noise: 0.15, cut: 9000, q: 8 }],
+  ricochet: [
+    { wave: "triangle", f0: 1500, f1: 3800, dur: 0.16, gain: 0.16, noise: 0.15, cut: 9000, q: 8 },
+  ],
   // GLACIER shard shattering: glassy tinkle
   shatter: [
     { wave: "sine", f0: 3400, f1: 2200, dur: 0.18, gain: 0.1, noise: 0.35, cut: 11000, q: 14 },
@@ -673,9 +1077,13 @@ const IMPACTS: Record<ImpactSound, Tone[]> = {
   thunk: [{ wave: "sine", f0: 260, f1: 90, dur: 0.14, gain: 0.35, noise: 0.35, cut: 1500 }],
   splash: [{ wave: "sine", f0: 500, f1: 150, dur: 0.3, gain: 0.12, noise: 1.2, cut: 3200 }],
   // LANCE punching through: high snap
-  crack: [{ wave: "sawtooth", f0: 3200, f1: 500, dur: 0.1, gain: 0.16, noise: 0.6, cut: 9000, q: 4 }],
+  crack: [
+    { wave: "sawtooth", f0: 3200, f1: 500, dur: 0.1, gain: 0.16, noise: 0.6, cut: 9000, q: 4 },
+  ],
   // spent brass hitting the floor
-  casing: [{ wave: "sine", f0: 4200, f1: 3800, dur: 0.05, gain: 0.025, noise: 0, cut: 12000, q: 18 }],
+  casing: [
+    { wave: "sine", f0: 4200, f1: 3800, dur: 0.05, gain: 0.025, noise: 0, cut: 12000, q: 18 },
+  ],
   fizz: [{ wave: "sine", f0: 900, f1: 300, dur: 0.12, gain: 0.08, noise: 0.5, cut: 5000 }],
 };
 const lastImpact: Partial<Record<ImpactSound, number>> = {};
@@ -688,7 +1096,9 @@ export function playImpact(kind: ImpactSound, dist = 0) {
   lastImpact[kind] = now;
   const k = Math.max(0.12, 1 - dist / 70);
   const far = dist > 18;
-  IMPACTS[kind].forEach((t) => tone({ ...t, gain: t.gain * k, cut: far ? Math.min(t.cut, 1800) : t.cut }));
+  IMPACTS[kind].forEach((t) =>
+    tone({ ...t, gain: t.gain * k, cut: far ? Math.min(t.cut, 1800) : t.cut }),
+  );
 }
 
 /** the live audio context, the effects bus and a second of white noise, for sounds built

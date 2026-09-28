@@ -1,3 +1,4 @@
+import { Fountains } from "./Fountains";
 import { registerStaticGeometry } from "./staticCollision";
 // Renders the "city" map from the merged chunk geometry built in cityMesh.ts.
 // One facade material (a texture array with every facade style) draws every building,
@@ -645,6 +646,7 @@ export const CityScene = memo(function CityScene({
   const ext = city.extent + 2600;
   return (
     <group name="city-root">
+      <Fountains city={city} />
       <SkyDome sunset={skies.sunset} night={skies.night} />
       {/* land beyond the backdrop, and the sea to the south */}
       <mesh

@@ -1,3 +1,4 @@
+import { matchEnvironment } from "../matchEnvironment";
 import { registerStaticGeometry, registerStaticInstances } from "../staticCollision";
 import { shelterUniforms, SHELTER_GLSL } from "../structures/weather";
 // Renders Whiteout Pass: the heightfield terrain and the endless land beyond, merged
@@ -472,6 +473,7 @@ function skyMaterial() {
       uGlow: { value: new THREE.Color() },
       uSun: U.uSunDir,
       uNight: { value: 0 },
+      uDay: { value: 0 },
       uAurora: { value: 0 },
       uBlizz: { value: 0 },
       uFogCol: U.uFogCol,
@@ -492,6 +494,7 @@ uniform vec3 uHor;
 uniform vec3 uGlow;
 uniform vec3 uSun;
 uniform float uNight;
+uniform float uDay;
 uniform float uAurora;
 uniform float uBlizz;
 uniform vec3 uFogCol;
@@ -514,8 +517,9 @@ void main() {
   vec3 sd = normalize(uSun);
   float s = max(dot(d, sd), 0.0);
   float horiz = 1.0 - smoothstep(0.0, 0.35, h);
-  float wDusk = 1.0 - smoothstep(0.3, 0.7, uNight);
-  float wNight = smoothstep(0.3, 0.7, uNight);
+  float wDusk = (1.0 - smoothstep(0.3, 0.7, uNight)) * (1.0-uDay);
+  float wNight = smoothstep(0.3, 0.7, uNight) * (1.0-uDay);
+  col += uDay * uGlow * (smoothstep(0.9995,0.9998,s)*1.4 + pow(s,120.0)*0.07);
   if (wDusk > 0.0) {
     // the afterglow over the western ridge and the pink belt of Venus opposite it
     col += uGlow * (pow(s, 6.0) * 0.55 + pow(s, 48.0) * 0.6) * horiz * wDusk;
@@ -1115,10 +1119,11 @@ export const AlpineScene = memo(function AlpineScene({
     (m.uniforms["uHor"]!.value as THREE.Color).set(look.skyHorizon);
     (m.uniforms["uGlow"]!.value as THREE.Color).set(look.sunGlow);
     m.uniforms["uNight"]!.value = nk;
+    m.uniforms["uDay"]!.value = ["sunny", "rain"].includes(matchEnvironment.kind) ? 1 : 0;
     m.uniforms["uAurora"]!.value = look.aurora;
     U.uSunDir.value.set(...look.sunDir).normalize();
     U.uPeakLit.value.set(look.peakLit);
-    U.uAlpen.value = nl(0.18, 1);
+    U.uAlpen.value = ["sunny", "rain"].includes(matchEnvironment.kind) ? 0 : nl(0.18, 1);
     U.uWin.value = look.windows;
     U.uHaze.value.set(look.haze);
     U.uMistCol.value.set(look.haze);
@@ -1315,7 +1320,13 @@ export const AlpineScene = memo(function AlpineScene({
       />
       <points geometry={geos.halo} material={mats.halo} renderOrder={3} />
       <points geometry={geos.smoke} material={mats.smoke} renderOrder={3} frustumCulled={false} />
-      <points geometry={geos.snow} material={mats.snow} renderOrder={4} frustumCulled={false} />
+      <points
+        visible={matchEnvironment.kind === "rain"}
+        geometry={geos.snow}
+        material={mats.snow}
+        renderOrder={4}
+        frustumCulled={false}
+      />
       <lineSegments
         geometry={geos.streak}
         material={mats.streak}

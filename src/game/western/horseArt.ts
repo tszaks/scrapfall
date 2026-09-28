@@ -18,22 +18,22 @@ function beam(m: Model, a: V3, b: V3, w: number, d: number, c: string, s: Surf) 
 /** Separate instanced parts preserve the existing gait, driver seats and network poses. */
 export function horseArt() {
   const body = new Model();
-  body.sphere(1, [0, 1.34, -0.06], "#ffffff", COAT, { s: [0.32, 0.34, 0.77], low: true });
-  for (const z of [-0.59, 0.52])
-    body.sphere(1, [0, 1.35, z], "#efefeb", COAT, { s: [0.34, 0.37, 0.34], low: true });
-  beam(body, [0, 1.48, 0.59], [0, 1.99, 1.05], 0.4, 0.43, "#ffffff", COAT);
-  body.sphere(1, [0, 1.94, 1.15], "#ffffff", COAT, {
-    s: [0.19, 0.24, 0.38],
-    rot: [0.48, 0, 0],
-    low: true,
-  });
-  body.sphere(1, [0, 1.76, 1.47], "#b9ada3", COAT, { s: [0.19, 0.14, 0.19], low: true });
+  // Smooth overlapping muscle volumes retain the saddle height and grounded hoof datum.
+  body.sphere(1, [0, 1.34, -0.06], "#ffffff", COAT, { s: [0.32, 0.34, 0.73] });
+  body.sphere(1, [0, 1.38, -0.55], "#eeebe6", COAT, { s: [0.355, 0.37, 0.36] });
+  body.sphere(1, [0, 1.38, 0.5], "#f8f6f2", COAT, { s: [0.32, 0.38, 0.33] });
+  body.sphere(1, [0, 1.72, 0.74], "#ffffff", COAT, { s: [0.225, 0.47, 0.25], rot: [0.5, 0, 0] });
+  body.sphere(1, [0, 1.98, 1.02], "#ffffff", COAT, { s: [0.145, 0.25, 0.2], rot: [0.35, 0, 0] });
+  body.sphere(1, [0, 1.96, 1.19], "#faf6ef", COAT, { s: [0.15, 0.195, 0.32], rot: [0.65, 0, 0] });
+  body.sphere(1, [0, 1.76, 1.42], "#c7b8a6", COAT, { s: [0.145, 0.115, 0.18] });
+  // A slim pale blaze and jaw mass make the face readable at normal player distance.
+  body.sphere(1, [0, 2.037, 1.22], "#e9dfcc", COAT, { s: [0.033, 0.16, 0.11], rot: [0.65, 0, 0] });
   for (const s of [-1, 1]) {
     body.cone(0.063, 0.23, [s * 0.11, 2.16, 1.03], "#ffffff", COAT, {
       rot: [-0.18, 0, s * -0.12],
       seg: 6,
     });
-    body.sphere(0.033, [s * 0.177, 2.035, 1.18], "#110e0c", SKIN, { low: true });
+    body.sphere(0.025, [s * 0.144, 2.035, 1.18], "#110e0c", SKIN, { low: true });
     body.sphere(0.018, [s * 0.158, 1.79, 1.605], "#2a221e", SKIN, { low: true });
     // Bridle, reins, saddle buckles and stirrups retain their own colours under coat tint.
     beam(body, [s * 0.19, 1.84, 1.39], [s * 0.19, 2.07, 1.03], 0.027, 0.025, "#493124", LEATHER);
@@ -45,31 +45,67 @@ export function horseArt() {
     });
     body.box(0.03, 0.1, 0.075, [s * 0.29, 1.53, 0.09], "#bea579", IRON, { bevel: 0.006 });
   }
-  beam(body, [0, 1.64, 0.51], [0, 2.16, 1.01], 0.08, 0.12, "#31251e", LEATHER);
-  for (let n = 0; n < 6; n++)
-    beam(
-      body,
-      [0, 1.61 + n * 0.078, 0.53 + n * 0.076],
-      [0, 1.5 + n * 0.075, 0.4 + n * 0.077],
-      0.1,
-      0.075,
-      "#39291f",
+  for (let i = 0; i < 7; i++) {
+    const x = (i - 3) * 0.012;
+    body.cable(
+      [
+        [x, 2.17, 0.98],
+        [x, 2.02, 0.81],
+        [x, 1.78, 0.56],
+        [x + 0.055, 1.5, 0.43],
+      ],
+      0.025,
+      "#30251e",
       LEATHER,
+      { lod: 0, seg: 12 },
     );
-  beam(body, [0, 1.54, -0.75], [0, 1.13, -0.93], 0.14, 0.14, "#32251e", LEATHER);
-  beam(body, [0, 1.13, -0.93], [0, 0.76, -1.08], 0.12, 0.15, "#32251e", LEATHER);
+  }
+  for (let i = 0; i < 8; i++) {
+    const x = (i - 3.5) * 0.013;
+    body.cable(
+      [
+        [x, 1.52, -0.79],
+        [x, 1.22, -0.91],
+        [x * 1.5, 0.85, -1.03],
+        [x * 1.7, 0.56, -0.99],
+      ],
+      0.024,
+      "#33271e",
+      LEATHER,
+      { lod: 0, seg: 12 },
+    );
+  }
   body.box(0.7, 0.08, 0.66, [0, 1.62, -0.02], "#a44338", [0.9, 0], { bevel: 0.028 });
   for (const z of [-0.29, 0.26]) body.box(0.71, 0.015, 0.035, [0, 1.665, z], "#cbae74", LEATHER);
   body.box(0.47, 0.105, 0.49, [0, 1.71, 0.0], "#67432b", LEATHER, { bevel: 0.04 });
   body.box(0.48, 0.18, 0.08, [0, 1.79, -0.21], "#67432b", LEATHER, { bevel: 0.025 });
   body.cyl(0.05, 0.15, [0, 1.84, 0.2], "#8b603a", LEATHER, { seg: 8 });
   body.sphere(0.066, [0, 1.925, 0.2], "#8b603a", LEATHER, { s: [1, 0.55, 1], low: true });
-  const leg = new Model();
-  beam(leg, [0, 0, 0], [0, -0.42, -0.055], 0.145, 0.17, "#ffffff", COAT);
-  leg.sphere(0.09, [0, -0.43, -0.04], "#f2eee7", COAT, { low: true });
-  beam(leg, [0, -0.43, -0.04], [0, -0.88, 0.035], 0.095, 0.1, "#ffffff", COAT);
-  leg.box(0.15, 0.13, 0.2, [0, -0.985, 0.065], "#28231f", LEATHER, { bevel: 0.025 });
-  leg.box(0.15, 0.023, 0.2, [0, -1.048, 0.065], "#726b60", IRON, { bevel: 0.007 });
+  const limb = (rear: boolean) => {
+    const m = new Model();
+    const knee: V3 = [0, -0.43, rear ? -0.15 : -0.025];
+    const ankle: V3 = [0, -0.88, 0.02];
+    const muscle = (a: V3, b: V3, top: number, bottom: number) => {
+      const v = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      e.setFromQuaternion(q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize()));
+      m.cyl(
+        bottom,
+        v.length(),
+        [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+        "#ffffff",
+        COAT,
+        { rb: top, seg: 10, rot: [e.x, e.y, e.z] },
+      );
+    };
+    muscle([0, 0, 0], knee, rear ? 0.115 : 0.09, 0.063);
+    m.sphere(0.071, knee, "#ece7df", COAT, { s: [0.95, 1.1, 1] });
+    muscle(knee, ankle, 0.051, 0.033);
+    m.sphere(0.045, ankle, "#ede7db", COAT);
+    muscle(ankle, [0, -0.97, 0.05], 0.036, 0.048);
+    m.sphere(1, [0, -0.993, 0.067], "#393128", LEATHER, { s: [0.07, 0.057, 0.093] });
+    m.box(0.13, 0.014, 0.17, [0, -1.048, 0.063], "#6b655c", IRON, { bevel: 0.007 });
+    return m.build();
+  };
   const legs = new Model();
   for (const s of [-1, 1]) {
     beam(legs, [s * 0.14, 1.83, 0.02], [s * 0.29, 1.65, 0.24], 0.19, 0.21, "#384252", SKIN);
@@ -104,7 +140,8 @@ export function horseArt() {
   hat.box(0.1, 0.017, 0.2, [0, 2.891, 0.01], "#d5c5ad", CLOTH, { bevel: 0.008 });
   return {
     body: body.build(),
-    leg: leg.build(),
+    leg: limb(false),
+    hind: limb(true),
     legs: legs.build(),
     torso: torso.build(),
     hat: hat.build(),

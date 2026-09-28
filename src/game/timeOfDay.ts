@@ -1,11 +1,10 @@
+import { matchEnvironment } from "./matchEnvironment";
 // Continuous time of day. `tod.k` runs from 0 (golden sunset) to 1 (full night) and every
 // look in the game (sky, fog, lights, windows, street lights, neon, headlights, the sun)
 // is a blend of its two authored endpoints at that k.
 //
-// During a match the time follows the waves: wave 1 is sunset, it deepens through dusk
-// and is full night by wave 7-8, staying night for the boss. The host drives it in co-op
-// (guests follow the host's number). Pressing N locks this player's own choice for the
-// rest of the match (auto off); the menu button cycles AUTO / NIGHT / SUNSET.
+// One seeded environment owns the whole match. Co-op peers share the seed; local
+// overrides are reserved for solo diagnostic URLs. Lighting blends remain continuous.
 import { useSyncExternalStore } from "react";
 import * as THREE from "three";
 
@@ -88,25 +87,18 @@ export function setTimeMode(m: TimeMode) {
   tod.mode = m;
   emit();
 }
-/** menu button: AUTO -> NIGHT -> SUNSET -> AUTO (a menu choice carries into the match) */
-export function cycleTimeMode() {
-  tod.lockedInMatch = false;
-  setTimeMode(tod.mode === "auto" ? "night" : tod.mode === "night" ? "sunset" : "auto");
-}
-/** N key: lock to the opposite of what's on screen (auto off for the rest of the match) */
-export function toggleTimeLock(inMatch: boolean) {
-  if (inMatch) tod.lockedInMatch = true;
-  if (tod.mode === "auto") setTimeMode(tod.v >= 0.5 ? "sunset" : "night");
-  else setTimeMode(tod.mode === "night" ? "sunset" : "night");
-}
+/** Conditions stay fixed for the entire run; retained for old input preferences. */
+export function cycleTimeMode() {}
+export function toggleTimeLock(_inMatch: boolean) {}
 /** the wave clock goes back to wave 0 (new arena / new seed) */
 export function resetMatchTime() {
   tod.wave = 0;
   tod.progress = 0;
   tod.hostK = null;
 }
-/** a new match begins: an N lock from the last match ends, a menu choice stays */
+/** Begin the fixed match lighting immediately, clearing any legacy local lock. */
 export function beginMatchTime() {
+  tod.snap = true;
   if (tod.lockedInMatch) {
     tod.lockedInMatch = false;
     setTimeMode("auto");
@@ -121,12 +113,10 @@ export function setWaveClock(wave: number, progress: number) {
 
 /** where k should be right now */
 function targetNow() {
-  if (pinned !== null) return pinned;
-  if (tod.mode === "night") return 1;
-  if (tod.mode === "sunset") return 0;
-  if (!tod.playing) return 0; // the start menu shows the sunset
+  if (pinned !== null && matchEnvironment.allowOverrides) return pinned;
+  if (!tod.playing) return 0;
   if (tod.hostK !== null) return tod.hostK;
-  return waveStage(tod.wave, tod.progress);
+  return matchEnvironment.kind === "night" ? 1 : matchEnvironment.kind === "rain" ? 0.35 : 0;
 }
 
 let lastQ = -1;
@@ -218,7 +208,13 @@ function lightDir(theme: Theme, look: Look, time: TimeOfDay) {
       : layout === "western"
         ? WESTERN_SKY_DIR[time]
         : (look as Look & { sunDir?: [number, number, number] }).sunDir;
-  const d = custom ?? (theme.blockShape === "city" ? SUN_DIR[time] : layoutOf(theme) === "scatter" ? ARENA_SUN[time] : look.sun.pos);
+  const d =
+    custom ??
+    (theme.blockShape === "city"
+      ? SUN_DIR[time]
+      : layoutOf(theme) === "scatter"
+        ? ARENA_SUN[time]
+        : look.sun.pos);
   const v = new THREE.Vector3(d[0], d[1], d[2]);
   return v.lengthSq() > 1e-6 ? v.normalize() : new THREE.Vector3(0, 1, 0);
 }
@@ -284,6 +280,25 @@ export function blendLook(theme: Theme, arena: number, k: number, out: Blend): B
     out.sunI = N.sun.intensity * f;
     out.hazeColor.copy(c.haze[1]);
     out.hazeK = N.fogSun.k * f;
+  }
+  if (tod.playing && (matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain")) {
+    const rain = matchEnvironment.kind === "rain";
+    out.sky.set(rain ? "#788894" : "#6dafdc");
+    out.fogColor.set(rain ? "#879395" : "#bbd3d9");
+    out.hemiSky.set(rain ? "#b8c7d0" : "#d8ecff");
+    out.hemiGround.set("#8e806d");
+    out.hemiI = rain ? 1.15 : 1.6;
+    out.ambient = rain ? 0.35 : 0.4;
+    out.ambientColor.set("#ffffff");
+    out.sunDir.set(-0.5, 0.82, 0.28).normalize();
+    out.sunColor.set(rain ? "#d3dce4" : "#fff3dc");
+    out.sunI = rain ? 0.55 : 2.3;
+    out.hazeColor.copy(out.fogColor);
+    out.hazeK = rain ? 0.12 : 0.045;
+    if (rain) {
+      out.fogNear *= 0.45;
+      out.fogFar *= 0.58;
+    }
   }
   return out;
 }

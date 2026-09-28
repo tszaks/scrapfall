@@ -2,10 +2,27 @@
 // rockets, blasts). Every attack goes through a visible wind-up first; the wind-up state is
 // written to `e.vis` so co-op guests draw exactly the same telegraph (see enemyKinds.ts).
 
-import { HALF, NAV_SCALE, blocked, clearLine, toNav, type Block, type NavGrid, fineStep, type FineField } from "./level";
+import {
+  HALF,
+  NAV_SCALE,
+  blocked,
+  clearLine,
+  toNav,
+  type Block,
+  type NavGrid,
+  fineStep,
+  type FineField,
+} from "./level";
 import { climbable, groundY } from "./terrain";
 import {
-  NEW_STATS, FLYERS, PH_ACT, PH_AFTER, PH_IDLE, PH_WIND, packVis, type NewKind,
+  NEW_STATS,
+  FLYERS,
+  PH_ACT,
+  PH_AFTER,
+  PH_IDLE,
+  PH_WIND,
+  packVis,
+  type NewKind,
 } from "./enemyKinds";
 
 export type Bot = {
@@ -47,7 +64,15 @@ export type Bot = {
 };
 
 /** `air`: riding the chairlift, so only ranged fire can reach them */
-export type Target = { id: string | null; x: number; z: number; y: number; fx: number; fz: number; air?: boolean };
+export type Target = {
+  id: string | null;
+  x: number;
+  z: number;
+  y: number;
+  fx: number;
+  fz: number;
+  air?: boolean;
+};
 
 export const ORD_GRENADE = 0;
 export const ORD_ROCKET = 1;
@@ -76,7 +101,23 @@ export type Ord = {
   /** the kind that launched it (cause-of-death log) */
   src?: string;
 };
-export const newOrd = (): Ord => ({ on: false, tp: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, T: 1, lx: 0, lz: 0, yaw: 0, r: 0, tgt: null });
+export const newOrd = (): Ord => ({
+  on: false,
+  tp: 0,
+  x: 0,
+  y: 0,
+  z: 0,
+  vx: 0,
+  vy: 0,
+  vz: 0,
+  t: 0,
+  T: 1,
+  lx: 0,
+  lz: 0,
+  yaw: 0,
+  r: 0,
+  tgt: null,
+});
 
 export const GRENADE_FUSE = 0.85;
 export const GRENADE_RADIUS = 2.8;
@@ -100,7 +141,17 @@ export type AICtx = {
   hurtTarget: (t: Target, dmg: number, kx?: number, kz?: number, src?: string) => void;
   /** attack clock step: delta scaled by the difficulty's tempo (cooldowns, wind-ups) */
   tdelta?: number;
-  shoot: (x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, dmg: number, size: number) => void;
+  shoot: (
+    x: number,
+    y: number,
+    z: number,
+    vx: number,
+    vy: number,
+    vz: number,
+    life: number,
+    dmg: number,
+    size: number,
+  ) => void;
   ords: Ord[];
   /** hornets share one sting cooldown, so a pack cannot land five hits in one frame */
   hornetCd: { v: number };
@@ -124,7 +175,8 @@ function turn(e: Bot, want: number, rate: number, dt: number) {
  * a chairlift overhead, a deck above the sand, or a rooftop) */
 export const MELEE_DY = 1.6;
 const eyeOf = (t: Target) => t.y - 1.6;
-export const meleeOK = (t: Target, x: number, z: number, dy = MELEE_DY) => !t.air && Math.abs(eyeOf(t) - groundY(x, z)) < dy;
+export const meleeOK = (t: Target, x: number, z: number, dy = MELEE_DY) =>
+  !t.air && Math.abs(eyeOf(t) - groundY(x, z)) < dy;
 
 function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   const mx = tx - e.x;
@@ -137,8 +189,14 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   const r = rad(e);
   let moved = false;
   // (only steps it could walk: never up a balcony edge or the church tower's face)
-  if (!blocked(ctx.blocks, nx, e.z, r) && climbable(e.x, e.z, nx, e.z)) { e.x = nx; moved = true; }
-  if (!blocked(ctx.blocks, e.x, nz, r) && climbable(e.x, e.z, e.x, nz)) { e.z = nz; moved = true; }
+  if (!blocked(ctx.blocks, nx, e.z, r) && climbable(e.x, e.z, nx, e.z)) {
+    e.x = nx;
+    moved = true;
+  }
+  if (!blocked(ctx.blocks, e.x, nz, r) && climbable(e.x, e.z, e.x, nz)) {
+    e.z = nz;
+    moved = true;
+  }
   return moved;
 }
 
@@ -159,7 +217,10 @@ function waypoint(e: Bot, t: Target, ctx: AICtx) {
  * round the block instead of up the street the player is watching.
  */
 function descend(
-  nav: NavGrid, dist: Float32Array, x: number, z: number,
+  nav: NavGrid,
+  dist: Float32Array,
+  x: number,
+  z: number,
   bias: { px: number; pz: number; fx: number; fz: number; w: number } | null,
 ) {
   const { g: solid, n } = nav;
@@ -190,7 +251,11 @@ function descend(
       if (solid[k]) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
       const c = cost(k);
-      if (c < best) { best = c; bi = ni; bj = nj; }
+      if (c < best) {
+        best = c;
+        bi = ni;
+        bj = nj;
+      }
     }
   }
   const k = bi * n + bj;
@@ -206,7 +271,8 @@ function approach(e: Bot, t: Target, dir: number, speed: number, ctx: AICtx) {
   else walk(e, e.x - (wp.x - e.x), e.z - (wp.z - e.z), speed * ctx.delta, ctx);
 }
 
-const los = (ctx: AICtx, ax: number, az: number, bx: number, bz: number) => clearLine(ctx.blocks, ax, az, bx, bz, 0.1);
+const los = (ctx: AICtx, ax: number, az: number, bx: number, bz: number) =>
+  clearLine(ctx.blocks, ax, az, bx, bz, 0.1);
 
 function spawnOrd(ctx: AICtx): Ord | null {
   for (const o of ctx.ords) if (!o.on) return o;
@@ -216,7 +282,22 @@ function spawnOrd(ctx: AICtx): Ord | null {
 export function blast(ords: Ord[], x: number, z: number, r: number, y = groundY(x, z) + 0.6) {
   const o = ords.find((q) => !q.on);
   if (!o) return;
-  Object.assign(o, { on: true, tp: ORD_BLAST, x, y, z, vx: 0, vy: 0, vz: 0, t: 0, T: 0.4, lx: x, lz: z, r, tgt: null });
+  Object.assign(o, {
+    on: true,
+    tp: ORD_BLAST,
+    x,
+    y,
+    z,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    t: 0,
+    T: 0.4,
+    lx: x,
+    lz: z,
+    r,
+    tgt: null,
+  });
 }
 
 /** one host tick for a newer-type enemy: movement, telegraphs and attacks */
@@ -242,7 +323,13 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       if (st === 0) {
         if (d < 3.2 && e.cooldown > 0) {
           // recharging: buzz round you at arm's length instead of sitting in your face
-          walk(e, e.x - (dz / d) * (idx % 2 ? 1 : -1) - (dx / d) * 0.6, e.z + (dx / d) * (idx % 2 ? 1 : -1) - (dz / d) * 0.6, spd * 0.6 * dt, ctx);
+          walk(
+            e,
+            e.x - (dz / d) * (idx % 2 ? 1 : -1) - (dx / d) * 0.6,
+            e.z + (dx / d) * (idx % 2 ? 1 : -1) - (dz / d) * 0.6,
+            spd * 0.6 * dt,
+            ctx,
+          );
         } else {
           const wp = waypoint(e, target, ctx);
           walk(e, wp.x, wp.z, spd * dt, ctx);
@@ -250,25 +337,50 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         // erratic weave, so a pack reads as a swarm and is hard to track
         const w = Math.sin(ctx.time * 6 + idx * 1.7) * 2.2 * dt;
         walk(e, e.x - dz / d, e.z + dx / d, w, ctx);
-        if (d < 3.6 && e.cooldown <= 0) { e.st = 1; e.t1 = 0.35 + ctx.rand() * 0.3; e.plan = e.t1; }
+        if (d < 3.6 && e.cooldown <= 0) {
+          e.st = 1;
+          e.t1 = 0.35 + ctx.rand() * 0.3;
+          e.plan = e.t1;
+        }
       } else if (st === 1) {
-        if (e.t1 <= 0) { e.st = 2; e.t1 = 0.45; e.ax = dx / d; e.az = dz / d; }
+        if (e.t1 <= 0) {
+          e.st = 2;
+          e.t1 = 0.45;
+          e.ax = dx / d;
+          e.az = dz / d;
+        }
       } else if (st === 2) {
-        const moved = walk(e, e.x + e.ax! * 5, e.z + e.az! * 5, 11 * (e.slow > 0 ? 0.5 : 1) * dt, ctx);
+        const moved = walk(
+          e,
+          e.x + e.ax! * 5,
+          e.z + e.az! * 5,
+          11 * (e.slow > 0 ? 0.5 : 1) * dt,
+          ctx,
+        );
         let hit = false;
         for (const t of ctx.targets) {
           if (Math.hypot(t.x - e.x, t.z - e.z) < 1.0 && meleeOK(t, e.x, e.z, 2.4)) {
-            if (ctx.hornetCd.v <= 0) { ctx.hurtTarget(t, stats.dmg); ctx.hornetCd.v = 0.25; }
+            if (ctx.hornetCd.v <= 0) {
+              ctx.hurtTarget(t, stats.dmg);
+              ctx.hornetCd.v = 0.25;
+            }
             hit = true;
             break;
           }
         }
-        if (hit || !moved || e.t1 <= 0) { e.st = 3; e.t1 = 0.6; e.cooldown = 1.6; }
+        if (hit || !moved || e.t1 <= 0) {
+          e.st = 3;
+          e.t1 = 0.6;
+          e.cooldown = 1.6;
+        }
       } else {
         walk(e, e.x - dx, e.z - dz, spd * 0.8 * dt, ctx);
         if (e.t1 <= 0) e.st = 0;
       }
-      e.vis = packVis(e.st === 1 ? PH_WIND : e.st === 2 ? PH_ACT : PH_IDLE, e.st === 1 ? 1 - e.t1 / (e.plan || 0.4) : 0);
+      e.vis = packVis(
+        e.st === 1 ? PH_WIND : e.st === 2 ? PH_ACT : PH_IDLE,
+        e.st === 1 ? 1 - e.t1 / (e.plan || 0.4) : 0,
+      );
       break;
     }
 
@@ -327,7 +439,8 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
             e.gd0 = gd;
           }
           if (gd > 1.5) {
-            if (clearLine(ctx.blocks, e.x, e.z, e.ax!, e.az!, rad(e) * 0.9)) walk(e, e.ax!, e.az!, spd * dt, ctx);
+            if (clearLine(ctx.blocks, e.x, e.z, e.ax!, e.az!, rad(e) * 0.9))
+              walk(e, e.ax!, e.az!, spd * dt, ctx);
             else {
               const dist = ctx.fieldFor(target);
               // round the block: the target's distance field, with the street it is watching made
@@ -335,7 +448,16 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
               // (the city's streets; the small arenas are open enough to just arc round)
               if ((e.stuck ?? 0) >= 0.8) e.detour = 2;
               e.detour = (e.detour ?? 0) - dt;
-              const wp = dist && NAV_SCALE > 1 && e.detour <= 0 ? descend(ctx.solid, dist, e.x, e.z, { px: target.x, pz: target.z, fx, fz, w: 14 }) : null;
+              const wp =
+                dist && NAV_SCALE > 1 && e.detour <= 0
+                  ? descend(ctx.solid, dist, e.x, e.z, {
+                      px: target.x,
+                      pz: target.z,
+                      fx,
+                      fz,
+                      w: 14,
+                    })
+                  : null;
               if (wp) walk(e, wp.x, wp.z, spd * dt, ctx);
               else {
                 const w2 = waypoint(e, target, ctx);
@@ -344,27 +466,63 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
                 const wl = Math.hypot(wx, wz) || 1;
                 const sd = e.side ?? 1;
                 const tw = d < 15 ? 1.3 : 0.6; // close in: mostly circle
-                walk(e, e.x + (wx / wl) * (d < 15 ? 0.6 : 1) - (dz / d) * sd * tw, e.z + (wz / wl) * (d < 15 ? 0.6 : 1) + (dx / d) * sd * tw, spd * dt, ctx);
+                walk(
+                  e,
+                  e.x + (wx / wl) * (d < 15 ? 0.6 : 1) - (dz / d) * sd * tw,
+                  e.z + (wz / wl) * (d < 15 ? 0.6 : 1) + (dx / d) * sd * tw,
+                  spd * dt,
+                  ctx,
+                );
               }
             }
           } else {
             // on station: circle round the player on its side
-            walk(e, e.x - (dz / d) * (e.side ?? 1), e.z + (dx / d) * (e.side ?? 1), spd * 0.5 * dt, ctx);
+            walk(
+              e,
+              e.x - (dz / d) * (e.side ?? 1),
+              e.z + (dx / d) * (e.side ?? 1),
+              spd * 0.5 * dt,
+              ctx,
+            );
           }
-          const canShoot = d < 12 && (!inFront || (e.shots ?? 0) > 10) && los(ctx, e.x, e.z, target.x, target.z);
-          if (canShoot && e.cooldown <= 0) { e.st = 1; e.t1 = 0.5; }
+          const canShoot =
+            d < 12 && (!inFront || (e.shots ?? 0) > 10) && los(ctx, e.x, e.z, target.x, target.z);
+          if (canShoot && e.cooldown <= 0) {
+            e.st = 1;
+            e.t1 = 0.5;
+          }
         }
       } else if (st === 1) {
-        if (e.t1 <= 0) { e.st = 2; e.t1 = 0; e.shots = 3; }
+        if (e.t1 <= 0) {
+          e.st = 2;
+          e.t1 = 0;
+          e.shots = 3;
+        }
       } else {
-        walk(e, e.x - (dz / d) * (e.side ?? 1), e.z + (dx / d) * (e.side ?? 1), spd * 0.4 * dt, ctx);
+        walk(
+          e,
+          e.x - (dz / d) * (e.side ?? 1),
+          e.z + (dx / d) * (e.side ?? 1),
+          spd * 0.4 * dt,
+          ctx,
+        );
         if (e.t1 <= 0 && (e.shots ?? 0) > 0 && e.shots! <= 3) {
           e.t1 = 0.12;
           e.shots = e.shots! - 1;
           const a = face + (ctx.rand() - 0.5) * 0.08;
           const vy = (target.y - 0.2 - 1.1 - g) / d;
           const len = Math.hypot(1, vy);
-          ctx.shoot(e.x + Math.sin(a) * 0.7, g + 1.1, e.z + Math.cos(a) * 0.7, (Math.sin(a) / len) * 15, (vy / len) * 15, (Math.cos(a) / len) * 15, 1.4, stats.dmg, 0.13);
+          ctx.shoot(
+            e.x + Math.sin(a) * 0.7,
+            g + 1.1,
+            e.z + Math.cos(a) * 0.7,
+            (Math.sin(a) / len) * 15,
+            (vy / len) * 15,
+            (Math.cos(a) / len) * 15,
+            1.4,
+            stats.dmg,
+            0.13,
+          );
         }
         if ((e.shots ?? 0) <= 0) {
           e.st = 0;
@@ -373,7 +531,10 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           e.plan = 0;
         }
       }
-      e.vis = packVis(e.st === 1 ? PH_WIND : e.st === 2 ? PH_ACT : PH_IDLE, e.st === 1 ? 1 - e.t1 / 0.5 : 0);
+      e.vis = packVis(
+        e.st === 1 ? PH_WIND : e.st === 2 ? PH_ACT : PH_IDLE,
+        e.st === 1 ? 1 - e.t1 / 0.5 : 0,
+      );
       break;
     }
 
@@ -382,7 +543,10 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       e.yaw = face;
       if (st === 0) {
         approach(e, target, d > 17 ? 1 : d < 10 ? -1 : 0, spd, ctx);
-        if (e.cooldown <= 0 && d < 21) { e.st = 1; e.t1 = 0.6; }
+        if (e.cooldown <= 0 && d < 21) {
+          e.st = 1;
+          e.t1 = 0.6;
+        }
       } else if (e.t1 <= 0) {
         const o = spawnOrd(ctx);
         if (o) {
@@ -390,15 +554,30 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const off = ctx.rand() * 1.2;
           let lx = target.x + Math.sin(a) * off;
           let lz = target.z + Math.cos(a) * off;
-          if (Math.abs(lx) > HALF - 1 || Math.abs(lz) > HALF - 1) { lx = target.x; lz = target.z; }
+          if (Math.abs(lx) > HALF - 1 || Math.abs(lz) > HALF - 1) {
+            lx = target.x;
+            lz = target.z;
+          }
           const sx = e.x + Math.sin(face) * 0.5;
           const sz = e.z + Math.cos(face) * 0.5;
           const y0 = g + 2.1;
           const T = Math.max(0.8, Math.min(1.7, Math.hypot(lx - sx, lz - sz) / 11));
           Object.assign(o, {
-            on: true, tp: ORD_GRENADE, src: "grenadier", x: sx, y: y0, z: sz,
-            vx: (lx - sx) / T, vz: (lz - sz) / T, vy: (groundY(lx, lz) + 0.25 - y0) / T + 0.5 * GRAVITY * T,
-            t: 0, T, lx, lz, r: GRENADE_RADIUS, tgt: null,
+            on: true,
+            tp: ORD_GRENADE,
+            src: "grenadier",
+            x: sx,
+            y: y0,
+            z: sz,
+            vx: (lx - sx) / T,
+            vz: (lz - sz) / T,
+            vy: (groundY(lx, lz) + 0.25 - y0) / T + 0.5 * GRAVITY * T,
+            t: 0,
+            T,
+            lx,
+            lz,
+            r: GRENADE_RADIUS,
+            tgt: null,
           });
         }
         e.st = 0;
@@ -417,9 +596,17 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         e.plan = (e.plan ?? 0) - dt;
         if (e.plan > 0 && e.ax !== undefined) {
           // relocating after a shot: dash to the chosen spot
-          if (Math.hypot(e.ax - e.x, e.az! - e.z) < 0.6 || !walk(e, e.ax, e.az!, spd * 1.3 * dt, ctx)) e.plan = 0;
+          if (
+            Math.hypot(e.ax - e.x, e.az! - e.z) < 0.6 ||
+            !walk(e, e.ax, e.az!, spd * 1.3 * dt, ctx)
+          )
+            e.plan = 0;
         } else if (sees && d >= 12 && d <= 46) {
-          if (e.cooldown <= 0) { e.st = 1; e.t1 = 1.5; e.shots = 0; }
+          if (e.cooldown <= 0) {
+            e.st = 1;
+            e.t1 = 1.5;
+            e.shots = 0;
+          }
         } else {
           approach(e, target, d < 12 ? -1 : 1, spd, ctx);
         }
@@ -427,8 +614,10 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         e.yaw = face;
         laser = d;
         if (!sees) e.shots = (e.shots ?? 0) + dt;
-        if ((e.shots ?? 0) > 0.25) { e.st = 0; e.cooldown = 0.6; }
-        else if (e.t1 <= 0) {
+        if ((e.shots ?? 0) > 0.25) {
+          e.st = 0;
+          e.cooldown = 0.6;
+        } else if (e.t1 <= 0) {
           // lock: the aim freezes here, so a sidestep now makes it miss
           e.st = 2;
           e.t1 = 0.45;
@@ -447,14 +636,20 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
             const s = (t.x - e.x) * ux + (t.z - e.z) * uz;
             if (s <= 0 || s > 60) continue;
             const perp = Math.abs((t.x - e.x) * uz - (t.z - e.z) * ux);
-            if (perp < 0.8 && s < bs && los(ctx, e.x, e.z, t.x, t.z)) { best = t; bs = s; }
+            if (perp < 0.8 && s < bs && los(ctx, e.x, e.z, t.x, t.z)) {
+              best = t;
+              bs = s;
+            }
           }
           // tracer runs to whoever it hit, or to the first wall
           let len = bs;
           if (!best) {
             len = 60;
             for (let s = 1; s < 60; s += 0.5) {
-              if (blocked(ctx.blocks, e.x + ux * s, e.z + uz * s, 0.05)) { len = s; break; }
+              if (blocked(ctx.blocks, e.x + ux * s, e.z + uz * s, 0.05)) {
+                len = s;
+                break;
+              }
             }
           } else ctx.hurtTarget(best, stats.dmg);
           e.ax = len;
@@ -478,11 +673,22 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
             pick = { x, z };
             if (!los(ctx, x, z, target.x, target.z)) break;
           }
-          if (pick) { e.ax = pick.x; e.az = pick.z; e.plan = 2.5; } else { e.ax = undefined; e.plan = 0; }
+          if (pick) {
+            e.ax = pick.x;
+            e.az = pick.z;
+            e.plan = 2.5;
+          } else {
+            e.ax = undefined;
+            e.plan = 0;
+          }
         }
       }
       const ph = e.st ?? 0;
-      e.vis = packVis(ph, ph === 1 ? 1 - e.t1 / 1.5 : ph === 2 ? 1 : 0, Math.min(1023, Math.round(laser)));
+      e.vis = packVis(
+        ph,
+        ph === 1 ? 1 - e.t1 / 1.5 : ph === 2 ? 1 : 0,
+        Math.min(1023, Math.round(laser)),
+      );
       break;
     }
 
@@ -496,16 +702,24 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       turn(e, face, 1.1, dt);
       if (st === 0) {
         approach(e, target, d > 1.9 ? 1 : 0, spd, ctx);
-        if (d < 2.3 && e.cooldown <= 0) { e.st = 1; e.t1 = 0.5; }
+        if (d < 2.3 && e.cooldown <= 0) {
+          e.st = 1;
+          e.t1 = 0.5;
+        }
       } else if (e.t1 <= 0) {
         const fx = Math.sin(e.yaw ?? face);
         const fz = Math.cos(e.yaw ?? face);
-        if (d < 2.6 && (dx * fx + dz * fz) / d > 0.3) ctx.hurtTarget(target, stats.dmg, fx * 7, fz * 7);
+        if (d < 2.6 && (dx * fx + dz * fz) / d > 0.3)
+          ctx.hurtTarget(target, stats.dmg, fx * 7, fz * 7);
         e.st = 0;
         e.cooldown = 1.8;
       }
       const up = (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0;
-      e.vis = packVis(e.st === 1 ? PH_WIND : PH_IDLE, e.st === 1 ? 1 - e.t1 / 0.5 : 0, (up ? 1 : 0) | ((e.blockT ?? 0) > 0 ? 2 : 0));
+      e.vis = packVis(
+        e.st === 1 ? PH_WIND : PH_IDLE,
+        e.st === 1 ? 1 - e.t1 / 0.5 : 0,
+        (up ? 1 : 0) | ((e.blockT ?? 0) > 0 ? 2 : 0),
+      );
       break;
     }
 
@@ -514,11 +728,20 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       if (st === 0) {
         e.yaw = face;
         approach(e, target, d > 2.2 ? 1 : 0, spd, ctx);
-        if (d < 17 && e.cooldown <= 0 && clearLine(ctx.blocks, e.x, e.z, target.x, target.z, 0.7)) { e.st = 1; e.t1 = 1.0; }
+        if (d < 17 && e.cooldown <= 0 && clearLine(ctx.blocks, e.x, e.z, target.x, target.z, 0.7)) {
+          e.st = 1;
+          e.t1 = 1.0;
+        }
       } else if (st === 1) {
         // tracks you for most of the wind-up, then the lane locks for the last 0.3 s
-        if (e.t1 > 0.3) { e.yaw = face; }
-        if (e.t1 <= 0) { e.st = 2; e.t1 = 1.5; e.shots = 0; }
+        if (e.t1 > 0.3) {
+          e.yaw = face;
+        }
+        if (e.t1 <= 0) {
+          e.st = 2;
+          e.t1 = 1.5;
+          e.shots = 0;
+        }
       } else if (st === 2) {
         const ux = Math.sin(e.yaw ?? face);
         const uz = Math.cos(e.yaw ?? face);
@@ -529,10 +752,15 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const step = Math.min(0.35, total - s);
           const nx = e.x + ux * step;
           const nz = e.z + uz * step;
-          if (blocked(ctx.blocks, nx, nz, rad(e)) || !climbable(e.x, e.z, nx, nz)) { wall = true; break; }
+          if (blocked(ctx.blocks, nx, nz, rad(e)) || !climbable(e.x, e.z, nx, nz)) {
+            wall = true;
+            break;
+          }
           e.x = nx;
           e.z = nz;
-          const hitT = ctx.targets.find((t) => Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z));
+          const hitT = ctx.targets.find(
+            (t) => Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z),
+          );
           if (hitT) {
             ctx.hurtTarget(hitT, stats.dmg, ux * 14, uz * 14);
             e.st = 4;
@@ -540,15 +768,29 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
             break;
           }
         }
-        if (wall) { e.st = 3; e.t1 = 2.2; }
-        else if (e.st === 2 && e.t1 <= 0) { e.st = 4; e.t1 = 0.7; }
+        if (wall) {
+          e.st = 3;
+          e.t1 = 2.2;
+        } else if (e.st === 2 && e.t1 <= 0) {
+          e.st = 4;
+          e.t1 = 0.7;
+        }
       } else if (st === 3) {
-        if (e.t1 <= 0) { e.st = 4; e.t1 = 0.3; }
+        if (e.t1 <= 0) {
+          e.st = 4;
+          e.t1 = 0.3;
+        }
       } else {
-        if (e.t1 <= 0) { e.st = 0; e.cooldown = 2.5; }
+        if (e.t1 <= 0) {
+          e.st = 0;
+          e.cooldown = 2.5;
+        }
       }
       const s2 = e.st ?? 0;
-      e.vis = packVis(s2 === 1 ? PH_WIND : s2 === 2 ? PH_ACT : s2 === 3 ? PH_AFTER : PH_IDLE, s2 === 1 ? 1 - e.t1 / 1.0 : 0);
+      e.vis = packVis(
+        s2 === 1 ? PH_WIND : s2 === 2 ? PH_ACT : s2 === 3 ? PH_AFTER : PH_IDLE,
+        s2 === 1 ? 1 - e.t1 / 1.0 : 0,
+      );
       break;
     }
 
@@ -565,7 +807,10 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           if (!o.alive || o === e || o.kind === "medic" || o.kind === "boss") continue;
           if (Math.hypot(o.x - e.x, o.z - e.z) > 16) continue;
           const f = o.hp / (o.max ?? o.hp);
-          if (f < worst) { worst = f; best = i; }
+          if (f < worst) {
+            worst = f;
+            best = i;
+          }
         }
         e.tgt = best;
       }
@@ -576,7 +821,10 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         for (const o of ctx.enemies) {
           if (!o.alive || o === e || o.kind === "medic" || FLYERS.has(o.kind)) continue;
           const dd = Math.hypot(o.x - e.x, o.z - e.z);
-          if (dd < bd) { bd = dd; ally = o; }
+          if (dd < bd) {
+            bd = dd;
+            ally = o;
+          }
         }
       }
       if (d < 8) {
@@ -610,7 +858,17 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         e.cooldown = 2.8;
         const vy = (target.y - 2.6 - g) / d;
         const len = Math.hypot(1, vy);
-        ctx.shoot(e.x, g + 2.6, e.z, (dx / d / len) * 9, (vy / len) * 9, (dz / d / len) * 9, 2.5, 1, 0.22);
+        ctx.shoot(
+          e.x,
+          g + 2.6,
+          e.z,
+          (dx / d / len) * 9,
+          (vy / len) * 9,
+          (dz / d / len) * 9,
+          2.5,
+          1,
+          0.22,
+        );
       }
       e.vis = packVis(e.st === 2 ? PH_ACT : PH_IDLE, 0, beam);
       break;
@@ -621,10 +879,17 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       if (st === 0) {
         turn(e, face, 2.2, dt);
         approach(e, target, d > 15 ? 1 : d < 8 ? -1 : 0, spd, ctx);
-        if (e.cooldown <= 0 && d < 19 && los(ctx, e.x, e.z, target.x, target.z)) { e.st = 1; e.t1 = 1.1; }
+        if (e.cooldown <= 0 && d < 19 && los(ctx, e.x, e.z, target.x, target.z)) {
+          e.st = 1;
+          e.t1 = 1.1;
+        }
       } else if (st === 1) {
         turn(e, face, 0.65, dt);
-        if (e.t1 <= 0) { e.st = 2; e.t1 = 1.5; e.shots = 0; }
+        if (e.t1 <= 0) {
+          e.st = 2;
+          e.t1 = 1.5;
+          e.shots = 0;
+        }
       } else if (st === 2) {
         // it tracks slowly: strafing round it at close range outpaces the barrels
         turn(e, face, 0.65, dt);
@@ -636,15 +901,33 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           const y0 = e.yaw ?? face;
           const mx = e.x + Math.sin(y0) * 1.1 + Math.cos(y0) * 0.45;
           const mz = e.z + Math.cos(y0) * 1.1 - Math.sin(y0) * 0.45;
-          const a = Math.atan2(e.x + Math.sin(y0) * d - mx, e.z + Math.cos(y0) * d - mz) + (Math.random() - 0.5) * 0.2;
+          const a =
+            Math.atan2(e.x + Math.sin(y0) * d - mx, e.z + Math.cos(y0) * d - mz) +
+            (Math.random() - 0.5) * 0.2;
           const vy = (target.y - 0.2 - 1.3 - g) / Math.max(2, d);
           const len = Math.hypot(1, vy);
-          ctx.shoot(mx, g + 1.3, mz, (Math.sin(a) / len) * 14, (vy / len) * 14, (Math.cos(a) / len) * 14, 1.6, stats.dmg, 0.12);
+          ctx.shoot(
+            mx,
+            g + 1.3,
+            mz,
+            (Math.sin(a) / len) * 14,
+            (vy / len) * 14,
+            (Math.cos(a) / len) * 14,
+            1.6,
+            stats.dmg,
+            0.12,
+          );
         }
-        if (e.t1 <= 0) { e.st = 3; e.t1 = 1.2; }
+        if (e.t1 <= 0) {
+          e.st = 3;
+          e.t1 = 1.2;
+        }
       } else {
         turn(e, face, 1.2, dt);
-        if (e.t1 <= 0) { e.st = 0; e.cooldown = 2.2; }
+        if (e.t1 <= 0) {
+          e.st = 0;
+          e.cooldown = 2.2;
+        }
       }
       const s2 = e.st ?? 0;
       e.vis = packVis(s2, s2 === 1 ? 1 - e.t1 / 1.1 : s2 === 3 ? e.t1 / 1.2 : s2 === 2 ? 1 : 0);
@@ -656,13 +939,33 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       e.yaw = face;
       if (st === 0) {
         approach(e, target, d > 24 ? 1 : d < 13 ? -1 : 0, spd, ctx);
-        if (e.cooldown <= 0 && d < 28 && los(ctx, e.x, e.z, target.x, target.z)) { e.st = 1; e.t1 = 0.9; }
+        if (e.cooldown <= 0 && d < 28 && los(ctx, e.x, e.z, target.x, target.z)) {
+          e.st = 1;
+          e.t1 = 0.9;
+        }
       } else if (e.t1 <= 0) {
         const o = spawnOrd(ctx);
         if (o) {
           const sx = e.x + Math.cos(face) * 0.45 + Math.sin(face) * 0.6;
           const sz = e.z - Math.sin(face) * 0.45 + Math.cos(face) * 0.6;
-          Object.assign(o, { on: true, tp: ORD_ROCKET, src: "rocketeer", x: sx, y: g + 2.2, z: sz, vx: 0, vy: 0, vz: 0, t: 0, T: ROCKET_LIFE, lx: 0, lz: 0, yaw: face, r: ROCKET_RADIUS, tgt: target.id });
+          Object.assign(o, {
+            on: true,
+            tp: ORD_ROCKET,
+            src: "rocketeer",
+            x: sx,
+            y: g + 2.2,
+            z: sz,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            t: 0,
+            T: ROCKET_LIFE,
+            lx: 0,
+            lz: 0,
+            yaw: face,
+            r: ROCKET_RADIUS,
+            tgt: target.id,
+          });
         }
         e.st = 0;
         e.cooldown = 5 + ctx.rand() * 1.5;
@@ -677,11 +980,18 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       const revealed = (e.hitT ?? 0) > 0;
       if (st === 0) {
         approach(e, target, 1, spd, ctx);
-        if (d <= 6) { e.st = 1; e.t1 = 0.6; }
+        if (d <= 6) {
+          e.st = 1;
+          e.t1 = 0.6;
+        }
       } else if (st === 1) {
         approach(e, target, d > 1.7 ? 1 : 0, spd, ctx);
-        if (d > 8) e.st = 0; // you ran: it slips back into cloak
-        else if (e.t1 <= 0 && d < 1.9 && e.cooldown <= 0) { e.st = 2; e.t1 = 0.35; }
+        if (d > 8)
+          e.st = 0; // you ran: it slips back into cloak
+        else if (e.t1 <= 0 && d < 1.9 && e.cooldown <= 0) {
+          e.st = 2;
+          e.t1 = 0.35;
+        }
       } else if (st === 2) {
         if (e.t1 <= 0) {
           if (d < 2.3) ctx.hurtTarget(target, stats.dmg);
@@ -696,14 +1006,23 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
       const s2 = e.st ?? 0;
       const cloaked = s2 === 0 && d > 6 && !revealed;
       const shimmer = s2 === 1 && e.t1 > 0 && !revealed;
-      e.vis = packVis(s2 === 2 ? PH_WIND : PH_IDLE, s2 === 2 ? 1 - e.t1 / 0.35 : 0, cloaked ? 1 : shimmer ? 2 : 0);
+      e.vis = packVis(
+        s2 === 2 ? PH_WIND : PH_IDLE,
+        s2 === 2 ? 1 - e.t1 / 0.35 : 0,
+        cloaked ? 1 : shimmer ? 2 : 0,
+      );
       break;
     }
   }
 }
 
 /** bulwark shield: true if a shot travelling (vx, vz) hits the raised shield face */
-export function shieldBlocks(e: { kind: string; yaw?: number; vis?: number }, vx: number, vz: number, up: boolean) {
+export function shieldBlocks(
+  e: { kind: string; yaw?: number; vis?: number },
+  vx: number,
+  vz: number,
+  up: boolean,
+) {
   if (e.kind !== "bulwark" || !up) return false;
   const vl = Math.hypot(vx, vz);
   if (vl < 1e-4) return false;
@@ -716,7 +1035,10 @@ export function shieldBlocks(e: { kind: string; yaw?: number; vis?: number }, vx
 export function drainShield(e: Bot, dmg: number) {
   e.blockT = 0.12;
   e.shield = (e.shield ?? 0) - dmg;
-  if (e.shield <= 0) { e.shield = 0; e.shieldT = 4; }
+  if (e.shield <= 0) {
+    e.shield = 0;
+    e.shieldT = 4;
+  }
 }
 
 /** charger stunned against a wall takes extra damage */
@@ -747,7 +1069,14 @@ export function stepOrds(ctx: AICtx) {
         o.on = false;
         for (const t of ctx.targets) {
           const dd = Math.hypot(t.x - o.x, t.z - o.z);
-          if (dd < o.r && Math.abs(eyeOf(t) - o.y) < o.r + 1.5) ctx.hurtTarget(t, 2, ((t.x - o.x) / (dd || 1)) * 6, ((t.z - o.z) / (dd || 1)) * 6, o.src ?? "grenadier");
+          if (dd < o.r && Math.abs(eyeOf(t) - o.y) < o.r + 1.5)
+            ctx.hurtTarget(
+              t,
+              2,
+              ((t.x - o.x) / (dd || 1)) * 6,
+              ((t.z - o.z) / (dd || 1)) * 6,
+              o.src ?? "grenadier",
+            );
         }
         blast(ctx.ords, o.x, o.z, o.r);
       }
@@ -759,7 +1088,10 @@ export function stepOrds(ctx: AICtx) {
       let bd = Infinity;
       for (const q of ctx.targets) {
         const dd = Math.hypot(q.x - o.x, q.z - o.z);
-        if (dd < bd) { bd = dd; t = q; }
+        if (dd < bd) {
+          bd = dd;
+          t = q;
+        }
       }
     }
     if (t) turnOrd(o, Math.atan2(t.x - o.x, t.z - o.z), dt);
@@ -772,7 +1104,14 @@ export function stepOrds(ctx: AICtx) {
       o.on = false;
       for (const q of ctx.targets) {
         const dd = Math.hypot(q.x - o.x, q.z - o.z);
-        if (dd < o.r && Math.abs(eyeOf(q) - o.y) < o.r + 1.5) ctx.hurtTarget(q, 3, ((q.x - o.x) / (dd || 1)) * 8, ((q.z - o.z) / (dd || 1)) * 8, o.src ?? "rocketeer");
+        if (dd < o.r && Math.abs(eyeOf(q) - o.y) < o.r + 1.5)
+          ctx.hurtTarget(
+            q,
+            3,
+            ((q.x - o.x) / (dd || 1)) * 8,
+            ((q.z - o.z) / (dd || 1)) * 8,
+            o.src ?? "rocketeer",
+          );
       }
       blast(ctx.ords, o.x, o.z, o.r, o.y);
     }
@@ -789,7 +1128,13 @@ function turnOrd(o: Ord, want: number, dt: number) {
 export function rocketAt(ords: Ord[], x: number, y: number, z: number) {
   for (let i = 0; i < ords.length; i++) {
     const o = ords[i]!;
-    if (o.on && o.tp === ORD_ROCKET && Math.hypot(o.x - x, o.z - z) < 0.65 && Math.abs(o.y - y) < 0.7) return i;
+    if (
+      o.on &&
+      o.tp === ORD_ROCKET &&
+      Math.hypot(o.x - x, o.z - z) < 0.65 &&
+      Math.abs(o.y - y) < 0.7
+    )
+      return i;
   }
   return -1;
 }
@@ -803,9 +1148,22 @@ export function packOrds(ords: Ord[]) {
     if (!o.on) return;
     const total = o.tp === ORD_GRENADE ? o.T + GRENADE_FUSE : o.T;
     const prog = Math.max(0, Math.min(127, Math.round((o.t / total) * 127)));
-    const a = o.tp === ORD_GRENADE ? Math.round(o.lx * 100) : o.tp === ORD_ROCKET ? Math.round(o.yaw * 1000) : Math.round(o.r * 100);
+    const a =
+      o.tp === ORD_GRENADE
+        ? Math.round(o.lx * 100)
+        : o.tp === ORD_ROCKET
+          ? Math.round(o.yaw * 1000)
+          : Math.round(o.r * 100);
     const b = o.tp === ORD_GRENADE ? Math.round(o.lz * 100) : 0;
-    out.push(i, o.tp | (prog << 2), Math.round(o.x * 100), Math.round(o.y * 100), Math.round(o.z * 100), a, b);
+    out.push(
+      i,
+      o.tp | (prog << 2),
+      Math.round(o.x * 100),
+      Math.round(o.y * 100),
+      Math.round(o.z * 100),
+      a,
+      b,
+    );
   });
   return out;
 }
@@ -826,7 +1184,11 @@ export function unpackOrds(ords: Ord[], a: number[], tx: Float32Array) {
     const fresh = !o.on || o.tp !== tp;
     o.on = true;
     o.tp = tp;
-    if (fresh) { o.x = x; o.y = y; o.z = z; }
+    if (fresh) {
+      o.x = x;
+      o.y = y;
+      o.z = z;
+    }
     tx[i * 3] = x;
     tx[i * 3 + 1] = y;
     tx[i * 3 + 2] = z;
@@ -846,5 +1208,50 @@ export function unpackOrds(ords: Ord[], a: number[], tx: Float32Array) {
       o.t = prog * 0.4;
     }
   }
-  ords.forEach((o, i) => { if (!seen.has(i)) o.on = false; });
+  ords.forEach((o, i) => {
+    if (!seen.has(i)) o.on = false;
+  });
+}
+
+/** Cancel unlaunched attacks when the last standing player leaves this zone. */
+export function abandonTarget(
+  e: Bot & { aux?: number; swing: number; shot: number },
+  dt: number,
+  attackDt = dt,
+  bossShape?: string,
+) {
+  e.swing = 0;
+  e.shot = Math.max(e.shot, 0.8);
+  e.cooldown = Math.max(e.cooldown, 0.8);
+  e.hitT = Math.max(0, (e.hitT ?? 0) - dt);
+  e.blockT = Math.max(0, (e.blockT ?? 0) - dt);
+  if ((e.shieldT ?? 0) > 0) {
+    e.shieldT = Math.max(0, e.shieldT! - dt);
+    if (e.shieldT === 0) e.shield = e.shieldMax ?? 8;
+  }
+  // Wall stun is a consequence of the previous charge, and must finish in place.
+  if (e.kind === "charger" && e.st === 3 && (e.t1 ?? 0) > attackDt) {
+    e.t1! -= attackDt;
+    e.vis = packVis(PH_AFTER, 0, 0);
+    return false;
+  }
+  e.st = 0;
+  e.t1 = 0;
+  e.shots = 0;
+  e.plan = 0;
+  e.ax = undefined;
+  e.az = undefined;
+  e.stuck = 0;
+  e.gd0 = 0;
+  e.detour = 0;
+  e.tgt = -1;
+  e.aux = e.kind === "boss" && bossShape === "plough" ? 5 : 0;
+  const extra =
+    e.kind === "bulwark"
+      ? ((e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 ? 1 : 0) | ((e.blockT ?? 0) > 0 ? 2 : 0)
+      : e.kind === "cloaker" && !(e.hitT! > 0)
+        ? 1
+        : 0;
+  e.vis = packVis(PH_IDLE, 0, extra);
+  return true;
 }

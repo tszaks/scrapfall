@@ -1,3 +1,4 @@
+import { matchEnvironment } from "./matchEnvironment";
 // The scene side of the continuous time of day (timeOfDay.ts holds the state and the
 // blending): the per-frame driver, the lights and fog, a sky dome that cross-fades the
 // sunset and night skies, and stars that fade in with the dark.
@@ -25,10 +26,10 @@ import {
 
 /** advances the time and refreshes the shared blended look. Mount before anything reading it. */
 export function TimeDriver({ theme, arena }: { theme: Theme; arena: number }) {
-  const key = `${theme.name}|${arena}`;
   const lastKey = useRef("");
   useFrame((_, raw) => {
     stepTod(Math.min(raw, 0.1));
+    const key = `${theme.name}|${arena}|${matchEnvironment.version}|${tod.playing}`;
     if (tod.v !== todFrame.lastK || key !== lastKey.current) {
       todFrame.lastK = tod.v;
       lastKey.current = key;
@@ -98,12 +99,7 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
     <>
       <hemisphereLight ref={hemi} />
       <ambientLight ref={amb} intensity={0} />
-      {!ownSun && (
-        <directionalLight
-          ref={sun}
-          castShadow={shadow.cast}
-        />
-      )}
+      {!ownSun && <directionalLight ref={sun} castShadow={shadow.cast} />}
     </>
   );
 }
@@ -124,6 +120,8 @@ uniform vec3 uColB;
 uniform float uUseA;
 uniform float uUseB;
 uniform float uMix;
+uniform float uDay;
+uniform float uStorm;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -143,6 +141,15 @@ void main() {
     // mix in (roughly) display space so the sky darkens the way the eye expects
     vec3 m = mix(sqrt(max(a, 0.0)), sqrt(max(b, 0.0)), uMix);
     col = m * m;
+  }
+  if (uDay > 0.5) {
+    float h = pow(max(d.y, 0.0), 0.55);
+    vec3 day = mix(vec3(0.63, 0.77, 0.83), vec3(0.13, 0.41, 0.69), h);
+    float sun = dot(d, normalize(vec3(-0.5, 0.82, 0.28)));
+    day += vec3(1.0, 0.87, 0.61) * (pow(max(sun, 0.0), 700.0) * 2.0 + pow(max(sun, 0.0), 16.0) * 0.12);
+    float cloud = sin(d.x * 8.0 + d.z * 4.0) * sin(d.z * 11.0 - d.y * 7.0);
+    vec3 storm = mix(vec3(0.20, 0.25, 0.29), vec3(0.44, 0.49, 0.52), clamp(0.6 - h * 0.25 + cloud * 0.18, 0.0, 1.0));
+    col = mix(day, storm, uStorm);
   }
   gl_FragColor = vec4(col, 1.0);
   #include <colorspace_fragment>
@@ -172,6 +179,8 @@ export function SkyDome({
           uUseA: { value: 0 },
           uUseB: { value: 0 },
           uMix: { value: 0 },
+          uDay: { value: 0 },
+          uStorm: { value: 0 },
         },
         vertexShader: DOME_VERT,
         fragmentShader: DOME_FRAG,
@@ -216,6 +225,11 @@ export function SkyDome({
   );
   useFrame(() => {
     mat.uniforms["uMix"]!.value = tod.v;
+    mat.uniforms["uDay"]!.value =
+      tod.playing && (matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain")
+        ? 1
+        : 0;
+    mat.uniforms["uStorm"]!.value = matchEnvironment.kind === "rain" ? 1 : 0;
   });
   return <mesh geometry={geo} material={mat} renderOrder={-1000} frustumCulled={false} />;
 }

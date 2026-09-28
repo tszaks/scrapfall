@@ -55,7 +55,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // big-map build speak different message sets, so they must not join each other's rooms.
 // v5 adds rendered-shape physics and persistent shared tumbleweeds. Older clients
 // have different physical maps and cannot interpret that state; keep rooms separate.
-const PREFIX = "scrapfall-ts-arena-v5-";
+// v6 adds shared match weather, ballistic trajectories, Longshot and the fifth map.
+const PREFIX = "scrapfall-ts-arena-v6-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
