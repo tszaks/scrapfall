@@ -4,11 +4,11 @@
 //     VITE_* env injection, @ path alias, React/TanStack dedupe, error logger plugins, and
 //     sandbox detection (port/host/strictPort).
 //
-// The game ships as a STATIC single-page app served under /gta/ (tylerszakacs.com/gta):
+// The game ships as a STATIC single-page app served under /game/ (tylerszakacs.com/game):
 // no server runtime (nitro off), TanStack Start SPA mode prerenders one HTML shell.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-export const BASE = "/gta/";
+export const BASE = "/game/";
 
 export default defineConfig({
   nitro: false,
