@@ -4408,6 +4408,7 @@ type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
 /** Brotato-style stat sheet: green above baseline, red below */
 export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
   const [tab, setTab] = useState<"combat" | "survival">("combat");
+  const [showCls, setShowCls] = useState(false);
   const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
   const combat: StatRow[] = [
     { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
