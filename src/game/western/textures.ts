@@ -1055,37 +1055,51 @@ const PAINT: Record<number, (P: Painter) => void> = {
       rect(d, "rgba(200,170,90,0.6)", r() * TEX, r() * TEX, 6 + r() * 8, 1);
   },
   [WL.MUD]: (P) => {
+    // a dry wash bed: sun-baked silt broken into curling plates of uneven size, each its own
+    // shade, the cracks wide and dark in places and hairline in others, sand blown into them
     const { d, r } = P;
-    rect(d, "#dcc4a0", 0, 0, TEX, TEX);
-    // cracked mud polygons
-    const pts: [number, number][] = [];
-    for (let i = 0; i < 60; i++) pts.push([r() * TEX, r() * TEX]);
+    rect(d, "#b89a74", 0, 0, TEX, TEX);
+    const pts: [number, number, number, number][] = [];
+    for (let i = 0; i < 110; i++) pts.push([r() * TEX, r() * TEX, 0.86 + r() * 0.2, 0.6 + r() * 2.2]);
     const img = d.getImageData(0, 0, TEX, TEX);
     const data = img.data;
     for (let y = 0; y < TEX; y += 1)
       for (let x = 0; x < TEX; x += 1) {
         let b1 = 1e9;
         let b2 = 1e9;
-        for (const [px, py] of pts) {
-          let dx = Math.abs(px - x);
-          let dy = Math.abs(py - y);
+        let i1 = 0;
+        // a little wobble in the edges so no two plates share a straight line
+        const wx = x + Math.sin(y * 0.09 + x * 0.013) * 2.5;
+        const wy = y + Math.cos(x * 0.08 + y * 0.017) * 2.5;
+        for (let i = 0; i < pts.length; i++) {
+          const q = pts[i]!;
+          let dx = Math.abs(q[0] - wx);
+          let dy = Math.abs(q[1] - wy);
           if (dx > TEX / 2) dx = TEX - dx;
           if (dy > TEX / 2) dy = TEX - dy;
           const dd = dx * dx + dy * dy;
           if (dd < b1) {
             b2 = b1;
             b1 = dd;
+            i1 = i;
           } else if (dd < b2) b2 = dd;
         }
         const edge = Math.sqrt(b2) - Math.sqrt(b1);
+        const [, , shade, cw] = pts[i1]!;
         const o = (y * TEX + x) * 4;
-        const k = edge < 1.5 ? 0.72 : edge < 3 ? 0.9 : 1 - Math.min(0.08, Math.sqrt(b1) / 500);
-        data[o] = data[o]! * k;
-        data[o + 1] = data[o + 1]! * k;
-        data[o + 2] = data[o + 2]! * k;
+        let k: number;
+        let sand = 0;
+        if (edge < cw) {
+          k = 0.48 + edge * 0.05; // the crack
+          sand = edge < cw * 0.4 ? 0.35 : 0; // blown sand in the wide ones
+        } else if (edge < cw + 2.2) k = shade * 1.08; // the plate's curled, sunlit lip
+        else k = shade * (1 - Math.min(0.1, Math.sqrt(b1) / 420));
+        data[o] = data[o]! * k + sand * 60;
+        data[o + 1] = data[o + 1]! * k + sand * 45;
+        data[o + 2] = data[o + 2]! * k + sand * 25;
       }
     d.putImageData(img, 0, 0);
-    grain(P, 0.5, 20);
+    grain(P, 0.7, 26);
   },
   [WL.YARD]: (P) => {
     const { d, r } = P;

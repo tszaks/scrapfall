@@ -1213,7 +1213,7 @@ function roomItem(
       ] as const)
         boxC(D2, WL.IRON, it.x + dx, fl, it.z + dz, 0.05, 0.12, 0.05);
       D2.col("#8a8a86").mat(WL.IRON);
-      D2.flat(it.x - 0.6, it.z - 0.6, it.x + 0.6, it.z + 0.6, fl + 0.02, [0, 0, 1, 1]);
+      D2.flat(it.x - 0.6, it.z - 0.6, it.x + 0.6, it.z + 0.6, fl + 0.035, [0, 0, 1, 1]);
       B.glow.col("#ff7a2a");
       B.glow.box(it.x, fl + 0.42, it.z + 0.3, 0.16, 0.1, 0.02);
       break;
@@ -3121,8 +3121,8 @@ function templates() {
     d.col("#7a2a22");
     boxP(d, WL.PAINT, -0.8, 1.1, -1.7, 0.8, 2.6, 1.6);
     d.col("#c8a040");
-    boxP(d, WL.PAINT, -0.82, 1.1, -1.72, 0.82, 1.22, 1.62);
-    boxP(d, WL.PAINT, -0.82, 2.5, -1.72, 0.82, 2.62, 1.62);
+    boxP(d, WL.PAINT, -0.82, 1.08, -1.72, 0.82, 1.22, 1.62);
+    boxP(d, WL.PAINT, -0.82, 2.5, -1.72, 0.82, 2.64, 1.62);
     d.col("#141210").mat(WL.PAINT);
     for (const s of [-1, 1]) {
       const x = s * 0.81;

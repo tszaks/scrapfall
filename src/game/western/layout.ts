@@ -817,7 +817,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const end = x0 + order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - gaps[gaps.length - 1]!;
       const slack = abut - end;
       const last = order[order.length - 1]!;
-      if (slack > 0 && slack < 6 && !fixed.includes(last))
+      if (slack > 0 && slack < 6 && last.t !== "saloon" && last.t !== "opera" && !last.walkIn)
         order[order.length - 1] = { ...last, w: last.w + slack };
     }
     for (let oi = 0; oi < order.length; oi++) {
@@ -859,7 +859,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       // boardwalk in front (walkable deck), hitching rail + trough on the street edge. Each
       // building laid its own walk, so they step up and down along the street (the saloon's
       // keeps the standard height: its balcony and stair are measured from it)
-      const deck = p.t === "saloon" ? DECK_Y : 0.2 + Math.round(rand() * 6) * 0.05;
+      const deck = p.t === "saloon" ? DECK_Y : 0.2 + Math.round(rand() * 5) * 0.05; // (0.2-0.45: under the bank's 0.5 m plinth)
       buildings[buildings.length - 1]!.deck = deck;
       setGround(
         x,
