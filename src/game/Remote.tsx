@@ -70,7 +70,7 @@ export function RemotePlayers({
         // (+ their jump: feet above the ground, input/movement.ts)
         g.position.set(
           p.rx,
-          (p.az ? remoteFloorY(p.az, p.ay, gy) : gy) + (down ? 0.3 : (p.jy ?? 0)),
+          (p.sy ?? (p.az ? remoteFloorY(p.az, p.ay, gy) : gy)) + (down ? 0.3 : (p.jy ?? 0)),
           p.rz,
         );
       }

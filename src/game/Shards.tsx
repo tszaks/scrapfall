@@ -59,7 +59,7 @@ export function Shards({
       const dx = cam.position.x - p.x;
       const dz = cam.position.z - p.z;
       const dist = Math.hypot(dx, dz);
-      if (active.current) {
+      if (active.current && Math.abs(cam.position.y - 1.6 - groundY(p.x,p.z)) < 1.5) {
         if (dist < 0.9) {
           p.on = false;
           onCollect(p.v);

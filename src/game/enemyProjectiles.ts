@@ -37,22 +37,58 @@ export function firstShotContact(
   return first ? { target: first, t: firstT } : null;
 }
 
-export function firstShotTarget(from: Point, to: Point, targets: readonly ShotTarget[], radius = 0.6) {
+export function firstShotTarget(
+  from: Point,
+  to: Point,
+  targets: readonly ShotTarget[],
+  radius = 0.6,
+) {
   return firstShotContact(from, to, targets, radius)?.target ?? null;
 }
 
 const probe: Point = { x: 0, y: 0, z: 0 };
+/** First sampled world contact along a round's whole movement, not only its endpoint. */
+export function firstWorldHit(from: Point, to: Point, stop: (p: Point) => boolean) {
+  const dx = to.x - from.x,
+    dy = to.y - from.y,
+    dz = to.z - from.z;
+  const n = Math.max(1, Math.ceil(Math.hypot(dx, dy, dz) / 0.1));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    probe.x = from.x + dx * t;
+    probe.y = from.y + dy * t;
+    probe.z = from.z + dz * t;
+    if (stop(probe)) {
+      let lo=Math.max(0,(i-1)/n),hi=t;
+      for(let j=0;j<8;j++) {
+        const mid=(lo+hi)/2;probe.x=from.x+dx*mid;probe.y=from.y+dy*mid;probe.z=from.z+dz*mid;
+        if(stop(probe))hi=mid;else lo=mid;
+      }
+      return hi;
+    }
+  }
+  return undefined;
+}
 /** Ordered player contact and sampled world sweep. `null` is cover, `undefined` is clear.
  * Only test the prefix before the earliest player, so a wall behind them cannot erase a hit.
  * World geometry exposes point queries; 10 cm probes prevent ordinary thin-wall tunneling. */
-export function firstShotImpact(from: Point, to: Point, targets: readonly ShotTarget[], stop: (p: Point) => boolean) {
+export function firstShotImpact(
+  from: Point,
+  to: Point,
+  targets: readonly ShotTarget[],
+  stop: (p: Point) => boolean,
+) {
   const hit = firstShotContact(from, to, targets);
   const limit = hit?.t ?? 1;
-  const dx = (to.x - from.x) * limit, dy = (to.y - from.y) * limit, dz = (to.z - from.z) * limit;
+  const dx = (to.x - from.x) * limit,
+    dy = (to.y - from.y) * limit,
+    dz = (to.z - from.z) * limit;
   const count = Math.max(1, Math.ceil(Math.hypot(dx, dy, dz) / 0.1));
   for (let i = 0; i <= count; i++) {
     const t = i / count;
-    probe.x = from.x + dx * t; probe.y = from.y + dy * t; probe.z = from.z + dz * t;
+    probe.x = from.x + dx * t;
+    probe.y = from.y + dy * t;
+    probe.z = from.z + dz * t;
     if (stop(probe)) return null;
   }
   return hit?.target;

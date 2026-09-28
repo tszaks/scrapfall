@@ -31,6 +31,9 @@ export type RemoteState = {
   /** building access: elevator button presses so far (the host compares counts) */
   ap?: number;
   ay?: number | undefined;
+  /** Explicit support height on an open structure; sn marks an upper lookout. */
+  sy?: number | undefined;
+  sn?: number;
   /** mid-jump: feet above the ground (m), 0 on foot (input/movement.ts) */
   jy?: number;
   /** alpine: the chairlift chair this player is riding, -1 on foot */
@@ -50,9 +53,9 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 
 // Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
 // big-map build speak different message sets, so they must not join each other's rooms.
-// v3 adds coastal service vehicles and host-authoritative alpine traffic snapshots.
-// Older clients have incompatible vehicle counts; keep their rooms separate.
-const PREFIX = "scrapfall-ts-arena-v3-";
+// v4 adds explicit stacked room floors. Older clients have different physical maps
+// and cannot interpret those player heights; keep their rooms separate.
+const PREFIX = "scrapfall-ts-arena-v4-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

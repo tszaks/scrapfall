@@ -1,3 +1,4 @@
+import { structureBase } from "./structures/world";
 // Ground for maps with real elevation: the alpine slopes (a heightfield) and Pacific Pier's
 // decks, stairs and skate bowls (an analytic ground). One API for every map; flat maps never
 // install a terrain, so every lookup returns the defaults (y = 0, full speed, no wind, shots
@@ -113,6 +114,8 @@ export const groundHook: { fn: ((x: number, z: number) => number | undefined) | 
 
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
+  const room=structureBase(x,z);
+  if(room!==undefined) return room;
   // a walkable roof (building access) wins over the ground under it
   const g = groundHook.fn;
   if (g) {

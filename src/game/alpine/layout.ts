@@ -58,6 +58,7 @@ export type BldType =
   | "ticket"
   | "summit";
 export type ABld = {
+  interior?: import("../structures/plan").Structure;
   t: BldType;
   x0: number;
   z0: number;

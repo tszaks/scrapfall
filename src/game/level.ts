@@ -1,3 +1,4 @@
+import { structureStreet, structureShot, structurePathClear } from "./structures/world";
 import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
 import { generateAlpine } from "./alpine/layout";
@@ -152,7 +153,7 @@ export function setPosts(list: Post[] | null) {
         a.push(p);
       }
 }
-function hitsPost(x: number, z: number, radius: number, shotsOnly = false) {
+export function hitsPost(x: number, z: number, radius: number, shotsOnly = false, feet?: number) {
   if (!postGrid) return false;
   const i0 = Math.floor((x - radius - 1) / 4);
   const i1 = Math.floor((x + radius + 1) / 4);
@@ -163,6 +164,7 @@ function hitsPost(x: number, z: number, radius: number, shotsOnly = false) {
       const a = postGrid.get(postKey(i, j));
       if (!a) continue;
       for (const p of a) {
+        if(feet!==undefined && feet>groundY(p.x,p.z)+(p.h??4.5))continue;
         if (shotsOnly ? !p.shot : p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
         if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
       }
@@ -192,6 +194,8 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   // (thin posts only stop bodies, not bullets (shots test with a tiny radius), unless they're
   // bulky enough to stop a shot: a tied horse, a hay bale, a crate stack)
   if (radius >= 0.2 ? hitsPost(x, z, radius) : hitsPost(x, z, radius, true)) return true;
+  const room=structureStreet(x,z,radius);
+  if(room!==undefined)return room;
   const half = BLOCK / 2 + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes
@@ -262,7 +266,7 @@ export function shotBlocked(blocks: Block[], x: number, y: number, z: number) {
  */
 export function shotStop(blocks: Block[], x: number, y: number, z: number) {
   return (
-    shotHits(x, y, z) ??
+    structureShot(x,y,z) ?? shotHits(x, y, z) ??
     (groundOwnsHits() ? groundHits(x, y, z) : y < groundY(x, z) || shotBlocked(blocks, x, y, z))
   );
 }
@@ -278,7 +282,7 @@ export function clearShot(
   bz: number,
 ) {
   const len = Math.hypot(bx - ax, by - ay, bz - az);
-  const steps = Math.ceil(len / 0.4);
+  const steps = Math.ceil(len / 0.1);
   for (let s = 1; s < steps; s++) {
     const t = s / steps;
     if (shotStop(blocks, ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t)) return false;
@@ -469,7 +473,7 @@ export function solidGrid(blocks: Block[]): NavGrid {
           const fj = j * sc + b;
           if (fi >= CELLS || fj >= CELLS) continue;
           total++;
-          if (fine[fi * CELLS + fj]) continue;
+          if (structureStreet(cellCenter(fi),cellCenter(fj),.45) ?? !!fine[fi * CELLS + fj]) continue;
           open++;
           sx += cellCenter(fi);
           sz += cellCenter(fj);
@@ -580,6 +584,7 @@ export function fineField(blocks: Block[], x: number, z: number, R = 24): FineFi
       // out of the target's own cell only onto its level (not over a railing to the sand below)
       if (c === s0 && Math.abs(groundY(cellCenter(i0 + na), cellCenter(j0 + nb)) - gy) > 1.2)
         continue;
+      if(!structurePathClear(cellCenter(i0+a),cellCenter(j0+b),cellCenter(i0+na),cellCenter(j0+nb)))continue;
       const nd = dist[c]! + (da && db ? 1.414 : 1);
       if (nd < dist[k]!) {
         dist[k] = nd;
@@ -604,6 +609,7 @@ export function fineStep(f: FineField, x: number, z: number): { x: number; z: nu
     const na = a + da;
     const nb = b + db;
     if (na < 0 || nb < 0 || na >= w || nb >= w) continue;
+    if(!structurePathClear(x,z,cellCenter(f.i0+na),cellCenter(f.j0+nb)))continue;
     const d = f.dist[na * w + nb]!;
     if (d < best) {
       best = d;
@@ -636,6 +642,7 @@ export function flowField(nav: NavGrid, ti: number, tj: number, maxD = Infinity)
       const k = ni * n + nj;
       if (solid[k]) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
+      if(!structurePathClear(nav.px[c]!,nav.pz[c]!,nav.px[k]!,nav.pz[k]!))continue;
       const nd = dc + (di && dj ? 1.414 : 1);
       if (nd > maxD) continue;
       if (nd < dist[k]!) {
@@ -660,6 +667,7 @@ export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: num
     const nj = cj + dj;
     if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
     if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
+    if(!structurePathClear(x,z,nav.px[ni*n+nj]!,nav.pz[ni*n+nj]!))continue;
     const d = dist[ni * n + nj]!;
     if (d < best) {
       best = d;

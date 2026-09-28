@@ -263,7 +263,7 @@ function remoteMuzzle(r: RemoteState, out: THREE.Vector3) {
   const lift = alpine.active ? alpine.lift : null;
   const seat = wheelWorld.wheel && (r.wr ?? -1) >= 0 ? wheelEye(wheelWorld.wheel,r.wr!) : lift && (r.rc ?? -1) >= 0 ? riderEye(lift,r.rc!) : null;
   const gy = groundY(r.rx,r.rz);
-  const feet = seat ? seat.y - 1.6 : (r.az ? remoteFloorY(r.az,r.ay,gy) : gy) + (r.jy ?? 0);
+  const feet = seat ? seat.y - 1.6 : (r.sy ?? (r.az ? remoteFloorY(r.az,r.ay,gy) : gy)) + (r.jy ?? 0);
   const pitch = r.pitch ?? 0;
   return out.set((seat?.x ?? r.rx) - .24 * c + .7 * Math.cos(pitch) * s,
     feet + 1.24 + .7 * Math.sin(pitch), (seat?.z ?? r.rz) + .24 * s + .7 * Math.cos(pitch) * c);

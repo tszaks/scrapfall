@@ -137,6 +137,7 @@ export type BType =
   | "station"
   | "camera";
 export type BBld = Rect & {
+  interior?: import("../structures/plan").Structure;
   t: BType;
   /** base height (deck buildings sit on the pier) */
   y0: number;

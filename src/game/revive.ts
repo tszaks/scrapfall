@@ -21,7 +21,7 @@ export type PState = { st: number; bleed: number; prog: number; by: string; grac
 export const squad = new Map<string, PState>();
 
 /** this client */
-export const me = { id: "host", x: 0, z: 0, yaw: 0 };
+export const me = { id: "host", x: 0, y: 0, z: 0, yaw: 0 };
 
 /** my revive attempt: who I'm reviving (as told to the host) */
 export const myRevive = { target: "", mustRelease: false, holding: false };
@@ -43,7 +43,7 @@ export function reviveInterrupted() {
   return true;
 }
 
-export type Player = { id: string; x: number; z: number; hp: number; bledOut: boolean };
+export type Player = { id: string; x: number; y?: number; z: number; hp: number; bledOut: boolean };
 
 /**
  * Host: advance the table. `wants` maps reviver id -> target id (who is holding R on whom).
@@ -78,7 +78,7 @@ export function hostReviveStep(dt: number, players: Player[], wants: Map<string,
       wants.forEach((tgt, rid) => {
         if (tgt !== p.id || by) return;
         const r = byId.get(rid);
-        if (r && r.hp > 0 && Math.hypot(r.x - p.x, r.z - p.z) <= REVIVE_RANGE) by = rid;
+        if (r && r.hp > 0 && Math.hypot(r.x - p.x, (r.y ?? 0) - (p.y ?? 0), r.z - p.z) <= REVIVE_RANGE) by = rid;
       });
       if (by) {
         if (s.by !== by) s.prog = 0;

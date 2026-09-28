@@ -92,6 +92,7 @@ export function SquadDriver({
     hudView.camera = presentationCamera(camera);
     me.x = camera.position.x;
     me.z = camera.position.z;
+    me.y = moveState.feet;
     const n = cb.current.net;
     const s = self.current;
     const w = world.current;
@@ -124,7 +125,7 @@ export function SquadDriver({
       let bd = REVIVE_RANGE;
       remotes.current.forEach((r) => {
         if (squad.get(r.id)?.st !== DOWN) return;
-        const d = Math.hypot(r.x - me.x, r.z - me.z);
+        const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x,r.z)) - me.y, r.z - me.z);
         if (d <= bd) {
           bd = d;
           want = r.id;
@@ -143,9 +144,9 @@ export function SquadDriver({
     // ---- host: the squad table ----
     if (n.role === "host") {
       const now = performance.now();
-      const players: Player[] = [{ id: "host", x: me.x, z: me.z, hp: s.hp, bledOut: s.bledOut }];
+      const players: Player[] = [{ id: "host", x: me.x, y:me.y, z: me.z, hp: s.hp, bledOut: s.bledOut }];
       remotes.current.forEach((r) => {
-        if (now - r.last < 4000) players.push({ id: r.id, x: r.x, z: r.z, hp: r.hp, bledOut: false });
+        if (now - r.last < 4000) players.push({ id: r.id, x: r.x, y:r.sy ?? r.ay ?? groundY(r.x,r.z), z: r.z, hp: r.hp, bledOut: false });
       });
       const res = hostReviveStep(dt, players, hostWants);
       for (const id of res.revived) {
@@ -301,7 +302,7 @@ export function HudOverlay({
           if (!s || s.st !== DOWN || k >= MAX_DOWN) return;
           const el = downEls.current[k++];
           if (!el) return;
-          project(cam, r.x, groundY(r.x, r.z) + 0.8, r.z, W, H, P);
+          project(cam, r.x, (r.sy ?? r.ay ?? groundY(r.x, r.z)) + 0.8, r.z, W, H, P);
           el.style.display = "flex";
           // off screen: pinned to the edge, kept whole
           const px = P.on ? P.x : Math.min(W - 130, Math.max(130, P.x));
@@ -312,7 +313,7 @@ export function HudOverlay({
           const txt = `✚ ${who} DOWN · ${Math.round(P.dist)}m · ${Math.ceil(s.bleed)}s${s.by ? " · REVIVING" : ""}`;
           if (el.textContent !== txt) el.textContent = txt;
           el.style.opacity = P.on ? "1" : "0.85";
-          const d = Math.hypot(r.x - me.x, r.z - me.z);
+          const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x,r.z)) - me.y, r.z - me.z);
           if (d <= REVIVE_RANGE && !prompt) {
             prompt = s.by === me.id ? `REVIVING ${who}` : `HOLD R TO REVIVE ${who}`;
             promptProg = s.by === me.id ? s.prog : 0;

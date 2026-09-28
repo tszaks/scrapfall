@@ -71,7 +71,7 @@ export function beachAccess(city: BeachLayout, solo: boolean, posts: readonly Po
     return null;
   };
 
-  const blds = city.beach.buildings.filter((b) => !b.backdrop);
+  const blds = city.beach.buildings.filter((b) => !b.backdrop && !b.interior);
   // the condo tower
   const condo = blds.find((b) => b.t === "hotel" && b.floors >= 8 && within(b, 6));
   if (condo) {

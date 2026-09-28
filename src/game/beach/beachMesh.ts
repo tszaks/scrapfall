@@ -824,6 +824,7 @@ function building(b: BBld, C: Ctx) {
     const q = poly[(i + 1) % 4]!;
     const faceW = Math.hypot(q[0] - p[0], q[1] - p[1]);
     const isFront = i === b.front;
+    if (b.interior) continue; // shared plan draws the real room walls and openings
     if (storeFront && (isFront || b.t === "restaurant" || b.t === "hotel")) {
       G.mat(L.store, b.seed, 1).col(wallCol);
       G.wall(p, q, y0, y0 + groundH, facadeUV(L.store, faceW, 0, 1, 1, Math.floor(r() * 8), 0));

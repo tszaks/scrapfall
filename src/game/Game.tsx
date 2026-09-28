@@ -1,3 +1,6 @@
+import { Structures } from "./structures/Structures";
+import { beachRooms, alpineRooms } from "./structures/adapters";
+import { installStructures, structureList, structurePlayer, structureFloor, structureBody, structureShot } from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
 import { wheelRide, wheelWorld, wheelEye, wheelSolid, wheelLoading, resetWheel, stepWheel, leaveWheel } from "./beach/wheelRide";
 import { PlayerView, ViewSettings, shoulderAim, shoulderView, playerMuzzle } from "./PlayerView";
@@ -6,7 +9,7 @@ import { setWorldMuzzle } from "./projectiles";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { firstShotImpact, type ShotTarget } from "./enemyProjectiles";
+import { firstWorldHit, firstShotImpact, type ShotTarget } from "./enemyProjectiles";
 
 import {
   ARENA,
@@ -18,6 +21,7 @@ import {
   pushOut,
   type Block,
   solidGrid,
+  hitsPost,
   flowField,
   navTarget,
   fineField,
@@ -191,7 +195,7 @@ import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
-import { cancelJump, canFire, moveState, stepJump, tryJump } from "./input/movement";
+import { cancelJump, canFire, moveState, stepJump, startFall, tryJump } from "./input/movement";
 import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
 import {
   clearControls,
@@ -2009,6 +2013,7 @@ const BULLET_GEO = new THREE.LatheGeometry(
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
+const WORLD_CONTACT = new THREE.Vector3();
 
 const BulletPool = memo(function BulletPool({
   meshes,
@@ -2475,6 +2480,7 @@ function World({
         net: netRef,
         fx: FX,
       });
+      Object.assign(handle,{structures:{list:structureList,player:structurePlayer,floor:structureFloor,body:structureBody,shot:structureShot}});
       // building access: the buildings, the local player's zone state, cars and doors
       Object.assign(handle, {
         access: {
@@ -2736,6 +2742,8 @@ function World({
     r.az = Number(m.az ?? 0);
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
     r.ay = m.ay !== undefined ? Number(m.ay) : undefined;
+    r.sy = Number.isFinite(m.sy) ? Number(m.sy) : undefined;
+    r.sn = m.sn === 1 ? 1 : 0;
     r.rc = Number(m.rc ?? -1);
     r.wr = Number.isInteger(m.wr) && m.wr >= 0 && m.wr < 20 ? m.wr : -1;
     r.jy = Number(m.jy ?? 0) || 0; // mid-jump height (the avatar hops)
@@ -3134,12 +3142,14 @@ function World({
   const baseZone = (x: number, z: number) => (alpineMap ? alpineZone(x, z) : 0);
   const zoneOf = (x: number, z: number) => zoneAt(x, z) || baseZone(x, z);
   const myZone = () => {
+    if (structurePlayer.id && structurePlayer.floor > 0) return -1;
     const k = playerZoneKey();
     if (k !== 0) return k;
     if ((alpineMap && ride.chair >= 0) || wheelRide.cabin >= 0) return -1;
     return baseZone(camera.position.x, camera.position.z);
   };
   const remoteZone = (r: RemoteState) => {
+    if (r.sn) return -1;
     const k = zoneKeyOfAz(r.az);
     if (k !== 0) return k;
     if ((alpineMap && (r.rc ?? -1) >= 0) || (r.wr ?? -1) >= 0) return -1;
@@ -3455,7 +3465,7 @@ function World({
       if (y < ey + lo - r || y > ey + hi + r) continue; // far above or below (a roof, a hornet)
       // walls shield; low cover shields the body but not the head (half the splash)
       let cover = 1;
-      if (d > er + 0.3 && !clearShot(blocks, x, y, z, e.x, ey + (lo + hi) / 2, e.z)) {
+      if (!clearShot(blocks, x, y, z, e.x, ey + (lo + hi) / 2, e.z)) {
         if (!clearShot(blocks, x, y, z, e.x, ey + hi - 0.15, e.z)) continue;
         cover = 0.5;
       }
@@ -3890,7 +3900,9 @@ function World({
       (big !== null && hitsTraffic(p.x, p.y, p.z))));
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) =>
-    playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
+    hitsPost(x,z,r,false,camGround.current+(moveState.airborne?moveState.lift:0)) || (structureBody(x, z, r,
+      Math.max(camGround.current, structureFloor(x,z,camGround.current)?.y ?? -Infinity) + (moveState.airborne ? moveState.lift : 0)) ??
+    playerBlocked(x, z, r) ?? blocked(blocks, x, z, r));
   // controller aim assist: the middle of each live robot's body, and a clear line to it
   const aimPt = { x: 0, y: 0, z: 0 };
   function* aimTargets() {
@@ -3922,7 +3934,7 @@ function World({
          .map((r) => {
           if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
           if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
-          return { x: r.x, z: r.z, y: remoteFloorY(r.az, r.ay, groundY(r.x, r.z)) + (r.jy ?? 0) + EYE };
+          return { x: r.x, z: r.z, y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE };
         });
     } else if (traffic.current.others.length) traffic.current.others = [];
 
@@ -4034,7 +4046,7 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
-      (accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
+      (structureFloor(x,z,camGround.current) !== undefined || accPlayer.zone !== 0 || climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
     const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
     const strafe =
@@ -4131,7 +4143,7 @@ function World({
     if (!spectating && !phasing && wheelRide.cabin < 0) {
       for (let pass = 0; pass < 2; pass++) {
         for (const e of enemies) {
-          if (!e.alive || FLYERS.has(e.kind)) continue;
+          if (!e.alive || FLYERS.has(e.kind) || Math.abs(cam.position.y - EYE - groundY(e.x,e.z)) > 1.8) continue;
           const r =
             (e.kind === "boss" && theme.boss.shape === "kraken"
               ? KRAKEN_R
@@ -4167,10 +4179,14 @@ function World({
       // stairs, the car and the roof decide the floor under you
       // (falling past a building from its roof: the street / lower roof is the floor, no doors)
       const falling = moveState.airborne && accPlayer.zone === 0 && moveState.lift > 1.5;
-      const gy =
+      const wasStructure=!!structurePlayer.id;
+      const roomFloor=structureFloor(cam.position.x,cam.position.z,moveState.airborne ? moveState.feet : camGround.current);
+      Object.assign(structurePlayer,roomFloor ? {id:roomFloor.id,floor:roomFloor.level,y:roomFloor.y} : {id:"",floor:0,y:0});
+      const gy = roomFloor?.y ?? (
         accessActive() && !falling
           ? stepPlayer(cam.position, MOVE.x, MOVE.z, (x, z, r) => blocked(blocks, x, z, r), delta)
-          : groundY(cam.position.x, cam.position.z);
+          : groundY(cam.position.x, cam.position.z));
+      if ((wasStructure || roomFloor) && !moveState.airborne && gy < camGround.current-.6) startFall();
       const dg = gy - camGround.current;
       camGround.current =
         !groundOwnsHits() || accPlayer.zone !== 0 || Math.abs(dg) > 3
@@ -4181,7 +4197,13 @@ function World({
         spectating || downedRef.current || ride.chair >= 0 || wheelRide.cabin >= 0 || (accessActive() && accPlayer.inCar);
       if (takeJump()) tryJump(!noJump);
       if (noJump && moveState.airborne) cancelJump(gy);
+      const beforeFeet=moveState.feet;
       stepJump(delta, gy);
+      if (roomFloor && moveState.airborne && moveState.feet>beforeFeet) {
+        for(let y=beforeFeet; y<=moveState.feet+.05; y+=.05) if(structureShot(cam.position.x,y+1.85,cam.position.z)) {
+          moveState.feet=Math.max(gy,y-.05);moveState.vy=0;moveState.lift=Math.max(0,moveState.feet-gy);break;
+        }
+      }
       if (moveState.airborne) camGround.current = gy;
       if (moveState.landed >= 0) {
         camGround.current = gy;
@@ -4298,6 +4320,7 @@ function World({
           pt: look.current.pitch,
           hp: spectating ? 0 : Math.max(1, healthRef.current),
           w: weapon.current,
+          ...(structurePlayer.id ? { sy:Math.round(structurePlayer.y*100)/100, sn:structurePlayer.floor>0?1:0 } : {}),
           ...(accPlayer.zone !== 0
             ? { az: playerAz(), ay: Math.round(accPlayer.y * 100) / 100, ap: accPlayer.press }
             : {}),
@@ -4327,6 +4350,7 @@ function World({
       pk.active &&
       canTake &&
       !spectating &&
+      Math.abs(camGround.current-groundY(pk.x,pk.z))<1.5 &&
       Math.hypot(cam.position.x - pk.x, cam.position.z - pk.z) < 1.3
     ) {
       pk.active = false;
@@ -4356,6 +4380,7 @@ function World({
     if (
       hp.active &&
       !spectating &&
+      Math.abs(camGround.current-groundY(hp.x,hp.z))<1.5 &&
       Math.hypot(cam.position.x - hp.x, cam.position.z - hp.z) < 1.3
     ) {
       hp.active = false;
@@ -4383,6 +4408,7 @@ function World({
     if (
       ck.active &&
       !spectating &&
+      Math.abs(camGround.current-groundY(ck.x,ck.z))<1.5 &&
       Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4
     ) {
       ck.active = false;
@@ -4520,13 +4546,18 @@ function World({
       if (e?.alive) hurtEnemy(e, dmg, idx, 0, 0, 1.6, kx, kz);
     };
 
+    const localEffectReaches=(e:Enemy,radius:number)=>{
+      const [lo,hi]=hitBand(e.kind), y=groundY(e.x,e.z)+(lo+hi)/2;
+      return Math.hypot(e.x-cam.position.x,y-(cam.position.y-.5),e.z-cam.position.z)<radius &&
+        clearShot(blocks,cam.position.x,cam.position.y-.5,cam.position.z,e.x,y,e.z);
+    };
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
     if (thornsPending.current > 0) {
       thornsPending.current = 0;
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < 4) hurtEnemy(e, 2, ei);
+        if (localEffectReaches(e,4)) hurtEnemy(e, 2, ei);
       }
     }
 
@@ -4635,7 +4666,7 @@ function World({
         const near = (radius: number, fn: (e: Enemy, i: number) => void) => {
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
-            if (e.alive && Math.hypot(e.x - cam.position.x, e.z - cam.position.z) < radius)
+            if (e.alive && (id==="warp" || localEffectReaches(e,radius)))
               fn(e, ei);
           }
         };
@@ -4652,7 +4683,7 @@ function World({
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             const d = Math.hypot(cx - e.x, cz - e.z);
-            if (e.alive && d < 13)
+            if (e.alive && d < 13 && localEffectReaches(e,20))
               hurtEnemy(e, 1, ei, 2.5, 0, Math.max(0, d - 1), cx - e.x, cz - e.z);
           }
           // collapsing vortex ring at the well's centre
@@ -4672,7 +4703,7 @@ function World({
         } else if (id === "storm") {
           const list = enemies
             .map((e, i) => ({ e, i, d: Math.hypot(e.x - cam.position.x, e.z - cam.position.z) }))
-            .filter((o) => o.e.alive && o.d < 20)
+            .filter((o) => o.e.alive && o.d < 20 && localEffectReaches(o.e,20))
             .sort((a, b) => a.d - b.d)
             .slice(0, 6);
           list.forEach((o) => hurtEnemy(o.e, 4, o.i));
@@ -4732,7 +4763,7 @@ function World({
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) {
+        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3 && clearShot(blocks,mn.x,groundY(mn.x,mn.z)+.3,mn.z,e.x,groundY(e.x,e.z)+1,e.z)) {
           hurtEnemy(e, 2, ei, 4);
           hit = true;
         }
@@ -4841,7 +4872,7 @@ function World({
             isBeach(city) && (r.wr ?? -1) >= 0 ? wheelEye(city.beach.wheel,r.wr!).y :
             alpineMap && (r.rc ?? -1) >= 0
               ? riderEye(alpineMap.alpine.lift, r.rc!).y
-              : EYE + (r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
+              : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
           targets.push({
             id: r.id,
             x: r.x,
@@ -5601,6 +5632,7 @@ function World({
         }
         // keep out of the players: at most touching
         for (const t of targets) {
+          if(Math.abs(t.y-EYE-groundY(a.x,a.z))>1.8)continue;
           const r = ra + PLAYER_R;
           const ox = a.x - t.x;
           const oz = a.z - t.z;
@@ -5614,6 +5646,7 @@ function World({
       for (const f of enemies) {
         if (!f.alive || !FLYERS.has(f.kind)) continue;
         for (const t of targets) {
+          if(Math.abs(t.y-EYE-groundY(f.x,f.z))>3)continue;
           const r = STATS[f.kind].radius + PLAYER_R + 0.3;
           const ox = f.x - t.x;
           const oz = f.z - t.z;
@@ -5661,16 +5694,21 @@ function World({
         BLAST_AT.copy(b.pos); // a shell that hits a wall explodes just in front of it
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
-        const hitWall = outOfBounds(b.pos);
+        const contact=firstWorldHit(BLAST_AT,b.pos,outOfBounds);
+        const hitWall=contact!==undefined;
+        if(contact!==undefined) {
+          WORLD_CONTACT.lerpVectors(BLAST_AT,b.pos,contact);
+          b.pos.lerpVectors(BLAST_AT,b.pos,Math.max(0,contact-.003/Math.max(.001,b.pos.distanceTo(BLAST_AT))));
+        }
         if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
-          if (shotBlocked(blocks, b.pos.x, b.pos.y, pz) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          if (outOfBounds({x:WORLD_CONTACT.x,y:BLAST_AT.y,z:pz}) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
+          else if(outOfBounds({x:px,y:WORLD_CONTACT.y,z:pz})) b.vel.y *= -1;
           else b.vel.z *= -1;
-          b.pos.set(px, b.pos.y, pz);
           fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
-          burst(b, hitWall ? BLAST_AT : b.pos);
+          burst(b, b.pos);
           fxDie(i, hitWall);
           b.active = false;
         } else {
@@ -5914,6 +5952,7 @@ function World({
         withTarget={theme.blockShape === "city"}
       />
       <WarmKinds enemies={enemies} theme={theme} />
+      <Structures seed={seed} />
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
@@ -6781,6 +6820,8 @@ export function Game() {
     const accessOn =
       typeof window === "undefined" ||
       new URLSearchParams(window.location.search).get("access") !== "0";
+    installStructures([]);
+    installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
     installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
     // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
     // the access adapters keep their doors clear of them
@@ -6799,6 +6840,7 @@ export function Game() {
                 return aa.list;
               })()
             : null;
+    if(alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
     resetAlpine(alp !== null, alp ? alp.lift : null);
     resetRide();
@@ -6811,7 +6853,7 @@ export function Game() {
     movePropsFromDoors(
       level.city,
       level.western ?? null,
-      (accessList0 ?? []).map((b) => b.spec.door),
+      [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap(p=>p.doors)],
       (x, z) => blocked(level.blocks, x, z, 0.35),
     );
     setPosts(mapPosts(level.city, level.western ?? null));
@@ -7132,7 +7174,7 @@ export function Game() {
     [...remotes.current.values()].some(
       (r) =>
         downTable.get(r.id)?.st === DOWN &&
-        Math.hypot(r.x - squadMe.x, r.z - squadMe.z) <= REVIVE_RANGE,
+        Math.hypot(r.x - squadMe.x, (r.sy ?? r.ay ?? groundY(r.x,r.z))-squadMe.y, r.z - squadMe.z) <= REVIVE_RANGE,
     );
   const patchRef = useRef<() => void>(() => {});
   patchRef.current = () => {

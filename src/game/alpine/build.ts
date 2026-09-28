@@ -464,6 +464,7 @@ function gableHouse(
     z1: number;
     y: number;
     ymin: number;
+    interior?: import("../structures/plan").Structure;
     front: 0 | 1 | 2 | 3;
     seed: number;
   },
@@ -489,10 +490,10 @@ function gableHouse(
     [W + 0.08, D + 0.08, -0.08, D + 0.08],
     [-0.08, D + 0.08, -0.08, -0.08],
   ] as const)
-    lface(g, F, ax, az, bx, bz, b.ymin, stoneTop);
+    lface(g, F, ax, az, bx, bz, b.ymin, b.interior ? y : stoneTop);
   // storeys
   for (let f = 0; f < o.floors; f++) {
-    const y0 = Math.max(stoneTop, y + f * FH);
+    const y0 = Math.max(stoneTop, y + f * FH, b.interior?.top ?? -Infinity);
     const y1 = y + (f + 1) * FH;
     if (y1 <= y0) continue;
     const plaster = (style === 1 && f === 0) || style === 3;
@@ -607,7 +608,7 @@ function gableHouse(
   }
 
   // windows on every storey; gable windows up in the attic
-  const doorAt = W / 2 + (W > 13 ? (r() < 0.5 ? -1 : 1) * W * 0.22 : 0);
+  const doorAt = W / 2 + (!b.interior && W > 13 ? (r() < 0.5 ? -1 : 1) * W * 0.22 : 0);
   const wy = (f: number) => y + f * FH + 0.95;
   const place = (len: number, f: number, fn: (c: number) => void, skip?: number) => {
     const n = Math.max(1, Math.floor((len - 1.6) / 2.7));
@@ -619,6 +620,7 @@ function gableHouse(
   };
   const bigFront = o.cafe || o.shop;
   for (let f = 0; f < o.floors; f++) {
+    if(b.interior && f===0) continue;
     const fl = f >= 1 && !o.barn;
     if (!(f === 0 && bigFront) && !(o.barn && f === 0))
       place(
@@ -644,7 +646,7 @@ function gableHouse(
     }
   }
   // café / shop ground floor: big glazing, an awning and a sign
-  if (bigFront) {
+  if (bigFront && !b.interior) {
     g.mat(T.glasswall, r(), 0).col("#ffffff");
     const gw = W - 3.2;
     const x0 = doorAt > W / 2 ? 0.8 : 2.4;
@@ -692,7 +694,7 @@ function gableHouse(
   // front door with a little snowy canopy
   if (o.door) {
     g.mat(T.door, r(), 0).col("#ffffff");
-    lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
+    if(!b.interior) lface(g, F, doorAt - 0.65, -0.15, doorAt + 0.65, -0.15, y, y + 2.25, [0, 0, 1, 1]);
     const dg = k.detail;
     dg.mat(T.board, 0, 0).col("#6a4424");
     const A = L3(F, doorAt - 1.1, y + 2.75, 0);
