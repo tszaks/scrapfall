@@ -35,3 +35,7 @@
 - [ ] Themed interactive map hazards (shootable, per-theme effect, co-op synced)
 - [ ] Endless mode past wave 12 with wave mutators + high-wave record
 - [ ] Version 1.0.4
+
+- [x] v1.0.4: fixed map scenery (tiered trees, biome decor, tighter collision)
+- [x] v1.0.4: themed destructible hazards per map, co-op synced
+- [x] v1.0.4: endless overtime past wave 12 with mutators + best-wave record
