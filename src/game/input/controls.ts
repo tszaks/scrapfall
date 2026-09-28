@@ -1,3 +1,12 @@
+import {
+  subscribeInputReset,
+  installMappedInput,
+  subscribeActions,
+  controlSettings,
+  controlState,
+  emitControl,
+  type ControlAction,
+} from "./remap";
 // The glue between every input device and the game loop (Game.tsx World's useFrame):
 //
 //   keyboard   Shift sprint (double-tap: tactical), Space jump, M big map
@@ -7,10 +16,10 @@
 // One-shot actions the game already understands from the touch controls (ability, swap, use,
 // ping, revive) are written into touchInput, so the game has one path for them. Movement,
 // the trigger and the look are returned / applied here.
-import { touchInput } from "../touch";
+import { touchInput, resetTouchInput } from "../touch";
 import { FULL_H, jumpBody, shotBlocked, shotStop } from "../level";
 import { climbable, jumpClimb } from "../terrain";
-import { BTN, loadPadSettings, padSettings } from "./bindings";
+import { loadPadSettings, padSettings } from "./bindings";
 import {
   consumePress,
   inputDevice,
@@ -38,21 +47,21 @@ export function installControls() {
   installed = true;
   loadPadSettings();
   installInputWatch();
-  const typing = (e: KeyboardEvent) =>
-    e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
-  window.addEventListener("keydown", (e) => {
-    if (typing(e)) return;
-    if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
-      if (!e.repeat) kb.sprintPress = true;
-      kb.shift = true;
-    } else if (e.code === "Space" && !e.repeat) kb.jump = true;
-    else if (e.code === "KeyM" && !e.repeat) toggleBigMap();
+  installMappedInput();
+  subscribeInputReset(() => {
+    clearControls();
+    resetTouchInput();
+    padOut.moveX = padOut.moveZ = 0;
+    padOut.fire = false;
+    pad.reviveHeld = false;
   });
-  window.addEventListener("keyup", (e) => {
-    if (e.code === "ShiftLeft" || e.code === "ShiftRight") kb.shift = false;
-  });
-  window.addEventListener("blur", () => {
-    kb.shift = false;
+  subscribeActions((a, down, repeat) => {
+    if (a === "sprint") {
+      if (down && !repeat) kb.sprintPress = true;
+      kb.shift = down;
+    }
+    if (a === "jump" && down && !repeat) kb.jump = true;
+    if (a === "map" && down && !repeat) toggleBigMap();
   });
   if (typeof window !== "undefined") {
     (window as unknown as { __controls?: unknown }).__controls = {
@@ -105,41 +114,72 @@ function shopActivate() {
  */
 export function stepPadActions(env: { inCar: boolean }) {
   const p = pollPad();
-  if (!p.connected) {
+  if (
+    !p.connected ||
+    controlSettings.mode === "kbm" ||
+    controlState.capturing ||
+    !controlState.active ||
+    !controlState.focused
+  ) {
     padOut.moveX = padOut.moveZ = 0;
     padOut.fire = false;
     if (pad.reviveHeld) touchInput.revive = pad.reviveHeld = false;
     return;
   }
+  if (!controlState.padNeutral) {
+    controlState.padNeutral = !p.down.some(Boolean) && Math.hypot(p.lx, p.ly, p.rx, p.ry) < 0.2;
+    padOut.moveX = padOut.moveZ = 0;
+    padOut.fire = false;
+    for (let i = 0; i < p.pressed.length; i++) if (p.pressed[i]) consumePress(i);
+    return;
+  }
   const s = padSettings;
-  const [mx, my] = shapeStick(p.lx, p.ly, s.deadzone, 1);
+  const [mx, my] = shapeStick(
+    controlSettings.swapSticks ? p.rx : p.lx,
+    controlSettings.swapSticks ? p.ry : p.ly,
+    s.deadzone,
+    1,
+  );
   padOut.moveX = mx;
   padOut.moveZ = -my;
-  padOut.fire = p.down[BTN.RT]!;
-  const hit = (b: number) => {
-    if (!p.pressed[b]) return false;
+  const index = (a: ControlAction) => controlSettings.pad[a];
+  const held = (a: ControlAction) => {
+    const b = index(a);
+    return b !== undefined && p.down[b]!;
+  };
+  const hit = (a: ControlAction) => {
+    const b = index(a);
+    if (b === undefined || !p.pressed[b]) return false;
     consumePress(b);
     return true;
   };
-  if (hit(BTN.A)) {
+  padOut.fire = held("fire");
+  if (hit("jump")) {
     if (env.inCar) touchInput.use = true;
     else pad.jump = true;
   }
-  if (hit(BTN.B)) touchInput.ability = true;
-  if (hit(BTN.X)) {
+  if (hit("ability")) touchInput.ability = true;
+  if (hit("use")) {
     if (env.inCar) touchInput.use = true;
     else shopActivate();
   }
-  if (hit(BTN.Y)) touchInput.ping = true;
-  if (hit(BTN.LB) || hit(BTN.DOWN)) touchInput.swap = -1;
-  if (hit(BTN.RB) || hit(BTN.UP)) touchInput.swap = 1;
-  if (hit(BTN.LEFT)) shopFocus(-1);
-  if (hit(BTN.RIGHT)) shopFocus(1);
-  if (hit(BTN.LS)) pad.sprintPress = true;
-  if (hit(BTN.VIEW)) toggleBigMap();
-  if (hit(BTN.START)) padHooks.pause?.();
-  // hold the right stick in to revive (Squad.tsx reads touchInput.revive)
-  const rs = p.down[BTN.RS]!;
+  if (hit("ping")) touchInput.ping = true;
+  if (hit("prevGun") && !shopFocus(-1)) touchInput.swap = -1;
+  if (hit("nextGun") && !shopFocus(1)) touchInput.swap = 1;
+  if (hit("sprint")) pad.sprintPress = true;
+  if (hit("map")) toggleBigMap();
+  if (hit("pause")) padHooks.pause?.();
+  for (const a of [
+    "camera",
+    "time",
+    "shop1",
+    "shop2",
+    "shop3",
+    "shopReroll",
+    "shopHeal",
+  ] as ControlAction[])
+    if (hit(a)) emitControl(a, true, false, index(a));
+  const rs = held("revive");
   if (rs !== pad.reviveHeld) {
     pad.reviveHeld = rs;
     touchInput.revive = rs;
@@ -155,7 +195,7 @@ export function takeJump() {
 
 /** Drop pending presses (entering a match, respawning): nothing queued fires later. */
 export function clearControls() {
-  kb.jump = kb.sprintPress = false;
+  kb.shift = kb.jump = kb.sprintPress = false;
   pad.jump = pad.sprintPress = false;
   touchInput.jump = touchInput.sprint = false;
 }
@@ -190,12 +230,25 @@ export function padLook(
   visible?: (t: AimTarget) => boolean,
 ) {
   const p = pollPad();
-  if (!p.connected) return;
+  if (
+    !p.connected ||
+    controlSettings.mode === "kbm" ||
+    controlState.capturing ||
+    !controlState.active ||
+    !controlState.focused ||
+    !controlState.padNeutral
+  )
+    return;
   const s = padSettings;
-  const [x, y] = shapeStick(p.rx, p.ry, s.deadzone, s.curve);
+  const [x, y] = shapeStick(
+    controlSettings.swapSticks ? p.lx : p.rx,
+    controlSettings.swapSticks ? p.ly : p.ry,
+    s.deadzone,
+    s.curve,
+  );
   const steering = x !== 0 || y !== 0 || Math.hypot(padOut.moveX, padOut.moveZ) > 0.2;
   let slow = 1;
-  if (s.assist > 0 && inputDevice.kind === "pad" && steering) {
+  if (s.assist > 0 && (controlSettings.mode === "pad" || inputDevice.kind === "pad") && steering) {
     const a = aimAssist(cam, look.yaw, look.pitch, targets(), s.assist, visible);
     if (a.on) {
       slow = a.slow;

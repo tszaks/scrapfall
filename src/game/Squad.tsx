@@ -1,3 +1,5 @@
+import { actionLabel } from "./input/labels";
+import { subscribeActions, subscribeInputReset } from "./input/remap";
 import { presentationCamera } from "./PlayerView";
 // Co-op squad play: pings (middle mouse or G) and downed / revive (hold R), plus the HUD
 // layer that draws them over the 3D view (world-anchored markers, the downed teammates'
@@ -52,33 +54,15 @@ export function SquadDriver({
   const { camera } = useThree();
   const pingReq = useRef(false);
   const holdR = useRef(false);
-  const touchHeld = useRef(false);
+
   const cb = useRef({ onRevived, onBleedOut, net, myNum });
   cb.current = { onRevived, onBleedOut, net, myNum };
-  useEffect(() => {
-    const down = (e: MouseEvent) => {
-      if (e.button === 1 && document.pointerLockElement) {
-        e.preventDefault();
-        pingReq.current = true;
-      }
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.code === "KeyG" && !e.repeat) pingReq.current = true;
-      if (e.code === "KeyR") holdR.current = e.type === "keydown";
-    };
-    const blur = () => (holdR.current = false);
-    window.addEventListener("mousedown", down);
-    window.addEventListener("keydown", key);
-    window.addEventListener("keyup", key);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("mousedown", down);
-      window.removeEventListener("keydown", key);
-      window.removeEventListener("keyup", key);
-      window.removeEventListener("blur", blur);
-    };
-  }, []);
+  useEffect(() => subscribeActions((a,down,repeat) => {
+    if(a === "ping" && down && !repeat)pingReq.current=true;
+    if(a === "revive")holdR.current=down;
+  }), []);
+
+  useEffect(()=>subscribeInputReset(()=>{pingReq.current=false;holdR.current=false;}),[]);
   useEffect(() => {
     me.id = net?.self ?? "host";
     if (!net) resetSquad();
@@ -101,10 +85,7 @@ export function SquadDriver({
       touchInput.ping = false;
       pingReq.current = true;
     }
-    if (touchInput.revive !== touchHeld.current) {
-      touchHeld.current = touchInput.revive;
-      holdR.current = touchInput.revive;
-    }
+    const reviveHeld=holdR.current||touchInput.revive;
     // ---- pings ----
     if (w) tickPings(w.enemies, w.ground, w.band);
     if (pingReq.current) {
@@ -121,7 +102,7 @@ export function SquadDriver({
     // ---- revive: hold R next to a downed teammate ----
     let want = "";
     // (never while sprinting: input/movement.ts; holding revive also stops the sprint)
-    if (holdR.current && s.hp > 0 && s.playing && !myRevive.mustRelease && !moveState.sprinting) {
+    if (reviveHeld && s.hp > 0 && s.playing && !myRevive.mustRelease && !moveState.sprinting) {
       let bd = REVIVE_RANGE;
       remotes.current.forEach((r) => {
         if (squad.get(r.id)?.st !== DOWN) return;
@@ -132,8 +113,8 @@ export function SquadDriver({
         }
       });
     }
-    if (!holdR.current) myRevive.mustRelease = false;
-    myRevive.holding = holdR.current;
+    if (!reviveHeld) myRevive.mustRelease = false;
+    myRevive.holding = reviveHeld;
     if (want !== myRevive.target) {
       myRevive.target = want;
       if (n.role === "host") {
@@ -315,7 +296,7 @@ export function HudOverlay({
           el.style.opacity = P.on ? "1" : "0.85";
           const d = Math.hypot(r.x - me.x, (r.sy ?? r.ay ?? groundY(r.x,r.z)) - me.y, r.z - me.z);
           if (d <= REVIVE_RANGE && !prompt) {
-            prompt = s.by === me.id ? `REVIVING ${who}` : `HOLD R TO REVIVE ${who}`;
+            prompt = s.by === me.id ? `REVIVING ${who}` : `HOLD ${actionLabel("revive")} TO REVIVE ${who}`;
             promptProg = s.by === me.id ? s.prog : 0;
           }
         });
@@ -342,7 +323,7 @@ export function HudOverlay({
           const a = se.querySelector("[data-t]");
           const b = se.querySelector("[data-s]");
           const ta = `BLEEDING OUT · ${Math.ceil(mine.bleed)}s`;
-          const tb = by ? `${by} IS REVIVING YOU` : "CRAWL TO COVER · A TEAMMATE CAN HOLD R TO REVIVE YOU";
+          const tb = by ? `${by} IS REVIVING YOU` : "CRAWL TO COVER · A TEAMMATE CAN REVIVE YOU";
           if (a && a.textContent !== ta) a.textContent = ta;
           if (b && b.textContent !== tb) b.textContent = tb;
           if (selfRingEl.current) selfRingEl.current.style.strokeDashoffset = String(113 * (1 - mine.prog));

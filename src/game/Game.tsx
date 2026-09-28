@@ -1,3 +1,5 @@
+import { sourceIsBound, subscribeActions, subscribeInputReset, controlSettings, setInputActive, controlState, keyLabel, type ControlAction } from "./input/remap";
+import { ControlSettings } from "./input/ControlSettings";
 import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
@@ -869,7 +871,6 @@ const WAVES: WaveSpec[] = [
 const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
-const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
 /** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
 const GAME_VERSION = "1.0.2";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
@@ -3080,7 +3081,7 @@ function World({
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!document.pointerLockElement) return;
+      if (!document.pointerLockElement || !controlState.active || controlState.capturing || controlSettings.mode === "pad") return;
       look.current.yaw -= e.movementX * 0.0022 * sensXRef.current;
       look.current.pitch = Math.max(
         -1.2,
@@ -3625,46 +3626,19 @@ function World({
     equip("pistol");
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
-    };
-    const onUp = () => (trigger.current = false);
-    // fire = hold the left mouse button (Space jumps: input/controls.ts); Enter still fires
-    // for keyboard-only players on the arrow keys
-    const isFire = (e: KeyboardEvent) => e.code === "Enter" || e.code === "NumpadEnter";
-    const onKey = (e: KeyboardEvent) => {
-      if (isFire(e)) trigger.current = true;
-      if (/^[0-9]$/.test(e.key)) {
-        const n = Number(e.key);
-        const slot = n === 0 ? 10 : n; // 0 acts as slot 10
-        const w = [...owned.current][slot - 1];
-        if (w) equip(w);
-      }
-      if (e.code === "KeyF") abilFire.current = true;
-      // in an elevator car, E presses the floor button (instead of the next weapon)
-      if (e.code === "KeyE" && accessActive() && pressCarButton()) return;
-      if (e.code === "KeyQ" || e.code === "KeyE") {
-        const list = [...owned.current];
-        const i = list.indexOf(weapon.current);
-        const next = list[(i + (e.code === "KeyE" ? 1 : list.length - 1)) % list.length];
-        if (next) equip(next);
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (isFire(e)) trigger.current = false;
-    };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>subscribeInputReset(()=>{trigger.current=false;abilFire.current=false;burstQueue.current=0;}),[]);
+  useEffect(() => subscribeActions((action, down, repeat, source) => {
+    if (action === "fire") trigger.current = down;
+    if (!down || repeat) return;
+    if (action.startsWith("slot")) { const w=[...owned.current][Number(action.slice(4))-1]; if(w)equip(w); }
+    if (action === "ability") abilFire.current = true;
+    if (action === "use" && accessActive()) pressCarButton();
+    if (action === "prevGun" || action === "nextGun") {
+      if (action === "nextGun" && accPlayer.inCar && sourceIsBound("use",source)) return;
+      const list=[...owned.current],i=list.indexOf(weapon.current);
+      const next=list[(i+(action === "nextGun" ? 1 : list.length-1))%list.length];if(next)equip(next);
+    }
+  }), [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** an open spot right next to (x, z): hornet pack members land around their leader */
   const besides = (x: number, z: number) => {
@@ -6397,19 +6371,12 @@ export function Game() {
     setTimeMode(init.mode);
     if (init.k !== null) pinTime(init.k);
   }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "KeyN" || e.repeat) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      pinTime(null);
-      const inMatch = phase.current.started && !phase.current.ended;
-      toggleTimeLock(inMatch);
-      if (inMatch)
-        showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useEffect(() => subscribeActions((a, down, repeat) => {
+    if (a !== "time" || !down || repeat) return;
+    pinTime(null);toggleTimeLock(phase.current.started && !phase.current.ended);
+    showToast(`${tod.mode === "night" ? "NIGHT" : "SUNSET"} LOCKED FOR THIS MATCH · AUTO OFF`);
+  }), []);
+
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
@@ -6470,10 +6437,9 @@ export function Game() {
   useEffect(() => {
     if (!locked) resetTouchInput();
   }, [locked]);
-  const [touchUi, setTouchUi] = useState(false);
+  const touchUi = controlSettings.mode === "auto" && dev.kind === "touch";
   const [portrait, setPortrait] = useState(false);
   useEffect(() => {
-    setTouchUi(isTouchDevice());
     const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
     onResize();
     window.addEventListener("resize", onResize);
@@ -6949,8 +6915,9 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       // P is the pause key on desktop; Escape still works since the browser
       // drops pointer lock on it anyway
-      if (e.code === "Escape" || e.code === "KeyP") pauseNow();
+      if (e.code === "Escape" && !controlState.capturing) pauseNow();
     };
+    const offPause=subscribeActions((a,down)=>{if(a === "pause" && down)pauseNow();});
     padHooks.pause = pauseNow; // Start / Options / + on a controller
 
     document.addEventListener("pointerlockchange", onChange);
@@ -6961,6 +6928,7 @@ export function Game() {
       window.removeEventListener("beforeunload", onUnload);
       window.removeEventListener("pagehide", onUnload);
       padHooks.pause = null;
+      offPause();
     };
   }, []);
 
@@ -7104,6 +7072,7 @@ export function Game() {
       }
       return; // touch devices steer with the on-screen controls, no pointer lock
     }
+    if (dev.kind === "pad") return;
     try {
       const r = wrapRef.current?.requestPointerLock() as unknown as Promise<void> | undefined;
       r?.catch?.(() => {});
@@ -7222,17 +7191,12 @@ export function Game() {
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
     if (id === "maxhp") setHealth((h) => h + 2);
   };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const i = SHOP_KEYS.indexOf(e.code);
-      if (i >= 0) buyRef.current(i);
-      // R is also "hold to revive": next to a downed teammate it revives instead of rerolling
-      else if (e.code === "KeyR" && !e.repeat && !reviveNearbyRef.current()) rerollRef.current();
-      else if (e.code === "KeyH" && !e.repeat && !(e.target instanceof HTMLElement && (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)))) patchRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useEffect(() => subscribeActions((a,down,repeat,source) => {
+    if (!down || repeat) return;
+    if (/^shop[123]$/.test(a)) buyRef.current(Number(a.slice(4))-1);
+    else if (a === "shopReroll" && !(sourceIsBound("revive",source)&&reviveNearbyRef.current())) rerollRef.current();
+    else if (a === "shopHeal") patchRef.current();
+  }), []);
 
   // regen perk
   const regenRate = statsRef.current.regen;
@@ -7251,6 +7215,7 @@ export function Game() {
     hookAudioUnlock();
   }, []);
   const inCombat = started && locked && !ended;
+  useEffect(()=>{setInputActive(inCombat && !showSettings);return()=>setInputActive(false);},[inCombat,showSettings]);
   useEffect(() => {
     setMusicMenu(!inCombat);
     startMusic();
@@ -7517,9 +7482,9 @@ export function Game() {
                 }`}
               >
                 <span
-                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "h-3 w-3 text-[7px]" : "h-4 w-4 text-[10px]"}`}
+                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "min-h-3 min-w-3 px-1 text-[7px]" : "min-h-4 min-w-4 px-1 text-[10px]"}`}
                 >
-                  {i === 9 ? 0 : i + 1}
+                  {i<10 ? keyLabel(`slot${i+1}` as ControlAction) : <KeyHint action="nextGun" />}
                 </span>
                 <span style={{ color: g.color }}>■</span> {g.name}{" "}
                 <b>{active ? ammoLeft : slot.ammo}</b>
@@ -7579,7 +7544,7 @@ export function Game() {
                 <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP
               </>
             ) : (
-              <>PRESS {slotOf(weapon) === 10 ? 0 : slotOf(weapon) || 1}</>
+              <>PRESS <KeyHint action={slotOf(weapon)>10 ? "nextGun" : `slot${slotOf(weapon)||1}` as ControlAction} /></>
             )}
           </div>
         )}
@@ -7651,7 +7616,7 @@ export function Game() {
             {dev.kind === "pad" && (
               <>
                 {" "}
-                · <KeyHint action="shopPick" /> PICK · <KeyHint action="shopBuy" /> BUY
+                · <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> SELECT · <KeyHint action="shopBuy" /> BUY
               </>
             )}
           </div>
@@ -7660,8 +7625,8 @@ export function Game() {
               onClick={() => patchRef.current()}
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                H
+              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
+                <KeyHint action="shopHeal" />
               </span>
               <span className="font-bold tracking-widest">FIELD DRESSING</span>
               <span className="opacity-60">
@@ -7673,8 +7638,8 @@ export function Game() {
               onClick={() => rerollRef.current()}
               className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
             >
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                R
+              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
+                <KeyHint action="shopReroll" />
               </span>
               <span className="font-bold tracking-widest">REROLL</span>
               <span className="opacity-60">
@@ -7699,8 +7664,8 @@ export function Game() {
                   onClick={() => buyRef.current(i)}
                   className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
                 >
-                  <span className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
-                    {SHOP_KEYS[i]!.slice(3)}
+                  <span className="absolute -left-2 -top-2 flex min-h-6 min-w-6 px-1 items-center justify-center rounded bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
+                    <KeyHint action={`shop${i+1}` as ControlAction} />
                   </span>
                   {isMod && <PistolBadge />}
                   <div className="text-xs font-bold tracking-widest">{info.name}</div>
@@ -8332,6 +8297,7 @@ export function Game() {
                     </label>
                     <ViewSettings />
                     <QualitySettings />
+                    <ControlSettings />
                     <PadSettingsPanel />
                   </div>
                   <button

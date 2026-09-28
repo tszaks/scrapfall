@@ -36,5 +36,5 @@ export function resetTouchInput() {
 
 export function isTouchDevice() {
   if (typeof window === "undefined") return false;
-  return navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+  return window.matchMedia("(pointer: coarse)").matches;
 }

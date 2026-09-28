@@ -16,7 +16,7 @@ export function ControlsHelp({ touch }: { touch: boolean }) {
     const g = (a: Action) => padLabel(a, d.padType);
     return (
       <>
-        {`${g("move")} to move · ${g("look")} to look · ${g("fire")} to shoot · ${g("jump")} to jump · click ${g("sprint")} to sprint (twice for a tactical sprint) · ${g("ability")} for your ability · ${g("prevGun")} ${g("nextGun")} or D-PAD ▲▼ swap guns · ${g("use")} in an elevator car for the floor button · ${g("ping")} to ping · ${g("revive")} to revive a teammate · D-PAD ◀▶ then ${g("shopBuy")} in the shop · ${g("map")} big map · ${g("pause")} to pause · Camera in Settings`}
+        {`${g("move")} to move · ${g("look")} to look · ${g("fire")} to shoot · ${g("jump")} to jump · click ${g("sprint")} to sprint (twice for a tactical sprint) · ${g("ability")} for your ability · ${g("prevGun")} ${g("nextGun")} swap guns · ${g("use")} in an elevator car for the floor button · ${g("ping")} to ping · ${g("revive")} to revive a teammate · ${g("shopPick")} in the shop · ${g("map")} big map · ${g("pause")} to pause · ${g("camera")} camera`}
       </>
     );
   }
@@ -29,12 +29,6 @@ export function ControlsHelp({ touch }: { touch: boolean }) {
       </>
     );
   }
-  return (
-    <>
-      WASD to move · mouse or arrow keys to look · hold left click to shoot · Space to jump · hold
-      Shift to sprint (double-tap for a tactical sprint) · F for your ability · 1-0 / Q E swap guns
-      · E in an elevator car for the floor button · middle mouse or G to ping · hold R to revive a
-      teammate · V first/third person · H field dressing in the shop · M big map · N locks night/sunset · P to pause · a controller works too
-    </>
-  );
+  const g=(a:Action)=>KEY_LABEL[a];
+  return <>{`${g("move")} to move · mouse or ${g("lookLeft")} ${g("lookRight")} ${g("lookUp")} ${g("lookDown")} to look · ${g("fire")} to shoot · ${g("jump")} to jump · ${g("sprint")} to sprint (double-tap tactical) · ${g("ability")} ability · ${g("prevGun")} / ${g("nextGun")} swap guns · ${g("use")} elevator · ${g("ping")} ping · hold ${g("revive")} revive · ${g("camera")} camera · ${g("shopHeal")} shop dressing · ${g("map")} map · ${g("time")} night/sunset · ${g("pause")} pause. Remap in Settings.`}</>;
 }

@@ -1,3 +1,4 @@
+import { controlState } from "./remap";
 // Controller support for the menus (start, loadout, pause, game over, Settings, the weapon and
 // enemy panels): the d-pad or left stick walks a focus ring between the buttons of the
 // top-most open menu, A presses, B backs out (CLOSE / BACK / DONE), Start presses the menu's
@@ -111,6 +112,7 @@ const focusOn = (el: HTMLElement) => {
 };
 
 function menuFrame(rep: { dir: string; next: number }) {
+  if(controlState.capturing&&!controlState.captureMenu)return;
   const p = pollPad();
   if (!p.connected) return;
   const root = topMenu();

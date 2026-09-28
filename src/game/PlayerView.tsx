@@ -1,3 +1,6 @@
+import { KeyHint } from "./input/Glyph";
+import { actionLabel } from "./input/labels";
+import { subscribeActions } from "./input/remap";
 import { createPortal, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, type ReactNode, type MutableRefObject } from "react";
 import * as THREE from "three";
@@ -147,20 +150,11 @@ export function PlayerView({
 }) {
   const rig = useMemo(newPlayerRig, []);
   useEffect(() => () => rig.dispose(), [rig]);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (!active || e.code !== "KeyV" || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (
-        e.target instanceof HTMLElement &&
-        (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))
-      )
-        return;
-      toggleView();
-      showToast(`${getViewMode() === "third" ? "THIRD" : "FIRST"} PERSON · V TO SWITCH`);
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [active]);
+  useEffect(() => subscribeActions((a,down,repeat) => {
+    if(!active || a !== "camera" || !down || repeat)return;
+    toggleView();showToast(`${getViewMode() === "third" ? "THIRD" : "FIRST"} PERSON · ${actionLabel("camera")} TO SWITCH`);
+  }), [active]);
+
   useFrame(({ camera, gl, scene, clock }, dt) => {
     artFrame();
     eye.copy(camera.position);
@@ -204,7 +198,7 @@ export function ViewSettings() {
   const mode = useViewMode();
   return (
     <div className="space-y-2 border-t border-white/10 pt-4">
-      <div className="text-[11px] font-bold tracking-[0.3em]">CAMERA · V</div>
+      <div className="text-[11px] font-bold tracking-[0.3em]">CAMERA · <KeyHint action="camera" /></div>
       <div className="flex gap-2">
         {(["first", "third"] as const).map((v) => (
           <button

@@ -1,3 +1,4 @@
+import { ACTIONS, controlSettings, keyLabel, loadControls, type ControlAction } from "./remap";
 // Controller layout, glyphs and the player's controller settings.
 //
 // Buttons are named by their position on the pad (the W3C "standard" mapping), so one table
@@ -107,6 +108,7 @@ export function glyph(b: ButtonName, t: PadType) {
 
 /** Game actions that show a hint somewhere on screen. */
 export type Action =
+  | ControlAction
   | "move"
   | "look"
   | "fire"
@@ -125,7 +127,7 @@ export type Action =
   | "shopBuy";
 
 /** keyboard + mouse labels */
-export const KEY_LABEL: Record<Action, string> = {
+const KEY_DEFAULT_LABEL: Partial<Record<Action, string>> = {
   move: "WASD",
   look: "MOUSE",
   fire: "LEFT CLICK",
@@ -145,7 +147,7 @@ export const KEY_LABEL: Record<Action, string> = {
 };
 
 /** controller buttons per action */
-export const PAD_BUTTON: Record<Action, ButtonName | "LSTICK" | "RSTICK"> = {
+export const PAD_BUTTON: Partial<Record<Action, ButtonName | "LSTICK" | "RSTICK">> = {
   move: "LSTICK",
   look: "RSTICK",
   fire: "RT",
@@ -164,14 +166,30 @@ export const PAD_BUTTON: Record<Action, ButtonName | "LSTICK" | "RSTICK"> = {
   shopBuy: "X",
 };
 
+export const KEY_LABEL = new Proxy(KEY_DEFAULT_LABEL, {
+  get(target, action: Action) {
+    if (action in ACTIONS) return keyLabel(action as ControlAction);
+    if (action === "move")
+      return ["forward", "left", "back", "right"]
+        .map((a) => keyLabel(a as ControlAction))
+        .join(" / ");
+    if (action === "tactical") return `${keyLabel("sprint")} ×2`;
+    if (action === "shopBuy" || action === "shopPick")
+      return ["shop1", "shop2", "shop3"].map((a) => keyLabel(a as ControlAction)).join(" / ");
+    return target[action] ?? "";
+  },
+}) as Record<Action, string>;
 export function padLabel(a: Action, t: PadType): string {
-  const b = PAD_BUTTON[a];
-  if (b === "LSTICK") return t === "switch" ? "L-STICK" : "LEFT STICK";
-  if (b === "RSTICK") return t === "switch" ? "R-STICK" : "RIGHT STICK";
-  if (a === "tactical") return `${glyph("LS", t)} ×2`;
-  if (a === "revive") return `HOLD ${glyph("RS", t)}`;
-  if (a === "shopPick") return "D-PAD ◀ ▶";
-  return glyph(b, t);
+  loadControls();
+  if (a === "move") return controlSettings.swapSticks ? "RIGHT STICK" : "LEFT STICK";
+  if (a === "look") return controlSettings.swapSticks ? "LEFT STICK" : "RIGHT STICK";
+  if (a === "tactical") return `${padLabel("sprint", t)} ×2`;
+  if (a === "shopPick")
+    return ["shop1", "shop2", "shop3"].map((a) => padLabel(a as ControlAction, t)).join(" / ");
+  if (a === "shopBuy") return padLabel("use", t);
+  const index = controlSettings.pad[a as ControlAction];
+  const name = (Object.keys(BTN) as ButtonName[]).find((n) => BTN[n] === index);
+  return name ? `${a === "revive" ? "HOLD " : ""}${glyph(name, t)}` : "UNBOUND";
 }
 
 // ---- controller settings (Settings panel, saved in localStorage) ----
