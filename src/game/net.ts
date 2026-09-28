@@ -48,7 +48,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 
 // Scrapfall name, but a distinct room namespace: Toby's plain 1.0.2 build and this
 // big-map build speak different message sets, so they must not join each other's rooms.
-const PREFIX = "scrapfall-ts-arena-v1-";
+// v2 resolves enemy projectile hits on the host; v1 guests would apply them twice.
+const PREFIX = "scrapfall-ts-arena-v2-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
