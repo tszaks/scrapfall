@@ -527,6 +527,69 @@ function Decor({ theme, seed }: { theme: Theme; seed: number }) {
   );
 }
 
+/** The shootable hazard prop for a map: drum, pod, condenser, relay, geyser or vat. */
+const HazardProp = memo(function HazardProp({ def }: { def: HazardDef }) {
+  const { shell, core, look } = def;
+  if (look === "pod") {
+    return (
+      <group>
+        <mesh position-y={0.12}><cylinderGeometry args={[0.22, 0.34, 0.24, 7]} /><meshLambertMaterial color="#3b2818" flatShading /></mesh>
+        <mesh position-y={0.72} castShadow><sphereGeometry args={[0.55, 10, 8]} /><meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.25} /></mesh>
+        <mesh position-y={1.28}><coneGeometry args={[0.2, 0.42, 6]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "condenser") {
+    return (
+      <group>
+        <mesh position-y={0.15}><cylinderGeometry args={[0.42, 0.5, 0.3, 8]} /><meshLambertMaterial color="#5f7f95" flatShading /></mesh>
+        <mesh position-y={0.85} castShadow><icosahedronGeometry args={[0.55, 0]} /><meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.35} /></mesh>
+        <mesh position-y={0.85} rotation-x={Math.PI / 2}><torusGeometry args={[0.62, 0.05, 6, 16]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "relay") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow><boxGeometry args={[0.6, 1, 0.6]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={1.15}><sphereGeometry args={[0.3, 10, 8]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        {[0.35, 0.7].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.31]}><boxGeometry args={[0.42, 0.06, 0.03]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        ))}
+      </group>
+    );
+  }
+  if (look === "geyser") {
+    return (
+      <group>
+        <mesh position-y={0.2} castShadow><cylinderGeometry args={[0.45, 0.75, 0.4, 9]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={0.42}><cylinderGeometry args={[0.36, 0.36, 0.08, 9]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        <mesh position-y={0.9}><coneGeometry args={[0.3, 0.9, 8, 1, true]} /><meshBasicMaterial color={core} transparent opacity={0.5} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "vat") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow><cylinderGeometry args={[0.45, 0.45, 1, 10]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={1.02}><cylinderGeometry args={[0.4, 0.45, 0.14, 10]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        <mesh position-y={0.55}><cylinderGeometry args={[0.47, 0.47, 0.18, 10]} /><meshLambertMaterial color="#2b2118" flatShading /></mesh>
+      </group>
+    );
+  }
+  // drum
+  return (
+    <group>
+      <mesh position-y={0.55} castShadow><cylinderGeometry args={[0.42, 0.42, 1.1, 12]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+      {[0.35, 0.75].map((y, i) => (
+        <mesh key={i} position-y={y}><cylinderGeometry args={[0.44, 0.44, 0.09, 12]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      ))}
+      <mesh position-y={1.12}><cylinderGeometry args={[0.44, 0.42, 0.1, 12]} /><meshLambertMaterial color="#2b2118" flatShading /></mesh>
+    </group>
+  );
+});
+
+
 const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
