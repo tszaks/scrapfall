@@ -1185,7 +1185,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   wagonSpots.forEach(([x, z, r], n) =>
     solidProp(n % 2 === 0 ? "covered" : "wagon", x, z, r + Math.PI / 2, 2.2, 5.2, 2.6),
   );
-  solidProp("well", -22, 0, 0, 2.6, 2.6, 1.2);
+  solidProp("well", -44, 0, 0, 2.6, 2.6, 1.2); // (off the cross street's junction: the riders turn there)
   // (a horse tied at the rail right there is led away first)
   for (const [cx, cz] of [
     [-40, -9.5],

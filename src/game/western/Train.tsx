@@ -29,6 +29,7 @@ import {
 } from "./trainSim";
 import { addUV } from "./mesh";
 import { facadeMaterial, syncEnv } from "./materials";
+import { riderSync } from "./Riders";
 
 const KINDS: CarKind[] = [
   "loco",
@@ -591,12 +592,14 @@ export function WesternTrain({
   const acc = useRef(0);
   useEffect(() => {
     const L = link.current;
-    L.encode = () => [q100(trainClock.t), q100(trainClock.bossAt), q100(trainClock.bossFrom)];
+    // (the riders' state rides along after the train's three numbers, Riders.tsx)
+    L.encode = () => [q100(trainClock.t), q100(trainClock.bossAt), q100(trainClock.bossFrom), ...(riderSync.encode?.() ?? [])];
     L.decode = (a) => {
       if (!Array.isArray(a) || a.length < 3) return;
       hostClock.current = { t: a[0]! / 100, at: performance.now() };
       trainClock.bossAt = a[1]! / 100;
       trainClock.bossFrom = a[2]! / 100;
+      if (a.length > 3) riderSync.decode?.(a.slice(3));
     };
     return () => {
       L.encode = null;

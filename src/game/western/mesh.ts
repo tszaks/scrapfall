@@ -2361,7 +2361,7 @@ function tipple(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
 // ---------------------------------------------------------------------------------------
 // prop templates (local space, origin at the base centre, +z = front)
 
-type PKey = WProp["k"] | "wheelL";
+type PKey = WProp["k"] | "wheelL" | "horsebody" | "horseleg" | "riderTorso" | "riderHat" | "riderLegs";
 let TM: Partial<Record<PKey, { d: Tmpl; g?: Tmpl; p?: Tmpl }>> | null = null;
 
 function templates() {
@@ -3052,6 +3052,69 @@ function templates() {
     boxP(d, WL.TIMBER, -0.1, 1.74, 0.16, 0.1, 1.92, 0.24); // horn
     d.col("#2a2420");
     for (const x of [-0.33, 0.33]) beam(d, x, 1.6, 0.02, x, 1.2, 0.02, 0.03, WL.IRON);
+  });
+  // ---- the moving riders' parts (Riders.tsx animates the legs; tints come per instance) ----
+  make("horsebody", (d) => {
+    // a saddled horse without its legs (they swing), nose toward +z
+    const coat = "#ffffff";
+    const dark = "#3a2a20";
+    d.col(coat);
+    boxP(d, WL.PAINT, -0.3, 0.98, -0.72, 0.3, 1.66, 0.7);
+    boxP(d, WL.PAINT, -0.26, 1.08, -0.82, 0.26, 1.58, -0.7);
+    boxP(d, WL.PAINT, -0.25, 1.08, 0.7, 0.25, 1.62, 0.82);
+    beam(d, 0, 1.45, 0.72, 0, 2.02, 1.12, 0.3, WL.PAINT);
+    beam(d, 0, 2.02, 1.05, 0, 1.72, 1.6, 0.24, WL.PAINT);
+    d.col(dark);
+    beam(d, 0, 1.6, 0.66, 0, 2.18, 1.08, 0.08, WL.PAINT);
+    beam(d, 0, 1.55, -0.82, 0, 0.8, -1.05, 0.11, WL.PAINT);
+    d.cone(-0.08, 2.1, 1.05, 0.05, 0.16, 4);
+    d.cone(0.08, 2.1, 1.05, 0.05, 0.16, 4);
+    d.col("#9a3a2a");
+    boxP(d, WL.CANVAS, -0.34, 1.52, -0.25, 0.34, 1.64, 0.3);
+    d.col("#5a3420");
+    boxP(d, WL.TIMBER, -0.24, 1.64, -0.2, 0.24, 1.78, 0.22);
+    boxP(d, WL.TIMBER, -0.1, 1.74, 0.16, 0.1, 1.92, 0.24);
+    d.col("#2a2420");
+    beam(d, -0.12, 1.85, 1.35, -0.25, 1.8, 0.2, 0.02, WL.IRON); // reins
+    beam(d, 0.12, 1.85, 1.35, 0.25, 1.8, 0.2, 0.02, WL.IRON);
+  });
+  make("horseleg", (d) => {
+    // one leg, hanging from its hip at the origin (swung by the instance matrix)
+    d.col("#ffffff");
+    beam(d, 0, 0.02, 0, 0, -0.93, 0.03, 0.13, WL.PAINT);
+    d.col("#1a1410");
+    boxC(d, WL.PAINT, 0, -1.05, 0.03, 0.15, 0.12, 0.17);
+  });
+  make("riderLegs", (d) => {
+    // trousers astride the saddle and boots in the stirrups (saddle seat at y 1.78)
+    d.col("#3a3430");
+    for (const s of [-1, 1]) {
+      beam(d, s * 0.14, 1.82, 0.02, s * 0.3, 1.66, 0.22, 0.17, WL.CANVAS);
+      beam(d, s * 0.3, 1.66, 0.22, s * 0.33, 1.25, 0.08, 0.14, WL.CANVAS);
+    }
+    d.col("#1e1612");
+    for (const s of [-1, 1]) boxP(d, WL.TIMBER, s * 0.33 - 0.07, 1.12, 0.02, s * 0.33 + 0.07, 1.27, 0.26);
+  });
+  make("riderTorso", (d) => {
+    // shirt and vest, arms forward to the reins, the head; tinted per rider
+    d.col("#ffffff");
+    boxP(d, WL.CANVAS, -0.2, 1.8, -0.12, 0.2, 2.42, 0.13);
+    beam(d, -0.22, 2.36, 0, -0.2, 2.02, 0.32, 0.1, WL.CANVAS);
+    beam(d, 0.22, 2.36, 0, 0.2, 2.02, 0.32, 0.1, WL.CANVAS);
+    d.col("#c8946a");
+    boxP(d, WL.PAINT, -0.11, 2.42, -0.1, 0.11, 2.7, 0.12);
+    boxC(d, WL.PAINT, -0.19, 1.99, 0.34, 0.07, 0.07, 0.08);
+    boxC(d, WL.PAINT, 0.19, 1.99, 0.34, 0.07, 0.07, 0.08);
+    d.col("#5a4a3a");
+    boxP(d, WL.CANVAS, -0.21, 1.95, -0.13, 0.21, 2.3, -0.1); // vest back
+  });
+  make("riderHat", (d) => {
+    // a wide-brimmed hat (tinted per rider: white for the posse, black for the outlaw)
+    d.col("#ffffff");
+    cylP(d, WL.CANVAS, 0, 2.68, 0.01, 0.3, 0.03, 12, 0.3);
+    cylP(d, WL.CANVAS, 0, 2.7, 0.01, 0.13, 0.17, 10, 0.12);
+    d.col("#2a2420");
+    cylP(d, WL.CANVAS, 0, 2.71, 0.01, 0.135, 0.04, 10, 0.135, false);
   });
   make("stagecoach", (d) => {
     // a Concord stagecoach: a curved body slung between big wheels, the driver's box up front

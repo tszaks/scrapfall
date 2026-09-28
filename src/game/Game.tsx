@@ -22,6 +22,7 @@ import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./so
 import type { WesternLayout } from "./western/layout";
 import { WesternScene, WesternSun } from "./western/Western";
 import { WesternTrain } from "./western/Train";
+import { WesternRiders } from "./western/Riders";
 import { WesternWeather } from "./western/Weather";
 import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
@@ -4312,6 +4313,7 @@ function World({
         <>
           <WesternScene layout={western} time={time} />
           <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
+          <WesternRiders layout={western} seed={seed} link={traffic} />
           <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
           {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
