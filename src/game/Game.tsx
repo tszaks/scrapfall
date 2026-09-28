@@ -2564,14 +2564,14 @@ function World({
     };
 
     /** A shot hazard prop goes off: everything close takes the map's own effect. */
-    const blowHazard = (idx: number, share = true) => {
+    const blowHazard = (idx: number, share = true, visualOnly = false) => {
       const h = hazards.current[idx];
       if (!h || !h.alive) return;
       h.alive = false;
       const def = hazardRef.current;
       playFx(def.core, 0.6, def.radius, 0.45, h.x, h.z);
       playSfx("boom");
-      for (let ei = 0; ei < enemies.length; ei++) {
+      for (let ei = 0; !visualOnly && ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
         const d = Math.hypot(e.x - h.x, e.z - h.z);
