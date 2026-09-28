@@ -1477,6 +1477,8 @@ function World({
   onAbilityCd,
   onStat,
   onEvent,
+  onMutator,
+  endless,
 
 
 
