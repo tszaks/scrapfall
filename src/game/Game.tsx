@@ -4732,7 +4732,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v1.0.3
+                    SCRAPFALL · v1.0.4
                   </div>
                 </div>
               </div>
