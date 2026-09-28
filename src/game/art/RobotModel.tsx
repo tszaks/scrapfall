@@ -24,6 +24,8 @@ export type RobotData = {
   aux?: number;
   vis?: number;
   kind?: string;
+  /** A render-only shader probe owns no gameplay effects or contact-shadow slot. */
+  preview?: boolean;
 };
 
 export type RobotInputs = (d: RobotData) => { wind: number; aux: number };
@@ -68,14 +70,16 @@ export function RobotModel({
   const scene = useThree((st) => st.scene);
   const shadow = useRef(-1);
   useEffect(() => {
+    if (data.preview) return;
     shadow.current = claimShadow(scene);
     return () => {
       releaseShadow(shadow.current);
       shadow.current = -1;
     };
-  }, [scene]);
+  }, [scene, data.preview]);
   const foot = useMemo(() => footprint(kind), [kind]);
   useFrame((state, delta) => {
+    if (data.preview) return;
     debrisFrame(state.gl.info.render.frame, Math.min(delta, 0.05));
     if (!data.alive) {
       // it just died: break it into chunks where it stood

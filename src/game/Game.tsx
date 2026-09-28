@@ -2158,6 +2158,7 @@ function World({
   health,
   slots,
   stats,
+  renderStats,
   onShard,
   onLeech,
   onCrate,
@@ -2200,6 +2201,7 @@ function World({
   health: number;
   slots: React.MutableRefObject<Record<string, number>>;
   stats: React.MutableRefObject<Derived>;
+  renderStats: Derived;
   onShard: (v: number) => void;
   onLeech: () => void;
   onCrate: (kind: CrateKind) => void;
@@ -2230,7 +2232,7 @@ function World({
   const shardActive = useRef(false);
   shardActive.current = locked && !gameOver && !dead;
   const magnetRef = useRef(2);
-  magnetRef.current = stats.current.magnet;
+  magnetRef.current = renderStats.magnet;
   const weapon = useRef<Weapon>("pistol");
   const [held, setHeld] = useState<Weapon>("pistol");
   const [dropGun, setDropGun] = useState<Weapon>("scatter");
@@ -5785,11 +5787,7 @@ function World({
         withSpot={theme.blockShape === "city"}
         withTarget={theme.blockShape === "city"}
       />
-      <WarmKinds
-        enemies={enemies}
-        when={seed}
-        idle={() => !lockedRef.current && wave.current === 0 && pending.current.every((p) => !p)}
-      />
+      <WarmKinds enemies={enemies} theme={theme} />
       {/* time of day: sunset into night with the waves (timeOfDay.ts / TimeScene.tsx) */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
@@ -6086,7 +6084,7 @@ function World({
           <planeGeometry args={[0.001, 0.001]} />
           <meshBasicMaterial colorWrite={false} depthWrite={false} transparent />
         </mesh>
-        <GunModel w={held} mods={stats.current} />
+        <GunModel w={held} mods={renderStats} />
       </group>
       <RemotePlayers remotes={remotes} />
       <CombatFx />
@@ -6101,55 +6099,22 @@ function World({
 /**
  * Shader warm-up for the enemies: a body only mounts (and its materials only compile) when an
  * enemy of that kind first appears, so each new kind used to stall the frame it arrived in
- * (46 programs, up to 84 ms each, compiled during a wave 9-10 fight). Before a match starts,
- * one of every kind stands for a moment far off in a corner, so Prewarm (which draws
- * everything, unseen) compiles them with the rest of the map.
+ * (46 programs, up to 84 ms each, compiled during a wave 9-10 fight). A separate hidden
+ * gallery supplies every model to Prewarm. These records never enter the simulation or
+ * become alive, so warming cannot erase a real spawn or create deaths, shards or debris.
  */
-function WarmKinds({
-  enemies,
-  when,
-  idle,
-}: {
-  enemies: Enemy[];
-  when: unknown;
-  idle: () => boolean;
-}) {
-  const frame = useRef(0);
-  const placed = useRef<number[]>([]);
-  useEffect(() => {
-    frame.current = 0;
-  }, [when]);
-  useFrame(() => {
-    const n = ++frame.current;
-    if (n === 4 && idle() && enemies.every((e) => !e.alive)) {
-      const c = HALF - 6;
-      placed.current = [];
-      KINDS.forEach((kind, i) => {
-        const e = enemies[i];
-        if (!e) return;
-        Object.assign(e, {
-          kind,
-          alive: true,
-          x: c - (i % 5) * 1.2,
-          z: c - Math.floor(i / 5) * 1.2,
-          hp: 9999,
-          max: 9999,
-          flash: 0,
-          swing: 0,
-          slow: 0,
-          burn: 0,
-          elite: 0,
-        });
-        placed.current.push(i);
-      });
-    }
-    // (Prewarm runs at frame 20; keep them until it has)
-    if (n === 40 && placed.current.length) {
-      for (const i of placed.current) if (enemies[i]) enemies[i]!.alive = false;
-      placed.current = [];
-    }
-  });
-  return null;
+function WarmKinds({ enemies, theme }: { enemies: Enemy[]; theme: Theme }) {
+  const gallery = useMemo(
+    () => KINDS.map((kind) => ({ ...enemies[0]!, kind, alive: false, preview: true })),
+    [enemies],
+  );
+  return (
+    <group visible={false} name="enemy-shader-gallery">
+      {gallery.map((e) => (
+        <EnemyMesh key={e.kind} data={e} theme={theme} all={gallery} />
+      ))}
+    </group>
+  );
 }
 
 /**
@@ -6343,8 +6308,9 @@ export function Game() {
   const clsMods = CLASSES[cls].mods;
   const clsRef = useRef(clsMods);
   clsRef.current = clsMods;
-  const statsRef = useRef<Derived>(derive(perks, clsMods));
-  statsRef.current = derive(perks, clsMods);
+  const renderStats = useMemo(() => derive(perks, clsMods), [perks, clsMods]);
+  const statsRef = useRef<Derived>(renderStats);
+  statsRef.current = renderStats;
 
   const maxHp = statsRef.current.maxHp;
 
@@ -7191,6 +7157,7 @@ export function Game() {
           health={health}
           slots={slots}
           stats={statsRef}
+          renderStats={renderStats}
           onShard={(v) => {
             const gain = Math.max(
               1,
