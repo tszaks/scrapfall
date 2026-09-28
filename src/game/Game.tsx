@@ -3449,6 +3449,9 @@ export function Game() {
     setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = generateLevel(seed);
     const theme = THEMES[seed % THEMES.length]!;
+    // slim props get a tighter collision box so shots line up with the trunk
+    const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
+    setBlockHalf(slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
     level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
