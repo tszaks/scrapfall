@@ -1087,6 +1087,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     ff: 0,
     roof: "gable",
   });
+  // the freight shed's loading dock along its track side
+  markSolid(142, 18.3, 144.5, 29.7, 1.05);
   setGround(158, 18, 196, 50, WK.YARD);
   for (let x = 158; x <= 196; x += 2.5) {
     prop("fence", x, 18, 0, 2.5, 1);

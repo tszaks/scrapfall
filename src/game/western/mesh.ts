@@ -1398,6 +1398,13 @@ function roomItem(
   }
 }
 
+/** a round roof ventilator (freight shed, livery) */
+function D2vent(B: BGeo, x: number, y: number, z: number) {
+  B.detail.col("#6a6460");
+  cylP(B.detail, WL.IRON, x, y - 0.3, z, 0.35, 0.7, 10, 0.35, false);
+  cylP(B.detail, WL.IRON, x, y + 0.4, z, 0.55, 0.25, 10, 0.05);
+}
+
 /** Main Street kinds: false-front businesses with a back lot */
 const STREET_KINDS = new Set(["store", "hotel", "saloon", "opera", "bank", "sheriff"]);
 /**
@@ -1925,6 +1932,37 @@ function building(b: WBld, r: () => number): BGeo {
     }
   }
   // ---- per-type extras ----
+  if (b.t === "shed") {
+    // the freight shed: a plank loading dock along its track side at wagon-bed height, big
+    // sliding doors, freight waiting on the dock, a roof ventilator
+    G.col("#8a6a48").mat(WL.DECK);
+    boxP(G, WL.DECK, x0 + 0.3, 0, 0, x1 - 0.3, 1.05, 2.5, true, false);
+    G.col("#5a4030");
+    for (let x = x0 + 0.5; x < x1 - 0.3; x += 1.8) boxP(G, WL.TIMBER, x - 0.1, 0, 2.3, x + 0.1, 1.0, 2.5, false);
+    boxP(G, WL.TIMBER, x0 + 0.3, 0.85, 2.44, x1 - 0.3, 1.05, 2.56);
+    // wooden steps down at one end
+    for (let k = 0; k < 4; k++) boxP(G, WL.DECK, x1 - 1.6, 0, 2.5 + k * 0.3, x1 - 0.4, 1.05 - k * 0.26, 2.8 + k * 0.3);
+    // the doors: plank leaves on an iron rail, one slid half open
+    G.col("#7a5a3e").mat(WL.P_BOARD);
+    for (const [xa, xb] of [
+      [-W * 0.3 - 1.6, -W * 0.3 + 1.6],
+      [W * 0.3 - 1.6 + 1.2, W * 0.3 + 1.6 + 1.2],
+    ] as const)
+      boxP(G, WL.P_BOARD, xa, 1.05, 0.04, xb, 3.2, 0.14);
+    G.col("#1a1410").mat(WL.PAINT, 0, 0);
+    G.quad(W * 0.3 - 1.6, 1.05, 0.03, W * 0.3 - 0.4, 1.05, 0.03, W * 0.3 - 0.4, 3.15, 0.03, W * 0.3 - 1.6, 3.15, 0.03, [0, 0, 1, 1]);
+    G.col("#2a2826");
+    boxP(G, WL.IRON, x0 + 0.5, 3.25, 0.04, x1 - 0.5, 3.35, 0.18);
+    // freight on the dock
+    const T2 = templates();
+    for (let i = 0; i < 4; i++) {
+      const k = ["crates", "barrels", "sacks", "crate"][i]! as "crates" | "barrels" | "sacks" | "crate";
+      const t = T2[k];
+      if (t) B.detail.stamp(t.d, x0 + 2 + i * (W - 4) / 3.2, 1.05, 1.3 + (r() - 0.5) * 0.6, r() * 3, 0.9, 0.9, 0.9, _tint.setRGB(1, 1, 1));
+    }
+    // ventilator on the ridge
+    D2vent(B, 0, H + W * 0.25 + 0.2, D * -0.5);
+  }
   if (b.t === "adobe") {
     // by the door: a string of red chiles drying and clay ollas
     const D2 = B.detail;
