@@ -56,7 +56,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v5 adds rendered-shape physics and persistent shared tumbleweeds. Older clients
 // have different physical maps and cannot interpret that state; keep rooms separate.
 // v6 adds shared match weather, ballistic trajectories, Longshot and the fifth map.
-const PREFIX = "scrapfall-ts-arena-v6-";
+// v8 furnishes Pier/Whiteout interiors and adds pier activities
+const PREFIX = "scrapfall-ts-arena-v8-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
