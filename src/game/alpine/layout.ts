@@ -1000,11 +1000,14 @@ export function generateAlpine(seed: number, solo: boolean) {
   scatter(4, -260, -60, -160, 20, "chalet", false);
   scatter(3, 170, -40, 260, 120, "chalet", false);
   scatter(3, -270, 150, -120, 240, "barn", false);
-  // co-op only: the east hamlet, the mountain hut and outlying barns
-  scatter(6, 290, 0, 390, 120, "chalet", true);
-  scatter(2, -80, -370, 20, -300, "hut", true);
-  scatter(4, -390, -250, -290, 250, "barn", true);
-  scatter(3, 290, 150, 390, 360, "chalet", true);
+  // co-op only: the east hamlet, the mountain hut and outlying barns. Solo never builds
+  // them (they stood lit just past the sealed edge, a village you can see but never reach)
+  if (sHalf === null) {
+    scatter(6, 290, 0, 390, 120, "chalet", true);
+    scatter(2, -80, -370, 20, -300, "hut", true);
+    scatter(4, -390, -250, -290, 250, "barn", true);
+    scatter(3, 290, 150, 390, 360, "chalet", true);
+  }
 
   // ---- 4b. snow that piles up: drifts banked against walls (wind-sculpted ramps that
   // merge into the ground), and ploughed ridges along the street and lane edges ----
@@ -1399,8 +1402,9 @@ export function generateAlpine(seed: number, solo: boolean) {
     props.push({ k: "boulder", x, z, y, rot: rand() * 6.28, s, v: Math.floor(rand() * 4) });
     for (let i = ci(x - s * 0.8); i <= ci(x + s * 0.8); i++)
       for (let j = ci(z - s * 0.8); j <= ci(z + s * 0.8); j++) {
+        // solid, but the snow is not repainted: a painted rock cell under a boulder showed
+        // as a hard-edged pale plate round it (the boulder mesh carries the rock look)
         solid[S(i, j)] = 1;
-        surf[S(i, j)] = S_ROCK;
         tops[S(i, j)] = Math.max(tops[S(i, j)]!, y + s * 1.6);
       }
   }
@@ -1417,10 +1421,10 @@ export function generateAlpine(seed: number, solo: boolean) {
         cc(i) > BRIDGE.x0 - 1 &&
         cc(i) < BRIDGE.x1 + 1 &&
         Math.abs(cc(j) - BRIDGE.z) < BRIDGE.w / 2 + 1;
-      if (grad > 0.62 && surf[k] !== S_DECK && !onBridge) {
-        solid[k] = 1;
-        if (surf[k] !== S_BLD) surf[k] = S_ROCK;
-      }
+      // too steep to walk: solid. The surface is left alone (the shader already turns steep
+      // ground to rock by its slope; painting whole 2 m cells as rock drew hard pale
+      // diamonds and slabs on every pad bank)
+      if (grad > 0.62 && surf[k] !== S_DECK && !onBridge) solid[k] = 1;
     }
 
   // ---- 7b. zones: the mountain face above the village can't be walked (up or down); the
@@ -1484,13 +1488,12 @@ export function generateAlpine(seed: number, solo: boolean) {
         const t = -g.w / 2 + w / 2 + s * w;
         const x = g.axis === "x" ? g.x + t : g.x;
         const z = g.axis === "z" ? g.z + t : g.z;
-        const kind =
-          surf[
-            S(
-              ci(x - Math.sign(x) * 4 * (g.axis === "z" ? 1 : 0)),
-              ci(z - Math.sign(z) * 4 * (g.axis === "x" ? 1 : 0)),
-            )
-          ];
+        const sx = x - Math.sign(x) * 4 * (g.axis === "z" ? 1 : 0);
+        const sz = z - Math.sign(z) * 4 * (g.axis === "x" ? 1 : 0);
+        const steep =
+          Math.abs(hAt(sx + 2, sz) - hAt(sx - 2, sz)) + Math.abs(hAt(sx, sz + 2) - hAt(sx, sz - 2)) >
+          2.4;
+        const kind = steep ? S_ROCK : surf[S(ci(sx), ci(sz))];
         let style: PropKind = "deadfall";
         if (kind === S_ROAD || kind === S_PATH) style = "gate";
         else if (kind === S_PISTE) style = "closed";

@@ -14,7 +14,6 @@ import {
   S_PISTE,
   S_PLAZA,
   S_ROAD,
-  S_ROCK,
   type AlpineData,
 } from "./layout";
 import { fbm, hash2, naturalHeight, smooth } from "./noise";
@@ -186,10 +185,10 @@ export function surfTexture(a: AlpineData) {
       const o = (j * n + i) * 4; // texture x = world x, texture y = world z
       data[o] =
         k === S_PATH || k === S_PLAZA || k === S_ROAD || k === S_DECK || k === S_BLD ? 255 : 0;
-      data[o + 1] = k === S_PISTE ? 255 : 0;
-      data[o + 2] = k === S_ICE ? 255 : k === S_ROCK ? 90 : 0;
+      // green: piste on its own, ploughed road together with red (see the terrain shader)
+      data[o + 1] = k === S_PISTE || k === S_ROAD ? 255 : 0;
+      data[o + 2] = k === S_ICE ? 255 : 0;
       data[o + 3] = k === S_FOREST ? 255 : k === S_BLOCKADE ? 160 : 0;
-      if (k === S_ROAD) data[o + 2] = 40;
     }
   const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
   t.magFilter = THREE.LinearFilter;
