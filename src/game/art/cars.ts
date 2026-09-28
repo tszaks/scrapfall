@@ -804,6 +804,12 @@ function busBody(far: boolean) {
   });
   if (far) {
     profile(m, band, W - 0.06, GLASS, SURF.glass, { seg: 2 });
+    // Keep separate panes readable when the transparent cabin switches to its distant LOD.
+    m.both(() => {
+      for (let k = 0; k <= 8; k++)
+        m.box(0.045, winHi - winLo, 0.09,
+          [W / 2 - 0.015, (winLo + winHi) / 2, R + 0.1 + k * ((L - 0.4) / 8)], PAINT, CAR_PAINT);
+    });
     simpleWheels(m, f, 0.34);
   } else {
     m.both(() => {

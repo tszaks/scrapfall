@@ -40,7 +40,7 @@ import {
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
 import { isBeach } from "./beach/beachLayout";
-import { mapPosts, movePropsFromDoors } from "./posts";
+import { mapPosts, movePropsFromDoors, snugPlazaProps } from "./posts";
 import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
 import { CityScene, CitySun } from "./City";
@@ -3638,12 +3638,16 @@ function World({
 
   /** an open spot right next to (x, z): hornet pack members land around their leader */
   const besides = (x: number, z: number) => {
-    // close beside the leader first, then a little wider; never a blocked or stair-only spot
-    for (let k = 0; k < 20; k++) {
+    // close beside the leader first, then a little wider; never a blocked or stair-only spot,
+    // and (like every spawn) out of the players' sight
+    const ps = livePlayers();
+    for (let k = 0; k < 24; k++) {
       const w = k < 8 ? 2.4 : 7;
       const qx = x + (rand() - 0.5) * w;
       const qz = z + (rand() - 0.5) * w;
-      if (!blocked(blocks, qx, qz, 0.5) && !raised(qx, qz)) return { x: qx, z: qz };
+      if (blocked(blocks, qx, qz, 0.5) || raised(qx, qz)) continue;
+      if (big && ps.some((p) => clearLine(blocks, p.x, p.z, qx, qz, 0.1))) continue;
+      return { x: qx, z: qz };
     }
     return spot(25, 45, true);
   };
@@ -6751,6 +6755,8 @@ export function Game() {
     // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
     // moves along the facade and stays solid (before the map's meshes are built from it)
     setPosts(null);
+    // Close narrow plaza masonry gaps without relocating ordinary kerb furniture.
+    if (mode === "city" && level.city) snugPlazaProps(level.city as CityLayout, (accessList0 ?? []).map(b => b.spec.door));
     movePropsFromDoors(
       level.city,
       level.western ?? null,

@@ -2,7 +2,7 @@
 // 2 m block grid can't hold them (a whole cell per lamp post is far too fat), so each map's
 // props become small collision circles (level.ts setPosts). Trees and palms keep whatever
 // each map already does with them.
-import type { CityLayout } from "./cityLayout";
+import { K_OPEN, K_PARK, type CityLayout } from "./cityLayout";
 import { isBeach } from "./beach/beachLayout";
 import type { AlpineLayout } from "./alpine/layout";
 import type { WesternLayout } from "./western/layout";
@@ -83,6 +83,9 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
       else if (p.k === "hydrant") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_HYDRANT });
       else if (p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_TRASH });
       else if (p.k === "bench") out.push({ x: p.x, z: p.z, r: 0.55, h: LOW_BENCH });
+      else if (p.k === "palm") out.push({ x: p.x, z: p.z, r: 0.32 });
+      else if (p.k === "tree") out.push({ x: p.x, z: p.z, r: 0.28 * (p.s ?? 1) });
+
     }
   }
   return out;
@@ -157,4 +160,55 @@ export function movePropsFromDoors(
     props.push(...keep);
   }
   return { moved, removed: drop.size };
+}
+
+/** collision radius of a city prop (mapPosts' circles; 0 = not solid) */
+function cityPropR(p: { k: string; s?: number }) {
+  if (p.k === "light" || p.k === "lightLED" || p.k === "meter" || p.k === "bollard") return 0.2;
+  if (p.k === "hydrant" || p.k === "trash" || p.k === "news") return 0.3;
+  if (p.k === "bench") return 0.55;
+  if (p.k === "palm") return 0.32;
+  if (p.k === "tree") return 0.28 * (p.s ?? 1);
+  return 0;
+}
+
+/** Close body-narrow gaps only around plaza/park masonry. Kerbs, medians, parking
+ * lanes and buildings keep their authored positions. The raw map grid is independent of
+ * the player's current roof/interior collision override. Returns an auditable move list. */
+export function snugPlazaProps(city: CityLayout, doors: readonly Door[]) {
+  const { cells, half, kind, solid } = city;
+  const cell = (v: number) => Math.floor((v + half) / 2);
+  const index = (x: number, z: number) => cell(x) * cells + cell(z);
+  const plaza = (k: number) => kind[k] === K_OPEN || kind[k] === K_PARK;
+  const isSolid = (x: number, z: number) => solid[index(x, z)] === 1;
+  const changes: { k: string; from: [number, number]; to: [number, number] }[] = [];
+  for (const p of city.props) {
+    const r = cityPropR(p);
+    if (!r || !plaza(index(p.x, p.z))) continue;
+    const candidates: { gap: number; x: number; z: number }[] = [];
+    for (let i = cell(p.x) - 1; i <= cell(p.x) + 1; i++)
+      for (let j = cell(p.z) - 1; j <= cell(p.z) + 1; j++) {
+        const k = i * cells + j;
+        if (!solid[k] || !plaza(k)) continue;
+        const cx = i * 2 - half + 1, cz = j * 2 - half + 1;
+        const nx = Math.max(cx - 1, Math.min(cx + 1, p.x));
+        const nz = Math.max(cz - 1, Math.min(cz + 1, p.z));
+        const d = Math.hypot(nx - p.x, nz - p.z), gap = d - r;
+        if (gap > 0.03 && gap < 0.9)
+          candidates.push({ gap, x: p.x + (nx - p.x) / d * (gap - 0.02), z: p.z + (nz - p.z) / d * (gap - 0.02) });
+      }
+    candidates.sort((a, b) => a.gap - b.gap);
+    for (const q of candidates) {
+      if (doors.some(d => inDoorway(d, q.x, q.z) !== null)) continue;
+      if (city.props.some(o => o !== p && cityPropR(o) > 0 && Math.hypot(o.x - q.x, o.z - q.z) < cityPropR(o) + r + 0.15)) continue;
+      let clear = !isSolid(q.x, q.z);
+      for (let a = 0; a < 16; a++)
+        if (isSolid(q.x + Math.cos(a * Math.PI / 8) * r, q.z + Math.sin(a * Math.PI / 8) * r)) clear = false;
+      if (!clear) continue;
+      changes.push({ k: p.k, from: [p.x, p.z], to: [q.x, q.z] });
+      p.x = q.x; p.z = q.z;
+      break;
+    }
+  }
+  return changes;
 }
