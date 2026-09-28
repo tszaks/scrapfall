@@ -4,7 +4,7 @@ import { groundY, shotHits } from "./terrain";
 import { playGun } from "./audio";
 import { DecalPool, MeshPool, RingPool, SegPool, spec } from "./fxCore";
 import {
-  FX, VF, VK, airBurst, beam, bolt, chips, classify, explosion, glow, impact, punchThrough, puffs,
+  BOOMER_R, FX, VF, VK, airBurst, beam, bolt, chips, classify, explosion, glow, impact, punchThrough, puffs,
   robotAt, seg, shatter, sound, sparks, type Contact, type FxEnemy, type FxEnv, type Surface, type VisKind,
 } from "./impacts";
 import type { NetHandle, NetMsg, RemoteState } from "./net";
@@ -152,11 +152,13 @@ type Proj = {
   owner: string | null;
   // ghost-only simulation
   life: number; bounce: number; pierce: number; cluster: number; chain: number;
+  /** BOOMER: the local shot's blast radius (0 = the default) */
+  blastR: number;
 };
 const mkProj = (): Proj => ({
   on: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), prev: new THREE.Vector3(), spawn: new THREE.Vector3(),
   vo: new THREE.Vector3(), kind: VK.PISTOL, flags: 0, age: 0, trailT: 0, scale: 1, conv: 7, owner: null,
-  life: 0, bounce: 0, pierce: 0, cluster: 0, chain: 0,
+  life: 0, bounce: 0, pierce: 0, cluster: 0, chain: 0, blastR: 0,
 });
 /** local rounds, indexed by Game.tsx's bullet slot */
 const L: Proj[] = [];
@@ -164,7 +166,7 @@ const L: Proj[] = [];
 const GHOSTS = 160;
 const G: Proj[] = Array.from({ length: GHOSTS }, mkProj);
 
-type BulletLike = { pos: THREE.Vector3; vel: THREE.Vector3; active: boolean; size: number; color: string; pierce: number };
+type BulletLike = { pos: THREE.Vector3; vel: THREE.Vector3; active: boolean; size: number; color: string; pierce: number; blast?: number };
 
 type Arc = { a: FxEnemy | null; ax: number; az: number; b: FxEnemy; t: number };
 const arcs: Arc[] = [];
@@ -283,6 +285,7 @@ export function fxShot(i: number, b: BulletLike, kind: VisKind, flags = 0, from?
   P.owner = null;
   const muz = from ?? (kind === VK.FRAG ? null : localMuzzle(kind, flags, V1));
   start(P, b.pos, kind, flags, b.size, muz);
+  P.blastR = b.blast ?? 0; // the drawn blast matches the local shot's (perk-widened) radius
 }
 
 /**
@@ -328,8 +331,8 @@ export function fxChain(e: FxEnemy, o: FxEnemy) {
   chainArc(e, o);
 }
 /** a FLAK / mortar shell's cluster just burst */
-export function fxBurst(b: BulletLike) {
-  airBurst(b.pos.x, b.pos.y, b.pos.z);
+export function fxBurst(b: BulletLike, r?: number) {
+  airBurst(b.pos.x, b.pos.y, b.pos.z, r);
 }
 /** a local round stopped: `wall` = it hit something solid, else it ran out of life */
 export function fxDie(i: number, wall: boolean) {
@@ -399,7 +402,7 @@ function hitVis(P: Proj, e: FxEnemy, terminal: boolean) {
   CONTACT.n.set(-P.vel.x, 0, -P.vel.z).normalize();
   switch (P.kind) {
     case VK.CANNON:
-      explosion(p.x, p.y, p.z, 2);
+      explosion(p.x, p.y, p.z, 2, P.blastR || BOOMER_R);
       break;
     case VK.CRYO:
       shatter(CONTACT, "robot");
@@ -441,7 +444,7 @@ function dieVis(P: Proj, wall: boolean) {
   const c = CONTACT.p;
   switch (P.kind) {
     case VK.CANNON:
-      explosion(c.x, c.y, c.z, 2);
+      explosion(c.x, c.y, c.z, 2, P.blastR || BOOMER_R);
       return;
     case VK.CRYO:
       shatter(CONTACT, surf);

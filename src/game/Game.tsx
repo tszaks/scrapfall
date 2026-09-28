@@ -70,7 +70,7 @@ import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteS
 import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
 import { visOf, aimDir, fxBounce, fxBurst, fxChain, fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxKick, fxNetStats, fxRemoteFire, fxReset, fxShot, fxStyle, rng } from "./projectiles";
-import { FX, VF, VK, type VisKind } from "./impacts";
+import { BOOMER_R, FLAK_R, FX, VF, VK, type VisKind } from "./impacts";
 import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicProgress, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { setAmbienceActive, setAmbienceHazard, setAmbienceScene, setAmbienceTime } from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
@@ -96,17 +96,21 @@ type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
   bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number;
+  /** splash radius (m): the round explodes on impact with anything, or at max range */
+  blast?: number;
+  /** splash damage as a share of the round's damage (full at the centre, 35% at the edge) */
+  blastMul?: number;
 };
 const GUNS: Record<Weapon, Gun> = {
   pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
   scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
-  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
+  cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6, blast: BOOMER_R, blastMul: 1 },
   rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
   harpoon: { name: "HARPOON", wave: 6, cooldown: 0.8, count: 1, spread: 0, speed: 40, life: 2, damage: 3, size: 0.1, color: "#f2ead6", body: "#4a4238", ammo: 12, pierce: 3 },
   cryo: { name: "GLACIER", wave: 4, cooldown: 0.25, count: 1, spread: 0.02, speed: 28, life: 1.5, damage: 1, size: 0.12, color: "#9fe8ff", body: "#2a5f6e", ammo: 30, slow: 2.5 },
-  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4 },
+  flak: { name: "FLAK", wave: 8, cooldown: 1, count: 1, spread: 0, speed: 16, life: 2, damage: 3, size: 0.3, color: "#ff9d3b", body: "#3c3a2a", ammo: 8, cluster: 4, blast: FLAK_R, blastMul: 0.5 },
   tesla: { name: "TESLA", wave: 6, cooldown: 0.35, count: 1, spread: 0, speed: 34, life: 1.2, damage: 2, size: 0.14, color: "#5f9bff", body: "#20304f", ammo: 40, chain: 2 },
   revolver: { name: "HAND CANNON", wave: 3, cooldown: 0.55, count: 1, spread: 0, speed: 30, life: 2, damage: 4, size: 0.13, color: "#ffcf6b", body: "#5a4a3a", ammo: 24, pierce: 1 },
   minigun: { name: "SHREDDER", wave: 7, cooldown: 0.05, count: 1, spread: 0.06, speed: 28, life: 1.3, damage: 1, size: 0.08, color: "#ffe14f", body: "#3a3a3a", ammo: 220 },
@@ -177,6 +181,7 @@ type Enemy = {
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
   bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
+  blast: number; blastMul: number;
 };
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
@@ -1303,6 +1308,7 @@ const BULLET_GEO = new THREE.LatheGeometry(
 );
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
+const BLAST_AT = new THREE.Vector3();
 
 
 const BulletPool = memo(function BulletPool({
@@ -1339,12 +1345,13 @@ function shieldUp(e: Enemy, host: boolean) {
   return host ? (e.shield ?? 0) > 0 && (e.shieldT ?? 0) <= 0 : (((e.vis ?? 0) >> 6) & 1) === 1;
 }
 
-type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number };
+type Fx = { bounce?: number; pierce?: number; slow?: number; cluster?: number; chain?: number; burn?: number; knock?: number; mods?: number; blast?: number; blastMul?: number };
 function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: number, damage = 1, color = "", size = 0, fx: Fx = {}) {
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
+    blast: fx.blast ?? 0, blastMul: fx.blastMul ?? 0,
   };
   const i = pool.findIndex((b) => !b.active);
   const slot = pool[i];
@@ -1764,7 +1771,7 @@ function World({
       const handle = { gl, scene, camera, look, liveCars, knock, city, western, gaps, traffic, remotes };
       Object.assign(handle, { enemies, turrets, mines, remoteDeps, spawnWave, groundAt: groundY, blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r) });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
-      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy });
+      Object.assign(handle, { ords, hitLog, packLead, blocks, keys, pending, wave, nextWaveTimer, hurtEnemy, blastAt });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
         for (const w of ORDER) { owned.current.add(w); ammo.current[w] = 9999; }
@@ -1977,7 +1984,7 @@ function World({
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
       let b = enemyBullets.current[i];
       if (!b) {
-        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0 };
+        b = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 1, active: false, damage: 1, color: "", size: 0, bounce: 0, pierce: 0, slow: 0, cluster: 0, chain: 0, burn: 0, knock: 0, mods: 0, blast: 0, blastMul: 0 };
         enemyBullets.current.push(b);
       }
       b.active = true;
@@ -2045,6 +2052,10 @@ function World({
               shred: m.sh === 1, exec: m.ex === 1, bounty: m.bo === 1, freeze: Number(m.fz ?? 0),
             }, String(m.from));
           }
+        } else if (m.type === "blast") {
+          // a guest's BOOMER / FLAK exploded: the host resolves the splash and credits the guest
+          applyBlast(Number(m.x), Number(m.y), Number(m.z), Math.min(8, Number(m.r) || 0), Number(m.d) || 0,
+            Number(m.vx) || 0, Number(m.vz) || 0, Number(m.s ?? -1), String(m.from));
         } else if (m.type === "shield") {
           const e = enemies[Number(m.i)];
           if (e?.alive && e.kind === "bulwark") drainShield(e, Number(m.dmg));
@@ -2460,6 +2471,54 @@ function World({
     }
     applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
   };
+  /**
+   * BOOMER / FLAK splash, host only: every robot within `r` of the blast (and in its line of
+   * sight: walls shield what is behind them) takes `dmg` with falloff, 100% at the centre and
+   * 35% at the edge, plus a shove away from the centre. Each hit runs through applyHit as a
+   * direct hit from the blast's direction, so a bulwark facing the blast blocks it, and the
+   * kill credit goes to the shooter (`from`).
+   */
+  const applyBlast = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip: number, from: string | null) => {
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      if (!e.alive || i === skip) continue;
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const d = Math.hypot(dx, dz);
+      const er = STATS[e.kind].radius;
+      const dd = Math.max(0, d - er);
+      if (dd > r) continue;
+      const [lo, hi] = hitBand(e.kind);
+      const ey = groundY(e.x, e.z);
+      if (y < ey + lo - r || y > ey + hi + r) continue; // far above or below (a roof, a hornet)
+      if (d > er + 0.3 && !clearLine(blocks, x, z, e.x, e.z, 0.1)) continue;
+      const k = 1 - 0.65 * Math.min(1, dd / r);
+      // at the centre the blast travels the way the shell was flying
+      const [kx, kz] = d > 0.3 ? [dx / d, dz / d] : [vx, vz];
+      applyHit(e, i, dmg * k, { kb: 2.4 * k, kx, kz, direct: true }, from);
+    }
+  };
+  /** this client's round exploded: resolved on the host (a guest sends one "blast" message) */
+  const blastAt = (x: number, y: number, z: number, r: number, dmg: number, vx: number, vz: number, skip = -1) => {
+    onStat("hit", 1);
+    onStat("dmg", dmg);
+    if (stats.current.steal > 0) {
+      stealBank.current += dmg * stats.current.steal;
+      if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
+    }
+    // no friendly fire, but a close blast gives your own player a gentle push
+    const c = camera.position;
+    const pd = Math.hypot(c.x - x, c.z - z);
+    if (pd < r && Math.abs(c.y - EYE - y) < r) {
+      const push = 4 * (1 - pd / r);
+      knock.current.x += ((c.x - x) / (pd || 1)) * push;
+      knock.current.z += ((c.z - z) / (pd || 1)) * push;
+    }
+    const q = (v: number) => Math.round(v * 100) / 100;
+    const vl = Math.hypot(vx, vz) || 1;
+    if (isHostRef.current) applyBlast(x, y, z, r, dmg, vx / vl, vz / vl, skip, null);
+    else netRef.current?.broadcast({ type: "blast", x: q(x), y: q(y), z: q(z), r: q(r), d: q(dmg), vx: q(vx / vl), vz: q(vz / vl), s: skip });
+  };
   const burstTimer = useRef(0);
 
   const spit = () => {
@@ -2488,6 +2547,9 @@ function World({
         chain: g.chain ?? 0,
         knock: s2.knock + (isP && s2.comp ? 0.8 : 0),
         burn: isP && s2.incend ? 3 : 0,
+        // Combustion (perks, the Bio-Siphon class, Cluster Charge) widens the blast a little
+        blast: g.blast ? g.blast * (1 + 0.5 * s2.boom) : 0,
+        blastMul: g.blastMul ?? 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
       };
       const slot = fireInto(
@@ -3992,11 +4054,17 @@ function World({
     }
 
     // player bullets
-    const burst = (b: Bullet) => {
+    const burst = (b: Bullet, at: THREE.Vector3 = b.pos, skip = -1) => {
+      const blastR = b.blast;
+      if (b.blast > 0) {
+        const r = b.blast;
+        b.blast = 0;
+        blastAt(at.x, at.y, at.z, r, b.damage * b.blastMul, b.vel.x, b.vel.z, skip);
+      }
       if (b.cluster <= 0) return;
       const n2 = b.cluster;
       b.cluster = 0;
-      fxBurst(b);
+      fxBurst(b, blastR || undefined);
       for (let s = 0; s < n2; s++) {
         const a = (s / n2) * Math.PI * 2 + Math.random();
         const v = new THREE.Vector3(Math.sin(a), 0.1, Math.cos(a)).multiplyScalar(14);
@@ -4009,10 +4077,11 @@ function World({
       if (b.active) {
         const px = b.pos.x;
         const pz = b.pos.z;
+        BLAST_AT.copy(b.pos); // a shell that hits a wall explodes just in front of it
         b.pos.addScaledVector(b.vel, delta);
         b.life -= delta;
         const hitWall = outOfBounds(b.pos);
-        if (hitWall && b.bounce > 0) {
+        if (hitWall && b.bounce > 0 && b.blast <= 0) {
           // bounce off whichever side it ran into
           b.bounce--;
           if (blocked(blocks, b.pos.x, pz, 0.05) || Math.abs(b.pos.x) > HALF) b.vel.x *= -1;
@@ -4020,7 +4089,7 @@ function World({
           b.pos.set(px, b.pos.y, pz);
           fxBounce(i);
         } else if (b.life <= 0 || hitWall) {
-          burst(b);
+          burst(b, hitWall ? BLAST_AT : b.pos);
           fxDie(i, hitWall);
           b.active = false;
         } else {
@@ -4058,6 +4127,13 @@ function World({
             const [lo, hi] = hitBand(e.kind);
             const by = b.pos.y - groundY(e.x, e.z); // height above the enemy's ground (alpine slopes)
             if (Math.hypot(b.pos.x - e.x, b.pos.z - e.z) < STATS[e.kind].radius + 0.2 && by < hi && by > lo) {
+              if (b.blast > 0 && b.blastMul >= 1) {
+                // BOOMER: the shell detonates on the robot; the blast does all the damage
+                fxHit(i, b, e);
+                burst(b);
+                b.active = false;
+                break;
+              }
               // a vanguard's slab soaks most of a normal hit; piercing shots go right through it
               const dmg = e.kind === "vanguard" && b.pierce <= 0 ? Math.max(1, Math.round(b.damage * 0.34)) : b.damage;
               // executioner / shredder / bounty are judged on the host (it has the true health)
@@ -4083,7 +4159,7 @@ function World({
               }
               if (b.pierce > 0) b.pierce--;
               else {
-                burst(b);
+                burst(b, b.pos, ei); // (FLAK's splash spares the robot it just hit directly)
                 b.active = false;
               }
               break;
