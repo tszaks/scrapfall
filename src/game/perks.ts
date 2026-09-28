@@ -33,51 +33,51 @@ export type PerkEntry = {
 };
 
 export const PERK_INFO: Record<PerkId, PerkEntry> = {
-  dmg: { name: "HOLLOW POINTS", desc: "+15% damage, every gun", base: 8, color: "#e8322a" },
-  rate: { name: "HAIR TRIGGER", desc: "+15% fire rate, every gun", base: 8, color: "#ff9d3b" },
-  speed: { name: "LIGHT BOOTS", desc: "+20% move speed", base: 6, color: "#4fe3ff" },
-  maxhp: { name: "IRON HEART", desc: "+2 max health", base: 10, color: "#b3261e" },
-  heal: { name: "PATCH KIT", desc: "Restore 5 health now", base: 5, color: "#7cff4f" },
-  magnet: { name: "SHARD MAGNET", desc: "Pull shards from farther away", base: 4, color: "#5ff6ff" },
-  greed: { name: "PROSPECTOR", desc: "+25% shards from kills", base: 7, color: "#e7b25c" },
-  regen: { name: "NANO MEND", desc: "Slowly regenerate health", base: 12, color: "#a855f7" },
-  steal: { name: "BLOOD SIPHON", desc: "+3% life steal on all damage you deal", base: 9, color: "#d6204f" },
-  mend: { name: "FIELD MEDIC", desc: "+3 health after every wave", base: 8, color: "#4fd88a" },
-  crit: { name: "EAGLE EYE", desc: "+15% chance to hit for double damage", base: 9, color: "#ffe14f" },
-  boom: { name: "COMBUSTION", desc: "+10% chance kills explode for 3 splash", base: 10, color: "#ff5c1f" },
-  knock: { name: "KINETIC FORCE", desc: "+20% knockback on every hit", base: 6, color: "#9ad0ff" },
-  ammo: { name: "DEEP POCKETS", desc: "+25% ammo in guns you pick up", base: 7, color: "#c8b47a" },
-  armor: { name: "NANITE PLATING", desc: "+15% less damage taken", base: 11, color: "#8fa3b8" },
-  thorns: { name: "SHOCK THORNS", desc: "+20% chance to zap attackers for 2", base: 9, color: "#7ce8ff" },
-  ricochet: { name: "RUBBER BULLETS", desc: "+25% chance shots bounce off walls", base: 8, color: "#7cff4f" },
-  leech: { name: "VAMPIRIC LEECH", desc: "+8% chance a kill restores 1 health", base: 10, color: "#ff4f8b" },
-  dodge: { name: "PHASE SHIFT", desc: "+6% chance an enemy hit passes right through you", base: 10, color: "#b06bff" },
-  haste: { name: "RECHARGE COILS", desc: "-12% ability cooldown", base: 9, color: "#5f9bff" },
-  pierce: { name: "PENETRATOR", desc: "Your shots punch through 1 more enemy", base: 12, color: "#f2ead6" },
-  freeroll: { name: "SUPPLY TOKENS", desc: "+1 free shop reroll every break", base: 10, color: "#c8f07a" },
+  dmg: { name: "HOLLOW POINTS", desc: "+15% Firepower", base: 8, color: "#e8322a" },
+  rate: { name: "HAIR TRIGGER", desc: "+15% Cycle Rate", base: 8, color: "#ff9d3b" },
+  speed: { name: "LIGHT BOOTS", desc: "+20% Thruster Speed", base: 6, color: "#4fe3ff" },
+  maxhp: { name: "IRON HEART", desc: "+2 Hull Integrity", base: 10, color: "#b3261e" },
+  heal: { name: "PATCH KIT", desc: "Restore 5 Hull Integrity now", base: 5, color: "#7cff4f" },
+  magnet: { name: "SHARD MAGNET", desc: "+1.5m Flux Magnet", base: 4, color: "#5ff6ff" },
+  greed: { name: "PROSPECTOR", desc: "+25% Salvage Yield", base: 7, color: "#e7b25c" },
+  regen: { name: "NANO MEND", desc: "+1 Nano-Regen", base: 12, color: "#a855f7" },
+  steal: { name: "BLOOD SIPHON", desc: "+3% Life Siphon", base: 9, color: "#d6204f" },
+  mend: { name: "FIELD MEDIC", desc: "+3 Hull Integrity after every wave", base: 8, color: "#4fd88a" },
+  crit: { name: "EAGLE EYE", desc: "+15% Crit Protocol", base: 9, color: "#ffe14f" },
+  boom: { name: "COMBUSTION", desc: "+10% Combustion (3 splash)", base: 10, color: "#ff5c1f" },
+  knock: { name: "KINETIC FORCE", desc: "+20% Impact Force", base: 6, color: "#9ad0ff" },
+  ammo: { name: "DEEP POCKETS", desc: "+25% Ammo Capacity", base: 7, color: "#c8b47a" },
+  armor: { name: "NANITE PLATING", desc: "+15% Armor Plating", base: 11, color: "#8fa3b8" },
+  thorns: { name: "SHOCK THORNS", desc: "+20% Shock Thorns (2 damage)", base: 9, color: "#7ce8ff" },
+  ricochet: { name: "RUBBER BULLETS", desc: "+25% Ricochet", base: 8, color: "#7cff4f" },
+  leech: { name: "VAMPIRIC LEECH", desc: "+8% chance a kill restores 1 Hull Integrity", base: 10, color: "#ff4f8b" },
+  dodge: { name: "PHASE SHIFT", desc: "+6% Phase Shift", base: 10, color: "#b06bff" },
+  haste: { name: "RECHARGE COILS", desc: "+12% Recharge Haste", base: 9, color: "#5f9bff" },
+  pierce: { name: "PENETRATOR", desc: "+1 Piercing", base: 12, color: "#f2ead6" },
+  freeroll: { name: "SUPPLY TOKENS", desc: "+1 Free Reroll every break", base: 10, color: "#c8f07a" },
 
   // ---- trade-off cards: real power, real cost ----
-  glass: { name: "GLASS CANNON", desc: "", base: 11, color: "#e8322a", pros: ["+35% Firepower"], cons: ["-3 Max HP"] },
-  plating: { name: "HEAVY PLATING", desc: "", base: 11, color: "#8fa3b8", pros: ["+25% Armor", "+10% Knockback"], cons: ["-15% Move Speed"] },
-  overclock: { name: "OVERCLOCK", desc: "", base: 11, color: "#ff9d3b", pros: ["+30% Fire Rate"], cons: ["-20% Ammo Capacity"] },
-  bloodpact: { name: "BLOOD PACT", desc: "", base: 12, color: "#d6204f", pros: ["+5% Life Steal"], cons: ["-2 Max HP", "-10% Armor"] },
-  leadcore: { name: "LEAD CORE", desc: "", base: 12, color: "#c8b47a", pros: ["+20% Firepower", "+1 Piercing"], cons: ["-15% Fire Rate"] },
-  spikes: { name: "SPRINTER SPIKES", desc: "", base: 9, color: "#4fe3ff", pros: ["+25% Move Speed"], cons: ["-10% Firepower"] },
-  greedp: { name: "GREED PROTOCOL", desc: "", base: 10, color: "#e7b25c", pros: ["+50% Shard Yield"], cons: ["-15% Armor"] },
-  valve: { name: "ADRENALINE VALVE", desc: "", base: 11, color: "#5f9bff", pros: ["-25% Ability Cooldown"], cons: ["-10% Armor"] },
-  cluster: { name: "CLUSTER CHARGE", desc: "", base: 11, color: "#ff5c1f", pros: ["+25% Combustion chance"], cons: ["-10% Firepower"] },
+  glass: { name: "GLASS CANNON", desc: "", base: 11, color: "#e8322a", pros: ["+35% Firepower"], cons: ["-3 Hull Integrity"] },
+  plating: { name: "HEAVY PLATING", desc: "", base: 11, color: "#8fa3b8", pros: ["+25% Armor Plating", "+10% Impact Force"], cons: ["-15% Thruster Speed"] },
+  overclock: { name: "OVERCLOCK", desc: "", base: 11, color: "#ff9d3b", pros: ["+30% Cycle Rate"], cons: ["-20% Ammo Capacity"] },
+  bloodpact: { name: "BLOOD PACT", desc: "", base: 12, color: "#d6204f", pros: ["+5% Life Siphon"], cons: ["-2 Hull Integrity", "-10% Armor Plating"] },
+  leadcore: { name: "LEAD CORE", desc: "", base: 12, color: "#c8b47a", pros: ["+20% Firepower", "+1 Piercing"], cons: ["-15% Cycle Rate"] },
+  spikes: { name: "SPRINTER SPIKES", desc: "", base: 9, color: "#4fe3ff", pros: ["+25% Thruster Speed"], cons: ["-10% Firepower"] },
+  greedp: { name: "GREED PROTOCOL", desc: "", base: 10, color: "#e7b25c", pros: ["+50% Salvage Yield"], cons: ["-15% Armor Plating"] },
+  valve: { name: "ADRENALINE VALVE", desc: "", base: 11, color: "#5f9bff", pros: ["+25% Recharge Haste"], cons: ["-10% Armor Plating"] },
+  cluster: { name: "CLUSTER CHARGE", desc: "", base: 11, color: "#ff5c1f", pros: ["+25% Combustion"], cons: ["-10% Firepower"] },
 
   burst: { name: "BURST RECEIVER", desc: "Pistol fires a 3-round burst", base: 14, color: "#ffb347", max: 1, trigger: true },
   incend: { name: "INCENDIARY ROUNDS", desc: "Pistol hits burn for 1/sec over 3s", base: 14, color: "#ff7043", max: 1 },
-  magnum: { name: "MAGNUM BREECH", desc: "Pistol: +1 damage, faster, pierces 1", base: 14, color: "#e8e2d4", max: 1 },
-  extmag: { name: "EXTENDED MAG", desc: "Pistol: 220 rounds each wave instead of 140", base: 12, color: "#000", max: 1 },
+  magnum: { name: "MAGNUM BREECH", desc: "Pistol: +1 Firepower, faster, +1 Piercing", base: 14, color: "#e8e2d4", max: 1 },
+  extmag: { name: "EXTENDED MAG", desc: "Pistol Ammo Capacity: 220 rounds each wave instead of 140", base: 12, color: "#000", max: 1 },
   shred: { name: "SHREDDER ROUNDS", desc: "Pistol hits make enemies take +30% damage for 3s", base: 14, color: "#000", max: 1 },
-  laser: { name: "LASER SIGHT", desc: "Pistol: red aiming laser, +25% crit chance", base: 13, color: "#000", max: 1 },
-  comp: { name: "HEAVY COMPENSATOR", desc: "Pistol: no recoil, +30% bullet speed, heavy knockback", base: 12, color: "#000", max: 1 },
-  suppr: { name: "WHISPER SUPPRESSOR", desc: "Pistol: quiet shots, crits deal triple damage", base: 13, color: "#000", max: 1 },
-  exec: { name: "EXECUTIONER HAMMER", desc: "Pistol: double damage to enemies under half health", base: 14, color: "#000", max: 1 },
-  holster: { name: "SPEED HOLSTER", desc: "+15% move speed while holding the pistol", base: 11, color: "#000", max: 1 },
-  bounty: { name: "BOUNTY EXTRACTOR", desc: "Pistol kills: +1 shard, every 6th heals 1", base: 13, color: "#000", max: 1 },
+  laser: { name: "LASER SIGHT", desc: "Pistol: red aiming laser, +25% Crit Protocol", base: 13, color: "#000", max: 1 },
+  comp: { name: "HEAVY COMPENSATOR", desc: "Pistol: no recoil, +30% bullet speed, heavy Impact Force", base: 12, color: "#000", max: 1 },
+  suppr: { name: "WHISPER SUPPRESSOR", desc: "Pistol: quiet shots, crits deal triple Firepower", base: 13, color: "#000", max: 1 },
+  exec: { name: "EXECUTIONER HAMMER", desc: "Pistol: double Firepower vs enemies under half Hull Integrity", base: 14, color: "#000", max: 1 },
+  holster: { name: "SPEED HOLSTER", desc: "+15% Thruster Speed while holding the pistol", base: 11, color: "#000", max: 1 },
+  bounty: { name: "BOUNTY EXTRACTOR", desc: "Pistol kills: +1 shard, every 6th restores 1 Hull Integrity", base: 13, color: "#000", max: 1 },
 };
 
 export const PERK_IDS = Object.keys(PERK_INFO) as PerkId[];
@@ -133,27 +133,27 @@ export const perkBadge = (id: PerkId, lvl: number): string | null => {
     return `${Math.round(v * 100)}%`;
   };
   switch (id) {
-    case "dmg": return `DMG +${pct(0.15)}`;
-    case "rate": return `RATE +${pct(0.15)}`;
-    case "speed": return `SPEED +${pct(0.2)}`;
-    case "maxhp": return `MAX HP +${lvl * 2}`;
-    case "magnet": return `MAGNET x${lvl}`;
-    case "greed": return `SHARDS +${pct(0.25)}`;
-    case "regen": return `REGEN x${lvl}`;
-    case "steal": return `LIFESTEAL ${pct(0.03)}`;
-    case "mend": return `WAVE HEAL +${lvl * 3}`;
-    case "crit": return `CRIT ${pct(0.15, 0.75)}`;
-    case "boom": return `COMBUST ${pct(0.1, 0.6)}`;
-    case "knock": return `KNOCK +${pct(0.2)}`;
-    case "ammo": return `AMMO +${pct(0.25)}`;
-    case "armor": return `ARMOR ${pct(0.15, 0.6)}`;
-    case "thorns": return `THORNS ${pct(0.2, 0.8)}`;
-    case "ricochet": return `BOUNCE ${pct(0.25, 0.75)}`;
+    case "dmg": return `FIREPOWER +${pct(0.15)}`;
+    case "rate": return `CYCLE RATE +${pct(0.15)}`;
+    case "speed": return `THRUSTER SPEED +${pct(0.2)}`;
+    case "maxhp": return `HULL INTEGRITY +${lvl * 2}`;
+    case "magnet": return `FLUX MAGNET +${(lvl * 1.5).toFixed(1)}m`;
+    case "greed": return `SALVAGE YIELD +${pct(0.25)}`;
+    case "regen": return `NANO-REGEN +${lvl}`;
+    case "steal": return `LIFE SIPHON ${pct(0.03)}`;
+    case "mend": return `WAVE REPAIR +${lvl * 3}`;
+    case "crit": return `CRIT PROTOCOL ${pct(0.15, 0.75)}`;
+    case "boom": return `COMBUSTION ${pct(0.1, 0.6)}`;
+    case "knock": return `IMPACT FORCE +${pct(0.2)}`;
+    case "ammo": return `AMMO CAPACITY +${pct(0.25)}`;
+    case "armor": return `ARMOR PLATING ${pct(0.15, 0.6)}`;
+    case "thorns": return `SHOCK THORNS ${pct(0.2, 0.8)}`;
+    case "ricochet": return `RICOCHET ${pct(0.25, 0.75)}`;
     case "leech": return `LEECH ${pct(0.08, 0.5)}`;
-    case "dodge": return `DODGE ${pct(0.06, 0.5)}`;
-    case "haste": return `HASTE ${pct(0.12, 0.6)}`;
-    case "pierce": return `PIERCE +${lvl}`;
-    case "freeroll": return `FREE REROLL x${lvl}`;
+    case "dodge": return `PHASE SHIFT ${pct(0.06, 0.5)}`;
+    case "haste": return `RECHARGE HASTE ${pct(0.12, 0.6)}`;
+    case "pierce": return `PIERCING +${lvl}`;
+    case "freeroll": return `FREE REROLLS +${lvl}`;
     case "burst": return "BURST";
     case "incend": return "INCENDIARY";
     case "magnum": return "MAGNUM";

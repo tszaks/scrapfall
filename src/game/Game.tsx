@@ -1410,6 +1410,10 @@ function World({
   const ammo = useRef<Record<Weapon, number>>(Object.fromEntries(ORDER.map((w) => [w, w === "pistol" ? GUNS.pistol.ammo : 0])) as Record<Weapon, number>);
   const lostQueue = useRef<Weapon[]>([]);
   const dropOrder = useRef<Weapon[]>([...DROPPABLE]);
+  /** wave on which a gun ran dry, so it can't come straight back */
+  const depletedWave = useRef<Partial<Record<Weapon, number>>>({});
+  /** waves in a row with no gun drop (2 dry waves => the next one drops two) */
+  const dryWaves = useRef(0);
   const bob = useRef(0);
   const sensXRef = useRef(sensX);
   const sensYRef = useRef(sensY);
@@ -1645,6 +1649,8 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    depletedWave.current = {};
+    dryWaves.current = 0;
     turrets.current = [];
     mines.current = [];
     lastDeploys.current = { turret: -1, mines: -1 };
@@ -1762,10 +1768,11 @@ function World({
       return;
     }
     if (ammo.current[w] <= 0) {
+      // a dry gun is gone: it does NOT drop back into the arena right away
       owned.current.delete(w);
       equip("pistol");
-      if (pickup.current.active) lostQueue.current.push(w);
-      else placePickup(w);
+      depletedWave.current[w] = wave.current;
+      if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     } else {
       syncInv();
     }
@@ -1840,7 +1847,6 @@ function World({
     // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
     const waveMul = 1.25 + 0.1 * (n - 1);
     const enemyMul = waveMul * (1 + 0.6 * extra);
-    const lootMul = 1 + 1.1 * extra;
     const spec: WaveSpec = WAVES[n - 1] ?? {};
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
@@ -1928,22 +1934,35 @@ function World({
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
-    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
-    const rolls = Math.max(1, Math.round(lootMul));
-    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
-    for (let i = 0; i < rolls; i++) {
+    // weapons: one new gun per wave at 80%, doubled after two dry waves.
+    // co-op multiplies the number of guns by the player count.
+    const players = Math.max(1, 1 + extra);
+    const pity = dryWaves.current >= 2;
+    const wantSolo = pity ? 2 : Math.random() < 0.8 ? 1 : 0;
+    let want = wantSolo * players;
+    let placed = 0;
+    while (want > 0) {
+      want--;
       // in co-op a gun you are carrying can still drop for your teammates
-      const candidates = dropOrder.current.filter(
+      const fresh = dropOrder.current.filter(
         (w) =>
           (coopRef.current || !owned.current.has(w)) &&
           !lostQueue.current.includes(w) &&
           !(pickup.current.active && pickup.current.gun === w),
       );
-      const drop = candidates[0];
-      if (!drop || Math.random() >= chance) continue;
+      // a gun you just ran dry on almost never comes straight back
+      const ready = fresh.filter((w) => {
+        const d = depletedWave.current[w];
+        return d === undefined || n - d >= 2 || Math.random() < 0.05;
+      });
+      const drop = ready[0] ?? (pity ? fresh[0] : undefined);
+      if (!drop) break;
+      delete depletedWave.current[drop];
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
+      placed++;
     }
+    dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
 
@@ -3591,10 +3610,23 @@ export function Game() {
   phase.current = { started, ended };
 
   // HUD status lists
-  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
-  const activePerks = PERK_IDS.filter((id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0)
-    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
-    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
+
+  // every purchased card, with what it does and how many times it was bought
+  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => {
+    const info = PERK_INFO[id];
+    const lvl = perks[id];
+    const mod = PISTOL_MODS.includes(id);
+    const effects: { text: string; bad?: boolean }[] = [];
+    if (info.pros?.length || info.cons?.length) {
+      info.pros?.forEach((t) => effects.push({ text: t }));
+      info.cons?.forEach((t) => effects.push({ text: t, bad: true }));
+    } else if (info.desc) {
+      effects.push({ text: info.desc });
+    }
+    const total = mod ? null : perkBadge(id, lvl);
+    if (total && lvl > 1) effects.push({ text: `Total: ${total}` });
+    return { id, name: info.name, color: info.color === "#000" ? "#2b2118" : info.color, lvl, mod, effects };
+  });
 
 
 
@@ -4139,19 +4171,27 @@ export function Game() {
             {paused && (
               <div className="w-full max-w-sm px-4">
                 <StatSheet d={statsRef.current} cls={cls} />
-                {(activeMods.length > 0 || activePerks.length > 0) && (
-                  <div className="mt-3 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {activeMods.map((id) => (
-                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                          {perkBadge(id, 1)}
-                        </span>
-                      ))}
-                      {activePerks.map(({ id, label }) => (
-                        <span key={id} className="text-[10px] tracking-wider text-black">
-                          {label}
-                        </span>
+                {boughtCards.length > 0 && (
+                  <div className="mt-3 text-left">
+                    <div className="text-[9px] tracking-[0.25em] text-black/50">UPGRADES BOUGHT</div>
+                    <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                      {boughtCards.map((c) => (
+                        <div
+                          key={c.id}
+                          className="relative rounded-md border p-1.5"
+                          style={{ borderColor: `${c.color}80`, background: `${c.color}14` }}
+                        >
+                          {c.mod && <PistolBadge />}
+                          <div className="pr-4 text-[9px] font-bold tracking-wider text-black">{c.name}</div>
+                          <div className="mt-0.5 space-y-0.5 text-[9px] leading-tight">
+                            {c.effects.map((e, i) => (
+                              <div key={i} className={e.bad ? "text-[#b3261e]" : "text-black/70"}>
+                                {e.text}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-1 text-[9px] font-bold tracking-widest text-black/60">{c.lvl}x</div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -4389,6 +4429,7 @@ type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
 /** Brotato-style stat sheet: green above baseline, red below */
 export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
   const [tab, setTab] = useState<"combat" | "survival">("combat");
+  const [showCls, setShowCls] = useState(false);
   const pct = (v: number, base = 1): StatRow["tone"] => (v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0);
   const combat: StatRow[] = [
     { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
@@ -4418,8 +4459,33 @@ export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
     <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between">
         <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
-        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
-          {CLASSES[cls].name}
+        <div className="relative">
+          <button
+            onMouseEnter={() => setShowCls(true)}
+            onMouseLeave={() => setShowCls(false)}
+            onClick={() => setShowCls((v) => !v)}
+            className="pointer-events-auto text-[9px] tracking-[0.2em] underline decoration-dotted underline-offset-2"
+            style={{ color: CLASSES[cls].color }}
+          >
+            {CLASSES[cls].name}
+          </button>
+          {showCls && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-[#f3e6cf]/20 bg-[#1d160f] p-2 text-left shadow-lg">
+              <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+                {CLASSES[cls].name}
+              </div>
+              <div className="mt-0.5 text-[9px] opacity-60">{CLASSES[cls].role}</div>
+              <div className="mt-1.5 text-[9px] tracking-[0.2em] opacity-50">STARTING STATS</div>
+              <div className="mt-1 space-y-0.5 text-[10px]">
+                {CLASSES[cls].pros.map((p) => (
+                  <div key={p} className="text-[#7cff4f]">{p}</div>
+                ))}
+                {CLASSES[cls].cons.map((c) => (
+                  <div key={c} className="text-[#ff6b5e]">{c}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <div className="mt-2 flex gap-1">
