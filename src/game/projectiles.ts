@@ -1178,7 +1178,10 @@ function trail(P: Proj, dt: number) {
   ) => {
     // hot spot at the head: stays a few pixels wide however far away the round is
     glow(hx, hy, hz, glowW * 2, gCol, 0, 0.85 * a, 1, pxG + 6);
-    const l = Math.min(len * 1.6, travelled);
+    // A tracer is a short exposure of the moving round, not a lingering beam back
+    // to its old firing position. Keep the first frame connected to the barrel,
+    // including slower frames; later tails advance with the world-space bullet.
+    const l = Math.min(len * 1.6, travelled, sp * Math.max(dt, 0.03));
     if (l <= 0.01) return;
     const kt = converge(travelled - l, P);
     const tx = P.pos.x - dx * l + P.vo.x * kt,
