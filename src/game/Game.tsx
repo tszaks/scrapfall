@@ -3764,10 +3764,13 @@ export function Game() {
   const start = (fromNet = false) => {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
-    const resuming = started && !ended;
+    // going into overtime keeps the current run, build and map intact
+    const overtime = goingOvertime.current;
+    goingOvertime.current = false;
+    const resuming = (started && !ended) || overtime;
     setPicking(false);
     setStarted(true);
-    if (ended && !fromNet) {
+    if (ended && !fromNet && !overtime) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
