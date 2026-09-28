@@ -39,7 +39,8 @@ import {
   type Tmpl,
 } from "./cityGeo";
 import { MODULE_W, SIGN_WORDS, W_DINER, W_GAS, W_HOTEL, adUV, wordUV } from "./cityTextures";
-import { vehicleParts, type Vehicle } from "./vehicles";
+import { bakeCar } from "./art/cars";
+import type { Vehicle } from "./vehicles";
 
 export const CHUNK = 150;
 /** the skyline filler outside the arena merges into much bigger chunks (massing only) */
@@ -1829,28 +1830,9 @@ function garage(b: Bld, st: Style, C: Ctx) {
   G.obox(ex + nx * 0.04, 0, ez + nz * 0.04, 6, 2.6, 0.05, Math.atan2(nx, nz));
 }
 
-/** parked car from its unit parts (lights off) */
+/** a static parked car baked into the chunk (lean model, lights off; see art/cars.ts) */
 function car(D: Geo, v: Vehicle, x: number, y: number, z: number, rot: number) {
-  const s = Math.sin(rot);
-  const c = Math.cos(rot);
-  D.mat(L.plain, 0.5, 0);
-  for (const p of vehicleParts(v)) {
-    const wx = x + p.x * c + p.z * s;
-    const wz = z - p.x * s + p.z * c;
-    const color =
-      p.kind === "head"
-        ? 0xb8b8b0
-        : p.kind === "tail"
-          ? 0x6a1612
-          : p.kind === "barR"
-            ? 0x5a1010
-            : p.kind === "barB"
-              ? 0x10205a
-              : p.color;
-    D.col(color);
-    if (p.kind === "wheel") D.obox(wx, y + p.y - p.sy / 2, wz, p.sz, p.sy, p.sx, rot);
-    else D.obox(wx, y + p.y - p.sy / 2, wz, p.sx, p.sy, p.sz, rot);
-  }
+  bakeCar(D, v, x, y, z, rot, L.plain);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -2286,8 +2268,7 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
     const ch = chunkAt(p.x, p.z);
     prop(p, ch, T, tint);
   }
-  // ---- parked cars ----
-  for (const pc of city.parked) car(chunkAt(pc.x, pc.z).detail, pc.v, pc.x, 0, pc.z, pc.rot);
+  // ---- parked cars: drawn instanced with the traffic (Traffic.tsx / art/cars.ts) ----
 
   // ---- traffic signals: mast arms + heads (static), lamps (instanced, driven by the sim) ----
   const lamps = signals(city, chunkAt);

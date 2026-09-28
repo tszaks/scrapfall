@@ -12,6 +12,8 @@ export const touchInput = {
   use: false, // one-shot: E (the elevator car's floor button)
   ping: false, // one-shot: G / middle mouse
   revive: false, // held: R next to a downed teammate
+  jump: false, // one-shot: the JUMP button
+  sprint: false, // one-shot: the SPRINT button (a toggle; two quick taps = tactical sprint)
 };
 
 
@@ -27,6 +29,8 @@ export function resetTouchInput() {
   touchInput.use = false;
   touchInput.ping = false;
   touchInput.revive = false;
+  touchInput.jump = false;
+  touchInput.sprint = false;
 }
 
 

@@ -9,11 +9,19 @@ import type { WesternLayout } from "./western/layout";
 import type { Post } from "./level";
 
 /** a bench-like prop: two circles along its long axis (local x at yaw `rot`) */
-function bar(out: Post[], x: number, z: number, rot: number, half: number, r: number) {
+function bar(out: Post[], x: number, z: number, rot: number, half: number, r: number, h?: number) {
   const c = Math.cos(rot);
   const s = Math.sin(rot);
-  for (const t of [-half, 0, half]) out.push({ x: x + c * t, z: z - s * t, r });
+  for (const t of [-half, 0, half]) out.push(h === undefined ? { x: x + c * t, z: z - s * t, r } : { x: x + c * t, z: z - s * t, r, h });
 }
+
+// Low props a jump clears (input/movement.ts: ~1.1 m apex): the height the feet must be above,
+// a little under the drawn top. Anything not listed blocks at every height (lamp posts, signs,
+// railings, blockades, bikes, surfboards, heaters).
+const LOW_BENCH = 0.55;
+const LOW_HYDRANT = 0.75;
+const LOW_TRASH = 0.85;
+const LOW_FIRERING = 0.45;
 
 export function mapPosts(city: CityLayout | null, western: WesternLayout | null): Post[] {
   const out: Post[] = [];
@@ -23,8 +31,9 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
       if (p.k === "lamp" || p.k === "flag" || p.k === "marker")
         out.push({ x: p.x, z: p.z, r: 0.2 });
       else if (p.k === "signpost") out.push({ x: p.x, z: p.z, r: 0.25 });
-      else if (p.k === "heater" || p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3 });
-      else if (p.k === "bench") bar(out, p.x, p.z, p.rot, 0.65, 0.35);
+      else if (p.k === "heater") out.push({ x: p.x, z: p.z, r: 0.3 });
+      else if (p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_TRASH });
+      else if (p.k === "bench") bar(out, p.x, p.z, p.rot, 0.65, 0.35, LOW_BENCH);
       else if (p.k === "skirack") bar(out, p.x, p.z, p.rot, 1.3, 0.35);
       else if (p.k === "xmas") out.push({ x: p.x, z: p.z, r: 3.4 * p.s });
     }
@@ -43,7 +52,7 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
       if (p.k === "palm") out.push({ x: p.x, z: p.z, r: 0.45 });
       else if (p.k === "tree") out.push({ x: p.x, z: p.z, r: 0.35 * (p.s ?? 1) });
       else if (p.k === "umbrella") out.push({ x: p.x, z: p.z, r: 0.12 });
-      else if (p.k === "firering") out.push({ x: p.x, z: p.z, r: 0.95 });
+      else if (p.k === "firering") out.push({ x: p.x, z: p.z, r: 0.95, h: LOW_FIRERING });
       else if (p.k === "bike") bar(out, p.x, p.z, p.rot, 0.5, 0.25);
       else if (p.k === "board") out.push({ x: p.x, z: p.z, r: 0.25 });
       else if (p.k === "scope") out.push({ x: p.x, z: p.z, r: 0.25 });
@@ -55,8 +64,9 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
         p.k === "sign66"
       )
         out.push({ x: p.x, z: p.z, r: 0.22 });
-      else if (p.k === "hydrant" || p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3 });
-      else if (p.k === "bench") bar(out, p.x, p.z, p.rot, 0.6, 0.35);
+      else if (p.k === "hydrant") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_HYDRANT });
+      else if (p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_TRASH });
+      else if (p.k === "bench") bar(out, p.x, p.z, p.rot, 0.6, 0.35, LOW_BENCH);
     }
     return out;
   }
@@ -69,9 +79,10 @@ export function mapPosts(city: CityLayout | null, western: WesternLayout | null)
     for (const p of city.props) {
       if (p.k === "light" || p.k === "lightLED" || p.k === "meter" || p.k === "bollard")
         out.push({ x: p.x, z: p.z, r: 0.2 });
-      else if (p.k === "hydrant" || p.k === "trash" || p.k === "news")
-        out.push({ x: p.x, z: p.z, r: 0.3 });
-      else if (p.k === "bench") out.push({ x: p.x, z: p.z, r: 0.55 });
+      else if (p.k === "news") out.push({ x: p.x, z: p.z, r: 0.3 });
+      else if (p.k === "hydrant") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_HYDRANT });
+      else if (p.k === "trash") out.push({ x: p.x, z: p.z, r: 0.3, h: LOW_TRASH });
+      else if (p.k === "bench") out.push({ x: p.x, z: p.z, r: 0.55, h: LOW_BENCH });
     }
   }
   return out;

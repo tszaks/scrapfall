@@ -1,6 +1,7 @@
 // Co-op squad play: pings (middle mouse or G) and downed / revive (hold R), plus the HUD
 // layer that draws them over the 3D view (world-anchored markers, the downed teammates'
 // direction and distance, the revive ring, the map-event banner).
+import { moveState } from "./input/movement";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -117,7 +118,8 @@ export function SquadDriver({
     if (!n) return;
     // ---- revive: hold R next to a downed teammate ----
     let want = "";
-    if (holdR.current && s.hp > 0 && s.playing && !myRevive.mustRelease) {
+    // (never while sprinting: input/movement.ts; holding revive also stops the sprint)
+    if (holdR.current && s.hp > 0 && s.playing && !myRevive.mustRelease && !moveState.sprinting) {
       let bd = REVIVE_RANGE;
       remotes.current.forEach((r) => {
         if (squad.get(r.id)?.st !== DOWN) return;
