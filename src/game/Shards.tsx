@@ -12,34 +12,49 @@ export function Shards({
   active,
   magnet,
   onCollect,
+  taken,
+  onTake,
 }: {
   enemies: E[];
   active: React.MutableRefObject<boolean>;
   magnet: React.MutableRefObject<number>;
   onCollect: (v: number) => void;
+  /** shard ids picked up by teammates (co-op): vanish here too */
+  taken?: React.MutableRefObject<Set<string>>;
+  onTake?: (id: string) => void;
 }) {
   const meshes = useRef<(THREE.Mesh | null)[]>([]);
-  const pool = useRef(Array.from({ length: N }, () => ({ x: 0, z: 0, v: 0, on: false, vx: 0, vz: 0 })));
+  const pool = useRef(Array.from({ length: N }, () => ({ x: 0, z: 0, v: 0, on: false, vx: 0, vz: 0, id: "" })));
+  const deaths = useRef<number[]>([]);
   const was = useRef(new WeakMap<E, boolean>());
 
   useEffect(() => {
     pool.current.forEach((p) => (p.on = false));
     was.current = new WeakMap();
+    deaths.current = [];
+    taken?.current.clear();
   }, [enemies]);
 
   useFrame((state, raw) => {
     const d = Math.min(raw, 0.05);
     const cam = state.camera;
-    for (const e of enemies) {
+    for (let ei = 0; ei < enemies.length; ei++) {
+      const e = enemies[ei]!;
       if (was.current.get(e) && !e.alive) {
+        const dn = (deaths.current[ei] = (deaths.current[ei] ?? 0) + 1);
         const total = VALUE[e.kind] ?? 1;
         const count = Math.min(5, Math.max(1, Math.ceil(total / 5)), total);
         for (let c = 0; c < count; c++) {
           const slot = pool.current.find((p) => !p.on);
           if (!slot) break;
-          const a = Math.random() * Math.PI * 2;
-          const s = count > 1 ? 2 + Math.random() * 2 : 0.5;
-          Object.assign(slot, { x: e.x, z: e.z, v: Math.round(total / count), on: true, vx: Math.cos(a) * s, vz: Math.sin(a) * s });
+          // deterministic id + scatter so every co-op client agrees on each shard
+          const id = `${ei}-${dn}-${c}`;
+          if (taken?.current.has(id)) continue;
+          const h = Math.sin((ei + 1) * 12.9898 + dn * 78.233 + c * 37.719) * 43758.5453;
+          const r = h - Math.floor(h);
+          const a = r * Math.PI * 2;
+          const s = count > 1 ? 2 + r * 2 : 0.5;
+          Object.assign(slot, { id, x: e.x, z: e.z, v: Math.round(total / count), on: true, vx: Math.cos(a) * s, vz: Math.sin(a) * s });
         }
       }
       was.current.set(e, e.alive);
@@ -47,6 +62,7 @@ export function Shards({
     const t = state.clock.elapsedTime;
     pool.current.forEach((p, i) => {
       const m = meshes.current[i];
+      if (p.on && taken?.current.has(p.id)) p.on = false;
       if (m) m.visible = p.on;
       if (!p.on) return;
       p.x += p.vx * d;
@@ -59,6 +75,7 @@ export function Shards({
       if (active.current) {
         if (dist < 0.9) {
           p.on = false;
+          onTake?.(p.id);
           onCollect(p.v);
           return;
         }

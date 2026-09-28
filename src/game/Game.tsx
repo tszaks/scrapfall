@@ -1535,6 +1535,7 @@ function World({
     r.last = performance.now();
   };
 
+  const takenShards = useRef(new Set<string>());
   const applySnap = (m: NetMsg) => {
     const arr = (m.e as number[]) ?? [];
     for (let i = 0; i < enemies.length; i++) {
@@ -1590,6 +1591,7 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "shard") { takenShards.current.add(String(m.id)); return; }
       if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
       if (isHostRef.current) {
         if (m.type === "hit") {
@@ -2980,7 +2982,7 @@ function World({
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} />
-      <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
+      <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} taken={takenShards} onTake={(id) => netRef.current?.broadcast({ type: "shard", id })} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
@@ -3640,7 +3642,7 @@ export function Game() {
           slots={slots}
           stats={statsRef}
           onShard={(v) => {
-            const gain = Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)));
+            const gain = Math.max(1, Math.round(v * statsRef.current.greed * (multiplayer ? (1 + 0.5 * peerCount) * 0.8 : 1)));
             run.current.shards += gain;
             setShards((s) => s + gain);
             playSfx("shard");
