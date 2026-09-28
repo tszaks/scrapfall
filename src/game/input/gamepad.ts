@@ -77,13 +77,16 @@ export function subscribeDevice(f: () => void) {
 }
 export const deviceSnapshot = () => deviceVersion;
 
+/** a phone / tablet (touch, no fine pointer), not a touchscreen laptop with a mouse */
+const touchFirst = () =>
+  navigator.maxTouchPoints > 0 && !window.matchMedia?.("(pointer: fine)").matches;
+
 let watching = false;
 /** Listen for keyboard, mouse and touch so the glyphs switch back from the controller. */
 export function installInputWatch() {
   if (watching || typeof window === "undefined") return;
   watching = true;
-  if (navigator.maxTouchPoints > 0 && !window.matchMedia?.("(pointer: fine)").matches)
-    inputDevice.kind = "touch";
+  if (touchFirst()) inputDevice.kind = "touch";
   const kb = (e: KeyboardEvent) => {
     if (!e.isTrusted && !(e as KeyboardEvent & { padShim?: boolean }).padShim) return;
     setDevice("kbm");
@@ -110,7 +113,7 @@ export function installInputWatch() {
   window.addEventListener("gamepaddisconnected", () => {
     conn();
     // pad gone: hints go back to the keyboard's
-    if (!inputDevice.padConnected) setDevice(navigator.maxTouchPoints > 0 ? "touch" : "kbm");
+    if (!inputDevice.padConnected) setDevice(touchFirst() ? "touch" : "kbm");
   });
 }
 
