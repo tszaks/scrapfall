@@ -44,35 +44,70 @@ export function pieceBottom(k: number, rx: number, ry: number, rz: number, scale
 }
 export const weedWorld = { seed: 0, seq: 0, applied: -1, acc: 0, send: 0, weeds: [] as Weed[] };
 /** Guests draw and hit-test the same interpolation between two authoritative snapshots. */
-export const weedView = { previous: null as Weed[] | null, fromSeq: -1, blend: 1 };
+export const weedView = {
+  previous: null as Weed[] | null,
+  target: null as Weed[] | null,
+  fromSeq: -1,
+  targetSeq: -1,
+  blend: 1,
+};
+const viewQueue: { seq: number; weeds: Weed[] }[] = [];
+const bottomCache = new WeakMap<Piece, number>();
+function viewNext() {
+  const next = viewQueue.shift();
+  if (!next) return false;
+  weedView.previous = weedView.target;
+  weedView.fromSeq = weedView.targetSeq;
+  weedView.target = next.weeds;
+  weedView.targetSeq = next.seq;
+  weedView.blend = 0;
+  return true;
+}
 export function stepWeedView(dt: number) {
-  weedView.blend = Math.min(1, weedView.blend + Math.max(0, dt) / 0.2);
+  let time = Math.max(0, Math.min(dt, 0.25));
+  for (let i = 0; i < 4; i++) {
+    if (weedView.blend >= 1 && !viewNext()) break;
+    const step = Math.min(time, (1 - weedView.blend) * 0.2);
+    weedView.blend = Math.min(1, weedView.blend + step / 0.2);
+    time -= step;
+    if (time < 1e-8) break;
+  }
 }
 export function weedPose(w: Weed) {
-  const p = weedView.previous?.[w.id],
+  const now = weedView.target?.[w.id] ?? w,
+    p = weedView.previous?.[w.id],
     t = weedView.blend;
   return p && !p.broken && t < 1
     ? {
-        x: p.x + (w.x - p.x) * t,
-        y: p.y + (w.y - p.y) * t,
-        z: p.z + (w.z - p.z) * t,
-        roll: p.roll + (w.roll - p.roll) * t,
+        x: p.x + (now.x - p.x) * t,
+        y: p.y + (now.y - p.y) * t,
+        z: p.z + (now.z - p.z) * t,
+        roll: p.roll + (now.roll - p.roll) * t,
       }
-    : w;
+    : now;
 }
 export function weedPiecePose(w: Weed, k: number) {
-  const p = w.pieces[k]!,
+  const p = weedView.target?.[w.id]?.pieces[k] ?? w.pieces[k]!,
     old = weedView.previous?.[w.id]?.pieces[k],
     t = weedView.blend;
-  return old && t < 1
-    ? {
-        x: old.x + (p.x - old.x) * t,
-        y: old.y + (p.y - old.y) * t,
-        z: old.z + (p.z - old.z) * t,
-        rx: old.rx + (p.rx - old.rx) * t,
-        rz: old.rz + (p.rz - old.rz) * t,
+  if (!old || t >= 1) return p;
+  const rx = old.rx + (p.rx - old.rx) * t,
+    rz = old.rz + (p.rz - old.rz) * t;
+  let y = old.y + (p.y - old.y) * t;
+  if (old.rx !== p.rx || old.rz !== p.rz) {
+    const low = (piece: Piece) => {
+      let v = bottomCache.get(piece);
+      if (v === undefined) {
+        v = piece.y + pieceBottom(k, piece.rx, w.id * 0.7, piece.rz, w.s);
+        bottomCache.set(piece, v);
       }
-    : p;
+      return v;
+    };
+    const before = low(old),
+      after = low(p);
+    y = before + (after - before) * t - pieceBottom(k, rx, w.id * 0.7, rz, w.s);
+  }
+  return { x: old.x + (p.x - old.x) * t, y, z: old.z + (p.z - old.z) * t, rx, rz };
 }
 export type WeedGround = {
   floor: (x: number, z: number, previous: number) => number;
@@ -81,7 +116,8 @@ export type WeedGround = {
 };
 export function resetWeeds(seed: number, positions: Point[] = []) {
   poseHistory.clear();
-  Object.assign(weedView, { previous: null, fromSeq: -1, blend: 1 });
+  Object.assign(weedView, { previous: null, target: null, fromSeq: -1, targetSeq: -1, blend: 1 });
+  viewQueue.length = 0;
   Object.assign(weedWorld, {
     seed,
     seq: 0,
@@ -327,9 +363,21 @@ export function applyWeeds(data: unknown) {
       vz: 0,
     });
   }
-  weedView.previous = weedWorld.applied >= 0 ? weedWorld.weeds : null;
-  weedView.fromSeq = weedWorld.applied;
-  weedView.blend = weedWorld.applied >= 0 ? 0 : 1;
+  if (weedWorld.applied < 0 || d.seq! - weedView.targetSeq >= 3) {
+    // First join or a stalled background tab: immediately recover current authority.
+    Object.assign(weedView, {
+      previous: null,
+      target: next,
+      fromSeq: -1,
+      targetSeq: d.seq!,
+      blend: 1,
+    });
+    viewQueue.length = 0;
+  } else {
+    viewQueue.push({ seq: d.seq!, weeds: next });
+    if (viewQueue.length > 2) viewQueue.shift();
+    if (weedView.blend >= 1) viewNext();
+  }
   weedWorld.weeds = next;
   weedWorld.applied = d.seq!;
   return true;

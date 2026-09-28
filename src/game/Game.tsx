@@ -5977,7 +5977,7 @@ function World({
               n?.broadcast({
                 type: "weed-hit",
                 seed,
-                seen: weedWorld.applied,
+                seen: weedView.targetSeq >= 0 ? weedView.targetSeq : weedWorld.applied,
                 previous: weedView.fromSeq,
                 blend: weedView.blend,
                 id: hit.id,
