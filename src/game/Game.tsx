@@ -3334,6 +3334,11 @@ export function Game() {
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
+  /** overtime past the map boss, plus the round condition it rolled */
+  const endlessRef = useRef(false);
+  const [mutId, setMutId] = useState<Mutator["id"]>("none");
+  const [highWave, setHighWave] = useState(0);
+  useEffect(() => setHighWave(readHighWave()), []);
   const [hurtFlash, setHurtFlash] = useState(0);
   const [weapon, setWeapon] = useState<Weapon>("pistol");
   const [bossHp, setBossHp] = useState(0);
