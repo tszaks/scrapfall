@@ -12,6 +12,7 @@ import { liveLook, todSmooth, useTodK } from "../timeOfDay";
 import { SkyDome } from "../TimeScene";
 import { provideEventHooks } from "../events/mapHooks";
 import { trainRobbery } from "./robbery";
+import { riverGLSL } from "./river";
 import { addSkyFogUniforms, skyFog } from "../skyFog";
 import {
   RIVER_EDGE,
@@ -120,6 +121,7 @@ uniform sampler2D uSplat;
 uniform float uHalf;
 uniform vec3 uWet[16];
 varying vec2 vGxz;
+${riverGLSL}
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
   vec2 i = floor(p); vec2 f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
@@ -133,8 +135,8 @@ ${
   cutRiver
     ? `// the riverbed corridor is drawn by its own carved mesh
 if (abs(wp.x) < uHalf - ${RIVER_END.toFixed(1)}) {
-  float rz = 172.0 + 24.0 * sin(wp.x / 88.0) + 9.0 * sin(wp.x / 37.0 + 1.3);
-  float rw = 21.0 + 5.0 * sin(wp.x / 61.0 + 0.4);
+  float rz = riverZ(wp.x);
+  float rw = riverW(wp.x);
   if (abs(wp.y - rz) < rw * 0.5 + ${(RIVER_EDGE - 0.3).toFixed(2)}) discard;
 }`
     : ""
@@ -197,7 +199,7 @@ for (int i = 0; i < 16; i++) {
 diffuseColor.rgb *= col;`,
       );
   };
-  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v2" : "western-ground-v2");
+  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v3" : "western-ground-v3");
   return { mat, splat };
 }
 
@@ -214,7 +216,8 @@ function riverbedMesh(L: WesternLayout) {
     const rz = riverZ(x);
     const hw = riverW(x) / 2 + RIVER_EDGE;
     const col: [number, number, number][] = [];
-    const steps = Math.ceil((hw * 2) / 1);
+    // A shared cross-section count joins the changing widths without triangular gaps.
+    const steps = 48;
     for (let k = 0; k <= steps; k++) {
       const z = rz - hw + (hw * 2 * k) / steps;
       const edge = k === 0 || k === steps;

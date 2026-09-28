@@ -1,3 +1,6 @@
+import { cliffShelves, type RockOverhang } from "./cliffs";
+import { BELFRY_FOOT } from "./belfry";
+export { BELFRY_Y } from "./belfry";
 // Dry Gulch: a deterministic, real-scale 1880s railroad boomtown (1 unit = 1 m, 2 m cells).
 // Pure data - no three.js - so every co-op client builds the identical town from the seed.
 //
@@ -43,7 +46,6 @@ export const BALCONY_Y = 3.5;
 /** depth of the saloon's balcony, out from its facade (across the front only, the width of
  * the building). The porch in front of it stays open at deck height. */
 export const SALOON_BALCONY = 2.0;
-export const BELFRY_Y = 9.5;
 /** the dry riverbed is carved this far below grade, its banks sloping out over RIVER_BANK m */
 export const RIVER_D = 1.3;
 export const RIVER_BANK = 3.5;
@@ -205,6 +207,7 @@ export type WesternLayout = {
   mine: { x: number; z: number };
   station: { x: number; z: number };
   church: { x: number; z: number; h: number };
+  overhangs: RockOverhang[];
   spawn: { x: number; z: number };
   spawnYaw: number;
   /** where the ranch campfire burns (night) */
@@ -310,8 +313,8 @@ const terrace = (h: number, step: number) => {
 };
 
 /** The dry riverbed: meanders west to east south of town. */
-export const riverZ = (x: number) => 172 + 24 * Math.sin(x / 88) + 9 * Math.sin(x / 37 + 1.3);
-export const riverW = (x: number) => 21 + 5 * Math.sin(x / 61 + 0.4);
+export { riverZ, riverW } from "./river";
+import { riverZ, riverW } from "./river";
 
 export function generateWestern(rand: () => number, cells: number, half: number) {
   const N = cells * cells;
@@ -325,9 +328,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[] = [];
   /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
   const boardY = new Map<string, number>();
-  const stairFeet: { x: number; z: number; label: string }[] = [
-    { x: -150, z: -7.15, label: "STAIRS · BELFRY" },
-  ];
+  const stairFeet: { x: number; z: number; label: string }[] = [];
   const lamps: { x: number; y: number; z: number }[] = [];
   const navWalls: { ax: number; az: number; bx: number; bz: number }[] = [];
   const navDoors: { x: number; z: number }[] = [];
@@ -1108,9 +1109,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     roof: "gable",
     tone: 0.5,
   });
-  // the bell tower is climbable: an outside stair runs up the nave's north side to a landing
-  // and into the belfry (heights in the terrain below); a boarded wall keeps you on the stair
-  markSolid(-150, -10, -134, -8, 4); // the stair's outer wall
+  // The visible tower contains a real spiral; street enemies cannot enter its shaft.
+  markSolid(BELFRY_FOOT.x0, BELFRY_FOOT.z0, BELFRY_FOOT.x1, BELFRY_FOOT.z1, 13.1);
   setGround(-162, -20, -128, 20, WK.YARD);
   for (let z = -20; z <= 20; z += 2.5) {
     if (Math.abs(z) < 5) continue; // the gate
@@ -2069,8 +2069,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
 
   // ======================================================================
-  // 9. walkable height: boardwalks, the platform, the saloon balcony and its stair, the
-  //    church stair, landing and belfry. 1 m samples; climbs steeper than 1:1 are walls.
+  // 9. Walkable height: boardwalks, the platform, the saloon balcony and its stair.
+  //    The belfry uses shared spiral access. 1 m samples; climbs steeper than 1:1 are walls.
   // ======================================================================
   const tn = half * 2;
   const th = new Float32Array((tn + 1) * (tn + 1));
@@ -2093,8 +2093,12 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         // the dry wash, carved below grade with gentle banks you can walk down
         const hw = riverW(x) / 2;
         const d = Math.abs(z - riverZ(x));
-        if (d < hw + RIVER_BANK - 2)
-          th[i * (tn + 1) + j] = -RIVER_D * smooth(hw + RIVER_BANK - 2, hw - 2, d);
+        if (d < hw + RIVER_BANK - 2) {
+          const bank = smooth(hw + RIVER_BANK - 2, hw - 2, d);
+          const depth = RIVER_D + 0.16 * Math.sin(x / 19 + 0.8) + 0.12 * Math.sin(x / 7.5 + z / 12);
+          const bar = 0.18 * Math.sin(x / 13 + z / 9) * Math.sin(x / 31 - z / 7);
+          th[i * (tn + 1) + j] = (-depth + bar) * bank;
+        }
       }
     }
   const platforms: { x0: number; z0: number; x1: number; z1: number; y: number }[] = [];
@@ -2236,13 +2240,16 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
     for (const dw of doorsW) navDoors.push(dw);
   }
-  // church: stair (west end at the bottom), landing beside the tower, the belfry floor
-  // (the treads run z -7.95..-6.1 against the nave wall at z -6, so the samples at z -6 carry
-  // the stair height too; without them the wall-side half sank toward the ground)
-  tbox(-151, -8, -134, -6, (x) => BELFRY_Y * Math.min(1, Math.max(0, (x + 151) / 17)));
-  tbox(-134, -8, -128.5, -2, () => BELFRY_Y);
-  tbox(-132.5, -2, -128.5, 2, () => BELFRY_Y);
-  const terrain: Terrain = { half, cell: 1, n: tn, h: th, maxSlope: 1.0, platforms };
+  const shelves = cliffShelves(rock, cells, half);
+  const terrain: Terrain = {
+    half,
+    cell: 1,
+    n: tn,
+    h: th,
+    maxSlope: 1.0,
+    platforms,
+    extraShot: shelves.hits,
+  };
 
   const layout: WesternLayout = {
     kind: "western",
@@ -2261,6 +2268,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     mine,
     station,
     church,
+    overhangs: shelves.boxes,
     spawn,
     spawnYaw: Math.PI / 2, // looking west, down Main Street at the church and the sunset
     campfire,

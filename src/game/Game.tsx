@@ -1,3 +1,4 @@
+import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
 import { installStructures, structureList, structurePlayer, structureFloor, structureBody, structureShot } from "./structures/world";
@@ -6841,7 +6842,7 @@ export function Game() {
                 level.blocks = level.blocks.concat(aa.blocks);
                 return aa.list;
               })()
-            : null;
+            : level.western ? westernBelfry() : null;
     if(alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
     if (mode === "city" && level.city) installStructures([...cityOpen,...cityRooms(level.city as CityLayout, PLAY_HALF)]);
     installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);

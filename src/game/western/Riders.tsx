@@ -7,12 +7,14 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { Geo } from "../cityGeo";
+import { artMaterial } from "../art/kit";
+import { tod } from "../timeOfDay";
+import { horseArt } from "./horseArt";
+import { roomPlan, toWorld } from "./rooms";
+import { DECK_Y, STOREY, sampleTerrain } from "./layout";
 import { groundY } from "../terrain";
 import { liveCars, pursuitDots, type TrafficLink } from "../trafficCore";
 import { mapEvent } from "../events/mapEvents";
-import { facadeMaterial, syncEnv } from "./materials";
-import { propTemplate } from "./mesh";
 import { CAR_NEAR, CarBatch } from "../art/cars";
 import {
   COACH_WHEELS,
@@ -63,13 +65,6 @@ const _x = new THREE.Vector3(1, 0, 0);
 const _fr = new THREE.Matrix4();
 const _ws = new THREE.Vector3();
 
-function geoOf(key: Parameters<typeof propTemplate>[0]) {
-  const t = propTemplate(key);
-  const g = new Geo();
-  if (t) g.stamp(t.d, 0, 0, 0, 0);
-  return g.build();
-}
-
 /** horses of an agent: offsets (local x, z) of each horse from the agent's centre */
 function team(a: Agent): [number, number][] {
   if (a.kind === 0) return [[0, 0]];
@@ -104,18 +99,40 @@ export function WesternRiders({
   link: React.MutableRefObject<TrafficLink>;
 }) {
   const sim = useRef<Sim>(newSim(seed));
-  const nightK = useMemo(() => ({ value: 0 }), []);
-  const mat = useMemo(() => facadeMaterial(nightK), [nightK]);
-  const geos = useMemo(
-    () => ({
-      body: geoOf("horsebody"),
-      leg: geoOf("horseleg"),
-      torso: geoOf("riderTorso"),
-      hat: geoOf("riderHat"),
-      legs: geoOf("riderLegs"),
-    }),
-    [],
-  );
+  const mat = useMemo(() => artMaterial({ paint: true, wear: 0.3 }), []);
+  const geos = useMemo(horseArt, []);
+  const standing = useMemo(() => {
+    const list = layout.props
+      .filter((p) => p.k === "horse")
+      .map((p) => ({
+        x: p.x,
+        z: p.z,
+        y: sampleTerrain(layout.terrain, p.x, p.z),
+        rot: p.rot,
+        s: p.s,
+        coat: (p.a ?? 0) % COATS.length,
+      }));
+    for (const b of layout.buildings) {
+      const plan = roomPlan(b, b.deck ?? DECK_Y, STOREY);
+      if (!plan) continue;
+      for (const it of plan.items)
+        if (it.k === "stall" && it.horse) {
+          const [x, z] = toWorld(b, (it.r.x0 + it.r.x1) / 2, (it.r.z0 + it.r.z1) / 2);
+          list.push({
+            x,
+            z,
+            y: plan.floor,
+            rot:
+              [Math.PI, Math.PI / 2, 0, -Math.PI / 2][b.front]! +
+              (it.open > 0 ? Math.PI / 2 : -Math.PI / 2),
+            s: 1,
+            coat: Math.abs(b.seed + list.length) % COATS.length,
+          });
+        }
+    }
+    return list;
+  }, [layout]);
+  const horseCapacity = MAX_HORSES + standing.length;
   // the stagecoach and buckboards (moving, one slot per sim agent that drives one) and the
   // parked ones on the street, through the shared vehicle batch
   const coaches = useMemo(() => {
@@ -187,7 +204,6 @@ export function WesternRiders({
 
   useFrame((state, raw) => {
     const dt = Math.min(raw, 0.05);
-    syncEnv(mat);
     const L = link.current;
     const S = sim.current;
     const guest = L.role === "guest";
@@ -320,7 +336,7 @@ export function WesternRiders({
     const wheel = r.wheel.current;
     if (!body || !leg || !torso || !hat || !legs || !wheel) return;
     const C = coaches;
-    const lit = nightK.value > 0.45;
+    const lit = tod.v > 0.45;
     let nwh = 0;
     const near2 = CAR_NEAR * CAR_NEAR;
     /** the four wooden wheels of batch slot `si` at (x, y, z) facing yaw */
@@ -424,6 +440,25 @@ export function WesternRiders({
         _q.setFromAxisAngle(_up, a.yaw);
       }
     }
+    // Tied and stable horses use the same art and footprints as the moving teams.
+    for (const h of standing) {
+      if (Math.hypot(h.x - cam.x, h.z - cam.z) > 420) continue;
+      _q.setFromAxisAngle(_up, h.rot);
+      _ws.setScalar(h.s);
+      body.setMatrixAt(nh, _m.compose(_p.set(h.x, h.y, h.z), _q, _ws));
+      body.setColorAt(nh++, _c.set(COATS[h.coat]!));
+      _fr.copy(_m);
+      for (const [x, z] of [
+        [-0.19, 0.55],
+        [0.19, 0.55],
+        [-0.19, -0.6],
+        [0.19, -0.6],
+      ]) {
+        _m.makeTranslation(x!, 1.05, z!).premultiply(_fr);
+        leg.setMatrixAt(nl, _m);
+        leg.setColorAt(nl++, _c.set(COATS[h.coat]!));
+      }
+    }
     // (a coach off stage or out of range is parked far off the map, where the batch culls it)
     S.agents.forEach((a, ai) => {
       const si = C.slotOf.get(ai);
@@ -460,8 +495,8 @@ export function WesternRiders({
   );
   return (
     <group>
-      {inst("body", MAX_HORSES, true)}
-      {inst("leg", MAX_HORSES * 4, true)}
+      {inst("body", horseCapacity, true)}
+      {inst("leg", horseCapacity * 4, true)}
       {inst("torso", TOWNFOLK + 4, true)}
       {inst("hat", TOWNFOLK + 4, true)}
       {inst("legs", TOWNFOLK + 4, false)}

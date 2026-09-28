@@ -25,6 +25,8 @@ export type Terrain = {
   platforms?: { x0: number; z0: number; x1: number; z1: number; y: number }[];
   /** does a shot at (x, y, z) hit something solid standing there (below its top)? */
   shot?: (x: number, y: number, z: number) => boolean;
+  /** Additional overhead geometry; false falls back to ordinary world collision. */
+  extraShot?: (x: number, y: number, z: number) => boolean;
   /** where wall-passing "ghost" enemies may go: through walls, never onto ground no one can
    * walk (cliffs, another zone, past a blockade). Absent = anywhere. */
   ghost?: (x: number, z: number) => boolean;
@@ -48,7 +50,11 @@ export type Ground = {
 
 let G: Ground | null = null;
 /** the installed heightfield (alpine), for the bare-terrain and shot lookups */
-let HF: { height: (x: number, z: number) => number; shot?: Terrain["shot"] } | null = null;
+let HF: {
+  height: (x: number, z: number) => number;
+  shot?: Terrain["shot"];
+  extraShot?: Terrain["extraShot"];
+} | null = null;
 
 /** Live weather push (metres per second) applied to walking players; the alpine blizzard drives it. */
 export const wind = { x: 0, z: 0 };
@@ -85,7 +91,11 @@ export function setTerrain(t: Terrain | Ground | null) {
   if (t && !("height" in t)) {
     const bare = sampler(t);
     const decks = t.platforms ?? [];
-    HF = { height: bare, ...(t.shot ? { shot: t.shot } : {}) };
+    HF = {
+      height: bare,
+      ...(t.shot ? { shot: t.shot } : {}),
+      ...(t.extraShot ? { extraShot: t.extraShot } : {}),
+    };
     const height = decks.length
       ? (x: number, z: number) => {
           for (const p of decks) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.y;
@@ -110,12 +120,14 @@ export function hasTerrain() {
 
 /** Flat maps can still have raised walkable floors: the building-access system answers with
  * the roof height for points on a walkable roof, `undefined` elsewhere. */
-export const groundHook: { fn: ((x: number, z: number) => number | undefined) | null } = { fn: null };
+export const groundHook: { fn: ((x: number, z: number) => number | undefined) | null } = {
+  fn: null,
+};
 
 /** Height of the ground at (x, z), in metres. */
 export function groundY(x: number, z: number) {
-  const room=structureBase(x,z);
-  if(room!==undefined) return room;
+  const room = structureBase(x, z);
+  if (room !== undefined) return room;
   // a walkable roof (building access) wins over the ground under it
   const g = groundHook.fn;
   if (g) {
@@ -176,7 +188,15 @@ const JUMP_LEDGE = 1.15;
  * boardwalk): only when the feet are above it, it is within JUMP_LEDGE of the ground under
  * them (the feet never rise more than ~1.1 m over the take-off), and it is flat on top. A steep slope is never a ledge, so slopes stay walls.
  */
-function ledgeOK(g: Ground, x0: number, z0: number, x1: number, z1: number, ux: number, uz: number) {
+function ledgeOK(
+  g: Ground,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  ux: number,
+  uz: number,
+) {
   const f = jumpClimb.feet;
   if (f === -Infinity || g.maxSlope === undefined) return false;
   const h0 = g.height(x0, z0);
@@ -192,7 +212,8 @@ function ledgeOK(g: Ground, x0: number, z0: number, x1: number, z1: number, ux: 
   // (from raised ground, or already falling from it down its face)
   const fromRaised = h0 > 1.2 || jumpClimb.top > 2.4;
   const drop = fromRaised && Math.min(h1, hp) < h0 - 0.05 && top <= h0 + 0.02;
-  if (!drop && (Math.abs(top - h0) > JUMP_LEDGE || Math.abs(Math.min(h1, hp) - h0) > JUMP_LEDGE)) return false;
+  if (!drop && (Math.abs(top - h0) > JUMP_LEDGE || Math.abs(Math.min(h1, hp) - h0) > JUMP_LEDGE))
+    return false;
   // (a drop falls past the edge's face and lands wherever it lands: no flat-top test)
   if (drop) return true;
   const hq = g.height(px + ux * 0.3, pz + uz * 0.3);
@@ -244,7 +265,9 @@ export function terrainY(x: number, z: number) {
  * inside something solid. Returns null elsewhere so callers fall back to their own tests.
  */
 export function shotHits(x: number, y: number, z: number): boolean | null {
-  if (!HF || !HF.shot) return null;
+  if (!HF) return null;
+  if (HF.extraShot?.(x, y, z)) return true;
+  if (!HF.shot) return null;
   return y < HF.height(x, z) || HF.shot(x, y, z);
 }
 

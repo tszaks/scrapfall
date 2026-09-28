@@ -1,3 +1,4 @@
+import { westernBelfry } from "./belfry";
 // Builds Dry Gulch's merged, chunked geometry from the layout (layout.ts). Every building,
 // prop, rock face and rail tie goes through one vertex format (cityGeo.ts's Geo) and one
 // facade material (a texture array, textures.ts), so a whole 200 m chunk of town draws in
@@ -1807,23 +1808,8 @@ function roomItem(
         fl + 0.025,
         [0, 0, 2, 2],
       );
-      if (it.horse) {
-        const hx = (R2.x0 + R2.x1) / 2;
-        const hz = (R2.z0 + R2.z1) / 2;
-        const horse = templates().horse;
-        if (horse)
-          D2.stamp(
-            horse.d,
-            hx,
-            fl,
-            hz,
-            it.open > 0 ? Math.PI / 2 : -Math.PI / 2,
-            1,
-            1,
-            1,
-            _tint.set(pick(COATS, r)),
-          );
-      }
+      // Riders.tsx draws the stable's horse with the same shared art kit as street teams.
+      if (it.horse) r(); // preserve the surrounding furnishing's deterministic random sequence
       break;
     }
     case "bench": {
@@ -2747,10 +2733,14 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   wallP(G, WL.P_CLAP, x0, 0, x1, 0, 0, H);
   const ridge = H + (W / 2) * 1.0;
   G.col("#6a5a4e");
-  slope(G, WL.SHINGLE, 0, 0.4, 0, z0 - 0.4, ridge, x1 + 0.4, 0, H - 0.4);
-  slope(G, WL.SHINGLE, 0, z0 - 0.4, 0, 0.4, ridge, x0 - 0.4, 0, H - 0.4);
+  slope(G, WL.SHINGLE, 0, -2, 0, z0 - 0.4, ridge, x1 + 0.4, 0, H - 0.4);
+  slope(G, WL.SHINGLE, 0, z0 - 0.4, 0, -2, ridge, x0 - 0.4, 0, H - 0.4);
+  // The wider tower occupies the nave roof's front centre; retain only the side eaves.
+  slope(G, WL.SHINGLE, 4, 0.4, 4, -2, ridge - 4, x1 + 0.4 - 4, 0, H - 0.4);
+  slope(G, WL.SHINGLE, -4, -2, -4, 0.4, ridge - 4, x0 - 0.4 + 4, 0, H - 0.4);
   G.col("#f6f2ea").mat(WL.P_CLAP, seed, AO);
-  gable(G, WL.P_CLAP, x0, 0, x1, 0, H, ridge);
+  G.quad(x0, H, 0, -4, H, 0, -4, ridge - 4, 0, x0, H, 0);
+  G.quad(4, H, 0, x1, H, 0, x1, H, 0, 4, ridge - 4, 0);
   gable(G, WL.P_CLAP, x1, z0, x0, z0, H, ridge);
   // the back (the side players reach from the yard): two tall windows, a rose window in the
   // gable, a vestry door, corner boards and a stone sill, so it is not a blank slab
@@ -2807,35 +2797,21 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   boxP(G, WL.P_STONE, x0 - 0.2, 0, z0 + 0.1, x0 + 0.1, 0.45, 0);
   boxP(G, WL.P_STONE, x1 - 0.1, 0, z0 + 0.1, x1 + 0.2, 0.45, 0);
   // the bell tower: square shaft, open belfry with the bell, a tall spire and a cross
-  const tw = 4.6;
-  const tz0 = -0.6;
-  const tz1 = tz0 + tw;
+  const tw = 8;
+  const tz0 = -2;
+  const tz1 = 8;
   const tx0 = -tw / 2;
   const tx1 = tw / 2;
   const shaft = BELFRY_Y;
   G.col("#f6f2ea").mat(WL.P_CLAP, seed, AO);
-  wallP(G, WL.P_CLAP, tx0, tz1, tx1, tz1, 0, shaft);
+  // A real door aligned with the spiral's street portal (world z=-.7).
+  wallP(G, WL.P_CLAP, tx0, tz1, -0.2, tz1, 0, shaft);
+  wallP(G, WL.P_CLAP, 1.6, tz1, tx1, tz1, 0, shaft);
+  wallP(G, WL.P_CLAP, -0.2, tz1, 1.6, tz1, 2.9, shaft);
   wallP(G, WL.P_CLAP, tx1, tz1, tx1, tz0, 0, shaft);
   wallP(G, WL.P_CLAP, tx0, tz0, tx0, tz1, 0, shaft);
-  // the door and a round window
-  G.col("#5a2e1c").mat(WL.PAINT, 0, 0);
-  G.quad(
-    -0.85,
-    0,
-    tz1 + 0.02,
-    0.85,
-    0,
-    tz1 + 0.02,
-    0.85,
-    2.9,
-    tz1 + 0.02,
-    -0.85,
-    2.9,
-    tz1 + 0.02,
-    [0, 0, 1, 1],
-  );
   G.col("#f4efe4");
-  boxP(G, WL.PAINT, -1.1, 2.9, tz1, 1.1, 3.2, tz1 + 0.12);
+  boxP(G, WL.PAINT, -0.4, 2.9, tz1, 1.8, 3.2, tz1 + 0.12);
   G.col("#ffffff").mat(WL.F_CHURCH, seed, CANDLE);
   G.quad(-0.8, 6.2, tz1 + 0.02, 0.8, 6.2, tz1 + 0.02, 0.8, 9.6, tz1 + 0.02, -0.8, 9.6, tz1 + 0.02, [
     0.33 / 4 + 0.0,
@@ -2843,15 +2819,22 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
     0.67 / 4,
     1.7 / 4,
   ]);
-  // steps
+  // Flush stone threshold: the access lobby's floor is at street grade.
   G.col("#b8ac94");
-  boxP(G, WL.P_STONE, -1.6, 0, tz1, 1.6, 0.16, tz1 + 1.2);
-  boxP(G, WL.P_STONE, -1.6, 0, tz1, 1.6, 0.32, tz1 + 0.6);
+  boxP(G, WL.P_STONE, -0.9, -0.08, tz1, 2.3, 0, tz1 + 1.2);
   // belfry: corner posts, rail, open arches, the bell
   const by0 = shaft;
   const by1 = shaft + 3.6;
   G.col("#f6f2ea");
-  boxP(G, WL.P_CLAP, tx0 - 0.2, by0 - 0.3, tz0 - 0.2, tx1 + 0.2, by0 + 0.1, tz1 + 0.2);
+  const hole = westernBelfry()[0]!.hole;
+  const h = { u0: -hole.z1, u1: -hole.z0, v0: hole.x0 + 132, v1: hole.x1 + 132 };
+  for (const [u0, v0, u1, v1] of [
+    [tx0 - 0.2, tz0 - 0.2, h.u0, tz1 + 0.2],
+    [h.u1, tz0 - 0.2, tx1 + 0.2, tz1 + 0.2],
+    [h.u0, tz0 - 0.2, h.u1, h.v0],
+    [h.u0, h.v1, h.u1, tz1 + 0.2],
+  ])
+    boxP(G, WL.P_CLAP, u0!, by0 - 0.3, v0!, u1!, by0, v1!, true, true);
   for (const [cx, cz] of [
     [tx0 + 0.25, tz0 + 0.25],
     [tx1 - 0.25, tz0 + 0.25],
@@ -2859,8 +2842,8 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
     [tx1 - 0.25, tz1 - 0.25],
   ] as const)
     boxC(G, WL.P_CLAP, cx, by0, cz, 0.5, by1 - by0, 0.5);
-  // side 1 faces north, where the landing from the outside stair comes in: no rail there
-  for (const side of [0, 2, 3]) {
+  // All sides have guards now that the outside staircase has been removed.
+  for (const side of [0, 1, 2, 3]) {
     const along = side % 2 === 0;
     const zz = side === 0 ? tz0 + 0.1 : tz1 - 0.1;
     const xx = side === 1 ? tx1 - 0.1 : tx0 + 0.1;
@@ -4550,8 +4533,8 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
   }
 }
 
-/** Outside stairs (their heights live in the layout's terrain, so what you see is what you
- * walk on): the saloon's alley stair to its balcony, and the church's stair, landing and belfry. */
+/** The saloon's alley stair to its balcony matches the layout terrain. The church uses
+ * the shared spiral access mesh, with its real floor opening cut into the tower above. */
 function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
   const st = L.saloonStairs;
   if (st) {
@@ -4637,40 +4620,6 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
         edge + 0.03,
         false,
       );
-  }
-  // the church: a stair along the nave's north wall up to a landing beside the tower
-  {
-    const G = chunkAt(-140, -7).main;
-    const x0 = -151;
-    const x1 = -134;
-    const n = 34;
-    for (let i = 0; i < n; i++) {
-      const xa = x0 + ((x1 - x0) * i) / n;
-      const xb = x0 + ((x1 - x0) * (i + 1)) / n;
-      const h = (BELFRY_Y * (i + 1)) / n;
-      G.col("#a88660");
-      boxP(G, WL.DECK, xa, h - 0.08, -7.95, xb, h, -6.1, true, true);
-      G.col("#d8c8b0");
-      // the outer wall is boarded all the way down (you walk inside it, like a covered stair)
-      boxP(G, WL.P_BOARD, xa, 0, -8.2, xb, h + 1.0, -7.95);
-    }
-    G.col("#6a4a30");
-    beam(G, x0, 1.0, -7.9, x1, BELFRY_Y + 1.0, -7.9, 0.1);
-    // landing: a timber tower from the ground up to belfry height, boarded on its faces
-    G.col("#d8c8b0");
-    boxP(G, WL.P_BOARD, -134, 0, -8.2, -128.5, BELFRY_Y - 0.2, -2.35);
-    G.col("#b89a78");
-    boxP(G, WL.DECK, -134.2, BELFRY_Y - 0.2, -8.3, -128.3, BELFRY_Y, -2.3, true, true);
-    G.col("#d8c8b0");
-    boxP(G, WL.P_BOARD, -134.2, BELFRY_Y, -8.3, -128.3, BELFRY_Y + 1.0, -8.15);
-    boxP(G, WL.P_BOARD, -128.45, BELFRY_Y, -8.3, -128.3, BELFRY_Y + 1.0, -2.3);
-    G.col("#8a7a66");
-    boxP(G, WL.SHINGLE, -134.4, BELFRY_Y + 2.6, -8.5, -128.1, BELFRY_Y + 2.72, -2.3);
-    for (const [px, pz] of [
-      [-134, -8.2],
-      [-128.5, -8.2],
-    ] as const)
-      boxP(G, WL.TIMBER, px - 0.08, BELFRY_Y, pz - 0.08, px + 0.08, BELFRY_Y + 2.6, pz + 0.08);
   }
 }
 
@@ -4778,11 +4727,10 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     // props stand on the walkable surface (boardwalk decks, the carved riverbed)
     const y = p.k === "lantern" ? (p.a ?? 2.8) : sampleTerrain(L.terrain, p.x, p.z);
     // (the parked stagecoach and buckboards draw through the vehicle batch: Riders.tsx)
-    if (p.k === "stagecoach" || p.k === "wagon") continue;
+    if (p.k === "stagecoach" || p.k === "wagon" || p.k === "horse") continue;
     // a light per-instance tint so repeated props don't read as clones
     const k = 0.9 + ((((Math.sin(p.x * 12.9898 + p.z * 78.233) * 43758.5453) % 1) + 1) % 1) * 0.2;
     tint.setRGB(k, k, k);
-    if (p.k === "horse") tint.set(COATS[(p.a ?? 0) % COATS.length]!).multiplyScalar(k);
     const big =
       p.k === "watertower" ||
       p.k === "windmill" ||
@@ -4812,6 +4760,12 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
 
   // ---- rock, the railroad, the mine ----
   const hv = rockMesh(L, chunkAt);
+  for (const b of L.overhangs) {
+    const G = chunkAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2).main;
+    G.colLinear(b.tone, b.tone * 0.89, b.tone * 0.78);
+    boxP(G, WL.ROCK, b.x0, b.y0, b.z0, b.x1, b.y1, b.z1, true, true);
+  }
+
   // talus at the cliff feet: fallen blocks and rubble heaped where the walls meet the desert.
   // They sit inside the rock's own collision cells (poking out less than a player's radius),
   // so the ground you walk on is unchanged.
