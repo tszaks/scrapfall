@@ -96,7 +96,16 @@ export type Region = Rect & { kind: "flat" | "rampX" | "rampZ"; h0: number; h1: 
 export type Mod =
   | { t: "ell"; x: number; z: number; rx: number; rz: number; depth: number }
   | { t: "cap"; ax: number; az: number; bx: number; bz: number; r: number; depth: number }
-  | { t: "box"; x0: number; z0: number; x1: number; z1: number; h: number; ramp: number };
+  | { t: "box"; x0: number; z0: number; x1: number; z1: number; h: number; ramp: number }
+  /** a walkable quarter pipe: curves up from its open `face` side to a flat deck `h` high */
+  | { t: "qp"; x0: number; z0: number; x1: number; z1: number; face: 0 | 1 | 2 | 3; h: number; run: number };
+
+/** height of a quarter pipe's surface `d` metres in from its open edge */
+export const qpHeight = (h: number, run: number, d: number) => (d <= 0 ? 0 : d >= run ? h : h * Math.pow(d / run, 1.7));
+/** distance in from a quarter pipe's open edge (negative outside it) */
+export function qpDepth(m: { x0: number; z0: number; x1: number; z1: number; face: number }, x: number, z: number) {
+  return m.face === 3 ? x - m.x0 : m.face === 1 ? m.x1 - x : m.face === 2 ? m.z1 - z : z - m.z0;
+}
 
 /** a flat pad the ground eases onto (parking, the skate park, buildings on the sand) */
 export type Pad = Rect & { h: number; ramp: number };
@@ -308,6 +317,10 @@ export function modHeight(m: Mod, x: number, z: number): number {
   const ex = Math.max(m.x0 - x, 0, x - m.x1);
   const ez = Math.max(m.z0 - z, 0, z - m.z1);
   const e = Math.max(ex, ez);
+  if (m.t === "qp") {
+    if (x < m.x0 || x > m.x1 || z < m.z0 || z > m.z1) return 0;
+    return qpHeight(m.h, m.run, qpDepth(m, x, z));
+  }
   if (e >= m.ramp) return 0;
   return m.h * (1 - e / m.ramp);
 }
@@ -531,14 +544,30 @@ export function generateBeach(
   // ledges and a stair set (low cover)
   solidify(rect(94, 52, 96, 60), -5, 0.55);
   solidify(rect(112, 64, 116, 66), -5, 0.55);
-  // quarter pipes along two edges (solid: a skater's wall, a shooter's cover)
+  // quarter pipes along two edges: you can run up the curve onto the deck (high ground over
+  // the bowls); the back and the two cheeks are solid walls
   const qpipes: BeachData["qpipes"] = [
-    { ...rect(114, 76, 120, 100), face: 3 },
-    { ...rect(60, 48, 90, 54), face: 2 },
+    { ...rect(112, 76, 120, 100), face: 3 },
+    { ...rect(60, 48, 90, 56), face: 2 },
   ];
-  for (const q of qpipes) solidify(q, -5, 2.6);
+  for (const q of qpipes) {
+    mods.push({ t: "qp", ...rect(q.x0, q.z0, q.x1, q.z1), face: q.face, h: 2.4, run: 4.6 });
+    const back = q.face === 3 ? rect(q.x1 - 2, q.z0, q.x1, q.z1) : rect(q.x0, q.z0, q.x1, q.z0 + 2);
+    solidify(back, -5, 3.4);
+    const cheeks =
+      q.face === 3
+        ? [rect(q.x0, q.z0, q.x1, q.z0 + 2), rect(q.x0, q.z1 - 2, q.x1, q.z1)]
+        : [rect(q.x0, q.z0, q.x0 + 2, q.z1), rect(q.x1 - 2, q.z0, q.x1, q.z1)];
+    for (const c of cheeks) solidify(c, -5, 3.4);
+  }
   props.push({ k: "rail", x: 96, z: 78, y: 0, rot: Math.PI / 2, s: 8 });
-  props.push({ k: "rail", x: 114, z: 96, y: 0, rot: 0, s: 6 });
+  props.push({ k: "rail", x: 104, z: 98, y: 0, rot: 0, s: 6 });
+  props.push({ k: "rail", x: 66, z: 100, y: 0, rot: 0, s: 7 });
+  props.push({ k: "ledge", x: 61, z: 72, y: 0, rot: 0, s: 10 });
+  solidify(rect(60, 68, 62, 76), -5, 0.55);
+  // spectators' benches along the park's sand side and the bike path
+  for (const z of [62, 76, 90]) props.push({ k: "bench", x: 57.2, z, y: 0, rot: Math.PI / 2 });
+  for (const x of [72, 84]) props.push({ k: "bench", x, z: 102.8, y: 0, rot: Math.PI });
   props.push({ k: "ledge", x: 95, z: 56, y: 0, rot: 0, s: 8 });
   props.push({ k: "ledge", x: 114, z: 65, y: 0, rot: Math.PI / 2, s: 4 });
 

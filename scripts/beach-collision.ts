@@ -1,9 +1,9 @@
 // Collision audit for Pacific Pier: points sampled inside every rendered solid thing must be
 // blocked for the player. Run: npx jiti scripts/beach-collision.ts [seeds]
 import { setArenaSize, generateLevel, blocked, BEACH_SIZE } from "../src/game/level";
-import { groundY as groundAt, setTerrain } from "../src/game/terrain";
+import { groundY as groundAt, setTerrain, climbable } from "../src/game/terrain";
 import { beachTerrain } from "../src/game/beach/terrain";
-import { isBeach, DECK } from "../src/game/beach/beachLayout";
+import { isBeach, DECK, qpHeight } from "../src/game/beach/beachLayout";
 
 const seeds = Number(process.argv[2] ?? 3);
 const tally: Record<string, [number, number]> = {};
@@ -39,7 +39,31 @@ for (const solo of [true, false])
     inside("ferris wheel base", w.x - 8, w.z - 3, w.x + 8, w.z + 3);
     inside("carousel", B.carousel.x - 5, B.carousel.z - 5, B.carousel.x + 5, B.carousel.z + 5);
     inside("drop tower", B.drop.x - 1.1, B.drop.z - 1.1, B.drop.x + 1.1, B.drop.z + 1.1, 0);
-    for (const q of B.qpipes) inside("quarter pipe", q.x0, q.z0, q.x1, q.z1);
+    // Both directions must be usable; collision behind and beside the deck stays solid.
+    for (const q of B.qpipes) {
+      const at = (d: number) => q.face === 3
+        ? { x: q.x0 + d, z: (q.z0 + q.z1) / 2 }
+        : { x: (q.x0 + q.x1) / 2, z: q.z1 - d };
+      const bottom = at(0), base = groundAt(bottom.x, bottom.z);
+      let previous = at(-0.2);
+      for (let d = 0; d <= 5.4; d += 0.1) {
+        const p = at(d);
+        add("quarter pipe walkable", !blocked(lv.blocks, p.x, p.z, 0.4));
+        add("quarter pipe surface", Math.abs(groundAt(p.x, p.z) - base - qpHeight(2.4, 4.6, d)) < 0.03);
+        add("quarter pipe climb", climbable(previous.x, previous.z, p.x, p.z));
+        add("quarter pipe descend", climbable(p.x, p.z, previous.x, previous.z));
+        previous = p;
+      }
+      if (q.face === 3) {
+        inside("quarter pipe back wall", q.x1 - 2, q.z0, q.x1, q.z1);
+        inside("quarter pipe cheek", q.x0, q.z0, q.x1, q.z0 + 2);
+        inside("quarter pipe cheek", q.x0, q.z1 - 2, q.x1, q.z1);
+      } else {
+        inside("quarter pipe back wall", q.x0, q.z0, q.x1, q.z0 + 2);
+        inside("quarter pipe cheek", q.x0, q.z0, q.x0 + 2, q.z1);
+        inside("quarter pipe cheek", q.x1 - 2, q.z0, q.x1, q.z1);
+      }
+    }
     B.coaster.pts.forEach((a, k) => {
       if (k % 4 === 0 && a[1] > DECK + 2)
         add("coaster column", blocked(lv.blocks, a[0], a[2], 0.4));
@@ -87,6 +111,8 @@ const rows = Object.entries(tally).sort();
 let fails = 0;
 for (const [k, [n, f]] of rows) {
   fails += f;
-  console.log(`${k.padEnd(26)} samples ${String(n).padStart(5)}  NOT blocked ${f}`);
+  console.log(`${k.padEnd(26)} samples ${String(n).padStart(5)}  failed ${f}`);
 }
-console.log(fails ? `FAIL: ${fails} unblocked samples` : "OK: every sample blocked");
+console.log(fails ? `FAIL: ${fails} samples` : "OK: collision and traversal samples passed");
+
+process.exitCode = fails ? 1 : 0;

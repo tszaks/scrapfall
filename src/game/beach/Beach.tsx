@@ -206,8 +206,9 @@ function ledMaterial(time: { value: number }, k: { value: number }, halo = false
         opacity: 0.22,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
+        fog: false,
       })
-    : new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+    : new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false });
   mat.onBeforeCompile = (sh) => {
     addSkyFogUniforms(sh);
     sh.uniforms["uTime"] = time;
@@ -624,8 +625,13 @@ function SetPieces({ city }: { city: BeachLayout; time?: TimeOfDay }) {
     };
   }, [ledTime, ledK]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
-  useFrame((state) => {
+  // the wheel's LEDs glow through the marine layer (unfogged, a little dimmed by it), so the
+  // landmark stays lit in the night boss round instead of vanishing into the haze
+  const haze = useRef(0);
+  useFrame((state, dt) => {
     ledTime.value = state.clock.elapsedTime;
+    haze.current += ((worldFx.hazard ? 1 : 0) - haze.current) * Math.min(1, dt * 0.35);
+    ledK.value = B.wheel * (1 - 0.35 * haze.current);
   });
   return (
     <>
@@ -864,7 +870,7 @@ function FerrisWheel({ city, mats }: { city: BeachLayout; mats: SetMats }) {
       <group ref={wheelRef} position={[w.x, w.y, w.z]} rotation={[0, w.rot, 0, "YXZ"]}>
         <mesh geometry={geo.frame} material={mats.lambert} castShadow />
         <mesh geometry={geo.leds} material={mats.led} />
-        <mesh geometry={geo.halos} material={mats.halo} renderOrder={3} />
+        <mesh geometry={geo.halos} material={mats.halo} renderOrder={11} />
       </group>
       <instancedMesh
         ref={gonRef}

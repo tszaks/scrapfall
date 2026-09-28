@@ -34,7 +34,7 @@ export const SURGE = {
   dry: 30,
   /** where the swell appears, and the high-water line on the sand (just short of the park
    * strip and boardwalk, which stay dry) */
-  farX: -330,
+  farX: -280,
   shoreX: X.wet,
   topX: X.strip - 8,
 } as const;
@@ -49,7 +49,7 @@ export function surgeAt(t: number) {
   if (t < S.breaks) {
     const k = clamp01((t - S.rise) / (S.breaks - S.rise));
     const x = S.farX + (S.shoreX - S.farX) * (1 - Math.pow(1 - k, 1.4));
-    const h = t < S.rise ? 0 : 2 + 7.5 * ease(k);
+    const h = t < S.rise ? 0 : 3.5 + 8 * ease(k);
     return { swellX: x, swellH: h, front: S.shoreX, running: false, wet: 0 };
   }
   // the run-up: fast at first, slowing as it climbs the beach
@@ -58,7 +58,7 @@ export function surgeAt(t: number) {
     const f = S.shoreX + (S.topX - S.shoreX) * (1 - Math.pow(1 - k, 2));
     return {
       swellX: S.shoreX + (f - S.shoreX) * 0.35,
-      swellH: 9.5 * Math.pow(1 - k, 2),
+      swellH: 11.5 * Math.pow(1 - k, 2),
       front: f,
       running: true,
       wet: 1,
