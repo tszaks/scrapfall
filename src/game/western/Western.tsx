@@ -95,6 +95,14 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
     sh.uniforms["uArr"] = { value: arr.day };
     sh.uniforms["uSplat"] = { value: splat };
     sh.uniforms["uHalf"] = { value: L.half };
+    // wet ground: troughs and wells (x, z, radius), up to 16, nearest the town first
+    const wet = L.props
+      .filter((p) => p.k === "trough" || p.k === "well")
+      .sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))
+      .slice(0, 16)
+      .map((p) => new THREE.Vector3(p.x, p.z, p.k === "well" ? 2.6 : 2.0));
+    while (wet.length < 16) wet.push(new THREE.Vector3(0, 0, 0));
+    sh.uniforms["uWet"] = { value: wet };
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;")
       .replace(
@@ -109,6 +117,7 @@ precision highp sampler2DArray;
 uniform sampler2DArray uArr;
 uniform sampler2D uSplat;
 uniform float uHalf;
+uniform vec3 uWet[16];
 varying vec2 vGxz;
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
@@ -143,10 +152,47 @@ col = mix(col, dirt, smoothstep(0.15, 0.6, w.r + (n1 - 0.5) * 0.25));
 col = mix(col, mud, smoothstep(0.2, 0.6, w.g + (n1 - 0.5) * 0.2));
 col = mix(col, yard, smoothstep(0.2, 0.6, w.b));
 col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
+// ---- a street people use: wheel ruts down each lane, hoof-churned dirt between them ----
+{
+  float street = smoothstep(0.35, 0.8, w.r);
+  if (street > 0.0) {
+    // which way the traffic runs here: Main Street and the back streets east-west, the cross
+    // street north-south
+    bool ns = wp.x > -31.0 && wp.x < -13.0 && abs(wp.y) > 13.0;
+    float along = ns ? wp.y : wp.x;
+    float across = ns ? wp.x + 22.0 : (abs(wp.y) < 14.0 ? wp.y : (wp.y < 0.0 ? wp.y + 64.0 : wp.y - 78.0));
+    float wob = gNoise(vec2(along * 0.03, 3.0)) * 0.9 + gNoise(vec2(along * 0.11, 7.0)) * 0.25;
+    float rut = 0.0;
+    // two lanes each way on Main Street, one lane each way on the side streets
+    for (int k = 0; k < 4; k++) {
+      float lane = abs(wp.y) < 14.0 && !ns ? (k < 2 ? -2.6 : 2.6) + (k == 1 || k == 3 ? 0.0 : 0.0) : (k < 2 ? -1.6 : 1.6);
+      float wheel = (k % 2 == 0 ? -0.78 : 0.78);
+      float d = abs(across - lane - wheel - wob);
+      rut = max(rut, 1.0 - smoothstep(0.08, 0.26, d));
+    }
+    // hoofprints: small dark crescents scattered down the middle of the lanes
+    vec2 hc = floor(wp * 2.2);
+    vec2 hf = fract(wp * 2.2) - vec2(gHash(hc), gHash(hc + 7.0));
+    float hoof = (1.0 - smoothstep(0.06, 0.14, length(hf * vec2(1.0, 1.4)))) * step(0.55, gHash(hc + 3.0));
+    float laneMid = 1.0 - smoothstep(0.6, 1.4, min(abs(abs(across) - 2.6), abs(abs(across) - 1.6)) );
+    col *= 1.0 - street * (rut * 0.2 + hoof * laneMid * 0.22);
+    // compacted crowns between the ruts read a touch lighter
+    col *= 1.0 + street * 0.05 * (1.0 - rut) * laneMid;
+  }
+}
+// ---- wet mud round the troughs and the town well ----
+for (int i = 0; i < 16; i++) {
+  vec3 tq = uWet[i];
+  if (tq.z <= 0.0) continue;
+  float d = length(wp - tq.xy);
+  float edge = tq.z * (0.8 + 0.4 * gNoise(wp * 1.3 + float(i)));
+  float wet = 1.0 - smoothstep(edge * 0.5, edge, d);
+  col = mix(col, col * vec3(0.52, 0.46, 0.42), wet * 0.85);
+}
 diffuseColor.rgb *= col;`,
       );
   };
-  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v1" : "western-ground-v1");
+  mat.customProgramCacheKey = () => (cutRiver ? "western-ground-cut-v2" : "western-ground-v2");
   return { mat, splat };
 }
 

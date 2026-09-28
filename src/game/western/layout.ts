@@ -172,6 +172,9 @@ export type WPropKind =
   | "stagecoach"
   | "sacks"
   | "picket"
+  | "straw"
+  | "brokencrate"
+  | "brokenbarrel"
   | "clothesline"
   | "garden"
   | "sign";
@@ -964,6 +967,23 @@ export function generateWestern(rand: () => number, cells: number, half: number)
           prop(rand() < 0.5 ? "crates" : "crate", cxw, czw, rand() * 0.6, 0.9);
         }
       }
+      // the alley beside it (when there is one): junk against the walls, the middle kept clear
+      if (gap > 0) {
+        const ax0 = x + p.w;
+        const ax1 = ax0 + gap;
+        const za = north ? zf - 3 : zf + 3;
+        const zb = north ? zf - d + 2 : zf + d - 2;
+        const junk: WPropKind[] = ["brokencrate", "barrels", "crate", "brokenbarrel", "crates"];
+        const nj = 1 + Math.floor(rand() * 3);
+        for (let k = 0; k < nj; k++) {
+          const side = rand() < 0.5;
+          const jx = side ? ax0 + 0.8 : ax1 - 0.8;
+          const jz = za + (zb - za) * rand();
+          const kind = junk[Math.floor(rand() * junk.length)]!;
+          if (props.some((q) => Math.hypot(q.x - jx, q.z - jz) < 1.4)) continue;
+          prop(kind, jx, jz, rand() * 6.28, 0.9 + rand() * 0.2);
+        }
+      }
       x += p.w + gap;
     }
   };
@@ -1708,6 +1728,20 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     boulders++;
   }
 
+  // straw where the horses stand and the hay is forked about
+  {
+    const straw: [number, number][] = [];
+    for (const q of props) if ((q.k === "horse" && rand() < 0.55) || q.k === "hay") straw.push([q.x + (rand() - 0.5) * 1.5, q.z + (rand() - 0.5) * 1.5]);
+    const sb = buildings.find((q) => q.t === "stable");
+    if (sb) {
+      const [fx, fz] = toWorld(sb, 0, 2.5);
+      straw.push([fx, fz], [fx + 2, fz + 0.5]);
+      const [bx, bz] = toWorld(sb, 0, -frameWD(sb).D - 2.5);
+      straw.push([bx, bz]);
+    }
+    for (const [x, z] of straw) prop("straw", x, z, rand() * 6.28, 0.8 + rand() * 0.5);
+  }
+
   // ======================================================================
   // 7b. every prop that looks solid is solid: cactus, posts, horses, benches, barrels...
   //     (footprints in metres, width across x and depth along z before rotation)
@@ -1726,6 +1760,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     crates: [1.5, 1.5],
     crate: [0.85, 0.85],
     barrel: [0.7, 0.7],
+    brokencrate: [0.9, 0.9],
+    brokenbarrel: [1.0, 0.7],
     sacks: [1.1, 1.1],
     woodpile: [2.2, 1.1],
     hay: [1.2, 0.8],
@@ -1744,7 +1780,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // per barrel or porch post left invisible walls metres wide. Bigger ones keep their cells.
   const THIN = new Set<WPropKind>([
     "saguaro", "pear", "barrelcactus", "deadtree", "pole", "streetlamp", "crossbuck", "horse",
-    "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross", "barrel", "crate",
+    "bench", "barrels", "crates", "sacks", "hay", "anvil", "wheel", "grave", "cross", "barrel", "crate", "brokencrate", "brokenbarrel",
   ]);
   /** a rectangle w x d (local x at yaw rot) as a row of circles */
   const SHOT_STOP = new Set<WPropKind>(["horse", "hay", "barrels", "crates", "sacks", "barrel", "crate"]);

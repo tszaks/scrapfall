@@ -2594,6 +2594,55 @@ function templates() {
     d.col("#9a8266");
     for (const y of [0.4, 0.8, 1.2]) beam(d, -1.25, y, 0, 1.25, y + (r() - 0.5) * 0.06, 0, 0.1);
   });
+  make("straw", (d) => {
+    // loose straw kicked about on the ground: a scatter of thin pale stalks and a few tufts
+    for (let i = 0; i < 70; i++) {
+      const a = r() * 6.28;
+      const rr = Math.sqrt(r()) * 1.4;
+      const x = Math.cos(a) * rr;
+      const z = Math.sin(a) * rr;
+      const ang = r() * 3.14;
+      const len = 0.15 + r() * 0.25;
+      d.col(pick(["#d8c07a", "#c8a860", "#e2cc88", "#b89a56"], r)).mat(WL.CANVAS);
+      oboxP(d, WL.CANVAS, x, 0.01 + r() * 0.02, z, len, 0.012, 0.02, ang, true);
+    }
+    for (let i = 0; i < 4; i++) {
+      d.col("#c8aa62").mat(WL.CANVAS);
+      oboxP(d, WL.CANVAS, (r() - 0.5) * 1.6, 0, (r() - 0.5) * 1.6, 0.35, 0.08, 0.25, r() * 3, true);
+    }
+  });
+  make("brokencrate", (d) => {
+    // a smashed crate: one side still standing, the rest of its boards scattered
+    d.col("#a8845a");
+    boxP(d, WL.TIMBER, -0.4, 0, -0.4, 0.4, 0.55, -0.34);
+    boxP(d, WL.TIMBER, -0.4, 0, -0.4, -0.34, 0.45, 0.2);
+    for (let i = 0; i < 6; i++) {
+      d.col(pick(["#b89468", "#9a7a4e", "#c4a070"], r));
+      oboxP(d, WL.TIMBER, (r() - 0.3) * 1.2, 0.02 + i * 0.012, (r() - 0.3) * 1.2, 0.75, 0.025, 0.12, r() * 3, true);
+    }
+  });
+  make("brokenbarrel", (d) => {
+    // a stove-in barrel on its side, staves sprung, hoops rusting
+    d.col("#8a5a32");
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      if (i === 3 || i === 4) continue;
+      const y = 0.32 + Math.sin(a) * 0.3;
+      const z = Math.cos(a) * 0.3;
+      oboxP(d, WL.TIMBER, 0, y, z, 0.85, 0.035, 0.18, 0, true);
+    }
+    d.col("#5a3a2a");
+    for (let i = 0; i < 3; i++) oboxP(d, WL.TIMBER, 0.6 + r() * 0.5, 0.02, (r() - 0.5) * 0.8, 0.8, 0.03, 0.14, r() * 3, true);
+    d.col("#4a3a30");
+    for (const x of [-0.3, 0.3]) {
+      for (let i = 0; i < 10; i++) {
+        const a0 = (i / 10) * Math.PI * 2;
+        const a1 = ((i + 1) / 10) * Math.PI * 2;
+        if (i === 3) continue;
+        beam(d, x, 0.32 + Math.sin(a0) * 0.32, Math.cos(a0) * 0.32, x, 0.32 + Math.sin(a1) * 0.32, Math.cos(a1) * 0.32, 0.03, WL.IRON);
+      }
+    }
+  });
   make("picket", (d) => {
     // a picket fence section, 2 m along x: two posts, two rails, pointed pickets; whitewash
     // gone grey and patchy
