@@ -12,7 +12,8 @@ import { Geo } from "./cityGeo";
 import type { CityLayout } from "./cityLayout";
 import type { TimeOfDay } from "./lighting";
 import type { Gap } from "./soloBounds";
-import { makeVehicle, vehicleParts } from "./vehicles";
+import { bakeCar, vehicleLamps } from "./art/cars";
+import { makeVehicle } from "./vehicles";
 
 function mulberry(seed: number) {
   let a = seed >>> 0;
@@ -243,23 +244,16 @@ function build(city: CityLayout, gaps: Gap[]) {
         const p = W(side * (v.len / 2 + 0.3), 4.6);
         const sy = Math.sin(yaw);
         const cy = Math.cos(yaw);
-        for (const part of vehicleParts(v)) {
-          const wx = p.x + part.x * cy + part.z * sy;
-          const wz = p.z - part.x * sy + part.z * cy;
-          if (part.kind === "barR" || part.kind === "barB") {
-            lights.push({
-              x: wx,
-              y: part.y,
-              z: wz,
-              kind: part.kind === "barR" ? "red" : "blue",
-              ph: side > 0 ? 0 : 0.5,
-            });
-            continue;
-          }
-          body.col(part.kind === "head" ? 0xe8e6dc : part.kind === "tail" ? 0x8a1a18 : part.color);
-          if (part.kind === "wheel")
-            body.obox(wx, part.y - part.sy / 2, wz, part.sz, part.sy, part.sx, yaw);
-          else body.obox(wx, part.y - part.sy / 2, wz, part.sx, part.sy, part.sz, yaw);
+        bakeCar(body, v, p.x, 0, p.z, yaw);
+        for (const part of vehicleLamps(v)) {
+          if (part.kind !== "barR" && part.kind !== "barB") continue;
+          lights.push({
+            x: p.x + part.x * cy + part.z * sy,
+            y: part.y,
+            z: p.z - part.x * sy + part.z * cy,
+            kind: part.kind === "barR" ? "red" : "blue",
+            ph: side > 0 ? 0 : 0.5,
+          });
         }
       }
       // cones fanned out in front of the cruisers

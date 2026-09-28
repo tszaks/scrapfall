@@ -8,7 +8,8 @@
 import * as THREE from "three";
 
 import { Geo, L, STRIDE, facadeUV, rectPoly, type P2, type Tmpl } from "../cityGeo";
-import { vehicleParts, type Vehicle } from "../vehicles";
+import { bakeCar } from "../art/cars";
+import type { Vehicle } from "../vehicles";
 import {
   BLUFF_H,
   DECK,
@@ -2154,8 +2155,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   for (const p of beach.props) prop(p, ctx(p.x, p.z), T, gv);
   for (const f of beach.firesLit) fires.push({ x: f.x, y: gv(f.x, f.z) + 0.2, z: f.z });
 
-  // ---- parked cars ----
-  for (const pc of beach.parked) car(ctx(pc.x, pc.z).detail, pc.v, pc.x, pc.y + 0.02, pc.z, pc.rot);
+  // ---- parked cars: drawn instanced with the traffic (Traffic.tsx / art/cars.ts) ----
 
   // ---- blockades ----
   for (const b of beach.blockades) blockade(b, ctx(b.x, b.z), T);
@@ -2316,27 +2316,9 @@ function railBar(G: Geo, a: [number, number, number], b: [number, number, number
   }
 }
 
+/** a static car baked into the chunk (lean model, lights off; see art/cars.ts) */
 function car(D: Geo, v: Vehicle, x: number, y: number, z: number, rot: number) {
-  const s = Math.sin(rot);
-  const c = Math.cos(rot);
-  D.mat(L.plain, 0.5, 0);
-  for (const p of vehicleParts(v)) {
-    const wx = x + p.x * c + p.z * s;
-    const wz = z - p.x * s + p.z * c;
-    const color =
-      p.kind === "head"
-        ? 0xb8b8b0
-        : p.kind === "tail"
-          ? 0x6a1612
-          : p.kind === "barR"
-            ? 0x5a1010
-            : p.kind === "barB"
-              ? 0x10205a
-              : p.color;
-    D.col(color);
-    if (p.kind === "wheel") D.obox(wx, y + p.y - p.sy / 2, wz, p.sz, p.sy, p.sx, rot);
-    else D.obox(wx, y + p.y - p.sy / 2, wz, p.sx, p.sy, p.sz, rot);
-  }
+  bakeCar(D, v, x, y, z, rot, L.plain);
 }
 
 function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) {
