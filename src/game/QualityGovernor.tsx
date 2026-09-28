@@ -2,11 +2,12 @@
 // quality tier (quality.ts).
 //
 // Every second it looks at the frame times it saw. Frames that miss 60 fps (> 18.5 ms) on
-// more than ~8% of frames for two seconds running step the resolution down one notch; at the
-// bottom of the tier's range the tier itself steps down (shadows, mirror, rain...). Four clean
-// seconds step the resolution back up; a level that failed right after a step up is remembered
-// for half a minute so the governor doesn't flip-flop. On a 120 Hz display it also trims the
-// resolution (but not below 1.3) when it can't keep up with the display.
+// more than ~8% of frames for three seconds running step the resolution down one notch; at
+// the bottom of the tier's range the tier itself steps down (shadows, mirror, rain...). Six
+// clean seconds (and 15 s since the last step down) step the resolution back up: each change
+// resizes the canvas, which costs a frame, so it moves rarely. A level that failed right after
+// a step up is remembered for a minute so the governor doesn't flip-flop. On a 120 Hz
+// display it also trims the resolution (but not below 1.3) when it can't keep up with it.
 //
 // The Canvas reads `liveDpr()` (quality.ts) for its `dpr` prop, so a re-render of the game
 // never resets what the governor picked (react-three-fiber re-applies the prop on every render).
@@ -41,6 +42,7 @@ export function QualityGovernor() {
     ceiling: 99,
     ceilingUntil: 0,
     tierAt: 0,
+    lastDown: -1e9,
     tierUpAt: -1e9,
     tierWait: 20,
     clock: 0,
@@ -81,6 +83,7 @@ export function QualityGovernor() {
   const apply = (d: number, why: string) => {
     const v = Math.round(d * 100) / 100;
     if (v === liveDpr()) return;
+    if (v < liveDpr()) st.current.lastDown = st.current.clock;
     setLiveDpr(v);
     debug.dpr = v;
     debug.log.push({ t: +st.current.clock.toFixed(1), what: `${why} dpr ${v}` });
@@ -134,12 +137,12 @@ export function QualityGovernor() {
     const good = miss60 < 0.015 && (!hiHz || missHi < 0.08);
     S.bad = bad ? S.bad + 1 : 0;
     S.good = good ? S.good + 1 : 0;
-    if (S.bad >= 2) {
+    if (S.bad >= 3) {
       S.bad = 0;
       // failing right after a step up: that level is too much for now
       if (S.clock - S.lastUp < 10) {
         S.ceiling = liveDpr();
-        S.ceilingUntil = S.clock + 30;
+        S.ceilingUntil = S.clock + 60;
       }
       const hard = miss60 > 0.08;
       const cpuBound = cpuMed > 13;
@@ -148,7 +151,7 @@ export function QualityGovernor() {
       } else if (liveDpr() - STEP_DOWN >= spec.dprMin - 1e-3) apply(liveDpr() - STEP_DOWN, "slow");
       else if (liveDpr() > spec.dprMin + 1e-3) apply(spec.dprMin, "slow");
       else if (hard && tier !== "low") tierDown(tier, "slow at the lowest resolution");
-    } else if (S.good >= 4) {
+    } else if (S.good >= 6 && S.clock - S.lastDown > 15) {
       const ceil = S.clock < S.ceilingUntil ? S.ceiling - 0.01 : 99;
       if (liveDpr() + 0.01 < spec.dprMax && liveDpr() + STEP_UP < ceil) {
         S.good = 0;
