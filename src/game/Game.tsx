@@ -3120,7 +3120,9 @@ function World({
           ? city.spawnYaw
           : alpineMap
             ? alpineMap.alpine.spawnYaw
-            : 0,
+            : layoutOf(theme) === "nuketown"
+              ? NUKE_SPAWN.yaw
+              : 0,
       pitch: city ? 0.12 : 0,
     };
     placeAtSpawn();
@@ -3171,8 +3173,9 @@ function World({
   // each other
   const spawnNum = () => (!net || net.role === "host" ? 1 : (slots.current[net.self] ?? 2));
   const placeAtSpawn = () => {
-    const sx = big ? big.spawn.x : 0;
-    const sz = big ? big.spawn.z : layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
+    const nuke = !big && layoutOf(theme) === "nuketown";
+    const sx = big ? big.spawn.x : nuke ? NUKE_SPAWN.x : 0;
+    const sz = big ? big.spawn.z : nuke ? NUKE_SPAWN.z : 0;
     const num = spawnNum();
     let x = sx;
     let z = sz;
@@ -5218,7 +5221,7 @@ function World({
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
       );
-      if (remaining === 0 && wave.current <= WAVES.length) {
+      if (!tourMode() && remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
           status(WAVES.length, 0, true, false);
@@ -6797,6 +6800,14 @@ function seedParam(): number | null {
   const raw = new URLSearchParams(window.location.search).get("seed");
   const n = raw === null ? NaN : Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** `?tour=1` walks the map empty: the wave clock never advances, nothing spawns */
+function tourMode() {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("tour") === "1"
+  );
 }
 
 /** is the HUD in its in-elevator-car state (the html element's rs-incar class)? */

@@ -60,18 +60,18 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
   let western: WesternLayout | null = null;
 
   if (mode === "nuketown") {
-    // Coarse navigation only; the rendered fence and vehicle models own precise contact.
+    // Coarse navigation only: cells inside the fenced union stay open and the structure
+    // plans (fences, walls, props) refine them; everything else is solid for nav/spawns.
+    const open = (x: number, z: number) =>
+      (x >= -18 && x <= -1 && z >= -31 && z <= -5.6) || // north lot
+      (x >= 1 && x <= 18 && z >= 5.6 && z <= 31) || // south lot
+      (x >= -22.5 && x <= 30 && z >= -5.6 && z <= 5.6) || // street + frontages
+      Math.hypot(x + 19.5, z) < 6.2; // cul-de-sac bulb
     for (let i = 0; i < cells; i++)
       for (let j = 0; j < cells; j++) {
         const x = -HALF + i * BLOCK + 1,
           z = -HALF + j * BLOCK + 1;
-        if (
-          Math.abs(x) > 33 ||
-          Math.abs(z) > 43 ||
-          (x > -11.5 && x < -0.5 && z > -4.3 && z < -1.3) ||
-          (x > 3 && x < 13.5 && z > 1.5 && z < 4.5)
-        )
-          blocks.push({ x, z, h: 4, tone: 0 });
+        if (!open(x, z)) blocks.push({ x, z, h: 4, tone: 0 });
       }
     return { blocks, seed, rand, city, western };
   }
