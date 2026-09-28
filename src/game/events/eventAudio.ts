@@ -64,10 +64,11 @@ function fightPlace() {
 }
 
 /** one shot (or a quick pair): report, body thump, the canyon slapback, maybe a ricochet */
-function gunshot(b: Bus, t: number) {
+function gunshot(b: Bus, t: number, boost = 1) {
   const { ctx } = b;
   const { d, pan } = fightPlace();
-  const k = 1 / (1 + d / 35);
+  // gunfire carries across a desert town: never below ~40% however far away you are
+  const k = Math.max(0.4, 1 / (1 + d / 35)) * boost;
   const g = ctx.createGain();
   g.gain.value = 0.9 * k;
   const lp = ctx.createBiquadFilter();
@@ -123,14 +124,19 @@ export function playTrainRobbery(secs = 58) {
   const me = ambienceListener();
   const st = me ? ambienceNearest("station", me.x, me.z) : null;
   const d = st && me ? Math.hypot(st.x - me.x, st.z - me.z) : 120;
-  whistle(d, 0.2, true);
-  setAt(ctx, 1.9, () => whistle(d, 0.2, false));
-  setAt(ctx, 2.6, () => whistle(d, 0.2, true));
+  // the alarm has to land: the whistles are heard as if from the platform's edge at most
+  const dw = Math.min(d, 22);
+  whistle(dw, 0.2, true);
+  setAt(ctx, 1.9, () => whistle(dw, 0.2, false));
+  setAt(ctx, 2.6, () => whistle(dw, 0.2, true));
+  // the hold-up starts with a volley: shots under the whistle from the first second
+  const t0 = ctx.currentTime;
+  for (const [dt, boost] of [[0.4, 2.2], [0.6, 2], [0.95, 2.1], [1.5, 1.9], [2.1, 2], [2.4, 1.8], [3.0, 2.1], [3.4, 1.8], [3.9, 2], [4.5, 1.9], [5.0, 1.8], [5.6, 2], [6.2, 1.8], [6.7, 1.9]] as const) gunshot(b, t0 + dt, boost);
   // two short blasts as it pulls out again
   setAt(ctx, secs - 6, () => whistle(d, 0.2, false));
   setAt(ctx, secs - 5.3, () => whistle(d, 0.2, false));
   robbery.until = ctx.currentTime + secs;
-  robbery.next = ctx.currentTime + 6; // the gang is off the train
+  robbery.next = ctx.currentTime + 6; // after the opening volley, the running fight
   if (typeof window !== "undefined" && !offline(ctx)) {
     if (robbery.timer) clearInterval(robbery.timer);
     robbery.timer = setInterval(() => {
@@ -197,8 +203,13 @@ export function playAvalanche(secs = 26) {
     s.start(t0, Math.random() * 0.5);
     s.stop(end + 0.05);
   };
-  // the ground-shaking sub rumble: from the first second of the warning
-  bed("lowpass", 55, 140, 1.5, 0.02, 0.55, t0 + 0.01);
+  // the ground-shaking sub rumble: already heavy in the first second of the warning
+  bed("lowpass", 55, 140, 1.5, 0.4, 0.7, t0 + 0.01);
+  // a low-mid growl so the warning is heard on small speakers too
+  bed("bandpass", 130, 260, 1, 0.3, 0.4, t0 + 0.01);
+  // the impact that starts it: a deep boom and a broadband crack as the slab lets go
+  toneHit(b, out, t0, "sine", 75, 28, 1.6, 0.9);
+  noiseHit(b, out, t0, { type: "lowpass", f: 2400, f1: 200, dur: 0.9, gain: 0.55, attack: 0.004 });
   // the roar of the moving snow: from the break
   bed("bandpass", 180, 520, 0.8, 0.01, 0.32, t0 + AV_WARN - 0.5);
   // powder hiss riding on top

@@ -1222,7 +1222,7 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
   // Vice Heights: a city that never sleeps, a beach at its feet
   vice(R) {
     // distant city hum and traffic wash: always there, stronger near the roads
-    bed(R, { name: "city hum", src: "brown", filters: [{ type: "lowpass", f: 160, q: 0.7 }], gain: 0.18, level: (e) => (e.night ? 0.8 : 1) * (0.45 + 0.55 * e.power), swell: [0.7, 1, 4, 10] });
+    bed(R, { name: "city hum", src: "brown", filters: [{ type: "lowpass", f: 160, q: 0.7 }], gain: 0.15, level: (e) => (e.night ? 0.8 : 1) * (0.45 + 0.55 * e.power), swell: [0.7, 1, 4, 10] });
     bed(R, { name: "traffic wash", src: "pink", filters: [{ type: "bandpass", f: 650, q: 0.6 }, { type: "lowpass", f: 2200 }], gain: 0.09, spot: "road", ref: 14, range: 400, level: (e) => (e.night ? 0.7 : 1), sweep: { spread: 0.35, every: [2, 6] }, swell: [0.55, 1, 2, 6] });
     // floor so a far-off wash stays even where the road falloff runs out
     bed(R, { name: "far traffic", src: "pink", filters: [{ type: "bandpass", f: 420, q: 0.5 }], gain: 0.035, level: always, swell: [0.6, 1, 3, 8] });
@@ -1250,7 +1250,7 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
 
   // Dry Gulch: a boomtown in the desert wind
   gulch(R) {
-    windBed(R, "desert wind", 0.28, 1, (e) => 1 - e.hazard * 0.4);
+    windBed(R, "desert wind", 0.36, 1, (e) => 1 - e.hazard * 0.4);
     bed(R, { name: "wind whistle", src: "white", filters: [{ type: "bandpass", f: 1700, q: 9 }], gain: 0.02, level: always, sweep: { spread: 0.3, every: [2, 6] }, swell: [0, 1, 2, 7] });
     crickets(R, "desert crickets", 0.008, undefined, 1, 1, nightOnly);
     tuneLayer(R, "saloon piano", "saloon", 1.6, 5, 70, (e) => 1 - e.hazard * 0.6, honkyTonk(R));
@@ -1284,12 +1284,12 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
 
   // Pacific Pier: surf, gulls, the boardwalk and the rides
   pier(R) {
-    bed(R, { name: "surf", src: "brown", filters: [{ type: "lowpass", f: 800, q: 0.5 }], gain: 0.26, spot: "shore", ref: 25, range: 450, level: always, swell: [0.35, 1, 2.5, 6] });
+    bed(R, { name: "surf", src: "brown", filters: [{ type: "lowpass", f: 800, q: 0.5 }], gain: 0.21, spot: "shore", ref: 25, range: 450, level: always, swell: [0.35, 1, 2.5, 6] });
     bed(R, { name: "surf hiss", src: "white", filters: [{ type: "bandpass", f: 2600, q: 0.5 }], gain: 0.05, spot: "shore", ref: 15, range: 180, level: always, swell: [0.15, 1, 2.5, 6] });
     // the ocean is never out of earshot in a beach town: a low far-off surf floor everywhere,
     // and a town bed (traffic on PCH, the promenade) away from the water
-    bed(R, { name: "far surf", src: "brown", filters: [{ type: "lowpass", f: 380, q: 0.5 }], gain: 0.11, level: always, swell: [0.5, 1, 3, 8] });
-    bed(R, { name: "town wash", src: "pink", filters: [{ type: "bandpass", f: 520, q: 0.6 }, { type: "lowpass", f: 1800 }], gain: 0.05, level: (e) => (e.night ? 0.75 : 1), swell: [0.6, 1, 3, 8] });
+    bed(R, { name: "far surf", src: "brown", filters: [{ type: "lowpass", f: 380, q: 0.5 }], gain: 0.16, level: always, swell: [0.5, 1, 3, 8] });
+    bed(R, { name: "town wash", src: "pink", filters: [{ type: "bandpass", f: 520, q: 0.6 }, { type: "lowpass", f: 1800 }], gain: 0.075, level: (e) => (e.night ? 0.75 : 1), swell: [0.6, 1, 3, 8] });
     windBed(R, "sea breeze", 0.1, 0.9, (e) => 0.6 + e.hazard * 0.4);
     crowdBed(R, "boardwalk crowd", 0.16, "crowd", 14, 150, (e) => (e.night ? 0.7 : 1) * (1 - e.hazard * 0.4));
     tuneLayer(R, "carnival organ", "carnival", 1.8, 18, 200, (e) => 1 - e.hazard * 0.5, calliope(R));
@@ -1327,7 +1327,7 @@ const PROFILES: Record<string, (R: Runtime) => void> = {
 
   // Whiteout Pass: hushed snow, the chairlift, the village
   alpine(R) {
-    windBed(R, "mountain wind", 0.24, 0.8, (e) => 1 - e.hazard * 0.5);
+    windBed(R, "mountain wind", 0.34, 0.8, (e) => 1 - e.hazard * 0.5);
     bed(R, { name: "cable hum", src: { osc: "sawtooth", f: [55, 110.4, 165.2] }, filters: [{ type: "lowpass", f: 320, q: 1.2 }], gain: 0.05, spot: "cable", ref: 6, range: 60, level: always, swell: [0.7, 1, 2, 5] });
     bed(R, { name: "bullwheel", src: "brown", filters: [{ type: "bandpass", f: 140, q: 2 }], gain: 0.18, spot: "station", ref: 8, range: 55, level: always });
     // fireplaces: muffled through chalet walls

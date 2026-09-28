@@ -8,8 +8,14 @@ let sfxGain: GainNode | null = null;
 /** background soundscapes (ambience.ts) sit on their own bus, under the music and effects */
 let ambGain: GainNode | null = null;
 let musicVerb: ConvolverNode | null = null;
+/** the music's stage level: it gets louder as the run builds (setMusicProgress / boss) */
+let musicStage: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 let muffle: BiquadFilterNode | null = null;
+/** the limiter at the end of the chain: everything audible goes through it */
+let out: AudioNode | null = null;
+/** music level per stage (early, mid, late, boss): ~ -4.4, -1.9, 0, +2.7 dB */
+const STAGE_GAIN = [0.6, 0.8, 1, 1.36];
 let windGain: GainNode | null = null;
 let windFilter: BiquadFilterNode | null = null;
 let vol = { music: 0.5, sfx: 0.7, amb: 0.6 };
@@ -43,11 +49,31 @@ function buildGraph(c: AudioContext) {
     muffle = ctx.createBiquadFilter();
     muffle.type = "lowpass";
     muffle.frequency.value = 20000;
-    master.connect(muffle).connect(ctx.destination);
+    // the final stage: a fast compressor used as a limiter, then a soft clipper, so the sum of
+    // everything (a boss round's pile-up of voices) can never clip the speakers
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 3;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.2;
+    const clip = ctx.createWaveShaper();
+    const curve = new Float32Array(2049);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / (curve.length - 1)) * 2 - 1;
+      // linear up to 0.7, then a smooth tanh knee that never passes 0.98
+      curve[i] = Math.abs(x) <= 0.7 ? x : Math.sign(x) * (0.7 + 0.28 * Math.tanh((Math.abs(x) - 0.7) / 0.28));
+    }
+    clip.curve = curve;
+    limiter.connect(clip).connect(ctx.destination);
+    out = limiter;
+    master.connect(muffle).connect(limiter);
     musicGain = ctx.createGain();
     sfxGain = ctx.createGain();
     ambGain = ctx.createGain();
-    musicGain.connect(master);
+    musicStage = ctx.createGain();
+    musicStage.gain.value = STAGE_GAIN[0]!;
+    musicGain.connect(musicStage).connect(master);
     sfxGain.connect(master);
     ambGain.connect(master);
     // one shared reverb for the music's bells, whistles and surf guitar
@@ -219,7 +245,7 @@ export function setWindNoise(k: number) {
     windGain = ctx.createGain();
     windGain.gain.value = 0;
     // the wind bypasses the muffle filter (it is the thing doing the muffling)
-    src.connect(windFilter).connect(windGain).connect(ctx.destination);
+    src.connect(windFilter).connect(windGain).connect(out ?? ctx.destination);
     src.start();
   }
   // an ambience layer: the ambience volume sets it, and it falls silent with the game (pause,
@@ -418,6 +444,11 @@ let intense = false;
 
 export function setMusicIntensity(boss: boolean) {
   intense = boss;
+  applyStage();
+}
+function applyStage() {
+  if (!ctx || !musicStage) return;
+  musicStage.gain.setTargetAtTime(STAGE_GAIN[intense ? 3 : level]!, ctx.currentTime, 1.5);
 }
 
 /**
@@ -427,7 +458,13 @@ export function setMusicIntensity(boss: boolean) {
 let level = 0;
 export function setMusicProgress(wave: number, total: number) {
   const k = total > 1 ? (wave - 1) / (total - 1) : 0;
+  // waves 1-3, 4-7 and 8-11 of 12 (the boss round is setMusicIntensity)
   level = k < 0.2 ? 0 : k < 0.6 ? 1 : 2;
+  applyStage();
+}
+/** current music stage 0..3 (instrumentation) */
+export function musicStageLevel() {
+  return intense ? 3 : level;
 }
 
 function musicOut(): MusicOut | null {
@@ -441,7 +478,10 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   const i = s % 16;
   const t = t0 + (i % 2 === 1 ? (S.swing ?? 0) * stepDur : 0);
   const root = S.roots[bar]!;
-  if (S.kick.includes(i) || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
+  const lvl0 = intense ? 3 : level;
+  // late waves drive harder: syncopated kicks join
+  const drive = lvl0 >= 2 && (i === 10 || i === 14);
+  if (S.kick.includes(i) || drive || (intense && i % 4 === 0)) tone({ wave: "sine", f0: 150, f1: 40, dur: 0.22, gain: 0.9, noise: 0, cut: 600 }, musicGain, t);
   if (S.snare.includes(i)) {
     if (S.wood) tone({ wave: "sine", f0: 900, f1: 700, dur: 0.05, gain: 0.35, noise: 0.1, cut: 4000, q: 6 }, musicGain, t);
     else tone({ wave: "triangle", f0: 220, f1: 120, dur: 0.16, gain: 0.3, noise: 0.8, cut: 3500 }, musicGain, t);
@@ -451,6 +491,12 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
   // hats join from the second stage (maps built around a constant hat keep it)
   const hat = ((S.hat === "all" || (S.hat === "odd" && i % 2 === 1) || (S.hat === "off" && i % 4 === 2)) && (lvl >= 1 || S.hat === "all")) || intense;
   if (hat) tone({ wave: "square", f0: 0, f1: 0, dur: S.hat === "off" ? 0.08 : 0.04, gain: 0.12, noise: 1, cut: 9000 }, musicGain, t);
+  // late waves: a quiet 16th shaker under everything
+  else if (lvl >= 2 && i % 2 === 1) tone({ wave: "square", f0: 0, f1: 0, dur: 0.03, gain: 0.06, noise: 1, cut: 10000 }, musicGain, t);
+  // the boss: a crash every two bars
+  if (intense && i === 0 && bar % 2 === 0) tone({ wave: "square", f0: 0, f1: 0, dur: 1.4, gain: 0.16, noise: 1, cut: 12000 }, musicGain, t);
+  // late waves and the boss: a sustained low chord that thickens the middle
+  if (lvl >= 2 && i === 0) [0, 7, 12].forEach((iv) => tone({ wave: "sawtooth", f0: midi(root + iv), f1: midi(root + iv), dur: stepDur * 15, gain: 0.03, noise: 0, cut: 1100 }, musicGain, t));
   const bRate = S.bassRate ?? 2;
   if (i % bRate === 0 || intense) {
     const bassNote = bRate === 1 ? (i % 2 ? root + 12 : root) : i % 4 === 2 ? root + 12 : root;
@@ -482,21 +528,23 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     }
   }
   const rate = S.arpRate ?? 2;
-  if (intense || i % rate === 0) {
-    const idx = Math.floor(s / rate);
+  const idx = Math.floor(s / rate);
+  // the opening waves play the lead at half density (every other note), so it can fill in
+  const thin = lvl === 0 && idx % 2 === 1;
+  if (intense || (i % rate === 0 && !thin)) {
     const n = root + (S.oct ?? 24) + S.arp[idx % S.arp.length]!;
     const base = S.lead === "sine" ? 0.25 : 0.12;
     const dur = base * (S.leadLen ?? 1);
     const g = S.lead === "sine" ? 0.14 : 0.1;
     if (S.leadVoice && M) {
       playVoice(M, S.leadVoice, midi(n), t, dur, g * 0.9);
-      if (S.echo) playVoice(M, S.leadVoice, midi(n), t + stepDur * 3, dur, g * 0.3);
+      if (S.echo && lvl >= 1) playVoice(M, S.leadVoice, midi(n), t + stepDur * 3, dur, g * 0.3);
     } else {
       tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut }, musicGain, t);
-      if (S.echo) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
+      if (S.echo && lvl >= 1) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
     }
     // late waves: a quiet octave-up sparkle doubles every other lead note
-    if (lvl === 2 && !S.parts && idx % 2 === 0) tone({ wave: "triangle", f0: midi(n + 12), f1: midi(n + 12), dur: dur * 0.8, gain: g * 0.3, noise: 0, cut: 7000 }, musicGain, t + stepDur);
+    if (lvl >= 2 && idx % 2 === 0) tone({ wave: "triangle", f0: midi(n + 12), f1: midi(n + 12), dur: dur * 0.8, gain: g * 0.3, noise: 0, cut: 7000 }, musicGain, t + stepDur);
   }
 }
 
