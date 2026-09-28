@@ -84,7 +84,7 @@ type Enemy = {
 };
 type Bullet = {
   pos: THREE.Vector3; vel: THREE.Vector3; life: number; active: boolean; damage: number; color: string; size: number;
-  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number;
+  bounce: number; pierce: number; slow: number; cluster: number; chain: number; burn: number; knock: number; mods: number; track?: number;
 };
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
@@ -1135,7 +1135,7 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
   const base = {
     life, active: true, damage, color, size,
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
-    burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0,
+    burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0, track: fx.track ?? 0,
   };
   const slot = pool.find((b) => !b.active);
   if (slot) {
@@ -1601,7 +1601,8 @@ function World({
             e.flash = 0.1;
             if (Number(m.slow) > 0) e.slow = Number(m.slow);
             if (e.kind === "boss") onBoss(Math.max(0, e.hp));
-            if (e.hp <= 0) { e.alive = false; onScore(); }
+            // credit the kill to the teammate who landed it, not the host
+            if (e.hp <= 0) { e.alive = false; n?.sendTo(String(m.from), { type: "kill" }); }
           }
         } else if (m.type === "ebhit") {
           const b = enemyBullets.current[Number(m.i)];
@@ -1732,6 +1733,7 @@ function World({
         knock: s2.knock + (isP && s2.comp ? 0.8 : 0),
         burn: isP && s2.incend ? 3 : 0,
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
+        track: 1,
       };
       fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
@@ -2770,7 +2772,8 @@ function World({
               if (b.mods & M_EXEC && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2;
               const lethal = e.hp - dmg * ((e.shredUntil ?? 0) > performance.now() ? 1.3 : 1) <= 0;
               hurtEnemy(e, dmg, ei, b.slow, b.burn, b.knock, b.vel.x, b.vel.z);
-              onStat("hit", 1);
+              // accuracy: a shot you fired counts as a hit once, no matter how many it pierces
+              if (b.track === 1) { onStat("hit", 1); b.track = 2; }
               onStat("dmg", dmg);
               if (b.mods & M_SHRED) e.shredUntil = performance.now() + 3000;
               if (b.mods & M_BOUNTY && lethal) {
@@ -3148,6 +3151,7 @@ export function Game() {
       return;
     }
 
+    if (m.type === "kill") { setScore((s) => s + 1); return; }
     if (m.type === "statline") {
       const num = Number(m.num);
       setSquad((q) => ({ ...q, [num]: { kills: Number(m.kills), dmg: Number(m.dmg), acc: Number(m.acc), shards: Number(m.shards), taken: Number(m.taken) } }));
