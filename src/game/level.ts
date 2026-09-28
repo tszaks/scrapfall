@@ -41,10 +41,19 @@ export function generateLevel(seed: number) {
   return { blocks, seed, rand };
 }
 
+/**
+ * Collision half-width of a piece of cover. Slim props (trees, coral) use a
+ * tighter box than the grid cell so shots and steps line up with what you see.
+ */
+export let BLOCK_HALF = BLOCK / 2;
+export function setBlockHalf(v: number) {
+  BLOCK_HALF = v;
+}
+
 export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
   for (const b of blocks) {
-    const half = BLOCK / 2 + radius;
+    const half = BLOCK_HALF + radius;
     if (Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
   }
   return false;

@@ -134,7 +134,12 @@ export function playGun(w: string, quiet = false) {
     tone(quiet ? { ...t, gain: t.gain * 0.3, cut: Math.min(t.cut, 1400) } : t));
 }
 
-export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret") {
+export function playSfx(kind: "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret" | "boom") {
+  if (kind === "boom") {
+    // hazard prop rupturing: deep thump plus a long debris hiss
+    tone({ wave: "sine", f0: 180, f1: 34, dur: 0.5, gain: 0.5, noise: 0.9, cut: 900 });
+    if (ctx) tone({ wave: "sawtooth", f0: 90, f1: 40, dur: 0.7, gain: 0.22, noise: 1.6, cut: 2200 }, sfxGain, ctx.currentTime + 0.02);
+  }
   if (kind === "turret") {
     // mechanical pneumatic pop + metallic ring, distinct from the music's square arps
     tone({ wave: "triangle", f0: 240, f1: 90, dur: 0.07, gain: 0.22, noise: 1.1, cut: 2600 });

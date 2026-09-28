@@ -5,7 +5,7 @@ import * as THREE from "three";
 import {
   ARENA, HALF, BLOCK, blocked, generateLevel, randomSpawn, pushOut, type Block,
   solidGrid, flowField, nextWaypoint, clearLine, toCell,
-  setArenaSize, SOLO_ARENA, COOP_ARENA,
+  setArenaSize, setBlockHalf, SOLO_ARENA, COOP_ARENA,
 } from "./level";
 
 import { THEMES, type Theme } from "./themes";
@@ -19,6 +19,8 @@ import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMus
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
 import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEquipped, perkAvailable, perkBadge, perkCost, type Derived, type PerkId, type Perks } from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
+import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
+import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 
 
 
@@ -143,20 +145,33 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const glow = theme.enemyBullet;
 
   if (shape === "tree") {
-    const trunk = 1 + b.h * 0.25;
+    // trunk stays slim, canopy sits directly on top of it and tapers upward so
+    // the tiers never float apart or read as hollow cones
+    const trunk = 1.1 + b.h * 0.22;
+    const canopy = b.h * 0.85 + 1.4;
     return (
-      <group position={[b.x, 0, b.z]}>
-        <mesh position-y={trunk / 2} castShadow>
-          <cylinderGeometry args={[0.3, 0.4, trunk, 6]} />
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        {/* root flare keeps the base planted in the ground */}
+        <mesh position-y={0.18} castShadow receiveShadow>
+          <cylinderGeometry args={[0.42, 0.68, 0.36, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={trunk / 2 + 0.2} castShadow>
+          <cylinderGeometry args={[0.26, 0.4, trunk, 7]} />
           <meshLambertMaterial color="#4a3320" flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.45} castShadow>
-          <coneGeometry args={[1.3, b.h * 0.9 + 1, 7]} />
+        {/* three overlapping tiers, each seated inside the one below it */}
+        <mesh position-y={trunk + canopy * 0.18} castShadow>
+          <coneGeometry args={[1.35, canopy * 0.6, 8]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={trunk + canopy * 0.42} castShadow>
+          <coneGeometry args={[1.08, canopy * 0.55, 8]} />
           <meshLambertMaterial color={color} flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.9} castShadow>
-          <coneGeometry args={[0.9, b.h * 0.6 + 0.6, 7]} />
-          <meshLambertMaterial color={color} flatShading />
+        <mesh position-y={trunk + canopy * 0.68} castShadow>
+          <coneGeometry args={[0.78, canopy * 0.5, 8]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
         </mesh>
       </group>
     );
@@ -388,6 +403,193 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
+/** Small scatter prop that belongs to the map it sits in. */
+function Decor({ theme, seed }: { theme: Theme; seed: number }) {
+  const s = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  // forests: mushroom clusters and mossy stones
+  if (s === "tree" || s === "pagoda") {
+    const cap = s === "tree" ? "#c8543a" : "#f0a0b8";
+    return (
+      <group>
+        <mesh position-y={0.1} receiveShadow>
+          <sphereGeometry args={[0.42, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.1 + seed * 6;
+          const h = 0.26 + ((i + seed) % 1) * 0.22;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.34, 0, Math.sin(a) * 0.34]}>
+              <mesh position-y={h / 2} castShadow>
+                <cylinderGeometry args={[0.055, 0.075, h, 6]} />
+                <meshLambertMaterial color="#e8dcc4" flatShading />
+              </mesh>
+              <mesh position-y={h} castShadow>
+                <sphereGeometry args={[0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshLambertMaterial color={cap} flatShading />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // ice fields: frost shards pushing out of the snow
+  if (s === "crystal" || s === "berg") {
+    return (
+      <group>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.3 + seed * 5;
+          const h = 0.5 + ((i * 7 + seed * 10) % 5) * 0.14;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.3, h / 2, Math.sin(a) * 0.3]} rotation-z={Math.cos(a) * 0.25} castShadow>
+              <coneGeometry args={[0.13, h, 5]} />
+              <meshLambertMaterial color="#e8f7ff" flatShading emissive="#5fd8ff" emissiveIntensity={0.12} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // volcanic and dry maps: cracked slabs with an ember seam
+  if (s === "basalt" || s === "monument" || s === "butte") {
+    return (
+      <group>
+        <mesh position-y={0.14} rotation-y={seed * 3} castShadow receiveShadow>
+          <boxGeometry args={[0.9, 0.28, 0.7]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={0.3} rotation-x={-Math.PI / 2}>
+          <planeGeometry args={[0.7, 0.09]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // deep sea: kelp fronds swaying off a rock
+  if (s === "coral") {
+    return (
+      <group>
+        <mesh position-y={0.12} receiveShadow>
+          <dodecahedronGeometry args={[0.32, 0]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.2 + seed * 4;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.22, 0.6, Math.sin(a) * 0.22]} rotation-z={Math.cos(a) * 0.35} castShadow>
+              <cylinderGeometry args={[0.03, 0.07, 1.1, 5]} />
+              <meshLambertMaterial color={theme.blocks[0]} flatShading emissive={glow} emissiveIntensity={0.15} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // neon city: a low conduit box with a lit strip
+  if (s === "server") {
+    return (
+      <group>
+        <mesh position-y={0.22} castShadow receiveShadow>
+          <boxGeometry args={[0.7, 0.44, 0.5]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.26]}>
+          <boxGeometry args={[0.5, 0.06, 0.03]} />
+          <meshBasicMaterial color={theme.grid[0]} fog={false} />
+        </mesh>
+        <mesh position-y={0.58} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.13, 0.03, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // industrial: a leaking pipe stub with a puddle
+  return (
+    <group>
+      <mesh position-y={0.3} rotation-z={Math.PI / 2} castShadow>
+        <cylinderGeometry args={[0.13, 0.13, 0.8, 8]} />
+        <meshLambertMaterial color={theme.blocks[1]} flatShading />
+      </mesh>
+      <mesh position-y={0.02} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.45, 14]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.45} fog={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/** The shootable hazard prop for a map: drum, pod, condenser, relay, geyser or vat. */
+const HazardProp = memo(function HazardProp({ def }: { def: HazardDef }) {
+  const { shell, core, look } = def;
+  if (look === "pod") {
+    return (
+      <group>
+        <mesh position-y={0.12}><cylinderGeometry args={[0.22, 0.34, 0.24, 7]} /><meshLambertMaterial color="#3b2818" flatShading /></mesh>
+        <mesh position-y={0.72} castShadow><sphereGeometry args={[0.55, 10, 8]} /><meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.25} /></mesh>
+        <mesh position-y={1.28}><coneGeometry args={[0.2, 0.42, 6]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "condenser") {
+    return (
+      <group>
+        <mesh position-y={0.15}><cylinderGeometry args={[0.42, 0.5, 0.3, 8]} /><meshLambertMaterial color="#5f7f95" flatShading /></mesh>
+        <mesh position-y={0.85} castShadow><icosahedronGeometry args={[0.55, 0]} /><meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.35} /></mesh>
+        <mesh position-y={0.85} rotation-x={Math.PI / 2}><torusGeometry args={[0.62, 0.05, 6, 16]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "relay") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow><boxGeometry args={[0.6, 1, 0.6]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={1.15}><sphereGeometry args={[0.3, 10, 8]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        {[0.35, 0.7].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.31]}><boxGeometry args={[0.42, 0.06, 0.03]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        ))}
+      </group>
+    );
+  }
+  if (look === "geyser") {
+    return (
+      <group>
+        <mesh position-y={0.2} castShadow><cylinderGeometry args={[0.45, 0.75, 0.4, 9]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={0.42}><cylinderGeometry args={[0.36, 0.36, 0.08, 9]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        <mesh position-y={0.9}><coneGeometry args={[0.3, 0.9, 8, 1, true]} /><meshBasicMaterial color={core} transparent opacity={0.5} fog={false} /></mesh>
+      </group>
+    );
+  }
+  if (look === "vat") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow><cylinderGeometry args={[0.45, 0.45, 1, 10]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+        <mesh position-y={1.02}><cylinderGeometry args={[0.4, 0.45, 0.14, 10]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+        <mesh position-y={0.55}><cylinderGeometry args={[0.47, 0.47, 0.18, 10]} /><meshLambertMaterial color="#2b2118" flatShading /></mesh>
+      </group>
+    );
+  }
+  // drum
+  return (
+    <group>
+      <mesh position-y={0.55} castShadow><cylinderGeometry args={[0.42, 0.42, 1.1, 12]} /><meshLambertMaterial color={shell} flatShading /></mesh>
+      {[0.35, 0.75].map((y, i) => (
+        <mesh key={i} position-y={y}><cylinderGeometry args={[0.44, 0.44, 0.09, 12]} /><meshBasicMaterial color={core} fog={false} /></mesh>
+      ))}
+      <mesh position-y={1.12}><cylinderGeometry args={[0.44, 0.42, 0.1, 12]} /><meshLambertMaterial color="#2b2118" flatShading /></mesh>
+    </group>
+  );
+});
+
+
 const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
@@ -420,17 +622,10 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
       ))}
-      {/* marker posts with a lit cap dotted through the arena */}
+      {/* small dressing props, chosen to match the map instead of generic posts */}
       {posts.map((b, i) => (
-        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
-          <mesh position-y={0.55} castShadow>
-            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
-            <meshLambertMaterial color={theme.wall} flatShading />
-          </mesh>
-          <mesh position-y={1.18}>
-            <sphereGeometry args={[0.13, 8, 6]} />
-            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
-          </mesh>
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]} rotation-y={b.tone * 6.28}>
+          <Decor theme={theme} seed={b.tone} />
         </group>
       ))}
       {([
@@ -1345,6 +1540,8 @@ function World({
   onAbilityCd,
   onStat,
   onEvent,
+  onMutator,
+  endless,
 
 
 
@@ -1383,6 +1580,9 @@ function World({
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
+  onMutator: (id: Mutator["id"]) => void;
+  /** overtime: keep spawning waves past the map boss instead of winning */
+  endless: React.MutableRefObject<boolean>;
 
 }) {
 
@@ -1434,6 +1634,18 @@ function World({
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  /** active overtime condition, null during the normal 12 waves */
+  const mutator = useRef<Mutator | null>(null);
+  /** set inside the frame loop so network messages can trigger a blast too */
+  const hazardBlow = useRef<(i: number, visualOnly?: boolean) => void>(() => {});
+  // shootable map hazards (fuel drums, cryo condensers, spore pods, ...)
+  const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
+    Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
+  );
+  const hazardMeshes = useRef<(THREE.Group | null)[]>([]);
+  const hazardDef = hazardFor(theme);
+  const hazardRef = useRef(hazardDef);
+  hazardRef.current = hazardDef;
   const thornsPending = useRef(0);
   // ---- active ability (F) ----
   const abilityRef = useRef<AbilityId>(ability);
@@ -1485,6 +1697,8 @@ function World({
   const wave = useRef(0);
   const nextWaveTimer = useRef(1.5);
   const lastRemaining = useRef(-1);
+  /** stops the victory status from firing on every frame once the boss is down */
+  const wonLatch = useRef(false);
   const pending = useRef<({ x: number; z: number; t: number } | null)[]>([]);
   const markMeshes = useRef<(THREE.Group | null)[]>([]);
 
@@ -1629,6 +1843,19 @@ function World({
         else if (m.type === "status") onStatus(Number(m.w), Number(m.rem), !!m.won, !!m.banner);
         else if (m.type === "boss") onBoss(Number(m.hp));
         else if (m.type === "hurt") takeHit(Number(m.dmg) || 1);
+      }
+      // a hazard someone else shot: show the blast without re-applying the damage
+      if (m.type === "haz") hazardBlow.current(Number(m.i), !isHostRef.current);
+      // the host decides where the hazard props stand each round
+      if (m.type === "hazset" && !isHostRef.current) {
+        const p = m.p as [number, number][];
+        hazards.current.forEach((h, i) => {
+          const spot = p[i];
+          if (!spot) { h.alive = false; return; }
+          h.x = spot[0];
+          h.z = spot[1];
+          h.alive = true;
+        });
       }
     };
   }); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1847,7 +2074,12 @@ function World({
     // waves get fuller as the run goes: 1.25x on wave 1, +0.10x every wave after
     const waveMul = 1.25 + 0.1 * (n - 1);
     const enemyMul = waveMul * (1 + 0.6 * extra);
-    const spec: WaveSpec = WAVES[n - 1] ?? {};
+    // past wave 12 the run goes into overtime: the roster keeps growing and a
+    // boss shows up on every fifth wave
+    const spec: WaveSpec = WAVES[n - 1] ?? {
+      ...WAVES[WAVES.length - 2]!,
+      ...((n - WAVES.length) % 5 === 0 ? { boss: 1 } : {}),
+    };
     const scale = (v: number) => (v > 0 ? Math.max(1, Math.round(v * enemyMul)) : 0);
     // wave events: a horde rush, a bounty champion, then a recon mini-boss
     const event = n === 4 ? "DRIFTER HORDE" : n === 7 ? "ELITE BOUNTY" : n === 10 ? "RECON ENFORCER" : null;
@@ -1868,7 +2100,28 @@ function World({
       rest[j] = tmp;
     }
     const kinds: Kind[] = boss.concat(rest).slice(0, MAX_ENEMIES);
-    const hpMul = 1 + 0.09 * (n - 1); // later rounds send sturdier enemies
+    // later rounds send sturdier enemies; overtime ramps harder still
+    const hpMul = n <= WAVES.length
+      ? 1 + 0.09 * (n - 1)
+      : 1 + 0.09 * (WAVES.length - 1) + 0.15 * (n - WAVES.length);
+    // overtime rolls a new global condition every round
+    if (n > WAVES.length) {
+      const m = rollMutator(rand);
+      mutator.current = m;
+      onMutator(m.id);
+      netRef.current?.broadcast({ type: "mut", id: m.id });
+    } else if (mutator.current) {
+      mutator.current = null;
+      onMutator("none");
+    }
+    // hazard props reset each round so there is always something to shoot open
+    hazards.current.forEach((h) => {
+      const p = randomSpawn(blocks, rand);
+      h.x = p.x;
+      h.z = p.z;
+      h.alive = true;
+    });
+    netRef.current?.broadcast({ type: "hazset", p: hazards.current.map((h) => [Math.round(h.x * 10) / 10, Math.round(h.z * 10) / 10]) });
 
     // spread arrivals across the wave: a few right away, the rest trickle in
     let delay = 0;
@@ -2036,7 +2289,8 @@ function World({
       fire();
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current = (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate)
-        * (overdrive.current > 0 ? 0.5 : 1);
+        * (overdrive.current > 0 ? 0.5 : 1)
+        * (mutator.current?.id === "surge" ? 0.77 : 1); // OVERDRIVE round: everyone shoots faster
     }
 
     // player movement — the boss round makes the ground treacherous, so you slide
@@ -2051,9 +2305,11 @@ function World({
     if (MOVE.lengthSq() > 1) MOVE.normalize();
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    const mut = mutator.current?.id;
     const spd = SPEED * stats.current.speed
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
-      * (overdrive.current > 0 ? 1.3 : 1);
+      * (overdrive.current > 0 ? 1.3 : 1)
+      * (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1); // CRYO SURGE / HEAVY GRAVITY drag you down
     if (dashT.current > 0) {
       // dash burst: carry the impulse, easing off, instead of snapping to walk speed
       dashT.current -= delta;
@@ -2124,6 +2380,18 @@ function World({
       onHeal();
       if (!isH) n?.broadcast({ type: "take", what: "heal" });
     }
+
+    // hazard props: keep each one parked on its spot until it is blown open
+    hazards.current.forEach((hz, i) => {
+      const g = hazardMeshes.current[i];
+      if (!g) return;
+      g.visible = hz.alive;
+      if (hz.alive) {
+        g.position.set(hz.x, 0, hz.z);
+        g.rotation.y = i * 1.3;
+      }
+    });
+
 
     // supply crate pickup
     const ck = crate.current;
@@ -2246,8 +2514,12 @@ function World({
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
-      if (stats.current.steal > 0 && dmg > 0) {
-        stealBank.current += dmg * stats.current.steal;
+      const mid = mutator.current?.id;
+      if (mid === "cryo" && slow < 1.2) slow = 1.2; // CRYO SURGE: every shot chills
+      if (mid === "gravity") kb *= 2; // HEAVY GRAVITY: hits shove much harder
+      const siphon = stats.current.steal * (mid === "blood" ? 2 : 1); // BLOOD MOON doubles life siphon
+      if (siphon > 0 && dmg > 0) {
+        stealBank.current += dmg * siphon;
         if (stealBank.current >= 1) { stealBank.current -= 1; onLeech(); }
       }
       if (kb > 0 && e.kind !== "boss") {
@@ -2293,10 +2565,45 @@ function World({
         if (e.elite) { onShard(15); e.elite = 0; }
         // elites, mini-bosses and bosses always leave a medkit behind
         if (e.kind === "boss" || e.kind === "vanguard") heal.current = { x: e.x, z: e.z, active: true };
+        // SOLAR FLARE round: every corpse pops in a small fire blast
+        if (mid === "flare") {
+          playFx("#ff9a3a", 0.4, 3.2, 0.3, e.x, e.z);
+          if (!spectating && Math.hypot(cam.position.x - e.x, cam.position.z - e.z) < 2.6) takeHit(1);
+        }
         onKill(e);
 
       }
     };
+
+    /** A shot hazard prop goes off: everything close takes the map's own effect. */
+    const blowHazard = (idx: number, share = true, visualOnly = false) => {
+      const h = hazards.current[idx];
+      if (!h || !h.alive) return;
+      h.alive = false;
+      const def = hazardRef.current;
+      playFx(def.core, 0.6, def.radius, 0.45, h.x, h.z);
+      playSfx("boom");
+      for (let ei = 0; !visualOnly && ei < enemies.length; ei++) {
+        const e = enemies[ei]!;
+        if (!e.alive) continue;
+        const d = Math.hypot(e.x - h.x, e.z - h.z);
+        if (d > def.radius) continue;
+        const dx = e.x - h.x;
+        const dz = e.z - h.z;
+        if (def.effect === "fire") hurtEnemy(e, def.damage, ei, 0, 3, 3, dx, dz);
+        else if (def.effect === "freeze") { e.frozen = 3; hurtEnemy(e, def.damage, ei, 3); }
+        else if (def.effect === "toxic") hurtEnemy(e, def.damage, ei, 2.5, 2.5);
+        else if (def.effect === "shock") hurtEnemy(e, def.damage, ei, 1.5, 0, 2, dx, dz);
+        else if (def.effect === "root") hurtEnemy(e, def.damage, ei, 4);
+        else hurtEnemy(e, def.damage, ei, 1, 0, Math.max(0, d - 1), -dx, -dz); // pull
+      }
+      // players standing in a blast get singed too, so they stay dangerous
+      if (!spectating && Math.hypot(cam.position.x - h.x, cam.position.z - h.z) < def.radius * 0.7) takeHit(2);
+      if (share) netRef.current?.broadcast({ type: "haz", i: idx });
+    };
+    hazardBlow.current = (i: number, visualOnly = false) => blowHazard(i, false, visualOnly);
+
+
 
     // shock thorns: getting hit can discharge a ring that zaps whoever is close
     if (thornsPending.current > 0) {
@@ -2496,12 +2803,16 @@ function World({
       });
       // waves
       const remaining = enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
-      if (remaining === 0 && wave.current <= WAVES.length) {
-        if (wave.current === WAVES.length) {
-          wave.current++;
-          status(WAVES.length, 0, true, false);
+      if (remaining === 0 && (endless.current || wave.current <= WAVES.length)) {
+        // clearing the map boss ends the run — unless overtime is switched on
+        if (wave.current === WAVES.length && !endless.current) {
+          if (!wonLatch.current) {
+            wonLatch.current = true;
+            status(WAVES.length, 0, true, false);
+          }
           return;
         }
+        wonLatch.current = false;
         // wave cleared: tell everyone so the shop opens during the break
         if (wave.current > 0 && lastRemaining.current !== 0) {
           lastRemaining.current = 0;
@@ -2617,7 +2928,10 @@ function World({
           if (spType === "bile") dir = d > 5 ? 1 : 0;
         }
         if (e.swing > 0) dir = 0;
-        const step = st.speed * spMul * (e.slow > 0 ? 0.5 : 1) * delta * dir;
+        // OVERDRIVE rounds make the swarm faster; BLOOD MOON knits their wounds back
+        const mutId2 = mutator.current?.id;
+        if (mutId2 === "blood" && e.max && e.hp < e.max) e.hp = Math.min(e.max, e.hp + delta * 0.8);
+        const step = st.speed * spMul * (mutId2 === "surge" ? 1.25 : 1) * (e.slow > 0 ? 0.5 : 1) * delta * dir;
         let nx = e.x + (mx / md) * step;
         let nz = e.z + (mz / md) * step;
         if (spType === "stalker" || spType === "shinobi") {
@@ -2781,6 +3095,21 @@ function World({
           burst(b);
           b.active = false;
         } else {
+          // shooting a hazard prop sets it off before anything else
+          let popped = false;
+          for (let hi = 0; hi < hazards.current.length; hi++) {
+            const hz = hazards.current[hi]!;
+            if (!hz.alive) continue;
+            if (Math.hypot(b.pos.x - hz.x, b.pos.z - hz.z) < 0.85 && b.pos.y < 2) {
+              if (b.track === 1) { onStat("hit", 1); b.track = 2; }
+              blowHazard(hi, true, !isH); // the host works out who the blast hurts
+              burst(b);
+              b.active = false;
+              popped = true;
+              break;
+            }
+          }
+          if (popped) { if (m) m.visible = false; return; }
           for (let ei = 0; ei < enemies.length; ei++) {
             const e = enemies[ei]!;
             if (!e.alive) continue;
@@ -2996,6 +3325,12 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
+      {/* shootable hazard props, styled to the map they sit in */}
+      {Array.from({ length: HAZARD_COUNT }, (_, i) => (
+        <group key={`haz${i}`} ref={(g) => { hazardMeshes.current[i] = g; }} visible={false}>
+          <HazardProp def={hazardDef} />
+        </group>
+      ))}
       <mesh ref={barrierMesh} visible={false}>
         <sphereGeometry args={[1.6, 16, 12]} />
         <meshBasicMaterial color="#7cc6ff" wireframe transparent opacity={0.45} fog={false} />
@@ -3028,6 +3363,12 @@ export function Game() {
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
+  /** overtime past the map boss, plus the round condition it rolled */
+  const endlessRef = useRef(false);
+  const goingOvertime = useRef(false);
+  const [mutId, setMutId] = useState<Mutator["id"]>("none");
+  const [highWave, setHighWave] = useState(0);
+  useEffect(() => setHighWave(readHighWave()), []);
   const [hurtFlash, setHurtFlash] = useState(0);
   const [weapon, setWeapon] = useState<Weapon>("pistol");
   const [bossHp, setBossHp] = useState(0);
@@ -3161,6 +3502,8 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "ot") { endlessRef.current = true; setStatus((s) => ({ ...s, won: false })); return; }
+    if (m.type === "mut") { setMutId(String(m.id) as Mutator["id"]); return; }
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
@@ -3263,6 +3606,8 @@ export function Game() {
     setShards(0);
     setBossHp(0);
     setStatus({ wave: 1, remaining: 0, won: false });
+    endlessRef.current = false;
+    setMutId("none");
     setWeapon("pistol");
     setSeed((p) => freshSeed(p));
     if (document.pointerLockElement) document.exitPointerLock();
@@ -3319,6 +3664,9 @@ export function Game() {
     setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = generateLevel(seed);
     const theme = THEMES[seed % THEMES.length]!;
+    // slim props get a tighter collision box so shots line up with the trunk
+    const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
+    setBlockHalf(slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
     level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
@@ -3399,6 +3747,16 @@ export function Game() {
   }, [dead]);
   const gameOver = multiplayer ? allDown : dead;
   const ended = gameOver || status.won;
+  // keep the deepest wave ever reached, overtime included
+  useEffect(() => {
+    if (!ended) return;
+    const reached = status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1);
+    setHighWave((h) => {
+      if (reached <= h) return h;
+      saveHighWave(reached);
+      return reached;
+    });
+  }, [ended, status.won, status.wave]);
   const isHost = !net || net.role === "host";
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
@@ -3436,10 +3794,13 @@ export function Game() {
   const start = (fromNet = false) => {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
-    const resuming = started && !ended;
+    // going into overtime keeps the current run, build and map intact
+    const overtime = goingOvertime.current;
+    goingOvertime.current = false;
+    const resuming = (started && !ended) || overtime;
     setPicking(false);
     setStarted(true);
-    if (ended && !fromNet) {
+    if (ended && !fromNet && !overtime) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
@@ -3455,6 +3816,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
     }
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
@@ -3703,6 +4066,8 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          onMutator={setMutId}
+          endless={endlessRef}
 
 
 
@@ -3847,6 +4212,19 @@ export function Game() {
             ⚠ {eventMsg} ⚠
           </div>
         )}
+        {/* overtime condition for this round */}
+        {(() => {
+          const mu = mutatorById(mutId);
+          if (!mu || !locked || ended) return null;
+          return (
+            <div
+              className="absolute left-1/2 top-[13%] -translate-x-1/2 rounded-md border px-4 py-1 text-center text-[10px] font-bold tracking-[0.25em]"
+              style={{ color: mu.color, borderColor: `${mu.color}80`, background: "#2b211899" }}
+            >
+              {mu.name} · {mu.desc}
+            </div>
+          );
+        })()}
         {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
@@ -4094,6 +4472,22 @@ export function Game() {
                   : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
               </p>
             )}
+            {/* beat the boss: bank the win, or push the run into overtime */}
+            {status.won && !gameOver && isHost && (
+              <button
+                onClick={() => {
+                  initAudio();
+                  endlessRef.current = true;
+                  goingOvertime.current = true;
+                  setStatus((s) => ({ ...s, won: false }));
+                  net?.broadcast({ type: "ot" });
+                  start();
+                }}
+                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#2b2118] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+              >
+                OVERTIME // KEEP GOING
+              </button>
+            )}
             {multiplayer && !isHost && (ended || !started) ? (
               <div className="mt-6">
                 <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
@@ -4138,7 +4532,8 @@ export function Game() {
                 <div className="mt-5 text-left text-black">
                   <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
                   <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                    <div>WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>WAVES SURVIVED · {status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1)}</div>
+                    <div>BEST EVER · WAVE {highWave}</div>
                     <div>KILLS · {mine.kills}</div>
                     <div>DAMAGE DEALT · {mine.dmg}</div>
                     <div>ACCURACY · {acc}%</div>
@@ -4337,7 +4732,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v1.0.3
+                    SCRAPFALL · v1.0.4
                   </div>
                 </div>
               </div>
