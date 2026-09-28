@@ -25,7 +25,6 @@ import { WesternTrain } from "./western/Train";
 import { WesternWeather } from "./western/Weather";
 import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
-import { DesperadoModel, IronMarshalParts } from "./western/enemies";
 import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
@@ -38,7 +37,6 @@ import { beginMatchTime, cycleTimeMode, initialMode, pinTime, resetMatchTime, se
 import { climbable, ghostOK, raised, strictNav, groundHits, groundOwnsHits, groundSpeed, groundY, setTerrain, shotHits, wind, worldFx } from "./terrain";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
-import { PloughBody, SkierModel } from "./alpine/enemies";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
 import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
@@ -62,6 +60,9 @@ import {
 } from "./enemyAI";
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import { RobotModel } from "./art/RobotModel";
+import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
+import { hasArtBoss } from "./art/robots/bosses";
+import { hasArtSpecial } from "./art/robots/specials";
 import { bomberInputs, classicRobot, shooterInputs, specterInputs, swingInputs } from "./art/robots/classic";
 import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
@@ -585,7 +586,6 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
 
 function BossBody({ theme }: { theme: Theme }) {
   const b = theme.boss;
-  if (b.shape === "plough") return <PloughBody theme={theme} />;
   const skin = <meshLambertMaterial color={b.body} flatShading />;
   const limb = <meshLambertMaterial color={b.limb} flatShading />;
   const glow = <meshBasicMaterial color={b.glow} fog={false} />;
@@ -633,8 +633,6 @@ function BossBody({ theme }: { theme: Theme }) {
         <mesh position={[0, 3.6, -0.1]}><coneGeometry args={[0.12, 0.6, 4]} />{glow}</mesh>
         <mesh position={[0, 1.45, 0.63]}><boxGeometry args={[1.2, 0.18, 0.08]} />{glow}</mesh>
       </>)}
-      {b.shape === "marshal" && <IronMarshalParts b={b} />}
-      {b.shape === "kraken" && <KrakenRig b={b} />}
       {b.shape === "drake" && (<>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * 1.5, 2.2, -0.4]} rotation-z={s * 0.5} castShadow>
@@ -645,68 +643,6 @@ function BossBody({ theme }: { theme: Theme }) {
           <mesh key={y} position={[0, y + 0.6, -0.65]}><coneGeometry args={[0.16, 0.5, 4]} />{glow}</mesh>
         ))}
       </>)}
-    </group>
-  );
-}
-
-// THE KRAKEN RIG (Pacific Pier): a rusted pressure hull on a drilling derrick, dragging six
-// segmented steel tentacles.
-function KrakenRig({ b }: { b: Theme["boss"] }) {
-  const hull = <meshLambertMaterial color={b.body} flatShading />;
-  const steel = <meshLambertMaterial color={b.limb} flatShading />;
-  const brass = <meshLambertMaterial color={b.weapon} flatShading />;
-  const glow = <meshBasicMaterial color={b.glow} fog={false} />;
-  const eye = <meshBasicMaterial color={b.eye} fog={false} />;
-  return (
-    <group>
-      <mesh position-y={1.7} castShadow><cylinderGeometry args={[1.2, 1.5, 2.8, 10]} />{hull}</mesh>
-      <mesh position-y={3.15} castShadow><sphereGeometry args={[1.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2]} />{hull}</mesh>
-      {[0.9, 1.9, 2.8].map((y) => (
-        <mesh key={y} position-y={y}><torusGeometry args={[1.36 - y * 0.05, 0.07, 5, 14]} />{brass}</mesh>
-      ))}
-      <mesh position={[0, 2.1, 1.18]}><sphereGeometry args={[0.46, 12, 10]} />{eye}</mesh>
-      <mesh position={[0, 2.1, 1.12]} rotation-x={Math.PI / 2}><torusGeometry args={[0.52, 0.09, 6, 16]} />{brass}</mesh>
-      {[-0.75, 0.75].map((x) => (
-        <mesh key={x} position={[x, 1.25, 1.02]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.1, 10]} />{glow}</mesh>
-      ))}
-      {/* derrick */}
-      {[0, 1, 2, 3].map((k) => {
-        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
-        return (
-          <mesh key={k} position={[Math.sin(a) * 0.45, 4.7, Math.cos(a) * 0.45]} rotation={[Math.cos(a) * -0.18, 0, Math.sin(a) * 0.18]}>
-            <boxGeometry args={[0.1, 2.6, 0.1]} />{steel}
-          </mesh>
-        );
-      })}
-      {[4.1, 4.9, 5.6].map((y) => (
-        <mesh key={y} position-y={y}><boxGeometry args={[1.1 - (y - 4.1) * 0.45, 0.07, 1.1 - (y - 4.1) * 0.45]} />{steel}</mesh>
-      ))}
-      <mesh position-y={6.05}><sphereGeometry args={[0.2, 8, 6]} />{glow}</mesh>
-      {/* tentacles: jointed steel segments curling out and up from the base */}
-      {[0, 1, 2, 3, 4, 5].map((i) => {
-        const a = (i / 6) * Math.PI * 2 + 0.3;
-        const segs: { y: number; r: number; th: number; k: number }[] = [];
-        let py = 0.3;
-        let pr = 1.35;
-        for (let k = 0; k < 6; k++) {
-          // tentacles curl up tight so the rig stays within its standoff (see KRAKEN_R)
-          const th = 0.35 + k * 0.38 + (i % 2) * 0.08;
-          const L = 0.55 - k * 0.04;
-          segs.push({ y: py + (Math.sin(th) * L) / 2, r: pr + (Math.cos(th) * L) / 2, th, k });
-          py += Math.sin(th) * L;
-          pr += Math.cos(th) * L;
-        }
-        return (
-          <group key={i} rotation-y={a}>
-            {segs.map((sg) => (
-              <mesh key={sg.k} position={[0, sg.y, sg.r]} rotation-x={Math.PI / 2 - sg.th} castShadow>
-                <cylinderGeometry args={[0.2 - sg.k * 0.025, 0.27 - sg.k * 0.025, 0.74, 7]} />{sg.k % 2 ? brass : steel}
-              </mesh>
-            ))}
-            <mesh position={[0, py, pr]}><sphereGeometry args={[0.13, 6, 5]} />{glow}</mesh>
-          </group>
-        );
-      })}
     </group>
   );
 }
@@ -722,12 +658,7 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
     if (part.current) {
       if (sp.type === "stalker") part.current.rotation.x = -0.6 + Math.sin(t * 6) * 0.25;
       else if (sp.type === "spore") part.current.scale.setScalar(1 + Math.sin(t * 3) * 0.12);
-      else if (sp.type === "leaper") part.current.position.y = (data.aux ?? 0) > 0 ? 1.4 : Math.abs(Math.sin(t * 5)) * 0.15;
       else if (sp.type === "wyrm") part.current.rotation.z = Math.sin(t * 2) * 0.3;
-      else if (sp.type === "crawler") {
-        part.current.rotation.z = Math.sin(t * 16) * 0.07;
-        part.current.position.y = Math.abs(Math.sin(t * 16)) * 0.05;
-      }
       else part.current.rotation.z = Math.sin(t * 4) * 0.15;
     }
   });
@@ -798,21 +729,6 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         </group>
         <mesh position-y={-0.9}><coneGeometry args={[0.2, 0.5, 6]} />{G}</mesh>
       </group>)}
-      {sp.type === "leaper" && (<group ref={part}>
-        <mesh position-y={1.1} castShadow><boxGeometry args={[0.8, 0.6, 0.7]} />{B}</mesh>
-        <mesh position={[0, 1.2, 0.36]}><sphereGeometry args={[0.1, 8, 8]} />{G}</mesh>
-        <mesh position={[0, 1.45, 0]}><boxGeometry args={[0.5, 0.15, 0.5]} />{A}</mesh>
-        {[-0.3, 0.3].map((x) => (
-          <group key={x} position={[x, 0.5, 0]}>
-            <mesh rotation-x={0.4}><cylinderGeometry args={[0.07, 0.07, 0.6, 6]} />{A}</mesh>
-            <mesh position-y={-0.25}><torusGeometry args={[0.1, 0.03, 4, 8]} />{A}</mesh>
-            <mesh position={[0, -0.4, 0.1]}><boxGeometry args={[0.2, 0.08, 0.35]} />{B}</mesh>
-          </group>
-        ))}
-        {[-0.5, 0.5].map((x) => (
-          <mesh key={`s${x}`} position={[x, 1.1, 0.35]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.28, 0.28, 0.04, 10]} />{A}</mesh>
-        ))}
-      </group>)}
       {sp.type === "shinobi" && (<group>
         <mesh position-y={0.9} castShadow><cylinderGeometry args={[0.2, 0.32, 1.1, 7]} />{B}</mesh>
         <mesh position-y={0.9}><torusGeometry args={[0.26, 0.05, 4, 10]} />{A}</mesh>
@@ -862,35 +778,6 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
         <mesh position-y={-0.55} rotation-x={Math.PI}><coneGeometry args={[0.35, 0.5, 8, 1, true]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
         <mesh position-y={-0.8} rotation-x={Math.PI / 2}><ringGeometry args={[0.25, 0.32, 16]} />{G}</mesh>
       </group>)}
-      {sp.type === "desperado" && <DesperadoModel sp={sp} data={data} />}
-      {sp.type === "crawler" && (<group ref={part}>
-        <mesh position-y={0.62} scale={[1.15, 0.42, 0.9]} castShadow><sphereGeometry args={[0.62, 12, 8]} />{B}</mesh>
-        {[-0.28, 0, 0.28].map((x) => (
-          <mesh key={x} position={[x, 0.86, -0.05]} scale={[0.16, 0.08, 0.5]}><sphereGeometry args={[0.6, 6, 5]} />{A}</mesh>
-        ))}
-        {[-0.18, 0.18].map((x) => (
-          <group key={`e${x}`} position={[x, 0.9, 0.4]}>
-            <mesh position-y={0.12}><cylinderGeometry args={[0.03, 0.035, 0.26, 5]} />{A}</mesh>
-            <mesh position-y={0.28}><sphereGeometry args={[0.07, 8, 6]} />{G}</mesh>
-          </group>
-        ))}
-        {[-1, 1].map((sd) => (
-          <group key={`c${sd}`} position={[sd * 0.55, 0.6, 0.45]} rotation-y={sd * -0.5}>
-            <mesh position-z={0.22} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.09, 0.45, 6]} />{B}</mesh>
-            <mesh position={[0, 0.02, 0.55]} scale={[0.9, 0.55, 1.2]}><sphereGeometry args={[0.2, 8, 6]} />{B}</mesh>
-            <mesh position={[sd * 0.06, 0.1, 0.76]} rotation-x={0.35}><boxGeometry args={[0.1, 0.06, 0.3]} />{B}</mesh>
-            <mesh position={[sd * 0.06, -0.06, 0.76]} rotation-x={-0.35}><boxGeometry args={[0.1, 0.06, 0.26]} />{A}</mesh>
-          </group>
-        ))}
-        {[-1, 1].map((sd) =>
-          [-0.3, 0, 0.3].map((z) => (
-            <mesh key={`l${sd}${z}`} position={[sd * 0.72, 0.32, z]} rotation={[0, 0, sd * 0.9]}>
-              <cylinderGeometry args={[0.035, 0.05, 0.7, 5]} />{A}
-            </mesh>
-          )),
-        )}
-        <mesh position-y={0.05} rotation-x={-Math.PI / 2}><ringGeometry args={[0.7, 0.85, 18]} /><meshBasicMaterial color={sp.glow} transparent opacity={0.35} /></mesh>
-      </group>)}
       {sp.type === "bile" && (<group>
         <mesh position-y={1} castShadow><boxGeometry args={[0.8, 0.9, 0.7]} />{B}</mesh>
         <mesh position={[0, 1.6, 0.1]}><sphereGeometry args={[0.3, 8, 7]} />{A}</mesh>
@@ -928,7 +815,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
     if (data.kind !== kind) setKind(data.kind);
     const t = state.clock.elapsedTime;
     const k = data.kind;
-    const heavy = k === "brute" || k === "runner" || k === "shooter" || k === "bomber" || k === "boss" || k === "vanguard" || isNewKind(k); // walkers: feet stay on the ground
+    const heavy = k === "brute" || k === "runner" || k === "special" || k === "shooter" || k === "bomber" || k === "boss" || k === "vanguard" || isNewKind(k); // walkers: feet stay on the ground
     const bob = heavy ? 0 : Math.sin(t * 4 + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.rotation.set(0, data.yaw ?? 0, 0); // same facing on every screen
@@ -995,8 +882,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
       {kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
       {kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
       {(kind==="boss") && (<group ref={bossGrp}>
-        <BossBody theme={theme} />
-        <group ref={bossArm} position={[1.05, 1.9, 0]}>
+        {hasArtBoss(theme) ? <ArtBoss theme={theme} data={data} /> : <BossBody theme={theme} />}
+        <group ref={bossArm} position={[1.05, 1.9, 0]} visible={!hasArtBoss(theme)}>
           <mesh position={[0, 0.9, 0]}>
             <boxGeometry args={[0.24, 1.8, 0.24]} />
             <meshLambertMaterial color={theme.boss.limb} flatShading />
@@ -1042,7 +929,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme, all }: { data: Enemy; t
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && (theme.special.type === "skier" ? <SkierModel theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
+      {kind === "special" && (hasArtSpecial(theme) ? <ArtSpecial theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {isNewKind(kind) && <NewEnemyModel kind={kind} data={data} all={all ?? NO_ENEMIES} />}
       {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
     </group>
