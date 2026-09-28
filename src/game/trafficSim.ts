@@ -13,7 +13,7 @@
 // and never drive into another car. Normal cars yield to sirens (slow down and pull
 // aside to open a corridor) and hold at a green while a pursuit is crossing.
 import { CURB, LANES, type Road, type StreetClass } from "./cityLayout";
-import { signal, GREEN, RED, YELLOW } from "./trafficCore";
+import { signal, untilRed, GREEN, RED, YELLOW } from "./trafficCore";
 import { nodeDark } from "./events/power";
 import { makeVehicle, vehicleHeight, type Vehicle } from "./vehicles";
 
@@ -97,7 +97,20 @@ export type Car = {
   plan: number;
   swerve: number;
   pref: number;
-  committedPrev: boolean;
+  /** null until the first step (cars can spawn past a stop line: that isn't running a red) */
+  committedPrev: boolean | null;
+  /** the stop line we've already decided about on amber, and whether we stop for it */
+  amberAt: number;
+  amberStop: boolean;
+  /** was a pursuit car last step; after release it drives on as one up to the next junction */
+  wasSpecial: boolean;
+  coolKey: number;
+  /** blackout: the dead signal we last saw (and when), and the one we've already stopped at */
+  darkSid: number;
+  darkT: number;
+  darkDone: number;
+  /** the light this car obeyed last step */
+  lightPrev: number;
   /** which car is holding us up (-1 = nothing / a light) and how long we've been stuck */
   blocker: number;
   stuckT: number;
@@ -132,7 +145,13 @@ export type SimEnv = {
 };
 
 /** Debug counters (read by the test tooling through the ?debug=1 handle). */
-export const trafficStats = { redRunsSpecial: 0, redRunsNormal: 0, deadlockBreaks: 0 };
+export const trafficStats = {
+  redRunsSpecial: 0,
+  redRunsNormal: 0,
+  deadlockBreaks: 0,
+  /** the last few normal-car red runs, for diagnosis */
+  redRunLog: [] as Record<string, unknown>[],
+};
 
 /** the car that produced the last scan result, and a car the scans must skip */
 let scanHit: Car | null = null;
@@ -203,7 +222,15 @@ export function makeCar(
     plan: 0,
     swerve: 0,
     pref: 0,
-    committedPrev: false,
+    committedPrev: null,
+    amberAt: -1,
+    amberStop: false,
+    wasSpecial: false,
+    coolKey: -1,
+    darkSid: -1,
+    darkT: -9,
+    darkDone: -1,
+    lightPrev: 0,
     blocker: -1,
     stuckT: 0,
     ghost: [],
@@ -248,9 +275,22 @@ function turnOptions(c: Car, cross: Road[], along: Road[]) {
  * the arc inside the intersection; specials may start it early and swing wide (they
  * come out on the corridor), which is what "cutting the corner" looks like.
  */
+/**
+ * The lane a turn ends in: right turns from the outer lane go to the outer lane, left turns
+ * from the inner lane to the inner lane. A turn from the "wrong" lane (forced at a T-junction)
+ * keeps its lane index, so side-by-side turners follow parallel arcs instead of crossing.
+ */
+function exitLane(c: Car, ownRoad: Road, crossRoad: Road, turn: 1 | -1) {
+  const ownLast = LANES[ownRoad.cls].length - 1;
+  const newLast = LANES[crossRoad.cls].length - 1;
+  if (turn === 1 && c.lane >= ownLast) return newLast;
+  if (turn === -1 && c.lane === 0) return 0;
+  return Math.min(c.lane, newLast);
+}
+
 function turnGeom(c: Car, crossRoad: Road, ownRoad: Road, turn: 1 | -1, special: boolean) {
   const { naxis, ndir } = turned(c.axis, c.dir, turn);
-  const nlane = turn === 1 ? LANES[crossRoad.cls].length - 1 : 0;
+  const nlane = exitLane(c, ownRoad, crossRoad, turn);
   const nlat = special
     ? corridorLat(crossRoad, naxis, ndir)
     : laneOffset(crossRoad, naxis, ndir, nlane);
@@ -699,7 +739,14 @@ export function stepCars(
       if (c.ghostT > 4 || apart) c.ghost = [];
       else scanSkip = c.ghost.map((g) => cars[g]!);
     }
-    const special = c.role !== ROLE_NORMAL;
+    // A pursuit car that has just been released is still doing pursuit speed and may be
+    // metres from a red it was always going to run: it keeps driving like one through the
+    // next junction (and while still well over its normal speed), and is counted as one.
+    const key = c.axis * 1e6 + c.line * 1000 + c.next;
+    if (c.role === ROLE_NORMAL && c.wasSpecial) c.coolKey = key;
+    else if (c.coolKey !== key && !c.arc) c.coolKey = -1;
+    c.wasSpecial = c.role !== ROLE_NORMAL;
+    const special = c.role !== ROLE_NORMAL || c.coolKey >= 0 || c.speed > c.baseVmax + 3;
     const cross = c.axis === 0 ? roadX : roadZ;
     const along = c.axis === 0 ? roadZ : roadX; // roads parallel to us, indexed by line
     const half = c.v.len / 2;
@@ -753,13 +800,41 @@ export function stepCars(
     // below still keeps them out of cross traffic)
     // (the lights are numbered on the full city grid, even when solo play trims the roads)
     const sid = signalId(crossRoad, ownRoad, c.axis, node);
-    const deadSignal = nodeDark(sid);
+    // (a signal flickering back to life mid-approach stays "dead" for a moment, so the
+    // light doesn't blink red at a car already creeping through its all-way stop)
+    if (nodeDark(sid)) {
+      c.darkSid = sid;
+      c.darkT = t;
+    }
+    const deadSignal = c.darkSid === sid && t - c.darkT < 1.5;
+    if (!deadSignal) c.darkDone = -1;
     const light = deadSignal ? GREEN : signal(sid, t, c.axis);
-    if (committed && !c.committedPrev && light === RED) {
+    // `committed` reflects last step's move, so judge it by the light that move was made
+    // under (a car creeping over a dead signal isn't running the red it comes back on)
+    if (committed && c.committedPrev === false && c.lightPrev === RED) {
       if (special) trafficStats.redRunsSpecial++;
-      else trafficStats.redRunsNormal++;
+      else {
+        trafficStats.redRunsNormal++;
+        trafficStats.redRunLog.push({
+          t: +t.toFixed(2),
+          car: ci,
+          x: +c.x.toFixed(1),
+          z: +c.z.toFixed(1),
+          speed: +c.speed.toFixed(1),
+          far: !!c.far,
+          turn: c.turn,
+          amberStop: c.amberStop,
+          sid,
+          blocker: c.blocker,
+          ghost: c.ghost.length,
+          dark: deadSignal,
+          stuckT: +c.stuckT.toFixed(1),
+        });
+        if (trafficStats.redRunLog.length > 20) trafficStats.redRunLog.shift();
+      }
     }
     c.committedPrev = committed;
+    c.lightPrev = light;
 
     // travel frame (arc tangent while turning)
     const ty = travelYaw(c);
@@ -778,6 +853,11 @@ export function stepCars(
     if (deadSignal && !committed) {
       const toStop = (stopCentre - c.s) * c.dir;
       if (toStop < 22) vcap = Math.min(vcap, 2.2 + Math.max(0, toStop) * 0.3);
+      // all-way stop: come to a halt at the line once, then creep across
+      if (!special && c.darkDone !== sid) {
+        lim(toStop, null);
+        if (toStop < 1.5 && c.speed < 0.3) c.darkDone = sid;
+      }
     }
     let yawOffT = 0;
     const turnDir = c.turn === 1 || c.turn === -1 ? c.turn : 0;
@@ -791,8 +871,20 @@ export function stepCars(
       // ---- normal traffic ----
       if (!committed && light !== GREEN) {
         const dist = (stopCentre - c.s) * c.dir;
-        const canStop = dist > (c.speed * c.speed) / (2 * 6);
-        if (light !== YELLOW || canStop) lim(dist, null);
+        // Amber: decide ONCE per stop line and stick to it. Re-deciding every step made cars
+        // that could stop comfortably coast on (braking only starts late) until the "can I
+        // stop?" test flipped to "no", then roll over the line after it had turned red.
+        // Go only if we can't stop comfortably AND will be over the line before red.
+        const stopId = node * 2 + (c.dir > 0 ? 1 : 0) + c.axis * 1e6;
+        if (light === YELLOW && c.amberAt !== stopId) {
+          c.amberAt = stopId;
+          const comfy = dist + 0.3 >= (c.speed * c.speed) / (2 * 6); // (a car waiting at the line stays)
+          // turning cars slow down before the line, so assume they get there slower
+          const v = Math.max(1, c.speed * (turnDir !== 0 ? 0.6 : 0.9));
+          const inTime = dist / v < untilRed(sid, t, c.axis) - 0.25;
+          c.amberStop = comfy || !inTime;
+        }
+        if (light === RED || c.amberStop) lim(dist, null);
       }
       // don't enter the box while cross traffic is still in it, or if our exit lane is backed up
       if (!committed) {
@@ -810,14 +902,28 @@ export function stepCars(
           exAxis = naxis;
           exDir = ndir;
           exLine = c.next;
-          exLane = turnDir === 1 ? LANES[crossRoad.cls].length - 1 : 0;
+          exLane = exitLane(c, ownRoad, crossRoad, turnDir);
           exEntry = ownRoad.c + exDir * CURB[ownRoad.cls];
         }
         let busy = false;
+        let busyBy: Car | null = null;
         for (const o of cars) {
-          if (o === c) continue;
-          if (o.axis !== c.axis && Math.abs(o.x - ix) < boxX && Math.abs(o.z - iz) < boxZ) {
+          if (o === c || scanSkip.includes(o)) continue;
+          const inBox = Math.abs(o.x - ix) < boxX && Math.abs(o.z - iz) < boxZ;
+          // cross traffic in the box, or already over its stop line and on its way in (an amber
+          // straggler); an oncoming car mid left turn across our path
+          const crossing =
+            o.axis !== c.axis &&
+            (inBox ||
+              (o.committedPrev === true &&
+                o.speed > 1 &&
+                !o.arc &&
+                nodeOf(o, roadZ.length) === node));
+          const leftTurner =
+            !!o.arc && o.axis === c.axis && o.dir !== c.dir && o.turn === -1 && inBox;
+          if (crossing || leftTurner) {
             busy = true;
+            busyBy = o;
             break;
           }
           if (o.axis === exAxis && o.dir === exDir && o.line === exLine && o.lane === exLane) {
@@ -827,15 +933,14 @@ export function stepCars(
               o.speed < 2 ? o.v.len / 2 + c.v.len + 1.5 : o.v.len / 2 + c.v.len / 2 + 1.5;
             if (past > -o.v.len / 2 - 1 && past < need) {
               busy = true;
+              busyBy = o;
               break;
             }
           }
         }
         // turning across other traffic: a left turn gives way to oncoming cars going straight
-        // or right; a forced turn across our other lane (T-junctions) waits for that lane
+        // or right (a forced turn from the other lane keeps its lane, so it crosses nobody)
         if (!busy && turnDir !== 0) {
-          const nl = LANES[ownRoad.cls].length;
-          const across = nl > 1 && (turnDir === 1 ? c.lane !== nl - 1 : c.lane !== 0);
           for (const o of cars) {
             if (o === c || o.axis !== c.axis || o.line !== c.line || o.next !== c.next) continue;
             if (o.dir !== c.dir && turnDir === -1 && o.turn !== -1) {
@@ -845,13 +950,7 @@ export function stepCars(
               const waiting = o.speed <= 1 && oTo - CROSSWALK - o.v.len < 3;
               if (inBox || waiting || (o.speed > 1 && oTo / o.speed < 3)) {
                 busy = true;
-                break;
-              }
-            }
-            if (across && o.dir === c.dir && o.lane !== c.lane) {
-              const rel = (o.s - c.s) * c.dir;
-              if (!!o.arc || (rel > -half - o.v.len / 2 + 0.5 && rel < 2 * crossHalf + 12)) {
-                busy = true;
+                busyBy = o;
                 break;
               }
             }
@@ -871,10 +970,11 @@ export function stepCars(
             const oDist = o.arc ? 0 : Math.max(0, (oBox.c - o.s) * o.dir - CURB[oBox.cls]);
             if (oDist / Math.max(2, o.speed) < 4.5) {
               busy = true;
+              busyBy = o;
               break;
             }
           }
-        if (busy) lim((stopCentre - c.s) * c.dir, null);
+        if (busy) lim((stopCentre - c.s) * c.dir, busyBy);
       }
       // keep distance to whoever is ahead in our lane (pursuit cars weave: their real
       // footprint is checked below instead)
@@ -1134,8 +1234,9 @@ export function stepCars(
     c.blocker = who;
     c.stuckT = c.speed < 0.3 && target < 0.5 ? c.stuckT + dt : 0;
     let move = ((v0 + c.speed) / 2) * dt;
-    // a coarse far step must not jump past a red light
-    if (c.far && !committed && room < Infinity) move = Math.min(move, Math.max(0, room));
+    // never roll past a stop line (or the car ahead) we're braking for: the speed curve
+    // alone can overshoot by a few centimetres, and a coarse far step by metres
+    if (!special && !committed && room < Infinity) move = Math.min(move, Math.max(0, room));
 
     // ---- longitudinal motion ----
     if (c.arc) advanceArc(c, move, roadX, roadZ);
@@ -1270,7 +1371,26 @@ export function spawnTraffic(
     if (next < 0) continue;
     // real city speeds: ~40-50 km/h
     const vmax = v.type === "bus" ? 9 : v.type === "van" ? 10.5 : v.type === "sports" ? 14 : 12.5;
-    list.push(makeCar(v, vehicleHeight(v), road, axis, dir, line, lane, s, vmax, next));
+    const car = makeCar(v, vehicleHeight(v), road, axis, dir, line, lane, s, vmax, next);
+    // start slow enough to stop at the first stop line (it may be red)
+    const nx = cross[next]!;
+    const toStop = (nx.c - s) * dir - CURB[nx.cls] - CROSSWALK - v.len / 2;
+    car.speed = Math.min(car.speed, Math.sqrt(2 * 5 * Math.max(0, toStop)));
+    list.push(car);
   }
   return list;
+}
+
+/**
+ * Flag cars far from every player (they step at a quarter of the rate). Pursuit cars and
+ * any car near one always step at the full rate, so a fast chase never meets a car that
+ * only moves every fourth step (that let a suspect slide through a far car).
+ */
+export function markFar(cars: Car[], players: { x: number; z: number }[], range: number) {
+  const near = (x: number, z: number, list: { x: number; z: number }[], r: number) =>
+    list.some((p) => Math.abs(p.x - x) < r && Math.abs(p.z - z) < r);
+  const specials = cars.filter((c) => c.role !== ROLE_NORMAL);
+  for (const c of cars)
+    c.far =
+      c.role === ROLE_NORMAL && !near(c.x, c.z, players, range) && !near(c.x, c.z, specials, 70);
 }

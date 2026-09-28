@@ -16,6 +16,13 @@ export function signal(node: number, t: number, axis: 0 | 1): 0 | 1 | 2 {
   return local < 7 ? GREEN : local < 9 ? YELLOW : RED;
 }
 
+/** Seconds until the light facing `axis` at `node` turns red (0 if it already is). */
+export function untilRed(node: number, t: number, axis: 0 | 1) {
+  const p = (((t + node * 3.7) % SIGNAL_CYCLE) + SIGNAL_CYCLE) % SIGNAL_CYCLE;
+  const local = axis === 0 ? p : (p + SIGNAL_CYCLE / 2) % SIGNAL_CYCLE;
+  return Math.max(0, 9 - local);
+}
+
 /**
  * Shared traffic time. The host (or solo player) advances it; guests follow the host's
  * value from snapshots, so traffic lights show the same phase on every screen.
