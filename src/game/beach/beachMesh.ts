@@ -340,9 +340,24 @@ function templates(): Tmpls {
     cart: t((g) => {
       g.col("#d8d4cc");
       g.box(0, 0.35, 0, 1.8, 0.75, 0.9);
-      g.col("#2a2a2a");
-      g.cyl(-0.7, 0, 0.46, 0.2, 0.08, 8);
-      g.cyl(0.7, 0, 0.46, 0.2, 0.08, 8);
+      // Upright wheels share an axle under the body; the tire bottoms sit on the ground.
+      const tire = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 10);
+      const hub = new THREE.CylinderGeometry(0.09, 0.09, 0.112, 10);
+      const wheel = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+      for (const x of [-0.7, 0.7]) {
+        g.col("#727570");
+        g.box(x, 0.21, 0, 0.08, 0.08, 1.02);
+        for (const z of [-0.49, 0.49]) {
+          wheel.setPosition(x, 0.25, z);
+          g.col("#2a2a2a");
+          g.add(tire, wheel);
+          g.col("#b8b4ac");
+          g.add(hub, wheel);
+          g.box(x, 0.25, z * 0.75, 0.08, 0.16, 0.08);
+        }
+      }
+      tire.dispose();
+      hub.dispose();
       g.col("#b8b4ac");
       g.box(-0.85, 1.1, 0, 0.05, 1.3, 0.05);
       g.box(0.85, 1.1, 0, 0.05, 1.3, 0.05);
@@ -2457,9 +2472,10 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       break;
     case "cart": {
       tint.set(AWN[(p.c ?? 0) % AWN.length]![0]);
-      D.stamp(T.cart, p.x, y + 0.15, p.z, p.rot, 1, 1, 1, tint);
+      D.stamp(T.cart, p.x, y, p.z, p.rot, 1, 1, 1, tint);
       C.glow.col(NEON[(p.c ?? 0) % NEON.length]!).mat(0);
-      C.glow.box(p.x, y + 2.3, p.z, 2.2, 0.06, 0.06);
+      C.glow.obox(p.x + Math.sin(p.rot) * 0.7, y + 2.37, p.z + Math.cos(p.rot) * 0.7,
+        2.2, 0.045, 0.035, p.rot);
       break;
     }
     case "table":
