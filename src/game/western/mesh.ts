@@ -2826,7 +2826,8 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   const by0 = shaft;
   const by1 = shaft + 3.6;
   G.col("#f6f2ea");
-  const hole = westernBelfry()[0]!.hole;
+  const belfry = westernBelfry()[0]!;
+  const hole = belfry.hole;
   const h = { u0: -hole.z1, u1: -hole.z0, v0: hole.x0 + 132, v1: hole.x1 + 132 };
   for (const [u0, v0, u1, v1] of [
     [tx0 - 0.2, tz0 - 0.2, h.u0, tz1 + 0.2],
@@ -2850,11 +2851,18 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
     if (along) boxP(G, WL.P_CLAP, tx0, by0 + 0.1, zz - 0.08, tx1, by0 + 1.0, zz + 0.08);
     else boxP(G, WL.P_CLAP, xx - 0.08, by0 + 0.1, tz0, xx + 0.08, by0 + 1.0, tz1);
   }
-  boxP(G, WL.P_CLAP, tx0 - 0.25, by1, tz0 - 0.25, tx1 + 0.25, by1 + 0.5, tz1 + 0.25);
-  B.detail.col("#8a6a2a").mat(WL.IRON, 0, 0);
-  // the bell hangs above head height, so you can stand under it
-  cylP(B.detail, WL.IRON, 0, by0 + 2.05, (tz0 + tz1) / 2, 0.7, 1.0, 10, 0.32);
-  beam(B.detail, -1.6, by0 + 3.2, (tz0 + tz1) / 2, 1.6, by0 + 3.2, (tz0 + tz1) / 2, 0.2);
+  boxP(G, WL.P_CLAP, tx0 - 0.25, by1, tz0 - 0.25, tx1 + 0.25, by1 + 0.5, tz1 + 0.25, true, false);
+  // The shared room supplies the ceiling, beams and bell. Draw only the outside eave's
+  // underside here, so two coplanar ceilings cannot flicker through one another.
+  const rr0 = belfry.spec.roof;
+  const roof = { u0: -rr0.z1, u1: -rr0.z0, v0: rr0.x0 + 132, v1: rr0.x1 + 132 };
+  for (const [u0, v0, u1, v1] of [
+    [tx0 - 0.25, tz0 - 0.25, roof.u0, tz1 + 0.25],
+    [roof.u1, tz0 - 0.25, tx1 + 0.25, tz1 + 0.25],
+    [roof.u0, tz0 - 0.25, roof.u1, roof.v0],
+    [roof.u0, roof.v1, roof.u1, tz1 + 0.25],
+  ])
+    G.quad(u0!, by1, v0!, u1!, by1, v0!, u1!, by1, v1!, u0!, by1, v1!, [0, 0, 1, 1]);
   // spire
   G.col("#5e5048").mat(WL.SHINGLE, 0, 0);
   const sy = by1 + 0.5;
@@ -2878,8 +2886,9 @@ function church(B: BGeo, b: WBld, W: number, D: number, r: () => number): BGeo {
   boxC(G, WL.IRON, cx, sy + spireH - 0.1, cz, 0.12, 1.6, 0.12);
   boxC(G, WL.IRON, cx, sy + spireH + 0.85, cz, 0.8, 0.12, 0.12);
   // the churchyard: a few graves behind, a lantern at the door
-  lantern(B, 1.3, 2.4, tz1 + 0.25, 5);
-  lantern(B, -1.3, 2.4, tz1 + 0.25, 5);
+  // Flank the new door centered at u=.7, leaving its opening and trim unobstructed.
+  lantern(B, 2.3, 2.4, tz1 + 0.25, 5);
+  lantern(B, -0.9, 2.4, tz1 + 0.25, 5);
   void b;
   void r;
   return B;

@@ -3676,6 +3676,12 @@ function World({
       const qx = x + (rand() - 0.5) * w;
       const qz = z + (rand() - 0.5) * w;
       if (blocked(blocks, qx, qz, 0.5) || raised(qx, qz)) continue;
+      const zone = zoneOf(qx, qz);
+      if (
+        zone >= ROOF_KEY &&
+        roofCount(zone - ROOF_KEY, enemies, pending.current) >=
+          (accessList()[zone - ROOF_KEY]?.cap ?? 0)
+      ) continue;
       if (big && ps.some((p) => clearLine(blocks, p.x, p.z, qx, qz, 0.1))) continue;
       return { x: qx, z: qz };
     }
@@ -4782,7 +4788,6 @@ function World({
         pd.t -= delta;
         if (big && !pd.placed && pd.t <= MARK_TIME) {
           // late arrivals appear near wherever the squad is now, not where it was
-          pd.placed = true;
           const lead = packLead.current[i]!;
           const lp = lead >= 0 ? pending.current[lead] : null;
           const le = lead >= 0 ? enemies[lead] : undefined;
@@ -4798,6 +4803,9 @@ function World({
           // (alpine: spot() only anchors on players standing in a zone, never riders)
           pd.x = q.x;
           pd.z = q.z;
+          // Reserve only the selected destination; this arrival must not count itself
+          // against the old roof while searching for its final position.
+          pd.placed = true;
         }
         if (pd.t <= 0) {
           const e = enemies[i]!;
