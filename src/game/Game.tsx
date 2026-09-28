@@ -4437,8 +4437,33 @@ export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
     <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between">
         <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
-        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
-          {CLASSES[cls].name}
+        <div className="relative">
+          <button
+            onMouseEnter={() => setShowCls(true)}
+            onMouseLeave={() => setShowCls(false)}
+            onClick={() => setShowCls((v) => !v)}
+            className="pointer-events-auto text-[9px] tracking-[0.2em] underline decoration-dotted underline-offset-2"
+            style={{ color: CLASSES[cls].color }}
+          >
+            {CLASSES[cls].name}
+          </button>
+          {showCls && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-[#f3e6cf]/20 bg-[#1d160f] p-2 text-left shadow-lg">
+              <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+                {CLASSES[cls].name}
+              </div>
+              <div className="mt-0.5 text-[9px] opacity-60">{CLASSES[cls].role}</div>
+              <div className="mt-1.5 text-[9px] tracking-[0.2em] opacity-50">STARTING STATS</div>
+              <div className="mt-1 space-y-0.5 text-[10px]">
+                {CLASSES[cls].pros.map((p) => (
+                  <div key={p} className="text-[#7cff4f]">{p}</div>
+                ))}
+                {CLASSES[cls].cons.map((c) => (
+                  <div key={c} className="text-[#ff6b5e]">{c}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <div className="mt-2 flex gap-1">
