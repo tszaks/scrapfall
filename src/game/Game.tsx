@@ -3467,6 +3467,8 @@ export function Game() {
     }
     if (m.type === "over") { setAllDown(true); return; }
     if (m.type === "event") { setEventMsg(String(m.name)); return; }
+    if (m.type === "ot") { endlessRef.current = true; setStatus((s) => ({ ...s, won: false })); return; }
+    if (m.type === "mut") { setMutId(String(m.id) as Mutator["id"]); return; }
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
