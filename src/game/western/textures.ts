@@ -135,6 +135,42 @@ function grain(P: Painter, amt: number, blot = 0) {
   }
 }
 
+/** paint gone: ragged patches where the whitewash has flaked off the bare grey boards,
+ * a lighter lip of lifting paint round each, and rust-brown drips below nail heads */
+function peel(c: Ctx, x: number, y: number, w: number, h: number, r: () => number, n: number) {
+  for (let i = 0; i < n; i++) {
+    const cx = x + r() * w;
+    const cy = y + r() * h;
+    const rw = 6 + r() * 26;
+    const rh = 3 + r() * 10;
+    c.beginPath();
+    const pts = 9;
+    for (let k = 0; k <= pts; k++) {
+      const a = (k / pts) * Math.PI * 2;
+      const f = 0.6 + r() * 0.5;
+      const px = cx + Math.cos(a) * rw * f;
+      const py = cy + Math.sin(a) * rh * f;
+      if (k === 0) c.moveTo(px, py);
+      else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.fillStyle = rgba(128 + r() * 20, 116 + r() * 16, 100 + r() * 12, 0.85);
+    c.fill();
+    c.strokeStyle = rgba(255, 250, 240, 0.35);
+    c.lineWidth = 1;
+    c.stroke();
+    // bare wood grain inside
+    for (let g = 0; g < 3; g++)
+      rect(c, rgba(90, 78, 64, 0.35), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
+  }
+  // rust drips from nail heads
+  for (let i = 0; i < n * 1.5; i++) {
+    const nx = x + r() * w;
+    const ny = y + r() * h;
+    rect(c, rgba(120, 70, 40, 0.18 + r() * 0.2), nx, ny, 1.2, 4 + r() * 18);
+  }
+}
+
 /** horizontal lap siding: `exp` px per board, shadow under each lap */
 function clapboard(
   c: Ctx,
@@ -158,6 +194,7 @@ function clapboard(
     const sx = x + r() * w;
     rect(c, rgba(120, 100, 80, 0.05 + r() * 0.08), sx, y + r() * h, 1 + r() * 2, 6 + r() * 40);
   }
+  peel(c, x, y, w, h, r, Math.round((w * h) / 9000));
   for (let i = 0; i < (w * h) / 5000; i++)
     rect(
       c,
@@ -642,7 +679,10 @@ const PAINT: Record<number, (P: Painter) => void> = {
               const cy = y - w * 0.4 + (j * dy) / 2;
               const [r, g, b] = jewels[picks[k++ % picks.length]!]!;
               // candle glow: brightest low and centred, dimmer toward the arch
-              const glow = lum * (0.55 + 0.45 * Math.min(1, (cy - y) / h)) * (1 - 0.35 * Math.abs(cx - (x + w / 2)) / (w / 2));
+              const glow =
+                lum *
+                (0.55 + 0.45 * Math.min(1, (cy - y) / h)) *
+                (1 - (0.35 * Math.abs(cx - (x + w / 2))) / (w / 2));
               c.fillStyle = `rgb(${Math.round(r * glow)},${Math.round(g * glow)},${Math.round(b * glow)})`;
               c.beginPath();
               c.moveTo(cx, cy - dy / 2);
@@ -1019,37 +1059,53 @@ const PAINT: Record<number, (P: Painter) => void> = {
       rect(d, "rgba(200,170,90,0.6)", r() * TEX, r() * TEX, 6 + r() * 8, 1);
   },
   [WL.MUD]: (P) => {
+    // a dry wash bed: sun-baked silt broken into curling plates of uneven size, each its own
+    // shade, the cracks wide and dark in places and hairline in others, sand blown into them
     const { d, r } = P;
-    rect(d, "#dcc4a0", 0, 0, TEX, TEX);
-    // cracked mud polygons
-    const pts: [number, number][] = [];
-    for (let i = 0; i < 60; i++) pts.push([r() * TEX, r() * TEX]);
+    rect(d, "#b89a74", 0, 0, TEX, TEX);
+    const pts: [number, number, number, number][] = [];
+    for (let i = 0; i < 110; i++)
+      pts.push([r() * TEX, r() * TEX, 0.86 + r() * 0.2, 0.6 + r() * 2.2]);
     const img = d.getImageData(0, 0, TEX, TEX);
     const data = img.data;
     for (let y = 0; y < TEX; y += 1)
       for (let x = 0; x < TEX; x += 1) {
         let b1 = 1e9;
         let b2 = 1e9;
-        for (const [px, py] of pts) {
-          let dx = Math.abs(px - x);
-          let dy = Math.abs(py - y);
+        let i1 = 0;
+        // a little wobble in the edges so no two plates share a straight line
+        const wx = x + Math.sin(y * 0.09 + x * 0.013) * 2.5;
+        const wy = y + Math.cos(x * 0.08 + y * 0.017) * 2.5;
+        for (let i = 0; i < pts.length; i++) {
+          const q = pts[i]!;
+          let dx = Math.abs(q[0] - wx);
+          let dy = Math.abs(q[1] - wy);
           if (dx > TEX / 2) dx = TEX - dx;
           if (dy > TEX / 2) dy = TEX - dy;
           const dd = dx * dx + dy * dy;
           if (dd < b1) {
             b2 = b1;
             b1 = dd;
+            i1 = i;
           } else if (dd < b2) b2 = dd;
         }
         const edge = Math.sqrt(b2) - Math.sqrt(b1);
+        const [, , shade, cw] = pts[i1]!;
         const o = (y * TEX + x) * 4;
-        const k = edge < 1.5 ? 0.72 : edge < 3 ? 0.9 : 1 - Math.min(0.08, Math.sqrt(b1) / 500);
-        data[o] = data[o]! * k;
-        data[o + 1] = data[o + 1]! * k;
-        data[o + 2] = data[o + 2]! * k;
+        let k: number;
+        let sand = 0;
+        if (edge < cw) {
+          k = 0.48 + edge * 0.05; // the crack
+          sand = edge < cw * 0.4 ? 0.35 : 0; // blown sand in the wide ones
+        } else if (edge < cw + 2.2)
+          k = shade * 1.08; // the plate's curled, sunlit lip
+        else k = shade * (1 - Math.min(0.1, Math.sqrt(b1) / 420));
+        data[o] = data[o]! * k + sand * 60;
+        data[o + 1] = data[o + 1]! * k + sand * 45;
+        data[o + 2] = data[o + 2]! * k + sand * 25;
       }
     d.putImageData(img, 0, 0);
-    grain(P, 0.5, 20);
+    grain(P, 0.7, 26);
   },
   [WL.YARD]: (P) => {
     const { d, r } = P;

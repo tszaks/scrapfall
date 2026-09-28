@@ -125,3 +125,32 @@ export function trainVoice() {
     },
   };
 }
+
+/** a pistol shot at a distance: a sharp crack and its echo off the buildings */
+export function pistolShot(dist: number, pan: number) {
+  const A = audioOut();
+  if (!A) return;
+  const { ctx, out, noise } = A;
+  const now = ctx.currentTime + 0.005 + dist / 340;
+  const vol = 0.5 * fall(dist);
+  if (vol < 0.01) return;
+  const p = ctx.createStereoPanner();
+  p.pan.value = Math.max(-0.9, Math.min(0.9, pan));
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 900 + 6000 * fall(dist);
+  lp.connect(p).connect(out);
+  for (const [dt, g] of [
+    [0, 1],
+    [0.13 + Math.random() * 0.05, 0.3],
+  ] as const) {
+    const n = ctx.createBufferSource();
+    n.buffer = noise;
+    const gn = ctx.createGain();
+    gn.gain.setValueAtTime(vol * g, now + dt);
+    gn.gain.exponentialRampToValueAtTime(0.0001, now + dt + 0.18);
+    n.connect(gn).connect(lp);
+    n.start(now + dt, Math.random() * 0.5);
+    n.stop(now + dt + 0.2);
+  }
+}

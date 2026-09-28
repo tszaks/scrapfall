@@ -128,12 +128,18 @@ varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
   vec2 uv = vec2(atan(d.z, d.x) * RECIPROCAL_PI2 + 0.5, asin(clamp(d.y, -1.0, 1.0)) * RECIPROCAL_PI + 0.5);
+  // the u coordinate wraps from 1 to 0 behind the sun: take the screen derivatives from a copy
+  // that wraps somewhere else, or the GPU picks the smallest mip along that seam and draws a
+  // thin dark line down the sky
+  float u2 = fract(uv.x + 0.5);
+  vec2 gx = vec2(abs(dFdx(uv.x)) < abs(dFdx(u2)) ? dFdx(uv.x) : dFdx(u2), dFdx(uv.y));
+  vec2 gy = vec2(abs(dFdy(uv.x)) < abs(dFdy(u2)) ? dFdy(uv.x) : dFdy(u2), dFdy(uv.y));
   vec3 col;
-  if (uMix <= 0.001) col = uUseA > 0.5 ? texture2D(uA, uv).rgb : uColA;
-  else if (uMix >= 0.999) col = uUseB > 0.5 ? texture2D(uB, uv).rgb : uColB;
+  if (uMix <= 0.001) col = uUseA > 0.5 ? textureGrad(uA, uv, gx, gy).rgb : uColA;
+  else if (uMix >= 0.999) col = uUseB > 0.5 ? textureGrad(uB, uv, gx, gy).rgb : uColB;
   else {
-    vec3 a = uUseA > 0.5 ? texture2D(uA, uv).rgb : uColA;
-    vec3 b = uUseB > 0.5 ? texture2D(uB, uv).rgb : uColB;
+    vec3 a = uUseA > 0.5 ? textureGrad(uA, uv, gx, gy).rgb : uColA;
+    vec3 b = uUseB > 0.5 ? textureGrad(uB, uv, gx, gy).rgb : uColB;
     // mix in (roughly) display space so the sky darkens the way the eye expects
     vec3 m = mix(sqrt(max(a, 0.0)), sqrt(max(b, 0.0)), uMix);
     col = m * m;
@@ -257,7 +263,9 @@ export function NightStars({
     const inc = depth / count;
     for (let i = 0; i < count; i++) {
       r -= inc * Math.random();
-      v.setFromSpherical(new THREE.Spherical(r, Math.acos(1 - Math.random() * 2), Math.random() * Math.PI * 2));
+      v.setFromSpherical(
+        new THREE.Spherical(r, Math.acos(1 - Math.random() * 2), Math.random() * Math.PI * 2),
+      );
       pos.set([v.x, v.y, v.z], i * 3);
       c.setHSL(i / count, 0, 0.9);
       colr.set([c.r, c.g, c.b], i * 3);
