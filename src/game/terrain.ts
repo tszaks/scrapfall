@@ -169,5 +169,15 @@ export function shotHits(x: number, y: number, z: number): boolean | null {
 
 /** May a wall-passing ghost enemy stand at (x, z)? (see Terrain.ghost) */
 export function ghostOK(x: number, z: number) {
+  if (raised(x, z)) return false;
   return G?.ghost ? G.ghost(x, z) : true;
+}
+
+/**
+ * Raised walkable ground that is only reached by its stair (Dry Gulch's saloon balcony, the
+ * church stair, landing and belfry): enemies never spawn, blink or route there. Only grounds
+ * with a climbing limit have such places.
+ */
+export function raised(x: number, z: number) {
+  return G?.maxSlope !== undefined && G.height(x, z) > 1.2;
 }

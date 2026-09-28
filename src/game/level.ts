@@ -2,7 +2,7 @@ import { generateCity, type CityLayout } from "./cityLayout";
 import { generateWestern, type WesternLayout } from "./western/layout";
 import { generateAlpine } from "./alpine/layout";
 import { generateBeach } from "./beach/beachLayout";
-import { strictNav } from "./terrain";
+import { raised, strictNav } from "./terrain";
 
 export type Block = { x: number; z: number; h: number; tone: number };
 export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western";
@@ -240,6 +240,20 @@ export let NAV_CELLS = CELLS;
 
 /** Resize the arena (co-op uses a bigger field, the city far bigger). Call before generating a level.
  * `playHalf` fences play into a smaller central square (solo on the big maps). */
+/** Nav cells over raised stair-only ground (see terrain.ts raised) are solid for enemies. */
+export function closeRaised(nav: NavGrid): NavGrid {
+  const cs = BLOCK * NAV_SCALE;
+  for (let i = 0; i < nav.n; i++)
+    for (let j = 0; j < nav.n; j++) {
+      const k = i * nav.n + j;
+      if (nav.g[k]) continue;
+      const cx = -HALF + (i + 0.5) * cs;
+      const cz = -HALF + (j + 0.5) * cs;
+      if (raised(cx, cz)) nav.g[k] = 1;
+    }
+  return nav;
+}
+
 export function setArenaSize(size: number, navScale = 1, playHalf = size / 2) {
   ARENA = size;
   HALF = size / 2;

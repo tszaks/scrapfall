@@ -226,6 +226,7 @@ export function bossSpot() {
 
 /** whistle cues for a run: times at which the loco blows (long, long, short, long) */
 export function whistles(run: Run) {
-  if (run.k < 0) return [run.arrive - 24 - WHISTLE_LEAD, run.arrive - 18, run.arrive - 4];
+  // (the boss train is called only ~24 s out, so all three cues fall inside that window)
+  if (run.k < 0) return [run.arrive - 21, run.arrive - 13, run.arrive - 4];
   return [run.arrive - WHISTLE_LEAD, run.arrive - WHISTLE_LEAD + 2.2, run.arrive - 1.5];
 }

@@ -114,7 +114,7 @@ export function setAmbienceTraffic(speed: number, x: number, z: number) {
   scene.tyre.z = z;
 }
 export function setAmbienceWeather(k: number) {
-  scene.weather = Math.max(0, Math.min(1, k));
+  scene.weather = Number.isFinite(k) ? Math.max(0, Math.min(1, k)) : 0;
 }
 /**
  * Emitter positions from map code, by kind ("saloon", "horses", "windmill", "sign", "carnival",
@@ -415,10 +415,13 @@ type Blip = { type?: OscillatorType; f0: number; f1?: number; dur: number; gain:
 /** an oscillator note with a glide, optional vibrato and lowpass */
 function blip(R: Runtime, o: AudioNode, t: number, b: Blip) {
   const { ctx } = R;
+  // nothing at or above Nyquist (a bell's high partials): it can't be heard, only warned about
+  const nyq = ctx.sampleRate * 0.45;
+  if (!(b.f0 > 0) || b.f0 >= nyq || !(b.gain > 0) || !Number.isFinite(t)) return;
   const osc = ctx.createOscillator();
   osc.type = b.type ?? "sine";
   osc.frequency.setValueAtTime(b.f0, t);
-  if (b.f1 && b.f1 !== b.f0) osc.frequency.exponentialRampToValueAtTime(b.f1, t + b.dur);
+  if (b.f1 && b.f1 !== b.f0) osc.frequency.exponentialRampToValueAtTime(Math.min(nyq, Math.max(1, b.f1)), t + b.dur);
   const g = ctx.createGain();
   const a = b.attack ?? 0.005;
   g.gain.setValueAtTime(0.0001, t);
@@ -490,10 +493,11 @@ function creak(R: Runtime, o: AudioNode, t: number, f: number, dur: number, gain
 function place(R: Runtime, gain: number, pan: number, bright: number) {
   const { ctx } = R;
   const g = ctx.createGain();
-  g.gain.value = gain;
+  g.gain.value = fin(gain, 0);
   const lp = ctx.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.value = bright;
+  lp.frequency.value = Math.min(ctx.sampleRate * 0.45, fin(bright, 18000));
+  pan = fin(pan, 0);
   const p = typeof ctx.createStereoPanner === "function" ? ctx.createStereoPanner() : null;
   g.connect(lp);
   if (p) {
@@ -557,6 +561,10 @@ function locate(R: Runtime, e: Env, kind: string): Dist {
   return relTo(e, { x: e.x + Math.cos(a) * 45, z: e.z + Math.sin(a) * 45 });
 }
 
+/** a finite number, or the fallback */
+function fin(v: number, fallback: number) {
+  return Number.isFinite(v) ? v : fallback;
+}
 /** loudness 0..1 at distance d: flat inside `ref`, inverse-square-ish after, gone at `range` */
 function falloff(d: number, ref: number, range: number) {
   const k = ref / (ref + Math.max(0, d - ref));
@@ -609,13 +617,16 @@ export function updateAmbience(x: number, y: number, z: number, fx: number, fz: 
     if (L.swell) g *= stepDrift(L.swell, e.t, dt);
     if (L.sweep) {
       const v = stepDrift(L.sweep.drift, e.t, dt);
-      L.sweep.param.setTargetAtTime(L.sweep.base * (1 + v * L.sweep.spread), now, 0.4);
+      L.sweep.param.setTargetAtTime(fin(L.sweep.base * (1 + v * L.sweep.spread), L.sweep.base), now, 0.4);
     }
+    // (a NaN here, e.g. standing exactly on an emitter, would throw and skip the rest of the
+    // update: every value set on an AudioParam goes through fin())
+    if (!Number.isFinite(g)) g = 0;
     L.lastGain = g;
     L.chan.level.gain.setTargetAtTime(g, now, 0.35);
     if (loc) {
-      L.chan.lp.frequency.setTargetAtTime(Math.min(R.ctx.sampleRate * 0.45, brightAt(loc.d, loc.behind)), now, 0.25);
-      L.chan.pan?.pan.setTargetAtTime(loc.pan, now, 0.15);
+      L.chan.lp.frequency.setTargetAtTime(fin(Math.min(R.ctx.sampleRate * 0.45, brightAt(loc.d, loc.behind)), 18000), now, 0.25);
+      L.chan.pan?.pan.setTargetAtTime(Math.max(-1, Math.min(1, fin(loc.pan, 0))), now, 0.15);
     }
     if (L.tune && g > 0.0005) {
       if ((L.nextNote ?? 0) < now) L.nextNote = now + 0.05;
