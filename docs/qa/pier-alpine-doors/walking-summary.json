@@ -1,5 +1,8 @@
 {
-  "pass_": true,
+  "pass": true,
+  "base": "4e5da66",
+  "sourceCommit": "5f4465c",
+  "bundle": "routes-DuC1F7LO.js",
   "counts": {
     "pacific": {
       "1": {
@@ -58,5 +61,7 @@
   },
   "roundTrips": 309,
   "boundaryChecks": 5,
-  "errors": []
+  "errors": [],
+  "webkitTargetedTrips": 27,
+  "coop": "Pier and Whiteout pass after 26 seconds, matching v9 worlds and zero settled remote error"
 }
