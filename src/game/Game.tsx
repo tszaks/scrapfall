@@ -27,6 +27,9 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
+import { WHITEOUT_SIZE, WHITEOUT_THEME, buildWhiteout, isWhiteoutSeed, paintWhiteout, whiteoutSeed, type WhiteoutLayout } from "./maps/whiteout";
+import { WhiteoutScene } from "./maps/WhiteoutScene";
+import { Minimap } from "./Minimap";
 
 
 
@@ -1571,7 +1574,9 @@ function World({
 
 
 
+  alpine,
 }: {
+  alpine: WhiteoutLayout | null;
   blocks: Block[];
   enemies: Enemy[];
   rand: () => number;
@@ -3285,7 +3290,7 @@ function World({
   return (
     <>
       <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={[theme.sky, 16, ARENA * 1.7]} />
+      <fog attach="fog" args={alpine ? [theme.sky, 14, 150] : [theme.sky, 16, ARENA * 1.7]} />
       <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
       <directionalLight
         position={[18, 26, 10]}
@@ -3294,7 +3299,7 @@ function World({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <Level blocks={blocks} theme={theme} />
+      {alpine ? <WhiteoutScene layout={alpine} theme={theme} /> : <Level blocks={blocks} theme={theme} />}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
@@ -3389,7 +3394,9 @@ function World({
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   // Anti-repeat: roll a new seed whose map differs from the current one.
+  const coopMapRef = useRef<"arenas" | "whiteout">("arenas");
   const freshSeed = (prev: number) => {
+    if (coopMapRef.current === "whiteout" && netHolder.current) return whiteoutSeed();
     let s = Math.floor(Math.random() * 1e9);
     while (s % THEMES.length === prev % THEMES.length) s = Math.floor(Math.random() * 1e9);
     return s;
@@ -3699,14 +3706,16 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
-  const { blocks, enemies, rand, theme } = useMemo(() => {
-    setArenaSize(coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
-    const level = generateLevel(seed);
-    const theme = THEMES[seed % THEMES.length]!;
+  const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
+    const big = coop && isWhiteoutSeed(seed);
+    setArenaSize(big ? WHITEOUT_SIZE : coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
+    const alpine = big ? buildWhiteout(seed) : null;
+    const level = alpine ? { blocks: alpine.blocks, seed, rand: generateLevel(seed).rand } : generateLevel(seed);
+    const theme = alpine ? WHITEOUT_THEME : THEMES[seed % THEMES.length]!;
     // slim props get a tighter collision box so shots line up with the trunk
     const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
-    setBlockHalf(slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
-    level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
+    setBlockHalf(alpine ? 0.95 : slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
+    if (!alpine) level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
       x: 0,
@@ -3721,7 +3730,7 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return { blocks: level.blocks, enemies: list, rand: level.rand, theme };
+    return { blocks: level.blocks, enemies: list, rand: level.rand, theme, alpine };
   }, [seed, coop]);
 
 
@@ -4034,8 +4043,9 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}>
+      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
         <World
+          alpine={alpine}
           blocks={blocks}
           enemies={enemies}
           rand={rand}
