@@ -4665,7 +4665,7 @@ const ENEMY_INFO: Record<Kind, { name: string; accent: string; wave: number; wea
   boss: { name: "BOSS", accent: "#e8322a", wave: 12, weapon: "Volley + hammer", tactic: "Huge, tanky, fires volleys and swings a hammer. Circle it, keep moving, save your ability." },
 };
 
-const PANEL_KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "specter", "bomber", "vanguard", "special", "boss"];
+const PANEL_KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "specter", "bomber", "vanguard", "special"];
 
 const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
   kind, x, z, hp: STATS[kind].hp, alive: true, cooldown: 9, swing: 0, flash: 0, shot: 9,
@@ -4684,7 +4684,7 @@ export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => 
   const lineup = useMemo(() => {
     const rest = PANEL_KINDS.filter((k) => k !== "boss");
     const front = rest.map((k, i) => fakeEnemy(k, (i - (rest.length - 1) / 2) * 3.4, -2));
-    return [fakeEnemy("boss", 0, -9), ...front];
+    return front;
   }, []);
   const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
   const list = sel === "lineup" ? lineup : single;
