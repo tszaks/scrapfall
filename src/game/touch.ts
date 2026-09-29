@@ -6,6 +6,8 @@ export const touchInput = {
   lookX: 0, // accumulated look delta in px, drained per frame
   lookY: 0,
   fire: false,
+  jump: false,
+  run: false,
   ability: false, // one-shot
   swap: 0, // one-shot: -1 previous weapon, 1 next weapon
   pick: null as string | null, // one-shot: equip this weapon directly (tapped HUD chip)
@@ -18,6 +20,8 @@ export function resetTouchInput() {
   touchInput.lookX = 0;
   touchInput.lookY = 0;
   touchInput.fire = false;
+  touchInput.jump = false;
+  touchInput.run = false;
   touchInput.ability = false;
   touchInput.swap = 0;
   touchInput.pick = null;

@@ -134,6 +134,9 @@ const TURN_SPEED = 2.4;
 const MAX_BULLETS = 90;
 const SPEED = 7;
 const EYE = 1.6;
+const RUN_MUL = 1.45; // Shift / RUN button
+const JUMP_V = 6.2;
+const GRAVITY = 18;
 
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
@@ -1293,6 +1296,10 @@ const BULLET_GEO = new THREE.LatheGeometry(
   10,
 );
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
+const BULLET_BAND = new THREE.CylinderGeometry(0.082, 0.082, 0.05, 10);
+const BULLET_BAND_MAT = new THREE.MeshBasicMaterial({ color: "#d9a53a", fog: false });
+// tapered streak: wide at the round, fading to a point behind it
+const TRACER_GEO = new THREE.CylinderGeometry(0.05, 0.005, 0.8, 6);
 const TMP_DIR = new THREE.Vector3();
 
 
@@ -1318,6 +1325,13 @@ const BulletPool = memo(function BulletPool({
         >
           {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
+          {shape === "bullet" && (<>
+            {/* brass casing band + glowing tracer streak behind the round */}
+            <mesh geometry={BULLET_BAND} material={BULLET_BAND_MAT} position={[0, -0.13, 0]} />
+            <mesh geometry={TRACER_GEO} position={[0, -0.6, 0]}>
+              <meshBasicMaterial color={color} fog={false} transparent opacity={0.35} depthWrite={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          </>)}
         </mesh>
       ))}
     </>
@@ -1691,6 +1705,8 @@ function World({
     c.updateProjectionMatrix();
   }, [fov, camera]);
   const bobAmt = useRef(0);
+  const jumpY = useRef(0);
+  const jumpV = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
   const field = useRef<{ key: number; dist: Float32Array } | null>(null);
@@ -2033,7 +2049,7 @@ function World({
       if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
     };
     const onUp = () => (trigger.current = false);
-    const isFire = (e: KeyboardEvent) => e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter";
+    const isFire = (e: KeyboardEvent) => e.code === "Enter" || e.code === "NumpadEnter";
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
@@ -2306,7 +2322,9 @@ function World({
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const mut = mutator.current?.id;
+    const running = k.has("ShiftLeft") || k.has("ShiftRight") || touchInput.run;
     const spd = SPEED * stats.current.speed
+      * (running ? RUN_MUL : 1)
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
       * (overdrive.current > 0 ? 1.3 : 1)
       * (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1); // CRYO SURGE / HEAVY GRAVITY drag you down
@@ -2328,8 +2346,16 @@ function World({
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
-    bob.current += delta * 9 * bobAmt.current;
-    cam.position.y = EYE + Math.sin(bob.current) * 0.03 * bobAmt.current;
+    // jump: Space on desktop, JUMP button on touch
+    const wantJump = k.has("Space") || touchInput.jump;
+    if (wantJump && jumpY.current <= 0 && jumpV.current <= 0 && !spectating) jumpV.current = JUMP_V;
+    if (jumpY.current > 0 || jumpV.current > 0) {
+      const dt = Math.min(delta, 0.05);
+      jumpV.current -= GRAVITY * (mut === "gravity" ? 1.4 : 1) * dt;
+      jumpY.current += jumpV.current * dt;
+      if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
+    }
+    cam.position.y = EYE + jumpY.current;
 
     // share my position with the room
     if (n) {
@@ -3236,9 +3262,9 @@ function World({
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
-    const sway = bobAmt.current;
-    v.translateX(0.3 + Math.sin(bob.current * 0.5) * 0.012 * sway);
-    v.translateY(-0.28 - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + recoil.current * 0.03);
+    // gun stays rock steady while moving — only recoil nudges it
+    v.translateX(0.3);
+    v.translateY(-0.28 + recoil.current * 0.03);
     v.translateZ(-0.75 + recoil.current * 0.08);
     v.rotateX(recoil.current * 0.15);
   });
@@ -4469,7 +4495,7 @@ export function Game() {
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 {touchUi
                   ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
+                  : "WASD to move · mouse or arrow keys to look · click or Enter to shoot · Space to jump · Shift to run · F for your ability · 1-0 / Q E swap guns · P to pause"}
               </p>
             )}
             {/* beat the boss: bank the win, or push the run into overtime */}

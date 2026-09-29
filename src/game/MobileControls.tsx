@@ -130,6 +130,20 @@ export function MobileControls({
           dim={abilityLeft > 0}
           onTap={() => (touchInput.ability = true)}
         />
+        <div className="flex flex-col items-center gap-3">
+          <Btn
+            label="JUMP"
+            size={60}
+            onDown={() => (touchInput.jump = true)}
+            onUp={() => (touchInput.jump = false)}
+          />
+          <Btn
+            label="RUN"
+            size={60}
+            onDown={() => (touchInput.run = true)}
+            onUp={() => (touchInput.run = false)}
+          />
+        </div>
         <Btn
           label="FIRE"
           size={86}
