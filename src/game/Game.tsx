@@ -3565,6 +3565,25 @@ export function Game() {
   const seedRef = useRef(seed);
   seedRef.current = seed;
   const netHolder = useRef<NetHandle | null>(null);
+  // home screen showcase: a new arena behind the menu every 8 s, with a soft fade
+  const [menuFade, setMenuFade] = useState(false);
+  useEffect(() => {
+    if (started || picking || testMap()) return;
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const id = setInterval(() => {
+      if (netHolder.current) return;
+      setMenuFade(true);
+      t2 = setTimeout(() => {
+        setSeed((p) => {
+          let s = Math.floor(Math.random() * 1e9);
+          while (s % THEMES.length === p % THEMES.length) s = Math.floor(Math.random() * 1e9);
+          return s;
+        });
+        setMenuFade(false);
+      }, 600);
+    }, 8000);
+    return () => { clearInterval(id); if (t2) clearTimeout(t2); };
+  }, [started, picking]);
   const healthRef = useRef(MAX_HP);
   healthRef.current = health;
   // player numbers: host is always 1, guests take 2-4 in join order
@@ -4116,6 +4135,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
+      <div aria-hidden className={`pointer-events-none fixed inset-0 z-30 bg-[#2b2118] transition-opacity duration-500 ${menuFade && !started ? "opacity-100" : "opacity-0"}`} />
       <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? 1200 : 220 }}>
         <World
           alpine={alpine}
