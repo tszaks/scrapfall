@@ -178,7 +178,7 @@ export function MobileControls({
         className="absolute"
         style={{
           left: "max(1.25rem, env(safe-area-inset-left))",
-          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 120px)",
+          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)",
         }}
       >
         <SprintButton />
