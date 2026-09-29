@@ -9,7 +9,7 @@ import { worldLook } from "./lighting";
 import { useTodNearest } from "./timeOfDay";
 import { THEMES } from "./themes";
 import { setArenaSize, generateLevel, CITY_COOP, BEACH_SIZE, type Block, type LayoutMode } from "./level";
-import { resetStaticCollision } from "./staticCollision";
+import { resetStaticCollision, staticBody, staticSupport, staticCollisionReady } from "./staticCollision";
 import { setTerrain } from "./terrain";
 import { configureEnvironment } from "./matchEnvironment";
 import { isBeach } from "./beach/beachLayout";
@@ -36,7 +36,7 @@ import { nuketownStructures } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
-import { installStructures, structureList } from "./structures/world";
+import { installStructures, structureList, structureBody, structureFloor } from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
 import { resetWheel } from "./beach/wheelRide";
 import { cityAccess } from "./access/cityAccess";
@@ -44,7 +44,7 @@ import { beachAccess } from "./access/beachAccess";
 import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
-import { installAccess } from "./access/world";
+import { installAccess, playerBlocked } from "./access/world";
 import { westernBelfry } from "./western/belfry";
 import { snugPlazaProps, movePropsFromDoors } from "./posts";
 import { blocked, boundaryBlocked, setNavWalls, BLOCK } from "./level";
@@ -270,4 +270,24 @@ function MapBody({ map, playing, isHost, time }: { map: BigMap; playing: boolean
     case "nuketown":
       return <Nuketown seed={seed} />;
   }
+}
+
+/** His player wall rule (rooms, lifts, walls, props) for our movement. */
+export function bigPlayerBlocked(blocks: Block[], x: number, z: number, r: number, feet: number, airborne: boolean): boolean {
+  if (staticCollisionReady()) {
+    if (boundaryBlocked(blocks, x, z, r)) return true;
+    const interior = playerBlocked(x, z, r, feet);
+    if (interior !== undefined) return interior;
+    return structureBody(x, z, r, feet) ?? staticBody(x, z, r, feet, 1.8, airborne ? 0 : 0.2);
+  }
+  return structureBody(x, z, r, feet) ?? playerBlocked(x, z, r) ?? blocked(blocks, x, z, r);
+}
+
+/** His floor rule: room floors, decks and boardwalks, else the ground. */
+export function bigFloorY(x: number, z: number, prevFeet: number): number {
+  const base = groundY(x, z);
+  const room = structureFloor(x, z, prevFeet);
+  if (room) return room.y;
+  if (!staticCollisionReady()) return base;
+  return staticSupport(x, z, prevFeet, base, 0.55) ?? base;
 }

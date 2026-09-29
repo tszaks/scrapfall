@@ -1749,6 +1749,7 @@ function World({
   }, [fov, camera]);
   const bobAmt = useRef(0);
   const jumpY = useRef(0);
+  const feetY = useRef(0);
   const jumpV = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
