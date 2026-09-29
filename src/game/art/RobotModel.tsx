@@ -28,8 +28,9 @@ export type RobotData = {
   preview?: boolean;
 };
 
-export type RobotInputs = (d: RobotData) => { wind: number; aux: number };
-const NONE = { wind: 0, aux: 0 };
+export type RobotInputs = (d: RobotData, o: { wind: number; aux: number }) => void;
+// per-frame scratch: `inputs` fills it and rig.update consumes it synchronously
+const INP = { wind: 0, aux: 0 };
 
 /** contact-shadow radius from the model's footprint (fliers get a smaller, fainter one) */
 function footprint(kind: RobotKind) {
@@ -97,7 +98,12 @@ export function RobotModel({
     artFrame();
     const cam = state.camera.position;
     const d = Math.hypot(cam.x - data.x, cam.z - data.z);
-    const inp = inputs ? inputs(data) : NONE;
+    const inp = INP;
+    if (inputs) inputs(data, inp);
+    else {
+      inp.wind = 0;
+      inp.aux = 0;
+    }
     rig.update(
       state.clock.elapsedTime,
       Math.min(delta, 0.05),

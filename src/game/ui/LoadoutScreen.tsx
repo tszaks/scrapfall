@@ -33,8 +33,8 @@ function ClassCard({
     >
       {!on && <div className="h-1" style={{ background: k.color }} />}
       <div className="px-2 py-1.5">
-        <div className="text-[10px] font-bold tracking-[0.1em]">{k.name}</div>
-        <div className="text-[8px] font-bold uppercase leading-tight tracking-[0.06em] opacity-60">
+        <div className="text-[11px] font-bold tracking-[0.1em]">{k.name}</div>
+        <div className="text-[11px] font-bold uppercase leading-tight tracking-[0.06em] opacity-70">
           {k.role}
         </div>
       </div>
@@ -67,9 +67,9 @@ function DifficultyCard({
         color: on ? C.cream : C.ink,
       }}
     >
-      <div className="text-[10px] font-bold tracking-[0.1em]">{d.name}</div>
+      <div className="text-[11px] font-bold tracking-[0.1em]">{d.name}</div>
       <div
-        className={`mt-0.5 text-[8px] font-bold tracking-[0.08em] ${on ? "opacity-85" : "opacity-50"}`}
+        className={`mt-0.5 text-[11px] font-bold tracking-[0.08em] ${on ? "opacity-85" : "opacity-70"}`}
       >
         CROWD ×{d.countMul.toFixed(2)}
       </div>
@@ -128,7 +128,7 @@ export function LoadoutScreen({
       className="ui-root flex touch-auto items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-6"
     >
       <Panel
-        className={`ui-rise my-auto max-h-[96dvh] w-full max-w-3xl overflow-y-auto ui-scroll ${pad}`}
+        className={`ui-rise my-auto max-h-[96dvh] w-full max-w-3xl overflow-y-auto ui-scroll ${pad} [@media(max-height:760px)]:p-3`}
       >
         {/* header */}
         <div className="flex items-start justify-between gap-3">
@@ -136,7 +136,7 @@ export function LoadoutScreen({
             <SectionLabel>MATCH SETUP</SectionLabel>
             <div className="mt-0.5 flex items-center gap-3">
               <h2 className="text-xl font-black tracking-[0.14em] sm:text-2xl">LOADOUT</h2>
-              <span className="rounded bg-[#2b2118] px-2 py-0.5 text-[9px] font-bold tracking-[0.18em] text-[#f3e6cf]">
+              <span className="rounded bg-[#2b2118] px-2 py-0.5 text-[11px] font-bold tracking-[0.18em] text-[#f3e6cf]">
                 {weather.toUpperCase()}
               </span>
             </div>
@@ -145,17 +145,17 @@ export function LoadoutScreen({
             ✕ Back
           </MenuButton>
         </div>
-        <Hazard className="mt-2.5" />
+        <Hazard className="mt-2.5 [@media(max-height:760px)]:mt-1.5" />
 
         {/* class row */}
-        <div className="mt-3.5">
+        <div className="mt-3.5 [@media(max-height:760px)]:mt-2.5">
           <SectionLabel>CLASS</SectionLabel>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
             {CLASS_IDS.map((c) => (
               <ClassCard key={c} id={c} on={cls === c} onPick={() => setCls(c)} />
             ))}
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-3 text-[9px] font-bold tracking-[0.08em]">
+          <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] font-bold tracking-[0.08em]">
             {CLASSES[cls].pros.map((t) => (
               <span key={t} style={{ color: C.leaf }}>
                 ▲ {t}
@@ -170,24 +170,24 @@ export function LoadoutScreen({
         </div>
 
         {/* ability */}
-        <div className="mt-3.5">
+        <div className="mt-3.5 [@media(max-height:760px)]:mt-2.5">
           <SectionLabel>ABILITY · {ABILITIES[ability].desc.toUpperCase()}</SectionLabel>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {ABILITY_IDS.map((a) => (
               <OptionChip key={a} on={ability === a} onClick={() => setAbility(a)}>
                 {ABILITIES[a].name}
-                <span className="ml-1 font-normal opacity-60">{ABILITIES[a].cd}s</span>
+                <span className="ml-1 font-normal opacity-70">{ABILITIES[a].cd}s</span>
               </OptionChip>
             ))}
           </div>
         </div>
 
         {/* map picker: painted postcards, host chooses */}
-        <div className="mt-3.5">
+        <div className="mt-3.5 [@media(max-height:760px)]:mt-2.5">
           <div className="flex items-baseline justify-between">
             <SectionLabel>{guest ? "ARENA · THE HOST PICKS" : "ARENA"}</SectionLabel>
             {!guest && (
-              <span className="text-[9px] tracking-[0.15em] opacity-50">
+              <span className="text-[11px] tracking-[0.15em] opacity-70">
                 THE LIVE MAP BEHIND THIS MENU IS YOUR PICK
               </span>
             )}
@@ -205,9 +205,8 @@ export function LoadoutScreen({
               }}
             >
               <div
-                className="flex items-center justify-center text-2xl font-black"
+                className="flex aspect-[264/132] items-center justify-center text-2xl font-black [@media(max-height:760px)]:aspect-[264/104]"
                 style={{
-                  aspectRatio: "264/132",
                   background: `repeating-linear-gradient(-45deg, ${C.ink} 0 12px, #4a3b2a 12px 24px)`,
                   color: C.gold,
                 }}
@@ -215,8 +214,8 @@ export function LoadoutScreen({
                 ?
               </div>
               <div className="border-t border-[#2b2118]/25 px-1.5 py-1">
-                <div className="text-[9px] font-bold tracking-[0.12em]">RANDOM</div>
-                <div className="text-[8px] leading-tight opacity-55">Shuffle all arenas.</div>
+                <div className="text-[11px] font-bold tracking-[0.12em]">RANDOM</div>
+                <div className="text-[11px] leading-tight opacity-70">Shuffle all arenas.</div>
               </div>
             </button>
             {maps.map((i) => {
@@ -239,16 +238,16 @@ export function LoadoutScreen({
                   <div className="relative">
                     <MapThumb theme={th} />
                     {on && (
-                      <span className="absolute right-1 top-1 rounded-sm bg-[#2b2118] px-1.5 py-0.5 text-[8px] font-bold tracking-[0.14em] text-[#e7b25c]">
+                      <span className="absolute right-1 top-1 rounded-sm bg-[#2b2118] px-1.5 py-0.5 text-[11px] font-bold tracking-[0.14em] text-[#e7b25c]">
                         ✓
                       </span>
                     )}
                   </div>
                   <div className="border-t border-[#2b2118]/25 px-1.5 py-1">
-                    <div className="text-[9px] font-bold tracking-[0.12em]">
+                    <div className="text-[11px] font-bold tracking-[0.12em]">
                       {th.name.toUpperCase()}
                     </div>
-                    <div className="text-[8px] leading-tight opacity-55">
+                    <div className="text-[11px] leading-tight opacity-70">
                       {info ? info.blurb : "Procedurally stacked arena."}
                     </div>
                   </div>
@@ -259,7 +258,7 @@ export function LoadoutScreen({
         </div>
 
         {/* difficulty */}
-        <div className="mt-3.5">
+        <div className="mt-3.5 [@media(max-height:760px)]:mt-2.5">
           <SectionLabel>{guest ? "DIFFICULTY · THE HOST PICKS" : "DIFFICULTY"}</SectionLabel>
           <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
             {DIFFICULTY_IDS.map((d) => (
@@ -272,14 +271,14 @@ export function LoadoutScreen({
               />
             ))}
           </div>
-          <div className="mt-1 text-[9px] tracking-[0.1em] opacity-60">
+          <div className="mt-1 text-[11px] tracking-[0.1em] opacity-70">
             {DIFFICULTIES[difficulty].desc}
           </div>
         </div>
 
         {/* squad (co-op only) */}
         {multiplayer && (
-          <div className="mt-3.5">
+          <div className="mt-3.5 [@media(max-height:760px)]:mt-2.5">
             <SectionLabel>SQUAD</SectionLabel>
             <div className="mt-1.5 space-y-1">
               {players.map((p) => (
@@ -291,20 +290,20 @@ export function LoadoutScreen({
                     className="inline-block h-2.5 w-2.5 rounded-[3px] border border-[#2b2118]"
                     style={{ background: colorFor(p.num) }}
                   />
-                  <span className="text-[10px] font-bold tracking-[0.15em]">
+                  <span className="text-[11px] font-bold tracking-[0.15em]">
                     {p.num === 1 ? "HOST" : `P${p.num}`}
-                    {p.me && <span className="opacity-45"> · YOU</span>}
+                    {p.me && <span className="opacity-70"> · YOU</span>}
                   </span>
-                  <span className="ml-auto text-[9px] tracking-[0.12em] opacity-70">
+                  <span className="ml-auto text-[11px] tracking-[0.12em] opacity-70">
                     {p.cls ? CLASSES[p.cls].name : "—"} ·{" "}
                     {p.ability ? ABILITIES[p.ability].name : "—"}
                   </span>
                   {p.ready ? (
-                    <span className="rounded bg-[#1d7a37] px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] text-[#f7eeda]">
+                    <span className="rounded bg-[#1d7a37] px-1.5 py-0.5 text-[11px] font-bold tracking-[0.12em] text-[#f7eeda]">
                       READY
                     </span>
                   ) : (
-                    <span className="rounded bg-[#2b2118]/15 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] opacity-70">
+                    <span className="rounded bg-[#2b2118]/15 px-1.5 py-0.5 text-[11px] font-bold tracking-[0.12em] opacity-70">
                       PICKING
                     </span>
                   )}
@@ -315,7 +314,7 @@ export function LoadoutScreen({
         )}
 
         {/* footer */}
-        <div className="mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5">
+        <div className="mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5">
           {guest ? (
             <>
               <MenuButton
@@ -330,7 +329,7 @@ export function LoadoutScreen({
                 Back to lobby
               </MenuButton>
               {!ready && (
-                <span className="text-[9px] tracking-[0.12em] opacity-55">
+                <span className="text-[11px] tracking-[0.12em] opacity-70">
                   THE HOST STARTS THE MATCH
                 </span>
               )}
@@ -347,7 +346,7 @@ export function LoadoutScreen({
                 Enter arena
               </MenuButton>
               {multiplayer && (
-                <span className="whitespace-nowrap text-[9px] tracking-[0.15em] opacity-55">
+                <span className="whitespace-nowrap text-[11px] tracking-[0.15em] opacity-70">
                   {players.filter((p) => p.ready).length}/{players.length} READY
                 </span>
               )}

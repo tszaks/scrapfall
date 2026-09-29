@@ -652,6 +652,7 @@ export const REMOTE_SHOT = new Map<string, number>();
 const V1 = new THREE.Vector3();
 const V2 = new THREE.Vector3();
 const V3 = new THREE.Vector3();
+const _END = new THREE.Vector3(); // a ghost bullet's swept end point (this frame only)
 const UP = new THREE.Vector3(0, 1, 0);
 const QA = new THREE.Quaternion();
 const QB = new THREE.Quaternion();
@@ -1656,7 +1657,7 @@ function ghostStep(P: Proj, dt: number) {
   P.prev.copy(P.pos);
   advanceBallistic(P.pos, P.vel, bulletGravity(P.kind), dt);
   P.life -= dt;
-  const end = P.pos.clone(),
+  const end = _END.copy(P.pos),
     h = env?.half() ?? 1e9;
   const stop = (q: { x: number; y: number; z: number }) =>
     Math.abs(q.x) > h ||

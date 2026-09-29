@@ -318,6 +318,14 @@ export function CityBlockades({
   const lightRef = useRef<THREE.InstancedMesh>(null);
   const _m = useMemo(() => new THREE.Matrix4(), []);
   const _c = useMemo(() => new THREE.Color(), []);
+  const lightCols = useMemo(
+    () => ({
+      red: new THREE.Color("#ff2020"),
+      blue: new THREE.Color("#2a5aff"),
+      amber: new THREE.Color("#ffb020"),
+    }),
+    [],
+  );
   useEffect(() => {
     const m = lightRef.current;
     if (!m) return;
@@ -333,9 +341,7 @@ export function CityBlockades({
     built.lights.forEach((l, i) => {
       const phase = (t * (l.kind === "amber" ? 1.3 : 2.4) + l.ph) % 1;
       const on = l.kind === "amber" ? phase < 0.5 : l.kind === "red" ? phase < 0.5 : phase >= 0.5;
-      _c.set(
-        l.kind === "red" ? "#ff2020" : l.kind === "blue" ? "#2a5aff" : "#ffb020",
-      ).multiplyScalar(on ? k : 0.12);
+      _c.copy(lightCols[l.kind]).multiplyScalar(on ? k : 0.12);
       m.setColorAt(i, _c);
     });
     if (m.instanceColor) m.instanceColor.needsUpdate = true;

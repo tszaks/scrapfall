@@ -240,14 +240,17 @@ export function furnishingBlocked(
   y0: number,
   y1: number,
 ) {
-  return b.furnishings.some(
-    (p) =>
+  // (a loop, not .some(): called inside blocked()/shot queries thousands of times a frame)
+  for (const p of b.furnishings)
+    if (
       p.level === level &&
       p.y1 > y0 &&
       p.y0 < y1 &&
       a > p.a0 - radius &&
       a < p.a1 + radius &&
       d > p.d0 - radius &&
-      d < p.d1 + radius,
-  );
+      d < p.d1 + radius
+    )
+      return true;
+  return false;
 }
