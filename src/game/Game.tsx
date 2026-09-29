@@ -3,6 +3,7 @@ import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nu
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
+import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { configureEnvironment, matchEnvironment } from "./matchEnvironment";
 import { aimState, stepAim, aimSensitivity } from "./input/aim";
@@ -2115,7 +2116,10 @@ const BULLET_GEO = new THREE.LatheGeometry(
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
+const BULLET_END = new THREE.Vector3();
 const WORLD_CONTACT = new THREE.Vector3();
+/** host: where cars look for the rest of the squad (filled in place every frame) */
+const trafficOthers: { x: number; z: number; y: number }[] = [];
 
 const BulletPool = memo(function BulletPool({
   meshes,
@@ -2755,7 +2759,6 @@ function World({
   const guestRef = useRef(false);
   // hornet packs: index of the pack leader each follower spawns beside (-1 = none)
   const packLead = useRef(new Int16Array(MAX_ENEMIES).fill(-1));
-  const sepGrid = useRef(new Map<number, number[]>());
 
   // ---------- networking ----------
   const netRef = useRef<NetHandle | null>(net);
@@ -4215,17 +4218,29 @@ function World({
     if (traffic.current.role === "host") {
       // the host's cars must brake for every live player in the lane, not just the host
       const now = performance.now();
-      traffic.current.others = [...remotes.current.values()]
-        .filter((r) => r.hp > 0 && now - r.last < 4000)
-        .map((r) => {
-          if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
-          if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
-          return {
-            x: r.x,
-            z: r.z,
-            y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE,
-          };
-        });
+      const oth = trafficOthers;
+      oth.length = 0;
+      remotes.current.forEach((r) => {
+        if (!(r.hp > 0 && now - r.last < 4000)) return;
+        const slot = (oth[oth.length] ??= { x: 0, z: 0, y: 0 });
+        if (alpineMap && (r.rc ?? -1) >= 0) {
+          const p = riderEye(alpineMap.alpine.lift, r.rc!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else if (isBeach(city) && (r.wr ?? -1) >= 0) {
+          const p = wheelEye(city.beach.wheel, r.wr!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else {
+          slot.x = r.x;
+          slot.z = r.z;
+          slot.y =
+            (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE;
+        }
+      });
+      traffic.current.others = oth;
     } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
@@ -6013,100 +6028,14 @@ function World({
 
       // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
       // inside you), and push apart lightly so a crowd doesn't stack into one blob. Fliers pass
-      // over everything. A spatial hash keeps the pair checks cheap with 110 enemies.
-      const grid = sepGrid.current;
-      if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
-      grid.forEach((cell) => (cell.length = 0));
-      const CELL = 2.5;
-      const keyOf = (x: number, z: number) =>
-        Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
-      const bodyR = (e: Enemy) =>
-        e.kind === "boss" && theme.boss.shape === "kraken"
-          ? KRAKEN_R
-          : STATS[e.kind].radius * (e.elite ? 1.6 : 1);
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const e = enemies[ei]!;
-        if (!e.alive || FLYERS.has(e.kind)) continue;
-        const k = keyOf(e.x, e.z);
-        let cell = grid.get(k);
-        if (!cell) grid.set(k, (cell = []));
-        cell.push(ei);
-      }
-      const nudge = (e: Enemy, px: number, pz: number) => {
-        const rr = Math.min(STATS[e.kind].radius, 0.8);
-        const ghost = e.kind === "specter";
-        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
-        if (
-          ghost
-            ? ghostOK(e.x + px, e.z)
-            : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)
-        )
-          e.x += px;
-        if (
-          ghost
-            ? ghostOK(e.x, e.z + pz)
-            : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)
-        )
-          e.z += pz;
-      };
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const a = enemies[ei]!;
-        if (!a.alive || FLYERS.has(a.kind)) continue;
-        const ra = bodyR(a);
-        const ci = Math.floor((a.x + HALF) / CELL);
-        const cj = Math.floor((a.z + HALF) / CELL);
-        for (let di = -1; di <= 1; di++) {
-          for (let dj = -1; dj <= 1; dj++) {
-            const cell = grid.get((ci + di) * 4096 + cj + dj);
-            if (!cell) continue;
-            for (const oj of cell) {
-              if (oj <= ei) continue;
-              const b = enemies[oj]!;
-              const rb = bodyR(b);
-              const reach = (ra + rb) * 0.8; // light: a little overlap is fine
-              const ox = b.x - a.x;
-              const oz = b.z - a.z;
-              const dd = ox * ox + oz * oz;
-              if (dd >= reach * reach) continue;
-              const dist = Math.sqrt(dd) || 0.01;
-              const nx = dd > 1e-6 ? ox / dist : Math.cos(ei);
-              const nz = dd > 1e-6 ? oz / dist : Math.sin(ei);
-              // soft: resolve part of the overlap per frame; the bigger body gives less ground
-              const push = Math.min(reach - dist, 0.5) * Math.min(1, delta * 10);
-              const wa = (rb * rb) / (ra * ra + rb * rb);
-              const bossA = a.kind === "boss" ? 0.1 : 1;
-              const bossB = b.kind === "boss" ? 0.1 : 1;
-              nudge(a, -nx * push * wa * bossA, -nz * push * wa * bossA);
-              nudge(b, nx * push * (1 - wa) * bossB, nz * push * (1 - wa) * bossB);
-            }
-          }
-        }
-        // keep out of the players: at most touching
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(a.x, a.z)) > 1.8) continue;
-          const r = ra + PLAYER_R;
-          const ox = a.x - t.x;
-          const oz = a.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(a, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
-      // fliers aren't solid, but they still hover at arm's length rather than inside your head
-      for (const f of enemies) {
-        if (!f.alive || !FLYERS.has(f.kind)) continue;
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(f.x, f.z)) > 3) continue;
-          const r = STATS[f.kind].radius + PLAYER_R + 0.3;
-          const ox = f.x - t.x;
-          const oz = f.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(f, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
+      // over everything. A dense flat grid keeps the pair checks cheap with 110 enemies
+      // (separate.ts: no per-frame cells, no hash lookups).
+      separateEnemies(enemies, targets, delta, {
+        blocks,
+        half: HALF,
+        kraken: theme.boss.shape === "kraken",
+        stats: STATS,
+      });
     }
 
     // player bullets
@@ -6147,7 +6076,7 @@ function World({
         advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
         b.life -= delta;
         const contact = firstWorldHit(BLAST_AT, b.pos, outOfBounds);
-        const end = b.pos.clone();
+        const end = BULLET_END.copy(b.pos);
         const hits = bodyContacts(
           BLAST_AT,
           end,

@@ -39,6 +39,35 @@ export function hitBand(kind: string): [number, number] {
   if (kind === "sniper") return [0, 2.4];
   return [0, 2];
 }
+/** hitBand without the allocation: fills `out` (hot loops reuse one tuple) */
+export function hitBandInto(kind: string, out: [number, number]): [number, number] {
+  if (kind === "hornet") {
+    out[0] = 0.8;
+    out[1] = 2.4;
+  } else if (kind === "medic") {
+    out[0] = 1.6;
+    out[1] = 3.5;
+  } else if (kind === "boss") {
+    out[0] = 0;
+    out[1] = 5;
+  } else if (
+    kind === "brute" ||
+    kind === "vanguard" ||
+    kind === "bulwark" ||
+    kind === "gatling" ||
+    kind === "charger"
+  ) {
+    out[0] = 0;
+    out[1] = 2.6;
+  } else if (kind === "sniper") {
+    out[0] = 0;
+    out[1] = 2.4;
+  } else {
+    out[0] = 0;
+    out[1] = 2;
+  }
+  return out;
+}
 
 /** shard payout on death (see Shards.tsx) */
 export const NEW_VALUE: Record<NewKind, number> = {
