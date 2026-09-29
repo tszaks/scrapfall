@@ -31,7 +31,7 @@ import {
   TENTS,
   YARD,
 } from "./streets";
-import { buildTown, townRow, type Deck, type Kit } from "./town";
+import { buildTown, townRow, type Deck, type Kit, type Rect } from "./town";
 
 // ---- cell kinds (minimap, ground splat, collision) ----
 export const WK = {
@@ -388,6 +388,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   const blocks: Block[] = [];
   const buildings: WBld[] = [];
   const props: WProp[] = [];
+  // the river crossings claim their approaches first: nothing may clutter a ramp or mouth
+  const noClutter: Rect[] = [];
   /** thin collision circles (porch posts, cactus, barrels...), installed through level.ts setPosts */
   const posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[] = [];
   /** boardwalk heights per 1 m terrain sample ("x,z"), for the walk each building laid */
@@ -934,6 +936,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   ) => a.x1 + gap > b.x0 && a.x0 - gap < b.x1 && a.z1 + gap > b.z0 && a.z0 - gap < b.z1;
   const prop = (k: WPropKind, x: number, z: number, rot = 0, s = 1, a?: number) => {
     const f = approachFoot[k] && footprint(k, x, z, rot, s);
+    // the bridge mouths and ramps stay clear of everything, clutter or not
+    if (noClutter.length) {
+      const q = f ?? { x0: x - 0.8, x1: x + 0.8, z0: z - 0.8, z1: z + 0.8 };
+      if (noClutter.some((r) => overlaps(q, r))) return undefined;
+    }
     if (f) {
       const lanes = doorApproaches(),
         blocked = lanes.find((l) => overlaps(f, l));
@@ -1087,6 +1094,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     footprint,
     doorApproaches,
     overlaps,
+    noClutter,
   };
 
   // north row, west block and east block
@@ -2012,7 +2020,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // 9. Walkable height: boardwalks, the platform, the saloon balcony and its stair.
   //    The belfry uses shared spiral access. 1 m samples; climbs steeper than 1:1 are walls.
   // ======================================================================
-  const earth = valleyEarth(half, buildings, props, rock, cells, riverZ);
+  const earth = valleyEarth(half, buildings, props, rock, cells, riverZ, decks);
   const tn = half * 2;
   const th = new Float32Array((tn + 1) * (tn + 1));
   const tset = (x: number, z: number, h: number) => {
@@ -2077,25 +2085,46 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     }
   }
   // ---- the raised decks (the river crossings and the loading-chute ramp): crib-walled
-  // causeways of fill with a plank top - the heightfield carries the berm itself, an exact
-  // platform keeps its top dead flat, and a dirt ramp at either end climbs it ----
+  // causeways with a plank top - the earth itself carries the dirt abutment ramps (added
+  // in valleyEarth so the drawn bank, the step check and this heightfield agree), an
+  // exact platform keeps the deck top dead flat ----
   for (const dk of decks) {
     platforms.push({ x0: dk.x0, z0: dk.z0, x1: dk.x1, z1: dk.z1, y: dk.y });
     tbox(dk.x0, dk.z0, dk.x1, dk.z1, () => dk.y);
-    const RAMP = 6;
-    if (dk.axis === "z") {
-      // rises along z at both ends
-      tbox(dk.x0, dk.z0 - RAMP, dk.x1, dk.z0, (x, z) => dk.y * (1 - (dk.z0 - z) / RAMP));
-      tbox(dk.x0, dk.z1, dk.x1, dk.z1 + RAMP, (x, z) => dk.y * (1 - (z - dk.z1) / RAMP));
-      // wing the fill out past the deck's shoulders so the sides slope, not cliff
-      tbox(dk.x0 - 3, dk.z0 - RAMP, dk.x0, dk.z0, (x, z) => dk.y * (1 - (dk.z0 - z) / RAMP) * ((x - dk.x0 + 3) / 3));
-      tbox(dk.x1, dk.z0 - RAMP, dk.x1 + 3, dk.z0, (x, z) => dk.y * (1 - (dk.z0 - z) / RAMP) * ((dk.x1 + 3 - x) / 3));
-      tbox(dk.x0 - 3, dk.z1, dk.x0, dk.z1 + RAMP, (x, z) => dk.y * (1 - (z - dk.z1) / RAMP) * ((x - dk.x0 + 3) / 3));
-      tbox(dk.x1, dk.z1, dk.x1 + 3, dk.z1 + RAMP, (x, z) => dk.y * (1 - (z - dk.z1) / RAMP) * ((dk.x1 + 3 - x) / 3));
-    } else {
-      tbox(dk.x0 - RAMP, dk.z0, dk.x0, dk.z1, (x) => dk.y * (1 - (dk.x0 - x) / RAMP));
-      tbox(dk.x1, dk.z0, dk.x1 + RAMP, dk.z1, (x) => dk.y * (1 - (x - dk.x1) / RAMP));
+  }
+  // ---- the saloon's alley stair: real steps up the outside wall to its balcony. One
+  // exact platform per tread (the same steps the mesh draws), then the landing ----
+  if (sal.stairs) {
+    const st = sal.stairs;
+    const run = Math.abs(st.zTop - st.zBottom);
+    const n = Math.max(10, Math.ceil(run / 0.8)); // the treads the stair mesh draws
+    const dir = Math.sign(st.zTop - st.zBottom) || 1;
+    for (let i = 0; i < n; i++) {
+      const za = st.zBottom + (dir * run * i) / n;
+      const zb = st.zBottom + (dir * run * (i + 1)) / n;
+      platforms.push({
+        x0: st.x0 + 0.2,
+        z0: Math.min(za, zb),
+        x1: st.x1 - 0.2,
+        z1: Math.max(za, zb),
+        y: (BALCONY_Y * (i + 1)) / n,
+      });
     }
+    const edge = st.zTop + dir * SALOON_BALCONY;
+    // the landing runs a touch past the stair strip, onto the balcony's end
+    const west = sal.lot ? (st.x0 + st.x1) / 2 < (sal.lot.x0 + sal.lot.x1) / 2 : false;
+    platforms.push({
+      x0: west ? st.x0 : st.x0 - 0.8,
+      z0: Math.min(st.zTop, edge),
+      x1: west ? st.x1 + 0.8 : st.x1,
+      z1: Math.max(st.zTop, edge),
+      y: BALCONY_Y,
+    });
+    // the outer edge is railed: thin posts where the treads stand above the dirt
+    const openX = west ? st.x0 : st.x1;
+    for (let z = Math.min(st.zBottom, st.zTop) + 0.4; z < Math.max(st.zBottom, st.zTop); z += 0.4)
+      posts.push({ x: openX, z, r: 0.06, h: 1.2 });
+    posts.push({ x: openX, z: Math.max(st.zBottom, st.zTop) + dir * 0.1, r: 0.06, h: 1.2 });
   }
   // ---- the walk-in interiors: floors at the boardwalk's height, stairs, landings, lamps ----
   for (const b of buildings) {
@@ -2242,7 +2271,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     campfire,
     terrain,
     earth,
-    saloonStairs: null,
+    saloonStairs: sal.stairs,
     stairFeet,
     lamps,
     navWalls,

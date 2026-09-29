@@ -69,6 +69,8 @@ export type Kit = {
   ) => Rect | undefined;
   doorApproaches: () => readonly Rect[];
   overlaps: (a: Rect, b: Rect, gap?: number) => boolean;
+  /** clutter never lands here: the bridge mouths and ramps stay walkable */
+  noClutter: Rect[];
 };
 
 export type RowPlan = {
@@ -121,7 +123,15 @@ export function townRow(
     order.push(fixed[li]!);
   }
   while (fi < fillers.length) order.push(fillers[fi++]!);
-  const gaps = order.map((p) => (p.t === "saloon" ? 6 : rand() < 0.3 ? 6 : 0));
+  const gaps: number[] = order.map((p) => (p.t === "saloon" ? 6 : rand() < 0.3 ? 6 : 0));
+  // the saloon's alley stair stands in the gap on its balcony side — west of a
+  // north-facing front (the gap BEFORE it), east of a south-facing one (its own,
+  // already wide). The lane must exist before the stair's strip is reserved.
+  for (let i = 0; i < order.length; i++) {
+    if (order[i]!.t !== "saloon") continue;
+    const gi = north ? i - 1 : i;
+    if (gi >= 0) gaps[gi] = Math.max(gaps[gi]!, 2.8);
+  }
   const need = () => order.reduce((sum, p, i) => sum + p.w + gaps[i]!, 0) - 2;
   while (need() > x1 - x0) {
     const k = order.map((p) => fixed.includes(p)).lastIndexOf(false);
@@ -140,19 +150,57 @@ export function townRow(
   for (let oi = 0; oi < order.length; oi++) {
     const p = order[oi]!;
     const gap = gaps[oi]!;
-    const d = Math.min(p.d ?? 14 + Math.floor(rand() * 4) * 2, maxD);
-    const bz0 = north ? zf - d : zf;
-    const bz1 = north ? zf : zf + d;
+    let d = Math.min(p.d ?? 14 + Math.floor(rand() * 4) * 2, maxD);
+    let bz0 = north ? zf - d : zf;
+    let bz1 = north ? zf : zf + d;
     const mat = p.mat ?? K.pickMat();
     const porch = p.porch ?? (p.storeys > 1 && rand() < 0.5 ? 2 : rand() < 0.8 ? 1 : 0);
-    // an occupied lot stays open ground (a fenced vacant lot, not a ghost building)
-    if (!isFree(x - 0.4, Math.min(bz0, bz1) - 0.4, x + p.w + 0.4, Math.max(bz0, bz1) + 0.4)) {
-      if (gap === 0 && rand() < 0.4) {
-        const fz = north ? zf + 0.4 : zf - 0.4;
-        K.picket(x + 0.4, fz, x + p.w - 0.4, fz);
+    // the saloon's alley stair wants its own clear strip beside the lot (on the
+    // balcony side: west of a north-facing front, east of a south-facing one)
+    const sideW = p.t === "saloon" ? 2.6 : 0;
+    const lotFree = (lx: number) =>
+      isFree(
+        lx - 0.4 - (north ? sideW : 0),
+        Math.min(bz0, bz1) - 0.4,
+        lx + p.w + 0.4 + (north ? 0 : sideW),
+        Math.max(bz0, bz1) + 0.4,
+      );
+    if (!lotFree(x)) {
+      if (!fixed.includes(p)) {
+        // an occupied lot stays open ground (a fenced vacant lot, not a ghost building)
+        if (gap === 0 && rand() < 0.4) {
+          const fz = north ? zf + 0.4 : zf - 0.4;
+          K.picket(x + 0.4, fz, x + p.w - 0.4, fz);
+        }
+        x += p.w + gap;
+        continue;
       }
-      x += p.w + gap;
-      continue;
+      // a reserved lot: the cross street or alley cuts the ROW, never the landmark.
+      // The building slides to the next clear stretch and the lane passes beside it.
+      let spot = -1;
+      const hi = x1 - p.w - (north ? 0 : sideW);
+      for (const [lo] of [[x], [x0]] as const) {
+        for (let sx = lo; sx <= hi + 0.01; sx += 0.5)
+          if (lotFree(sx)) {
+            spot = sx;
+            break;
+          }
+        if (spot >= 0) break;
+      }
+      if (spot < 0) {
+        // nothing at full depth: a shallow footprint still beats a missing landmark
+        d = Math.min(d, 10);
+        bz0 = north ? zf - d : zf;
+        bz1 = north ? zf : zf + d;
+        for (let sx = x0; sx <= hi + 0.01; sx += 0.5)
+          if (lotFree(sx)) {
+            spot = sx;
+            break;
+          }
+      }
+      if (spot >= 0) x = spot;
+      // (with no clear stretch at all it still builds at the cursor: a fixed shop is
+      // promised by the map, never silently skipped)
     }
     bld({
       t: p.t,
@@ -204,14 +252,40 @@ export function townRow(
         });
     }
     if (p.t === "saloon") {
+      // the alley stair climbs the BALCONY side of the lot: west of a north-facing
+      // front, east of a south-facing one (mirrored, like the balcony itself)
       K.sal.stairs = {
-        x0: x + p.w,
-        x1: x + p.w + 2,
+        x0: north ? x - 2.4 : x + p.w + 0.1,
+        x1: north ? x - 0.1 : x + p.w + 2.4,
         zBottom: north ? zf - 14 : zf + 14,
         zTop: zf,
         zEdge: north ? zf + BOARD_D : zf - BOARD_D,
       };
       K.sal.lot = { x0: x, x1: x + p.w, zf, north };
+      // and the lane stays clear of clutter: a wagon or trough parked in it would
+      // wall off the only outside route to the balcony. The noClutter zone covers
+      // later placements; the sweeps clear the gap junk earlier lots already dropped.
+      K.noClutter.push({
+        x0: K.sal.stairs.x0 - 0.5,
+        z0: Math.min(K.sal.stairs.zBottom, K.sal.stairs.zEdge) - 1,
+        x1: K.sal.stairs.x1 + 0.5,
+        z1: Math.max(K.sal.stairs.zBottom, K.sal.stairs.zEdge) + 1,
+      });
+      {
+        const st = K.sal.stairs,
+          x0 = st.x0 - 0.2,
+          x1 = st.x1 + 0.2,
+          z0 = Math.min(st.zBottom, st.zEdge) - 0.6,
+          z1 = Math.max(st.zBottom, st.zEdge) + 0.6;
+        for (let i = K.props.length - 1; i >= 0; i--) {
+          const q = K.props[i]!;
+          if (q.x > x0 && q.x < x1 && q.z > z0 && q.z < z1) K.props.splice(i, 1);
+        }
+        for (let i = K.posts.length - 1; i >= 0; i--) {
+          const q = K.posts[i]!;
+          if (q.x > x0 && q.x < x1 && q.z > z0 && q.z < z1) K.posts.splice(i, 1);
+        }
+      }
     }
     if (p.t !== "smithy" && rand() < 0.75) {
       let hx = x + p.w * (0.3 + rand() * 0.4);
@@ -319,7 +393,10 @@ export function townRow(
         prop(rand() < 0.5 ? "crates" : "crate", cxw, czw, rand() * 0.6, 0.9);
       }
     }
-    if (gap > 0) {
+    // the gap junk: but not where it would wall off the saloon's alley stair —
+    // the strip stands in the gap before a north-front saloon, after a south one
+    const stairGap = north ? order[oi + 1]?.t === "saloon" : p.t === "saloon";
+    if (gap > 0 && !stairGap) {
       const ax0 = x + p.w;
       const ax1 = ax0 + gap;
       const za = north ? zf - 3 : zf + 3;
@@ -1088,26 +1165,230 @@ function southBank(K: Kit) {
   }
 }
 
+/** the desert was never empty: a working spread west by the ford, homesteads and
+ * woodlots along the south bank, prospector claims under the north canyon and stock
+ * outfits east of the freight yard. Every site is probed with isFree, so a seed that
+ * leaves less room between the rock spurs simply gets fewer outfits. */
+function ranches(K: Kit) {
+  const { rand, prop, solidProp, setGround, markSolid } = K;
+
+  /** a rail corral: fence props on the perimeter, a collision line just inside */
+  const corral = (x0: number, z0: number, x1: number, z1: number, gap: number) => {
+    for (let x = x0; x < x1; x += 2.4) {
+      for (const z of [z0, z1])
+        if (Math.abs(x - gap) > 2.2 || z === z0) prop("fence", x + 1.2, z, 0, 2.4, 1);
+    }
+    for (let z = z0; z < z1; z += 2.4) {
+      prop("fence", x0, z + 1.2, Math.PI / 2, 2.4, 1);
+      prop("fence", x1, z + 1.2, Math.PI / 2, 2.4, 1);
+    }
+    markSolid(x0 - 0.3, z0 - 0.3, x1 + 0.3, z0 + 0.3, 1.3);
+    markSolid(x0 - 0.3, z1 - 0.3, x1 + 0.3, z1 + 0.3, 1.3);
+    markSolid(x0 - 0.3, z0 - 0.3, x0 + 0.3, z1 + 0.3, 1.3);
+    markSolid(x1 - 0.3, z0 - 0.3, x1 + 0.3, z1 + 0.3, 1.3);
+  };
+
+  /** face the front door toward the middle of town, roughly */
+  const toward = (cx: number, cz: number): 0 | 1 | 2 | 3 =>
+    Math.abs(cx) > Math.abs(cz) ? (cx > 0 ? 3 : 1) : cz > 0 ? 0 : 2;
+
+  /** a ranch/homestead outfit: house, windmill, corral and the day's clutter */
+  const outfit = (cx: number, cz: number, small: boolean) => {
+    const hw = small ? 11 : 14,
+      hd = small ? 9 : 12;
+    const bw = small ? 6 : 10,
+      bd = small ? 5 : 7;
+    // the house needs clean dirt; the clutter can live beside the odd rock spur, so
+    // the probe covers just the house apron instead of the whole outfit
+    if (!K.isFree(cx - bw / 2 - 2, cz - hd, cx + bw / 2 + 2, cz - hd + bd + 4)) return false;
+    setGround(cx - hw, cz - hd, cx + hw, cz + hd, WK.YARD);
+    const front = toward(cx, cz);
+    K.bld({
+      t: small ? (rand() < 0.6 ? "shack" : "tent") : "ranch",
+      x0: cx - bw / 2,
+      z0: cz - hd + 2,
+      x1: cx + bw / 2,
+      z1: cz - hd + 2 + bd,
+      front,
+      storeys: 1,
+      mat: rand() < 0.4 ? "log" : "board",
+      sign: -1,
+      porch: 0,
+      ff: 0,
+      roof: small ? "shed" : "gable",
+    });
+    if (!small || rand() < 0.4)
+      prop("windmill", cx + hw - 4, cz - hd + 5, rand() * 6.28, 0.75 + rand() * 0.2);
+    // the corral on the windward side, stock in it, a water tank by the gate — it marks
+    // solid, so it only goes where its own footprint is clear
+    if (!small && K.isFree(cx - hw, cz + 1, cx - hw + 14, cz + hd - 1)) {
+      corral(cx - hw + 1, cz + 2, cx - hw + 13, cz + hd - 2, cx - hw + 7);
+      const n = 2 + Math.floor(rand() * 3);
+      for (let i = 0; i < n; i++)
+        prop(
+          rand() < 0.5 ? "steer" : "horse",
+          cx - hw + 3 + rand() * 8,
+          cz + 4 + rand() * (hd - 7),
+          rand() * 6.28,
+          1,
+        );
+      prop(rand() < 0.5 ? "tank" : "trough", cx - hw + 14.4, cz + 5, 0.4, 1);
+    }
+    if (!small) {
+      prop("hay", cx + hw - 3.4, cz + hd - 4, rand() * 6.28, 1);
+      solidProp(
+        rand() < 0.7 ? "wagon" : "cart",
+        cx + hw - 4,
+        cz + hd - 7,
+        rand() * 0.8 - 0.4,
+        1.8,
+        3.6,
+        1.6,
+      );
+    }
+    prop("woodpile", cx - bw / 2 - 1.6, cz - hd + 3, rand() * 0.8, 0.9 + rand() * 0.4);
+    prop("barrels", cx + bw / 2 + 1.4, cz - hd + 4, rand() * 6.28, 1);
+    if (rand() < 0.5) prop("outhouse", cx + hw - 3, cz + 3.4, rand() * 0.5, 1);
+    if (rand() < 0.4) prop("garden", cx - 2, cz + hd - 4, 0, 1);
+    if (rand() < 0.5) prop("clothesline", cx + 3, cz - hd + bd + 4, 0.3, 1, 1);
+    return true;
+  };
+
+  /** a lone prospector's claim: shack, ore cart, tailings — the canyon fringe */
+  const claim = (cx: number, cz: number) => {
+    if (!K.isFree(cx - 5, cz - 7, cx + 5, cz + 4)) return false;
+    setGround(cx - 9, cz - 8, cx + 9, cz + 8, WK.YARD);
+    K.bld({
+      t: "shack",
+      x0: cx - 3,
+      z0: cz - 5,
+      x1: cx + 3,
+      z1: cz,
+      front: toward(cx, cz),
+      storeys: 1,
+      mat: rand() < 0.7 ? "log" : "board",
+      sign: -1,
+      porch: 0,
+      ff: 0,
+      roof: "shed",
+    });
+    prop("orecart", cx + 4.6, cz - 1, rand() * 0.6, 1);
+    prop("woodpile", cx - 4.4, cz + 2.4, rand(), 0.9);
+    prop("barrels", cx + 4, cz + 3, rand() * 6.28, 0.9);
+    if (rand() < 0.4) prop("bones", cx - 3, cz + 5, rand() * 6.28, 1);
+    if (rand() < 0.5) prop("deadtree", cx + 7, cz + 6, rand() * 6.28, 0.9);
+    return true;
+  };
+
+  // west of the windmill ranch the desert runs to the ridge — a spread on the trail
+  // out, beyond the ford camp
+  for (const [cx, cz] of [
+    [-262, 96],
+    [-250, 132],
+    [-268, 62],
+  ] as const) {
+    if (outfit(cx, cz, false)) break;
+  }
+  // homesteads on the south bank, out past the woodcutters and the wagon camp
+  {
+    let placed = 0;
+    const spots: [number, number][] = [];
+    for (const cx of [-246, -196, -146, -96, 136, 176, 216, 252]) {
+      if (placed >= 3) break;
+      for (let z = 212; z <= 272; z += 12) {
+        if (spots.some(([px, pz]) => Math.abs(px - cx) < 40 && Math.abs(pz - z) < 30))
+          continue;
+        if (rand() < 0.25) continue;
+        if (outfit(cx, z + rand() * 6, false)) {
+          spots.push([cx, z]);
+          placed++;
+          break;
+        }
+      }
+    }
+    // dugouts and shacks where the ground squeezes between the mesas in the far corners
+    for (const cx of [-216, -188, -240, 199, 228, 168]) {
+      if (placed >= 5) break;
+      for (let z = 246; z <= 276; z += 10)
+        if (claim(cx + rand() * 8 - 4, z + rand() * 6)) {
+          placed++;
+          break;
+        }
+    }
+    // and the thin dirt strip between the woodcutters and the south ridge, east side
+    for (const cx of [176, 208, 238, 150]) {
+      if (placed >= 7) break;
+      for (let z = 190; z <= 240; z += 14)
+        if (claim(cx + rand() * 8 - 4, z + rand() * 6)) {
+          placed++;
+          break;
+        }
+    }
+  }
+  // stock outfits east of the freight yard, along the road out of town
+  {
+    let placed = 0;
+    for (const [cx, cz] of [
+      [236, -176],
+      [218, -152],
+      [252, -160],
+      [230, -128],
+      [246, 160],
+      [222, 176],
+      [256, 196],
+    ] as const) {
+      if (placed >= 2) break;
+      if (outfit(cx + rand() * 6 - 3, cz + rand() * 6 - 3, rand() < 0.5)) placed++;
+    }
+  }
+  // prospector claims under the north canyon face, behind the mine bench
+  {
+    let placed = 0;
+    for (let x = -250; x <= 250 && placed < 6; x += 25)
+      for (const z of [-212, -230, -198, -246]) {
+        if (claim(x + rand() * 10 - 5, z + rand() * 8 - 4)) {
+          placed++;
+          break;
+        }
+      }
+  }
+  // the odd dugout west of Boot Hill, where the trail bends toward the west road
+  for (const [cx, cz] of [
+    [-262, -28],
+    [-246, -58],
+    [-272, 12],
+  ] as const) {
+    if (claim(cx, cz)) break;
+  }
+}
+
 /** the two bridges over the dry riverbed: the wagon bridge on the south trail and the
  * plank bridge where Laundry Row runs out to the tent city */
 function bridges(K: Kit) {
-  const { prop, posts } = K;
-  // decks (layout's section 9 gives them ramps and real terrain)
-  K.decks.push({ x0: -62, z0: 136, x1: -52, z1: 172, y: 0.5, axis: "z" });
-  K.decks.push({ x0: 48, z0: 174, x1: 60, z1: 206, y: 0.5, axis: "z" });
-  // side rails: thin posts a walker brushes against
-  for (const [xa, xb, z0, z1] of [
-    [-61.4, -52.6, 138, 170],
-    [48.6, 59.4, 176, 204],
+  const { posts } = K;
+  // The deck list doubles as the approach plan: the dirt ramps and mouths are
+  // registered before any district dresses the banks, so clutter never blocks them.
+  for (const dk of [
+    { x0: -62, z0: 136, x1: -52, z1: 172, y: 0.5 }, // the wagon bridge, south trail
+    { x0: 48, z0: 174, x1: 60, z1: 206, y: 0.5 }, // the plank bridge to the tent city
   ] as const) {
-    for (const x of [xa, xb])
-      for (let z = z0 + 1; z <= z1 - 1; z += 0.4)
-        posts.push({ x, z, r: 0.07, shot: true, h: 1.4 });
-    for (const z of [z0 + 0.6, z1 - 0.6])
-      for (const x of [xa, xb]) prop("fence", x, z, Math.PI / 2, 1.4, 1);
+    K.decks.push({ ...dk, axis: "z" });
+    K.noClutter.push(
+      { x0: dk.x0 - 1.6, z0: dk.z0 - 9, x1: dk.x1 + 1.6, z1: dk.z0 + 0.6 },
+      { x0: dk.x0 - 1.6, z0: dk.z1 - 0.6, x1: dk.x1 + 1.6, z1: dk.z1 + 9 },
+    );
+    // the side rails: a continuous collision line AND the visible split rails on it
+    for (const x of [dk.x0 + 0.6, dk.x1 - 0.6]) {
+      for (let z = dk.z0 + 1; z <= dk.z1 - 1; z += 0.4)
+        posts.push({ x, z, r: 0.09, shot: true, h: 1.4 });
+      for (let z = dk.z0 + 1.2; z + 2.3 <= dk.z1 - 1; z += 2.3)
+        K.props.push({ k: "fence", x, z: z + 1.15, rot: Math.PI / 2, s: 2.3 });
+    }
+    // lamp posts mark each mouth instead of the railroad crossbucks
+    for (const z of [dk.z0 - 1.6, dk.z1 + 1.6])
+      for (const x of [dk.x0 - 0.9, dk.x1 + 0.9])
+        K.props.push({ k: "streetlamp", x, z, rot: 0, s: 1 });
   }
-  prop("crossbuck", -64, 134, 0, 1);
-  prop("crossbuck", 62, 172, 0, 1);
 }
 
 /** a lumber yard and a brickyard/ice house in the back blocks: the working yards every
@@ -1369,6 +1650,9 @@ export function buildTown(K: Kit) {
   // Station road's west side: warehouses and the wagon yard
   townRowZ(K, 113, -56, 66);
   // ---- the districts ----
+  // (the bridges go first: their mouths and ramps are no-clutter zones, so the
+  // riverside camps and yards that follow can never wall the crossings in)
+  bridges(K);
   plaza(K);
   chinatown(K);
   bootHill(K);
@@ -1377,7 +1661,7 @@ export function buildTown(K: Kit) {
   tentCity(K);
   riverside(K);
   southBank(K);
-  bridges(K);
+  ranches(K);
   workYards(K);
   streetCover(K);
   streetDressing(K);

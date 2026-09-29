@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { rolldown } from "rolldown";
 
 // These pure modules have no runtime imports. Transpile with the project's existing
 // compiler so the regression checks also run on the supported Node 20 runtime.
@@ -119,5 +121,66 @@ test("co-op ignores local URL overrides while solo diagnostics may select weathe
   } finally {
     if (previous) Object.defineProperty(globalThis, "window", previous);
     else delete globalThis.window;
+  }
+});
+
+test("Dry Gulch's reserved landmarks exist on every seed", async () => {
+  // The western layout graph is pure data (no three.js): bundle it once with the
+  // project's bundler, then build the co-op-size town for seeds 1-50.
+  const bundle = await rolldown({
+    input: fileURLToPath(new URL("../src/game/western/layout.ts", import.meta.url)),
+  });
+  const { output } = await bundle.generate({ format: "esm" });
+  const western = await import(
+    `data:text/javascript;base64,${Buffer.from(output[0].code).toString("base64")}`
+  );
+  const rng = (seed) => {
+    let a = seed >>> 0;
+    return () => {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  // walk-ins by kind (the general store is the walk-in "store"); named landmarks by sign
+  const W = western.W;
+  const FIXED = ["HOTEL", "OPERA HOUSE"];
+  for (let seed = 1; seed <= 50; seed++) {
+    const { layout } = western.generateWestern(rng(seed), 400, 400);
+    for (const t of ["store", "saloon", "bank", "sheriff", "stable"])
+      assert.ok(
+        layout.buildings.some((b) => b.t === t && b.walkIn),
+        `seed ${seed}: walk-in ${t} missing`,
+      );
+    for (const name of FIXED)
+      assert.ok(
+        layout.buildings.some((b) => b.sign === W[name]),
+        `seed ${seed}: ${name} missing`,
+      );
+    // the saloon's balcony stair must be wired, or the STAIRS marker leads nowhere
+    const st = layout.saloonStairs;
+    assert.ok(st, `seed ${seed}: saloon stairs missing`);
+    // and its alley lane stays clear: no neighbor wall, prop or post stands in it
+    // (the strip's inner edge kisses the saloon wall — the margin goes on the far side)
+    const salB = layout.buildings.find((b) => b.t === "saloon");
+    const lx0 = st.x0 - (salB && salB.x1 <= st.x0 ? 0.02 : 0.2),
+      lx1 = st.x1 + (salB && salB.x0 >= st.x1 ? 0.02 : 0.2),
+      lz0 = Math.min(st.zBottom, st.zEdge) - 0.6,
+      lz1 = Math.max(st.zBottom, st.zEdge) + 0.6;
+    const inLane = (x, z) => x > lx0 && x < lx1 && z > lz0 && z < lz1;
+    for (const b of layout.buildings)
+      assert.ok(
+        b.x0 >= lx1 || b.x1 <= lx0 || b.z0 >= lz1 || b.z1 <= lz0,
+        `seed ${seed}: ${b.t} (${b.x0}..${b.x1}, ${b.z0}..${b.z1}) blocks the stair lane`,
+      );
+    for (const q of layout.props)
+      assert.ok(!inLane(q.x, q.z), `seed ${seed}: ${q.k} prop in the stair lane at ${q.x},${q.z}`);
+    for (const q of layout.posts)
+      assert.ok(
+        !inLane(q.x, q.z) || q.r <= 0.08,
+        `seed ${seed}: post in the stair lane at ${q.x},${q.z} r=${q.r}`,
+      );
   }
 });

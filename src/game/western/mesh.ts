@@ -2029,7 +2029,7 @@ function backWorks(
   void plainL;
 }
 
-function building(b: WBld, r: () => number): BGeo {
+function building(b: WBld, r: () => number, stairOpen = false): BGeo {
   const B: BGeo = { main: new Geo(), detail: new Geo(), glow: new Geo(), pools: new Geo() };
   const { W, D } = frameOf(b);
   const G = B.main;
@@ -2486,7 +2486,8 @@ function building(b: WBld, r: () => number): BGeo {
         G.col("#ffffff", 0.9);
         boxP(G, WL.DECK, ba + 0.01, py, -0.1, bb, py + 0.18, bd, true, true);
         rail(ba, bb, bd - 0.07);
-        endRail(ba + 0.07, 0.2, bd - 0.07);
+        // the alley stair's landing joins the balcony on this end: leave it open
+        if (!stairOpen) endRail(ba + 0.07, 0.2, bd - 0.07);
         endRail(bb - 0.07, 0.2, bd - 0.07);
         const nb = Math.max(2, Math.round((bb - ba) / 3.2));
         for (let i = 0; i <= nb; i++) {
@@ -2791,7 +2792,10 @@ function tent(B: BGeo, W: number, D: number, r: () => number): BGeo {
   const x0 = -W / 2;
   const x1 = W / 2;
   const z0 = -D;
-  G.col("#ffffff", 0.95 - r() * 0.1).mat(WL.CANVAS, r(), 0);
+  // weathered canvas, never clean white: sun-faded oiled cloth reads pale tan and
+  // stays dim instead of glaring under the moon
+  const canvasTint = pick(["#e6dbc2", "#d8cbab", "#cfc0a0", "#e2d8c4"], r);
+  G.col(canvasTint, 0.95 - r() * 0.1).mat(WL.CANVAS, r(), 0);
   // the two slopes (ridge along the depth), flaps out at the front
   slope(G, WL.CANVAS, 0, 0.2, 0, z0 - 0.2, h, x1 + 0.2, 0, 0.35);
   slope(G, WL.CANVAS, 0, z0 - 0.2, 0, 0.2, h, x0 - 0.2, 0, 0.35);
@@ -2817,9 +2821,15 @@ function tent(B: BGeo, W: number, D: number, r: () => number): BGeo {
     B.detail.col("#3a3634");
     cylP(B.detail, WL.IRON, x1 * 0.5, h * 0.5, z0 * 0.5, 0.07, 1.8, 6);
   }
-  // a lamp glowing through the canvas at night
-  B.glow.col("#ffb060", 0.25);
-  B.glow.quad(-0.45, 0.02, 0.05, 0.45, 0.02, 0.05, 0, h - 0.45, 0.05, 0, h - 0.45, 0.05);
+  // a lamp glowing through the canvas at night: some tents burn a light, some are dark.
+  // (glow geo draws opaque, so the lit interior is a warm plane just off the open flap —
+  // big enough to read at a distance, shaped to the flap opening, not over the canvas)
+  if (r() < 0.55) {
+    B.glow.col("#ff9a3c", 0.55);
+    B.glow.quad(-0.56, 0.02, 0.07, 0.56, 0.02, 0.07, 0.3, h - 0.55, 0.07, -0.3, h - 0.55, 0.07);
+    B.glow.col("#ffc878", 0.85);
+    B.glow.quad(-0.3, 0.02, 0.08, 0.3, 0.02, 0.08, 0, h - 0.7, 0.08, 0, h - 0.7, 0.08);
+  }
   return B;
 }
 
@@ -4889,12 +4899,15 @@ function decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
     G.quad(dk.x0, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z1,
       dk.x0, dk.y + 0.05, dk.z1, [0, 0, 1, 1]); // dark underside (visible from the gully)
     G.col("#4a3a2c").mat(WL.P_BOARD, 0.5, 0);
-    // the timber deck edge: a fascia board round the rim
-    const fx = 0.16;
-    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x0, dk.y + 0.1, dk.z1 + fx);
-    boxP(G, WL.TIMBER, dk.x1, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, dk.y + 0.1, dk.z1 + fx);
-    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, dk.y + 0.1, dk.z0);
-    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z1, dk.x1 + fx, dk.y + 0.1, dk.z1 + fx);
+    // the timber deck edge: a fascia board round the rim — flush at the two ends the
+    // ramps land on (a lip above the planks snags the body capsule mid-step)
+    const fx = 0.16,
+      lipX = dk.axis === "x" ? dk.y + 0.01 : dk.y + 0.1,
+      lipZ = dk.axis === "z" ? dk.y + 0.01 : dk.y + 0.1;
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x0, lipX, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x1, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, lipX, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, lipZ, dk.z0);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z1, dk.x1 + fx, lipZ, dk.z1 + fx);
     // the crib walls: vertical plank faces where the berm meets the carved bed, on
     // posts down into the channel
     const sideX: number[] = dk.axis === "z" ? [dk.x0, dk.x1] : [];
@@ -4922,74 +4935,66 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
     const G = chunkAt((st.x0 + st.x1) / 2, st.zTop).main;
     const dir = Math.sign(st.zTop - st.zBottom); // toward the street
     const run = Math.abs(st.zTop - st.zBottom);
-    const n = Math.round(run);
     const xa = st.x0 + 0.25;
     const xb = st.x1 - 0.3;
+    const n = Math.max(10, Math.ceil(run / 0.8)); // ~0.19 m risers: a taller face reads as a wall to the step clearance
+    const rise = BALCONY_Y / n;
     for (let i = 0; i < n; i++) {
-      const za = st.zBottom + dir * i;
-      const h = (BALCONY_Y * (i + 1)) / n;
+      const za = st.zBottom + (dir * run * i) / n;
+      const zb = st.zBottom + (dir * run * (i + 1)) / n;
+      const h = BALCONY_Y - rise * (n - i - 1);
       G.col("#a88660");
       boxP(
         G,
         WL.DECK,
         xa,
-        h - 0.08,
-        Math.min(za, za + dir),
+        h - 0.05,
+        Math.min(za, zb + dir * 0.03),
         xb,
         h,
-        Math.max(za, za + dir),
+        Math.max(za, zb + dir * 0.03),
         true,
         true,
       );
-      // risers
+      // the riser is one board between treads, top edge under the step budget
       G.col("#7a5e44");
-      boxP(
-        G,
-        WL.TIMBER,
-        xa,
-        0,
-        Math.min(za, za + dir * 0.06),
-        xb,
-        h - 0.08,
-        Math.max(za, za + dir * 0.06),
-        false,
-      );
+      if (dir > 0) wallq(G, xb, za, xa, za, h - rise, h - 0.05, [0, 0, 1, 0.2]);
+      else wallq(G, xa, za, xb, za, h - rise, h - 0.05, [0, 0, 1, 0.2]);
     }
-    // the boarded side toward the open half of the alley, and a handrail
+    // the boarded side toward the open half of the alley, and a handrail — on whichever
+    // edge is farther from the saloon (the stair can run either side of the lot)
+    const sb = L.buildings.find((b) => b.t === "saloon");
+    const openL =
+      !sb || (st.x0 + st.x1) / 2 < (sb.x0 + sb.x1) / 2; // open edge on the west side
+    const ox = openL ? xa - 0.28 : xb; // rail line on the open edge
     G.col("#8a7258");
     for (let i = 0; i < n; i++) {
-      const za = st.zBottom + dir * i;
-      const h = (BALCONY_Y * (i + 1)) / n;
-      boxP(G, WL.P_BOARD, xb, 0, Math.min(za, za + dir), xb + 0.1, h, Math.max(za, za + dir));
+      const za = st.zBottom + (dir * run * i) / n;
+      const zb = st.zBottom + (dir * run * (i + 1)) / n;
+      const h = rise * (i + 1);
+      boxP(G, WL.P_BOARD, ox, 0, Math.min(za, zb), ox + 0.1, h, Math.max(za, zb));
     }
     G.col("#6a4a30");
-    beam(G, xb + 0.05, 1.0, st.zBottom, xb + 0.05, BALCONY_Y + 1.0, st.zTop, 0.08);
+    beam(G, ox + 0.05, 1.0, st.zBottom, ox + 0.05, BALCONY_Y + 1.0, st.zTop, 0.08);
     for (let i = 0; i <= n; i += 2) {
-      const z = st.zBottom + dir * i;
-      const h = (BALCONY_Y * i) / n;
-      boxP(G, WL.TIMBER, xb, h, z - 0.05, xb + 0.1, h + 1.0, z + 0.05);
+      const z = st.zBottom + (dir * run * i) / n;
+      boxP(G, WL.TIMBER, ox, rise * i, z - 0.05, ox + 0.1, rise * i + 1.0, z + 0.05);
     }
     // the landing: a deck at balcony height on posts, railed on its open sides
     const edge = st.zTop + dir * SALOON_BALCONY; // (as deep as the balcony it joins)
     const zl0 = Math.min(st.zTop, edge);
     const zl1 = Math.max(st.zTop, edge);
     G.col("#b89a78");
-    boxP(G, WL.DECK, st.x0 - 0.1, BALCONY_Y - 0.18, zl0, xb + 0.1, BALCONY_Y, zl1, true, true);
+    // the deck runs a touch past the stair strip, onto the balcony's end
+    const dx0 = openL ? st.x0 - 0.1 : st.x0 - 0.9,
+      dx1 = openL ? st.x1 + 0.9 : st.x1 + 0.1;
+    boxP(G, WL.DECK, dx0, BALCONY_Y - 0.18, zl0, dx1, BALCONY_Y, zl1, true, true);
     G.col("#6a4a30");
-    boxP(G, WL.TIMBER, xb - 0.1, 0, edge - 0.1, xb + 0.1, BALCONY_Y, edge + 0.1);
+    boxP(G, WL.TIMBER, ox - 0.1, 0, edge - 0.1, ox + 0.1, BALCONY_Y, edge + 0.1);
     G.col("#e8dcc0");
-    boxP(
-      G,
-      WL.TIMBER,
-      st.x0 - 0.1,
-      BALCONY_Y + 0.95,
-      edge - 0.06,
-      xb + 0.1,
-      BALCONY_Y + 1.05,
-      edge + 0.06,
-    );
-    boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
-    for (let x = st.x0; x <= xb; x += 0.42)
+    boxP(G, WL.TIMBER, dx0, BALCONY_Y + 0.95, edge - 0.06, dx1, BALCONY_Y + 1.05, edge + 0.06);
+    boxP(G, WL.TIMBER, ox, BALCONY_Y + 0.95, zl0, ox + 0.1, BALCONY_Y + 1.05, zl1);
+    for (let x = dx0; x <= dx1; x += 0.42)
       boxP(
         G,
         WL.TIMBER,
@@ -5080,7 +5085,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
 
   // ---- buildings ----
   for (const b of L.buildings) {
-    const B = building(b, mulberry(b.seed));
+    const B = building(b, mulberry(b.seed), b.t === "saloon" && !!L.saloonStairs);
     const { out } = frameOf(b);
     const ch = chunkAt(out.x, out.z);
     if (B.main.n) ch.main.stamp(B.main.freeze(), out.x, 0, out.z, out.rot);

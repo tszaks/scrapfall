@@ -108,10 +108,13 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
     while (wet.length < 16) wet.push(new THREE.Vector3(0, 0, 0));
     sh.uniforms["uWet"] = { value: wet };
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;\nvarying float vGNy;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec2 vGxz;\nvarying float vGNy;\nvarying float vGy;",
+      )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;\nvGNy = normal.y;",
+        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;\nvGy = (modelMatrix * vec4(transformed, 1.0)).y;\nvGNy = normal.y;",
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -124,6 +127,7 @@ uniform float uHalf;
 uniform vec3 uWet[16];
 varying vec2 vGxz;
 varying float vGNy;
+varying float vGy;
 ${riverGLSL}
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
@@ -187,6 +191,13 @@ col = mix(col, yard, smoothstep(0.2, 0.6, w.b));
   float steep = smoothstep(0.86, 0.62, vGNy);
   vec3 rubble = col * vec3(0.62, 0.55, 0.5) + vec3(0.05, 0.04, 0.035);
   col = mix(col, rubble * (0.85 + 0.3 * gNoise(wp * 0.6)), steep);
+  // sedimentary strata: an exposed berm face shows the bands it was cut through —
+  // pale caliche lines alternating with the darker packed dirt between them
+  float band = sin(vGy * 2.6 + gNoise(wp * 0.11) * 1.4);
+  float stratum = smoothstep(0.55, 0.9, band) * steep;
+  col = mix(col, col * vec3(1.3, 1.26, 1.16) + vec3(0.1, 0.095, 0.08), stratum * 0.5);
+  float darkBand = smoothstep(0.75, 0.97, -band) * steep;
+  col *= 1.0 - darkBand * 0.22;
 }
 col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
 // ---- a street people use: wheel ruts down each lane, hoof-churned dirt between them ----

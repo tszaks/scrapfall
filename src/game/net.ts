@@ -59,7 +59,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v6 adds shared match weather, ballistic trajectories, Longshot and the fifth map.
 // v7 reserves generated doorway approaches and aligns physical door/window openings.
 // v8 furnishes Pier/Whiteout interiors and adds pier activities
-const PREFIX = "scrapfall-ts-arena-v8-";
+// v9 rebuilds Dry Gulch as a multi-district boomtown (new street grid, decks, districts)
+const PREFIX = "scrapfall-ts-arena-v9-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

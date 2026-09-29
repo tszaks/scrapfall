@@ -2547,6 +2547,24 @@ function World({
         spawnWave,
         groundAt: groundY,
         blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r),
+        // walkable-space probes: the full player body test (cells + BVH meshes) and the
+        // support raycast — what walkTo() and the ground follow actually see
+        bodyAt: (x: number, z: number, feet: number) => {
+          if (boundaryBlocked(blocks, x, z, 0.4)) return "boundary";
+          const interior = playerBlocked(x, z, 0.4, feet);
+          if (interior !== undefined) return interior ? "interior" : false;
+          const sb = structureBody(x, z, 0.4, feet);
+          if (sb !== undefined) return sb ? "structure" : false;
+          return staticBody(x, z, 0.396, feet, 1.8, moveState.airborne ? 0 : 0.2)
+            ? "static"
+            : false;
+        },
+        supportAt: (x: number, z: number, feet: number) =>
+          staticSupport(x, z, feet, baseGroundY(x, z)),
+        // the live body state: what the walk controller thinks the feet are doing
+        moveState,
+        terrainStepAt: (x: number, z: number, tx: number, tz: number) =>
+          terrainStep(x, z, tx, tz, moveState.feet),
       });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
       Object.assign(handle, {
@@ -4506,15 +4524,22 @@ function World({
       ) {
         const bare = baseGroundY(cam.position.x, cam.position.z);
         // Never select a roof merely because its footprint is above us.
-        gy = staticSupport(
+        const bound =
+          bare <= moveState.feet + (moveState.airborne ? 0.02 : 0.24)
+            ? bare
+            : Math.min(bare, moveState.feet);
+        const sup = staticSupport(
           cam.position.x,
           cam.position.z,
           moveState.feet,
-          bare <= moveState.feet + (moveState.airborne ? 0.02 : 0.24)
-            ? bare
-            : Math.min(bare, moveState.feet),
+          bound,
           moveState.airborne ? 0 : 0.22,
         );
+        // a static surface above `bound` wins, and bare ground is the floor itself; but
+        // when the bare ground towers over the feet and nothing static holds them (a hill
+        // climbed past the step limit, or a teleport into a dune) keep the walk system's
+        // ground instead of pinning the feet inside the rise
+        if (sup > bound || bound === bare) gy = sup;
         if (roomFloor && roomFloor.y <= moveState.feet + (moveState.airborne ? 0.03 : 0.55))
           gy = Math.max(gy, roomFloor.y);
       }
