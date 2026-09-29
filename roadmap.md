@@ -60,7 +60,7 @@
 - [x] Version 1.0.5 (exact big maps: rooms, lifts, traffic, train, weather, events, his radar)
 
 ## v1.0.6 — his gun look + menus
-- [ ] Port his first-person gun models (art/guns.ts, art/GunView.tsx, muzzle, gunFx)
-- [ ] Port his home menu + pause menu look (ui/TitleScreen, ui/PauseEndScreens, ui/kit)
-- [ ] No shootable/explodable hazards on any big map
-- [ ] Home showcase: slow camera drift through the map, cycle every 18s
+- [x] Port his first-person gun models (art/guns.ts, art/GunView.tsx, muzzle, gunFx)
+- [x] Port his home menu + pause menu look (his ui/kit; our logo line, co-op picker, stats sheet kept)
+- [x] No shootable/explodable hazards on any big map
+- [x] Home showcase: slow camera drift through the map, cycle every 18s
