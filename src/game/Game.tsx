@@ -1353,10 +1353,6 @@ const BULLET_GEO = new THREE.LatheGeometry(
   10,
 );
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
-const BULLET_BAND = new THREE.CylinderGeometry(0.082, 0.082, 0.05, 10);
-const BULLET_BAND_MAT = new THREE.MeshBasicMaterial({ color: "#d9a53a", fog: false });
-// tapered streak: wide at the round, fading to a point behind it
-const TRACER_GEO = new THREE.CylinderGeometry(0.05, 0.005, 0.8, 6);
 const TMP_DIR = new THREE.Vector3();
 
 
@@ -1823,6 +1819,7 @@ function World({
     onAmmo(0);
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
+    fxReset();
     onStatus(1, 0, false, true);
   }, [blocks, camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1870,6 +1867,22 @@ function World({
   const burstQueue = useRef(0);
   const bountyKills = useRef(0);
   const burstTimer = useRef(0);
+
+  // his combat effects need to know the world: what is solid, where the robots are, the gun table
+  useEffect(() => {
+    fxGuns(Object.fromEntries(ORDER.map((w) => [visOf(w), GUNS[w]])) as never);
+    const dust = parseInt((theme.blocks[1] ?? "#9a9080").slice(1), 16);
+    fxEnv({
+      solid: (x, z) => blocked(blocks, x, z, 0.05),
+      car: () => false,
+      half: () => HALF,
+      waterZ: null,
+      enemies,
+      radius: (k) => STATS[k as Kind]?.radius ?? 0.6,
+      height: (k) => (k === "boss" ? 5 : k === "brute" || k === "vanguard" ? 2.6 : 2),
+      dust: Number.isFinite(dust) ? dust : 0x9a9080,
+    });
+  }, [blocks, enemies, theme]);
 
   const spit = () => {
     const w = weapon.current;
