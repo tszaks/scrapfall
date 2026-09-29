@@ -149,7 +149,6 @@ const EYE = 1.6;
 // Big maps (copied from tszaks/scrapfall): seeds above BIG_BASE name a map; its layout is fixed.
 const BIG_BASE = 1_500_000_000;
 const BIG_IDS: BigMapId[] = ["alpine", "beach", "city", "western", "nuketown"];
-const BIG_LAYOUT_SEED: Record<BigMapId, number> = { alpine: 20240611, beach: 20240612, city: 20240613, western: 20240614, nuketown: 20240615 };
 function bigSeed(id: BigMapId) { return BIG_BASE + BIG_IDS.indexOf(id) * 10_000_000 + Math.floor(Math.random() * 1e6); }
 /** Testing only: ?bigmap=alpine opens that map in solo. */
 function testMap(): BigMapId | null {
@@ -3743,7 +3742,7 @@ export function Game() {
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
     let bigId = bigIdOf(seed);
     if (bigId && bigId !== "nuketown" && !coop && !testMap()) bigId = null; // the 4 huge maps are co-op only
-    const alpine = bigId ? setupBigMap(bigId, BIG_LAYOUT_SEED[bigId], !coop) : null;
+    const alpine = bigId ? setupBigMap(bigId, seed, !coop) : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
     if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
