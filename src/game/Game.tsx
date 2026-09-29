@@ -4477,16 +4477,34 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
-          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-
-
-            {!started && !ended && !paused && (
-              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+        <div
+          className={`fixed inset-0 z-40 flex touch-auto flex-col overflow-y-auto overscroll-contain p-6 ${home ? "items-center justify-end sm:justify-center" : "items-center justify-start sm:justify-center"}`}
+          style={{
+            background: home
+              ? "linear-gradient(180deg, rgba(22,16,9,0.62) 0%, rgba(22,16,9,0.16) 34%, rgba(22,16,9,0.16) 58%, rgba(22,16,9,0.82) 100%)"
+              : "rgba(22,16,9,0.76)",
+          }}
+        >
+          <UiStyles />
+          {home && (
+            <div className="ui-rise mb-6 text-center">
+              <Logo />
+            </div>
+          )}
+          <div
+            className={`ui-rise ui-rise-1 my-auto w-full max-w-sm touch-auto rounded-xl p-7 text-center font-mono shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)] ${
+              home
+                ? "border-2 border-[#b4653f] bg-[#241b12]/92 text-[#f2ead6] backdrop-blur-[2px]"
+                : "border-2 border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
+            }`}
+          >
+            {home ? (
+              <Hazard className="mx-auto mb-4 w-24 opacity-80" />
+            ) : (
+              <h1 className="text-2xl font-bold tracking-tight">
+                {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : "Paused"}
+              </h1>
             )}
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
-            </h1>
             {(gameOver || status.won || paused) && (
               <p className="mt-2 text-sm opacity-70">
                 {gameOver
@@ -4538,7 +4556,7 @@ export function Game() {
                   initAudio();
                   setPicking(true);
                 }}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] bg-[#b4653f] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-[#f7eeda] shadow-[3px_3px_0_0_#2b2118] transition-[transform,background-color] duration-100 active:translate-y-px [@media(hover:hover)]:hover:bg-[#c4724a]"
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
               </button>
@@ -4637,7 +4655,7 @@ export function Game() {
                 </button>
               </div>
             ) : (
-              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
+              <div className={`mt-5 border-t pt-4 text-xs tracking-widest ${home ? "border-[#f3e6cf]/20" : "border-[#2b2118]/20"}`}>
                 {!net ? (
                   <>
                     <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
@@ -4645,7 +4663,7 @@ export function Game() {
                       <button
                         onClick={startHost}
                         disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
                       >
                         HOST
                       </button>
@@ -4653,12 +4671,12 @@ export function Game() {
                         value={joinCode}
                         onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
                         placeholder="CODE"
-                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
+                        className={`pointer-events-auto w-20 rounded-md border-2 bg-transparent px-2 text-center tracking-[0.3em] outline-none ${home ? "border-[#f3e6cf]/40 placeholder:text-[#f3e6cf]/40" : "border-[#2b2118]/30"}`}
                       />
                       <button
                         onClick={startJoin}
                         disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
                       >
                         JOIN
                       </button>
@@ -4693,7 +4711,7 @@ export function Game() {
                                   setSeed(s2);
                                   net.broadcast({ type: "seed", seed: s2 });
                                 }}
-                                className={`pointer-events-auto flex-1 rounded-md border border-[#2b2118]/40 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-transparent"}`}
+                                className={`pointer-events-auto flex-1 rounded-md border-2 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${home ? "border-[#f3e6cf]/40" : "border-[#2b2118]/40"} ${on ? (home ? "bg-[#b4653f] text-[#f7eeda] shadow-[2px_2px_0_0_rgba(43,33,24,0.85)]" : "bg-[#2b2118] text-[#f7eeda]") : "bg-transparent"}`}
                               >
                                 {label}
                               </button>
