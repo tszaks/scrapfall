@@ -102,6 +102,7 @@ import {
   fineStep,
   toCell,
   type FineField,
+  type NavGrid,
   nextWaypoint,
   clearLine,
   toNav,
@@ -2117,6 +2118,22 @@ const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
 const BULLET_END = new THREE.Vector3();
+// scratches for the per-enemy route picks (steerTo returns shared objects already)
+const WP_SCRATCH = { x: 0, z: 0 };
+const FINE_SCRATCH = { x: 0, z: 0 };
+// per-frame pools for the squad target list and the field-cache sweep (cleared each frame)
+const targetPool: {
+  id: string | null;
+  x: number;
+  z: number;
+  y: number;
+  fx: number;
+  fz: number;
+  zn?: number;
+  air?: boolean;
+}[] = [];
+const usedSet = new Set<number>();
+const usedFSet = new Set<number>();
 const WORLD_CONTACT = new THREE.Vector3();
 /** host: where cars look for the rest of the squad (filled in place every frame) */
 const trafficOthers: { x: number; z: number; y: number }[] = [];
@@ -2833,6 +2850,36 @@ function World({
   /** fine 2 m fields round each target (stacked-ground maps only, see level.ts fineField) */
   const fines = useRef(new Map<number, FineField>());
   const fineKey = (t: { x: number; z: number }) => toCell(t.x) * 1000 + toCell(t.z);
+  // one reusable probe for the per-enemy route pick in the frame loop: a pair of closures
+  // per enemy per frame was a measurable GC source (steerCache.ts). blocks/solid are
+  // refreshed every frame below — they change when the map does.
+  const steerProbe = useRef({
+    e: null as Enemy | null,
+    t: null as { x: number; z: number } | null,
+    st: null as { radius: number } | null,
+    blocks: [] as Block[],
+    solid: null as NavGrid | null,
+    los() {
+      const { e, t, st, blocks } = this;
+      return clearLine(blocks, e!.x, e!.z, t!.x, t!.z, Math.min(st!.radius, 0.8) * 0.9);
+    },
+    route() {
+      const { e, t, solid, blocks } = this;
+      const [ni, nj] = navTarget(solid!, t!.x, t!.z, blocks);
+      const dist = fields.current.get(ni * 1000 + nj);
+      // close in: the fine field knows the 2 m corridors the nav grid can't see
+      const ff = strictNav()
+        ? fines.current.get(toCell(t!.x) * 1000 + toCell(t!.z))
+        : undefined;
+      const fs = ff ? fineStep(ff, e!.x, e!.z, FINE_SCRATCH) : null;
+      if (fs) return fs;
+      // at the field's own cell (the target is right there, e.g. against a railing)
+      // walk straight at it instead of parking on the cell centre
+      if (dist && dist[toNav(e!.x) * solid!.n + toNav(e!.z)]! > 0)
+        return nextWaypoint(solid!, dist, e!.x, e!.z, WP_SCRATCH);
+      return null;
+    },
+  }).current;
   const recycleT = useRef(1);
   const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
@@ -5306,17 +5353,28 @@ function World({
         air?: boolean;
       };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
-      const targets: Target[] = [];
-      if (!spectating && !downedRef.current)
-        targets.push({
+      // (pooled slots: fresh target records every frame were a steady GC source)
+      const targets: Target[] = targetPool;
+      targets.length = 0;
+      if (!spectating && !downedRef.current) {
+        const t = (targetPool[0] ??= {
           id: null,
-          x: cam.position.x,
-          z: cam.position.z,
-          y: cam.position.y,
-          ...lf,
-          zn: myZone(),
-          air: ride.chair >= 0 || wheelRide.cabin >= 0,
+          x: 0,
+          z: 0,
+          y: 0,
+          fx: 0,
+          fz: 0,
         });
+        t.id = null;
+        t.x = cam.position.x;
+        t.z = cam.position.z;
+        t.y = cam.position.y;
+        t.fx = lf.fx;
+        t.fz = lf.fz;
+        t.zn = myZone();
+        t.air = ride.chair >= 0 || wheelRide.cabin >= 0;
+        targets.push(t);
+      }
       remotes.current.forEach((r) => {
         if (r.hp > 0 && downTable.get(r.id)?.st !== DOWN && now - r.last < 4000) {
           const ry =
@@ -5325,16 +5383,23 @@ function World({
               : alpineMap && (r.rc ?? -1) >= 0
                 ? riderEye(alpineMap.alpine.lift, r.rc!).y
                 : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
-          targets.push({
-            id: r.id,
-            x: r.x,
-            z: r.z,
-            y: ry,
-            fx: -Math.sin(r.yaw),
-            fz: -Math.cos(r.yaw),
-            zn: remoteZone(r),
-            air: (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0,
+          const t = (targetPool[targets.length] ??= {
+            id: null,
+            x: 0,
+            z: 0,
+            y: 0,
+            fx: 0,
+            fz: 0,
           });
+          t.id = r.id;
+          t.x = r.x;
+          t.z = r.z;
+          t.y = ry;
+          t.fx = -Math.sin(r.yaw);
+          t.fz = -Math.cos(r.yaw);
+          t.zn = remoteZone(r);
+          t.air = (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0;
+          targets.push(t);
         }
       });
       enemyShotTargets.current = targets.length ? targets : [];
@@ -5382,7 +5447,8 @@ function World({
       hornetCd.current.v -= atkDt;
 
       // flow field per target cell (cached)
-      const used = new Set<number>();
+      const used = usedSet;
+      used.clear();
       for (const t of targets) {
         const key = navKey(t);
         const [ni, nj] = navTarget(solid, t.x, t.z, blocks);
@@ -5396,7 +5462,8 @@ function World({
         });
       }
       if (strictNav()) {
-        const usedF = new Set<number>();
+        const usedF = usedFSet;
+        usedF.clear();
         for (const t of targets) {
           const key = fineKey(t);
           usedF.add(key);
@@ -5602,24 +5669,12 @@ function World({
         if (!ghost) {
           // route pick is memoised per enemy (steerCache.ts): the LOS probe plus the
           // field descent used to run per frame per enemy — the crowd's biggest CPU line
-          const wp = steerTo(
-            e,
-            target,
-            state.clock.elapsedTime,
-            () => clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9),
-            () => {
-              const dist = fields.current.get(navKey(target));
-              // at the field's own cell (the target is right there, e.g. against a railing)
-              // walk straight at it instead of parking on the cell centre
-              // close in: the fine field knows the 2 m corridors the nav grid can't see
-              const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
-              const fs = ff ? fineStep(ff, e.x, e.z) : null;
-              if (fs) return fs;
-              if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0)
-                return nextWaypoint(solid, dist, e.x, e.z);
-              return null;
-            },
-          );
+          steerProbe.e = e;
+          steerProbe.t = target;
+          steerProbe.st = st;
+          steerProbe.blocks = blocks;
+          steerProbe.solid = solid;
+          const wp = steerTo(e, target, state.clock.elapsedTime, steerProbe);
           tx = wp.x;
           tz = wp.z;
         }

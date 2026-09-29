@@ -209,22 +209,36 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   return moved;
 }
 
+// reusable probes/scratches for waypoint(): per-enemy-per-frame closures and {x,z}
+// temporaries were a measurable GC source in a crowd
+const _fsOut = { x: 0, z: 0 };
+const _descOut = { x: 0, z: 0 };
+const _bias = { px: 0, pz: 0, fx: 0, fz: 0, w: 0 };
+const wpProbe = {
+  e: null as Bot | null,
+  t: null as Target | null,
+  ctx: null as AICtx | null,
+  los() {
+    const { e, t, ctx } = this;
+    return clearLine(ctx!.blocks, e!.x, e!.z, t!.x, t!.z, rad(e!) * 0.9);
+  },
+  route() {
+    const { e, t, ctx } = this;
+    const ff = ctx!.fineFor?.(t!);
+    const fs = ff ? fineStep(ff, e!.x, e!.z, _fsOut) : null;
+    if (fs) return fs;
+    const dist = ctx!.fieldFor(t!);
+    if (!dist) return null;
+    return descend(ctx!.solid, dist, e!.x, e!.z, null, _descOut);
+  },
+};
+
 /** Next point on the way to the target: straight if the line is clear, else the flow field. */
 function waypoint(e: Bot, t: Target, ctx: AICtx) {
-  return steerTo(
-    e,
-    t,
-    ctx.time,
-    () => clearLine(ctx.blocks, e.x, e.z, t.x, t.z, rad(e) * 0.9),
-    () => {
-      const ff = ctx.fineFor?.(t);
-      const fs = ff ? fineStep(ff, e.x, e.z) : null;
-      if (fs) return fs;
-      const dist = ctx.fieldFor(t);
-      if (!dist) return null;
-      return descend(ctx.solid, dist, e.x, e.z, null);
-    },
-  );
+  wpProbe.e = e;
+  wpProbe.t = t;
+  wpProbe.ctx = ctx;
+  return steerTo(e, t, ctx.time, wpProbe);
 }
 
 /**
@@ -238,6 +252,7 @@ function descend(
   x: number,
   z: number,
   bias: { px: number; pz: number; fx: number; fz: number; w: number } | null,
+  out: { x: number; z: number },
 ) {
   const { g: solid, n } = nav;
   const ci = toNav(x);
@@ -276,7 +291,9 @@ function descend(
   }
   const k = bi * n + bj;
   if (bi === ci && bj === cj && (bias || best === 0)) return null; // at the target's cell: go straight
-  return { x: nav.px[k]!, z: nav.pz[k]! };
+  out.x = nav.px[k]!;
+  out.z = nav.pz[k]!;
+  return out;
 }
 
 /** approach (1), hold (0) or back off (-1) along the route to the target */
@@ -464,15 +481,14 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
               // (the city's streets; the small arenas are open enough to just arc round)
               if ((e.stuck ?? 0) >= 0.8) e.detour = 2;
               e.detour = (e.detour ?? 0) - dt;
+              _bias.px = target.x;
+              _bias.pz = target.z;
+              _bias.fx = fx;
+              _bias.fz = fz;
+              _bias.w = 14;
               const wp =
                 dist && NAV_SCALE > 1 && e.detour <= 0
-                  ? descend(ctx.solid, dist, e.x, e.z, {
-                      px: target.x,
-                      pz: target.z,
-                      fx,
-                      fz,
-                      w: 14,
-                    })
+                  ? descend(ctx.solid, dist, e.x, e.z, _bias, _descOut)
                   : null;
               if (wp) walk(e, wp.x, wp.z, spd * dt, ctx);
               else {
