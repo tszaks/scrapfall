@@ -4564,62 +4564,23 @@ export function Game() {
             />
           )}
           {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+          {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
           {showSettings && (
-            <div className="ui-root pointer-events-auto fixed inset-0 z-50 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#161009]/80 p-4 font-mono sm:items-center">
-              <div className="ui-rise my-auto w-full max-w-md rounded-xl border-2 border-[#b4653f] bg-[#241b12] p-6 font-mono text-[#f2ead6] shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)]">
-                <SectionLabel>SETUP</SectionLabel>
-                <h2 className="text-2xl font-black tracking-[0.12em]">SETTINGS</h2>
-                <Hazard className="mt-3" />
-                <div className="mt-4 space-y-4 text-left text-[11px] font-bold tracking-[0.25em]">
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>FIELD OF VIEW</span><span className="text-[#e7b25c]">{fov}°</span>
-                    </div>
-                    <input type="range" min={50} max={110} step={1} value={fov}
-                      onChange={(e) => setFov(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>LOOK SPEED · LEFT/RIGHT</span><span className="text-[#e7b25c]">{sensX.toFixed(1)}x</span>
-                    </div>
-                    <input type="range" min={0.2} max={3} step={0.1} value={sensX}
-                      onChange={(e) => setSensX(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>LOOK SPEED · UP/DOWN</span><span className="text-[#e7b25c]">{sensY.toFixed(1)}x</span>
-                    </div>
-                    <input type="range" min={0.2} max={3} step={0.1} value={sensY}
-                      onChange={(e) => setSensY(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>MUSIC VOLUME</span><span className="text-[#e7b25c]">{Math.round(musicVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={musicVol}
-                      onChange={(e) => setMusicVol(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>EFFECTS VOLUME</span><span className="text-[#e7b25c]">{Math.round(sfxVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                      onChange={(e) => setSfxVol(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                </div>
-                <MenuButton variant="primary" size="md" className="mt-5 w-full" onClick={() => setShowSettings(false)}>
-                  Done
-                </MenuButton>
-                <div className="mt-4 border-t border-[#f3e6cf]/15 pt-3 text-center text-[11px] tracking-[0.3em] opacity-60">
-                  SCRAPFALL · v{VERSION}
-                </div>
-              </div>
-            </div>
+            <SettingsScreen
+              fov={fov}
+              setFov={setFov}
+              sensX={sensX}
+              setSensX={setSensX}
+              sensY={sensY}
+              setSensY={setSensY}
+              musicVol={musicVol}
+              setMusicVol={setMusicVol}
+              sfxVol={sfxVol}
+              setSfxVol={setSfxVol}
+              touchUi={touchUi}
+              version={VERSION}
+              onClose={() => setShowSettings(false)}
+            />
           )}
         </>
       )}
