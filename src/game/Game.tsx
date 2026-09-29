@@ -31,6 +31,12 @@ import { MapEvents } from "@/bro/game/events/EventsLayer";
 import { onMapEventMsg } from "@/bro/game/events/mapEvents";
 import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
+import { GunView } from "@/bro/game/art/GunView";
+import { type GunId } from "@/bro/game/art/guns";
+import { gunKick, gunReload } from "@/bro/game/art/gunFx";
+import { readGunMuzzle } from "@/bro/game/art/muzzle";
+import { Hazard, UiStyles } from "@/bro/game/ui/kit";
+import { BrandLogo } from "./ui/BrandLogo";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -77,6 +83,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
 const TURRET_LIFE = 30;
+const MUZZLE_AT = new THREE.Vector3();
 
 type Enemy = {
   kind: Kind;
@@ -1399,166 +1406,11 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
 }
 
 
-/** Simple blocky gun model, different silhouette per weapon. */
+/** His first-person gun models (src/bro/game/art/guns.ts), animated by GunView. */
 type ModLooks = Partial<Record<"burst" | "incend" | "magnum" | "extmag" | "shred" | "laser" | "comp" | "suppr" | "exec" | "holster" | "bounty", boolean>>;
 function GunModel({ w, mods }: { w: Weapon; mods?: ModLooks }) {
   const g = GUNS[w];
-  const glow = <meshBasicMaterial color={g.color} fog={false} />;
-  const body = <meshLambertMaterial color={g.body} />;
-  const mg = w === "pistol" && mods?.magnum;
-  return (
-    <group>
-      {w === "pistol" && (<>
-        {/* magnum: longer gold-trimmed barrel */}
-        <mesh position={[0, 0, mg ? -0.22 : -0.15]}><boxGeometry args={[0.1, 0.12, mg ? 0.5 : 0.35]} />{body}</mesh>
-        <mesh position={[0, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.08, 0.18, 0.1]} />{body}</mesh>
-        <mesh position={[0, 0.07, mg ? -0.44 : -0.3]}><boxGeometry args={[0.03, 0.03, 0.03]} />{glow}</mesh>
-        {mg && (<>
-          <mesh position={[0, 0.075, -0.2]}><boxGeometry args={[0.11, 0.02, 0.46]} /><meshBasicMaterial color="#e8b93a" fog={false} /></mesh>
-          <mesh position={[0, 0, -0.03]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.075, 0.075, 0.12, 6]} /><meshLambertMaterial color="#8a6a24" /></mesh>
-        </>)}
-        {/* burst: extended magazine + triple muzzle vents */}
-        {mods?.burst && (<>
-          <mesh position={[0, -0.27, 0]} rotation-x={0.3}><boxGeometry args={[0.06, 0.14, 0.07]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
-          {[-0.03, 0, 0.03].map((x) => (
-            <mesh key={x} position={[x, -0.035, mg ? -0.48 : -0.33]}><boxGeometry args={[0.018, 0.018, 0.04]} /><meshBasicMaterial color="#4fd6ff" fog={false} /></mesh>
-          ))}
-        </>)}
-        {/* incendiary: glowing fuel canister under the barrel */}
-        {mods?.incend && (
-          <mesh position={[0, -0.09, -0.2]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.22, 8]} /><meshBasicMaterial color="#ff5a1f" fog={false} /></mesh>
-        )}
-        {/* extended mag: chunky drum at the grip base */}
-        {mods?.extmag && (
-          <mesh position={[0, -0.25, 0.02]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.09, 10]} /><meshLambertMaterial color="#2a2a2a" /></mesh>
-        )}
-        {/* shredder: serrated muzzle brake */}
-        {mods?.shred && [0, 1, 2].map((k) => (
-          <mesh key={k} position={[0, 0, (mg ? -0.47 : -0.32) - (mods?.suppr ? 0.2 : 0) - k * 0.035]} rotation-z={k * 0.5}><boxGeometry args={[0.14, 0.14, 0.02]} /><meshLambertMaterial color="#9a9a9a" /></mesh>
-        ))}
-        {/* laser sight: emitter + beam */}
-        {mods?.laser && (<>
-          <mesh position={[0.07, -0.05, -0.22]}><boxGeometry args={[0.04, 0.04, 0.12]} /><meshLambertMaterial color="#222" /></mesh>
-          <mesh position={[0.07, -0.05, -3.3]}><boxGeometry args={[0.006, 0.006, 6]} /><meshBasicMaterial color="#ff2020" fog={false} transparent opacity={0.6} /></mesh>
-        </>)}
-        {/* compensator: squared ported block on the tip */}
-        {mods?.comp && !mods?.suppr && (<>
-          <mesh position={[0, 0, mg ? -0.5 : -0.36]}><boxGeometry args={[0.13, 0.13, 0.08]} /><meshLambertMaterial color="#4a4a4a" /></mesh>
-          <mesh position={[0, 0.066, mg ? -0.5 : -0.36]}><boxGeometry args={[0.06, 0.01, 0.05]} /><meshBasicMaterial color="#111" /></mesh>
-        </>)}
-        {/* suppressor: long matte shroud */}
-        {mods?.suppr && (
-          <mesh position={[0, 0, mg ? -0.57 : -0.43]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.055, 0.055, 0.22, 12]} /><meshLambertMaterial color="#141414" /></mesh>
-        )}
-        {/* executioner: serrated hammer on the rear */}
-        {mods?.exec && (<>
-          <mesh position={[0, 0.1, 0.06]} rotation-x={-0.5}><boxGeometry args={[0.04, 0.1, 0.05]} /><meshLambertMaterial color="#6a1010" /></mesh>
-          <mesh position={[0, 0.15, 0.09]}><boxGeometry args={[0.1, 0.03, 0.03]} /><meshLambertMaterial color="#b8b8b8" /></mesh>
-        </>)}
-        {/* holster: skeletonized match grip panels */}
-        {mods?.holster && [-0.045, 0.045].map((x) => (
-          <mesh key={x} position={[x, -0.12, -0.02]} rotation-x={0.3}><boxGeometry args={[0.012, 0.16, 0.09]} /><meshLambertMaterial color="#3fae5a" /></mesh>
-        ))}
-        {/* bounty: glowing capacitor under the trigger guard */}
-        {mods?.bounty && (
-          <mesh position={[0, -0.09, -0.06]}><boxGeometry args={[0.05, 0.04, 0.07]} /><meshBasicMaterial color="#39c6ff" fog={false} /></mesh>
-        )}
-      </>)}
-      {w === "scatter" && (<>
-        <mesh position={[-0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
-        <mesh position={[0.04, 0, -0.3]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.04, 0.04, 0.6, 8]} />{body}</mesh>
-        <mesh position={[0, -0.04, 0.05]}><boxGeometry args={[0.14, 0.14, 0.3]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-        <mesh position={[0, -0.06, -0.2]}><boxGeometry args={[0.16, 0.05, 0.12]} />{glow}</mesh>
-      </>)}
-      {w === "smg" && (<>
-        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.14, 0.45]} />{body}</mesh>
-        <mesh position={[0, 0, -0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.025, 0.025, 0.2, 6]} /><meshLambertMaterial color="#111" /></mesh>
-        <mesh position={[0, -0.16, -0.12]}><boxGeometry args={[0.06, 0.22, 0.08]} />{body}</mesh>
-        <mesh position={[0.065, 0.02, -0.15]}><boxGeometry args={[0.01, 0.04, 0.3]} />{glow}</mesh>
-      </>)}
-      {w === "rail" && (<>
-        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.09, 0.09, 0.8]} />{body}</mesh>
-        {[-0.5, -0.35, -0.2].map((z) => (
-          <mesh key={z} position={[0, 0, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.08, 0.018, 6, 12]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, -0.1, 0.05]}><boxGeometry args={[0.08, 0.16, 0.14]} /><meshLambertMaterial color="#555" /></mesh>
-      </>)}
-      {w === "cannon" && (<>
-        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.13, 0.1, 0.55, 12]} />{body}</mesh>
-        <mesh position={[0, 0, -0.53]} rotation-x={Math.PI / 2}><torusGeometry args={[0.13, 0.03, 6, 14]} />{glow}</mesh>
-        <mesh position={[0, 0.16, -0.15]}><sphereGeometry args={[0.06, 8, 8]} />{glow}</mesh>
-      </>)}
-      {w === "rebound" && (<>
-        <mesh position={[0, 0, -0.18]}><boxGeometry args={[0.11, 0.16, 0.42]} />{body}</mesh>
-        <mesh position={[0, 0.06, -0.42]} rotation-y={Math.PI / 2}><cylinderGeometry args={[0.16, 0.16, 0.03, 10]} />{glow}</mesh>
-        <mesh position={[0, -0.14, 0]}><boxGeometry args={[0.07, 0.2, 0.1]} />{body}</mesh>
-      </>)}
-      {w === "harpoon" && (<>
-        <mesh position={[0, 0, -0.3]}><boxGeometry args={[0.07, 0.08, 0.7]} />{body}</mesh>
-        <mesh position={[0, 0.02, -0.25]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.012, 0.012, 0.44, 6]} /><meshLambertMaterial color="#8c7f66" /></mesh>
-        <mesh position={[0, 0.02, -0.62]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.05, 0.18, 6]} />{glow}</mesh>
-        <mesh position={[0, -0.12, 0.02]}><boxGeometry args={[0.07, 0.18, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "cryo" && (<>
-        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.1, 0.13, 0.5]} />{body}</mesh>
-        <mesh position={[0, 0.11, -0.2]} rotation-z={Math.PI / 2}><cylinderGeometry args={[0.06, 0.06, 0.3, 8]} />{glow}</mesh>
-        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.07, 0.16, 6]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "flak" && (<>
-        <mesh position={[0, 0, -0.28]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.1, 0.14, 0.5, 8]} />{body}</mesh>
-        <mesh position={[0, 0, -0.55]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.15, 0.11, 0.12, 8]} />{glow}</mesh>
-        <mesh position={[0, 0.14, -0.06]}><boxGeometry args={[0.1, 0.12, 0.22]} /><meshLambertMaterial color="#6b6450" /></mesh>
-        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "revolver" && (<>
-        <mesh position={[0, 0.02, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.035, 0.035, 0.45, 8]} />{body}</mesh>
-        <mesh position={[0, 0, -0.05]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.08, 0.08, 0.14, 6]} /><meshLambertMaterial color="#8a7a66" /></mesh>
-        <mesh position={[0, 0.07, -0.46]}><boxGeometry args={[0.02, 0.03, 0.03]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.06]} rotation-x={0.35}><boxGeometry args={[0.07, 0.2, 0.1]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-      </>)}
-      {w === "minigun" && (<>
-        {[0, 1, 2, 3, 4, 5].map((k) => (
-          <mesh key={k} position={[Math.cos(k) * 0.05, Math.sin(k) * 0.05, -0.32]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.018, 0.018, 0.55, 6]} /><meshLambertMaterial color="#222" /></mesh>
-        ))}
-        <mesh position={[0, 0, -0.05]}><boxGeometry args={[0.18, 0.18, 0.25]} />{body}</mesh>
-        <mesh position={[0, 0, -0.58]} rotation-x={Math.PI / 2}><torusGeometry args={[0.07, 0.015, 6, 12]} />{glow}</mesh>
-      </>)}
-      {w === "crossbow" && (<>
-        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.07, 0.08, 0.55]} />{body}</mesh>
-        <mesh position={[0, 0.02, -0.4]}><boxGeometry args={[0.5, 0.03, 0.04]} /><meshLambertMaterial color="#3b2a1a" /></mesh>
-        <mesh position={[0, 0.06, -0.35]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.008, 0.008, 0.45, 4]} />{glow}</mesh>
-      </>)}
-      {w === "plasma" && (<>
-        <mesh position={[0, 0, -0.2]}><boxGeometry args={[0.14, 0.12, 0.45]} />{body}</mesh>
-        {[-0.06, 0, 0.06].map((x) => (
-          <mesh key={x} position={[x, 0.02, -0.46]}><sphereGeometry args={[0.03, 8, 8]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "voidorb" && (<>
-        <mesh position={[0, 0, -0.15]}><boxGeometry args={[0.12, 0.12, 0.35]} />{body}</mesh>
-        <mesh position={[0, 0.03, -0.45]}><sphereGeometry args={[0.1, 12, 12]} />{glow}</mesh>
-        <mesh position={[0, 0.03, -0.45]} rotation-x={Math.PI / 2}><torusGeometry args={[0.14, 0.015, 6, 16]} /><meshLambertMaterial color="#444" /></mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-      {w === "shatter" && (<>
-        <mesh position={[0, 0, -0.25]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.09, 0.12, 0.5, 6]} />{body}</mesh>
-        <mesh position={[0, 0, -0.52]} rotation-x={-Math.PI / 2}><coneGeometry args={[0.1, 0.12, 6]} />{glow}</mesh>
-        <mesh position={[0, 0.13, -0.2]}><octahedronGeometry args={[0.06]} />{glow}</mesh>
-        <mesh position={[0, -0.14, 0.02]}><boxGeometry args={[0.08, 0.2, 0.12]} />{body}</mesh>
-      </>)}
-      {w === "tesla" && (<>
-        <mesh position={[0, 0, -0.22]}><boxGeometry args={[0.11, 0.12, 0.5]} />{body}</mesh>
-        {[-0.42, -0.3].map((z) => (
-          <mesh key={z} position={[0, 0.08, z]} rotation-x={Math.PI / 2}><torusGeometry args={[0.09, 0.022, 6, 12]} />{glow}</mesh>
-        ))}
-        <mesh position={[0, 0.2, -0.36]}><sphereGeometry args={[0.07, 10, 10]} />{glow}</mesh>
-        <mesh position={[0, -0.13, 0.02]}><boxGeometry args={[0.07, 0.2, 0.11]} />{body}</mesh>
-      </>)}
-
-    </group>
-  );
+  return <GunView w={w as GunId} mods={mods} color={g.color} body={g.body} />;
 }
 
 function World({
@@ -1567,6 +1419,7 @@ function World({
   rand,
   theme,
   locked,
+  menu,
   gameOver,
   onScore,
   onHurt,
@@ -1609,6 +1462,7 @@ function World({
   rand: () => number;
   theme: Theme;
   locked: boolean;
+  menu: boolean;
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
@@ -1662,6 +1516,9 @@ function World({
   const trigger = useRef(false);
   const fireCd = useRef(0);
   const viewModel = useRef<THREE.Group>(null);
+  // home-screen showcase: a slow glide through the map behind the menu
+  const menuDrift = useRef(0);
+  const menuStart = useRef({ x: 0, y: EYE, z: 0, yaw: 0 });
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
@@ -1930,6 +1787,8 @@ function World({
   useEffect(() => {
     camera.position.set(alpine?.spawn.x ?? 0, EYE + groundY(alpine?.spawn.x ?? 0, alpine?.spawn.z ?? 0), alpine?.spawn.z ?? 0);
     look.current = { yaw: 0, pitch: 0 };
+    menuDrift.current = 0;
+    menuStart.current = { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
@@ -2013,7 +1872,9 @@ function World({
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     // rounds leave the gun's muzzle (view-model offset) and converge on the crosshair
-    const pos = new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
+    const pos = readGunMuzzle(viewModel.current, MUZZLE_AT, w)
+      ? MUZZLE_AT.clone()
+      : new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
     const aim = camera.position.clone().addScaledVector(FORWARD, 28).sub(pos).normalize();
     for (let s = 0; s < g.count; s++) {
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
@@ -2040,6 +1901,7 @@ function World({
       onStat("shot", 1);
     }
     playGun(w, w === "pistol" && s2.suppr);
+    gunKick();
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
 
@@ -2080,6 +1942,7 @@ function World({
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2087,6 +1950,7 @@ function World({
   useEffect(() => {
     if (waveNum < 1) return;
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
   }, [waveNum]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2133,6 +1997,7 @@ function World({
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
@@ -2180,7 +2045,9 @@ function World({
       onMutator("none");
     }
     // hazard props reset each round so there is always something to shoot open
+    // (big maps have his own scenery and events instead — no explodable props)
     hazards.current.forEach((h) => {
+      if (alpine) { h.alive = false; return; }
       const p = randomSpawn(blocks, rand);
       h.x = p.x;
       h.z = p.z;
@@ -2308,6 +2175,24 @@ function World({
     }
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+
+    // home screen: glide the camera slowly through the map behind the menu
+    if (menu && !locked) {
+      const t = state.clock.elapsedTime;
+      menuDrift.current += delta;
+      const d = menuDrift.current;
+      look.current.yaw = menuStart.current.yaw + d * 0.055;
+      look.current.pitch = Math.sin(t * 0.13) * 0.06 - 0.03;
+      cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+      const s0 = menuStart.current;
+      const r = 6 + Math.sin(d * 0.09) * 3;
+      cam.position.set(
+        s0.x + Math.sin(d * 0.07) * r,
+        s0.y + Math.sin(t * 0.21) * 0.35,
+        s0.z + Math.cos(d * 0.07) * r - r,
+      );
+      return;
+    }
 
     if (gameOver || !locked) return;
 
@@ -3313,7 +3198,7 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
-    v.visible = !deadRef.current; // spectators carry no weapon
+    v.visible = !deadRef.current && !menu; // spectators carry no weapon; title screen shows the map
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
@@ -3434,8 +3319,8 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
-      {/* shootable hazard props, styled to the map they sit in */}
-      {Array.from({ length: HAZARD_COUNT }, (_, i) => (
+      {/* shootable hazard props, styled to the map they sit in (arenas only) */}
+      {!alpine && Array.from({ length: HAZARD_COUNT }, (_, i) => (
         <group key={`haz${i}`} ref={(g) => { hazardMeshes.current[i] = g; }} visible={false}>
           <HazardProp def={hazardDef} />
         </group>
@@ -3565,7 +3450,7 @@ export function Game() {
   const seedRef = useRef(seed);
   seedRef.current = seed;
   const netHolder = useRef<NetHandle | null>(null);
-  // home screen showcase: a new arena behind the menu every 8 s, with a soft fade
+  // home screen showcase: a new arena behind the menu every 18 s, with a soft fade
   const [menuFade, setMenuFade] = useState(false);
   useEffect(() => {
     if (started || picking || testMap()) return;
@@ -3581,7 +3466,7 @@ export function Game() {
         });
         setMenuFade(false);
       }, 600);
-    }, 8000);
+    }, 18000);
     return () => { clearInterval(id); if (t2) clearTimeout(t2); };
   }, [started, picking]);
   const healthRef = useRef(MAX_HP);
@@ -3901,6 +3786,8 @@ export function Game() {
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
+  /** the title screen: no run in progress, so the live map shows behind his logo */
+  const home = !started && !ended && !paused;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
@@ -4144,6 +4031,7 @@ export function Game() {
           rand={rand}
           theme={theme}
           locked={locked}
+          menu={!started && !ended}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
@@ -4230,7 +4118,7 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
+      <div className={`pointer-events-none fixed inset-0 font-mono transition-opacity duration-300 ${home ? "opacity-0" : "opacity-100"} ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
@@ -4593,16 +4481,34 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6 sm:items-center">
-          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-
-
-            {!started && !ended && !paused && (
-              <div className="mb-2 text-[10px] tracking-[0.45em] opacity-50">SCRAPFALL</div>
+        <div
+          className={`fixed inset-0 z-40 flex touch-auto flex-col overflow-y-auto overscroll-contain p-6 ${home ? "items-center justify-end sm:justify-center" : "items-center justify-start sm:justify-center"}`}
+          style={{
+            background: home
+              ? "linear-gradient(180deg, rgba(22,16,9,0.62) 0%, rgba(22,16,9,0.16) 34%, rgba(22,16,9,0.16) 58%, rgba(22,16,9,0.82) 100%)"
+              : "rgba(22,16,9,0.76)",
+          }}
+        >
+          <UiStyles />
+          {home && (
+            <div className="ui-rise mb-6 text-center">
+              <BrandLogo />
+            </div>
+          )}
+          <div
+            className={`ui-rise ui-rise-1 my-auto w-full max-w-sm touch-auto rounded-xl p-7 text-center font-mono shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)] ${
+              home
+                ? "border-2 border-[#b4653f] bg-[#241b12]/92 text-[#f2ead6] backdrop-blur-[2px]"
+                : "border-2 border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
+            }`}
+          >
+            {home ? (
+              <Hazard className="mx-auto mb-4 w-24 opacity-80" />
+            ) : (
+              <h1 className="text-2xl font-bold tracking-tight">
+                {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : "Paused"}
+              </h1>
             )}
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : paused ? "Paused" : theme.name}
-            </h1>
             {(gameOver || status.won || paused) && (
               <p className="mt-2 text-sm opacity-70">
                 {gameOver
@@ -4654,7 +4560,7 @@ export function Game() {
                   initAudio();
                   setPicking(true);
                 }}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] bg-[#b4653f] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-[#f7eeda] shadow-[3px_3px_0_0_#2b2118] transition-[transform,background-color] duration-100 active:translate-y-px [@media(hover:hover)]:hover:bg-[#c4724a]"
               >
                 {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
               </button>
@@ -4753,7 +4659,7 @@ export function Game() {
                 </button>
               </div>
             ) : (
-              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
+              <div className={`mt-5 border-t pt-4 text-xs tracking-widest ${home ? "border-[#f3e6cf]/20" : "border-[#2b2118]/20"}`}>
                 {!net ? (
                   <>
                     <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
@@ -4761,7 +4667,7 @@ export function Game() {
                       <button
                         onClick={startHost}
                         disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
                       >
                         HOST
                       </button>
@@ -4769,12 +4675,12 @@ export function Game() {
                         value={joinCode}
                         onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
                         placeholder="CODE"
-                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
+                        className={`pointer-events-auto w-20 rounded-md border-2 bg-transparent px-2 text-center tracking-[0.3em] outline-none ${home ? "border-[#f3e6cf]/40 placeholder:text-[#f3e6cf]/40" : "border-[#2b2118]/30"}`}
                       />
                       <button
                         onClick={startJoin}
                         disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
+                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
                       >
                         JOIN
                       </button>
@@ -4809,7 +4715,7 @@ export function Game() {
                                   setSeed(s2);
                                   net.broadcast({ type: "seed", seed: s2 });
                                 }}
-                                className={`pointer-events-auto flex-1 rounded-md border border-[#2b2118]/40 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-transparent"}`}
+                                className={`pointer-events-auto flex-1 rounded-md border-2 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${home ? "border-[#f3e6cf]/40" : "border-[#2b2118]/40"} ${on ? (home ? "bg-[#b4653f] text-[#f7eeda] shadow-[2px_2px_0_0_rgba(43,33,24,0.85)]" : "bg-[#2b2118] text-[#f7eeda]") : "bg-transparent"}`}
                               >
                                 {label}
                               </button>
