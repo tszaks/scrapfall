@@ -35,7 +35,7 @@ Where things live, and where to go to change them. Every folder under `src/` mus
 | --- | --- |
 | Maps list and picker rules | `themes.ts` (every map; `offered()` decides which appear in the picker), `matchEnvironment.ts` (one seed picks the weather for every peer) |
 | Arena layout and collision | `level.ts` (arena grid, `blocked()`), `staticCollision.ts` (collision from rendered triangles), `posts.ts` (thin-prop collision), `terrain.ts` (ground height), `soloBounds.ts` (the solo blockade square) |
-| Player | `PlayerView.tsx` (the camera and the one final `gl.render` each frame), `viewMode.ts` (first or third person), `useKeyboard.ts`, `touch.ts`, `MobileControls.tsx`, `ScopeOverlay.tsx` |
+| Player | `PlayerView.tsx` (the camera and the one final `gl.render` each frame), `PostFx.tsx` (bloom passes layered on that render), `viewMode.ts` (first or third person), `useKeyboard.ts`, `touch.ts`, `MobileControls.tsx`, `ScopeOverlay.tsx` |
 | Weapons and shots | `projectiles.ts`, `ballistics.ts` (bullet drop), `projectileContact.ts`, `impacts.ts`, `CombatFx.tsx`, `fxCore.ts` |
 | Enemies | `enemyKinds.ts`, `enemyAI.ts`, `steerCache.ts` (a short-lived route-pick cache), `EnemyModels.tsx`, `enemyProjectiles.ts`, `enemySync.ts` (the compact host→guest snapshot) |
 | Run rules | `difficulty.ts` (five levels and the wave curve), `classes.ts`, `abilities.ts`, `perks.ts`, `Shards.tsx` (currency drops), `revive.ts`, `soloRevive.ts`, `SelfReviveView.tsx` |
