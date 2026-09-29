@@ -4713,7 +4713,7 @@ export function Game() {
                                   coopMapRef.current = id;
                                   const s2 = id === "whiteout" ? whiteoutSeed() : Math.floor(Math.random() * 1e9);
                                   setSeed(s2);
-                                  net.broadcast({ type: "seed", seed: s2 });
+                                  //TMP net.broadcast({ type: "seed", seed: s2 });
                                 }}
                                 className={`pointer-events-auto flex-1 rounded-md border border-[#2b2118]/40 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-transparent"}`}
                               >
