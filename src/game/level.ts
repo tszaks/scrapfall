@@ -185,6 +185,7 @@ export function flowField(solid: Uint8Array, ti: number, tj: number) {
       if (solid[n]) continue;
       if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
       const nd = dist[c]! + (di && dj ? 1.414 : 1);
+      if (CELLS > 100 && nd > 70) continue; // big maps: only route near the players
       if (nd < dist[n]!) {
         dist[n] = nd;
         q.push(n);
