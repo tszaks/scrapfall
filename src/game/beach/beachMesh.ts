@@ -1304,7 +1304,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     [K_ROAD]: { h: 0, c: "#3e4045", layer: L.ground, rough: 0.9 },
     [K_PARKLANE]: { h: 0.02, c: "#46484c", layer: L.ground, rough: 0.9 },
     [K_WALK]: { h: 0.15, c: "#c8c0b0", layer: L.paving, pave: 1.5, rough: 0.9 },
-    [K_PROM]: { h: 0.15, c: "#dcd0bc", layer: L.paving, pave: 1.2, paveX: 2.4, rough: 0.9 },
+    [K_PROM]: { h: 0.15, c: "#ac8a60", layer: L.paving, pave: 0.3, paveX: 4, rough: 0.9 },
     [K_PARK]: { h: 0.12, c: "#62923e", layer: L.ground, rough: 1 },
     [K_PATH]: { h: 0.13, c: "#c6b28e", layer: L.ground, rough: 1 },
     [K_OPEN]: { h: 0.05, c: "#4a4c50", layer: L.ground, rough: 0.9 },
@@ -1355,6 +1355,16 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       ]);
       j = j1;
     }
+  }
+  // Boardwalk plank seams are merged into the ground batch: no extra objects or draw calls.
+  // Short staggered joints and a wider edge board distinguish the promenade from shop paving.
+  for (let z = -half; z < half; z += 0.6) {
+    const G = chunkAt(138, z + 0.3).ground;
+    G.mat(L.plain, 0.9, 0).col("#71583c");
+    G.flat(X.prom, z, X.shops, z + 0.025, 0.156);
+    const offset = (Math.round((z + half) / 0.6) % 2) * 2;
+    for (let x = X.prom + offset; x < X.shops; x += 4)
+      G.flat(x, z + 0.025, x + 0.025, z + 0.6, 0.157);
   }
   // curbs along the sidewalks and the promenade edge
   for (let z = -half; z < half; z += CHUNK / 4) {
@@ -2220,6 +2230,46 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     }
   }
 
+  // Court boundary tapes lie on the same sand profile as the feet and net posts.
+  for (const court of beach.activity.courts) {
+    const D = ctx(court.x, court.z).detail;
+    D.mat(L.plain, 0.8, 0).col("#f4e7bb");
+    const strip = (x0: number, z0: number, x1: number, z1: number) =>
+      D.quad(
+        x0,
+        gv(x0, z1) + 0.025,
+        z1,
+        x1,
+        gv(x1, z1) + 0.025,
+        z1,
+        x1,
+        gv(x1, z0) + 0.025,
+        z0,
+        x0,
+        gv(x0, z0) + 0.025,
+        z0,
+      );
+    strip(court.x - 4, court.z - 8, court.x - 3.9, court.z + 8);
+    strip(court.x + 3.9, court.z - 8, court.x + 4, court.z + 8);
+    strip(court.x - 4, court.z - 8, court.x + 4, court.z - 7.9);
+    strip(court.x - 4, court.z + 7.9, court.x + 4, court.z + 8);
+  }
+  // A continuous rope joins the visible buoys at the movement boundary. End sections leave
+  // the pier itself clear; the existing deck railings carry the boundary through that gap.
+  for (let z = -half + 8; z < half - 8; z += 8) {
+    if (z < 40 && z + 8 > -40) continue;
+    const D = ctx(X.surf, z + 4).detail;
+    D.mat(L.plain, 0.6, 0).col("#e8d8aa");
+    railBar(D, [X.surf, SEA + 0.16, z], [X.surf, SEA + 0.08, z + 4], 0.028);
+    railBar(D, [X.surf, SEA + 0.08, z + 4], [X.surf, SEA + 0.16, z + 8], 0.028);
+  }
+
+  for (const side of [-1, 1]) {
+    const D = ctx(X.surf, side * 38).detail;
+    D.mat(L.plain, 0.6, 0).col("#e8d8aa");
+    railBar(D, [X.surf, SEA + 0.16, side * 36], [X.surf, SEA + 0.16, side * 40], 0.028);
+  }
+
   // ---- props ----
   for (const p of beach.props) prop(p, ctx(p.x, p.z), T, gv);
   for (const f of beach.firesLit) fires.push({ x: f.x, y: gv(f.x, f.z) + 0.2, z: f.z });
@@ -2461,7 +2511,7 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       break;
     case "umbrella":
       tint.set(UMB[(p.c ?? 0) % UMB.length]!);
-      D.stamp(T.umbrella, p.x, y - 0.3, p.z, p.rot, 1, 1, 1, tint);
+      D.stamp(T.umbrella, p.x, y, p.z, p.rot, 1, 1, 1, tint);
       break;
     case "towel":
       tint.set(UMB[((p.c ?? 0) + 3) % UMB.length]!);
@@ -2508,7 +2558,7 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
       break;
     }
     case "table":
-      D.stamp(T.table, p.x, y + 0.15, p.z, p.rot);
+      D.stamp(T.table, p.x, y + (p.x >= X.strip ? 0.15 : 0), p.z, p.rot);
       break;
     case "rack":
       D.stamp(T.rack, p.x, y + 0.1, p.z, p.rot);
@@ -2567,9 +2617,22 @@ function prop(p: BProp, C: Ctx, T: Tmpls, gv: (x: number, z: number) => number) 
     case "shower":
       D.stamp(T.shower, p.x, y, p.z, 0);
       break;
-    case "mat":
-      D.stamp(T.mat, p.x, gv(p.x, p.z) + 0.02, p.z, 0);
+    case "mat": {
+      // Flush 4 m-wide access slats follow the dunes; rigid boxes floated or sank at slopes.
+      // The rendered park strip sits 12 cm above natural ground. Ease onto that surface
+      // over the last 2 m of sand, so the connection to the bike path stays visible.
+      const matY = (x: number, z: number) =>
+        gv(x, z) + 0.035 + 0.12 * Math.max(0, Math.min(1, (x - (X.strip - 2)) / 2));
+      D.mat(L.plain, 0.9, 0).col("#a4865d");
+      for (let k = 0; k < 8; k++) {
+        const a = p.x - 1.2 + k * 0.3,
+          b = a + 0.285;
+        const z0 = p.z - 2,
+          z1 = p.z + 2;
+        D.quad(a, matY(a, z1), z1, b, matY(b, z1), z1, b, matY(b, z0), z0, a, matY(a, z0), z0);
+      }
       break;
+    }
     case "bike":
       D.stamp(T.bike, p.x, y + 0.34, p.z, p.rot);
       break;
