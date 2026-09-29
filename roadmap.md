@@ -65,3 +65,7 @@
 - [x] Port his home menu + pause menu look (his ui/kit; our logo line, co-op picker, stats sheet kept)
 - [x] No shootable/explodable hazards on any big map
 - [x] Home showcase: slow camera drift through the map, cycle every 18s
+
+## v1.0.7
+- Match setup, settings and enemies screens in his menu style
+- Enemies button on the home menu (lineup + per-enemy 3D card)

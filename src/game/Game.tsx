@@ -41,7 +41,7 @@ import { SettingsScreen } from "./ui/SettingsScreen";
 import { TitleScreen } from "./ui/TitleScreen";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
-const VERSION = "1.0.6";
+const VERSION = "1.0.7";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
