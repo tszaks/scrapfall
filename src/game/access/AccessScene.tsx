@@ -674,7 +674,12 @@ export const AccessScene = memo(function AccessScene({
     [mats, beaconGeo, sound],
   );
 
-  const cityRoot = useRef<THREE.Object3D | null>(null);
+  // Cache a missing root too: only Vice has city-root. Retrying a miss walks every
+  // pooled enemy and map object each frame on the other maps. A new world resets it.
+  const cityRoot = useRef<THREE.Object3D | null | undefined>(undefined);
+  useLayoutEffect(() => {
+    cityRoot.current = undefined;
+  }, [scene, cityKey]);
   const preRefs = useRef<(THREE.Mesh | null)[]>([]);
   const terraceRefs = useRef<(THREE.Mesh | null)[]>([]);
   // high on a roof the city is hundreds of metres below: stretch the view distance and the
@@ -829,7 +834,7 @@ export const AccessScene = memo(function AccessScene({
       }
     });
     sound.ride(riding);
-    if (!cityRoot.current || !cityRoot.current.parent)
+    if (cityRoot.current === undefined || (cityRoot.current && !cityRoot.current.parent))
       cityRoot.current = scene.getObjectByName("city-root") ?? null;
     if (cityRoot.current) cityRoot.current.visible = !hideCity;
   });
