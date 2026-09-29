@@ -2654,6 +2654,7 @@ function World({
 
       }
     };
+    hurtRef.current = hurtEnemy;
 
     /** A shot hazard prop goes off: everything close takes the map's own effect. */
     const blowHazard = (idx: number, share = true, visualOnly = false) => {
