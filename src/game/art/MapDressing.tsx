@@ -39,8 +39,8 @@ export function groundTexture(theme: Theme) {
   }
   // speckle
   for (let i = 0; i < 2200; i++) {
-    g.globalAlpha = 0.18 + r() * 0.25;
-    g.fillStyle = r() > 0.5 ? "#000000" : "#ffffff";
+    g.globalAlpha = 0.06 + r() * 0.1;
+    g.fillStyle = r() > 0.25 ? "#000000" : "#ffffff";
     g.fillRect(r() * S, r() * S, 1 + r() * 2, 1 + r() * 2);
   }
   // cracks
@@ -215,7 +215,7 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
     <group>
       {/* ground beyond the walls so the skyline stands on something */}
       <mesh rotation-x={-Math.PI / 2} position-y={-0.02}>
-        <ringGeometry args={[half * 1.1, outer, 4, 1, Math.PI / 4]} />
+        <ringGeometry args={[half * 1.02, outer, 4, 1, Math.PI / 4]} />
         <meshLambertMaterial color={theme.grid[0]} />
       </mesh>
       <Instanced geo={cov.geo} color={cov.color} emissive={cov.glow ? cov.color : undefined} items={data.a} />

@@ -45,7 +45,8 @@
 - [x] Bullet detail: brass band + glowing tracer
 - [x] Bullets fire from the gun muzzle and converge on the crosshair
 - [x] New robot enemy looks for the 7 regular enemies + Brass Automaton / Null Apex bosses + Scrap Leaper; others keep old look
-- [ ] Detail pass on our 10 maps to match
+
 - [ ] Big maps (Vice Heights, Beach, Snow Mountain, Western City) co-op only + map picker + minimap
 - [ ] Map events + rolled conditions
 - [ ] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
+- [x] Detail pass on our 10 maps (painted ground, ground cover, skyline beyond walls)
