@@ -50,8 +50,39 @@ export function setBlockHalf(v: number) {
   BLOCK_HALF = v;
 }
 
+// Big maps have thousands of blocks: look them up through a cell grid instead of a scan.
+let gridFor: Block[] | null = null;
+let gridCells: Map<number, Block[]> = new Map();
+function cellGrid(blocks: Block[]) {
+  if (gridFor !== blocks) {
+    gridFor = blocks;
+    gridCells = new Map();
+    for (const b of blocks) {
+      const k = Math.floor(b.x / BLOCK) * 100003 + Math.floor(b.z / BLOCK);
+      const l = gridCells.get(k);
+      if (l) l.push(b); else gridCells.set(k, [b]);
+    }
+  }
+  return gridCells;
+}
+
+/** Big maps: enemies and pickups appear around this point instead of anywhere on the map. */
+export const spawnFocus: { x: number; z: number; r: number; on: boolean } = { x: 0, z: 0, r: 40, on: false };
+
 export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
+  if (blocks.length > 400) {
+    const g = cellGrid(blocks);
+    const half = BLOCK_HALF + radius;
+    const i0 = Math.floor((x - half - BLOCK) / BLOCK), i1 = Math.floor((x + half + BLOCK) / BLOCK);
+    const j0 = Math.floor((z - half - BLOCK) / BLOCK), j1 = Math.floor((z + half + BLOCK) / BLOCK);
+    for (let i = i0; i <= i1; i++)
+      for (let j = j0; j <= j1; j++) {
+        const l = g.get(i * 100003 + j);
+        if (l) for (const b of l) if (Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
+      }
+    return false;
+  }
   for (const b of blocks) {
     const half = BLOCK_HALF + radius;
     if (Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
@@ -61,6 +92,15 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
 
 export function randomSpawn(blocks: Block[], rand: () => number) {
   // wide clearance first so even the biggest enemies never appear inside cover
+  if (spawnFocus.on) {
+    for (const clear of [1.8, 1.4, 1.1])
+      for (let i = 0; i < 120; i++) {
+        const a = rand() * Math.PI * 2, d = 12 + rand() * (spawnFocus.r - 12);
+        const x = spawnFocus.x + Math.cos(a) * d, z = spawnFocus.z + Math.sin(a) * d;
+        if (!blocked(blocks, x, z, clear)) return { x, z };
+      }
+    return { x: spawnFocus.x, z: spawnFocus.z };
+  }
   for (const clear of [1.8, 1.4, 1.1]) {
     for (let i = 0; i < 80; i++) {
       const x = (rand() - 0.5) * (ARENA - 6);
@@ -145,6 +185,7 @@ export function flowField(solid: Uint8Array, ti: number, tj: number) {
       if (solid[n]) continue;
       if (di && dj && (solid[(ci + di) * CELLS + cj] || solid[ci * CELLS + cj + dj])) continue;
       const nd = dist[c]! + (di && dj ? 1.414 : 1);
+      if (CELLS > 100 && nd > 70) continue; // big maps: only route near the players
       if (nd < dist[n]!) {
         dist[n] = nd;
         q.push(n);

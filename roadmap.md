@@ -46,7 +46,7 @@
 - [x] Bullets fire from the gun muzzle and converge on the crosshair
 - [x] New robot enemy looks for the 7 regular enemies + Brass Automaton / Null Apex bosses + Scrap Leaper; others keep old look
 
-- [ ] Big maps copied EXACTLY from tszaks/scrapfall (no own recreations): Whiteout Pass first, then Dry Gulch, Pacific Pier, Vice Heights, Nuketown; co-op picker + radar done
+- [x] Big maps copied EXACTLY from tszaks/scrapfall (src/bro, unchanged): Whiteout Pass, Pacific Pier, Vice Heights, Dry Gulch, Nuketown; co-op picker + radar
 - [ ] Map events + rolled conditions
 - [ ] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
 - [x] Detail pass on our 10 maps (painted ground, ground cover, skyline beyond walls)

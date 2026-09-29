@@ -1,4 +1,6 @@
-// Snow-laden spruce (ported from Whiteout Pass): unit height, drawn instanced.
+// Snow-laden spruce for Whiteout Pass: one near model (jagged drooping tiers, snow on
+// every tier, a visible trunk) and one far model (two cones), both unit-height, drawn as
+// instanced meshes per chunk so the whole forest costs a couple of dozen draw calls.
 import * as THREE from "three";
 
 type Build = { pos: number[]; col: number[]; nor: number[] };

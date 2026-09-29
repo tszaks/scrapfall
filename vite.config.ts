@@ -12,4 +12,19 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    plugins: [
+      {
+        // Dev only: the preview tags every JSX element with data-tsd-source. On 3D scene
+        // elements React Three Fiber treats that as a nested property and crashes on unmount.
+        name: "strip-tsd-source-3d",
+        enforce: "pre",
+        transform(code: string, id: string) {
+          if (!/\/src\/(game|bro)\//.test(id) || !id.endsWith(".tsx")) return null;
+          if (!code.includes("data-tsd-source")) return null;
+          return { code: code.replace(/\s+data-tsd-source=(?:"[^"]*"|\{[^}]*\})/g, ""), map: null };
+        },
+      },
+    ],
+  },
 });
