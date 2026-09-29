@@ -27,7 +27,7 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
@@ -2404,7 +2404,7 @@ function World({
     const floorY = alpine ? bigFloorY(cam.position.x, cam.position.z, feetY.current) : groundY(cam.position.x, cam.position.z);
     feetY.current = floorY;
     cam.position.y = EYE + jumpY.current + floorY;
-    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; }
+    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; bigFeed.current.x = cam.position.x; bigFeed.current.z = cam.position.z; bigFeed.current.yaw = look.current.yaw; }
 
     // share my position with the room
     if (n) {
@@ -4200,7 +4200,9 @@ export function Game() {
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
             {alpineMap && locked && (
-              <Minimap base={alpineMap.base} half={alpineMap.half} enemies={enemies} remotes={remotes} myColor={colorFor(myNum)} compact={touchUi} />
+              <div data-minimap className={touchUi ? "fixed bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "fixed bottom-5 right-5"}>
+                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+              </div>
             )}
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>

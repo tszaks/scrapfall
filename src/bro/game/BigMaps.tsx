@@ -1,5 +1,6 @@
 // Scrapfall bridge: mounts the brother's big maps (copied unchanged) inside our game.
 import { memo, useMemo, useRef } from "react";
+import type { MapFeed, MinimapSource } from "./Minimap";
 import * as THREE from "three";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
 import { ARENA_SUN } from "./lighting";
@@ -90,8 +91,8 @@ const LAYOUT_THEME: Record<BigMapId, string> = {
 export const bigGroundY = groundY;
 
 /** His HUD radar painting for this map (browser only). */
-export function bigMinimap(m: BigMap): { base: HTMLCanvasElement; half: number } | null {
-  const src = m.alpine
+export function bigMinimap(m: BigMap): MinimapSource | null {
+  return m.alpine
     ? alpineMinimap(m.alpine)
     : m.city
       ? cityMinimap(m.city, m.blocks, PLAY_HALF)
@@ -100,10 +101,12 @@ export function bigMinimap(m: BigMap): { base: HTMLCanvasElement; half: number }
         : m.id === "nuketown"
           ? nuketownMinimap()
           : null;
-  return src ? { base: src.base, half: src.half } : null;
 }
 
-/** Same setup order as his Game.tsx: arena size, collision reset, layout, ground, props. */
+/** What his radar reads each frame (position, facing, pickups). */
+export const bigFeed: { current: MapFeed } = { current: { x: 0, z: 0, yaw: 0, items: [] } };
+export { Minimap as BigMinimap } from "./Minimap";
+
 /** His Game.tsx map setup, step for step (arena, collision, layout, ground, rooms, lifts, props). */
 export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
   const coop = !solo;
