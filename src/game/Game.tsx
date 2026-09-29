@@ -2036,7 +2036,9 @@ function World({
       onMutator("none");
     }
     // hazard props reset each round so there is always something to shoot open
+    // (big maps have his own scenery and events instead — no explodable props)
     hazards.current.forEach((h) => {
+      if (alpine) { h.alive = false; return; }
       const p = randomSpawn(blocks, rand);
       h.x = p.x;
       h.z = p.z;
@@ -3290,8 +3292,8 @@ function World({
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
         </group>
       ))}
-      {/* shootable hazard props, styled to the map they sit in */}
-      {Array.from({ length: HAZARD_COUNT }, (_, i) => (
+      {/* shootable hazard props, styled to the map they sit in (arenas only) */}
+      {!alpine && Array.from({ length: HAZARD_COUNT }, (_, i) => (
         <group key={`haz${i}`} ref={(g) => { hazardMeshes.current[i] = g; }} visible={false}>
           <HazardProp def={hazardDef} />
         </group>
