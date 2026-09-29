@@ -3198,7 +3198,7 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
-    v.visible = !deadRef.current; // spectators carry no weapon
+    v.visible = !deadRef.current && !menu; // spectators carry no weapon; title screen shows the map
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
