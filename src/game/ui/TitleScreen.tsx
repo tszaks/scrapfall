@@ -69,6 +69,7 @@ export function TitleScreen({
   onPlay,
   onSettings,
   onWeapons,
+  onEnemies,
   net,
   joining,
   joinCode,
