@@ -3391,6 +3391,8 @@ function World({
   );
 }
 
+import { Component as __C } from "react";
+class __DbgB extends __C<{ children: React.ReactNode }> { state = { e: false }; static getDerivedStateFromError() { return { e: true }; } componentDidCatch(e: unknown, info: { componentStack?: string | null }) { (window as any).__dbg = String(e) + "\n" + (info.componentStack ?? "").slice(0, 1500); } render() { return this.state.e ? null : this.props.children; } }
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   // Anti-repeat: roll a new seed whose map differs from the current one.
@@ -4044,7 +4046,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
+      <__DbgB><Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
         <World
           alpine={alpine}
           blocks={blocks}
@@ -4128,7 +4130,7 @@ export function Game() {
           onInv={setInv}
 
         />
-      </Canvas>
+      </Canvas></__DbgB>
 
       {hurtFlash > 0 && (
         <div
