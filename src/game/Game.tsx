@@ -26,6 +26,7 @@ import { NO_PERKS, PERK_IDS, PERK_INFO, MOD_SLOTS, PISTOL_MODS, derive, modsEqui
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
+import { Ground, MapDressing } from "./art/MapDressing";
 
 
 
@@ -615,11 +616,8 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
   const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[ARENA, ARENA]} />
-        <meshLambertMaterial color={theme.ground} />
-      </mesh>
-      <gridHelper args={[ARENA, ARENA / 2, theme.grid[0], theme.grid[1]]} position-y={0.01} />
+      <Ground theme={theme} size={ARENA} />
+      <MapDressing theme={theme} blocks={blocks} half={HALF} />
       {blocks.map((b, i) => (
         <Obstacle key={i} b={b} theme={theme} />
       ))}
