@@ -151,6 +151,12 @@ const BIG_BASE = 1_500_000_000;
 const BIG_IDS: BigMapId[] = ["alpine", "beach", "city", "western", "nuketown"];
 const BIG_LAYOUT_SEED: Record<BigMapId, number> = { alpine: 20240611, beach: 20240612, city: 20240613, western: 20240614, nuketown: 20240615 };
 function bigSeed(id: BigMapId) { return BIG_BASE + BIG_IDS.indexOf(id) * 10_000_000 + Math.floor(Math.random() * 1e6); }
+/** Testing only: ?bigmap=alpine opens that map in solo. */
+function testMap(): BigMapId | null {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("bigmap");
+  return v && (BIG_IDS as string[]).includes(v) ? (v as BigMapId) : null;
+}
 function bigIdOf(seed: number): BigMapId | null { return seed >= BIG_BASE ? BIG_IDS[Math.floor((seed - BIG_BASE) / 10_000_000)] ?? null : null; }
 const OUR_BOSS = new Set(["golem", "yeti", "treant", "magma", "mech", "ronin", "drake"]);
 const OUR_SPECIAL = new Set(["stalker", "mite", "spore", "pyre", "leaper", "shinobi", "wyrm", "nautilus", "hacker", "bile"]);
@@ -3416,6 +3422,7 @@ export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   // Anti-repeat: roll a new seed whose map differs from the current one.
   const coopMapRef = useRef<"arenas" | BigMapId>("arenas");
+  useEffect(() => { const t = testMap(); if (t) setSeed(bigSeed(t)); }, []);
   const freshSeed = (prev: number) => {
     if (coopMapRef.current !== "arenas" && netHolder.current) return bigSeed(coopMapRef.current);
     // solo: Nuketown joins the rotation of the 10 arenas
@@ -3731,7 +3738,7 @@ export function Game() {
   const coop = !!net;
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
     let bigId = bigIdOf(seed);
-    if (bigId && bigId !== "nuketown" && !coop) bigId = null; // the 4 huge maps are co-op only
+    if (bigId && bigId !== "nuketown" && !coop && !testMap()) bigId = null; // the 4 huge maps are co-op only
     const alpine = bigId ? setupBigMap(bigId, BIG_LAYOUT_SEED[bigId], !coop) : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
