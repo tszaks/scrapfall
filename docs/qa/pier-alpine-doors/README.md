@@ -46,6 +46,12 @@ The same harness on the baseline reproduces the seed-4 surf-shop entrance obstru
 - Real PeerJS host/guest sessions on Pier and Whiteout: identical generated room/threshold geometry, both players' movement synchronized, connected after 26 seconds, zero console errors. Rooms use v9 so older layouts cannot join.
 - Buoys and the visible rope share one spacing function; floats are 4 m apart except under the amusement deck. Actual movement stops at the existing deep-water boundary and can travel alongside it.
 
+## Required local checks
+
+`npm run check` passed: 11 unit tests, TypeScript, production build, and all ten map/time smoke cases with zero errors. The repo-map and whitespace checks also passed. A full source-file fingerprint confirmed that the final build uses the same game source as the 309-round-trip audit (`routes-8PBZRLIO.js`).
+
+Real co-op session duration was 26 seconds on each map. Both players moved initially and after the heartbeat window, with zero measured remote-position error at the settled samples.
+
 ## Limits
 
 No physical phone/controller test or full combat endurance run is claimed. The sparse ordinary-shop centrepiece is unchanged: its canonical furnishing plan is in `structures/`, outside this PR's assigned area. Surfboard silhouettes/fins and thinner hotel-lounge books are included. Performance measurements are reported in the PR separately from traversal checks.
