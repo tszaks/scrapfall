@@ -99,7 +99,7 @@ function Instanced({
 }: {
   geo: THREE.BufferGeometry;
   color: string;
-  emissive?: string;
+  emissive?: string | undefined;
   items: { x: number; y: number; z: number; s: number; sy?: number; ry: number; tilt?: number }[];
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -196,7 +196,7 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
       const k = 1 / Math.max(Math.abs(Math.cos(ang)), Math.abs(Math.sin(ang)));
       const dist = Math.min(d * k, d * 1.35);
       const s = sky.geo === GEO.tower ? 2 + r() * 3 : 1.6 + r() * 2.4;
-      const h = sky.h[0] + r() * (sky.h[1] - sky.h[0]);
+      const h = sky.h[0]! + r() * (sky.h[1]! - sky.h[0]!);
       (i % 2 ? ring : ring2).push({
         x: Math.cos(ang) * dist,
         y: 0,
