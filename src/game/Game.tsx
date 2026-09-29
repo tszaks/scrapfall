@@ -27,6 +27,8 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
+import { MapEvents } from "@/bro/game/events/EventsLayer";
+import { onMapEventMsg } from "@/bro/game/events/mapEvents";
 import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { spawnFocus } from "./level";
@@ -1749,6 +1751,8 @@ function World({
   const bobAmt = useRef(0);
   const jumpY = useRef(0);
   const feetY = useRef(0);
+  const hurtRef = useRef<((e: Enemy, dmg: number, idx: number, slow?: number, burn?: number, kb?: number, kx?: number, kz?: number) => void) | null>(null);
+  const aliveRef = useRef(true);
   const jumpV = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
@@ -1870,6 +1874,7 @@ function World({
       if (m.type === "t") { upsertRemote(m); return; }
       if (m.type === "shard") { takenShards.current.add(String(m.id)); return; }
       if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
+      if (onMapEventMsg(m as never)) return;
       if (isHostRef.current) {
         if (m.type === "hit") {
           const e = enemies[Number(m.i)];
@@ -2309,6 +2314,7 @@ function World({
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
+    aliveRef.current = !spectating;
 
     // on-screen controls
     if (touchInput.ability) {
@@ -3330,6 +3336,34 @@ function World({
         shadow-mapSize-height={1024}
       />}
       {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} isHost={isHost} /> : <Level blocks={blocks} theme={theme} />}
+      {alpine && alpine.id !== "nuketown" && (
+        <MapEvents
+          theme={alpine.theme as never}
+          city={(alpine.alpine ?? alpine.city) as never}
+          enemies={enemies}
+          net={net as never}
+          isHost={isHost}
+          wave={wave}
+          playing={locked && !gameOver}
+          matchSeed={alpine.seed}
+          alive={aliveRef}
+          hurtPlayer={(dmg, kx, kz) => {
+            if (deadRef.current) return;
+            if (kx || kz) { slide.current.x += kx * 6; slide.current.z += kz * 6; }
+            if (dmg > 0) takeHit(dmg);
+          }}
+          movePlayer={(dx, dz) => {
+            const p = camera.position;
+            if (!bigPlayerBlocked(blocks, p.x + dx, p.z, 0.4, feetY.current, false)) p.x += dx;
+            if (!bigPlayerBlocked(blocks, p.x, p.z + dz, 0.4, feetY.current, false)) p.z += dz;
+          }}
+          hurtEnemy={(i, dmg, kx, kz) => {
+            const e = enemies[i];
+            if (e?.alive && hurtRef.current) hurtRef.current(e, dmg, i, 0, 0, 3, kx, kz);
+          }}
+          spawnEnemies={() => 0}
+        />
+      )}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
