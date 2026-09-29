@@ -38,6 +38,7 @@ import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { CombatFx } from "@/bro/game/CombatFx";
 import { fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxReset, fxShot, fxStyle, setLocalMuzzle, visOf } from "@/bro/game/projectiles";
 import { VF } from "@/bro/game/impacts";
+import { setAutoTier } from "@/bro/game/quality";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { SettingsScreen } from "./ui/SettingsScreen";
