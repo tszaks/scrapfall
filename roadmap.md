@@ -43,7 +43,7 @@
 ## Merge from tszaks/scrapfall (keep all our systems)
 - [x] Controls: Space jump, Shift run, Enter shoot; mobile JUMP + RUN buttons; no gun sway
 - [x] Bullet detail: brass band + glowing tracer
-- [ ] New robot enemy looks (port art kit / rigs)
+- [x] New robot enemy looks for the 7 regular enemies (boss + map specials still old)
 - [ ] Detail pass on our 10 maps to match
 - [ ] Big maps (Vice Heights, Beach, Snow Mountain, Western City) co-op only + map picker + minimap
 - [ ] Map events + rolled conditions
