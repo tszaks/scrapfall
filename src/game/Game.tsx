@@ -35,6 +35,7 @@ import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
+import { Hazard, Logo, UiStyles } from "@/bro/game/ui/kit";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -3784,6 +3785,8 @@ export function Game() {
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const paused = started && !ended && !locked;
+  /** the title screen: no run in progress, so the live map shows behind his logo */
+  const home = !started && !ended && !paused;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
