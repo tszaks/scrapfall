@@ -27,7 +27,9 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { MapEvents } from "@/bro/game/events/EventsLayer";
+import { onMapEventMsg } from "@/bro/game/events/mapEvents";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
@@ -149,7 +151,6 @@ const EYE = 1.6;
 // Big maps (copied from tszaks/scrapfall): seeds above BIG_BASE name a map; its layout is fixed.
 const BIG_BASE = 1_500_000_000;
 const BIG_IDS: BigMapId[] = ["alpine", "beach", "city", "western", "nuketown"];
-const BIG_LAYOUT_SEED: Record<BigMapId, number> = { alpine: 20240611, beach: 20240612, city: 20240613, western: 20240614, nuketown: 20240615 };
 function bigSeed(id: BigMapId) { return BIG_BASE + BIG_IDS.indexOf(id) * 10_000_000 + Math.floor(Math.random() * 1e6); }
 /** Testing only: ?bigmap=alpine opens that map in solo. */
 function testMap(): BigMapId | null {
@@ -1749,6 +1750,9 @@ function World({
   }, [fov, camera]);
   const bobAmt = useRef(0);
   const jumpY = useRef(0);
+  const feetY = useRef(0);
+  const hurtRef = useRef<((e: Enemy, dmg: number, idx: number, slow?: number, burn?: number, kb?: number, kx?: number, kz?: number) => void) | null>(null);
+  const aliveRef = useRef(true);
   const jumpV = useRef(0);
 
   const solid = useMemo(() => solidGrid(blocks), [blocks]);
@@ -1870,6 +1874,7 @@ function World({
       if (m.type === "t") { upsertRemote(m); return; }
       if (m.type === "shard") { takenShards.current.add(String(m.id)); return; }
       if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
+      if (onMapEventMsg(m as never)) return;
       if (isHostRef.current) {
         if (m.type === "hit") {
           const e = enemies[Number(m.i)];
@@ -2309,6 +2314,7 @@ function World({
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
+    aliveRef.current = !spectating;
 
     // on-screen controls
     if (touchInput.ability) {
@@ -2385,8 +2391,9 @@ function World({
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current, jumpY.current > 0) : (x: number, z: number) => blocked(blocks, x, z, 0.4);
+      if (!hit(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
+      if (!hit(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
@@ -2399,8 +2406,10 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    cam.position.y = EYE + jumpY.current + groundY(cam.position.x, cam.position.z);
-    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; }
+    const floorY = alpine ? bigFloorY(cam.position.x, cam.position.z, feetY.current) : groundY(cam.position.x, cam.position.z);
+    feetY.current = floorY;
+    cam.position.y = EYE + jumpY.current + floorY;
+    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; bigFeed.current.x = cam.position.x; bigFeed.current.z = cam.position.z; bigFeed.current.yaw = look.current.yaw; }
 
     // share my position with the room
     if (n) {
@@ -2645,6 +2654,7 @@ function World({
 
       }
     };
+    hurtRef.current = hurtEnemy;
 
     /** A shot hazard prop goes off: everything close takes the map's own effect. */
     const blowHazard = (idx: number, share = true, visualOnly = false) => {
@@ -3326,7 +3336,35 @@ function World({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />}
-      {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} /> : <Level blocks={blocks} theme={theme} />}
+      {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} isHost={isHost} /> : <Level blocks={blocks} theme={theme} />}
+      {alpine && alpine.id !== "nuketown" && (
+        <MapEvents
+          theme={alpine.theme as never}
+          city={(alpine.alpine ?? alpine.city) as never}
+          enemies={enemies}
+          net={net as never}
+          isHost={isHost}
+          wave={wave}
+          playing={locked && !gameOver}
+          matchSeed={alpine.seed}
+          alive={aliveRef}
+          hurtPlayer={(dmg, kx, kz) => {
+            if (deadRef.current) return;
+            if (kx || kz) { slide.current.x += kx * 6; slide.current.z += kz * 6; }
+            if (dmg > 0) takeHit(dmg);
+          }}
+          movePlayer={(dx, dz) => {
+            const p = camera.position;
+            if (!bigPlayerBlocked(blocks, p.x + dx, p.z, 0.4, feetY.current, false)) p.x += dx;
+            if (!bigPlayerBlocked(blocks, p.x, p.z + dz, 0.4, feetY.current, false)) p.z += dz;
+          }}
+          hurtEnemy={(i, dmg, kx, kz) => {
+            const e = enemies[i];
+            if (e?.alive && hurtRef.current) hurtRef.current(e, dmg, i, 0, 0, 3, kx, kz);
+          }}
+          spawnEnemies={() => 0}
+        />
+      )}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
@@ -3527,6 +3565,25 @@ export function Game() {
   const seedRef = useRef(seed);
   seedRef.current = seed;
   const netHolder = useRef<NetHandle | null>(null);
+  // home screen showcase: a new arena behind the menu every 8 s, with a soft fade
+  const [menuFade, setMenuFade] = useState(false);
+  useEffect(() => {
+    if (started || picking || testMap()) return;
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const id = setInterval(() => {
+      if (netHolder.current) return;
+      setMenuFade(true);
+      t2 = setTimeout(() => {
+        setSeed((p) => {
+          let s = Math.floor(Math.random() * 1e9);
+          while (s % THEMES.length === p % THEMES.length) s = Math.floor(Math.random() * 1e9);
+          return s;
+        });
+        setMenuFade(false);
+      }, 600);
+    }, 8000);
+    return () => { clearInterval(id); if (t2) clearTimeout(t2); };
+  }, [started, picking]);
   const healthRef = useRef(MAX_HP);
   healthRef.current = health;
   // player numbers: host is always 1, guests take 2-4 in join order
@@ -3739,7 +3796,7 @@ export function Game() {
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
     let bigId = bigIdOf(seed);
     if (bigId && bigId !== "nuketown" && !coop && !testMap()) bigId = null; // the 4 huge maps are co-op only
-    const alpine = bigId ? setupBigMap(bigId, BIG_LAYOUT_SEED[bigId], !coop) : null;
+    const alpine = bigId ? setupBigMap(bigId, seed, !coop) : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
     if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
@@ -4078,6 +4135,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
+      <div aria-hidden className={`pointer-events-none fixed inset-0 z-30 bg-[#2b2118] transition-opacity duration-500 ${menuFade && !started ? "opacity-100" : "opacity-0"}`} />
       <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? 1200 : 220 }}>
         <World
           alpine={alpine}
@@ -4196,7 +4254,9 @@ export function Game() {
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
             {alpineMap && locked && (
-              <Minimap base={alpineMap.base} half={alpineMap.half} enemies={enemies} remotes={remotes} myColor={colorFor(myNum)} compact={touchUi} />
+              <div data-minimap className={touchUi ? "fixed bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "fixed bottom-5 right-5"}>
+                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+              </div>
             )}
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
@@ -4846,7 +4906,7 @@ export function Game() {
                     DONE
                   </button>
                   <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v1.0.4
+                    SCRAPFALL · v1.0.5
                   </div>
                 </div>
               </div>

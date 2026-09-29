@@ -13,11 +13,11 @@
 - [x] 6 new guns (Hand Cannon, Shredder, Crossbow, Plasma Fan, Void Orb, Shattergun)
 - [x] Health cards: Blood Siphon (+3% life steal), Field Medic (+3 heal after each wave)
 - [x] Swap 4 abilities for Gravity Well, Chain Storm, Time Warp, Orbital Strike
-- [ ] Music must start reliably on the published site (audio unlock on first gesture)
-- [ ] Player bullets: bullet-shaped mesh aligned to flight direction, same colors
-- [ ] Visible effects for every ability (storm lightning arcs, orbital beam + ground marker, etc.)
-- [ ] Burning enemies show flames only while the burn lasts
-- [ ] Rework "happy" biome music into battle-intensity versions, keeping each theme
+- [x] Music must start reliably on the published site (audio unlock on first gesture)
+- [x] Player bullets: bullet-shaped mesh aligned to flight direction, same colors
+- [x] Visible effects for every ability (storm lightning arcs, orbital beam + ground marker, etc.)
+- [x] Burning enemies show flames only while the burn lasts
+- [x] Rework "happy" biome music into battle-intensity versions, keeping each theme
 - [x] Mobile: remove weapon arrow buttons (tap the weapon chips instead)
 - [x] Mobile: remove duplicate square ability badge in bottom corner
 - [x] Mobile: pause button must not overlap other HUD blocks
@@ -31,10 +31,10 @@
 - [x] Version 1.0.1
 - [x] Bigger waves (1.25x on wave 1, +0.10x each wave), shuffled spawn order, tougher boss round
 - [x] Version 1.0.2
-- [ ] Fix forest/map object loading (tree geometry, themed decor, tighter collision)
-- [ ] Themed interactive map hazards (shootable, per-theme effect, co-op synced)
-- [ ] Endless mode past wave 12 with wave mutators + high-wave record
-- [ ] Version 1.0.4
+- [x] Fix forest/map object loading (tree geometry, themed decor, tighter collision)
+- [x] Themed interactive map hazards (shootable, per-theme effect, co-op synced)
+- [x] Endless mode past wave 12 with wave mutators + high-wave record
+- [x] Version 1.0.4
 
 - [x] v1.0.4: fixed map scenery (tiered trees, biome decor, tighter collision)
 - [x] v1.0.4: themed destructible hazards per map, co-op synced
@@ -47,13 +47,14 @@
 - [x] New robot enemy looks for the 7 regular enemies + Brass Automaton / Null Apex bosses + Scrap Leaper; others keep old look
 
 - [x] Big maps copied EXACTLY from tszaks/scrapfall (src/bro, unchanged): Whiteout Pass, Pacific Pier, Vice Heights, Dry Gulch, Nuketown; co-op picker + radar
-- [ ] Map events + rolled conditions
-- [ ] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
+- [x] Map events + rolled conditions
+- [x] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
 - [x] Detail pass on our 10 maps (painted ground, ground cover, skyline beyond walls)
 
 ## Big-map exactness gaps (vs szakacsmedia.com/game v1.0.2)
-- [ ] Nuketown house walls/stairs/balcony invisible
-- [ ] Elevators, stairwells, walkable roofs/rooms missing (Vice Heights fountain elevator etc.)
-- [ ] Moving life missing: city traffic/parked cars, Dry Gulch train/riders/tumbleweeds/weather, alpine life, rain
-- [ ] Random time of day + weather per match
-- [ ] Minimap in his style (bottom-right, N marker, streets, elevator icons)
+- [x] Nuketown house walls/stairs/balcony invisible
+- [x] Elevators, stairwells, walkable roofs/rooms missing (Vice Heights fountain elevator etc.)
+- [x] Moving life missing: city traffic/parked cars, Dry Gulch train/riders/tumbleweeds/weather, alpine life, rain
+- [x] Random time of day + weather per match
+- [x] Minimap in his style (bottom-right, N marker, streets, elevator icons)
+- [x] Version 1.0.5 (exact big maps: rooms, lifts, traffic, train, weather, events, his radar)
