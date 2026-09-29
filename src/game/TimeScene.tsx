@@ -95,6 +95,9 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
       s.position.copy(L.sunDir).multiplyScalar(30);
       s.color.copy(L.sunColor);
       s.intensity = L.sunI;
+      // moonlight is diffuse: let the arena shadow fade with the dusk instead of
+      // reading as a hard-edged blob under the night sky
+      s.shadow.intensity = 1 - 0.55 * tod.v;
     }
     skyFog.fogSunDir.value.copy(L.sunDir);
     skyFog.fogSunColor.value.copy(L.hazeColor);

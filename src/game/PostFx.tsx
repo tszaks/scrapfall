@@ -22,6 +22,7 @@ import * as THREE from "three";
 
 import { matchEnvironment } from "./matchEnvironment";
 import { quality } from "./quality";
+import { tod } from "./timeOfDay";
 
 const QUAD_VERT = /* glsl */ `
 varying vec2 vUv;
@@ -241,9 +242,13 @@ export function renderWithPost(
       }
     }
     gl.autoClear = false;
-    // daylight matches run a high threshold and a faint overlay: sunlit surfaces
-    // stay under the knee and only true emitters (and the sun itself) still pass
-    const day = matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain" ? 1 : 0;
+    // daylight factor, continuous: bright weather is fully guarded; the dusk blend
+    // (tod.v, 0 = golden sunset .. 1 = night) fades the guard away as it gets dark so
+    // emitters regain full strength exactly when the scene does
+    const day =
+      matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain"
+        ? 1
+        : 1 - tod.v;
     p.bright.uniforms["uDay"]!.value = day;
     p.mix.uniforms["uDay"]!.value = day;
     p.bright.uniforms["tSrc"]!.value = k.tex;
