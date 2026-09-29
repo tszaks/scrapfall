@@ -27,7 +27,7 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
@@ -2385,8 +2385,9 @@ function World({
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      if (!blocked(blocks, nx, cam.position.z, 0.4)) cam.position.x = nx; else slide.current.x = 0;
-      if (!blocked(blocks, cam.position.x, nz, 0.4)) cam.position.z = nz; else slide.current.z = 0;
+      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current, jumpY.current > 0) : (x: number, z: number) => blocked(blocks, x, z, 0.4);
+      if (!hit(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
+      if (!hit(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
@@ -2399,7 +2400,9 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    cam.position.y = EYE + jumpY.current + groundY(cam.position.x, cam.position.z);
+    const floorY = alpine ? bigFloorY(cam.position.x, cam.position.z, feetY.current) : groundY(cam.position.x, cam.position.z);
+    feetY.current = floorY;
+    cam.position.y = EYE + jumpY.current + floorY;
     if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; }
 
     // share my position with the room
