@@ -150,3 +150,31 @@ export function buildWhiteout(seed: number): WhiteoutLayout {
 
   return { chalets, spruce, rocks, lake, lift, blocks };
 }
+
+/** one pixel per metre top-down base map for the radar */
+export function paintWhiteout(l: WhiteoutLayout): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = c.height = WHITEOUT_SIZE;
+  const g = c.getContext("2d")!;
+  g.translate(H, H);
+  g.fillStyle = "#eef3f7";
+  g.fillRect(-H, -H, WHITEOUT_SIZE, WHITEOUT_SIZE);
+  g.fillStyle = "#cdd5dc";
+  g.fillRect(-H, 6 - 2.25, WHITEOUT_SIZE, 4.5);
+  g.beginPath(); g.arc(0, 0, 8.5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#8fb8d0";
+  g.beginPath(); g.arc(l.lake.x, l.lake.z, l.lake.r, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = "#c8302a"; g.lineWidth = 0.8;
+  g.beginPath(); g.moveTo(l.lift.x, l.lift.z0); g.lineTo(l.lift.x, l.lift.z1); g.stroke();
+  g.fillStyle = "#4f7a62";
+  for (const s of l.spruce) { g.beginPath(); g.arc(s.x, s.z, 1.2, 0, Math.PI * 2); g.fill(); }
+  g.fillStyle = "#7d8792";
+  for (const r of l.rocks) g.fillRect(r.x - 0.9, r.z - 0.9, 1.8, 1.8);
+  for (const b of l.chalets) {
+    g.fillStyle = b.kind === "chapel" ? "#3e4a58" : "#6a3f26";
+    g.fillRect(b.x - b.w / 2, b.z - b.d / 2, b.w, b.d);
+  }
+  g.strokeStyle = "#5f6f80"; g.lineWidth = 1.4;
+  g.strokeRect(-H, -H, WHITEOUT_SIZE, WHITEOUT_SIZE);
+  return c;
+}
