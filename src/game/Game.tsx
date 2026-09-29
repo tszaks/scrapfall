@@ -13,6 +13,9 @@ import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
 import { RobotModel } from "./art/RobotModel";
+import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
+import { hasArtBoss } from "./art/robots/bosses";
+import { hasArtSpecial } from "./art/robots/specials";
 import { classicRobot, swingInputs, shooterInputs, bomberInputs, specterInputs } from "./art/robots/classic";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
@@ -1103,8 +1106,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </group>
       </group> )}
       {(kind==="boss") && (<group ref={bossGrp}>
-        <BossBody theme={theme} />
-        <group ref={bossArm} position={[1.05, 1.9, 0]}>
+        {hasArtBoss(theme) ? <ArtBoss theme={theme} data={data} /> : <BossBody theme={theme} />}
+        <group ref={bossArm} position={[1.05, 1.9, 0]} visible={!hasArtBoss(theme)}>
           <mesh position={[0, 0.9, 0]}>
             <boxGeometry args={[0.24, 1.8, 0.24]} />
             <meshLambertMaterial color={theme.boss.limb} flatShading />
@@ -1237,7 +1240,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
-      {kind === "special" && <SpecialModel theme={theme} data={data} />}
+      {kind === "special" && (hasArtSpecial(theme) ? <ArtSpecial theme={theme} data={data} /> : <SpecialModel theme={theme} data={data} />)}
       {false && (kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
