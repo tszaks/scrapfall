@@ -1417,6 +1417,7 @@ function World({
   rand,
   theme,
   locked,
+  menu,
   gameOver,
   onScore,
   onHurt,
@@ -1459,6 +1460,7 @@ function World({
   rand: () => number;
   theme: Theme;
   locked: boolean;
+  menu: boolean;
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
@@ -2166,6 +2168,24 @@ function World({
     }
     cam.rotation.order = "YXZ";
     cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+
+    // home screen: glide the camera slowly through the map behind the menu
+    if (menu && !locked) {
+      const t = state.clock.elapsedTime;
+      menuDrift.current += delta;
+      const d = menuDrift.current;
+      look.current.yaw = menuStart.current.yaw + d * 0.055;
+      look.current.pitch = Math.sin(t * 0.13) * 0.06 - 0.03;
+      cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+      const s0 = menuStart.current;
+      const r = 6 + Math.sin(d * 0.09) * 3;
+      cam.position.set(
+        s0.x + Math.sin(d * 0.07) * r,
+        s0.y + Math.sin(t * 0.21) * 0.35,
+        s0.z + Math.cos(d * 0.07) * r - r,
+      );
+      return;
+    }
 
     if (gameOver || !locked) return;
 
@@ -4002,6 +4022,7 @@ export function Game() {
           rand={rand}
           theme={theme}
           locked={locked}
+          menu={!started && !ended}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
