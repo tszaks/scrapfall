@@ -121,3 +121,38 @@ test("co-op ignores local URL overrides while solo diagnostics may select weathe
     else delete globalThis.window;
   }
 });
+
+const pierDoors = await pureModule("../src/game/beach/doorways.ts");
+const intersects = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.z0 < b.z1 && a.z1 > b.z0;
+test("Pier arcade reserves the entire exit including a stall canopy", () => {
+  const door = pierDoors.beachDoorApproach({ x0: -76, x1: -44, z0: -30, z1: -14, front: 2 });
+  assert.ok(intersects(door, pierDoors.beachStallBounds({ x0: -60, x1: -54, z0: -12, z1: -8 })));
+  assert.ok(door.x0 <= -62.8 && door.x1 >= -57.2, "room opening plus player shoulders");
+  assert.ok(door.z1 >= -10, "approach extends beyond the blocked production exit");
+});
+test("Pier doorway reservations follow all four facade orientations", () => {
+  const box = { x0: 10, x1: 30, z0: 40, z1: 60 };
+  for (const [front, x, z] of [
+    [0, 20, 37],
+    [1, 33, 50],
+    [2, 20, 63],
+    [3, 7, 50],
+  ]) {
+    const door = pierDoors.beachDoorApproach({ ...box, front });
+    assert.ok(x > door.x0 && x < door.x1 && z > door.z0 && z < door.z1);
+    assert.equal(
+      intersects(door, { x0: 19, x1: 21, z0: 49, z1: 51 }),
+      false,
+      "centre remains available for furnishing",
+    );
+  }
+});
+test("Pier swim boundary has a continuous four-metre float rhythm outside the deck", () => {
+  for (const half of [280, 400]) {
+    const points = pierDoors.swimLineBuoys(half);
+    assert.ok(points.includes(-36) && points.includes(36), "line reaches both pier shoulders");
+    assert.equal(new Set(points).size, points.length);
+    for (let i = 1; i < points.length; i++)
+      assert.ok(points[i] - points[i - 1] <= 4 || (points[i - 1] === -36 && points[i] === 36));
+  }
+});

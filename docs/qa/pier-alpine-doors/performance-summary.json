@@ -1,0 +1,278 @@
+{
+  "current-chromium-1": {
+    "pacific": {
+      "baseline": {
+        "callbackMeanMs": 1.83,
+        "callbackRangeMs": [
+          1.653,
+          2.006
+        ],
+        "p95RangeMs": [
+          2.9,
+          3.7
+        ],
+        "worstP99Ms": 9.6,
+        "over25": 0,
+        "over50": 0,
+        "drawCalls": 122,
+        "triangles": 909436,
+        "fpsRange": [
+          446.4,
+          554.3
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 2.039,
+        "callbackRangeMs": [
+          2.034,
+          2.044
+        ],
+        "p95RangeMs": [
+          4,
+          4
+        ],
+        "worstP99Ms": 7.2,
+        "over25": 0,
+        "over50": 0,
+        "drawCalls": 122,
+        "triangles": 923362,
+        "fpsRange": [
+          447.3,
+          449.0
+        ]
+      }
+    },
+    "whiteout": {
+      "baseline": {
+        "callbackMeanMs": 3.349,
+        "callbackRangeMs": [
+          3.213,
+          3.485
+        ],
+        "p95RangeMs": [
+          5.7,
+          9.8
+        ],
+        "worstP99Ms": 12.6,
+        "over25": 0,
+        "over50": 0,
+        "drawCalls": 105.0,
+        "triangles": 2917149,
+        "fpsRange": [
+          259.7,
+          296.4
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 3.491,
+        "callbackRangeMs": [
+          2.886,
+          4.096
+        ],
+        "p95RangeMs": [
+          5.2,
+          10.7
+        ],
+        "worstP99Ms": 13.3,
+        "over25": 0,
+        "over50": 0,
+        "drawCalls": 105.0,
+        "triangles": 2917150,
+        "fpsRange": [
+          221.9,
+          313.4
+        ]
+      }
+    }
+  },
+  "current-chromium-4": {
+    "pacific": {
+      "baseline": {
+        "callbackMeanMs": 10.325,
+        "callbackRangeMs": [
+          7.594,
+          13.056
+        ],
+        "p95RangeMs": [
+          13.6,
+          35.1
+        ],
+        "worstP99Ms": 47.1,
+        "over25": 76,
+        "over50": 3,
+        "drawCalls": 122,
+        "triangles": 909436,
+        "fpsRange": [
+          68.5,
+          118.5
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 13.207,
+        "callbackRangeMs": [
+          12.947,
+          13.467
+        ],
+        "p95RangeMs": [
+          32.7,
+          34.5
+        ],
+        "worstP99Ms": 46.2,
+        "over25": 125,
+        "over50": 1,
+        "drawCalls": 122,
+        "triangles": 923362,
+        "fpsRange": [
+          66.2,
+          69.6
+        ]
+      }
+    },
+    "whiteout": {
+      "baseline": {
+        "callbackMeanMs": 5.446,
+        "callbackRangeMs": [
+          4.665,
+          6.227
+        ],
+        "p95RangeMs": [
+          7.7,
+          10.8
+        ],
+        "worstP99Ms": 14.2,
+        "over25": 1,
+        "over50": 0,
+        "drawCalls": 105.0,
+        "triangles": 2917151,
+        "fpsRange": [
+          141.4,
+          190.5
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 5.401,
+        "callbackRangeMs": [
+          5.398,
+          5.404
+        ],
+        "p95RangeMs": [
+          9.7,
+          10.3
+        ],
+        "worstP99Ms": 13.6,
+        "over25": 0,
+        "over50": 0,
+        "drawCalls": 105.0,
+        "triangles": 2917141,
+        "fpsRange": [
+          163.0,
+          163.5
+        ]
+      }
+    }
+  },
+  "current-webkit-1": {
+    "pacific": {
+      "baseline": {
+        "callbackMeanMs": 2.303,
+        "callbackRangeMs": [
+          2.1,
+          2.506
+        ],
+        "p95RangeMs": [
+          35,
+          35
+        ],
+        "worstP99Ms": 36,
+        "over25": 360,
+        "over50": 0,
+        "drawCalls": 119,
+        "triangles": 930632,
+        "fpsRange": [
+          30,
+          30
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 2.264,
+        "callbackRangeMs": [
+          2.194,
+          2.333
+        ],
+        "p95RangeMs": [
+          35,
+          35
+        ],
+        "worstP99Ms": 36,
+        "over25": 360,
+        "over50": 0,
+        "drawCalls": 119,
+        "triangles": 945410,
+        "fpsRange": [
+          30,
+          30
+        ]
+      }
+    },
+    "whiteout": {
+      "baseline": {
+        "callbackMeanMs": 1.836,
+        "callbackRangeMs": [
+          1.6,
+          2.072
+        ],
+        "p95RangeMs": [
+          35,
+          35
+        ],
+        "worstP99Ms": 37,
+        "over25": 360,
+        "over50": 0,
+        "drawCalls": 103,
+        "triangles": 2908740,
+        "fpsRange": [
+          30,
+          30
+        ]
+      },
+      "candidate": {
+        "callbackMeanMs": 1.775,
+        "callbackRangeMs": [
+          1.7,
+          1.85
+        ],
+        "p95RangeMs": [
+          35,
+          35
+        ],
+        "worstP99Ms": 36,
+        "over25": 360,
+        "over50": 0,
+        "drawCalls": 103.0,
+        "triangles": 2908711,
+        "fpsRange": [
+          30.0,
+          30.0
+        ]
+      }
+    }
+  },
+  "current-chromium-4-long": {
+    "pacific": {
+      "baseline": {
+        "callbackMeanMs": 6.049,
+        "worstP99Ms": 14,
+        "over25": 1,
+        "over50": 0,
+        "calls": 122.02
+      },
+      "candidate": {
+        "callbackMeanMs": 6.176,
+        "worstP99Ms": 14.8,
+        "over25": 2,
+        "over50": 0,
+        "calls": 122.02
+      }
+    }
+  }
+}

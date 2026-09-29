@@ -12,7 +12,7 @@ Solo or co-op with up to four players. No install, no account.
 ---
 
 A standalone game by **Tyler and Toby Szakacs** ([Szakacs Media](https://szakacsmedia.com)). Fight twelve waves of scrap-built robots across
-four large real-scale maps and a compact Nuketown arena. Each map has its own boss,
+four large real-scale maps. Each map has its own boss,
 hazard, traffic and events.
 
 ## Maps
@@ -23,7 +23,6 @@ hazard, traffic and events.
 | **Dry Gulch** | A railroad boomtown with a walk-in saloon, jail, bank and livery, a stagecoach, a sheriff's posse and a freight train | The Iron Marshal |
 | **Pacific Pier** | A beach town with a rideable Ferris wheel, a coaster, a skate park and a coast road | The Kraken Rig |
 | **Whiteout Pass** | An alpine ski village with a rideable chairlift, a summit lodge and a clock-tower belfry | The Avalanche Engine |
-| **Nuketown** | A compact 1950s test-site cul-de-sac *(in progress)* | The Test Subject |
 
 The four big maps are built at real scale (1 unit = 1 metre, about 800 × 800 m). Solo play
 seals off a smaller 560 m area with in-world blockades; co-op opens the whole map.
@@ -99,7 +98,7 @@ npm run dev            # open the printed URL + /game/
 npm test               # physics, ballistics and match-weather regressions
 ```
 
-Useful URL options: `?map=vice|gulch|pacific|whiteout|nuketown`,
+Useful URL options: `?map=vice|gulch|pacific|whiteout`,
 `?weather=sunny|rain|night|sunset`, `?shadows=0|1`, and `?debug=1` for developer handles.
 
 ## Build and deploy
@@ -123,7 +122,8 @@ The full map, with every folder, is in [docs/REPO_MAP.md](docs/REPO_MAP.md). If 
 | --- | --- |
 | `src/game/Game.tsx` | The game loop, weapons, enemies, waves, HUD and co-op |
 | `src/game/cityLayout.ts`, `City.tsx`, `cityMesh.ts` | Vice Heights: the generator and the renderer |
-| `src/game/western/`, `beach/`, `alpine/`, `nuketown/` | The other maps |
+| `src/game/western/`, `beach/`, `alpine/` | The other maps |
+| `src/game/nuketown/` | Nuketown (hidden, work in progress — only reachable with `?map=nuketown`) |
 | `src/game/access/` | Elevators, stairs, ladders and rooftops, shared by every map |
 | `src/game/trafficSim.ts`, `Traffic.tsx`, `pursuit.ts` | Traffic and police chases |
 | `src/game/terrain.ts`, `soloBounds.ts`, `posts.ts` | Ground height, solo blockades, thin-prop collision |
