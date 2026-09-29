@@ -4053,7 +4053,15 @@ export function Game() {
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
       <div aria-hidden className={`pointer-events-none fixed inset-0 z-30 bg-[#2b2118] transition-opacity duration-500 ${menuFade && !started ? "opacity-100" : "opacity-0"}`} />
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? 1200 : 220 }}>
+      {/* phones draw at a lower resolution and skip sun shadows: the big maps are 800 m wide
+          and a 3x phone screen is what makes them stutter */}
+      <Canvas
+        shadows={!touchUi}
+        dpr={touchUi ? [0.6, 1] : [1, 1.6]}
+        gl={{ powerPreference: "high-performance", antialias: true }}
+        camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? (touchUi ? 700 : 1200) : 220 }}
+      >
+
         <World
           alpine={alpine}
           blocks={blocks}
