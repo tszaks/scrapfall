@@ -24,7 +24,7 @@ export function PauseScreen({
   mapName: string;
   stats: Derived;
   cls: ClassId;
-  extra?: ReactNode;
+  extra?: ReactNode | undefined;
   multiplayer: boolean;
   onResume: () => void;
   onSettings: () => void;
@@ -167,7 +167,7 @@ export function EndScreen({
   onNewArena: () => void;
   onLoadout: () => void;
   onLeave: () => void;
-  onOvertime?: () => void;
+  onOvertime?: (() => void) | undefined;
 }) {
   const { short } = useViewport();
   const compact = short;

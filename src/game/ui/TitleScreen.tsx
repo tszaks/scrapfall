@@ -6,7 +6,7 @@ import { BrandLogo } from "./BrandLogo";
 export type LobbyPlayer = {
   num: number;
   cls: string | undefined;
-  clsColor?: string;
+  clsColor?: string | undefined;
   ability: string | undefined;
   color: string;
   me: boolean;
@@ -97,7 +97,7 @@ export function TitleScreen({
   startJoin: () => void;
   leaveRoom: () => void;
   players: LobbyPlayer[];
-  mapPicker?: ReactNode;
+  mapPicker?: ReactNode | undefined;
 }) {
   const { short, narrow } = useViewport();
   const compact = short || touchUi;
