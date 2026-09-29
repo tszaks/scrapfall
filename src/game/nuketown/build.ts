@@ -698,8 +698,7 @@ function streetArt(S: Model, D: Model) {
   for (const sz of [-1, 1]) S.box(0.1, 2.4, 0.1, [25.5, 1.2, -4.8 + sz * 1.35], "#5c5546", SURF.wood);
   S.box(0.08, 1.2, 3.1, [25.5, 2.0, -4.8], "#2e4a38", SURF.paint);
   D.push([25.44, 1.95, -4.8], [0, -Math.PI / 2, 0]);
-  letterRow(D, "NUKETOWN", -1.3, 0.16, 0.06, 0.42, INK);
-  letterRow(D, "POP. 51", -0.72, -0.38, 0.06, 0.3, "#c8b45e");
+  letterRow(D, "NUKETOWN", -1.3, 0.16, 0.06, 0.42, INK); // POP. row is the live sign plane
   D.pop();
   // Trinity Ave blade + stop sign at the bulb mouth
   S.cyl(0.05, 2.6, [-15, 1.3, -4.9], "#6a6f66", SURF.steel, { seg: 8 });
@@ -976,6 +975,13 @@ function backdrop(S: Model, D: Model) {
     S.cyl(0.05, 1.4, [x + 0.5, 2.05, z], "#6a7a52", SURF.wood, { rot: [0, 0, 0.6], seg: 5 });
     S.cyl(0.05, 1.1, [x - 0.4, 1.75, z + 0.2], "#6a7a52", SURF.wood, { rot: [0.3, 0, -0.5], seg: 5 });
   }
+  // civic clock tower on the rise behind the yellow yard — the dial face is a
+  // live component (ClockDial in Nuketown.tsx) bolted to its north face
+  S.box(2.6, 13, 1.6, [14, 6.5, 40.7], "#b0a284", SURF.wood);
+  S.box(3.0, 0.5, 2.0, [14, 12.6, 40.7], "#8a7c64", SURF.wood);
+  S.box(2.0, 1.4, 1.4, [14, 13.5, 40.7], "#8a7c64", SURF.wood);
+  S.cone(1.3, 1.6, [14, 14.9, 40.7], "#5d5648", SURF.wood, { seg: 4 });
+  for (const wy of [3.2, 5.4, 7.6]) D.box(0.5, 0.7, 0.06, [14, wy, 39.88], "#2e3a40", SURF.glass);
   // dirt road running east past the gate, then the mesa ring and far peaks
   S.box(22, 0.03, 5.5, [41, 0.015, 0], "#9a8a68", SURF.wood);
   const mesa = (x: number, z: number, w: number, h: number, d: number, c: string) => {

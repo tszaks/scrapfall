@@ -6,6 +6,9 @@ export const NUKE_SIZE = 96;
 export const NUKE_SPAWN = { x: 10.5, z: 24.5, yaw: 0 };
 /** [north house, south house] */
 export const HOUSE_COLORS = ["#62a89b", "#dfb95f"] as const;
+/** live counters written by the match director, read by the map's lit props
+ *  (population sign, clock-tower wave dial). pop = players + living enemies. */
+export const nukeLive = { pop: 51, wave: 1 };
 
 // ---------------------------------------------------------------- shared spec
 // The art builder (build.ts) and the collision plan below read from these rects so the
@@ -762,5 +765,25 @@ export function nuketownMinimap(): MinimapSource {
     c.fillRect(-l / 2, -1.15, l, 2.3);
     c.restore();
   }
+  // named zones, lettered into the map base
+  c.fillStyle = "rgba(40,36,28,0.85)";
+  c.font = "bold 3.2px monospace";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  const zone = (t: string, x: number, z: number, r = 0) => {
+    c.save();
+    c.translate(x, z);
+    c.rotate(r);
+    c.fillText(t, 0, 0);
+    c.restore();
+  };
+  zone("CUL-DE-SAC", NUKE.bulb.x - 1, 0);
+  zone("TRINITY AV", 12, 0);
+  zone("GREEN HOUSE", -8.6, -13.4);
+  zone("GARAGE", -15.4, -13.4);
+  zone("GREEN YARD", -9.5, -25);
+  zone("YELLOW HOUSE", 8.6, 13.4);
+  zone("GARAGE", 15.4, 13.4);
+  zone("YELLOW YARD", 9.5, 25);
   return { cells: 48, half: 48, base, land: "#b3a582", sea: null, landmark: { x: 0, z: 0 }, playHalf: 48 };
 }

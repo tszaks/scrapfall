@@ -1,5 +1,5 @@
 import { Nuketown } from "./nuketown/Nuketown";
-import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nuketown/layout";
+import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN, nukeLive } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
@@ -2575,6 +2575,8 @@ function World({
         aimStats,
         los: (ax: number, az: number, bx: number, bz: number) =>
           clearLine(blocks, ax, az, bx, bz, 0.1),
+        los3: (ax: number, ay: number, az: number, bx: number, by: number, bz: number) =>
+          clearShot(blocks, ax, ay, az, bx, by, bz),
       });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
@@ -7910,6 +7912,8 @@ export function Game() {
 
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
+            nukeLive.wave = wave;
+            nukeLive.pop = (multiplayer ? peerCount + 1 : 1) + remaining;
             if (showBanner) {
               setBanner(true);
               if (perksRef.current.mend > 0 && wave > 1)
