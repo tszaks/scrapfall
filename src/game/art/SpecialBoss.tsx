@@ -101,7 +101,7 @@ export function ArtBoss({ theme, data }: { theme: Theme; data: RobotData }) {
   return (
     <>
       <RobotModel kind={kind} data={data} inputs={BOSS_INPUTS} />
-      {theme.boss.shape === "marshal" && <Steam />}
+      {(theme.boss.shape as string) === "marshal" && <Steam />}
     </>
   );
 }

@@ -568,9 +568,9 @@ export function specialRobot(theme: Theme): RobotKind | null {
     k =
       sp.type === "leaper"
         ? leaper(sp)
-        : sp.type === "skier"
+        : (sp.type as string) === "skier"
           ? skier(sp)
-          : sp.type === "crawler"
+          : (sp.type as string) === "crawler"
             ? crawler(sp)
             : desperado(sp);
     cache.set(key, k);
@@ -585,7 +585,7 @@ export function specialRobotFor(
   const key = `${type}|${sp.body}|${sp.accent}|${sp.glow}`;
   let k = cache.get(key);
   if (!k) {
-    const s: Sp = { name: type, type, ...sp };
+    const s = { name: type, type, ...sp } as unknown as Sp;
     k =
       type === "leaper"
         ? leaper(s)

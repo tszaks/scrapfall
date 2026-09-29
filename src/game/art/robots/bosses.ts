@@ -769,9 +769,9 @@ export function bossRobot(theme: Theme): RobotKind | null {
     k =
       b.shape === "mech"
         ? kingpin(b)
-        : b.shape === "plough"
+        : (b.shape as string) === "plough"
           ? plough(b)
-          : b.shape === "kraken"
+          : (b.shape as string) === "kraken"
             ? kraken(b)
             : marshal(b);
     cache.set(key, k);
