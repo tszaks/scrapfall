@@ -93,6 +93,7 @@ export function alpineAccessFull(
         roofKind: "room",
         roomH: 4.6,
         windows: "belfry",
+        furnishings: { room: "belfry" },
         punch: true,
         plinth: 0.17, // the stone plinth stands 0.15 m proud; the painted door 0.08
         doorH: 3.1,
@@ -158,6 +159,7 @@ export function alpineAccessFull(
       roofKind: "room",
       roomH: storey - 0.15,
       windows: "tall",
+      furnishings: { lobby: "alpine-reception", room: "hotel-lounge" },
       punch: true,
       plinth: 0.08, // the painted grand door sits 6 cm proud
       doorH: 2.8,
@@ -229,6 +231,7 @@ export function alpineAccessFull(
           roofKind: "room",
           roomH: FH - 0.12,
           windows: "square",
+          furnishings: { room: "chalet-loft" },
           punch: true,
           plinth: 0.3, // the stone plinth faces sit 8 cm out, window frames and shutters further
           doorStyle: "wood",
