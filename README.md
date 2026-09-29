@@ -117,6 +117,8 @@ in through pull requests.
 
 ## Code map
 
+The full map, with every folder, is in [docs/REPO_MAP.md](docs/REPO_MAP.md). If you're an agent or contributor, read [AGENTS.md](AGENTS.md) first.
+
 | Path | What's there |
 | --- | --- |
 | `src/game/Game.tsx` | The game loop, weapons, enemies, waves, HUD and co-op |
