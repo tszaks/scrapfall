@@ -3732,6 +3732,7 @@ export function Game() {
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme, alpine };
   }, [seed, coop]);
+  const alpineMap = useMemo(() => (alpine && typeof document !== "undefined" ? paintWhiteout(alpine) : null), [alpine]);
 
 
   useEffect(() => {
@@ -4160,6 +4161,9 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
+            {alpineMap && locked && (
+              <Minimap base={alpineMap} half={WHITEOUT_SIZE / 2} enemies={enemies} remotes={remotes} myColor={colorFor(myNum)} compact={touchUi} />
+            )}
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
             <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
@@ -4695,6 +4699,33 @@ export function Game() {
                           {p.num === myNum && <span className="opacity-50">(YOU)</span>}
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-3 text-left">
+                      <div className="opacity-60">MAP</div>
+                      {net.role === "host" ? (
+                        <div className="mt-1 flex gap-1">
+                          {([["arenas", "RANDOM ARENA"], ["whiteout", "WHITEOUT PASS"]] as const).map(([id, label]) => {
+                            const on = id === "whiteout" ? isWhiteoutSeed(seed) : !isWhiteoutSeed(seed);
+                            return (
+                              <button
+                                key={id}
+                                onClick={() => {
+                                  coopMapRef.current = id;
+                                  const s2 = id === "whiteout" ? whiteoutSeed() : Math.floor(Math.random() * 1e9);
+                                  setSeed(s2);
+                                  net.broadcast({ type: "seed", seed: s2 });
+                                }}
+                                className={`pointer-events-auto flex-1 rounded-md border border-[#2b2118]/40 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-transparent"}`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="mt-1 font-semibold">{isWhiteoutSeed(seed) ? "WHITEOUT PASS" : "RANDOM ARENA"}</div>
+                      )}
+                      {isWhiteoutSeed(seed) && <div className="mt-1 text-[11px] opacity-60">Big co-op map · radar on</div>}
                     </div>
                     <div className="mt-2 opacity-60">
                       {net.role === "host" ? "share the code" : "waiting for the host"}
