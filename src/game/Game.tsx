@@ -4436,6 +4436,7 @@ export function Game() {
               onPlay={() => { initAudio(); setPicking(true); }}
               onSettings={() => setShowSettings(true)}
               onWeapons={() => setShowWeapons(true)}
+              onEnemies={() => setShowEnemies(true)}
               net={net ? { role: net.role, code: net.code } : null}
               joining={joining}
               joinCode={joinCode}
