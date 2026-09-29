@@ -3,6 +3,7 @@
 // stairwell, the doorways, the rooftop penthouse and the rooftop props. Pure data, no three.js,
 // so every co-op client derives the identical building from the shared layout.
 import type { Spiral } from "./spiral";
+import { furnishAccess, furnishingBlocked, type FurnishingBox } from "./roomFurnishings";
 import type { AccessSpec, Facing, LRect, Portal, Rect, RoofProp } from "./types";
 
 /** player body radius used by the movement code */
@@ -108,8 +109,11 @@ export type AccessBuilding = {
   /** penthouse over the core (vestibule + machine room, or the stair bulkhead), local */
   pent: LRect;
   pentH: number;
-  /** rooftop props (world) and every solid thing on the roof as world AABBs */
+  /** rooftop props (world) */
   props: RoofProp[];
+  /** Opt-in closed fixture parts, shared by geometry and collision. */
+  furnishings: FurnishingBox[];
+  /** Structural roof obstacles and outdoor props; fixtures use their exact parts above. */
   obstacles: Rect[];
   /** world AABB of all interior spaces (lobby, car, stairwell) for culling and bullets */
   interior: Rect;
@@ -326,6 +330,7 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     pent,
     pentH,
     props: [],
+    furnishings: [],
     obstacles: [...(pent.a1 > pent.a0 ? [worldRect(f, pent)] : []), ...(spec.hostObstacles ?? []), ...terraceWall(spec)],
     interior: worldRect(f, interiorL),
     hole: worldRect(f, holeL),
@@ -333,6 +338,7 @@ export function layoutAccess(spec: AccessSpec, id: number): AccessBuilding | nul
     spots: [],
     cap: 4,
   };
+  b.furnishings = furnishAccess(b);
   if (spec.dressing ?? (!room && spec.kind !== "ladder")) dressRoof(b);
   else findSpots(b);
   return b;
@@ -362,6 +368,8 @@ function findSpots(b: AccessBuilding) {
   for (let x = R.x0 + 0.8; x < R.x1 - 0.8; x += 1)
     for (let z = R.z0 + 0.8; z < R.z1 - 0.8; z += 1) {
       if (b.obstacles.some((o) => x > o.x0 - 0.9 && x < o.x1 + 0.9 && z > o.z0 - 0.9 && z < o.z1 + 0.9)) continue;
+      const [a, d] = toLocal(b, x, z);
+      if (furnishingBlocked(b, 1, a, d, 0.9, b.top, b.top + 1.8)) continue;
       b.spots.push({ x, z });
     }
   // small decks and rooms hold a few (a lifeguard deck none: nobody spawns on top of you)

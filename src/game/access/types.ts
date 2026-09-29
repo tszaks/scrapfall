@@ -43,6 +43,13 @@ export type AccessSpec = {
   /** room: clear height and the openings cut in its walls */
   roomH?: number | undefined;
   windows?: "belfry" | "square" | "tall" | undefined;
+  /** Map-owned interior themes. Absent preserves the original rooms and lobbies. */
+  furnishings?:
+    | {
+        lobby?: "pier-reception" | "alpine-reception";
+        room?: "hotel-lounge" | "chalet-loft" | "belfry";
+      }
+    | undefined;
   /** host things standing on the roof (a lifeguard hut): solid */
   hostObstacles?: Rect[] | undefined;
   /** rooftop props (default: open roofs yes, rooms and small decks no) */
