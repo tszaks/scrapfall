@@ -35,6 +35,9 @@ import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
+import { CombatFx } from "@/bro/game/CombatFx";
+import { fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxReset, fxShot, fxStyle, setLocalMuzzle, visOf } from "@/bro/game/projectiles";
+import { VF } from "@/bro/game/impacts";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { SettingsScreen } from "./ui/SettingsScreen";
@@ -1379,13 +1382,6 @@ const BulletPool = memo(function BulletPool({
         >
           {shape === "sphere" && <sphereGeometry args={[size, 10, 10]} />}
           <meshBasicMaterial color={color} fog={false} />
-          {shape === "bullet" && (<>
-            {/* brass casing band + glowing tracer streak behind the round */}
-            <mesh geometry={BULLET_BAND} material={BULLET_BAND_MAT} position={[0, -0.13, 0]} />
-            <mesh geometry={TRACER_GEO} position={[0, -0.6, 0]}>
-              <meshBasicMaterial color={color} fog={false} transparent opacity={0.35} depthWrite={false} blending={THREE.AdditiveBlending} />
-            </mesh>
-          </>)}
         </mesh>
       ))}
     </>
@@ -1400,14 +1396,18 @@ function fireInto(pool: Bullet[], pos: THREE.Vector3, vel: THREE.Vector3, life: 
     bounce: fx.bounce ?? 0, pierce: fx.pierce ?? 0, slow: fx.slow ?? 0, cluster: fx.cluster ?? 0, chain: fx.chain ?? 0,
     burn: fx.burn ?? 0, knock: fx.knock ?? 0, mods: fx.mods ?? 0, track: fx.track ?? 0,
   };
-  const slot = pool.find((b) => !b.active);
+  const idx = pool.findIndex((b) => !b.active);
+  const slot = idx >= 0 ? pool[idx] : undefined;
   if (slot) {
     Object.assign(slot, base);
     slot.pos.copy(pos);
     slot.vel.copy(vel);
+    return idx;
   } else if (pool.length < MAX_BULLETS) {
     pool.push({ pos: pos.clone(), vel: vel.clone(), ...base });
+    return pool.length - 1;
   }
+  return -1;
 }
 
 
@@ -1881,6 +1881,10 @@ function World({
       ? MUZZLE_AT.clone()
       : new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
     const aim = camera.position.clone().addScaledVector(FORWARD, 28).sub(pos).normalize();
+    // his per-gun rounds, muzzle flashes, casings and tracers (src/bro/game/projectiles.ts)
+    const kind = visOf(w);
+    const vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
+    setLocalMuzzle(pos, false);
     for (let s = 0; s < g.count; s++) {
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
       const dir = aim.clone().applyAxisAngle(camera.up, off * g.spread);
@@ -1899,12 +1903,14 @@ function World({
         mods: isP ? (s2.shred ? M_SHRED : 0) | (s2.exec ? M_EXEC : 0) | (s2.bounty ? M_BOUNTY : 0) : 0,
         track: 1,
       };
-      fireInto(
+      const slot = fireInto(
         bullets.current, pos, dir.normalize().multiplyScalar(g.speed), g.life, dmg,
         crit ? "#ffffff" : g.color, crit ? g.size * 1.4 : g.size, fx,
       );
+      if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
+    fxFired(kind, vf, pos, FORWARD, Math.floor(Math.random() * 1e9), g.speed, null);
     playGun(w, w === "pistol" && s2.suppr);
     gunKick();
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
@@ -3064,6 +3070,7 @@ function World({
           b.pos.set(px, b.pos.y, pz);
         } else if (b.life <= 0 || hitWall) {
           burst(b);
+          fxDie(i, hitWall);
           b.active = false;
         } else {
           // shooting a hazard prop sets it off before anything else
@@ -3113,6 +3120,7 @@ function World({
                   }
                 }
               }
+              fxHit(i, b, e);
               if (b.pierce > 0) b.pierce--;
               else {
                 burst(b);
@@ -3134,10 +3142,12 @@ function World({
             TMP_DIR.copy(b.vel).normalize();
             m.quaternion.setFromUnitVectors(BULLET_UP, TMP_DIR);
           }
+          fxStyle(i, m, b); // his per-weapon round
         }
       }
 
     });
+    fxFrame(delta, cam, viewModel.current, bullets.current);
 
 
     // enemy bullets (host simulates them for everyone)
@@ -3226,6 +3236,7 @@ function World({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />}
+      <CombatFx />
       {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} isHost={isHost} /> : <Level blocks={blocks} theme={theme} />}
       {alpine && alpine.id !== "nuketown" && (
         <MapEvents
