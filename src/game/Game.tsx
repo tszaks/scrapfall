@@ -30,7 +30,7 @@ import { Ground, MapDressing } from "./art/MapDressing";
 import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { spawnFocus } from "./level";
-import { Minimap } from "./Minimap";
+import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
 
 
@@ -2394,7 +2394,7 @@ function World({
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
     cam.position.y = EYE + jumpY.current + groundY(cam.position.x, cam.position.z);
-    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; }
+    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; }
 
     // share my position with the room
     if (n) {
