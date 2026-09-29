@@ -1,5 +1,5 @@
 import { Nuketown } from "./nuketown/Nuketown";
-import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nuketown/layout";
+import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN, nukeLive } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
@@ -2596,6 +2596,8 @@ function World({
         aimStats,
         los: (ax: number, az: number, bx: number, bz: number) =>
           clearLine(blocks, ax, az, bx, bz, 0.1),
+        los3: (ax: number, ay: number, az: number, bx: number, by: number, bz: number) =>
+          clearShot(blocks, ax, ay, az, bx, by, bz),
       });
       // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
       const giveAll = () => {
@@ -3186,7 +3188,9 @@ function World({
           ? city.spawnYaw
           : alpineMap
             ? alpineMap.alpine.spawnYaw
-            : 0,
+            : layoutOf(theme) === "nuketown"
+              ? NUKE_SPAWN.yaw
+              : 0,
       pitch: city ? 0.12 : 0,
     };
     menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
@@ -3238,8 +3242,9 @@ function World({
   // each other
   const spawnNum = () => (!net || net.role === "host" ? 1 : (slots.current[net.self] ?? 2));
   const placeAtSpawn = () => {
-    const sx = big ? big.spawn.x : 0;
-    const sz = big ? big.spawn.z : layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
+    const nuke = !big && layoutOf(theme) === "nuketown";
+    const sx = big ? big.spawn.x : nuke ? NUKE_SPAWN.x : 0;
+    const sz = big ? big.spawn.z : nuke ? NUKE_SPAWN.z : 0;
     const num = spawnNum();
     let x = sx;
     let z = sz;
@@ -5317,7 +5322,7 @@ function World({
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
       );
-      if (remaining === 0 && wave.current <= WAVES.length) {
+      if (!tourMode() && remaining === 0 && wave.current <= WAVES.length) {
         if (wave.current === WAVES.length) {
           wave.current++;
           status(WAVES.length, 0, true, false);
@@ -6829,6 +6834,14 @@ function seedParam(): number | null {
   return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
+/** `?tour=1` walks the map empty: the wave clock never advances, nothing spawns */
+function tourMode() {
+  return (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("tour") === "1"
+  );
+}
+
 /** is the HUD in its in-elevator-car state (the html element's rs-incar class)? */
 let inCarHud = false;
 
@@ -7891,6 +7904,8 @@ export function Game() {
 
           onStatus={(wave, remaining, won, showBanner) => {
             setStatus({ wave, remaining, won });
+            nukeLive.wave = wave;
+            nukeLive.pop = (multiplayer ? peerCount + 1 : 1) + remaining;
             if (showBanner) {
               setBanner(true);
               if (perksRef.current.mend > 0 && wave > 1)
