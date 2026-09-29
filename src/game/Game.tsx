@@ -12,6 +12,8 @@ import { THEMES, type Theme } from "./themes";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
+import { RobotModel } from "./art/RobotModel";
+import { classicRobot, swingInputs, shooterInputs, bomberInputs, specterInputs } from "./art/robots/classic";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -923,7 +925,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const t = state.clock.elapsedTime;
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
-    const bob = heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
+    const bob = k !== "special" && k !== "boss" ? 0 : heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
@@ -992,7 +994,15 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       </group>
 
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
-      {(kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
+      {/* detailed skinned robots (ported art kit) — one draw call each */}
+      {kind === "drifter" && <RobotModel kind={classicRobot("drifter", theme)} data={data} />}
+      {kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
+      {kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
+      {kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
+      {kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
+      {kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
+      {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
+      {false && (kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
           <octahedronGeometry args={[0.8, 0]} />
           <meshLambertMaterial color={c.drifter.body} flatShading emissive={c.drifter.emissive} />
@@ -1025,7 +1035,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* BRUTE: hulking bruiser with layered plating and a power maul */}
-      {(kind==="brute") && (<group ref={brute}>
+      {false && (kind==="brute") && (<group ref={brute}>
         <mesh position-y={1.1}>
           <boxGeometry args={[1.4, 1.8, 1]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
@@ -1117,7 +1127,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </group>
       </group> )}
       {/* SHOOTER: sensor-headed gunner on a tripod chassis */}
-      {(kind==="shooter") && (<group ref={shooter} position-y={1.3}>
+      {false && (kind==="shooter") && (<group ref={shooter} position-y={1.3}>
         <mesh>
           <cylinderGeometry args={[0.45, 0.6, 1.4, 6]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
@@ -1160,7 +1170,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* SPECTER: drifting, see-through wraith that blinks toward you */}
-      {(kind==="specter") && (<group ref={specter} position-y={1.5}>
+      {false && (kind==="specter") && (<group ref={specter} position-y={1.5}>
         <mesh>
           <coneGeometry args={[0.6, 1.8, 6]} />
           <meshLambertMaterial color={c.drifter.body} flatShading transparent opacity={0.55} emissive={c.drifter.emissive} />
@@ -1191,7 +1201,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
         </mesh>
       </group> )}
       {/* BOMBER: squat mortar unit that lobs shells over cover */}
-      {(kind==="bomber") && (<group ref={bomber} position-y={0.8}>
+      {false && (kind==="bomber") && (<group ref={bomber} position-y={0.8}>
         <mesh>
           <sphereGeometry args={[0.75, 8, 6]} />
           <meshLambertMaterial color={c.brute.body} flatShading />
@@ -1227,7 +1237,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
       </group> )}
       {/* VANGUARD: armoured shield wall, tough from the front */}
       {kind === "special" && <SpecialModel theme={theme} data={data} />}
-      {(kind==="vanguard") && (<group ref={vanguard}>
+      {false && (kind==="vanguard") && (<group ref={vanguard}>
         <mesh position-y={1.2}>
           <boxGeometry args={[1.2, 2, 0.9]} />
           <meshLambertMaterial color={c.shooter.body} flatShading />
