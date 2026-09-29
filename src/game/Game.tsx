@@ -4683,8 +4683,8 @@ export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => 
   const [sel, setSel] = useState<Kind | "lineup">("lineup");
   const lineup = useMemo(() => {
     const rest = PANEL_KINDS.filter((k) => k !== "boss");
-    const row = [...rest.slice(0, 4), "boss" as Kind, ...rest.slice(4)];
-    return row.map((k, i) => fakeEnemy(k, (i - (row.length - 1) / 2) * 2.6, -4.5));
+    const front = rest.map((k, i) => fakeEnemy(k, (i - (rest.length - 1) / 2) * 3.4, -2));
+    return [fakeEnemy("boss", 0, -9), ...front];
   }, []);
   const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
   const list = sel === "lineup" ? lineup : single;
