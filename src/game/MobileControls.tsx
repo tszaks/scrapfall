@@ -72,7 +72,7 @@ function SprintButton() {
     <Btn
       label={st === "tac" ? "TAC" : "SPRINT"}
       {...(st === "off" ? { sub: "2× TAC" } : {})}
-      size={54}
+      size={68}
       lit={st !== "off"}
       onTap={() => (touchInput.sprint = true)}
     />
