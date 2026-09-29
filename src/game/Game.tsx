@@ -27,8 +27,9 @@ import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { hazardFor, HAZARD_COUNT, type HazardDef } from "./hazards";
 import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } from "./endless";
 import { Ground, MapDressing } from "./art/MapDressing";
-import { WHITEOUT_SIZE, WHITEOUT_THEME, buildWhiteout, isWhiteoutSeed, paintWhiteout, whiteoutSeed, type WhiteoutLayout } from "./maps/whiteout";
-import { WhiteoutScene } from "./maps/WhiteoutScene";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { setBigGround, groundY } from "./terrain";
+import { spawnFocus } from "./level";
 import { Minimap } from "./Minimap";
 import "./r3fDevFix";
 
@@ -144,6 +145,24 @@ const TURN_SPEED = 2.4;
 const MAX_BULLETS = 90;
 const SPEED = 7;
 const EYE = 1.6;
+
+// Big maps (copied from tszaks/scrapfall): seeds above BIG_BASE name a map; its layout is fixed.
+const BIG_BASE = 1_500_000_000;
+const BIG_IDS: BigMapId[] = ["alpine", "beach", "city", "western", "nuketown"];
+const BIG_LAYOUT_SEED: Record<BigMapId, number> = { alpine: 20240611, beach: 20240612, city: 20240613, western: 20240614, nuketown: 20240615 };
+function bigSeed(id: BigMapId) { return BIG_BASE + BIG_IDS.indexOf(id) * 10_000_000 + Math.floor(Math.random() * 1e6); }
+function bigIdOf(seed: number): BigMapId | null { return seed >= BIG_BASE ? BIG_IDS[Math.floor((seed - BIG_BASE) / 10_000_000)] ?? null : null; }
+const OUR_BOSS = new Set(["golem", "yeti", "treant", "magma", "mech", "ronin", "drake"]);
+const OUR_SPECIAL = new Set(["stalker", "mite", "spore", "pyre", "leaper", "shinobi", "wyrm", "nautilus", "hacker", "bile"]);
+/** His map colours fit our theme shape; his newer boss/special kinds fall back to ones we draw. */
+function toOurTheme(t: Theme): Theme {
+  return {
+    ...t,
+    blockShape: "alpine",
+    boss: { ...t.boss, shape: OUR_BOSS.has(t.boss.shape) ? t.boss.shape : "mech" },
+    special: { ...t.special, type: OUR_SPECIAL.has(t.special.type) ? t.special.type : "leaper" },
+  };
+}
 const RUN_MUL = 1.45; // Shift / RUN button
 const JUMP_V = 6.2;
 const GRAVITY = 18;
@@ -1577,7 +1596,7 @@ function World({
 
   alpine,
 }: {
-  alpine: WhiteoutLayout | null;
+  alpine: BigMap | null;
   blocks: Block[];
   enemies: Enemy[];
   rand: () => number;
@@ -1898,7 +1917,7 @@ function World({
 
 
   useEffect(() => {
-    camera.position.set(0, EYE, 0);
+    camera.position.set(alpine?.spawn.x ?? 0, EYE + groundY(alpine?.spawn.x ?? 0, alpine?.spawn.z ?? 0), alpine?.spawn.z ?? 0);
     look.current = { yaw: 0, pitch: 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
@@ -2374,7 +2393,8 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    cam.position.y = EYE + jumpY.current;
+    cam.position.y = EYE + jumpY.current + groundY(cam.position.x, cam.position.z);
+    if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; }
 
     // share my position with the room
     if (n) {
@@ -3291,16 +3311,16 @@ function World({
   return (
     <>
       <color attach="background" args={[theme.sky]} />
-      <fog attach="fog" args={alpine ? [theme.sky, 14, 150] : [theme.sky, 16, ARENA * 1.7]} />
+      <fog attach="fog" args={alpine ? [theme.sky, 40, 420] : [theme.sky, 16, ARENA * 1.7]} />
       <hemisphereLight args={[theme.hemi[0], theme.hemi[1], 1.1]} />
-      <directionalLight
+      {!alpine && <directionalLight
         position={[18, 26, 10]}
         intensity={1.5}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      {alpine ? <WhiteoutScene layout={alpine} theme={theme} /> : <Level blocks={blocks} theme={theme} />}
+      {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} /> : <Level blocks={blocks} theme={theme} />}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
@@ -3395,9 +3415,11 @@ function World({
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   // Anti-repeat: roll a new seed whose map differs from the current one.
-  const coopMapRef = useRef<"arenas" | "whiteout">("arenas");
+  const coopMapRef = useRef<"arenas" | BigMapId>("arenas");
   const freshSeed = (prev: number) => {
-    if (coopMapRef.current === "whiteout" && netHolder.current) return whiteoutSeed();
+    if (coopMapRef.current !== "arenas" && netHolder.current) return bigSeed(coopMapRef.current);
+    // solo: Nuketown joins the rotation of the 10 arenas
+    if (!netHolder.current && bigIdOf(prev) !== "nuketown" && Math.random() < 1 / 11) return bigSeed("nuketown");
     let s = Math.floor(Math.random() * 1e9);
     while (s % THEMES.length === prev % THEMES.length) s = Math.floor(Math.random() * 1e9);
     return s;
@@ -3708,14 +3730,18 @@ export function Game() {
 
   const coop = !!net;
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
-    const big = coop && isWhiteoutSeed(seed);
-    setArenaSize(big ? WHITEOUT_SIZE : coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
-    const alpine = big ? buildWhiteout(seed) : null;
+    let bigId = bigIdOf(seed);
+    if (bigId && bigId !== "nuketown" && !coop) bigId = null; // the 4 huge maps are co-op only
+    const alpine = bigId ? setupBigMap(bigId, BIG_LAYOUT_SEED[bigId], !coop) : null;
+    setBigGround(!!alpine);
+    spawnFocus.on = !!alpine && alpine.size > 200;
+    if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
+    setArenaSize(alpine ? alpine.size : coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = alpine ? { blocks: alpine.blocks, seed, rand: generateLevel(seed).rand } : generateLevel(seed);
-    const theme = alpine ? WHITEOUT_THEME : THEMES[seed % THEMES.length]!;
+    const theme = alpine ? toOurTheme(alpine.theme as unknown as Theme) : THEMES[seed % THEMES.length]!;
     // slim props get a tighter collision box so shots line up with the trunk
     const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
-    setBlockHalf(alpine ? 0.95 : slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
+    setBlockHalf(alpine ? 1 : slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2);
     if (!alpine) level.blocks = level.blocks.filter((b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5);
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
@@ -3733,7 +3759,7 @@ export function Game() {
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme, alpine };
   }, [seed, coop]);
-  const alpineMap = useMemo(() => (alpine && typeof document !== "undefined" ? paintWhiteout(alpine) : null), [alpine]);
+  const alpineMap = useMemo(() => (alpine && typeof document !== "undefined" ? bigMinimap(alpine) : null), [alpine]);
 
 
   useEffect(() => {
@@ -4045,7 +4071,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
+      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? 1200 : 220 }}>
         <World
           alpine={alpine}
           blocks={blocks}
@@ -4163,7 +4189,7 @@ export function Game() {
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
             {alpineMap && locked && (
-              <Minimap base={alpineMap} half={WHITEOUT_SIZE / 2} enemies={enemies} remotes={remotes} myColor={colorFor(myNum)} compact={touchUi} />
+              <Minimap base={alpineMap.base} half={alpineMap.half} enemies={enemies} remotes={remotes} myColor={colorFor(myNum)} compact={touchUi} />
             )}
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
@@ -4704,15 +4730,15 @@ export function Game() {
                     <div className="mt-3 text-left">
                       <div className="opacity-60">MAP</div>
                       {net.role === "host" ? (
-                        <div className="mt-1 flex gap-1">
-                          {([["arenas", "RANDOM ARENA"], ["whiteout", "WHITEOUT PASS"]] as const).map(([id, label]) => {
-                            const on = id === "whiteout" ? isWhiteoutSeed(seed) : !isWhiteoutSeed(seed);
+                        <div className="mt-1 grid grid-cols-2 gap-1">
+                          {([["arenas", "RANDOM ARENA"], ...(Object.keys(BIG_MAPS) as BigMapId[]).map((k) => [k, BIG_MAPS[k].name] as const)] as const).map(([id, label]) => {
+                            const on = id === "arenas" ? !bigIdOf(seed) : bigIdOf(seed) === id;
                             return (
                               <button
                                 key={id}
                                 onClick={() => {
                                   coopMapRef.current = id;
-                                  const s2 = id === "whiteout" ? whiteoutSeed() : Math.floor(Math.random() * 1e9);
+                                  const s2 = id === "arenas" ? Math.floor(Math.random() * 1e9) : bigSeed(id);
                                   setSeed(s2);
                                   net.broadcast({ type: "seed", seed: s2 });
                                 }}
@@ -4724,9 +4750,9 @@ export function Game() {
                           })}
                         </div>
                       ) : (
-                        <div className="mt-1 font-semibold">{isWhiteoutSeed(seed) ? "WHITEOUT PASS" : "RANDOM ARENA"}</div>
+                        <div className="mt-1 font-semibold">{bigIdOf(seed) ? BIG_MAPS[bigIdOf(seed)!].name : "RANDOM ARENA"}</div>
                       )}
-                      {isWhiteoutSeed(seed) && <div className="mt-1 text-[11px] opacity-60">Big co-op map · radar on</div>}
+                      {bigIdOf(seed) && <div className="mt-1 text-[11px] opacity-60">Big co-op map · radar on</div>}
                     </div>
                     <div className="mt-2 opacity-60">
                       {net.role === "host" ? "share the code" : "waiting for the host"}
