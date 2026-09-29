@@ -89,6 +89,7 @@ export function TitleScreen({
   onPlay: () => void;
   onSettings: () => void;
   onWeapons: () => void;
+  onEnemies: () => void;
   net: { role: "host" | "guest"; code: string } | null;
   joining: boolean;
   joinCode: string;
