@@ -4481,147 +4481,123 @@ export function Game() {
       )}
 
       {(!locked || ended) && !picking && (
-        <div
-          className={`fixed inset-0 z-40 flex touch-auto flex-col overflow-y-auto overscroll-contain p-6 ${home ? "items-center justify-end sm:justify-center" : "items-center justify-start sm:justify-center"}`}
-          style={{
-            background: home
-              ? "linear-gradient(180deg, rgba(22,16,9,0.62) 0%, rgba(22,16,9,0.16) 34%, rgba(22,16,9,0.16) 58%, rgba(22,16,9,0.82) 100%)"
-              : "rgba(22,16,9,0.76)",
-          }}
-        >
+        <>
           <UiStyles />
-          {home && (
-            <div className="ui-rise mb-6 text-center">
-              <BrandLogo />
-            </div>
-          )}
-          <div
-            className={`ui-rise ui-rise-1 my-auto w-full max-w-sm touch-auto rounded-xl p-7 text-center font-mono shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)] ${
-              home
-                ? "border-2 border-[#b4653f] bg-[#241b12]/92 text-[#f2ead6] backdrop-blur-[2px]"
-                : "border-2 border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
-            }`}
-          >
-            {home ? (
-              <Hazard className="mx-auto mb-4 w-24 opacity-80" />
-            ) : (
-              <h1 className="text-2xl font-bold tracking-tight">
-                {gameOver ? "You got swarmed" : status.won ? "Arena cleared!" : "Paused"}
-              </h1>
-            )}
-            {(gameOver || status.won || paused) && (
-              <p className="mt-2 text-sm opacity-70">
-                {gameOver
-                  ? `You fell on wave ${status.wave} with ${score} kills.`
-                  : status.won
-                    ? `All ${WAVES.length} waves survived · ${score} kills.`
-                    : `Wave ${status.wave} · ${score} kills so far.`}
-              </p>
-            )}
-            {!paused && (
-              <p className="mt-4 text-xs leading-relaxed opacity-60">
-                {touchUi
-                  ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · click or Enter to shoot · Space to jump · Shift to run · F for your ability · 1-0 / Q E swap guns · P to pause"}
-              </p>
-            )}
-            {/* beat the boss: bank the win, or push the run into overtime */}
-            {status.won && !gameOver && isHost && (
-              <button
-                onClick={() => {
-                  initAudio();
-                  endlessRef.current = true;
-                  goingOvertime.current = true;
-                  setStatus((s) => ({ ...s, won: false }));
-                  net?.broadcast({ type: "ot" });
-                  start();
-                }}
-                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#2b2118] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                OVERTIME // KEEP GOING
-              </button>
-            )}
-            {multiplayer && !isHost && (ended || !started) ? (
-              <div className="mt-6">
-                <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                  {ended ? "WAITING FOR THE HOST TO START A NEW ARENA" : "WAITING FOR THE HOST TO START"}
-                </div>
-                <button
-                  onClick={() => { initAudio(); setPicking(true); }}
-                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  CHOOSE LOADOUT
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  if (started && !ended) { start(); return; } // resume straight back in
-                  initAudio();
-                  setPicking(true);
-                }}
-                className="pointer-events-auto mt-6 w-full rounded-md border-2 border-[#2b2118] bg-[#b4653f] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-[#f7eeda] shadow-[3px_3px_0_0_#2b2118] transition-[transform,background-color] duration-100 active:translate-y-px [@media(hover:hover)]:hover:bg-[#c4724a]"
-              >
-                {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
-              </button>
-            )}
-
-
-            {ended && (() => {
+          {home ? (
+            <TitleScreen
+              themeName={theme.name}
+              weather={bigIdOf(seed) ? "BIG CO-OP MAP" : "PROCEDURAL ARENA"}
+              touchUi={touchUi}
+              version={VERSION}
+              primaryLabel="Start"
+              onPlay={() => { initAudio(); setPicking(true); }}
+              onSettings={() => setShowSettings(true)}
+              onWeapons={() => setShowWeapons(true)}
+              net={net ? { role: net.role, code: net.code } : null}
+              joining={joining}
+              joinCode={joinCode}
+              setJoinCode={setJoinCode}
+              netError={netError}
+              startHost={startHost}
+              startJoin={startJoin}
+              leaveRoom={leaveRoom}
+              players={connected.map((p) => ({
+                num: p.num,
+                cls: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : undefined,
+                clsColor: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
+                ability: picks[p.num] ? ABILITIES[picks[p.num]!].name : undefined,
+                color: colorFor(p.num),
+                me: p.num === myNum,
+              }))}
+              mapPicker={
+                net ? (
+                  <div>
+                    <SectionLabel className="text-[#f3e6cf]">MAP</SectionLabel>
+                    {net.role === "host" ? (
+                      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                        {([["arenas", "RANDOM ARENA"], ...(Object.keys(BIG_MAPS) as BigMapId[]).map((k) => [k, BIG_MAPS[k].name] as const)] as const).map(([id, label]) => {
+                          const on = id === "arenas" ? !bigIdOf(seed) : bigIdOf(seed) === id;
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => {
+                                coopMapRef.current = id;
+                                const s2 = id === "arenas" ? Math.floor(Math.random() * 1e9) : bigSeed(id);
+                                setSeed(s2);
+                                net.broadcast({ type: "seed", seed: s2 });
+                              }}
+                              className={`pointer-events-auto rounded-md border-2 px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-[transform,box-shadow] duration-100 ${
+                                on
+                                  ? "border-[#2b2118] bg-[#b4653f] text-[#f7eeda] shadow-[2px_2px_0_0_rgba(43,33,24,0.85)]"
+                                  : "border-[#f3e6cf]/35 bg-[#161009]/45 text-[#f3e6cf]"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-1.5 text-[11px] font-bold tracking-[0.18em] text-[#f3e6cf]">
+                        {bigIdOf(seed) ? BIG_MAPS[bigIdOf(seed)!].name : "RANDOM ARENA"}
+                      </div>
+                    )}
+                  </div>
+                ) : undefined
+              }
+            />
+          ) : ended ? (
+            (() => {
               const r = run.current;
               const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
-              const mine = { kills: score, dmg: Math.round(r.dmg), acc, shards: r.shards, taken: r.taken };
-              const rows = [{ num: myNum, ...mine }, ...Object.entries(squad)
+              const mine = { num: myNum, kills: score, dmg: Math.round(r.dmg), acc, shards: r.shards, taken: r.taken };
+              const rows = [mine, ...Object.entries(squad)
                 .filter(([n]) => Number(n) !== myNum)
                 .map(([n, v]) => ({ num: Number(n), ...v }))]
                 .sort((a, b) => a.num - b.num);
-              const badges: string[] = [];
-              if (acc >= 60) badges.push("SHARPSHOOTER");
-              if (rows.every((x) => mine.dmg >= x.dmg)) badges.push("HEAVY GUNNER");
-              if (rows.every((x) => mine.shards >= x.shards)) badges.push("SCAVENGER");
-              if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
-              if (status.won) badges.push("BOSS SLAYER");
               return (
-                <div className="mt-5 text-left text-black">
-                  <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
-                  <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                    <div>WAVES SURVIVED · {status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1)}</div>
-                    <div>BEST EVER · WAVE {highWave}</div>
-                    <div>KILLS · {mine.kills}</div>
-                    <div>DAMAGE DEALT · {mine.dmg}</div>
-                    <div>ACCURACY · {acc}%</div>
-                    <div>SHARDS COLLECTED · {mine.shards}</div>
-                    <div>DAMAGE TAKEN · {mine.taken}</div>
-                  </div>
-                  {badges.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
-                      {badges.map((b) => <span key={b}>{b}</span>)}
-                    </div>
-                  )}
-                  {multiplayer && rows.length > 1 && (
-                    <div className="mt-3 space-y-1 text-[10px] tracking-wider">
-                      <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                      {rows.map((x) => (
-                        <div key={x.num} className="flex items-center gap-2">
-                          <span style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                          <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
-                          <span className="opacity-60">{x.kills} kills · {x.dmg} dmg · {x.acc}%</span>
-                          {x.num === myNum && <span className="opacity-40">(YOU)</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <EndScreen
+                  won={!!status.won && !gameOver}
+                  wave={status.wave}
+                  totalWaves={WAVES.length}
+                  wavesSurvived={status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1)}
+                  highWave={highWave}
+                  mapName={theme.name}
+                  mine={mine}
+                  rows={rows}
+                  myNum={myNum}
+                  multiplayer={multiplayer}
+                  isHost={isHost}
+                  onNewArena={() => { initAudio(); setPicking(true); }}
+                  onLoadout={() => { initAudio(); setPicking(true); }}
+                  onLeave={leaveGame}
+                  onOvertime={status.won && !gameOver && isHost ? () => {
+                    initAudio();
+                    endlessRef.current = true;
+                    goingOvertime.current = true;
+                    setStatus((s) => ({ ...s, won: false }));
+                    net?.broadcast({ type: "ot" });
+                    start();
+                  } : undefined}
+                />
               );
-            })()}
-
-
-            {paused && (
-              <div className="w-full max-w-sm px-4">
-                <StatSheet d={statsRef.current} cls={cls} />
-                {boughtCards.length > 0 && (
+            })()
+          ) : (
+            <PauseScreen
+              wave={status.wave}
+              totalWaves={WAVES.length}
+              score={score}
+              mapName={theme.name}
+              stats={statsRef.current}
+              cls={cls}
+              multiplayer={multiplayer}
+              onResume={() => start()}
+              onSettings={() => setShowSettings(true)}
+              onLeave={leaveGame}
+              extra={
+                boughtCards.length > 0 ? (
                   <div className="mt-3 text-left">
-                    <div className="text-[9px] tracking-[0.25em] text-black/50">UPGRADES BOUGHT</div>
+                    <SectionLabel>UPGRADES BOUGHT</SectionLabel>
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                       {boughtCards.map((c) => (
                         <div
@@ -4630,196 +4606,82 @@ export function Game() {
                           style={{ borderColor: `${c.color}80`, background: `${c.color}14` }}
                         >
                           {c.mod && <PistolBadge />}
-                          <div className="pr-4 text-[9px] font-bold tracking-wider text-black">{c.name}</div>
-                          <div className="mt-0.5 space-y-0.5 text-[9px] leading-tight">
+                          <div className="pr-4 text-[11px] font-bold tracking-wider">{c.name}</div>
+                          <div className="mt-0.5 space-y-0.5 text-[11px] leading-tight">
                             {c.effects.map((e, i) => (
-                              <div key={i} className={e.bad ? "text-[#b3261e]" : "text-black/70"}>
+                              <div key={i} className={e.bad ? "text-[#b3261e]" : "opacity-70"}>
                                 {e.text}
                               </div>
                             ))}
                           </div>
-                          <div className="mt-1 text-[9px] font-bold tracking-widest text-black/60">{c.lvl}x</div>
+                          <div className="mt-1 text-[11px] font-bold tracking-widest opacity-60">{c.lvl}x</div>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-
-
-
-            {paused || (multiplayer && ended) ? (
-              <div className="mt-3">
-                <button
-                  onClick={leaveGame}
-                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
-                </button>
-              </div>
-            ) : (
-              <div className={`mt-5 border-t pt-4 text-xs tracking-widest ${home ? "border-[#f3e6cf]/20" : "border-[#2b2118]/20"}`}>
-                {!net ? (
-                  <>
-                    <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={startHost}
-                        disabled={joining}
-                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
-                      >
-                        HOST
-                      </button>
-                      <input
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
-                        placeholder="CODE"
-                        className={`pointer-events-auto w-20 rounded-md border-2 bg-transparent px-2 text-center tracking-[0.3em] outline-none ${home ? "border-[#f3e6cf]/40 placeholder:text-[#f3e6cf]/40" : "border-[#2b2118]/30"}`}
-                      />
-                      <button
-                        onClick={startJoin}
-                        disabled={joining}
-                        className={`pointer-events-auto flex-1 rounded-md border-2 border-[#2b2118] px-3 py-2 font-semibold disabled:opacity-50 ${home ? "bg-[#f3e6cf] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]" : "bg-[#2b2118] text-[#f7eeda]"}`}
-                      >
-                        JOIN
-                      </button>
+                ) : undefined
+              }
+            />
+          )}
+          {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+          {showSettings && (
+            <div className="ui-root pointer-events-auto fixed inset-0 z-50 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#161009]/80 p-4 font-mono sm:items-center">
+              <div className="ui-rise my-auto w-full max-w-md rounded-xl border-2 border-[#b4653f] bg-[#241b12] p-6 font-mono text-[#f2ead6] shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)]">
+                <SectionLabel>SETUP</SectionLabel>
+                <h2 className="text-2xl font-black tracking-[0.12em]">SETTINGS</h2>
+                <Hazard className="mt-3" />
+                <div className="mt-4 space-y-4 text-left text-[11px] font-bold tracking-[0.25em]">
+                  <label className="block">
+                    <div className="flex items-baseline justify-between">
+                      <span>FIELD OF VIEW</span><span className="text-[#e7b25c]">{fov}°</span>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="opacity-60">{net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}</div>
-                    <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
-                    <div className="mt-3 space-y-1 text-left">
-                      {connected.map((p) => (
-                        <div key={p.id} className="flex items-center gap-2">
-                          <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                          <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">· {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}</span>
-                          {p.num === myNum && <span className="opacity-50">(YOU)</span>}
-                        </div>
-                      ))}
+                    <input type="range" min={50} max={110} step={1} value={fov}
+                      onChange={(e) => setFov(Number(e.target.value))}
+                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
+                  </label>
+                  <label className="block">
+                    <div className="flex items-baseline justify-between">
+                      <span>LOOK SPEED · LEFT/RIGHT</span><span className="text-[#e7b25c]">{sensX.toFixed(1)}x</span>
                     </div>
-                    <div className="mt-3 text-left">
-                      <div className="opacity-60">MAP</div>
-                      {net.role === "host" ? (
-                        <div className="mt-1 grid grid-cols-2 gap-1">
-                          {([["arenas", "RANDOM ARENA"], ...(Object.keys(BIG_MAPS) as BigMapId[]).map((k) => [k, BIG_MAPS[k].name] as const)] as const).map(([id, label]) => {
-                            const on = id === "arenas" ? !bigIdOf(seed) : bigIdOf(seed) === id;
-                            return (
-                              <button
-                                key={id}
-                                onClick={() => {
-                                  coopMapRef.current = id;
-                                  const s2 = id === "arenas" ? Math.floor(Math.random() * 1e9) : bigSeed(id);
-                                  setSeed(s2);
-                                  net.broadcast({ type: "seed", seed: s2 });
-                                }}
-                                className={`pointer-events-auto flex-1 rounded-md border-2 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${home ? "border-[#f3e6cf]/40" : "border-[#2b2118]/40"} ${on ? (home ? "bg-[#b4653f] text-[#f7eeda] shadow-[2px_2px_0_0_rgba(43,33,24,0.85)]" : "bg-[#2b2118] text-[#f7eeda]") : "bg-transparent"}`}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="mt-1 font-semibold">{bigIdOf(seed) ? BIG_MAPS[bigIdOf(seed)!].name : "RANDOM ARENA"}</div>
-                      )}
-                      {bigIdOf(seed) && <div className="mt-1 text-[11px] opacity-60">Big co-op map · radar on</div>}
+                    <input type="range" min={0.2} max={3} step={0.1} value={sensX}
+                      onChange={(e) => setSensX(Number(e.target.value))}
+                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
+                  </label>
+                  <label className="block">
+                    <div className="flex items-baseline justify-between">
+                      <span>LOOK SPEED · UP/DOWN</span><span className="text-[#e7b25c]">{sensY.toFixed(1)}x</span>
                     </div>
-                    <div className="mt-2 opacity-60">
-                      {net.role === "host" ? "share the code" : "waiting for the host"}
+                    <input type="range" min={0.2} max={3} step={0.1} value={sensY}
+                      onChange={(e) => setSensY(Number(e.target.value))}
+                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
+                  </label>
+                  <label className="block">
+                    <div className="flex items-baseline justify-between">
+                      <span>MUSIC VOLUME</span><span className="text-[#e7b25c]">{Math.round(musicVol * 100)}%</span>
                     </div>
-                    <button
-                      onClick={leaveRoom}
-                      className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
-                    >
-                      LEAVE ROOM
-                    </button>
-                  </>
-                )}
-                {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
-                {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
-              </div>
-            )}
-
-            {(
-              <div>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  SETTINGS
-                </button>
-
-                {!paused && <button
-                  onClick={() => setShowWeapons(true)}
-                  className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  WEAPONS
-                </button>}
-                {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-              </div>
-            )}
-            {showSettings && (
-              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6] sm:items-center">
-                <div className="w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
-                    <button
-                      onClick={() => setShowSettings(false)}
-                      className="rounded px-3 py-1 text-xs tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
-                    >
-                      CLOSE
-                    </button>
-                  </div>
-                  <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                    <label className="block">
-                      FIELD OF VIEW · {fov}°
-                      <input type="range" min={50} max={110} step={1} value={fov}
-                        onChange={(e) => setFov(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                      <input type="range" min={0.2} max={3} step={0.1} value={sensX}
-                        onChange={(e) => setSensX(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                      <input type="range" min={0.2} max={3} step={0.1} value={sensY}
-                        onChange={(e) => setSensY(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                    </label>
-                    <label className="block">
-                      MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                      <input type="range" min={0} max={1} step={0.05} value={musicVol}
-                        onChange={(e) => setMusicVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                    </label>
-                    <label className="block">
-                      EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                      <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                        onChange={(e) => setSfxVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]" />
-                    </label>
-                  </div>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="pointer-events-auto mt-5 w-full rounded bg-[#b4653f] py-3 text-sm font-bold tracking-widest active:scale-95"
-                  >
-                    DONE
-                  </button>
-                  <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v1.0.5
-                  </div>
+                    <input type="range" min={0} max={1} step={0.05} value={musicVol}
+                      onChange={(e) => setMusicVol(Number(e.target.value))}
+                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
+                  </label>
+                  <label className="block">
+                    <div className="flex items-baseline justify-between">
+                      <span>EFFECTS VOLUME</span><span className="text-[#e7b25c]">{Math.round(sfxVol * 100)}%</span>
+                    </div>
+                    <input type="range" min={0} max={1} step={0.05} value={sfxVol}
+                      onChange={(e) => setSfxVol(Number(e.target.value))}
+                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
+                  </label>
+                </div>
+                <MenuButton variant="primary" size="md" className="mt-5 w-full" onClick={() => setShowSettings(false)}>
+                  Done
+                </MenuButton>
+                <div className="mt-4 border-t border-[#f3e6cf]/15 pt-3 text-center text-[11px] tracking-[0.3em] opacity-60">
+                  SCRAPFALL · v{VERSION}
                 </div>
               </div>
-            )}
-
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
