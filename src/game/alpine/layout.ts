@@ -1069,6 +1069,38 @@ export function generateAlpine(seed: number, solo: boolean) {
     });
   }
   carveCreek();
+  // Keep the whole entrance approach at threshold height before the capsule meets the
+  // plinth. Previously only samples inside the footprint were levelled, leaving the
+  // final 2 m terrain cell sloping up into the wall. These packed-snow aprons are part
+  // of the same heightfield that is drawn and walked; no invisible support or higher
+  // player step limit is needed. Blend their outer edges back into the existing snow.
+  for (const b of buildings) {
+    if (!["chalet", "lodge", "cafe", "hotel", "church"].includes(b.t)) continue;
+    const front =
+      b.front === 0
+        ? { x0: b.x0, x1: b.x1, z0: b.z0 - 2, z1: b.z0 }
+        : b.front === 1
+          ? { x0: b.x1, x1: b.x1 + 2, z0: b.z0, z1: b.z1 }
+          : b.front === 2
+            ? { x0: b.x0, x1: b.x1, z0: b.z1, z1: b.z1 + 2 }
+            : { x0: b.x0 - 2, x1: b.x0, z0: b.z0, z1: b.z1 };
+    shape(front.x0 - 4, front.z0 - 4, front.x1 + 4, front.z1 + 4, (x, z, h) => {
+      if (
+        (b.front === 0 && z > b.z0) ||
+        (b.front === 1 && x < b.x1) ||
+        (b.front === 2 && z < b.z1) ||
+        (b.front === 3 && x > b.x0)
+      )
+        return h;
+      // Never reshape another building's pad when a lane is narrow.
+      if (buildings.some((o) => o !== b && x >= o.x0 && x <= o.x1 && z >= o.z0 && z <= o.z1))
+        return h;
+      // Preserve the carved creek banks and ease the apron in beyond their outer edge.
+      const creekBlend = smooth(creek.w / 2 + 8, creek.w / 2 + 10, polyDist(x, z, creek.pts).d);
+      const k = (1 - smooth(0, 4, rectDist(x, z, front))) * creekBlend;
+      return h + (b.y - 0.08 - h) * k;
+    });
+  }
   // plinths reach the lowest ground under and around each house (after every cut)
   for (const b of buildings) {
     let lo = Infinity;

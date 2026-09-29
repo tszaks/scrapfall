@@ -30,7 +30,7 @@ export function beachPropBounds(p: BProp, margin = 0): Rect {
   const sizes: Partial<Record<PropKind, [number, number]>> = {
     umbrella: [1.3, 1.3],
     towel: [0.45, 0.9],
-    board: [0.32, 0.12],
+    board: [0.3, 0.25],
     cooler: [0.31, 0.21],
     firering: [0.95, 0.95],
     net: [4.7, 0.1],
