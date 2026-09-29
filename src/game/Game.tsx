@@ -3330,7 +3330,7 @@ function World({
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />}
-      {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} /> : <Level blocks={blocks} theme={theme} />}
+      {alpine ? <BigMapScene map={alpine} playing={locked && !gameOver} isHost={isHost} /> : <Level blocks={blocks} theme={theme} />}
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} />
       ))}
