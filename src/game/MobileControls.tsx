@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { touchInput } from "./touch";
 
 const RADIUS = 52;
@@ -50,7 +50,11 @@ export function MobileControls({
   abilityName: string;
   abilityLeft: number;
 }) {
-  const [stick, setStick] = useState<{ ox: number; oy: number; dx: number; dy: number } | null>(null);
+  // the stick ring and knob are moved straight on the DOM: re-rendering the whole
+  // overlay on every finger move is what made the big maps feel sticky on phones
+  const ringEl = useRef<HTMLDivElement | null>(null);
+  const knobEl = useRef<HTMLDivElement | null>(null);
+  const origin = useRef({ x: 0, y: 0 });
   const moveId = useRef<number | null>(null);
   const lookId = useRef<number | null>(null);
   const last = useRef({ x: 0, y: 0 });
@@ -59,7 +63,7 @@ export function MobileControls({
     moveId.current = null;
     touchInput.moveX = 0;
     touchInput.moveZ = 0;
-    setStick(null);
+    if (ringEl.current) ringEl.current.style.opacity = "0";
   };
 
   return (
@@ -71,12 +75,19 @@ export function MobileControls({
           if (moveId.current !== null) return;
           moveId.current = e.pointerId;
           e.currentTarget.setPointerCapture(e.pointerId);
-          setStick({ ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 });
+          origin.current = { x: e.clientX, y: e.clientY };
+          const ring = ringEl.current;
+          if (ring) {
+            ring.style.left = `${e.clientX - RADIUS}px`;
+            ring.style.top = `${e.clientY - RADIUS}px`;
+            ring.style.opacity = "1";
+          }
+          if (knobEl.current) knobEl.current.style.transform = "translate3d(0px, 0px, 0)";
         }}
         onPointerMove={(e) => {
-          if (moveId.current !== e.pointerId || !stick) return;
-          let dx = e.clientX - stick.ox;
-          let dy = e.clientY - stick.oy;
+          if (moveId.current !== e.pointerId) return;
+          let dx = e.clientX - origin.current.x;
+          let dy = e.clientY - origin.current.y;
           const len = Math.hypot(dx, dy);
           if (len > RADIUS) {
             dx = (dx / len) * RADIUS;
@@ -84,7 +95,7 @@ export function MobileControls({
           }
           touchInput.moveX = dx / RADIUS;
           touchInput.moveZ = -dy / RADIUS;
-          setStick((s) => (s ? { ...s, dx, dy } : s));
+          if (knobEl.current) knobEl.current.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
         }}
         onPointerUp={endMove}
         onPointerCancel={endMove}
@@ -109,17 +120,17 @@ export function MobileControls({
         onPointerCancel={() => (lookId.current = null)}
       />
 
-      {stick && (
+      <div
+        ref={ringEl}
+        className="pointer-events-none absolute rounded-full border-2 border-[#f3e6cf]/60 bg-[#2b2118]/25 opacity-0"
+        style={{ left: -999, top: -999, width: RADIUS * 2, height: RADIUS * 2, willChange: "left, top" }}
+      >
         <div
-          className="pointer-events-none absolute rounded-full border-2 border-[#f3e6cf]/60 bg-[#2b2118]/25"
-          style={{ left: stick.ox - RADIUS, top: stick.oy - RADIUS, width: RADIUS * 2, height: RADIUS * 2 }}
-        >
-          <div
-            className="absolute rounded-full bg-[#f3e6cf]/80"
-            style={{ left: RADIUS - 22 + stick.dx, top: RADIUS - 22 + stick.dy, width: 44, height: 44 }}
-          />
-        </div>
-      )}
+          ref={knobEl}
+          className="absolute rounded-full bg-[#f3e6cf]/80"
+          style={{ left: RADIUS - 22, top: RADIUS - 22, width: 44, height: 44, willChange: "transform" }}
+        />
+      </div>
 
       {/* jump sits on the left, away from the aim side */}
       <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>

@@ -38,6 +38,7 @@ import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { CombatFx } from "@/bro/game/CombatFx";
 import { fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxReset, fxShot, fxStyle, setLocalMuzzle, visOf } from "@/bro/game/projectiles";
 import { VF } from "@/bro/game/impacts";
+import { setAutoTier } from "@/bro/game/quality";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { SettingsScreen } from "./ui/SettingsScreen";
@@ -3442,7 +3443,11 @@ export function Game() {
   const [touchUi, setTouchUi] = useState(false);
   const [portrait, setPortrait] = useState(false);
   useEffect(() => {
-    setTouchUi(isTouchDevice());
+    const touch = isTouchDevice();
+    setTouchUi(touch);
+    // phones: run the big maps' own scenery budget at its lightest (fewer rain streaks,
+    // particles and window rooms, no street mirror) so frames stay steady
+    if (touch) setAutoTier("low");
     const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
     onResize();
     window.addEventListener("resize", onResize);
@@ -4053,7 +4058,15 @@ export function Game() {
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
       <div aria-hidden className={`pointer-events-none fixed inset-0 z-30 bg-[#2b2118] transition-opacity duration-500 ${menuFade && !started ? "opacity-100" : "opacity-0"}`} />
-      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? 1200 : 220 }}>
+      {/* phones draw at a lower resolution and skip sun shadows: the big maps are 800 m wide
+          and a 3x phone screen is what makes them stutter */}
+      <Canvas
+        shadows={!touchUi}
+        dpr={touchUi ? [0.6, 1] : [1, 1.6]}
+        gl={{ powerPreference: "high-performance", antialias: true }}
+        camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? (touchUi ? 700 : 1200) : 220 }}
+      >
+
         <World
           alpine={alpine}
           blocks={blocks}
@@ -4172,8 +4185,12 @@ export function Game() {
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
             {alpineMap && locked && (
-              <div data-minimap className={touchUi ? "fixed bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]" : "fixed bottom-5 right-5"}>
-                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+              // phones: the radar tucks under the health/shard readout, so it can never sit
+              // over the fire/run/ability buttons or swallow an aim drag
+              <div data-minimap className={touchUi ? "pointer-events-none mt-1 h-[92px] w-[92px]" : "fixed bottom-5 right-5"}>
+                <div className={touchUi ? "origin-top-right scale-[0.5]" : ""}>
+                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+                </div>
               </div>
             )}
         {multiplayer && locked && !ended && (

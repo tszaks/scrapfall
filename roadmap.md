@@ -69,3 +69,10 @@
 ## v1.0.7
 - Match setup, settings and enemies screens in his menu style
 - Enemies button on the home menu (lineup + per-enemy 3D card)
+
+## v1.0.8 — mobile polish on the big maps
+- [x] Mobile: map guide moved under the health/shard readout, never over the buttons
+- [x] Mobile: lower render resolution, no sun shadows, lightest scenery budget on the big maps
+- [x] Mobile: movement stick drawn without re-rendering the HUD each finger move
+- [ ] Add his 10 new enemy types to the big maps only
+- [ ] Preload/warm the big maps before the match starts (4-player co-op)
