@@ -44,6 +44,8 @@ type Plan = {
   cam: THREE.Camera | null;
   rt: THREE.WebGLRenderTarget | null;
   spot: THREE.SpotLight | null;
+  /** wall-clock start: a slow GPU caps the run instead of holding the veil up forever */
+  t0: number;
   done: boolean;
 };
 
@@ -55,8 +57,15 @@ const idle = (delay: number): Plan => ({
   cam: null,
   rt: null,
   spot: null,
+  t0: performance.now(),
   done: false,
 });
+
+/** the frame-count delay before warming starts is also wall-clock bounded (slow GPUs
+ *  render few frames per second; the veil must not wait on them) */
+const DELAY_CAP_MS = 1200;
+/** the whole warm run caps out here — batches left unwarmed compile lazily, as before */
+const WARM_CAP_MS = 3500;
 
 /**
  * `withSpot`: also draw each batch once more with a (dark) spot light in the scene: the
@@ -107,7 +116,7 @@ export function Prewarm({
   useFrame(() => {
     const p = plan.current;
     if (p.done) return;
-    if (p.left-- > 0) return;
+    if (p.left-- > 0 && performance.now() - p.t0 < DELAY_CAP_MS) return;
     const t0 = performance.now();
     const before = gl.info.programs?.length ?? 0;
     if (!p.batches) {
@@ -185,7 +194,7 @@ export function Prewarm({
       before,
     });
     if (warmLog.length > 128) warmLog.splice(0, warmLog.length - 128);
-    if (++p.i >= p.batches.length) {
+    if (++p.i >= p.batches.length || t0 - p.t0 > WARM_CAP_MS) {
       p.done = true;
       for (const l of p.lights) l.layers.disable(WARM_LAYER);
       p.rt?.dispose();

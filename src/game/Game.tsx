@@ -7649,12 +7649,13 @@ export function Game() {
     me: p.num === myNum,
   }));
   const paused = started && !ended && !locked;
-  // the veil: up from the moment new world inputs are requested until that build's shaders
-  // are warm — first load, map picks, hosting a room, New Arena all pass through it
+  // the veil covers the canvas while a world applies and, in the menus, while its shaders
+  // warm — it is pointer-transparent and sits under the menus, so it never gates them, and
+  // it never stays up over a live match (the warm keeps running, unseen, in the background)
   const pending =
     !built || built.seed !== seed || built.coop !== coop || built.mapChoice !== mapChoice;
-  const loading = pending || warmDone < built!.n;
-  const veilProgress = pending ? 0.2 : warmDone < built!.n ? 0.72 : 1;
+  const veilUp = pending || (!started && built !== null && warmDone < built.n);
+  const veilProgress = pending ? 0.2 : 0.72;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
@@ -8107,6 +8108,9 @@ export function Game() {
         />
         <AmbienceListener />
       </Canvas>
+      {/* opaque card over the canvas while a world builds/warms behind it; mounted before
+          every menu so it never covers or intercepts them */}
+      <LoadingVeil up={veilUp} mapName={wantedTheme.name} progress={veilProgress} />
       {!multiplayer && downed && locked && !showSettings && <SoloRevivePrompt />}
       <HudOverlay
         remotes={remotes}
@@ -8457,6 +8461,7 @@ export function Game() {
           setAbility={setAbility}
           mapChoice={mapChoice}
           pickMap={pickMap}
+          building={pending}
           seed={seed}
           difficulty={difficulty}
           pickDifficulty={pickDifficulty}
@@ -8582,8 +8587,6 @@ export function Game() {
           onClose={() => setShowSettings(false)}
         />
       )}
-      {/* opaque card over the canvas while a world builds/warms behind it */}
-      <LoadingVeil up={loading} mapName={wantedTheme.name} progress={veilProgress} />
     </div>
   );
 }

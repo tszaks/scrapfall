@@ -1,9 +1,11 @@
-// The loading veil: an opaque title card shown while a world is generated and warmed behind
-// it — first paint, map picks in the loadout, and New Arena all pass through it. The logo
-// and a thin progress bar sit on the ink background; the fill animates on the compositor
-// (transform + a travelling sheen), so it stays smooth while the main thread is in the
-// generator. Fades out once the map's shaders are warm.
-import { C, Hazard, Logo } from "./ui/kit";
+// The loading veil: an opaque ink backdrop over the canvas while a world is generated and
+// warmed behind it — first paint, map picks in the loadout, hosting a room, and New Arena
+// all pass through it. It is mounted before every menu and is pointer-transparent, so it
+// never gates the UI on the backdrop being ready; the menus stay usable and only Enter
+// Arena waits for the build. The slim progress line sits at the bottom edge (the title
+// screen carries the logo itself) and animates on the compositor, so it stays smooth while
+// the main thread is in the generator. Fades out once the map's shaders are warm.
+import { C, Hazard } from "./ui/kit";
 
 export function LoadingVeil({
   up,
@@ -22,7 +24,7 @@ export function LoadingVeil({
     <div
       data-veil
       aria-hidden={!up}
-      className="ui-root fixed inset-0 z-[60] flex items-center justify-center font-mono"
+      className="ui-root pointer-events-none fixed inset-0 font-mono"
       style={{
         background:
           "radial-gradient(120% 90% at 50% 30%, #2b2118 0%, #161009 68%, #0e0a06 100%)",
@@ -34,9 +36,8 @@ export function LoadingVeil({
       }}
     >
       <style>{`@keyframes veil-sheen { from { transform: translateX(-110%) } to { transform: translateX(320%) } }`}</style>
-      <div className="flex w-[min(22rem,78vw)] flex-col items-center gap-5">
-        <Logo compact />
-        <div className="w-full">
+      <div className="absolute inset-x-0 bottom-0 flex justify-center pb-6">
+        <div className="w-[min(22rem,72vw)]">
           <div className="flex items-baseline justify-between text-[9px] font-bold tracking-[0.3em]">
             <span className="text-[#f3e6cf]/60">ENTERING</span>
             <span className="text-[#e7b25c]">{mapName.toUpperCase()}</span>
@@ -61,7 +62,7 @@ export function LoadingVeil({
               }}
             />
           </div>
-          <Hazard className="mt-3 w-16 opacity-60" />
+          <Hazard className="mx-auto mt-2 w-16 opacity-60" />
         </div>
       </div>
     </div>
