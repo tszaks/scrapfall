@@ -1,6 +1,7 @@
 // Scrapfall menu kit: one type scale, one spacing grid, one button style, shared by every
 // screen (title, loadout, pause, recap, settings, shop). Warm paper-and-ink industrial look.
 import { useEffect, useState, type ReactNode } from "react";
+import { THEMES, offered } from "../themes";
 
 export const C = {
   ink: "#2b2118",
@@ -240,7 +241,7 @@ export function Logo({ compact }: { compact?: boolean }) {
         style={{ textShadow: "0 1px 0 #2b2118, 0 0 16px rgba(20,14,8,0.9)" }}
       >
         <Hazard className="w-10 opacity-90" />
-        12 WAVES · 5 ARENAS · 4-PLAYER CO-OP
+        {`12 WAVES · ${THEMES.filter(offered).length} ARENAS · 4-PLAYER CO-OP`}
       </div>
     </div>
   );
