@@ -3448,7 +3448,7 @@ export function Game() {
   const seedRef = useRef(seed);
   seedRef.current = seed;
   const netHolder = useRef<NetHandle | null>(null);
-  // home screen showcase: a new arena behind the menu every 8 s, with a soft fade
+  // home screen showcase: a new arena behind the menu every 18 s, with a soft fade
   const [menuFade, setMenuFade] = useState(false);
   useEffect(() => {
     if (started || picking || testMap()) return;
@@ -3464,7 +3464,7 @@ export function Game() {
         });
         setMenuFade(false);
       }, 600);
-    }, 8000);
+    }, 18000);
     return () => { clearInterval(id); if (t2) clearTimeout(t2); };
   }, [started, picking]);
   const healthRef = useRef(MAX_HP);
