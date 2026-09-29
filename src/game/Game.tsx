@@ -34,6 +34,7 @@ import { setBigGround, groundY } from "./terrain";
 import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
+import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -80,6 +81,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
 const TURRET_LIFE = 30;
+const MUZZLE_AT = new THREE.Vector3();
 
 type Enemy = {
   kind: Kind;
@@ -1861,7 +1863,9 @@ function World({
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
     // rounds leave the gun's muzzle (view-model offset) and converge on the crosshair
-    const pos = new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
+    const pos = readGunMuzzle(viewModel.current, MUZZLE_AT, w)
+      ? MUZZLE_AT.clone()
+      : new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
     const aim = camera.position.clone().addScaledVector(FORWARD, 28).sub(pos).normalize();
     for (let s = 0; s < g.count; s++) {
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
@@ -1888,6 +1892,7 @@ function World({
       onStat("shot", 1);
     }
     playGun(w, w === "pistol" && s2.suppr);
+    gunKick();
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
   };
 
@@ -1928,6 +1933,7 @@ function World({
       if (!dropOrder.current.includes(w)) dropOrder.current.push(w);
     });
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     equip("pistol");
   }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1935,6 +1941,7 @@ function World({
   useEffect(() => {
     if (waveNum < 1) return;
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
   }, [waveNum]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1981,6 +1988,7 @@ function World({
   const spawnWave = (n: number) => {
     // every wave hands the sidearm a fresh magazine
     ammo.current.pistol = Math.round((stats.current.extmag ? 220 : GUNS.pistol.ammo) * stats.current.ammoMul);
+    gunReload();
     onAmmo(ammo.current[weapon.current]);
     syncInv();
     const extra = Math.max(0, playersRef.current - 1); // each extra player scales the round
