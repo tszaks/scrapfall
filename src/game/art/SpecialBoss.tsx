@@ -28,12 +28,24 @@ function ease(d: object, target: number, rate: number) {
 
 const SPECIAL_INPUTS: Record<ArtSpecialType, RobotInputs> = {
   // leap: the synced aux runs while airborne
-  leaper: (d) => ({ wind: ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 12), aux: 0 }),
+  leaper: (d, o) => {
+    o.wind = ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 12);
+    o.aux = 0;
+  },
   // quick-draw: aux > 0 while the revolvers come up (the old model eased 35% a frame)
-  desperado: (d) => ({ wind: ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 22), aux: 0 }),
+  desperado: (d, o) => {
+    o.wind = ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 22);
+    o.aux = 0;
+  },
   // crawler: claws snap right after a pinch (host cooldown resets to 1.2)
-  crawler: (d) => ({ wind: (d.cooldown ?? 0) > 0.85 ? 1 : 0, aux: 0 }),
-  skier: () => ({ wind: 0, aux: 0 }),
+  crawler: (d, o) => {
+    o.wind = (d.cooldown ?? 0) > 0.85 ? 1 : 0;
+    o.aux = 0;
+  },
+  skier: (d, o) => {
+    o.wind = 0;
+    o.aux = 0;
+  },
 };
 
 const GLINT = new THREE.MeshBasicMaterial({ color: "#fff6c0", fog: false });
@@ -88,11 +100,11 @@ function Glints({ data }: { data: RobotData }) {
 }
 
 // ---------------------------------------------------------------- bosses
-const BOSS_INPUTS: RobotInputs = (d) => ({
-  wind: (d.swing ?? 0) > 0 ? 1 - (d.swing ?? 0) / 0.4 : 0,
+const BOSS_INPUTS: RobotInputs = (d, o) => {
+  o.wind = (d.swing ?? 0) > 0 ? 1 - (d.swing ?? 0) / 0.4 : 0;
   // the Marshal's lasso wind-up (synced aux), eased so the loop opens and closes smoothly
-  aux: ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 10),
-});
+  o.aux = ease(d, (d.aux ?? 0) > 0 ? 1 : 0, 10);
+};
 
 /** the live map's boss (null for the old arena bosses) */
 export function ArtBoss({ theme, data }: { theme: Theme; data: RobotData }) {

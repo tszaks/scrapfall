@@ -44,7 +44,7 @@ export function PauseScreen({
         <h2 className={`font-black tracking-[0.12em] ${compact ? "text-xl" : "text-3xl"}`}>
           PAUSED
         </h2>
-        <div className="mt-1.5 text-[10px] font-bold tracking-[0.2em] opacity-60">
+        <div className="mt-1.5 text-[11px] font-bold tracking-[0.2em] opacity-70">
           WAVE {wave}/{totalWaves} · {score} KILLS · {difficultyName}
         </div>
         <Hazard className="mt-3" />
@@ -95,12 +95,12 @@ export function PauseScreen({
                 <SectionLabel>ATTRIBUTES</SectionLabel>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                   {modBadges.map((b) => (
-                    <span key={b} className="text-[10px] font-bold tracking-wider">
+                    <span key={b} className="text-[11px] font-bold tracking-wider">
                       {b}
                     </span>
                   ))}
                   {perkBadges.map((b) => (
-                    <span key={b} className="text-[10px] tracking-wider">
+                    <span key={b} className="text-[11px] tracking-wider">
                       {b}
                     </span>
                   ))}
@@ -143,8 +143,8 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
   ];
   const col = (rows: [string, string, -1 | 0 | 1][], title: string) => (
     <div>
-      <div className="text-[8px] tracking-[0.3em] opacity-50">{title}</div>
-      <div className="mt-1 space-y-0.5 text-[10.5px]">
+      <div className="text-[11px] tracking-[0.3em] opacity-70">{title}</div>
+      <div className="mt-1 space-y-0.5 text-[11px]">
         {rows.map(([l, v, t]) => (
           <div key={l} className="flex items-center justify-between gap-2">
             <span className={t === 1 ? "text-[#7cff4f]" : t === -1 ? "text-[#ff6b5e]" : "text-[#f3e6cf]/75"}>
@@ -160,8 +160,8 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
   );
   return (
     <div className="mt-4 rounded-lg bg-[#2b2118] p-3 font-mono text-[#f3e6cf]">
-      <div className="flex items-center justify-between text-[9px] tracking-[0.25em]">
-        <span className="opacity-60">STATS</span>
+      <div className="flex items-center justify-between text-[11px] tracking-[0.25em]">
+        <span className="opacity-70">STATS</span>
         {/* hover shows the class's role and trade-offs (Toby's class tooltip) */}
         <span
           className="cursor-help underline decoration-dotted underline-offset-2"
@@ -255,7 +255,7 @@ export function EndScreen({
         >
           {won ? "ARENA CLEARED!" : "YOU GOT SWARMED"}
         </h2>
-        <div className="mt-1.5 text-[10px] font-bold tracking-[0.18em] opacity-60">
+        <div className="mt-1.5 text-[11px] font-bold tracking-[0.18em] opacity-70">
           {won
             ? `ALL ${totalWaves} WAVES · ${mine.kills} KILLS · ${difficultyName}`
             : `WAVE ${wave} · ${mine.kills} KILLS · ${difficultyName}`}
@@ -265,7 +265,7 @@ export function EndScreen({
         <div className={`grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px] tracking-wider ${compact ? "mt-3" : "mt-4"}`}>
           {stats.map(([l, v]) => (
             <div key={l} className="flex items-baseline justify-between gap-2">
-              <span className="text-[9px] tracking-[0.18em] opacity-55">{l}</span>
+              <span className="text-[11px] tracking-[0.18em] opacity-70">{l}</span>
               <span className="font-bold">{v}</span>
             </div>
           ))}
@@ -276,7 +276,7 @@ export function EndScreen({
             {badges.map((b) => (
               <span
                 key={b}
-                className="rounded border border-[#2b2118] bg-[#e7b25c]/50 px-2 py-0.5 text-[9px] font-bold tracking-[0.15em]"
+                className="rounded border border-[#2b2118] bg-[#e7b25c]/50 px-2 py-0.5 text-[11px] font-bold tracking-[0.15em]"
               >
                 ★ {b}
               </span>
@@ -297,11 +297,11 @@ export function EndScreen({
                     className="inline-block h-2.5 w-2.5 rounded-[3px] border border-[#2b2118]"
                     style={{ background: colorFor(x.num) }}
                   />
-                  <span className="text-[10px] font-bold tracking-[0.15em]">
+                  <span className="text-[11px] font-bold tracking-[0.15em]">
                     {x.num === 1 ? "HOST" : `P${x.num}`}
-                    {x.num === myNum && <span className="opacity-45"> · YOU</span>}
+                    {x.num === myNum && <span className="opacity-70"> · YOU</span>}
                   </span>
-                  <span className="ml-auto text-[9px] tracking-[0.1em] opacity-65">
+                  <span className="ml-auto text-[11px] tracking-[0.1em] opacity-70">
                     {x.kills} KILLS · {x.dmg} DMG · {x.acc}%
                   </span>
                 </div>
@@ -319,7 +319,7 @@ export function EndScreen({
           )}
           {multiplayer && !isHost ? (
             <>
-              <div className="rounded-md border border-[#2b2118]/25 bg-[#2b2118]/8 px-4 py-2 text-center text-[10px] font-bold tracking-[0.2em] opacity-75">
+              <div className="rounded-md border border-[#2b2118]/25 bg-[#2b2118]/8 px-4 py-2 text-center text-[11px] font-bold tracking-[0.2em] opacity-75">
                 WAITING FOR THE HOST TO START A NEW ARENA
               </div>
               <MenuButton variant="ink" size="md" className="w-full" onClick={onLoadout}>

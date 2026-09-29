@@ -42,10 +42,10 @@ export function Shards({
   useEffect(() => {
     if (new URLSearchParams(location.search).has("debug")) {
       const w = window as unknown as Record<string, unknown>;
-      w.__shardPool = pool.current;
-      w.__shardDeaths = deaths;
-      w.__shardTick = tick;
-      w.__shardEnemies = enemies;
+      w["__shardPool"] = pool.current;
+      w["__shardDeaths"] = deaths;
+      w["__shardTick"] = tick;
+      w["__shardEnemies"] = enemies;
     }
   }, []);
 

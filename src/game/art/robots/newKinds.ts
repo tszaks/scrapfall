@@ -835,8 +835,9 @@ export function newRobot(kind: NewKind): RobotKind {
 }
 
 /** feed the synced telegraph state (`vis`) to the animations */
-export const visInputs: RobotInputs = (d) => {
+export const visInputs: RobotInputs = (d, o) => {
   const v = d.vis ?? 0;
   const ph = visPhase(v);
-  return { wind: ph === PH_WIND ? visProg(v) : ph === PH_ACT ? 1 : 0, aux: v };
+  o.wind = ph === PH_WIND ? visProg(v) : ph === PH_ACT ? 1 : 0;
+  o.aux = v;
 };

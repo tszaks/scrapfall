@@ -257,8 +257,8 @@ export function MapThumb({ theme, className = "" }: { theme: Theme; className?: 
   return (
     <canvas
       ref={ref}
-      style={{ width: "100%", aspectRatio: `${W}/${H}` }}
-      className={`block ${className}`}
+      style={{ width: "100%" }}
+      className={`block aspect-[264/132] [@media(max-height:760px)]:aspect-[264/104] ${className}`}
       aria-hidden
     />
   );

@@ -3,6 +3,7 @@ import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nu
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
+import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { configureEnvironment, matchEnvironment } from "./matchEnvironment";
 import { aimState, stepAim, aimSensitivity } from "./input/aim";
@@ -101,6 +102,7 @@ import {
   fineStep,
   toCell,
   type FineField,
+  type NavGrid,
   nextWaypoint,
   clearLine,
   toNav,
@@ -291,7 +293,7 @@ import { HudChip, UiStyles } from "./ui/kit";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
-import { SettingsScreen } from "./ui/SettingsScreen";
+import { SettingsScreen, type SettingsTab } from "./ui/SettingsScreen";
 import { ShopBar } from "./ui/ShopBar";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
@@ -2126,7 +2128,26 @@ const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
 const HAZ_PT = new THREE.Vector3();
+const BULLET_END = new THREE.Vector3();
+// scratches for the per-enemy route picks (steerTo returns shared objects already)
+const WP_SCRATCH = { x: 0, z: 0 };
+const FINE_SCRATCH = { x: 0, z: 0 };
+// per-frame pools for the squad target list and the field-cache sweep (cleared each frame)
+const targetPool: {
+  id: string | null;
+  x: number;
+  z: number;
+  y: number;
+  fx: number;
+  fz: number;
+  zn?: number;
+  air?: boolean;
+}[] = [];
+const usedSet = new Set<number>();
+const usedFSet = new Set<number>();
 const WORLD_CONTACT = new THREE.Vector3();
+/** host: where cars look for the rest of the squad (filled in place every frame) */
+const trafficOthers: { x: number; z: number; y: number }[] = [];
 
 /** The themed shootable prop (Toby 1.0.4): fuel drum, cryo condenser, EMP relay, ... */
 const HazardProp = memo(function HazardProp({ def }: { def: HazardDef }) {
@@ -2919,7 +2940,6 @@ function World({
   const guestRef = useRef(false);
   // hornet packs: index of the pack leader each follower spawns beside (-1 = none)
   const packLead = useRef(new Int16Array(MAX_ENEMIES).fill(-1));
-  const sepGrid = useRef(new Map<number, number[]>());
 
   // ---------- networking ----------
   const netRef = useRef<NetHandle | null>(net);
@@ -2994,6 +3014,36 @@ function World({
   /** fine 2 m fields round each target (stacked-ground maps only, see level.ts fineField) */
   const fines = useRef(new Map<number, FineField>());
   const fineKey = (t: { x: number; z: number }) => toCell(t.x) * 1000 + toCell(t.z);
+  // one reusable probe for the per-enemy route pick in the frame loop: a pair of closures
+  // per enemy per frame was a measurable GC source (steerCache.ts). blocks/solid are
+  // refreshed every frame below — they change when the map does.
+  const steerProbe = useRef({
+    e: null as Enemy | null,
+    t: null as { x: number; z: number } | null,
+    st: null as { radius: number } | null,
+    blocks: [] as Block[],
+    solid: null as NavGrid | null,
+    los() {
+      const { e, t, st, blocks } = this;
+      return clearLine(blocks, e!.x, e!.z, t!.x, t!.z, Math.min(st!.radius, 0.8) * 0.9);
+    },
+    route() {
+      const { e, t, solid, blocks } = this;
+      const [ni, nj] = navTarget(solid!, t!.x, t!.z, blocks);
+      const dist = fields.current.get(ni * 1000 + nj);
+      // close in: the fine field knows the 2 m corridors the nav grid can't see
+      const ff = strictNav()
+        ? fines.current.get(toCell(t!.x) * 1000 + toCell(t!.z))
+        : undefined;
+      const fs = ff ? fineStep(ff, e!.x, e!.z, FINE_SCRATCH) : null;
+      if (fs) return fs;
+      // at the field's own cell (the target is right there, e.g. against a railing)
+      // walk straight at it instead of parking on the cell centre
+      if (dist && dist[toNav(e!.x) * solid!.n + toNav(e!.z)]! > 0)
+        return nextWaypoint(solid!, dist, e!.x, e!.z, WP_SCRATCH);
+      return null;
+    },
+  }).current;
   const recycleT = useRef(1);
   const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
@@ -4600,17 +4650,29 @@ function World({
     if (traffic.current.role === "host") {
       // the host's cars must brake for every live player in the lane, not just the host
       const now = performance.now();
-      traffic.current.others = [...remotes.current.values()]
-        .filter((r) => r.hp > 0 && now - r.last < 4000)
-        .map((r) => {
-          if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
-          if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
-          return {
-            x: r.x,
-            z: r.z,
-            y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE,
-          };
-        });
+      const oth = trafficOthers;
+      oth.length = 0;
+      remotes.current.forEach((r) => {
+        if (!(r.hp > 0 && now - r.last < 4000)) return;
+        const slot = (oth[oth.length] ??= { x: 0, z: 0, y: 0 });
+        if (alpineMap && (r.rc ?? -1) >= 0) {
+          const p = riderEye(alpineMap.alpine.lift, r.rc!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else if (isBeach(city) && (r.wr ?? -1) >= 0) {
+          const p = wheelEye(city.beach.wheel, r.wr!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else {
+          slot.x = r.x;
+          slot.z = r.z;
+          slot.y =
+            (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE;
+        }
+      });
+      traffic.current.others = oth;
     } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
@@ -5650,8 +5712,11 @@ function World({
         }
       });
       // waves
-      const remaining =
-        enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      let alive = 0,
+        pend = 0;
+      for (const e of enemies) if (e.alive) alive++;
+      for (const p of pending.current) if (p) pend++;
+      const remaining = alive + pend;
       setWaveClock(
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
@@ -5699,17 +5764,28 @@ function World({
         air?: boolean;
       };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
-      const targets: Target[] = [];
-      if (!spectating && !downedRef.current)
-        targets.push({
+      // (pooled slots: fresh target records every frame were a steady GC source)
+      const targets: Target[] = targetPool;
+      targets.length = 0;
+      if (!spectating && !downedRef.current) {
+        const t = (targetPool[0] ??= {
           id: null,
-          x: cam.position.x,
-          z: cam.position.z,
-          y: cam.position.y,
-          ...lf,
-          zn: myZone(),
-          air: ride.chair >= 0 || wheelRide.cabin >= 0,
+          x: 0,
+          z: 0,
+          y: 0,
+          fx: 0,
+          fz: 0,
         });
+        t.id = null;
+        t.x = cam.position.x;
+        t.z = cam.position.z;
+        t.y = cam.position.y;
+        t.fx = lf.fx;
+        t.fz = lf.fz;
+        t.zn = myZone();
+        t.air = ride.chair >= 0 || wheelRide.cabin >= 0;
+        targets.push(t);
+      }
       remotes.current.forEach((r) => {
         if (r.hp > 0 && downTable.get(r.id)?.st !== DOWN && now - r.last < 4000) {
           const ry =
@@ -5718,16 +5794,23 @@ function World({
               : alpineMap && (r.rc ?? -1) >= 0
                 ? riderEye(alpineMap.alpine.lift, r.rc!).y
                 : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
-          targets.push({
-            id: r.id,
-            x: r.x,
-            z: r.z,
-            y: ry,
-            fx: -Math.sin(r.yaw),
-            fz: -Math.cos(r.yaw),
-            zn: remoteZone(r),
-            air: (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0,
+          const t = (targetPool[targets.length] ??= {
+            id: null,
+            x: 0,
+            z: 0,
+            y: 0,
+            fx: 0,
+            fz: 0,
           });
+          t.id = r.id;
+          t.x = r.x;
+          t.z = r.z;
+          t.y = ry;
+          t.fx = -Math.sin(r.yaw);
+          t.fz = -Math.cos(r.yaw);
+          t.zn = remoteZone(r);
+          t.air = (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0;
+          targets.push(t);
         }
       });
       enemyShotTargets.current = targets.length ? targets : [];
@@ -5775,7 +5858,8 @@ function World({
       hornetCd.current.v -= atkDt;
 
       // flow field per target cell (cached)
-      const used = new Set<number>();
+      const used = usedSet;
+      used.clear();
       for (const t of targets) {
         const key = navKey(t);
         const [ni, nj] = navTarget(solid, t.x, t.z, blocks);
@@ -5789,7 +5873,8 @@ function World({
         });
       }
       if (strictNav()) {
-        const usedF = new Set<number>();
+        const usedF = usedFSet;
+        usedF.clear();
         for (const t of targets) {
           const key = fineKey(t);
           usedF.add(key);
@@ -5999,24 +6084,12 @@ function World({
         if (!ghost) {
           // route pick is memoised per enemy (steerCache.ts): the LOS probe plus the
           // field descent used to run per frame per enemy — the crowd's biggest CPU line
-          const wp = steerTo(
-            e,
-            target,
-            state.clock.elapsedTime,
-            () => clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9),
-            () => {
-              const dist = fields.current.get(navKey(target));
-              // at the field's own cell (the target is right there, e.g. against a railing)
-              // walk straight at it instead of parking on the cell centre
-              // close in: the fine field knows the 2 m corridors the nav grid can't see
-              const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
-              const fs = ff ? fineStep(ff, e.x, e.z) : null;
-              if (fs) return fs;
-              if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0)
-                return nextWaypoint(solid, dist, e.x, e.z);
-              return null;
-            },
-          );
+          steerProbe.e = e;
+          steerProbe.t = target;
+          steerProbe.st = st;
+          steerProbe.blocks = blocks;
+          steerProbe.solid = solid;
+          const wp = steerTo(e, target, state.clock.elapsedTime, steerProbe);
           tx = wp.x;
           tz = wp.z;
         }
@@ -6426,100 +6499,14 @@ function World({
 
       // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
       // inside you), and push apart lightly so a crowd doesn't stack into one blob. Fliers pass
-      // over everything. A spatial hash keeps the pair checks cheap with 110 enemies.
-      const grid = sepGrid.current;
-      if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
-      grid.forEach((cell) => (cell.length = 0));
-      const CELL = 2.5;
-      const keyOf = (x: number, z: number) =>
-        Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
-      const bodyR = (e: Enemy) =>
-        e.kind === "boss" && theme.boss.shape === "kraken"
-          ? KRAKEN_R
-          : STATS[e.kind].radius * (e.elite ? 1.6 : 1);
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const e = enemies[ei]!;
-        if (!e.alive || FLYERS.has(e.kind)) continue;
-        const k = keyOf(e.x, e.z);
-        let cell = grid.get(k);
-        if (!cell) grid.set(k, (cell = []));
-        cell.push(ei);
-      }
-      const nudge = (e: Enemy, px: number, pz: number) => {
-        const rr = Math.min(STATS[e.kind].radius, 0.8);
-        const ghost = e.kind === "specter";
-        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
-        if (
-          ghost
-            ? ghostOK(e.x + px, e.z)
-            : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)
-        )
-          e.x += px;
-        if (
-          ghost
-            ? ghostOK(e.x, e.z + pz)
-            : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)
-        )
-          e.z += pz;
-      };
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const a = enemies[ei]!;
-        if (!a.alive || FLYERS.has(a.kind)) continue;
-        const ra = bodyR(a);
-        const ci = Math.floor((a.x + HALF) / CELL);
-        const cj = Math.floor((a.z + HALF) / CELL);
-        for (let di = -1; di <= 1; di++) {
-          for (let dj = -1; dj <= 1; dj++) {
-            const cell = grid.get((ci + di) * 4096 + cj + dj);
-            if (!cell) continue;
-            for (const oj of cell) {
-              if (oj <= ei) continue;
-              const b = enemies[oj]!;
-              const rb = bodyR(b);
-              const reach = (ra + rb) * 0.8; // light: a little overlap is fine
-              const ox = b.x - a.x;
-              const oz = b.z - a.z;
-              const dd = ox * ox + oz * oz;
-              if (dd >= reach * reach) continue;
-              const dist = Math.sqrt(dd) || 0.01;
-              const nx = dd > 1e-6 ? ox / dist : Math.cos(ei);
-              const nz = dd > 1e-6 ? oz / dist : Math.sin(ei);
-              // soft: resolve part of the overlap per frame; the bigger body gives less ground
-              const push = Math.min(reach - dist, 0.5) * Math.min(1, delta * 10);
-              const wa = (rb * rb) / (ra * ra + rb * rb);
-              const bossA = a.kind === "boss" ? 0.1 : 1;
-              const bossB = b.kind === "boss" ? 0.1 : 1;
-              nudge(a, -nx * push * wa * bossA, -nz * push * wa * bossA);
-              nudge(b, nx * push * (1 - wa) * bossB, nz * push * (1 - wa) * bossB);
-            }
-          }
-        }
-        // keep out of the players: at most touching
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(a.x, a.z)) > 1.8) continue;
-          const r = ra + PLAYER_R;
-          const ox = a.x - t.x;
-          const oz = a.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(a, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
-      // fliers aren't solid, but they still hover at arm's length rather than inside your head
-      for (const f of enemies) {
-        if (!f.alive || !FLYERS.has(f.kind)) continue;
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(f.x, f.z)) > 3) continue;
-          const r = STATS[f.kind].radius + PLAYER_R + 0.3;
-          const ox = f.x - t.x;
-          const oz = f.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(f, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
+      // over everything. A dense flat grid keeps the pair checks cheap with 110 enemies
+      // (separate.ts: no per-frame cells, no hash lookups).
+      separateEnemies(enemies, targets, delta, {
+        blocks,
+        half: HALF,
+        kraken: theme.boss.shape === "kraken",
+        stats: STATS,
+      });
     }
 
     // player bullets
@@ -6560,7 +6547,7 @@ function World({
         advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
         b.life -= delta;
         const contact = firstWorldHit(BLAST_AT, b.pos, outOfBounds);
-        const end = b.pos.clone();
+        const end = BULLET_END.copy(b.pos);
         const hits = bodyContacts(
           BLAST_AT,
           end,
@@ -7368,6 +7355,11 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dev = useInputDevice(); // keyboard / controller / touch: which hints to show
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("graphics");
+  const openSettings = (tab: SettingsTab = "graphics") => {
+    setSettingsTab(tab);
+    setShowSettings(true);
+  };
   const [showWeapons, setShowWeapons] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
@@ -8540,7 +8532,7 @@ export function Game() {
 
       <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[10px]" : "text-xs"}`}>
+          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
             {started && !ended && (
               <>
                 <HudChip className="font-bold">
@@ -8571,7 +8563,7 @@ export function Game() {
             )}
             {multiplayer && locked && !ended && (
               <div
-                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-[11px]"}`}
+                className="space-y-1 text-right font-mono text-[11px] tracking-widest text-[#2b2118]"
               >
                 <div className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-2 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
                   ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
@@ -8617,14 +8609,14 @@ export function Game() {
                       }
                     : undefined
                 }
-                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[11px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
                     : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "min-h-3 min-w-3 px-1 text-[7px]" : "min-h-4 min-w-4 px-1 text-[10px]"}`}
+                  className="absolute -left-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]"
                 >
                   {i < 10 ? (
                     keyLabel(`slot${i + 1}` as ControlAction)
@@ -8689,7 +8681,7 @@ export function Game() {
                 ? theme.boss.name
                 : `WAVE ${status.wave}`}
             </div>
-            <div className="mt-1 text-[10px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
+            <div className="mt-1 text-[11px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
               {status.wave === WAVES.length ||
               (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
                 ? theme.hazard.name
@@ -8731,7 +8723,7 @@ export function Game() {
           </div>
         )}
         {!multiplayer && locked && !ended && !downed && (
-          <HudChip className="absolute left-5 top-[10.5rem] text-[10px] tracking-wider">
+          <HudChip className="absolute left-5 top-[10.5rem] text-[11px] tracking-wider">
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
           </HudChip>
         )}
@@ -8939,7 +8931,8 @@ export function Game() {
             initAudio();
             setPicking(true);
           }}
-          onSettings={() => setShowSettings(true)}
+          onSettings={() => openSettings()}
+          onControls={() => openSettings("controls")}
           onWeapons={() => setShowWeapons(true)}
           onEnemies={() => setShowEnemies(true)}
           net={net ? { role: net.role, code: net.code } : null}
@@ -8969,7 +8962,7 @@ export function Game() {
           bought={boughtCards}
           multiplayer={multiplayer}
           onResume={() => start()}
-          onSettings={() => setShowSettings(true)}
+          onSettings={() => openSettings()}
           onLeave={leaveGame}
         />
       )}
@@ -9025,6 +9018,7 @@ export function Game() {
       {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
       {showSettings && (
         <SettingsScreen
+          initialTab={settingsTab}
           fov={fov}
           setFov={setFov}
           sensX={sensX}
