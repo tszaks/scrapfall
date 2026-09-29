@@ -43,7 +43,8 @@
 ## Merge from tszaks/scrapfall (keep all our systems)
 - [x] Controls: Space jump, Shift run, Enter shoot; mobile JUMP + RUN buttons; no gun sway
 - [x] Bullet detail: brass band + glowing tracer
-- [x] New robot enemy looks for the 7 regular enemies (boss + map specials still old)
+- [x] Bullets fire from the gun muzzle and converge on the crosshair
+- [x] New robot enemy looks for the 7 regular enemies + Brass Automaton / Null Apex bosses + Scrap Leaper; others keep old look
 - [ ] Detail pass on our 10 maps to match
 - [ ] Big maps (Vice Heights, Beach, Snow Mountain, Western City) co-op only + map picker + minimap
 - [ ] Map events + rolled conditions
