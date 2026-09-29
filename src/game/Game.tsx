@@ -36,10 +36,12 @@ import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
+import { LoadoutScreen } from "./ui/LoadoutScreen";
+import { SettingsScreen } from "./ui/SettingsScreen";
 import { TitleScreen } from "./ui/TitleScreen";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
-const VERSION = "1.0.6";
+const VERSION = "1.0.7";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -3384,6 +3386,7 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
+  const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
@@ -4393,95 +4396,32 @@ export function Game() {
 
 
       {(!locked || ended) && picking && (
-        <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
-          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
-            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
-
-            <div className="mt-4 grid grid-cols-5 gap-1">
-              {CLASS_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setCls(id)}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                  style={cls === id ? { background: CLASSES[id].color } : undefined}
-                >
-                  {CLASSES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
-            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
-              {CLASSES[cls].pros.map((t) => (
-                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
-              ))}
-              {CLASSES[cls].cons.map((t) => (
-                <span key={t} className="text-[#b3261e]">▼ {t}</span>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-1">
-              {ABILITY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setAbility(id)}
-                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
-                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                >
-                  {ABILITIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
-
-            {multiplayer && (
-              <div className="mt-5 text-left">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                  {connected.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
-                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
-                      </span>
-                      <span className="opacity-60">
-                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                      </span>
-                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-
-            {multiplayer && !isHost ? (
-              <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START
-              </div>
-            ) : (
-              <button
-                onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                ENTER ARENA
-              </button>
-            )}
-            <div>
-              <button
-                onClick={() => setPicking(false)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
-              >
-                BACK
-              </button>
-            </div>
-          </div>
-        </div>
+        <>
+          <UiStyles />
+          <LoadoutScreen
+            cls={cls}
+            setCls={setCls}
+            ability={ability}
+            setAbility={setAbility}
+            mapName={theme.name}
+            weather={bigIdOf(seed) ? "BIG CO-OP MAP" : "PROCEDURAL ARENA"}
+            multiplayer={multiplayer}
+            isHost={isHost}
+            players={connected.map((p) => ({
+              num: p.num,
+              cls: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : undefined,
+              clsColor: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
+              ability: picks[p.num] ? ABILITIES[picks[p.num]!].name : undefined,
+              color: colorFor(p.num),
+              me: p.num === myNum,
+            }))}
+            onEnter={() => start()}
+            onBack={() => setPicking(false)}
+            touchUi={touchUi}
+          />
+        </>
       )}
+
 
       {(!locked || ended) && !picking && (
         <>
@@ -4496,6 +4436,7 @@ export function Game() {
               onPlay={() => { initAudio(); setPicking(true); }}
               onSettings={() => setShowSettings(true)}
               onWeapons={() => setShowWeapons(true)}
+              onEnemies={() => setShowEnemies(true)}
               net={net ? { role: net.role, code: net.code } : null}
               joining={joining}
               joinCode={joinCode}
@@ -4627,62 +4568,23 @@ export function Game() {
             />
           )}
           {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+          {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
           {showSettings && (
-            <div className="ui-root pointer-events-auto fixed inset-0 z-50 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#161009]/80 p-4 font-mono sm:items-center">
-              <div className="ui-rise my-auto w-full max-w-md rounded-xl border-2 border-[#b4653f] bg-[#241b12] p-6 font-mono text-[#f2ead6] shadow-[0_24px_70px_-18px_rgba(0,0,0,0.75)]">
-                <SectionLabel>SETUP</SectionLabel>
-                <h2 className="text-2xl font-black tracking-[0.12em]">SETTINGS</h2>
-                <Hazard className="mt-3" />
-                <div className="mt-4 space-y-4 text-left text-[11px] font-bold tracking-[0.25em]">
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>FIELD OF VIEW</span><span className="text-[#e7b25c]">{fov}°</span>
-                    </div>
-                    <input type="range" min={50} max={110} step={1} value={fov}
-                      onChange={(e) => setFov(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>LOOK SPEED · LEFT/RIGHT</span><span className="text-[#e7b25c]">{sensX.toFixed(1)}x</span>
-                    </div>
-                    <input type="range" min={0.2} max={3} step={0.1} value={sensX}
-                      onChange={(e) => setSensX(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>LOOK SPEED · UP/DOWN</span><span className="text-[#e7b25c]">{sensY.toFixed(1)}x</span>
-                    </div>
-                    <input type="range" min={0.2} max={3} step={0.1} value={sensY}
-                      onChange={(e) => setSensY(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>MUSIC VOLUME</span><span className="text-[#e7b25c]">{Math.round(musicVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={musicVol}
-                      onChange={(e) => setMusicVol(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                  <label className="block">
-                    <div className="flex items-baseline justify-between">
-                      <span>EFFECTS VOLUME</span><span className="text-[#e7b25c]">{Math.round(sfxVol * 100)}%</span>
-                    </div>
-                    <input type="range" min={0} max={1} step={0.05} value={sfxVol}
-                      onChange={(e) => setSfxVol(Number(e.target.value))}
-                      className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]" />
-                  </label>
-                </div>
-                <MenuButton variant="primary" size="md" className="mt-5 w-full" onClick={() => setShowSettings(false)}>
-                  Done
-                </MenuButton>
-                <div className="mt-4 border-t border-[#f3e6cf]/15 pt-3 text-center text-[11px] tracking-[0.3em] opacity-60">
-                  SCRAPFALL · v{VERSION}
-                </div>
-              </div>
-            </div>
+            <SettingsScreen
+              fov={fov}
+              setFov={setFov}
+              sensX={sensX}
+              setSensX={setSensX}
+              sensY={sensY}
+              setSensY={setSensY}
+              musicVol={musicVol}
+              setMusicVol={setMusicVol}
+              sfxVol={sfxVol}
+              setSfxVol={setSfxVol}
+              touchUi={touchUi}
+              version={VERSION}
+              onClose={() => setShowSettings(false)}
+            />
           )}
         </>
       )}
@@ -4750,6 +4652,132 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+const ENEMY_INFO: Record<Kind, { name: string; accent: string; wave: number; weapon: string; tactic: string }> = {
+  drifter: { name: "DRIFTER", accent: "#f3e6cf", wave: 1, weapon: "Melee claws", tactic: "Walks straight at you and swings. Harmless alone, deadly in a crowd — keep backing away and sweep them." },
+  brute: { name: "BRUTE", accent: "#ffb066", wave: 1, weapon: "Heavy slam", tactic: "Slow armoured bruiser that winds up before each slam. Step aside during the wind-up, then punish it." },
+  shooter: { name: "SHOOTER", accent: "#ff6b5e", wave: 2, weapon: "Plasma bolts", tactic: "Stops at range and fires. Break the line of sight behind cover or close the gap fast." },
+  runner: { name: "RUNNER", accent: "#7cff4f", wave: 2, weapon: "Rush tackle", tactic: "Sprints at you in a spin. Weak, but it closes in from behind — check your back." },
+  specter: { name: "SPECTER", accent: "#c08bff", wave: 3, weapon: "Phase strike", tactic: "Fades in and out while circling. Lead your shots and watch the shimmer." },
+  bomber: { name: "BOMBER", accent: "#ffd24a", wave: 4, weapon: "Blast core", tactic: "Waddles in and detonates. Pop it from a distance — never let it reach you." },
+  vanguard: { name: "VANGUARD", accent: "#8fa3b8", wave: 5, weapon: "Shield ram", tactic: "Walking wall of plating. Piercing rounds and explosions get through; small arms bounce." },
+  special: { name: "MAP SPECIAL", accent: "#4fe3ff", wave: 3, weapon: "Map-specific", tactic: "Each arena has its own hunter with its own trick. Learn the one on your map." },
+  boss: { name: "BOSS", accent: "#e8322a", wave: 12, weapon: "Volley + hammer", tactic: "Huge, tanky, fires volleys and swings a hammer. Circle it, keep moving, save your ability." },
+};
+
+const PANEL_KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "specter", "bomber", "vanguard", "special", "boss"];
+
+const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
+  kind, x, z, hp: STATS[kind].hp, alive: true, cooldown: 9, swing: 0, flash: 0, shot: 9,
+  slow: 0, burn: 0, burnTick: 0, max: STATS[kind].hp,
+});
+
+function LookAt({ y = 0, z = 0 }: { y?: number; z?: number }) {
+  const { camera } = useThree();
+  useFrame(() => camera.lookAt(0, y, z));
+  return null;
+}
+
+/** The enemy reference book: rotating 3D models, stats and how to beat each one. */
+export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => void }) {
+  const [sel, setSel] = useState<Kind | "lineup">("lineup");
+  const lineup = useMemo(() => {
+    const rest = PANEL_KINDS.filter((k) => k !== "boss");
+    const front = rest.map((k, i) => fakeEnemy(k, (i - (rest.length - 1) / 2) * 3.4, -2));
+    return [fakeEnemy("boss", 0, -9), ...front];
+  }, []);
+  const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
+  const list = sel === "lineup" ? lineup : single;
+  const info = sel === "lineup" ? null : ENEMY_INFO[sel];
+  const st = sel === "lineup" ? null : STATS[sel];
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
+      <div className="flex max-h-full w-full max-w-5xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
+        <div className="grid grid-cols-2 gap-1 md:w-60 md:grid-cols-1">
+          <button
+            onClick={() => setSel("lineup")}
+            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+          >
+            ALL · LINEUP
+          </button>
+          {PANEL_KINDS.map((k) => (
+            <button
+              key={k}
+              onClick={() => setSel(k)}
+              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+            >
+              <span style={{ color: ENEMY_INFO[k].accent }}>■</span>{" "}
+              {k === "special" ? theme.special.name : ENEMY_INFO[k].name}
+              <span className="float-right opacity-50">W{ENEMY_INFO[k].wave}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1">
+          <div className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}>
+            <Canvas
+              key={sel === "lineup" ? "lineup" : "one"}
+              camera={sel === "lineup" ? { position: [0, 6, 25], fov: 28 } : { position: [2.6, 2.4, 4.6], fov: 42 }}
+            >
+              <LookAt y={sel === "lineup" ? 0.5 : 0} z={sel === "lineup" ? -1.5 : 0} />
+              <ambientLight intensity={0.9} />
+              <hemisphereLight args={["#ffe7c4", "#3a3028", 0.6]} />
+              <directionalLight position={[3, 6, 5]} intensity={1.6} />
+              {sel === "lineup" ? (
+                <group position={[0, -1.4, 0]}>
+                  {list.map((e) => (
+                    <EnemyMesh key={e.kind} data={e} theme={theme} />
+                  ))}
+                </group>
+              ) : (
+                <Spin>
+                  <group position={[0, -1.1, 0]}>
+                    {list.map((e) => (
+                      <EnemyMesh key={e.kind} data={e} theme={theme} />
+                    ))}
+                  </group>
+                </Spin>
+              )}
+            </Canvas>
+          </div>
+          {info && st ? (
+            <>
+              <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: info.accent }}>
+                {sel === "special" ? theme.special.name : info.name}
+              </h2>
+              <p className="mt-2 text-sm opacity-90">{info.tactic}</p>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] tracking-widest opacity-80">
+                <div>HEALTH<br /><b className="text-base">{st.hp}</b></div>
+                <div>SPEED<br /><b className="text-base">{st.speed} m/s</b></div>
+                <div>WEAPON<br /><b className="text-xs">{info.weapon}</b></div>
+                <div>FIRST WAVE<br /><b className="text-base">{info.wave}</b></div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 space-y-1 text-[11px] tracking-wider">
+              <div>
+                <span className="opacity-50">THE ROSTER · </span>
+                {PANEL_KINDS.map((k, i) => (
+                  <span key={k} style={{ color: ENEMY_INFO[k].accent }}>
+                    {i ? " · " : ""}
+                    {k === "special" ? theme.special.name : ENEMY_INFO[k].name}
+                  </span>
+                ))}
+              </div>
+              <p className="pt-1 text-sm opacity-80">
+                Every attack is telegraphed: watch for the wind-up, the glow or the red ring, then move.
+              </p>
+            </div>
+          )}
+          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">
+            CLOSE
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 /** tiny pistol silhouette shown on pistol-mod shop cards */
 function PistolBadge() {

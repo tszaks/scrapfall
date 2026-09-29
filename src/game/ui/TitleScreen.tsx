@@ -69,6 +69,7 @@ export function TitleScreen({
   onPlay,
   onSettings,
   onWeapons,
+  onEnemies,
   net,
   joining,
   joinCode,
@@ -88,6 +89,7 @@ export function TitleScreen({
   onPlay: () => void;
   onSettings: () => void;
   onWeapons: () => void;
+  onEnemies: () => void;
   net: { role: "host" | "guest"; code: string } | null;
   joining: boolean;
   joinCode: string;
@@ -176,6 +178,9 @@ export function TitleScreen({
                   </MenuButton>
                   <MenuButton variant="line" size="sm" className="flex-1" onClick={onWeapons}>
                     Weapons
+                  </MenuButton>
+                  <MenuButton variant="line" size="sm" className="flex-1" onClick={onEnemies}>
+                    Enemies
                   </MenuButton>
                 </div>
               </div>
