@@ -30,6 +30,7 @@ import { Ground, MapDressing } from "./art/MapDressing";
 import { WHITEOUT_SIZE, WHITEOUT_THEME, buildWhiteout, isWhiteoutSeed, paintWhiteout, whiteoutSeed, type WhiteoutLayout } from "./maps/whiteout";
 import { WhiteoutScene } from "./maps/WhiteoutScene";
 import { Minimap } from "./Minimap";
+import "./r3fDevFix";
 
 
 
@@ -3391,8 +3392,6 @@ function World({
   );
 }
 
-import { Component as __C } from "react";
-class __DbgB extends __C<{ children: React.ReactNode }> { state = { e: false }; static getDerivedStateFromError() { return { e: true }; } componentDidCatch(e: unknown, info: { componentStack?: string | null }) { (window as any).__dbg = String(e) + "\n" + (info.componentStack ?? "").slice(0, 1500); } render() { return this.state.e ? null : this.props.children; } }
 export function Game() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
   // Anti-repeat: roll a new seed whose map differs from the current one.
@@ -4046,7 +4045,7 @@ export function Game() {
 
   return (
     <div ref={wrapRef} className="fixed inset-0 cursor-crosshair touch-none select-none overscroll-none">
-      <__DbgB><Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
+      <Canvas shadows dpr={[1, 1.6]} gl={{ powerPreference: "high-performance", antialias: true }} camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 220 }}>
         <World
           alpine={alpine}
           blocks={blocks}
@@ -4130,7 +4129,7 @@ export function Game() {
           onInv={setInv}
 
         />
-      </Canvas></__DbgB>
+      </Canvas>
 
       {hurtFlash > 0 && (
         <div
@@ -4715,7 +4714,7 @@ export function Game() {
                                   coopMapRef.current = id;
                                   const s2 = id === "whiteout" ? whiteoutSeed() : Math.floor(Math.random() * 1e9);
                                   setSeed(s2);
-                                  //TMP net.broadcast({ type: "seed", seed: s2 });
+                                  net.broadcast({ type: "seed", seed: s2 });
                                 }}
                                 className={`pointer-events-auto flex-1 rounded-md border border-[#2b2118]/40 px-2 py-1.5 text-[11px] font-semibold tracking-wider ${on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-transparent"}`}
                               >
