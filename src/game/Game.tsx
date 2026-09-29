@@ -3442,7 +3442,11 @@ export function Game() {
   const [touchUi, setTouchUi] = useState(false);
   const [portrait, setPortrait] = useState(false);
   useEffect(() => {
-    setTouchUi(isTouchDevice());
+    const touch = isTouchDevice();
+    setTouchUi(touch);
+    // phones: run the big maps' own scenery budget at its lightest (fewer rain streaks,
+    // particles and window rooms, no street mirror) so frames stay steady
+    if (touch) setAutoTier("low");
     const onResize = () => setPortrait(window.innerHeight > window.innerWidth);
     onResize();
     window.addEventListener("resize", onResize);
