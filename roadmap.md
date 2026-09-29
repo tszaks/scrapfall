@@ -50,3 +50,10 @@
 - [ ] Map events + rolled conditions
 - [ ] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
 - [x] Detail pass on our 10 maps (painted ground, ground cover, skyline beyond walls)
+
+## Big-map exactness gaps (vs szakacsmedia.com/game v1.0.2)
+- [ ] Nuketown house walls/stairs/balcony invisible
+- [ ] Elevators, stairwells, walkable roofs/rooms missing (Vice Heights fountain elevator etc.)
+- [ ] Moving life missing: city traffic/parked cars, Dry Gulch train/riders/tumbleweeds/weather, alpine life, rain
+- [ ] Random time of day + weather per match
+- [ ] Minimap in his style (bottom-right, N marker, streets, elevator icons)
