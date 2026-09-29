@@ -142,6 +142,19 @@ function midBlock(c: Car, env: SimEnv) {
   return true;
 }
 
+const _cops: Car[] = [];
+const onTail = (c: Car, sus: Car, max: number) => {
+  const behind = (sus.s - c.s) * sus.dir;
+  return (
+    !c.arc &&
+    c.axis === sus.axis &&
+    c.dir === sus.dir &&
+    c.line === sus.line &&
+    behind > 0 &&
+    behind < max
+  );
+};
+
 export function stepDirector(d: Director, cars: Car[], env: SimEnv, t: number) {
   for (let k = d.list.length - 1; k >= 0; k--) {
     const p = d.list[k]!;
@@ -155,7 +168,12 @@ export function stepDirector(d: Director, cars: Car[], env: SimEnv, t: number) {
       d.log.push({ t, id: p.id, ev: "giving up" });
     } else if (p.phase === 1) {
       // pull over once mid-block with a cruiser close by
-      const near = p.cops.some((i) => Math.hypot(cars[i]!.x - sus.x, cars[i]!.z - sus.z) < 70);
+      let near = false;
+      for (const i of p.cops)
+        if (Math.hypot(cars[i]!.x - sus.x, cars[i]!.z - sus.z) < 70) {
+          near = true;
+          break;
+        }
       if (near && midBlock(sus, env)) {
         p.phase = 2;
         p.tc = t;
@@ -165,26 +183,32 @@ export function stepDirector(d: Director, cars: Car[], env: SimEnv, t: number) {
     } else if (p.phase === 2) {
       // cruisers on the suspect's road, behind it, pull in: the first angled right behind
       // the suspect, a second one behind that
-      const onTail = (c: Car, max: number) => {
-        const behind = (sus.s - c.s) * sus.dir;
-        return (
-          !c.arc &&
-          c.axis === sus.axis &&
-          c.dir === sus.dir &&
-          c.line === sus.line &&
-          behind > 0 &&
-          behind < max
-        );
-      };
-      const cops = p.cops
-        .map((i) => cars[i]!)
-        .sort((x, y) => (sus.s - x.s) * sus.dir - (sus.s - y.s) * sus.dir);
+      // (a pooled list + insertion sort: the old map/sort/find chain allocated a closure
+      // and two arrays every simulation step while a pursuit was parking)
+      const cops = _cops;
+      cops.length = 0;
+      for (const i of p.cops) cops.push(cars[i]!);
+      for (let a = 1; a < cops.length; a++) {
+        const v = cops[a]!;
+        const vs = (sus.s - v.s) * sus.dir;
+        let b = a - 1;
+        while (b >= 0 && (sus.s - cops[b]!.s) * sus.dir > vs) {
+          cops[b + 1] = cops[b]!;
+          b--;
+        }
+        cops[b + 1] = v;
+      }
       let rank: 2 | 3 = 2;
       for (const c of cops) {
-        if (c.park === 0 && onTail(c, 70)) c.park = rank;
+        if (c.park === 0 && onTail(c, sus, 70)) c.park = rank;
         if (c.park) rank = 3;
       }
-      const lead = cops.find((c) => c.park === 2);
+      let lead: Car | undefined;
+      for (const c of cops)
+        if (c.park === 2) {
+          lead = c;
+          break;
+        }
       if (lead && !p.parkedAt && lead.speed < 0.3 && sus.speed < 0.3) {
         p.parkedAt = t;
         d.log.push({ t, id: p.id, ev: "caught" });

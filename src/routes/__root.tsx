@@ -51,7 +51,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 const DESCRIPTION =
-  "Scrapfall, with Vice Heights and three more real-scale maps by Tyler Szakacs: fight waves of robots through a city, a Western town, a beach pier and an alpine pass, solo or in co-op.";
+  "Scrapfall by Tyler and Toby Szakacs (Szakacs Media): fight waves of robots through a city, a Western town, a beach pier and an alpine pass, solo or in co-op.";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -64,7 +64,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { title: "Scrapfall" },
       { name: "description", content: DESCRIPTION },
-      { name: "author", content: "Tyler Szakacs" },
+      { name: "author", content: "Tyler and Toby Szakacs" },
       { property: "og:title", content: "Scrapfall" },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "website" },

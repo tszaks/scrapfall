@@ -33,7 +33,7 @@ export function PadSettingsPanel() {
     <div className="space-y-4 border-t border-white/10 pt-4">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold tracking-[0.3em]">CONTROLLER</span>
-        <span className="text-[9px] tracking-widest opacity-60">
+        <span className="text-[11px] tracking-widest opacity-70">
           {dev.padConnected
             ? `CONNECTED · ${dev.padType === "ps" ? "PLAYSTATION" : dev.padType === "switch" ? "SWITCH PRO" : "XBOX"} LAYOUT`
             : "PLUG IN OR PAIR A PAD, THEN PRESS A BUTTON"}
