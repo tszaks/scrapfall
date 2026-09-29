@@ -4495,7 +4495,7 @@ export function Game() {
               <p className="mt-4 text-xs leading-relaxed opacity-60">
                 {touchUi
                   ? "Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · ABILITY button · tap a gun to swap · pause button up top"
-                  : "WASD to move · mouse or arrow keys to look · hold Space to shoot · F for your ability · 1-0 / Q E swap guns · P to pause"}
+                  : "WASD to move · mouse or arrow keys to look · click or Enter to shoot · Space to jump · Shift to run · F for your ability · 1-0 / Q E swap guns · P to pause"}
               </p>
             )}
             {/* beat the boss: bank the win, or push the run into overtime */}
