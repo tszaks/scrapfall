@@ -15,7 +15,12 @@ import { setPosts } from "./level";
 import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
 import { resetAlpine } from "./alpine/weather";
 import { resetRide } from "./alpine/ride";
-import { NUKE_SIZE } from "./nuketown/layout";
+import { NUKE_SIZE, NUKE_SPAWN, nuketownMinimap } from "./nuketown/layout";
+import { alpineMinimap, cityMinimap } from "./cityMinimap";
+import { westernMinimap } from "./western/minimap";
+import { PLAY_HALF } from "./level";
+import { groundY } from "./terrain";
+import type { Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
 import type { WesternLayout } from "./western/layout";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
@@ -42,7 +47,30 @@ export type BigMap = {
   city: CityLayout | null;
   western: WesternLayout | null;
   alpine: AlpineLayout | null;
+  spawn: { x: number; z: number };
+  theme: Theme;
 };
+
+const LAYOUT_THEME: Record<BigMapId, string> = {
+  alpine: "Whiteout Pass", beach: "Pacific Pier", city: "Vice Heights", western: "Dry Gulch", nuketown: "Nuketown",
+};
+
+/** His ground height (hills, decks, boardwalks) for the active big map. */
+export const bigGroundY = groundY;
+
+/** His HUD radar painting for this map (browser only). */
+export function bigMinimap(m: BigMap): { base: HTMLCanvasElement; half: number } | null {
+  const src = m.alpine
+    ? alpineMinimap(m.alpine)
+    : m.city
+      ? cityMinimap(m.city, m.blocks, PLAY_HALF)
+      : m.western
+        ? westernMinimap(m.western, m.blocks, PLAY_HALF)
+        : m.id === "nuketown"
+          ? nuketownMinimap()
+          : null;
+  return src ? { base: src.base, half: src.half } : null;
+}
 
 /** Same setup order as his Game.tsx: arena size, collision reset, layout, ground, props. */
 export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
@@ -73,6 +101,8 @@ export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
     city: alp ? null : level.city,
     western: level.western ?? null,
     alpine: alp,
+    spawn: id === "nuketown" ? NUKE_SPAWN : (alp ?? level.city ?? level.western)?.spawn ?? { x: 0, z: 0 },
+    theme: THEMES.find((t) => t.name === LAYOUT_THEME[id]) ?? THEMES.find((t) => t.layout === id) ?? THEMES[0]!,
   };
 }
 
