@@ -91,7 +91,8 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      {/* ink matches the game's loading veil: no white flash before React mounts */}
+      <body style={{ background: "#0e0a06" }}>
         {children}
         <Scripts />
       </body>
