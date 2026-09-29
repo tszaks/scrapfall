@@ -1,5 +1,9 @@
 // Scrapfall bridge: mounts the brother's big maps (copied unchanged) inside our game.
-import { memo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
+import { ARENA_SUN } from "./lighting";
+import { arenaSunsetSky } from "./sky";
 import type { TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
 import { useTodNearest } from "./timeOfDay";
@@ -106,7 +110,24 @@ export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
   };
 }
 
+/** His match lighting, sky and fog around the map, as his Game.tsx mounts them. */
 export const BigMapScene = memo(function BigMapScene({ map, playing }: { map: BigMap; playing: boolean }) {
+  const big = map.id === "city" || map.id === "western" || map.id === "alpine" || map.id === "beach";
+  const night = useMemo(() => new THREE.Color(worldLook(map.theme, "night", map.size).sky), [map]);
+  return (
+    <>
+      <TimeDriver theme={map.theme} arena={map.size} />
+      <TimeLights ownSun={big} ownFog={map.id === "alpine" || map.id === "beach"} />
+      {!big && <SkyDome sunset={arenaSunsetSky(map.theme.name, map.theme.sky, ARENA_SUN.sunset)} night={night} />}
+      {map.id !== "alpine" && (
+        <NightStars radius={big ? 900 : 90} depth={big ? 200 : 20} count={big ? 3000 : 1500} factor={big ? 26 : 4} />
+      )}
+      <MapBody map={map} playing={playing} />
+    </>
+  );
+});
+
+function MapBody({ map, playing }: { map: BigMap; playing: boolean }) {
   switch (map.id) {
     case "alpine":
       return (
@@ -134,7 +155,7 @@ export const BigMapScene = memo(function BigMapScene({ map, playing }: { map: Bi
     case "nuketown":
       return <Nuketown seed={map.seed} />;
   }
-});
+}
 
 function Beach({ map }: { map: BigMap }) {
   const time = useTodNearest();
