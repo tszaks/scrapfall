@@ -4393,95 +4393,32 @@ export function Game() {
 
 
       {(!locked || ended) && picking && (
-        <div className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}>
-          <div className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}>
-            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
-
-            <div className="mt-4 grid grid-cols-5 gap-1">
-              {CLASS_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setCls(id)}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                  style={cls === id ? { background: CLASSES[id].color } : undefined}
-                >
-                  {CLASSES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
-            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
-              {CLASSES[cls].pros.map((t) => (
-                <span key={t} className="text-[#1d7a37]">▲ {t}</span>
-              ))}
-              {CLASSES[cls].cons.map((t) => (
-                <span key={t} className="text-[#b3261e]">▼ {t}</span>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-1">
-              {ABILITY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setAbility(id)}
-                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
-                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                >
-                  {ABILITIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{ABILITIES[ability].desc}</div>
-
-            {multiplayer && (
-              <div className="mt-5 text-left">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                  {connected.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                      <span className="font-bold" style={{ color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined }}>
-                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
-                      </span>
-                      <span className="opacity-60">
-                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                      </span>
-                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-
-            {multiplayer && !isHost ? (
-              <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START
-              </div>
-            ) : (
-              <button
-                onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                ENTER ARENA
-              </button>
-            )}
-            <div>
-              <button
-                onClick={() => setPicking(false)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
-              >
-                BACK
-              </button>
-            </div>
-          </div>
-        </div>
+        <>
+          <UiStyles />
+          <LoadoutScreen
+            cls={cls}
+            setCls={setCls}
+            ability={ability}
+            setAbility={setAbility}
+            mapName={theme.name}
+            weather={bigIdOf(seed) ? "BIG CO-OP MAP" : "PROCEDURAL ARENA"}
+            multiplayer={multiplayer}
+            isHost={isHost}
+            players={connected.map((p) => ({
+              num: p.num,
+              cls: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : undefined,
+              clsColor: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
+              ability: picks[p.num] ? ABILITIES[picks[p.num]!].name : undefined,
+              color: colorFor(p.num),
+              me: p.num === myNum,
+            }))}
+            onEnter={() => start()}
+            onBack={() => setPicking(false)}
+            touchUi={touchUi}
+          />
+        </>
       )}
+
 
       {(!locked || ended) && !picking && (
         <>
