@@ -58,6 +58,7 @@
 - [x] Random time of day + weather per match
 - [x] Minimap in his style (bottom-right, N marker, streets, elevator icons)
 - [x] Version 1.0.5 (exact big maps: rooms, lifts, traffic, train, weather, events, his radar)
+- [x] Version 1.0.6 (his gun look, his title/pause/recap screens, no explodables on big maps)
 
 ## v1.0.6 — his gun look + menus
 - [x] Port his first-person gun models (art/guns.ts, art/GunView.tsx, muzzle, gunFx)
