@@ -1,5 +1,9 @@
 // Scrapfall bridge: mounts the brother's big maps (copied unchanged) inside our game.
-import { memo } from "react";
+import { memo, useRef } from "react";
+import type { TrafficLink } from "./trafficCore";
+import { worldLook } from "./lighting";
+import { useTodNearest } from "./timeOfDay";
+import { THEMES } from "./themes";
 import { setArenaSize, generateLevel, CITY_COOP, BEACH_SIZE, type Block, type LayoutMode } from "./level";
 import { resetStaticCollision } from "./staticCollision";
 import { setTerrain } from "./terrain";
@@ -82,22 +86,32 @@ export const BigMapScene = memo(function BigMapScene({ map, playing }: { map: Bi
         </>
       );
     case "beach":
-      return <BeachWorld key={map.seed} city={map.city as never} seed={map.seed} {...({} as never)} />;
+      return <Beach map={map} />;
     case "city":
       return (
         <>
           <CitySun />
-          <CityScene city={map.city!} {...({ isHost: true } as never)} />
+          <CityScene city={map.city!} isHost />
         </>
       );
     case "western":
       return (
         <>
           <WesternSun />
-          <WesternScene layout={map.western!} {...({} as never)} />
+          <WesternScene layout={map.western!} />
         </>
       );
     case "nuketown":
       return <Nuketown seed={map.seed} />;
   }
 });
+
+function Beach({ map }: { map: BigMap }) {
+  const time = useTodNearest();
+  const link = useRef<TrafficLink>({
+    active: false, px: 0, pz: 0, isHost: true, role: "solo", others: [], encode: null, decode: null,
+    enemies: [], radiusOf: () => 0.6, isBig: () => false, hurtEnemy: null, hitPlayer: () => {},
+  });
+  const theme = THEMES.find((t) => t.blockShape === "beach") ?? THEMES[0]!;
+  return <BeachWorld key={map.seed} city={map.city as never} seed={map.seed} time={time} link={link} look={worldLook(theme, time, map.size)} />;
+}
