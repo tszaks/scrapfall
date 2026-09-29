@@ -925,7 +925,8 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     const t = state.clock.elapsedTime;
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
-    const bob = k !== "special" && k !== "boss" ? 0 : heavy ? 0 : Math.sin(t * (k === "runner" ? 10 : 4) + data.x) * (k === "specter" ? 0.22 : 0.08);
+    // robots walk on the ground; only specials/boss keep the old hover bob
+    const bob = k === "special" ? Math.sin(t * 4 + data.x) * 0.08 : 0;
     g.position.set(data.x, bob, data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
