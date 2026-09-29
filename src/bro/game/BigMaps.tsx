@@ -112,6 +112,6 @@ function Beach({ map }: { map: BigMap }) {
     active: false, px: 0, pz: 0, isHost: true, role: "solo", others: [], encode: null, decode: null,
     enemies: [], radiusOf: () => 0.6, isBig: () => false, hurtEnemy: null, hitPlayer: () => {},
   });
-  const theme = THEMES.find((t) => t.blockShape === "beach") ?? THEMES[0]!;
+  const theme = THEMES.find((t) => t.layout === "beach") ?? THEMES[0]!;
   return <BeachWorld key={map.seed} city={map.city as never} seed={map.seed} time={time} link={link} look={worldLook(theme, time, map.size)} />;
 }
