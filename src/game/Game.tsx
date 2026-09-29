@@ -108,6 +108,7 @@ import {
   closeRaised,
   setNavWalls,
   setArenaSize,
+  setBlockHalf,
   SOLO_ARENA,
   COOP_ARENA,
   CITY_COOP,
@@ -250,6 +251,7 @@ import {
   type DifficultyId,
 } from "./difficulty";
 import { RobotModel } from "./art/RobotModel";
+import { Ground, MapDressing } from "./art/MapDressing";
 import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
 import { hasArtBoss } from "./art/robots/bosses";
 import { hasArtSpecial } from "./art/robots/specials";
@@ -355,6 +357,7 @@ import {
 import {
   NO_PERKS,
   PERK_IDS,
+  PERK_INFO,
   MOD_SLOTS,
   PISTOL_MODS,
   derive,
@@ -367,6 +370,15 @@ import {
   type Perks,
 } from "./perks";
 import { CLASSES, type ClassId } from "./classes";
+import { hazardFor, hazardsEnabled, HAZARD_COUNT, type HazardDef } from "./hazards";
+import {
+  mutatorById,
+  rollMutator,
+  readHighWave,
+  saveHighWave,
+  type Mutator,
+  type MutatorId,
+} from "./endless";
 import { QualityGovernor } from "./QualityGovernor";
 import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
@@ -726,7 +738,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   mine: { name: "CRYO MINE", color: "#9fe8ff" },
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
-const TURRET_LIFE = 15;
+const TURRET_LIFE = 30;
 
 type Enemy = {
   generation?: number;
@@ -972,7 +984,7 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 /** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
-const GAME_VERSION = "1.0.2";
+const GAME_VERSION = "1.0.4";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
 
 const BULLET_SPEED = 22;
@@ -1286,11 +1298,9 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
   const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[ARENA, ARENA]} />
-        <meshLambertMaterial color={theme.ground} />
-      </mesh>
-      <gridHelper args={[ARENA, ARENA / 2, theme.grid[0], theme.grid[1]]} position-y={0.01} />
+      {/* painted ground + cover + a skyline ring instead of the bare plane (Toby 1.0.4) */}
+      <Ground theme={theme} size={ARENA} />
+      <MapDressing theme={theme} blocks={blocks} half={HALF} />
       {blocks.map((b, i) => (
         <Obstacle key={i} b={b} theme={theme} />
       ))}
@@ -2115,7 +2125,124 @@ const BULLET_GEO = new THREE.LatheGeometry(
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
+const HAZ_PT = new THREE.Vector3();
 const WORLD_CONTACT = new THREE.Vector3();
+
+/** The themed shootable prop (Toby 1.0.4): fuel drum, cryo condenser, EMP relay, ... */
+const HazardProp = memo(function HazardProp({ def }: { def: HazardDef }) {
+  const { shell, core, look } = def;
+  if (look === "pod") {
+    return (
+      <group>
+        <mesh position-y={0.12}>
+          <cylinderGeometry args={[0.22, 0.34, 0.24, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={0.72} castShadow>
+          <sphereGeometry args={[0.55, 10, 8]} />
+          <meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.25} />
+        </mesh>
+        <mesh position-y={1.28}>
+          <coneGeometry args={[0.2, 0.42, 6]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "condenser") {
+    return (
+      <group>
+        <mesh position-y={0.15}>
+          <cylinderGeometry args={[0.42, 0.5, 0.3, 8]} />
+          <meshLambertMaterial color="#5f7f95" flatShading />
+        </mesh>
+        <mesh position-y={0.85} castShadow>
+          <icosahedronGeometry args={[0.55, 0]} />
+          <meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.35} />
+        </mesh>
+        <mesh position-y={0.85} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.62, 0.05, 6, 16]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "relay") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow>
+          <boxGeometry args={[0.6, 1, 0.6]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={1.15}>
+          <sphereGeometry args={[0.3, 10, 8]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        {[0.35, 0.7].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.31]}>
+            <boxGeometry args={[0.42, 0.06, 0.03]} />
+            <meshBasicMaterial color={core} fog={false} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (look === "geyser") {
+    return (
+      <group>
+        <mesh position-y={0.2} castShadow>
+          <cylinderGeometry args={[0.45, 0.75, 0.4, 9]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={0.42}>
+          <cylinderGeometry args={[0.36, 0.36, 0.08, 9]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        <mesh position-y={0.9}>
+          <coneGeometry args={[0.3, 0.9, 8, 1, true]} />
+          <meshBasicMaterial color={core} transparent opacity={0.5} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "vat") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow>
+          <cylinderGeometry args={[0.45, 0.45, 1, 10]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={1.02}>
+          <cylinderGeometry args={[0.4, 0.45, 0.14, 10]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        <mesh position-y={0.55}>
+          <cylinderGeometry args={[0.47, 0.47, 0.18, 10]} />
+          <meshLambertMaterial color="#2b2118" flatShading />
+        </mesh>
+      </group>
+    );
+  }
+  // drum
+  return (
+    <group>
+      <mesh position-y={0.55} castShadow>
+        <cylinderGeometry args={[0.42, 0.42, 1.1, 12]} />
+        <meshLambertMaterial color={shell} flatShading />
+      </mesh>
+      {[0.35, 0.75].map((y, i) => (
+        <mesh key={i} position-y={y}>
+          <cylinderGeometry args={[0.44, 0.44, 0.09, 12]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      ))}
+      <mesh position-y={1.12}>
+        <cylinderGeometry args={[0.44, 0.42, 0.1, 12]} />
+        <meshLambertMaterial color="#2b2118" flatShading />
+      </mesh>
+    </group>
+  );
+});
 
 const BulletPool = memo(function BulletPool({
   meshes,
@@ -2305,6 +2432,8 @@ function World({
   onAbilityCd,
   onStat,
   onEvent,
+  onMutator,
+  endless,
   mapFeed,
   downed,
   pingWorld,
@@ -2352,6 +2481,10 @@ function World({
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
+  /** overtime's rolled condition; "none" clears it (back to normal waves) */
+  onMutator: (id: MutatorId) => void;
+  /** endless overtime past the last wave: the host's OVERTIME button or the "ot" message */
+  endless: React.MutableRefObject<boolean>;
   mapFeed: React.MutableRefObject<MapFeed>;
   /** the host's difficulty (synced to guests like the map pick) */
   difficulty: DifficultyId;
@@ -2427,6 +2560,29 @@ function World({
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  /** active overtime condition, null during the normal 12 waves */
+  const mutator = useRef<Mutator | null>(null);
+  /** set once so network messages can trigger a blast too */
+  const hazardBlow = useRef<(i: number, visualOnly?: boolean, from?: string | null) => void>(
+    () => {},
+  );
+  // shootable map hazards (fuel drums, cryo condensers, powder kegs, ...)
+  const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
+    Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
+  );
+  const hazardMeshes = useRef<(THREE.Group | null)[]>([]);
+  const hazardDef = hazardFor(theme);
+  const hazardRef = useRef(hazardDef);
+  hazardRef.current = hazardDef;
+  const hazOn = hazardsEnabled(theme);
+  /** the boss-clear win stays latched until the squad picks overtime or a new arena */
+  const wonLatch = useRef(false);
+  // shard pickups are shared in co-op: one grab removes them for the whole squad
+  const takenShards = useRef<Set<string>>(new Set());
+  // weapon-drop pacing: a gun that ran dry sits the next wave out, and two waves
+  // with no drop guarantee a double drop
+  const depletedWave = useRef<Partial<Record<Weapon, number>>>({});
+  const dryWaves = useRef(0);
   const thornsPending = useRef(0);
   // ---- active ability (F) ----
   const abilityRef = useRef<AbilityId>(ability);
@@ -2633,6 +2789,14 @@ function World({
         downedRef,
         weedWorld,
         weedView,
+      });
+      // toby-sync testing: hazard props, the overtime mutator and endless state
+      Object.assign(handle, {
+        hazards,
+        mutator,
+        endless,
+        takenShards,
+        blowHazard: (i: number) => blowHazard(i, true, !isHostRef.current),
       });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
@@ -2975,6 +3139,10 @@ function World({
         upsertRemote(m);
         return;
       }
+      if (m.type === "shard") {
+        takenShards.current.add(String(m.id));
+        return;
+      }
       if (m.type === "fire") {
         fxRemoteFire(m, remotes.current);
         return;
@@ -3100,6 +3268,14 @@ function World({
             won: false,
             banner: true,
           });
+          // a late joiner lands mid-overtime: give it the round's condition and mode
+          if (mutator.current) n?.sendTo(String(m.from), { type: "mut", id: mutator.current.id });
+          if (endless.current) n?.sendTo(String(m.from), { type: "ot" });
+          // and where this round's hazard props stand (null = already blown)
+          n?.sendTo(String(m.from), {
+            type: "hazset",
+            p: hazards.current.map((h) => (h.alive ? ([h.x, h.z] as [number, number]) : null)),
+          });
         }
       } else {
         if (m.type === "snap") applySnap(m);
@@ -3124,6 +3300,32 @@ function World({
           takeHit(Number(m.dmg) || 1, String(m.src ?? ""));
         }
       }
+      // a hazard someone shot: the blast shows everywhere; the host alone scores the damage,
+      // credited to whoever's bullet set it off (per-player kill credit)
+      if (m.type === "haz")
+        hazardBlow.current(
+          Number(m.i),
+          !isHostRef.current,
+          typeof m.from === "string" && m.from !== "host" ? m.from : null,
+        );
+      // the host decides where the hazard props stand each round
+      if (m.type === "hazset" && !isHostRef.current) {
+        const p = m.p as ([number, number] | null)[];
+        hazards.current.forEach((h, i) => {
+          const spot = p[i];
+          if (!spot) {
+            h.alive = false;
+            return;
+          }
+          h.x = spot[0];
+          h.z = spot[1];
+          h.alive = true;
+        });
+      }
+      // overtime's condition for the round: guests mirror what the host rolled so their own
+      // shots, movement and siphon follow it too (the host set its own when it rolled)
+      if (m.type === "mut" && !isHostRef.current)
+        mutator.current = mutatorById(String(m.id) as MutatorId);
     };
   });
 
@@ -3154,6 +3356,12 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    mutator.current = null;
+    wonLatch.current = false;
+    depletedWave.current = {};
+    dryWaves.current = 0;
+    takenShards.current.clear();
+    hazards.current.forEach((h) => (h.alive = false));
     turrets.current = [];
     mines.current = [];
     remoteDeps.current.clear();
@@ -3525,6 +3733,12 @@ function World({
     // (not up on a roof, where the pack would drop into the building below)
     if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5))
       heal.current = { x: e.x, z: e.z, active: true };
+    // SOLAR FLARE round: every corpse pops in a small fire blast
+    if (mutator.current?.id === "flare") {
+      playFx("#ff9a3a", 0.4, 3.2, 0.3, e.x, e.z);
+      if (!deadRef.current && Math.hypot(camera.position.x - e.x, camera.position.z - e.z) < 2.6)
+        takeHit(1, "flare");
+    }
     if (from === null) creditKill(e, elite, bounty);
     else
       netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
@@ -3543,6 +3757,11 @@ function World({
     if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
     if (e.kind === "special" && theme.special.type === "crawler") dmg *= 0.7; // crab shell
     dmg *= damageMul(e); // a charger stunned against a wall takes extra
+    // the overtime condition bends every hit, whoever fired it (host decides):
+    // CRYO SURGE chills everything, HEAVY GRAVITY doubles the shove
+    const mid = mutator.current?.id;
+    if (mid === "cryo") h = { ...h, slow: Math.max(h.slow ?? 0, 1.2) };
+    else if (mid === "gravity") h = { ...h, kb: (h.kb ?? 0) * 2 };
     const kb = h.kb ?? 0;
     if (kb > 0 && e.kind !== "boss") {
       const kx = h.kx ?? 0;
@@ -3592,9 +3811,10 @@ function World({
     kz = 0,
     fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {},
   ) => {
-    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the damage
+    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the
+    // damage — BLOOD MOON rounds double it
     if (stats.current.steal > 0 && dmg > 0 && e.alive) {
-      stealBank.current += dmg * stats.current.steal;
+      stealBank.current += dmg * stats.current.steal * (mutator.current?.id === "blood" ? 2 : 1);
       if (stealBank.current >= 1) {
         stealBank.current -= 1;
         onLeech();
@@ -3621,6 +3841,102 @@ function World({
       return;
     }
     applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
+  };
+  /**
+   * A hazard prop blew (Toby): local flash + sfx, and the blast ring scales with the
+   * map's effect radius. On the host the blast also hurts, credited to `from` — the
+   * player whose bullet set it off — so a guest's drum kill shows up on their card.
+   */
+  const blowHazard = (i: number, share = false, visualOnly = false, from: string | null = null) => {
+    const h = hazards.current[i];
+    if (!h?.alive) return;
+    const def = hazardRef.current;
+    if (!def) return;
+    h.alive = false;
+    playFx(def.core, 0.5, def.radius * 0.9, 0.45, h.x, h.z);
+    playSfx("boom");
+    if (share) netRef.current?.broadcast({ type: "haz", i });
+    for (let ei = 0; !visualOnly && ei < enemies.length; ei++) {
+      const e = enemies[ei]!;
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - h.x, e.z - h.z);
+      if (d > def.radius) continue;
+      const dx = (e.x - h.x) / (d || 1);
+      const dz = (e.z - h.z) / (d || 1);
+      // each themed prop pushes a different effect (host applies them, hit ms keep syncing)
+      const fx: HitFx =
+        def.effect === "fire"
+          ? { burn: 3, kb: 3, kx: dx, kz: dz }
+          : def.effect === "freeze"
+            ? { freeze: 3, slow: 3 }
+            : def.effect === "toxic"
+              ? { slow: 2.5, burn: 2.5 }
+              : def.effect === "shock"
+                ? { slow: 1.5, kb: 2, kx: dx, kz: dz }
+                : def.effect === "root"
+                  ? { slow: 4 }
+                  : { slow: 1, kb: Math.max(0, d - 1), kx: -dx, kz: -dz }; // pull
+      applyHit(e, ei, def.damage, fx, from);
+    }
+    // players standing in a blast get singed too — each client checks its own player
+    if (
+      !deadRef.current &&
+      Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < def.radius * 0.7
+    )
+      takeHit(2, "hazard");
+  };
+  hazardBlow.current = (i, visualOnly = false, from = null) =>
+    blowHazard(i, false, visualOnly, from);
+  /**
+   * Big maps get themed props at the landmarks (fuel drums at the Vice gas stations, powder
+   * kegs by the Gulch mine, gas canisters along the Pier's midway, propane tanks at the
+   * Whiteout lodge) — each candidate still gets a clear-ground check at spawn time, so a
+   * drum never seals a door or a stair. Arena maps keep Toby's random open-ground spots.
+   */
+  const hazardAnchors = (): [number, number][] => {
+    const out: [number, number][] = [];
+    const push = (x: number, z: number) => out.push([x, z]);
+    if (western) {
+      const m = western.mine;
+      const st = western.station;
+      push(m.x + 3, m.z + 2);
+      push(m.x - 3, m.z + 3);
+      push(m.x + 1, m.z + 6);
+      push(st.x - 3, st.z + 3);
+      push(st.x + 4, st.z - 2);
+      push(western.campfire.x + 3, western.campfire.z + 1);
+    } else if (alpineMap) {
+      // beside the lodge deck on the snow, and one by each lift terminal's platform
+      const d = alpineMap.alpine.lodgeDeck;
+      const midZ = (d.z0 + d.z1) / 2;
+      push(d.x0 - 2.5, midZ - 2);
+      push(d.x0 - 2.5, midZ + 2);
+      push(d.x1 + 2.5, midZ);
+      push((d.x0 + d.x1) / 2, d.z1 + 2.5);
+      alpineMap.alpine.terminals.forEach((t) => push((t.x0 + t.x1) / 2, t.z1 + 3));
+    } else if (isBeach(city)) {
+      const b = city.beach;
+      push(b.wheel.x + 6, b.wheel.z + 4);
+      push(b.wheel.x - 4, b.wheel.z - 5);
+      const st = b.coaster.station;
+      push(st.x0 - 2, (st.z0 + st.z1) / 2);
+      b.firesLit.slice(0, 2).forEach((f) => push(f.x + 2.2, f.z + 1.4));
+      b.towers.slice(0, 2).forEach((t) => push(t.x + 2.5, t.z));
+    } else if (city) {
+      // the gas-station apron: drums stand just off the pump canopy
+      city.buildings
+        .filter((b) => b.t === "gas")
+        .forEach((b) => {
+          const cp = b.parts.find((p) => p.role === "canopy") ?? b.parts[1];
+          if (!cp) return;
+          const midZ = (cp.z0 + cp.z1) / 2;
+          push(cp.x0 - 2.5, midZ);
+          push(cp.x1 + 2.5, midZ);
+          push(cp.x0 - 2.5, cp.z0 - 2);
+          push((cp.x0 + cp.x1) / 2, cp.z1 + 2.5);
+        });
+    }
+    return out;
   };
   /**
    * BOOMER / FLAK splash, host only: every robot within `r` of the blast (and in its line of
@@ -3678,7 +3994,8 @@ function World({
     onStat("hit", 1);
     onStat("dmg", dmg);
     if (stats.current.steal > 0) {
-      stealBank.current += dmg * stats.current.steal;
+      stealBank.current +=
+        dmg * stats.current.steal * (mutator.current?.id === "blood" ? 2 : 1);
       if (stealBank.current >= 1) {
         stealBank.current -= 1;
         onLeech();
@@ -3820,9 +4137,9 @@ function World({
     }
     if (ammo.current[w] <= 0) {
       owned.current.delete(w);
+      // a dry gun is gone until a future drop roll brings it back — never next wave (Toby)
+      depletedWave.current[w] = wave.current;
       equip("pistol");
-      if (pickup.current.active) lostQueue.current.push(w);
-      else placePickup(w);
     } else {
       syncInv();
     }
@@ -3912,9 +4229,19 @@ function World({
     // multiplier (the curve grows it wave by wave) and an overall count multiplier
     const diff = diffRef.current;
     const waveMul = crowdMul(diff, n, !!big) * diff.countMul;
-    const enemyMul = (1 + 0.6 * extra) * waveMul;
-    const lootMul = 1 + 0.65 * extra;
-    const spec = waveLineup(diff, n, WAVES) as WaveSpec;
+    // overtime keeps sending bigger crowds (Toby's waveMul never stops growing)
+    const enemyMul =
+      (1 + 0.6 * extra) * waveMul * (n > WAVES.length ? 1 + 0.08 * (n - WAVES.length) : 1);
+    // past the last wave the run goes into overtime (Toby): the pre-boss wave's lineup keeps
+    // coming, with a boss on every fifth overtime wave
+    const spec = (
+      n <= WAVES.length
+        ? waveLineup(diff, n, WAVES)
+        : {
+            ...waveLineup(diff, WAVES.length - 1, WAVES),
+            ...((n - WAVES.length) % 5 === 0 ? { boss: 1 } : {}),
+          }
+    ) as WaveSpec;
     // the curve rounds each count up or down at random, so a crowd multiplier of 1.5 doesn't
     // turn every lone newcomer into a pair (the old table keeps its plain rounding)
     const scale = (v: number) => {
@@ -3987,7 +4314,53 @@ function World({
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
     waveTotal.current = Math.max(1, kinds.length); // progress is retained for wave and network state
-    const hpMul = diff.hpMul * (1 + diff.hpRamp * (n - 1)); // later rounds send sturdier enemies
+    // later rounds send sturdier enemies; overtime ramps ~1.7x harder on top of wave 12's level
+    const hpMul =
+      diff.hpMul *
+      (1 +
+        diff.hpRamp * (Math.min(n, WAVES.length) - 1) +
+        (n > WAVES.length ? diff.hpRamp * 1.67 * (n - WAVES.length) : 0));
+    // overtime rolls a new global condition every round; the squad mirrors the host's pick
+    if (n > WAVES.length && isHostRef.current) {
+      const m = rollMutator(rand);
+      mutator.current = m;
+      onMutator(m.id);
+      netRef.current?.broadcast({ type: "mut", id: m.id });
+    } else if (n <= WAVES.length && mutator.current) {
+      mutator.current = null;
+      onMutator("none");
+    }
+    // hazard props reset each round so there is always something to shoot open; the host
+    // places them and tells the squad where (hazset)
+    if (isHostRef.current && hazOn) {
+      const spots = hazardAnchors().filter(([x, z]) => !blocked(blocks, x, z, 0.9));
+      for (let i = spots.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        const t = spots[i]!;
+        spots[i] = spots[j]!;
+        spots[j] = t;
+      }
+      spots.length = Math.min(spots.length, HAZARD_COUNT);
+      let guard = 40;
+      while (spots.length < HAZARD_COUNT && guard-- > 0) {
+        const p = spot(6, 30, false);
+        if (!blocked(blocks, p.x, p.z, 0.9)) spots.push([p.x, p.z]);
+      }
+      hazards.current.forEach((h, i) => {
+        const s = spots[i];
+        if (!s) {
+          h.alive = false;
+          return;
+        }
+        h.x = s[0];
+        h.z = s[1];
+        h.alive = true;
+      });
+      netRef.current?.broadcast({
+        type: "hazset",
+        p: hazards.current.map((h) => (h.alive ? ([h.x, h.z] as [number, number]) : null)),
+      });
+    }
     // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
     const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
 
@@ -4089,22 +4462,34 @@ function World({
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
-    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
-    const rolls = Math.max(1, Math.round(lootMul));
-    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
-    for (let i = 0; i < rolls; i++) {
+    // weapons: one new gun per wave at 80%, doubled after two dry waves.
+    // co-op multiplies the number of guns by the player count.
+    const pity = dryWaves.current >= 2;
+    const wantSolo = pity ? 2 : Math.random() < 0.8 ? 1 : 0;
+    let want = wantSolo * (1 + extra);
+    let placed = 0;
+    while (want > 0) {
+      want--;
       // in co-op a gun you are carrying can still drop for your teammates
-      const candidates = dropOrder.current.filter(
+      const fresh = dropOrder.current.filter(
         (w) =>
           (coopRef.current || !owned.current.has(w)) &&
           !lostQueue.current.includes(w) &&
           !(pickup.current.active && pickup.current.gun === w),
       );
-      const drop = candidates[0];
-      if (!drop || Math.random() >= chance) continue;
+      // a gun you just ran dry on almost never comes straight back
+      const ready = fresh.filter((w) => {
+        const d = depletedWave.current[w];
+        return d === undefined || n - d >= 2 || Math.random() < 0.05;
+      });
+      const drop = ready[0] ?? (pity ? fresh[0] : undefined);
+      if (!drop) break;
+      delete depletedWave.current[drop];
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
+      placed++;
     }
+    dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
   const outOfBounds = (p: { x: number; y: number; z: number }) =>
@@ -4366,15 +4751,25 @@ function World({
     if (wheelRide.cabin >= 0) MOVE.set(0, 0, 0);
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
-    const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
-    alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
+    // the last wave and every fifth overtime wave are boss rounds — the arena's hazard
+    // floor (ice slip, the marine layer, the alpine blizzard) comes back for each
+    const bossWave =
+      wave.current === WAVES.length ||
+      (wave.current > WAVES.length && (wave.current - WAVES.length) % 5 === 0);
+    const slip = bossWave ? theme.hazard.slip : 0;
+    alpine.boss = bossWave; // the alpine boss round brings a blizzard
     worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    const mut = mutator.current?.id;
+    // HEAVY GRAVITY rounds weigh on the jump arc too
+    moveState.gravityMul = mut === "gravity" ? 1.4 : 1;
     const spd =
       SPEED *
       stats.current.speed *
       (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1) *
       (overdrive.current > 0 ? 1.3 : 1) *
+      // CRYO SURGE chills the legs a little; HEAVY GRAVITY weighs every step down
+      (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1) *
       groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
       runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
       (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
@@ -4705,7 +5100,8 @@ function World({
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current =
         (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate) *
-        (overdrive.current > 0 ? 0.5 : 1);
+        (overdrive.current > 0 ? 0.5 : 1) *
+        (mutator.current?.id === "surge" ? 0.77 : 1); // OVERDRIVE: everyone shoots faster
     }
 
     // minimap feed (the HUD reads it)
@@ -4792,6 +5188,14 @@ function World({
       } else n?.broadcast({ type: "take", what: "gun" });
     }
 
+    // hazard props sit on the ground under them; a popped one stays down until next wave
+    hazards.current.forEach((h, i) => {
+      const m = hazardMeshes.current[i];
+      if (!m) return;
+      m.visible = h.alive;
+      if (h.alive) m.position.set(h.x, groundY(h.x, h.z), h.z);
+    });
+
     // health pickup
     const hp = heal.current;
     if (healMesh.current) {
@@ -4846,11 +5250,11 @@ function World({
         mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
-          if (w === "pistol") return;
-          ammo.current[w] = Math.min(
-            Math.round(GUNS[w].ammo * stats.current.ammoMul),
-            ammo.current[w] + Math.round(GUNS[w].ammo * 0.5),
+          // ammo crates refill the sidearm too — its cap is 220 with the Extended Mag mod
+          const cap = Math.round(
+            (w === "pistol" && stats.current.extmag ? 220 : GUNS[w].ammo) * stats.current.ammoMul,
           );
+          ammo.current[w] = Math.min(cap, ammo.current[w] + Math.round(cap * 0.5));
         });
         onAmmo(ammo.current[weapon.current]);
         syncInv();
@@ -5252,12 +5656,16 @@ function World({
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
       );
-      if (remaining === 0 && wave.current <= WAVES.length) {
-        if (wave.current === WAVES.length) {
-          wave.current++;
-          status(WAVES.length, 0, true, false);
+      if (remaining === 0 && (wave.current <= WAVES.length || endless.current)) {
+        // endgame latch: sit on the last wave until the host picks overtime
+        if (wave.current === WAVES.length && !endless.current) {
+          if (!wonLatch.current) {
+            wonLatch.current = true;
+            status(WAVES.length, 0, true, false);
+          }
           return;
         }
+        wonLatch.current = false;
         // wave cleared: tell everyone so the shop opens during the break
         if (wave.current > 0 && lastRemaining.current !== 0) {
           lastRemaining.current = 0;
@@ -5535,6 +5943,10 @@ function World({
           }
         }
         const st = STATS[e.kind];
+        // BLOOD MOON knits their wounds back; OVERDRIVE picks their pace up
+        const mutId2 = mutator.current?.id;
+        if (mutId2 === "blood" && e.max && e.hp < e.max)
+          e.hp = Math.min(e.max, e.hp + delta * 0.8);
         // nearest player (alpine: chase someone in your own zone if there is anyone; others are
         // unreachable. Building access: only players in this enemy's zone, a player on a roof or
         // inside a building can't be reached from the street, so it holds)
@@ -5647,6 +6059,7 @@ function World({
         const step =
           st.speed *
           spMul *
+          (mutId2 === "surge" ? 1.25 : 1) *
           (e.slow > 0 ? 0.5 : 1) *
           delta *
           dir *
@@ -6168,6 +6581,28 @@ function World({
             break;
           }
         }
+        // shooting a hazard prop sets it off before anything else (Toby): the shell dies
+        // where the drum stands; on a guest the blast is visual-only, the host scores it
+        if (hazOn) {
+          const reach = Math.min(stopAt, 1);
+          HAZ_PT.lerpVectors(BLAST_AT, end, reach);
+          for (let hi = 0; hi < hazards.current.length; hi++) {
+            const hz = hazards.current[hi]!;
+            if (!hz.alive) continue;
+            const gy = groundY(hz.x, hz.z);
+            const near = (p: THREE.Vector3) =>
+              Math.hypot(p.x - hz.x, p.z - hz.z) < 0.85 && p.y - gy < 2;
+            if (near(BLAST_AT) || near(HAZ_PT)) {
+              blowHazard(hi, true, !isH);
+              b.pos.copy(HAZ_PT);
+              burst(b);
+              b.active = false;
+              if (m) m.visible = false;
+              break;
+            }
+          }
+          if (!b.active) return; // popped: done with this shell
+        }
         if (western)
           for (const hit of weedContacts(BLAST_AT, end, stopAt)) {
             if (isHostRef.current) breakWeed(hit.id, b.vel);
@@ -6216,8 +6651,11 @@ function World({
             bounty: !!(b.mods & M_BOUNTY),
           });
           fxHit(i, b, e);
-          onStat("hit", 1);
-          aimStats.current.hit++;
+          // a shot counts as one hit even when it pierces several enemies (Toby accuracy fix)
+          if (b.hitBodies!.size === 1) {
+            onStat("hit", 1);
+            aimStats.current.hit++;
+          }
           onStat("dmg", dmg);
 
           if (b.chain > 0) {
@@ -6749,7 +7187,31 @@ function World({
         renderGun={(w) => <GunModel w={w in GUNS ? (w as Weapon) : "pistol"} />}
       />
       <CombatFx />
-      <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
+      <Shards
+        enemies={enemies}
+        active={shardActive}
+        magnet={magnetRef}
+        onCollect={onShard}
+        taken={takenShards}
+        onTake={(id) => {
+          takenShards.current.add(id);
+          netRef.current?.broadcast({ type: "shard", id });
+        }}
+      />
+      {/* shootable hazard props (Toby 1.0.4): the host places them, everyone can pop them */}
+      {hazOn &&
+        hazardDef &&
+        Array.from({ length: HAZARD_COUNT }, (_, i) => (
+          <group
+            key={`hz${i}`}
+            ref={(g) => {
+              hazardMeshes.current[i] = g;
+            }}
+            visible={false}
+          >
+            <HazardProp def={hazardDef} />
+          </group>
+        ))}
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
@@ -7002,6 +7464,14 @@ export function Game() {
   // lets network messages kick off / resume the match, and keeps pause state handy
   const startRef = useRef<(fromNet?: boolean) => void>(() => {});
   const phase = useRef({ started: false, ended: false });
+  // endless overtime (Toby 1.0.4): the host's OVERTIME button or the "ot" message flips this
+  const endlessRef = useRef(false);
+  const goingOvertime = useRef(false);
+  const [mutId, setMutId] = useState<MutatorId>("none");
+  // the deepest wave ever reached, overtime included, kept in localStorage
+  const [highWave, setHighWave] = useState(0);
+  useEffect(() => setHighWave(readHighWave()), []);
+  const [deathMsg, setDeathMsg] = useState(false);
 
   const publishRoster = () => {
     const list = Object.entries(slots.current)
@@ -7044,6 +7514,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
       return;
     }
     if (m.type === "over") {
@@ -7052,6 +7524,16 @@ export function Game() {
     }
     if (m.type === "event") {
       setEventMsg(String(m.name));
+      return;
+    }
+    // the host picked overtime: every client rolls past wave 12, the win screen lifts
+    if (m.type === "ot") {
+      endlessRef.current = true;
+      setStatus((s) => ({ ...s, won: false }));
+      return;
+    }
+    if (m.type === "mut") {
+      setMutId(String(m.id) as MutatorId);
       return;
     }
     if (m.type === "pick") {
@@ -7532,6 +8014,27 @@ export function Game() {
   };
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
+  // dead co-op players bleed out over a few seconds; the banner tells them the squad fights on
+  useEffect(() => {
+    if (!dead) {
+      setDeathMsg(false);
+      return;
+    }
+    setDeathMsg(true);
+    const t = window.setTimeout(() => setDeathMsg(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [dead]);
+  // keep the deepest wave ever reached, overtime included
+  useEffect(() => {
+    if (!ended) return;
+    const reached =
+      status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1);
+    setHighWave((h) => {
+      if (reached <= h) return h;
+      saveHighWave(reached);
+      return reached;
+    });
+  }, [ended, status.won, status.wave]);
   const isHost = !net || net.role === "host";
   // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
   const pickMap = (choice: number | null) => {
@@ -7590,14 +8093,17 @@ export function Game() {
   const start = (fromNet = false) => {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
-    const resuming = started && !ended;
+    // going into overtime keeps the current run, build and map intact
+    const overtime = goingOvertime.current;
+    goingOvertime.current = false;
+    const resuming = (started && !ended) || overtime;
     setPicking(false);
     if (!resuming) {
       beginMatchTime();
       resetSoloRevive();
     }
     setStarted(true);
-    if (ended && !fromNet) {
+    if (ended && !fromNet && !overtime) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
@@ -7613,6 +8119,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
     }
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
@@ -7662,10 +8170,12 @@ export function Game() {
   // ---- shop: open during the break after a cleared wave ----
   // NOTE: the break itself does not depend on pointer lock, so pausing and
   // resuming keeps the same cards and remembers the ones already bought.
+  // co-op players keep shopping while down (the wave banner revives them); overtime
+  // waves have no shopping break — the win screen leads straight back in
   const shopBreak =
     started &&
     !ended &&
-    !dead &&
+    (multiplayer || !dead) &&
     status.remaining === 0 &&
     fought === status.wave &&
     status.wave < WAVES.length;
@@ -7767,11 +8277,12 @@ export function Game() {
     setBought((b) => [...b, i]);
     playSfx("buy");
     if (id === "heal") {
-      setHealth((h) => Math.min(maxHp, h + 5));
+      // a downed co-op player can shop but can't heal their way back — the wave banner revives
+      setHealth((h) => (h > 0 ? Math.min(maxHp, h + 5) : h));
       return;
     }
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
-    if (id === "maxhp") setHealth((h) => h + 2);
+    if (id === "maxhp") setHealth((h) => (h > 0 ? h + 2 : h));
   };
   useEffect(
     () =>
@@ -7866,6 +8377,14 @@ export function Game() {
   )
     .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
     .filter((p): p is { id: PerkId; label: string } => p.label !== null);
+  // every purchased card this run, with level and whether it's a pistol mod (Toby 1.0.3)
+  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => ({
+    id,
+    name: PERK_INFO[id].name,
+    lvl: perks[id],
+    color: PERK_INFO[id].color,
+    mod: PISTOL_MODS.includes(id),
+  }));
 
   return (
     <div
@@ -7932,7 +8451,9 @@ export function Game() {
           onShard={(v) => {
             const gain = Math.max(
               1,
-              Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)),
+              Math.round(
+                v * statsRef.current.greed * (multiplayer ? (1 + 0.5 * peerCount) * 0.8 : 1),
+              ),
             );
             run.current.shards += gain;
             setShards((s) => s + gain);
@@ -7965,6 +8486,8 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          onMutator={setMutId}
+          endless={endlessRef}
           mapFeed={mapFeed}
           difficulty={difficulty}
           downed={downed}
@@ -8024,7 +8547,9 @@ export function Game() {
                   {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
                 </HudChip>
                 <HudChip>
-                  WAVE {status.wave}/{WAVES.length}
+                  {status.wave > WAVES.length
+                    ? `WAVE ${status.wave} · OVERTIME +${status.wave - WAVES.length}`
+                    : `WAVE ${status.wave}/${WAVES.length}`}
                 </HudChip>
                 <HudChip>
                   KILLS <b>{score}</b>
@@ -8159,10 +8684,18 @@ export function Game() {
               style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
             />
             <div className="text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
-              {status.wave === WAVES.length ? theme.boss.name : `WAVE ${status.wave}`}
+              {status.wave === WAVES.length ||
+              (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
+                ? theme.boss.name
+                : `WAVE ${status.wave}`}
             </div>
             <div className="mt-1 text-[10px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
-              {status.wave === WAVES.length ? theme.hazard.name : `${status.wave} OF ${WAVES.length}`}
+              {status.wave === WAVES.length ||
+              (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
+                ? theme.hazard.name
+                : status.wave > WAVES.length
+                  ? `OVERTIME +${status.wave - WAVES.length}`
+                  : `${status.wave} OF ${WAVES.length}`}
             </div>
             <div
               className="mt-2 h-[5px] w-56 rounded-sm sm:w-72"
@@ -8228,6 +8761,31 @@ export function Game() {
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-md border-2 border-[#f3e6cf]/50 bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]">
             ⚠ {eventMsg} ⚠
+          </div>
+        )}
+        {/* overtime's condition for the round (Toby 1.0.4) */}
+        {(() => {
+          const mu = mutatorById(mutId);
+          if (!mu || !locked || ended) return null;
+          return (
+            <div
+              className="absolute left-1/2 top-[13%] -translate-x-1/2 rounded-md border-2 bg-[#2b2118]/85 px-4 py-1 text-center text-[10px] font-bold tracking-[0.25em] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]"
+              style={{ color: mu.color, borderColor: `${mu.color}80` }}
+            >
+              {mu.name} · {mu.desc}
+            </div>
+          );
+        })()}
+        {/* co-op death: the squad fights on; the wave banner brings you back */}
+        {multiplayer && dead && deathMsg && !ended && locked && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border-2 border-[#2b2118] bg-[#2b2118]/85 px-8 py-5 text-center text-[#f3e6cf] shadow-[4px_4px_0_0_rgba(43,33,24,0.55)]">
+            <div className="text-2xl font-black tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
+            <div className="mt-2 text-xs font-bold tracking-[0.25em] opacity-80">
+              SPECTATING · YOU RESPAWN NEXT WAVE
+            </div>
+            <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">
+              WALK AROUND FREELY · P TO PAUSE
+            </div>
           </div>
         )}
         {locked && !ended && (
@@ -8408,6 +8966,7 @@ export function Game() {
           cls={cls}
           modBadges={activeMods.map((id) => perkBadge(id, 1) ?? "")}
           perkBadges={activePerks.map((p) => p.label)}
+          bought={boughtCards}
           multiplayer={multiplayer}
           onResume={() => start()}
           onSettings={() => setShowSettings(true)}
@@ -8442,6 +9001,16 @@ export function Game() {
             myNum={myNum}
             multiplayer={multiplayer}
             isHost={isHost}
+            endless={endlessRef.current}
+            highWave={highWave}
+            onOvertime={() => {
+              initAudio();
+              endlessRef.current = true;
+              goingOvertime.current = true;
+              setStatus((s) => ({ ...s, won: false }));
+              net?.broadcast({ type: "ot" });
+              start();
+            }}
             onNewArena={() => start()}
             onLoadout={() => {
               initAudio();

@@ -14,6 +14,7 @@ export function PauseScreen({
   cls,
   modBadges,
   perkBadges,
+  bought,
   multiplayer,
   onResume,
   onSettings,
@@ -27,6 +28,8 @@ export function PauseScreen({
   cls: ClassId;
   modBadges: string[];
   perkBadges: string[];
+  /** this run's bought shop cards (Toby 1.0.3 stats overhaul) */
+  bought: { id: string; name: string; lvl: number; color: string; mod: boolean }[];
   multiplayer: boolean;
   onResume: () => void;
   onSettings: () => void;
@@ -63,6 +66,30 @@ export function PauseScreen({
         {!compact && (
           <>
             <StatMini d={stats} cls={cls} />
+            {bought.length > 0 && (
+              <div className="mt-3">
+                <SectionLabel>UPGRADES BOUGHT</SectionLabel>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  {bought.map((c) => (
+                    <div
+                      key={c.id}
+                      className="relative rounded-md border p-1.5"
+                      style={{ borderColor: `${c.color}80`, background: `${c.color}14` }}
+                    >
+                      {c.mod && (
+                        <span className="absolute right-1 top-1 rounded-sm bg-[#2b2118] px-1 text-[7px] font-bold tracking-widest text-[#f3e6cf]">
+                          MOD
+                        </span>
+                      )}
+                      <div className="pr-5 text-[9px] font-bold tracking-wider">{c.name}</div>
+                      <div className="text-[8px] tracking-wider opacity-55">
+                        {c.lvl > 1 ? `x${c.lvl}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {(modBadges.length > 0 || perkBadges.length > 0) && (
               <div className="mt-3">
                 <SectionLabel>ATTRIBUTES</SectionLabel>
@@ -135,7 +162,14 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
     <div className="mt-4 rounded-lg bg-[#2b2118] p-3 font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between text-[9px] tracking-[0.25em]">
         <span className="opacity-60">STATS</span>
-        <span style={{ color: CLASSES[cls].color }}>{CLASSES[cls].name}</span>
+        {/* hover shows the class's role and trade-offs (Toby's class tooltip) */}
+        <span
+          className="cursor-help underline decoration-dotted underline-offset-2"
+          style={{ color: CLASSES[cls].color }}
+          title={`${CLASSES[cls].role}\n${CLASSES[cls].pros.join(" · ")}\n${CLASSES[cls].cons.join(" · ")}`}
+        >
+          {CLASSES[cls].name}
+        </span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-x-4">
         {col(combat, "COMBAT")}
@@ -164,6 +198,12 @@ export function EndScreen({
   myNum,
   multiplayer,
   isHost,
+  /** the run went past the last wave (the squad picked overtime before ending) */
+  endless,
+  /** deepest wave ever reached, kept in localStorage (Toby 1.0.4) */
+  highWave,
+  /** host only: push the run into endless overtime past the last wave */
+  onOvertime,
   onNewArena,
   onLoadout,
   onLeave,
@@ -177,6 +217,9 @@ export function EndScreen({
   myNum: number;
   multiplayer: boolean;
   isHost: boolean;
+  endless?: boolean;
+  highWave?: number;
+  onOvertime?: () => void;
   onNewArena: () => void;
   onLoadout: () => void;
   onLeave: () => void;
@@ -192,7 +235,9 @@ export function EndScreen({
   }
   if (won) badges.push("BOSS SLAYER");
   const stats: [string, string][] = [
-    ["WAVES SURVIVED", `${won ? totalWaves : Math.max(0, wave - 1)}`],
+    // a win that went into overtime counts the overtime waves survived, not the clean 12
+    ["WAVES SURVIVED", `${won && !endless ? totalWaves : Math.max(0, wave - 1)}`],
+    ...(highWave ? ([["BEST EVER", `WAVE ${highWave}`]] as [string, string][]) : []),
     ["KILLS", `${mine.kills}`],
     ["DAMAGE DEALT", `${mine.dmg}`],
     ["ACCURACY", `${mine.acc}%`],
@@ -266,6 +311,12 @@ export function EndScreen({
         )}
 
         <div className={`flex flex-col gap-2 ${compact ? "mt-3.5" : "mt-5"}`}>
+          {/* beat the boss: bank the win, or the host pushes the run into overtime (Toby 1.0.4) */}
+          {won && onOvertime && isHost && (
+            <MenuButton variant="line" size="md" className="w-full" onClick={onOvertime}>
+              Overtime // keep going
+            </MenuButton>
+          )}
           {multiplayer && !isHost ? (
             <>
               <div className="rounded-md border border-[#2b2118]/25 bg-[#2b2118]/8 px-4 py-2 text-center text-[10px] font-bold tracking-[0.2em] opacity-75">
