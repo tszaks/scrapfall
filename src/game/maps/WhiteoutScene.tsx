@@ -52,15 +52,30 @@ function Building({ c }: { c: Chalet }) {
         <boxGeometry args={[w - 0.1, c.h - 0.7, d - 0.1]} />
         <meshLambertMaterial color={c.wood} flatShading />
       </mesh>
-      {/* pitched roof: a triangular prism with overhang + snow on top */}
-      <mesh position-y={c.h + roofH / 2 - 0.05} rotation-z={Math.PI / 2} rotation-y={Math.PI / 2} scale={[roofH, w + 0.8, (d + 1) / 1.5]} castShadow>
-        <cylinderGeometry args={[0.577, 0.577, 1, 3]} />
-        <meshLambertMaterial color={c.roof} flatShading />
-      </mesh>
-      <mesh position-y={c.h + roofH / 2 + 0.12} rotation-z={Math.PI / 2} rotation-y={Math.PI / 2} scale={[roofH * 0.92, w + 0.9, (d + 0.9) / 1.5]}>
-        <cylinderGeometry args={[0.577, 0.577, 1, 3]} />
-        <meshLambertMaterial color="#f6f9fc" flatShading />
-      </mesh>
+      {/* pitched roof: two sloped slabs with a snow layer, plus gable ends */}
+      {[1, -1].map((side) => {
+        const run = d / 2 + 0.5;
+        const L = Math.hypot(run, roofH);
+        const ang = Math.atan2(roofH, run);
+        return (
+          <group key={side} position={[0, c.h + roofH / 2, (side * run) / 2]} rotation-x={side * ang}>
+            <mesh castShadow>
+              <boxGeometry args={[w + 0.8, 0.2, L + 0.1]} />
+              <meshLambertMaterial color={c.roof} flatShading />
+            </mesh>
+            <mesh position-y={0.16}>
+              <boxGeometry args={[w + 0.7, 0.14, L]} />
+              <meshLambertMaterial color="#f6f9fc" flatShading />
+            </mesh>
+          </group>
+        );
+      })}
+      {[1, -1].map((side) => (
+        <mesh key={`g${side}`} position={[(side * (w - 0.1)) / 2, c.h, 0]} rotation-y={side > 0 ? Math.PI / 2 : -Math.PI / 2}>
+          <shapeGeometry args={[new THREE.Shape([new THREE.Vector2(-d / 2 + 0.05, 0), new THREE.Vector2(d / 2 - 0.05, 0), new THREE.Vector2(0, roofH - 0.1)])]} />
+          <meshLambertMaterial color={c.wood} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
       {/* glowing windows on both long sides */}
       {Array.from({ length: Math.max(1, Math.floor(w / 2)) }, (_, i) => {
         const x = -w / 2 + 1 + i * 2;
