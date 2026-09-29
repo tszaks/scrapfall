@@ -279,17 +279,6 @@ export const WhiteoutScene = memo(function WhiteoutScene({ layout, theme }: { la
         <circleGeometry args={[8.5, 32]} />
         <meshLambertMaterial color="#c9d0d6" />
       </mesh>
-      {/* square: a lamp-lit fountain frozen solid */}
-      <group position={[0, 0, 0]}>
-        <mesh position-y={0.35}>
-          <cylinderGeometry args={[1.6, 1.8, 0.7, 16]} />
-          <meshLambertMaterial color="#8a8e94" flatShading />
-        </mesh>
-        <mesh position-y={0.72}>
-          <cylinderGeometry args={[1.4, 1.4, 0.06, 16]} />
-          <meshStandardMaterial color="#bfe0f0" roughness={0.1} />
-        </mesh>
-      </group>
       {[[-6, -6], [6, -6], [-6, 6], [6, 6]].map(([x, z]) => (
         <group key={`${x}${z}`} position={[x!, 0, z!]}>
           <mesh position-y={1.5}>
