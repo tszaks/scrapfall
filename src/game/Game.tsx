@@ -4653,6 +4653,132 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+const ENEMY_INFO: Record<Kind, { name: string; accent: string; wave: number; weapon: string; tactic: string }> = {
+  drifter: { name: "DRIFTER", accent: "#f3e6cf", wave: 1, weapon: "Melee claws", tactic: "Walks straight at you and swings. Harmless alone, deadly in a crowd — keep backing away and sweep them." },
+  brute: { name: "BRUTE", accent: "#ffb066", wave: 1, weapon: "Heavy slam", tactic: "Slow armoured bruiser that winds up before each slam. Step aside during the wind-up, then punish it." },
+  shooter: { name: "SHOOTER", accent: "#ff6b5e", wave: 2, weapon: "Plasma bolts", tactic: "Stops at range and fires. Break the line of sight behind cover or close the gap fast." },
+  runner: { name: "RUNNER", accent: "#7cff4f", wave: 2, weapon: "Rush tackle", tactic: "Sprints at you in a spin. Weak, but it closes in from behind — check your back." },
+  specter: { name: "SPECTER", accent: "#c08bff", wave: 3, weapon: "Phase strike", tactic: "Fades in and out while circling. Lead your shots and watch the shimmer." },
+  bomber: { name: "BOMBER", accent: "#ffd24a", wave: 4, weapon: "Blast core", tactic: "Waddles in and detonates. Pop it from a distance — never let it reach you." },
+  vanguard: { name: "VANGUARD", accent: "#8fa3b8", wave: 5, weapon: "Shield ram", tactic: "Walking wall of plating. Piercing rounds and explosions get through; small arms bounce." },
+  special: { name: "MAP SPECIAL", accent: "#4fe3ff", wave: 3, weapon: "Map-specific", tactic: "Each arena has its own hunter with its own trick. Learn the one on your map." },
+  boss: { name: "BOSS", accent: "#e8322a", wave: 12, weapon: "Volley + hammer", tactic: "Huge, tanky, fires volleys and swings a hammer. Circle it, keep moving, save your ability." },
+};
+
+const PANEL_KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "specter", "bomber", "vanguard", "special", "boss"];
+
+const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
+  kind, x, z, hp: STATS[kind].hp, alive: true, cooldown: 9, swing: 0, flash: 0, shot: 9,
+  slow: 0, burn: 0, burnTick: 0, max: STATS[kind].hp,
+});
+
+function LookAt({ y = 0, z = 0 }: { y?: number; z?: number }) {
+  const { camera } = useThree();
+  useFrame(() => camera.lookAt(0, y, z));
+  return null;
+}
+
+/** The enemy reference book: rotating 3D models, stats and how to beat each one. */
+export function EnemiesPanel({ theme, onClose }: { theme: Theme; onClose: () => void }) {
+  const [sel, setSel] = useState<Kind | "lineup">("lineup");
+  const lineup = useMemo(() => {
+    const rest = PANEL_KINDS.filter((k) => k !== "boss");
+    const row = [...rest.slice(0, 4), "boss" as Kind, ...rest.slice(4)];
+    return row.map((k, i) => fakeEnemy(k, (i - (row.length - 1) / 2) * 2.6, -4.5));
+  }, []);
+  const single = useMemo(() => (sel === "lineup" ? [] : [fakeEnemy(sel)]), [sel]);
+  const list = sel === "lineup" ? lineup : single;
+  const info = sel === "lineup" ? null : ENEMY_INFO[sel];
+  const st = sel === "lineup" ? null : STATS[sel];
+  return (
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-mono text-[#f2ead6]">
+      <div className="flex max-h-full w-full max-w-5xl flex-col gap-4 overflow-auto rounded-lg border border-[#b4653f] bg-[#2b2118] p-5 md:flex-row">
+        <div className="grid grid-cols-2 gap-1 md:w-60 md:grid-cols-1">
+          <button
+            onClick={() => setSel("lineup")}
+            className={`rounded px-3 py-1.5 text-left text-xs tracking-widest ${sel === "lineup" ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+          >
+            ALL · LINEUP
+          </button>
+          {PANEL_KINDS.map((k) => (
+            <button
+              key={k}
+              onClick={() => setSel(k)}
+              className={`rounded px-3 py-1 text-left text-xs tracking-widest ${sel === k ? "bg-[#b4653f]" : "hover:bg-white/10"}`}
+            >
+              <span style={{ color: ENEMY_INFO[k].accent }}>■</span>{" "}
+              {k === "special" ? theme.special.name : ENEMY_INFO[k].name}
+              <span className="float-right opacity-50">W{ENEMY_INFO[k].wave}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1">
+          <div className={`${sel === "lineup" ? "h-[22rem]" : "h-64"} w-full overflow-hidden rounded bg-[#1a1410]`}>
+            <Canvas
+              key={sel === "lineup" ? "lineup" : "one"}
+              camera={sel === "lineup" ? { position: [0, 6, 25], fov: 28 } : { position: [2.6, 2.4, 4.6], fov: 42 }}
+            >
+              <LookAt y={sel === "lineup" ? 0.5 : 0} z={sel === "lineup" ? -1.5 : 0} />
+              <ambientLight intensity={0.9} />
+              <hemisphereLight args={["#ffe7c4", "#3a3028", 0.6]} />
+              <directionalLight position={[3, 6, 5]} intensity={1.6} />
+              {sel === "lineup" ? (
+                <group position={[0, -1.4, 0]}>
+                  {list.map((e) => (
+                    <EnemyMesh key={e.kind} data={e} theme={theme} />
+                  ))}
+                </group>
+              ) : (
+                <Spin>
+                  <group position={[0, -1.1, 0]}>
+                    {list.map((e) => (
+                      <EnemyMesh key={e.kind} data={e} theme={theme} />
+                    ))}
+                  </group>
+                </Spin>
+              )}
+            </Canvas>
+          </div>
+          {info && st ? (
+            <>
+              <h2 className="mt-3 text-2xl font-bold tracking-[0.3em]" style={{ color: info.accent }}>
+                {sel === "special" ? theme.special.name : info.name}
+              </h2>
+              <p className="mt-2 text-sm opacity-90">{info.tactic}</p>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] tracking-widest opacity-80">
+                <div>HEALTH<br /><b className="text-base">{st.hp}</b></div>
+                <div>SPEED<br /><b className="text-base">{st.speed} m/s</b></div>
+                <div>WEAPON<br /><b className="text-xs">{info.weapon}</b></div>
+                <div>FIRST WAVE<br /><b className="text-base">{info.wave}</b></div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 space-y-1 text-[11px] tracking-wider">
+              <div>
+                <span className="opacity-50">THE ROSTER · </span>
+                {PANEL_KINDS.map((k, i) => (
+                  <span key={k} style={{ color: ENEMY_INFO[k].accent }}>
+                    {i ? " · " : ""}
+                    {k === "special" ? theme.special.name : ENEMY_INFO[k].name}
+                  </span>
+                ))}
+              </div>
+              <p className="pt-1 text-sm opacity-80">
+                Every attack is telegraphed: watch for the wind-up, the glow or the red ring, then move.
+              </p>
+            </div>
+          )}
+          <button onClick={onClose} className="mt-4 rounded bg-[#b4653f] px-4 py-2 text-xs tracking-widest hover:opacity-90">
+            CLOSE
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
 /** tiny pistol silhouette shown on pistol-mod shop cards */
 function PistolBadge() {
   return (
