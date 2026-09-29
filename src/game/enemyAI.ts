@@ -14,6 +14,7 @@ import {
   type FineField,
 } from "./level";
 import { climbable, groundY } from "./terrain";
+import { steerTo } from "./steerCache";
 import {
   NEW_STATS,
   FLYERS,
@@ -61,6 +62,14 @@ export type Bot = {
   hitT?: number;
   /** medic heal target (enemy index) */
   tgt?: number;
+  /** steering memo (steerCache.ts): memo time, waypoint, sampled target and own spot */
+  svT?: number;
+  svX?: number;
+  svZ?: number;
+  stX?: number;
+  stZ?: number;
+  seX?: number;
+  seZ?: number;
 };
 
 /** `air`: riding the chairlift, so only ranged fire can reach them */
@@ -202,13 +211,20 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
 
 /** Next point on the way to the target: straight if the line is clear, else the flow field. */
 function waypoint(e: Bot, t: Target, ctx: AICtx) {
-  if (clearLine(ctx.blocks, e.x, e.z, t.x, t.z, rad(e) * 0.9)) return { x: t.x, z: t.z };
-  const ff = ctx.fineFor?.(t);
-  const fs = ff ? fineStep(ff, e.x, e.z) : null;
-  if (fs) return fs;
-  const dist = ctx.fieldFor(t);
-  if (!dist) return { x: t.x, z: t.z };
-  return descend(ctx.solid, dist, e.x, e.z, null) ?? { x: t.x, z: t.z };
+  return steerTo(
+    e,
+    t,
+    ctx.time,
+    () => clearLine(ctx.blocks, e.x, e.z, t.x, t.z, rad(e) * 0.9),
+    () => {
+      const ff = ctx.fineFor?.(t);
+      const fs = ff ? fineStep(ff, e.x, e.z) : null;
+      if (fs) return fs;
+      const dist = ctx.fieldFor(t);
+      if (!dist) return null;
+      return descend(ctx.solid, dist, e.x, e.z, null);
+    },
+  );
 }
 
 /**

@@ -484,7 +484,7 @@ export function WesternTrain({
   time: TimeOfDay;
   link: React.MutableRefObject<TrafficLink>;
 }) {
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const look = WESTERN_LOOK[time];
   const timeRef = useRef(time);
   timeRef.current = time;
