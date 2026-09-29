@@ -1975,11 +1975,12 @@ function World({
     const g = gunFor(w);
     const s2 = stats.current;
     camera.getWorldDirection(FORWARD);
-    const pos = camera.position.clone().addScaledVector(FORWARD, 0.6);
-    pos.y -= 0.25;
+    // rounds leave the gun's muzzle (view-model offset) and converge on the crosshair
+    const pos = new THREE.Vector3(0.3, -0.24, -1.15).applyQuaternion(camera.quaternion).add(camera.position);
+    const aim = camera.position.clone().addScaledVector(FORWARD, 28).sub(pos).normalize();
     for (let s = 0; s < g.count; s++) {
       const off = g.count > 1 ? s - (g.count - 1) / 2 : (Math.random() - 0.5) * 2;
-      const dir = FORWARD.clone().applyAxisAngle(camera.up, off * g.spread);
+      const dir = aim.clone().applyAxisAngle(camera.up, off * g.spread);
       dir.y += (Math.random() - 0.5) * g.spread * 0.6;
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
