@@ -4172,17 +4172,12 @@ export function Game() {
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
             {alpineMap && locked && (
-              <div
-                data-minimap
-                className={
-                  touchUi
-                    // phones: tuck the radar under the health/shard readout so it can never
-                    // sit over the fire/run/ability buttons or eat an aim drag
-                    ? "pointer-events-none mt-1 origin-top-right scale-[0.5]"
-                    : "fixed bottom-5 right-5"
-                }
-              >
-                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+              // phones: the radar tucks under the health/shard readout, so it can never sit
+              // over the fire/run/ability buttons or swallow an aim drag
+              <div data-minimap className={touchUi ? "pointer-events-none mt-1 h-[92px] w-[92px]" : "fixed bottom-5 right-5"}>
+                <div className={touchUi ? "origin-top-right scale-[0.5]" : ""}>
+                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+                </div>
               </div>
             )}
         {multiplayer && locked && !ended && (
