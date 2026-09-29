@@ -2,6 +2,9 @@
 // soft bloom is layered on top of it — the displayed image is copied once, the bright
 // parts (lamps, neon, lit windows, the sun) are picked out and blurred at a fraction
 // of the resolution, and the result is drawn back as an additive glow.
+// In daylight matches (sunny/rain) the bright-pass threshold rises past sunlit
+// diffuse surfaces and the overlay fades to a whisper, so bloom only ever comes from
+// genuine emitters: lamps, neon, lit windows, muzzle flashes, the moon and sun disc.
 //
 // Working on the displayed (already tone-mapped) image means none of the hand-tuned
 // materials, custom shaders or skies change their look: the pass only adds light.
@@ -17,6 +20,7 @@
 import { useEffect } from "react";
 import * as THREE from "three";
 
+import { matchEnvironment } from "./matchEnvironment";
 import { quality } from "./quality";
 
 const QUAD_VERT = /* glsl */ `
@@ -26,18 +30,30 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`;
 
-// keep the bright parts; saturated colours pass a little easier than grey ones so the
-// neon signs glow before the pale sky does
+// keep the bright parts — but only genuine emitters: pixels must either carry a
+// colour cast (neon, lit windows, muzzle flash) or sit near the clip (sun/moon disc),
+// so pale diffuse surfaces (moonlit snow, sand, sky) can never bloom. In daylight
+// (uDay) the threshold rises further and the overlay fades, so sunlit scenes keep
+// their contrast and even true emitters read only faintly.
 const BRIGHT_FRAG = /* glsl */ `
 uniform sampler2D tSrc;
 uniform float uTh;
 uniform float uKnee;
+uniform float uDay;
 varying vec2 vUv;
 void main() {
   vec3 c = texture2D(tSrc, vUv).rgb;
+  float th = mix(uTh, 0.96, uDay);
+  float kn = uKnee * (1.0 - uDay * 0.85);
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float mx = max(c.r, max(c.g, c.b));
-  float w = smoothstep(uTh, uTh + uKnee, max(l, mx * 0.72));
+  float mn = min(c.r, min(c.g, c.b));
+  float sat = (mx - mn) / max(mx, 0.001);
+  // emitters carry a colour cast (neon, warm windows) or sit near the clip
+  // (sun/moon disc, blown highlights); moonlit snow and other pale diffuse
+  // surfaces are desaturated and must not bloom even when bright
+  float emis = max(smoothstep(0.9, 0.97, l), smoothstep(0.28, 0.45, sat));
+  float w = smoothstep(th, th + kn, max(l, mx * 0.72)) * emis;
   gl_FragColor = vec4(c * w, 1.0);
 }`;
 
@@ -53,20 +69,17 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 
-const COPY_FRAG = /* glsl */ `
-uniform sampler2D tSrc;
-varying vec2 vUv;
-void main() { gl_FragColor = texture2D(tSrc, vUv); }`;
-
-// additive glow: writes raw values on top of the displayed frame (tone-mapped space)
+// additive glow: writes raw values on top of the displayed frame (tone-mapped space);
+// daylight (uDay) fades the overlay so sunlit scenes keep their contrast
 const MIX_FRAG = /* glsl */ `
 uniform sampler2D tA;
 uniform sampler2D tB;
 uniform vec2 uW;
+uniform float uDay;
 varying vec2 vUv;
 void main() {
   vec3 g = texture2D(tA, vUv).rgb * uW.x + texture2D(tB, vUv).rgb * uW.y;
-  gl_FragColor = vec4(g, 1.0);
+  gl_FragColor = vec4(g * (1.0 - uDay * 0.88), 1.0);
 }`;
 
 function mat(frag: string, uniforms: Record<string, THREE.IUniform>, additive = false) {
@@ -102,7 +115,6 @@ type Parts = {
   bright: THREE.ShaderMaterial;
   blurH: THREE.ShaderMaterial;
   blurV: THREE.ShaderMaterial;
-  copy: THREE.ShaderMaterial;
   mix: THREE.ShaderMaterial;
 };
 type Kit = {
@@ -118,6 +130,7 @@ type Kit = {
 let parts: Parts | null = null;
 let kit: Kit | null = null;
 let bad = false;
+let probed = false;
 
 function getParts() {
   if (parts) return parts;
@@ -135,6 +148,7 @@ function getParts() {
     tSrc: { value: null },
     uTh: { value: 0.66 },
     uKnee: { value: 0.32 },
+    uDay: { value: 0 },
   });
   const blurH = mat(BLUR_FRAG, {
     tSrc: { value: null },
@@ -144,13 +158,17 @@ function getParts() {
     tSrc: { value: null },
     uDir: { value: new THREE.Vector2() },
   });
-  const copy = mat(COPY_FRAG, { tSrc: { value: null } });
   const mix = mat(
     MIX_FRAG,
-    { tA: { value: null }, tB: { value: null }, uW: { value: new THREE.Vector2(0.78, 0.68) } },
+    {
+      tA: { value: null },
+      tB: { value: null },
+      uW: { value: new THREE.Vector2(0.78, 0.68) },
+      uDay: { value: 0 },
+    },
     true,
   );
-  parts = { quad, mesh, cam, geo, bright, blurH, blurV, copy, mix };
+  parts = { quad, mesh, cam, geo, bright, blurH, blurV, mix };
   return parts;
 }
 
@@ -208,15 +226,26 @@ export function renderWithPost(
   const prevRT = gl.getRenderTarget();
   const prevClear = gl.autoClear;
   try {
-    // grab the finished frame (a device-side blit; the multisample canvas resolves)
+    // grab the finished frame (a device-side copy; the multisample canvas resolves).
+    // a scaled blit would be cheaper but WebGL2 forbids downscaling blits out of a
+    // multisampled default framebuffer. the support probe runs exactly once —
+    // getError forces a GPU sync each call
     gl.copyFramebufferToTexture(k.tex);
-    const ctx = gl.getContext();
-    if (ctx.getError() !== ctx.NO_ERROR) {
-      bad = true;
-      console.warn("post: framebuffer copy unsupported, bloom disabled");
-      return;
+    if (!probed) {
+      probed = true;
+      const ctx = gl.getContext();
+      if (ctx.getError() !== ctx.NO_ERROR) {
+        bad = true;
+        console.warn("post: framebuffer copy unsupported, bloom disabled");
+        return;
+      }
     }
     gl.autoClear = false;
+    // daylight matches run a high threshold and a faint overlay: sunlit surfaces
+    // stay under the knee and only true emitters (and the sun itself) still pass
+    const day = matchEnvironment.kind === "sunny" || matchEnvironment.kind === "rain" ? 1 : 0;
+    p.bright.uniforms["uDay"]!.value = day;
+    p.mix.uniforms["uDay"]!.value = day;
     p.bright.uniforms["tSrc"]!.value = k.tex;
     run(p.bright, k.rtA);
     const tx = 1 / k.rtA.width;
@@ -228,13 +257,13 @@ export function renderWithPost(
     (p.blurV.uniforms["uDir"]!.value as THREE.Vector2).set(0, ty);
     run(p.blurV, k.rtA);
     if (level > 1) {
-      p.copy.uniforms["tSrc"]!.value = k.rtA.texture;
-      run(p.copy, k.rtC);
-      p.blurH.uniforms["tSrc"]!.value = k.rtC.texture;
-      (p.blurH.uniforms["uDir"]!.value as THREE.Vector2).set(1 / k.rtC.width, 0);
+      // wider, softer halo: blur the quarter-res glow again into the eighth-res pair —
+      // drawing into the smaller target halves the footprint, so no copy pass is needed
+      p.blurH.uniforms["tSrc"]!.value = k.rtA.texture;
+      (p.blurH.uniforms["uDir"]!.value as THREE.Vector2).set(2 * tx, 0);
       run(p.blurH, k.rtD);
       p.blurV.uniforms["tSrc"]!.value = k.rtD.texture;
-      (p.blurV.uniforms["uDir"]!.value as THREE.Vector2).set(0, 1 / k.rtC.height);
+      (p.blurV.uniforms["uDir"]!.value as THREE.Vector2).set(0, 2 * ty);
       run(p.blurV, k.rtC);
     }
     p.mix.uniforms["tA"]!.value = k.rtA.texture;
@@ -255,7 +284,7 @@ export function PostFx() {
       parts = null;
       if (p) {
         p.geo.dispose();
-        for (const m of [p.bright, p.blurH, p.blurV, p.copy, p.mix]) m.dispose();
+        for (const m of [p.bright, p.blurH, p.blurV, p.mix]) m.dispose();
       }
       const k = kit;
       kit = null;
@@ -264,6 +293,7 @@ export function PostFx() {
         k.tex.dispose();
       }
       bad = false;
+      probed = false;
     },
     [],
   );
