@@ -372,7 +372,7 @@ import {
   type Perks,
 } from "./perks";
 import { CLASSES, type ClassId } from "./classes";
-import { hazardFor, hazardsEnabled, HAZARD_COUNT, BIG_MAP_HAZARDS, type HazardDef } from "./hazards";
+import { hazardFor, hazardsEnabled, HAZARD_COUNT, HAZARD_COUNT_BIG, BIG_MAP_HAZARDS, type HazardDef } from "./hazards";
 import {
   mutatorById,
   rollMutator,
@@ -2718,8 +2718,9 @@ function World({
     () => {},
   );
   // shootable map hazards (fuel drums, cryo condensers, powder kegs, ...)
+  // sized for the big maps; arenas leave the tail asleep (alive stays false)
   const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
-    Array.from({ length: HAZARD_COUNT }, () => ({ x: 0, z: 0, alive: false })),
+    Array.from({ length: HAZARD_COUNT_BIG }, () => ({ x: 0, z: 0, alive: false })),
   );
   const hazardMeshes = useRef<(THREE.Group | null)[]>([]);
   const hazardDef = hazardFor(theme);
@@ -4069,14 +4070,29 @@ function World({
   hazardBlow.current = (i, visualOnly = false, from = null) =>
     blowHazard(i, false, visualOnly, from);
   /**
-   * Big maps get themed props at the landmarks (fuel drums at the Vice gas stations, powder
-   * kegs by the Gulch mine, gas canisters along the Pier's midway, propane tanks at the
-   * Whiteout lodge) — each candidate still gets a clear-ground check at spawn time, so a
-   * drum never seals a door or a stair. Arena maps keep Toby's random open-ground spots.
+   * Big maps get themed props at the landmarks (fuel drums round the Vice gas stations,
+   * construction yards, loading bays and alley dumpsters; powder kegs by the Gulch mine;
+   * gas canisters along the Pier's midway; snow cannons round Whiteout's village square)
+   * — each candidate still gets a clear-ground check at spawn time, so a drum never seals
+   * a door or a stair. Arena maps keep Toby's random open-ground spots.
    */
+  /** extra ground rules beyond `blocked`: Whiteout keeps props off the rink ice and off
+   * the lift-only summit island. */
+  const hazardOk = (x: number, z: number): boolean => {
+    if (alpineMap) {
+      const a = alpineMap.alpine;
+      if (x > a.rink.x0 - 2 && x < a.rink.x1 + 2 && z > a.rink.z0 - 2 && z < a.rink.z1 + 2)
+        return false;
+      if (x > a.island.x0 - 1 && x < a.island.x1 + 1 && z > a.island.z0 - 1 && z < a.island.z1 + 1)
+        return false;
+    }
+    return true;
+  };
   const hazardAnchors = (): [number, number][] => {
     const out: [number, number][] = [];
-    const push = (x: number, z: number) => out.push([x, z]);
+    const push = (x: number, z: number) => {
+      if (hazardOk(x, z)) out.push([x, z]);
+    };
     if (western) {
       const m = western.mine;
       const st = western.station;
@@ -4087,14 +4103,19 @@ function World({
       push(st.x + 4, st.z - 2);
       push(western.campfire.x + 3, western.campfire.z + 1);
     } else if (alpineMap) {
-      // beside the lodge deck on the snow, and one by each lift terminal's platform
-      const d = alpineMap.alpine.lodgeDeck;
-      const midZ = (d.z0 + d.z1) / 2;
-      push(d.x0 - 2.5, midZ - 2);
-      push(d.x0 - 2.5, midZ + 2);
-      push(d.x1 + 2.5, midZ);
-      push((d.x0 + d.x1) / 2, d.z1 + 2.5);
-      alpineMap.alpine.terminals.forEach((t) => push((t.x0 + t.x1) / 2, t.z1 + 3));
+      // village level only: beside the cafes, chalets and shops round the main square
+      alpineMap.alpine.buildings
+        .filter((b) => b.t === "cafe" || b.t === "chalet" || b.t === "shop" || b.t === "rental" || b.t === "lodge")
+        .forEach((b) => {
+          // beside the building, on the side away from its street front
+          const midX = (b.x0 + b.x1) / 2;
+          const midZ = (b.z0 + b.z1) / 2;
+          const rear = b.front ^ 2;
+          push(
+            rear === 1 ? b.x1 + 2.2 : rear === 3 ? b.x0 - 2.2 : midX,
+            rear === 0 ? b.z0 - 2.2 : rear === 2 ? b.z1 + 2.2 : midZ,
+          );
+        });
     } else if (isBeach(city)) {
       const b = city.beach;
       push(b.wheel.x + 6, b.wheel.z + 4);
@@ -4116,6 +4137,29 @@ function World({
           push(cp.x0 - 2.5, cp.z0 - 2);
           push((cp.x0 + cp.x1) / 2, cp.z1 + 2.5);
         });
+      // and a few more where the fights are: construction yards, the apron behind
+      // garages/warehouses (the loading bay), and beside the alley dumpsters
+      city.buildings
+        .filter((b) => b.t === "construction")
+        .forEach((b) => {
+          push(b.x0 + 3, b.z0 + 3);
+          push(b.x1 - 3, b.z1 - 3);
+        });
+      city.buildings
+        .filter((b) => b.t === "garage" || b.t === "warehouse")
+        .forEach((b) => {
+          const midX = (b.x0 + b.x1) / 2;
+          const midZ = (b.z0 + b.z1) / 2;
+          const rear = b.front ^ 2;
+          push(
+            rear === 1 ? b.x1 + 2.2 : rear === 3 ? b.x0 - 2.2 : midX,
+            rear === 0 ? b.z0 - 2.2 : rear === 2 ? b.z1 + 2.2 : midZ,
+          );
+        });
+      city.props
+        .filter((p) => p.k === "dumpster")
+        .slice(0, 6)
+        .forEach((p) => push(p.x + 1.4, p.z));
     }
     return out;
   };
@@ -4514,6 +4558,8 @@ function World({
     // hazard props reset each round so there is always something to shoot open; the host
     // places them and tells the squad where (hazset)
     if (isHostRef.current && hazOn) {
+      // big maps are much bigger than an arena — a couple more props out there
+      const want = city || western ? HAZARD_COUNT_BIG : HAZARD_COUNT;
       const spots = hazardAnchors().filter(([x, z]) => !blocked(blocks, x, z, 0.9));
       for (let i = spots.length - 1; i > 0; i--) {
         const j = Math.floor(rand() * (i + 1));
@@ -4521,11 +4567,11 @@ function World({
         spots[i] = spots[j]!;
         spots[j] = t;
       }
-      spots.length = Math.min(spots.length, HAZARD_COUNT);
+      spots.length = Math.min(spots.length, want);
       let guard = 40;
-      while (spots.length < HAZARD_COUNT && guard-- > 0) {
+      while (spots.length < want && guard-- > 0) {
         const p = spot(6, 30, false);
-        if (!blocked(blocks, p.x, p.z, 0.9)) spots.push([p.x, p.z]);
+        if (!blocked(blocks, p.x, p.z, 0.9) && hazardOk(p.x, p.z)) spots.push([p.x, p.z]);
       }
       hazards.current.forEach((h, i) => {
         const s = spots[i];
@@ -7329,7 +7375,7 @@ function World({
       {/* shootable hazard props (Toby 1.0.4): the host places them, everyone can pop them */}
       {hazOn &&
         hazardDef &&
-        Array.from({ length: HAZARD_COUNT }, (_, i) => (
+        Array.from({ length: HAZARD_COUNT_BIG }, (_, i) => (
           <group
             key={`hz${i}`}
             ref={(g) => {

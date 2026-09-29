@@ -33,8 +33,8 @@ gun/menu modules and is listed under "originates here" below.
 
 | Upstream change | Status | Where | Notes |
 | --- | --- | --- | --- |
-| `src/game/hazards.ts` hazard defs | adapted | `hazards.ts` — same `HazardDef` shape; added `effect`/`shell`/`core` names and defs for our big-map blockShapes (`city` fuel drums, `western` powder kegs, `beach` gas canisters, `alpine` propane tanks) | Toby's defs are per-arena theme; our big maps needed their own themed props |
-| Hazard placement per round, host-authoritative | adapted | `Game.tsx` `hazardAnchors()` places props at real landmarks (gas-station canopy, mine, lodge deck, pier wheel/coaster/fires/towers) with a `blocked()` clear-ground check + `spot()` fallback; `hazset` syncs to guests and late joiners | Toby scatters randomly on his arenas; our big maps anchor to authored landmarks so props never seal doors/stairs |
+| `src/game/hazards.ts` hazard defs | adapted | `hazards.ts` — same `HazardDef` shape; added `effect`/`shell`/`core` names and defs for our big-map blockShapes (`city` fuel drums, `western` powder kegs, `beach` gas canisters, `alpine` snow cannons) | Toby's defs are per-arena theme; our big maps needed their own themed props |
+| Hazard placement per round, host-authoritative | adapted | `Game.tsx` `hazardAnchors()` places props at real landmarks (gas-station canopy + construction yards + garage aprons + alley dumpsters on Vice; mine/station on Gulch; pier wheel/coaster/fires/towers; village cafes/chalets/shops on Whiteout) with `blocked()` + `hazardOk` ground checks + `spot()` fallback; `hazset` syncs to guests and late joiners | Toby scatters randomly on his arenas; our big maps anchor to authored landmarks so props never seal doors/stairs; Whiteout's summit island and ice rink are excluded (see Intentional differences) |
 | `blowHazard` + `haz` message + bullet collision | ported | `Game.tsx` `blowHazard`, `msgSink` `haz`/`hazset`, bullet loop checks hazards first; guest blasts are visual-only, the host applies damage credited to the shooter; a hazard pop counts as the shot's one accuracy hit (Toby's `track`, mapped onto our `hitBodies`); each prop gets `rotation.y = i * 1.3` | same semantics; `haz` added to `RELAYED` so guest blasts reach every client |
 | `HazardProp` themed visuals | ported | `Game.tsx` `HazardProp` memo — drum/pod/condenser/relay/geyser/vat | verbatim geometry, driven by `HazardDef.look` |
 | `boom` sfx | ported | `audio.ts` `playSfx("boom")` | verbatim |
@@ -63,7 +63,7 @@ behaviour are listed; everything else is "skipped: originates here".
 | Upstream change | Status | Where | Notes |
 | --- | --- | --- | --- |
 | `alpine` hazard def → SNOW CANNON (freeze condenser, red shell) | ported | `hazards.ts` `BY_SHAPE.alpine` | replaces our earlier PROPANE TANK for Whiteout's lodge props |
-| "No shootable/explodable hazards on any big map" | adapted | `hazards.ts` `BIG_MAP_HAZARDS` switch + `Game.tsx` `hazOn` gate (`!(city \|\| western)`) | owner decision pending — currently `true`, flipping the constant removes the landmark props in one line |
+| "No shootable/explodable hazards on any big map" | adapted | `hazards.ts` `BIG_MAP_HAZARDS` switch + `Game.tsx` `hazOn` gate (`!(city \|\| western)`) | **owner decision: KEEP them** (`BIG_MAP_HAZARDS = true`) — see Intentional differences |
 | `level.ts`: cell-grid `blocked` for >400 blocks | skipped | — | superseded: our `blocked` already runs through the `BlockGrid` cell lookup (plus posts/room hooks) |
 | `level.ts`: `spawnFocus` ring for big maps | skipped | — | superseded: our `spawnNear` already spawns around live players, hidden, with a routable-spot check |
 | `level.ts`: flowField `nd > 70` cap on big maps | skipped | — | our flow field already has the `maxD` cut-off |
@@ -75,6 +75,25 @@ behaviour are listed; everything else is "skipped: originates here".
 | `Minimap.tsx`, `ui/TitleScreen.tsx`, `ui/RunScreens.tsx`, `ui/BrandLogo.tsx`, `ui/LoadoutScreen.tsx`, `ui/SettingsScreen.tsx`, menu fade/drift showcase | skipped | — | originates here: his extraction/rematch of our menu kit |
 | `GunView`/`gunFx`/`readGunMuzzle` adoption | skipped | — | originates here: he imports our `src/game/art/*` via `src/bro/` |
 | `VERSION = "1.0.6"` | ported | `GAME_VERSION` | upstream HEAD is already 1.0.7 — covered by the next sync |
+
+## Intentional differences
+
+Deliberate divergences from upstream, decided by the owner — do not "fix" these on a
+future sync:
+
+- **Big maps keep their shootable hazards.** Toby's v1.0.6 removes explodable props
+  from the big maps; Tyler keeps ours (owner decision 2026-09-29). The switch is
+  `BIG_MAP_HAZARDS = true` in `hazards.ts` — flip it if the call ever changes.
+- **Whiteout's props are SNOW CANNONs at village level, not the summit.** Toby's alpine
+  def is ported, but his placement targeted the lift-only summit island and the ice
+  rink; ours anchors beside the village cafes/chalets/shops and `hazardOk` keeps the
+  rink and the island clear (owner note: a prop kept landing at the top terminal, ~100 m
+  up, and on the rink).
+- **Big maps get 8 props, arenas 5** (`HAZARD_COUNT_BIG`); Vice drums spread across gas
+  stations, construction yards, garage/warehouse loading aprons and alley dumpsters so
+  they sit near the usual fights (owner note: drums were only reachable at gas stations).
+- Whiteout's hazard prop was our PROPANE TANK before a2a4efa; the lodge-deck propane
+  anchors are superseded by the village SNOW CANNON spots.
 
 ## Sync mechanics
 
