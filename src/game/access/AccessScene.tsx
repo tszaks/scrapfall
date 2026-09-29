@@ -614,7 +614,7 @@ export const AccessScene = memo(function AccessScene({
   const mats = useMemo(makeMats, []);
   const displays = useMemo(() => list.map((b) => (b.elev ? new Display() : null)), [list]);
   const cops = useMemo(() => list.map((b) => (b.elev ? new CopPanel() : null)), [list]);
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const refs = useMemo<Refs[]>(
     () =>
       list.map(() => ({

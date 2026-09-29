@@ -48,7 +48,7 @@ export function TimeDriver({ theme, arena }: { theme: Theme; arena: number }) {
  * suns at liveLook.sunDir).
  */
 export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolean }) {
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const fog = useMemo(() => new THREE.Fog("#000000", 10, 100), []);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const amb = useRef<THREE.AmbientLight>(null);
@@ -185,7 +185,7 @@ export function SkyDome({
   sunset: THREE.Texture | THREE.Color;
   night: THREE.Texture | THREE.Color;
 }) {
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({

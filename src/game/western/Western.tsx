@@ -315,7 +315,7 @@ export const WesternScene = memo(function WesternScene({
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
 }) {
-  const { gl } = useThree();
+  const gl = useThree((s) => s.gl);
   // the time of day in 1/64 steps; the reflections and the sky disc swap at the midpoint
   const nk = useTodK();
   const mode: WMode = nk >= 0.5 ? "night" : "sunset";

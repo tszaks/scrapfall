@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve:static": "node scripts/serve-static.mjs",
-    "test": "node --test scripts/game-physics.test.mjs"
+    "test": "node --test scripts/game-physics.test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm test && npm run typecheck && npm run build && npm run smoke"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -90,6 +93,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
+    "playwright": "^1.62.1",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",

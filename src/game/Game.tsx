@@ -170,6 +170,7 @@ import {
   wind,
   worldFx,
 } from "./terrain";
+import { steerTo } from "./steerCache";
 import { beachTerrain } from "./beach/terrain";
 import { AlpineScene, AlpineSun } from "./alpine/Alpine";
 import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
@@ -773,6 +774,14 @@ type Enemy = {
   tgt?: number;
   /** who set it on fire (co-op kill credit for burn kills; null = host) */
   burnFrom?: string | null;
+  /** steering memo (steerCache.ts): memo time, waypoint, sampled target and own spot */
+  svT?: number;
+  svX?: number;
+  svZ?: number;
+  stX?: number;
+  stZ?: number;
+  seX?: number;
+  seZ?: number;
 };
 type Bullet = {
   hitBodies?: Map<Body, number>;
@@ -2279,7 +2288,7 @@ function World({
   dead,
   players,
   msgSink,
-  health,
+  healthRef,
   slots,
   stats,
   renderStats,
@@ -2324,7 +2333,8 @@ function World({
   dead: boolean;
   players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
-  health: number;
+  /** live health as a ref so hits don't re-render the whole scene graph */
+  healthRef: React.MutableRefObject<number>;
   slots: React.MutableRefObject<Record<string, number>>;
   stats: React.MutableRefObject<Derived>;
   renderStats: Derived;
@@ -2360,7 +2370,7 @@ function World({
   const menuT = useRef(0);
   const menuWasOn = useRef(false);
   const meleeCooldown = useRef(0);
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
   const shardActive = useRef(false);
@@ -2512,7 +2522,8 @@ function World({
     };
   }, [city, gaps]);
   const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
-  const { gl, scene } = useThree();
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
@@ -2804,8 +2815,6 @@ function World({
 
   const playersRef = useRef(players);
   playersRef.current = players;
-  const healthRef = useRef(health);
-  healthRef.current = health;
   const coopRef = useRef(!!net);
   coopRef.current = !!net;
 
@@ -5576,21 +5585,29 @@ function World({
         let tx = target.x;
         let tz = target.z;
         const ghost = e.kind === "specter"; // specters drift straight through cover
-        if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-          const dist = fields.current.get(navKey(target));
-          // at the field's own cell (the target is right there, e.g. against a railing) walk
-          // straight at it instead of parking on the cell centre
-          // close in: the fine field knows the 2 m corridors the nav grid can't see
-          const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
-          const fs = ff ? fineStep(ff, e.x, e.z) : null;
-          if (fs) {
-            tx = fs.x;
-            tz = fs.z;
-          } else if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0) {
-            const wp = nextWaypoint(solid, dist, e.x, e.z);
-            tx = wp.x;
-            tz = wp.z;
-          }
+        if (!ghost) {
+          // route pick is memoised per enemy (steerCache.ts): the LOS probe plus the
+          // field descent used to run per frame per enemy — the crowd's biggest CPU line
+          const wp = steerTo(
+            e,
+            target,
+            state.clock.elapsedTime,
+            () => clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9),
+            () => {
+              const dist = fields.current.get(navKey(target));
+              // at the field's own cell (the target is right there, e.g. against a railing)
+              // walk straight at it instead of parking on the cell centre
+              // close in: the fine field knows the 2 m corridors the nav grid can't see
+              const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
+              const fs = ff ? fineStep(ff, e.x, e.z) : null;
+              if (fs) return fs;
+              if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0)
+                return nextWaypoint(solid, dist, e.x, e.z);
+              return null;
+            },
+          );
+          tx = wp.x;
+          tz = wp.z;
         }
         const mx = tx - e.x;
         const mz = tz - e.z;
@@ -6794,7 +6811,8 @@ function useStableCallbacks<T extends object>(props: T): T {
  */
 const WorldMemo = memo(World);
 function StableWorld(props: React.ComponentProps<typeof World>) {
-  return <WorldMemo {...useStableCallbacks(props)} />;
+  const p = useStableCallbacks(props);
+  return <WorldMemo {...p} />;
 }
 
 /** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
@@ -7909,7 +7927,7 @@ export function Game() {
           dead={dead}
           players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
-          health={health}
+          healthRef={healthRef}
           slots={slots}
           stats={statsRef}
           renderStats={renderStats}
@@ -8578,7 +8596,7 @@ const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
 });
 
 function LookAt({ y, z }: { y: number; z: number }) {
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   useEffect(() => camera.lookAt(0, y, z), [camera, y, z]);
   return null;
 }

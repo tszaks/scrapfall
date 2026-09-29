@@ -51,7 +51,7 @@ export function SquadDriver({
   onRevived: () => void;
   onBleedOut: () => void;
 }) {
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const pingReq = useRef(false);
   const holdR = useRef(false);
 
@@ -267,8 +267,10 @@ export function HudOverlay({
         const p = pings[i];
         if (!el || !box) continue;
         if (!p || !cam || !on) {
-          el.style.display = "none";
-          box.style.display = "none";
+          // (skip the DOM write when already hidden: style sets are not free, and this
+          // loop used to touch every slot every frame)
+          if (el.style.display !== "none") el.style.display = "none";
+          if (box.style.display !== "none") box.style.display = "none";
           continue;
         }
         project(cam, p.x, p.y + (p.kind === "enemy" ? 0.35 : 0.6), p.z, W, H, P);
@@ -333,21 +335,26 @@ export function HudOverlay({
       }
       for (let i = k; i < MAX_DOWN; i++) {
         const el = downEls.current[i];
-        if (el) el.style.display = "none";
+        if (el && el.style.display !== "none") el.style.display = "none";
       }
       const pe = promptEl.current;
       if (pe) {
-        pe.style.display = prompt ? "flex" : "none";
-        const t = pe.querySelector("span");
-        if (t && t.textContent !== prompt) t.textContent = prompt;
-        if (ringEl.current) ringEl.current.style.strokeDashoffset = String(113 * (1 - promptProg));
+        const want = prompt ? "flex" : "none";
+        if (pe.style.display !== want) pe.style.display = want;
+        if (prompt) {
+          const t = pe.querySelector("span");
+          if (t && t.textContent !== prompt) t.textContent = prompt;
+          if (ringEl.current)
+            ringEl.current.style.strokeDashoffset = String(113 * (1 - promptProg));
+        }
       }
       // ---- me, down ----
       const mine = squad.get(me.id);
       const se = selfEl.current;
       if (se) {
         const down = co && on && mine?.st === DOWN;
-        se.style.display = down ? "block" : "none";
+        const sd = down ? "block" : "none";
+        if (se.style.display !== sd) se.style.display = sd;
         if (down && mine) {
           const by = mine.by ? (num(mine.by) === 1 ? "HOST" : `P${num(mine.by)}`) : "";
           const a = se.querySelector("[data-t]");
@@ -365,7 +372,8 @@ export function HudOverlay({
       if (te) {
         const age = (now - hudToast.at) / 1000;
         const show = age < 2.8;
-        te.style.display = show ? "block" : "none";
+        const td = show ? "block" : "none";
+        if (te.style.display !== td) te.style.display = td;
         if (show) {
           te.style.opacity = String(Math.min(1, (2.8 - age) / 0.5));
           if (te.textContent !== hudToast.text) te.textContent = hudToast.text;
@@ -377,7 +385,8 @@ export function HudOverlay({
       if (be) {
         const age = bn ? (now - bn.at) / 1000 : 99;
         const show = on && age < 4.5;
-        be.style.display = show ? "block" : "none";
+        const bd = show ? "block" : "none";
+        if (be.style.display !== bd) be.style.display = bd;
         if (show && bn) {
           be.style.opacity = String(Math.min(1, (4.5 - age) / 0.6, age / 0.15));
           be.style.background = bn.color;

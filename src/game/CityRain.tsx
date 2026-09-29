@@ -212,7 +212,8 @@ export function CityRain({
   drips: [number, number, number, number][];
   heights: Float32Array;
 }) {
-  const { gl, scene } = useThree();
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   const group = useRef<THREE.Group>(null);
   const skyRef = useRef<THREE.Mesh>(null);
 
