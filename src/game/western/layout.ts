@@ -235,7 +235,17 @@ export type WPropKind =
   | "flatcar"
   | "steer"
   | "sign";
-export type WProp = { k: WPropKind; x: number; z: number; rot: number; s: number; a?: number };
+export type WProp = {
+  k: WPropKind;
+  x: number;
+  z: number;
+  rot: number;
+  s: number;
+  a?: number;
+  /** "bridge": part of a crossing's furniture (rails, mouth lamps), exempt from the
+   * keep-clear checks that bar clutter from decks and approaches */
+  tag?: "bridge";
+};
 
 export type WesternLayout = {
   kind: "western";
@@ -839,26 +849,46 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       const W = b.front === 0 || b.front === 2 ? b.x1 - b.x0 : b.z1 - b.z0;
       const cx = (b.x0 + b.x1) / 2;
       const cz = (b.z0 + b.z1) / 2;
+      // a ramada pole standing in a keep-clear lane (a bridge approach) blocks traffic —
+      // the lane is wider than the facade, so the adobe simply goes without its ramada
+      // (the mesh reads full.porch, so pole visuals and their posts stay in step)
+      const lz0 = 2.4;
+      const poleAt = (lx: number): [number, number] =>
+        b.front === 2
+          ? [cx + lx, b.z1 + lz0]
+          : b.front === 0
+            ? [cx - lx, b.z0 - lz0]
+            : b.front === 1
+              ? [b.x1 + lz0, cz - lx]
+              : [b.x0 - lz0, cz + lx];
+      if (
+        [W / 2 - 0.4, -W / 2 + 0.4].some((lx) => {
+          const [wx, wz] = poleAt(lx);
+          return noClutter.some((r) => wx > r.x0 && wx < r.x1 && wz > r.z0 && wz < r.z1);
+        })
+      ) {
+        full.porch = 0;
+        return full;
+      }
       for (const lx of [-W / 2 + 0.4, W / 2 - 0.4]) {
-        const lz = 2.4;
-        const [wx, wz] =
-          b.front === 2
-            ? [cx + lx, b.z1 + lz]
-            : b.front === 0
-              ? [cx - lx, b.z0 - lz]
-              : b.front === 1
-                ? [b.x1 + lz, cz - lx]
-                : [b.x0 - lz, cz + lx];
+        const [wx, wz] = poleAt(lx);
         posts.push({ x: wx, z: wz, r: 0.14 });
       }
     }
-    // a house's front porch (deck, posts, a little roof) blocks too
-    if (b.porch > 0 && (b.t === "house" || b.t === "ranch")) {
+    // a house's front porch (deck, posts, a little roof) blocks too — but a porch strip
+    // that lands on a keep-clear lane would wall off the approach, so it goes unbuilt
+    if (full.porch > 0 && (b.t === "house" || b.t === "ranch")) {
       const d = 2.2;
-      if (b.front === 0) markSolid(b.x0 + 0.5, b.z0 - d, b.x1 - 0.5, b.z0, 3);
-      else if (b.front === 2) markSolid(b.x0 + 0.5, b.z1, b.x1 - 0.5, b.z1 + d, 3);
-      else if (b.front === 1) markSolid(b.x1, b.z0 + 0.5, b.x1 + d, b.z1 - 0.5, 3);
-      else markSolid(b.x0 - d, b.z0 + 0.5, b.x0, b.z1 - 0.5, 3);
+      const strip =
+        b.front === 0
+          ? { x0: b.x0 + 0.5, z0: b.z0 - d, x1: b.x1 - 0.5, z1: b.z0 }
+          : b.front === 2
+            ? { x0: b.x0 + 0.5, z0: b.z1, x1: b.x1 - 0.5, z1: b.z1 + d }
+            : b.front === 1
+              ? { x0: b.x1, z0: b.z0 + 0.5, x1: b.x1 + d, z1: b.z1 - 0.5 }
+              : { x0: b.x0 - d, z0: b.z0 + 0.5, x1: b.x0, z1: b.z1 - 0.5 };
+      if (noClutter.some((r) => overlaps(strip, r))) full.porch = 0;
+      else markSolid(strip.x0, strip.z0, strip.x1, strip.z1, 3);
     }
     return full;
   };

@@ -182,5 +182,27 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
         !inLane(q.x, q.z) || q.r <= 0.08,
         `seed ${seed}: post in the stair lane at ${q.x},${q.z} r=${q.r}`,
       );
+    // nothing blocks a crossing: no clutter prop on a deck or within the 14 m end
+    // aprons (the spec calls for 10 m clear), and no post stands in the walkable
+    // lane between the rails. The bridge's own rails and mouth lamps (tag
+    // "bridge") are furniture, not clutter.
+    const inKeep = (x, z, d) =>
+      (x > d.x0 - 0.4 && x < d.x1 + 0.4 && z > d.z0 - 0.4 && z < d.z1 + 0.4) ||
+      (x > d.x0 - 2.4 && x < d.x1 + 2.4 && z > d.z0 - 14 && z < d.z0 + 0.6) ||
+      (x > d.x0 - 2.4 && x < d.x1 + 2.4 && z > d.z1 - 0.6 && z < d.z1 + 14);
+    for (const d of layout.decks.filter((d) => d.axis === "z")) {
+      const clog = layout.props.find((p) => p.tag !== "bridge" && inKeep(p.x, p.z, d));
+      assert.ok(!clog, `seed ${seed}: ${clog?.k} clutters the bridge approach at ${clog?.x},${clog?.z}`);
+      const pole = layout.posts.find(
+        (p) =>
+          p.x > d.x0 + 0.75 &&
+          p.x < d.x1 - 0.75 &&
+          p.z > d.z0 - 14 &&
+          p.z < d.z1 + 14 &&
+          Math.abs(p.x - (d.x0 + 0.6)) > 0.15 &&
+          Math.abs(p.x - (d.x1 - 0.6)) > 0.15,
+      );
+      assert.ok(!pole, `seed ${seed}: post at ${pole?.x},${pole?.z} blocks a bridge lane`);
+    }
   }
 });

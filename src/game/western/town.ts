@@ -1362,32 +1362,29 @@ function ranches(K: Kit) {
   }
 }
 
-/** the two bridges over the dry riverbed: the wagon bridge on the south trail and the
- * plank bridge where Laundry Row runs out to the tent city */
+/** the two creek crossings: the wagon bridge on the south trail and the plank bridge
+ * where Laundry Row runs out to the tent city */
+const CREEK_DECKS = [
+  { x0: -62, z0: 136, x1: -52, z1: 172, y: 0.5 },
+  { x0: 48, z0: 174, x1: 60, z1: 206, y: 0.5 },
+] as const;
+
+/** the bridges' own dressing: continuous collision rails plus the visible split
+ * rails, and a lamp post at each corner of each mouth */
 function bridges(K: Kit) {
   const { posts } = K;
-  // The deck list doubles as the approach plan: the dirt ramps and mouths are
-  // registered before any district dresses the banks, so clutter never blocks them.
-  for (const dk of [
-    { x0: -62, z0: 136, x1: -52, z1: 172, y: 0.5 }, // the wagon bridge, south trail
-    { x0: 48, z0: 174, x1: 60, z1: 206, y: 0.5 }, // the plank bridge to the tent city
-  ] as const) {
-    K.decks.push({ ...dk, axis: "z" });
-    K.noClutter.push(
-      { x0: dk.x0 - 1.6, z0: dk.z0 - 9, x1: dk.x1 + 1.6, z1: dk.z0 + 0.6 },
-      { x0: dk.x0 - 1.6, z0: dk.z1 - 0.6, x1: dk.x1 + 1.6, z1: dk.z1 + 9 },
-    );
+  for (const dk of CREEK_DECKS) {
     // the side rails: a continuous collision line AND the visible split rails on it
     for (const x of [dk.x0 + 0.6, dk.x1 - 0.6]) {
       for (let z = dk.z0 + 1; z <= dk.z1 - 1; z += 0.4)
         posts.push({ x, z, r: 0.09, shot: true, h: 1.4 });
       for (let z = dk.z0 + 1.2; z + 2.3 <= dk.z1 - 1; z += 2.3)
-        K.props.push({ k: "fence", x, z: z + 1.15, rot: Math.PI / 2, s: 2.3 });
+        K.props.push({ k: "fence", x, z: z + 1.15, rot: Math.PI / 2, s: 2.3, tag: "bridge" });
     }
     // lamp posts mark each mouth instead of the railroad crossbucks
     for (const z of [dk.z0 - 1.6, dk.z1 + 1.6])
       for (const x of [dk.x0 - 0.9, dk.x1 + 0.9])
-        K.props.push({ k: "streetlamp", x, z, rot: 0, s: 1 });
+        K.props.push({ k: "streetlamp", x, z, rot: 0, s: 1, tag: "bridge" });
   }
 }
 
@@ -1591,6 +1588,19 @@ function townRowZ(K: Kit, edgeX: number, z0: number, z1: number) {
 }
 
 export function buildTown(K: Kit) {
+  // ---- the crossings go first ----
+  // The deck list doubles as the approach plan: each deck and a 14 m apron at each
+  // end (10 m of clear approach plus the margin a wagon needs to line up) are
+  // registered before any row or district builds, so the desert scatter and the
+  // porch and ramada poles that follow can never stand on a deck or in the way.
+  for (const dk of CREEK_DECKS) {
+    K.decks.push({ ...dk, axis: "z" });
+    K.noClutter.push(
+      { x0: dk.x0 - 0.4, z0: dk.z0 - 0.4, x1: dk.x1 + 0.4, z1: dk.z1 + 0.4 },
+      { x0: dk.x0 - 2.4, z0: dk.z0 - 14, x1: dk.x1 + 2.4, z1: dk.z0 + 0.6 },
+      { x0: dk.x0 - 2.4, z0: dk.z1 - 0.6, x1: dk.x1 + 2.4, z1: dk.z1 + 14 },
+    );
+  }
   // ---- business rows on the parallel streets ----
   // North Street (z = -64): commercial fronts both sides; a boarding house mid-block
   townRow(K, false, -64, 6, -170, -36, [
