@@ -121,6 +121,13 @@ function bus(m: Model, c: string) {
   m.box(1.2, 0.3, 0.06, [0, 3.02, L / 2 - 0.02], "#1d1c1a", SURF.paint);
   wheelSet(m, L / 2 - 1.6, 0.46, 0.3, W / 2 - 0.28);
   wheelSet(m, -L / 2 + 1.6, 0.46, 0.3, W / 2 - 0.28);
+  // district lettering on both flanks, under the window band
+  for (const sx of [-1, 1]) {
+    m.push([sx * (W / 2 + 0.05), 0, 0], [0, sx * (Math.PI / 2), 0]);
+    letterRow(m, "SCRAPFALL UNIFIED", -4.6, 1.52, 0, 0.3, "#1d1c1a");
+    letterRow(m, "SCHOOL DISTRICT", -3.9, 1.12, 0, 0.3, "#1d1c1a");
+    m.pop();
+  }
   for (const sx of [-1, 1])
     m.box(0.05, 0.05, 0.5, [sx * (W / 2 + 0.12), 2.45, L / 2 - 0.3], "#1d1c1a", SURF.steel);
   m.cyl(0.05, 1.7, [W / 2 - 0.4, 0.32, -L / 2 + 0.5], "#3a3a38", SURF.steel, {
@@ -151,6 +158,11 @@ function truck(m: Model, c: string) {
   }
   m.box(W + 0.1, 0.3, 0.25, [0, 0.5, L / 2 + 0.08], CHROME, SURF.chrome);
   m.box(2.1, 0.55, 0.06, [0, 2.55, -L / 2 + 0.02], "#6a8a5f", SURF.paint); // mover's name board
+  // own gag: the grille reads "SMC" (Scrapfall Moving Co.), the tail board the firm
+  letterRow(m, "SMC", -0.36, 0.66, L / 2 + 0.13, 0.16, "#efe6cd");
+  m.push([0, 2.55, -L / 2 - 0.05], [0, Math.PI, 0]);
+  letterRow(m, "SCRAPFALL MOVING CO", -0.98, -0.09, 0, 0.09, "#e8e2d2");
+  m.pop();
   wheelSet(m, L / 2 - 1.1, 0.42, 0.28, W / 2 - 0.24);
   wheelSet(m, -L / 2 + 1.2, 0.42, 0.28, W / 2 - 0.24);
   for (const sx of [-1, 1])
@@ -456,6 +468,30 @@ function houseArt(S: Model, D: Model, Gl: Model, side: "n" | "s") {
   D.box(0.92, 2.3, 0.05, [-7.4, 1.35, H.z1 + T + 0.4], "#7a5c40", SURF.wood, { rot: [0, 0.65, 0] });
   D.box(0.92, 2.28, 0.05, [-11.45, 1.32, H.z0 - T - 0.55], "#7a5c40", SURF.wood, { rot: [0, -0.6, 0] });
   D.box(0.85, 2.2, 0.05, [-15.2, 1.28, G.z0 - T - 0.5], "#7a5c40", SURF.wood, { rot: [0, -0.75, 0] });
+  // deck door upstairs, swung out onto the deck boards
+  D.box(0.92, 2.28, 0.05, [-8.55, F2 + 1.12, H.z0 - T - 0.5], "#7a5c40", SURF.wood, { rot: [0, -0.6, 0] });
+
+  // ---- rear deck + garden stair (collision lives in the plan)
+  for (const px of [-12.2, -10.0, -7.8])
+    S.box(0.14, F2 - 0.18, 0.14, [px, (F2 - 0.18) / 2, -18.8], "#7a6248", SURF.wood);
+  const stAng = Math.atan2(F2, 4.92),
+    stLen = Math.hypot(4.92, F2);
+  for (const xx of [-8.63, -7.57]) {
+    S.box(0.07, 0.3, stLen, [xx, F2 / 2 + 0.05, -21.44], "#7a6248", SURF.wood, { rot: [-stAng, 0, 0] });
+    D.box(0.05, 0.07, stLen * 0.95, [xx, F2 / 2 + 0.82, -21.44], "#8a6f4d", SURF.wood, { rot: [-stAng, 0, 0] });
+  }
+  // rail caps over the deck parapets + plank lines on the deck floor
+  D.box(0.2, 0.05, 1.4, [-12.385, F2 + 0.99, -18.3], "#efe6cd", SURF.wood);
+  D.box(0.2, 0.05, 1.4, [-7.615, F2 + 0.99, -18.3], "#efe6cd", SURF.wood);
+  D.box(3.78, 0.05, 0.2, [-10.47, F2 + 0.99, -18.94], "#efe6cd", SURF.wood);
+  for (let k = 0; k < 5; k++) D.box(4.75, 0.02, 0.03, [-10.0, F2 + 0.01, -18.85 + k * 0.26], "#8d7f68", SURF.wood);
+  // mantle crates on the lawn at the house's front-east corner — a staircase
+  // of movers' boxes up to the porch-roof edge (two crates + a wardrobe carton)
+  D.box(0.85, 0.69, 0.8, [-3.87, 0.505, -8.2], "#a8906a", SURF.wood);
+  D.box(0.7, 1.19, 0.7, [-4.5, 0.755, -8.2], "#96805e", SURF.wood, { rot: [0, 0.28, 0] });
+  D.box(0.75, 2.19, 0.79, [-4.53, 1.255, -8.95], "#b09a70", SURF.wood, { rot: [0, -0.06, 0] });
+  D.box(0.87, 0.05, 0.82, [-3.87, 0.87, -8.2], "#8d7a58", SURF.wood);
+  D.box(0.72, 0.05, 0.72, [-4.5, 1.37, -8.2], "#8d7a58", SURF.wood, { rot: [0, 0.28, 0] });
 
   // ---- windows: sill, mullion, mid rail, glass downstairs only
   const win = (a: number, b: number, y0: number, y1: number, c0: number, along: "x" | "z") => {
@@ -493,9 +529,8 @@ function houseArt(S: Model, D: Model, Gl: Model, side: "n" | "s") {
   }
   // upstairs, open slots (the firing line)
   for (const [a, b, y0, y1, c0, ax] of [
-    [-9.6, -7.4, 3.95, 5.4, H.z1 + T / 2, "x"],
+    [-9.6, -7.4, 3.35, 5.5, H.z1 + T / 2, "x"],
     [-12.4, -11.2, 4.0, 5.35, H.z1 + T / 2, "x"],
-    [-9.4, -7.5, 3.95, 5.4, H.z0 - T / 2, "x"],
     [-12.2, -11, 4.0, 5.35, H.z0 - T / 2, "x"],
     [-10.4, -9.9, 4.1, 5.2, H.x1 + T / 2, "z"],
     [-17.1, -16.3, 4.1, 5.2, H.x1 + T / 2, "z"],
@@ -508,7 +543,7 @@ function houseArt(S: Model, D: Model, Gl: Model, side: "n" | "s") {
   for (const [a, b, y] of [
     [-11.9, -10.3, 1.7],
     [-5.85, -4.95, 1.7],
-    [-9.6, -7.4, 4.68],
+    [-9.6, -7.4, 4.45],
   ] as const)
     for (const px of [a - 0.22, b + 0.22]) D.box(0.3, 1.42, 0.05, [px, y, H.z1 + T + 0.03], shutterC, SURF.wood);
   // corner boards + water table cap over the foundation
@@ -595,8 +630,9 @@ function furnitureArt(D: Model) {
   bed(-11.65, -16.35, "#a87d7d");
   D.box(1.7, 0.9, 0.5, [-5.45, F2 + 0.45, -10.25], "#7a5c40", SURF.wood);
   for (let i = 0; i < 3; i++) D.box(0.44, 0.2, 0.05, [-5.45 + (i - 1) * 0.55, F2 + 0.45, -10.0], "#8f6a4a", SURF.wood);
-  D.box(1.4, 0.06, 0.55, [-6.15, F2 + 0.75, -16.55], "#7a5c40", SURF.wood);
-  D.box(0.5, 0.5, 0.42, [-6.0, F2 + 0.25, -16.3], "#96684a", SURF.wood);
+  D.box(0.6, 0.06, 1.4, [-12.6, F2 + 0.75, -12.85], "#7a5c40", SURF.wood); // desk on the front room's west wall
+  D.box(0.5, 0.5, 0.42, [-11.95, F2 + 0.25, -12.85], "#96684a", SURF.wood); // its chair
+  D.box(0.04, 0.55, 0.42, [-12.94, F2 + 1.45, -12.85], "#6a5236", SURF.wood); // framed portrait above it
   D.box(0.2, 0.5, 0.2, [-9.9, F2 + 0.25, -10.3], "#8a6a4a", SURF.wood);
   D.cyl(0.09, 0.05, [-9.9, F2 + 0.52, -10.3], "#c8b45e", SURF.paint, { seg: 8 }); // lamp
   D.box(0.14, 0.3, 0.06, [-9.9, F2 + 0.65, -10.3], "#e8d8a8", SURF.glow);
@@ -736,18 +772,36 @@ function streetArt(S: Model, D: Model) {
 function yardArt(S: Model, D: Model, s: 1 | -1) {
   const Z = (z: number) => z * s,
     X = (x: number) => x * s;
-  // swing set: two A-frames (legs splay in z), a bar, two swings
-  for (const e of [-1, 1])
-    for (const q of [-1, 1])
-      S.box(0.07, 2.25, 0.07, [X(-9) + e * 1.05, 1.05, Z(-24.2) + q * 0.45], WOOD_D, SURF.wood, {
-        rot: [q * 0.22 * s, 0, 0],
-      });
-  S.box(2.35, 0.08, 0.08, [X(-9), 2.14, Z(-24.2)], WOOD_D, SURF.wood);
-  for (const dx of [-0.55, 0.55]) {
-    for (const sx of [-1, 1])
-      D.cyl(0.013, 1.45, [X(-9) + dx + sx * 0.14, 1.4, Z(-24.2)], "#8a9296", SURF.steel, { seg: 4 });
-    D.box(0.44, 0.05, 0.2, [X(-9) + dx, 0.62, Z(-24.2)], "#b04a40", SURF.paint);
+  // swing set: two A-frames (legs splay in z), a bar, two swings — yellow yard only
+  if (s === -1) {
+    for (const e of [-1, 1])
+      for (const q of [-1, 1])
+        S.box(0.07, 2.25, 0.07, [X(-9) + e * 1.05, 1.05, Z(-24.2) + q * 0.45], WOOD_D, SURF.wood, {
+          rot: [q * 0.22 * s, 0, 0],
+        });
+    S.box(2.35, 0.08, 0.08, [X(-9), 2.14, Z(-24.2)], WOOD_D, SURF.wood);
+    for (const dx of [-0.55, 0.55]) {
+      for (const sx of [-1, 1])
+        D.cyl(0.013, 1.45, [X(-9) + dx + sx * 0.14, 1.4, Z(-24.2)], "#8a9296", SURF.steel, { seg: 4 });
+      D.box(0.44, 0.05, 0.2, [X(-9) + dx, 0.62, Z(-24.2)], "#b04a40", SURF.paint);
+    }
   }
+  // green yard instead gets the fallout-shelter hatch: concrete collar flush with
+  // the lawn, bolted steel lid, air vent, stencil marking
+  if (s === 1) {
+    S.box(2.0, 0.2, 1.5, [-9, 0.1, -24.4], CONCRETE, SURF.paint);
+    S.box(1.7, 0.07, 1.2, [-9, 0.24, -24.4], "#6f7a70", SURF.steel);
+    for (const ex of [-0.72, 0.72]) S.box(0.16, 0.1, 0.32, [-9 + ex, 0.3, -24.4], "#57504a", SURF.steel);
+    D.cyl(0.05, 0.5, [-8.6, 0.48, -24.4], "#8a9296", SURF.steel, { rot: [0, 0, 0.7], seg: 6 });
+    D.cyl(0.09, 1.15, [-9.8, 0.57, -25.05], "#8a9296", SURF.steel, { seg: 7 });
+    D.cyl(0.17, 0.07, [-9.8, 1.16, -25.05], "#9aa2a6", SURF.steel, { seg: 8 });
+    D.push([-9, 0.29, -24.4], [-Math.PI / 2, 0, 0]);
+    letterRow(D, "SHELTER", -0.64, -0.09, 0, 0.08, "#e8e2d2");
+    D.pop();
+  }
+  // the pet/RC gap under each rear fence: bare dirt humped on both faces
+  for (const zz of [-30.55, -31.45])
+    D.sphere(0.55, [X(-1.95), 0.09, Z(zz)], SOIL, SURF.wood, { s: [1.5, 0.35, 0.85] });
   // picnic table + benches + kettle grill
   const px = X(-14.4),
     pz = Z(-22.3);
@@ -1029,10 +1083,12 @@ export function buildNuketown() {
   }
   // board fence dressing on the yard side of each panel
   const PRIV_RUNS: [number, number, number, number, 1 | -1][] = [
-    [-18, -31, -1, -31, -1],
+    [-18, -31, -2.4, -31, -1],
+    [-1.5, -31, -1, -31, -1],
     [-1, -31, -1, -5.6, -1],
     [-18, -31, -18, -5.6, 1],
-    [1, 31, 18, 31, 1],
+    [1, 31, 1.5, 31, 1],
+    [2.4, 31, 18, 31, 1],
     [1, 5.6, 1, 31, 1],
     [18, 5.6, 18, 31, -1],
     [30, -5.6, 30, -3.7, -1],

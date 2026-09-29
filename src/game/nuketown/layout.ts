@@ -60,7 +60,7 @@ export const NUKE_VEHICLES: {
 }[] = [
   // nose is local +z; yaw is the world heading (pi/2 = facing east along the street)
   { kind: "bus", x: -5.4, z: -0.55, yaw: 1.29, color: "#d9a92e" },
-  { kind: "truck", x: 6.9, z: 1.15, yaw: -1.35, color: "#cfd3cd" },
+  { kind: "truck", x: 6.9, z: 1.15, yaw: -1.35, color: "#a8452f" },
   { kind: "sedan", x: 14.6, z: -2.15, yaw: Math.PI / 2 + 0.05, color: "#cf8a8a" },
   { kind: "wagon", x: -21.6, z: 4.35, yaw: 1.78, color: "#7fa8a0" },
   { kind: "jeep", x: 24.6, z: 0.4, yaw: Math.PI / 2 - 0.22, color: "#77775a" },
@@ -77,17 +77,17 @@ export const NUKE_MANNEQUINS: {
   hat?: boolean;
 }[] = [
   // north house: family at the dining table (seat tops ~0.7 -> base offset ~0.2)
-  { x: -8.8, z: -14.4, y: 0.21, yaw: Math.PI, pose: "sit" },
+  { x: -8.8, z: -14.9, y: 0.21, yaw: Math.PI, pose: "sit" },
   { x: -9.75, z: -15.2, y: 0.21, yaw: Math.PI / 2, pose: "sit" },
   { x: -7.85, z: -15.2, y: 0.21, yaw: -Math.PI / 2, pose: "sit" },
   { x: -6.0, z: -16.6, yaw: 2.6, pose: "stand" }, // kitchen counter
   { x: -12, z: -11.2, y: 0.31, yaw: Math.PI / 2, pose: "sit" }, // sofa
   { x: -11.2, z: -11.2, y: 0.31, yaw: Math.PI / 2, pose: "sit" }, // sofa
   { x: -8.5, z: -10.6, y: F2, yaw: Math.PI, pose: "stand" }, // THE window
-  { x: -8.4, z: -16.7, y: F2, yaw: Math.PI, pose: "stand" }, // rear bedroom window
+  { x: -10.3, z: -16.65, y: F2, yaw: Math.PI, pose: "stand" }, // rear bedroom window
   { x: -8.1, z: -8.4, y: 0.21, yaw: 0.2, pose: "sit" }, // porch chair
   // south house
-  { x: 8.8, z: 14.4, y: 0.21, yaw: 0, pose: "sit" },
+  { x: 8.8, z: 14.9, y: 0.21, yaw: 0, pose: "sit" },
   { x: 9.75, z: 15.2, y: 0.21, yaw: -Math.PI / 2, pose: "sit" },
   { x: 7.85, z: 15.2, y: 0.21, yaw: Math.PI / 2, pose: "sit" },
   { x: 6.0, z: 16.6, yaw: -2.6, pose: "stand" },
@@ -97,7 +97,7 @@ export const NUKE_MANNEQUINS: {
   { x: 15.6, z: 13.6, yaw: -1.2, pose: "stand" }, // garage mechanic at the bench
   // yards and street
   { x: -5.9, z: -24.5, yaw: 0.4, pose: "stand" }, // pushing the mower
-  { x: -9, z: -23.3, y: 0.12, yaw: 0, pose: "sitFloor" }, // on the swing
+  { x: 9, z: 23.3, y: 0.12, yaw: Math.PI, pose: "sitFloor" }, // on the swing (yellow yard)
   { x: 13.6, z: 22.6, yaw: -2.4, pose: "stand" }, // grill man
   { x: 5.4, z: 7.6, yaw: 1.9, pose: "lounge" }, // sunbathing on the lawn
   { x: -10.6, z: -4.15, yaw: 1.35, pose: "stand" }, // waiting by the mailbox
@@ -328,7 +328,7 @@ function housePlan(side: Side): Structure {
     NUKE.wallTop,
     wallC,
     [
-      { a: -9.6, b: -7.4, y0: 3.95, y1: 5.4 }, // the window — the long sightline
+      { a: -9.6, b: -7.4, y0: 3.35, y1: 5.5 }, // the window — the long sightline (low sill: mantle route)
       { a: -12.4, b: -11.2, y0: 4.0, y1: 5.35 },
     ],
     { dir: 1, color: cl.color },
@@ -342,7 +342,7 @@ function housePlan(side: Side): Structure {
     NUKE.wallTop,
     wallC,
     [
-      { a: -9.4, b: -7.5, y0: 3.95, y1: 5.4 },
+      { a: -9.4, b: -8.2, y0: F2, y1: 5.35 }, // deck door
       { a: -12.2, b: -11, y0: 4.0, y1: 5.35 },
     ],
     { dir: -1, color: cl.color },
@@ -389,6 +389,9 @@ function housePlan(side: Side): Structure {
   B(P.x0, P.z0, P.x1, P.z1, 0, 0.16, "#a49e92");
   const hole = { x0: -5.66, x1: -4.4, z0: -15.95, z1: -10.85 };
   slab(p, rect(H.x0, H.z0, H.x1, H.z1), F2, 1, side === "n" ? hole : mirror(hole));
+  // the porch roof is a floor: crates on the porch are the mantle route to the
+  // upstairs front window (sill 3.95 -> 1.15 m hop, inside the ledge limit)
+  p.floors.push({ ...rect(P.x0 - 0.4, H.z1 + T, P.x1 + 0.4, P.z1 + 0.45), y: 2.8, level: 1, holes: [] });
   // opaque attic floor / upstairs ceiling
   B(H.x0 - T, H.z0 - T, H.x1 + T, H.z1 + T, NUKE.wallTop - 0.16, NUKE.wallTop + 0.02, "#cfc5ae");
   // the stair itself rises toward the rear wall
@@ -410,6 +413,34 @@ function housePlan(side: Side): Structure {
       y = 0.6 + i * 0.3;
     B(-5.58, z - 0.02, -5.5, z + 0.02, y, y + 0.75, "#8a6f4d", false);
   }
+
+  // ---------------- rear deck + garden stair (the third way upstairs)
+  // plank deck against the rear wall; a straight open-riser stair drops from its
+  // east end into the yard, feet landing beside the kitchen-door stoop
+  slab(p, rect(-12.4, -19.05, -7.6, -17.64), F2, 1); // laps under the stair's top tread — no seam
+  // threshold: carry the deck surface through the door reveal so the capsule
+  // never straddles a floorless wall slice mid-step
+  p.floors.push({ ...rect(-9.3, -17.64, -8.3, -17.2), y: F2, level: 1, holes: [] });
+  p.stairs.push({
+    ...rect(-8.65, -23.9, -7.55, -18.98),
+    axis: "z",
+    reverse: side === "s",
+    y0: 0,
+    y1: F2,
+    level: 1,
+  });
+  // deck rails: west end, east end, and the yard edge west of the stair landing;
+  // balusters run down both open edges of the flight, just outside the treads
+  B(-12.45, -18.95, -12.32, -17.64, F2, F2 + 0.95, "#8a6f4d");
+  B(-7.68, -18.95, -7.55, -17.64, F2, F2 + 0.95, "#8a6f4d");
+  B(-12.32, -18.98, -8.7, -18.9, F2, F2 + 0.95, "#8a6f4d");
+  for (let i = 0; i < 9; i++) {
+    const z = -19.4 - i * 0.48,
+      y = F2 - (i + 0.6) * 0.34;
+    B(-8.72, z - 0.02, -8.65, z + 0.02, y, y + 0.75, "#8a6f4d", false);
+    B(-7.55, z - 0.02, -7.48, z + 0.02, y, y + 0.75, "#8a6f4d", false);
+  }
+  nav(-8.8, -24, -7.4, -18.9);
 
   // ---------------- garage (attached, west side)
   const gw = "#a89d8a",
@@ -469,20 +500,29 @@ function housePlan(side: Side): Structure {
   furn(-12.9, -17.16, -12.2, -16.45, fy, fy + 1.78);
   furn(-9.8, -15.75, -7.8, -14.6, fy, fy + 0.78);
   for (const [cx, cz] of [
-    [-10.0, -14.4],
-    [-10.0, -15.95],
-    [-8.55, -15.2],
+    [-8.8, -14.92],
+    [-10.15, -15.2],
+    [-9.3, -15.95],
   ] as const)
     furn(cx - 0.24, cz - 0.24, cx + 0.24, cz + 0.24, fy, fy + 0.48);
   // upstairs: beds + dresser + desk (kept west of the stairwell hole)
   furn(-12.76, -10.0, -10.6, -12.1, F2, F2 + 0.58);
   furn(-6.3, -9.9, -4.5, -10.55, F2, F2 + 0.95);
   furn(-12.76, -15.6, -10.6, -17.15, F2, F2 + 0.58);
-  furn(-6.6, -16.95, -5.7, -16.3, F2, F2 + 0.75);
+  furn(-12.95, -13.15, -12.35, -12.55, F2, F2 + 0.75);
   // garage: workbench along the west wall, shelves, crates (clear of the rear man-door lane)
   furn(-17.26, -15.8, -16.55, -13.6, 0.14, 1.06);
   furn(-14.6, -10.2, -13.6, -9.9, 0.14, 1.5);
   furn(-16.9, -12.3, -16.1, -11.3, 0.14, 0.62);
+  // moving crates piled on the lawn at the porch's east corner: a staircase of
+  // movers' boxes — 0.85 -> 1.35 -> 2.35 m tops, then the porch-roof edge
+  // (2.8 m) is a plain 0.45 m walk-step. the mantle route upstairs
+  furn(-4.3, -8.6, -3.45, -7.8, 0.16, 0.85);
+  furn(-4.85, -8.55, -4.15, -7.85, 0.16, 1.35);
+  furn(-4.9, -9.34, -4.15, -8.55, 0.16, 2.35);
+  p.floors.push({ ...rect(-4.3, -8.6, -3.45, -7.8), y: 0.85, level: 0, holes: [] });
+  p.floors.push({ ...rect(-4.85, -8.55, -4.15, -7.85), y: 1.35, level: 0, holes: [] });
+  p.floors.push({ ...rect(-4.9, -9.34, -4.15, -8.55), y: 2.35, level: 0, holes: [] });
   // backyard cover: swing set A-frames, picnic table + grill, trash cans, clothesline, chair
   nav(-10.1, -24.8, -8.0, -23.6);
   nav(-15.2, -22.7, -13.6, -21.9);
@@ -494,6 +534,7 @@ function housePlan(side: Side): Structure {
 
   door(-7.05, H.z1 + 0.1, side === "n" ? 0 : 2);
   door(-11.1, H.z0 - 0.1, side === "n" ? 2 : 0);
+  door(-8.8, H.z0 - 0.1, side === "n" ? 2 : 0); // deck door upstairs
   door(-15.5, G.z1 + 0.1, side === "n" ? 0 : 2);
   door(-15.8, G.z0 - 0.1, side === "n" ? 2 : 0);
   return p;
@@ -559,8 +600,12 @@ function boundaryPlan(): Structure {
 
   const N = NUKE.lotN,
     S = NUKE.lotS;
-  // north lot boundary (rear/east/west privacy; street frontage picket with gaps)
-  run("privacy", N.x0, N.z0, N.x1, N.z0);
+  // north lot boundary (rear/east/west privacy; street frontage picket with gaps);
+  // the rear fence keeps a low pet/RC gap near its east end — open below 0.52 m so
+  // shots and small things pass but nobody walks through
+  run("privacy", N.x0, N.z0, -2.4, N.z0);
+  run("privacy", -1.5, N.z0, N.x1, N.z0);
+  B(-2.4, N.z0 - 0.05, -1.5, N.z0 + 0.05, 0.52, 1.95, "#b3a284");
   run("privacy", N.x1, N.z0, N.x1, N.z1);
   run("privacy", N.x0, N.z0, N.x0, N.z1);
   run("picket", N.x0, N.z1, N.x1, N.z1, [
@@ -571,8 +616,10 @@ function boundaryPlan(): Structure {
   // the slot between each garage's side wall and its fence is a dead pocket
   nav(-18.15, -17.3, -17.7, -9.7);
   nav(17.7, 9.7, 18.15, 17.3);
-  // south lot (point-mirrored)
-  run("privacy", S.x0, S.z1, S.x1, S.z1);
+  // south lot (point-mirrored), same pet gap by its east corner
+  run("privacy", S.x0, S.z1, 1.5, S.z1);
+  run("privacy", 2.4, S.z1, S.x1, S.z1);
+  B(1.5, S.z1 - 0.05, 2.4, S.z1 + 0.05, 0.52, 1.95, "#b3a284");
   run("privacy", S.x0, S.z0, S.x0, S.z1);
   run("privacy", S.x1, S.z0, S.x1, S.z1);
   run("picket", S.x0, S.z0, S.x1, S.z0, [
