@@ -27,6 +27,7 @@ const BY_SHAPE: Record<Theme["blockShape"], HazardDef> = {
   // ice: cryo condensers flash-freeze the area
   crystal: { name: "CRYO CONDENSER", effect: "freeze", shell: "#8fc4dc", core: "#9ff0ff", radius: 7, damage: 6, look: "condenser" },
   berg: { name: "CRYO CONDENSER", effect: "freeze", shell: "#b0d0ec", core: "#7fe8ff", radius: 7, damage: 6, look: "condenser" },
+  alpine: { name: "SNOW CANNON", effect: "freeze", shell: "#c8302a", core: "#bff4ff", radius: 7.5, damage: 7, look: "condenser" },
   // forests: bursting pods tangle everything nearby
   tree: { name: "SPORE POD", effect: "root", shell: "#6a4a7a", core: "#d4ff3a", radius: 6, damage: 8, look: "pod" },
   pagoda: { name: "BRAMBLE POD", effect: "root", shell: "#b03a5a", core: "#ff9ac0", radius: 6, damage: 8, look: "pod" },

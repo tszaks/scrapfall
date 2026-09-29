@@ -14,7 +14,7 @@ export type Theme = {
   enemyBullet: string;
   blockShape:
     | "monument" | "crystal" | "tree" | "basalt" | "butte"
-    | "pagoda" | "berg" | "coral" | "server" | "vat";
+    | "pagoda" | "berg" | "coral" | "server" | "vat" | "alpine";
   boss: {
     name: string;
     shape: "golem" | "yeti" | "treant" | "magma" | "mech" | "ronin" | "drake";

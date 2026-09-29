@@ -191,6 +191,7 @@ const MAP_STYLE: Record<string, string> = {
   "Dust Basin": "desert", "Canyon Mesa": "desert", "Frost Shelf": "ice", "Glacier Rift": "ice",
   "Mossy Woods": "forest", "Ash Crater": "magma", "Cherry Grove": "blossom",
   "Sunken Abyss": "abyss", "Neon Spire": "cyber", "Toxic Hollow": "toxic",
+  "Whiteout Pass": "ice",
 };
 let style: Style = STYLES['desert']!;
 export function setMusicTheme(mapName: string) {
