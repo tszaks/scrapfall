@@ -289,7 +289,7 @@ import { HudChip, UiStyles } from "./ui/kit";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
-import { SettingsScreen } from "./ui/SettingsScreen";
+import { SettingsScreen, type SettingsTab } from "./ui/SettingsScreen";
 import { ShopBar } from "./ui/ShopBar";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
@@ -6906,6 +6906,11 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dev = useInputDevice(); // keyboard / controller / touch: which hints to show
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("graphics");
+  const openSettings = (tab: SettingsTab = "graphics") => {
+    setSettingsTab(tab);
+    setShowSettings(true);
+  };
   const [showWeapons, setShowWeapons] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
@@ -8017,7 +8022,7 @@ export function Game() {
 
       <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[10px]" : "text-xs"}`}>
+          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
             {started && !ended && (
               <>
                 <HudChip className="font-bold">
@@ -8046,7 +8051,7 @@ export function Game() {
             )}
             {multiplayer && locked && !ended && (
               <div
-                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-[11px]"}`}
+                className="space-y-1 text-right font-mono text-[11px] tracking-widest text-[#2b2118]"
               >
                 <div className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-2 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
                   ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
@@ -8092,14 +8097,14 @@ export function Game() {
                       }
                     : undefined
                 }
-                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[11px]" : "px-3 py-1.5 text-xs"} ${
                   active
                     ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
                     : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "min-h-3 min-w-3 px-1 text-[7px]" : "min-h-4 min-w-4 px-1 text-[10px]"}`}
+                  className="absolute -left-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]"
                 >
                   {i < 10 ? (
                     keyLabel(`slot${i + 1}` as ControlAction)
@@ -8161,7 +8166,7 @@ export function Game() {
             <div className="text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
               {status.wave === WAVES.length ? theme.boss.name : `WAVE ${status.wave}`}
             </div>
-            <div className="mt-1 text-[10px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
+            <div className="mt-1 text-[11px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
               {status.wave === WAVES.length ? theme.hazard.name : `${status.wave} OF ${WAVES.length}`}
             </div>
             <div
@@ -8198,7 +8203,7 @@ export function Game() {
           </div>
         )}
         {!multiplayer && locked && !ended && !downed && (
-          <HudChip className="absolute left-5 top-[10.5rem] text-[10px] tracking-wider">
+          <HudChip className="absolute left-5 top-[10.5rem] text-[11px] tracking-wider">
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
           </HudChip>
         )}
@@ -8381,7 +8386,8 @@ export function Game() {
             initAudio();
             setPicking(true);
           }}
-          onSettings={() => setShowSettings(true)}
+          onSettings={() => openSettings()}
+          onControls={() => openSettings("controls")}
           onWeapons={() => setShowWeapons(true)}
           onEnemies={() => setShowEnemies(true)}
           net={net ? { role: net.role, code: net.code } : null}
@@ -8410,7 +8416,7 @@ export function Game() {
           perkBadges={activePerks.map((p) => p.label)}
           multiplayer={multiplayer}
           onResume={() => start()}
-          onSettings={() => setShowSettings(true)}
+          onSettings={() => openSettings()}
           onLeave={leaveGame}
         />
       )}
@@ -8456,6 +8462,7 @@ export function Game() {
       {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
       {showSettings && (
         <SettingsScreen
+          initialTab={settingsTab}
           fov={fov}
           setFov={setFov}
           sensX={sensX}

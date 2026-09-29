@@ -46,7 +46,7 @@ function Btn({
       }`}
     >
       <span>{label}</span>
-      {sub && <span className="mt-0.5 text-[8px] opacity-70">{sub}</span>}
+      {sub && <span className="mt-0.5 text-[11px] opacity-70">{sub}</span>}
     </button>
   );
 }

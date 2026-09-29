@@ -19,14 +19,14 @@ export type LobbyPlayer = {
 function MenuGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="rounded-lg border-2 border-[#f3e6cf]/25 bg-[#161009]/45 p-2.5 backdrop-blur-[2px]">
-      <div className="mb-2 text-[9px] font-bold tracking-[0.3em] text-[#f3e6cf]/60">{label}</div>
+      <div className="mb-2 text-[11px] font-bold tracking-[0.3em] text-[#f3e6cf]/70">{label}</div>
       <div className="flex items-stretch gap-1.5">{children}</div>
     </div>
   );
 }
 
 /** three key chips describing the controls for whatever device was used last */
-function ControlsHint({ touch }: { touch: boolean }) {
+function ControlsHint({ touch, onAll }: { touch: boolean; onAll: () => void }) {
   const d = useInputDevice();
   const items =
     d.kind === "pad"
@@ -35,15 +35,21 @@ function ControlsHint({ touch }: { touch: boolean }) {
         ? ["LEFT THUMB · MOVE", "RIGHT THUMB · AIM", "FIRE · SHOOT", "BUTTONS UP TOP"]
         : ["WASD · MOVE", "MOUSE · AIM", "CLICK · FIRE", "P · PAUSE"];
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
       {items.map((s) => (
         <span
           key={s}
-          className="rounded border border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1 text-[9px] font-bold tracking-[0.18em] text-[#f3e6cf]/85"
+          className="rounded border border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1 text-[11px] font-bold tracking-[0.18em] text-[#f3e6cf]/85"
         >
           {s}
         </span>
       ))}
+      <button
+        onClick={onAll}
+        className="pointer-events-auto px-1 py-1 text-[11px] font-bold tracking-[0.2em] text-[#e7b25c] underline decoration-1 underline-offset-4 [@media(hover:hover)]:hover:text-[#f3e6cf]"
+      >
+        ALL CONTROLS →
+      </button>
     </div>
   );
 }
@@ -57,19 +63,19 @@ function PlayerRow({ p, showReady }: { p: LobbyPlayer; showReady: boolean }) {
       />
       <span className="w-[96px] shrink-0 whitespace-nowrap text-[11px] font-bold tracking-[0.12em]">
         {p.num === 1 ? "HOST" : `PLAYER ${p.num}`}
-        {p.me && <span className="opacity-45"> · YOU</span>}
+        {p.me && <span className="opacity-70"> · YOU</span>}
       </span>
-      <span className="min-w-0 flex-1 truncate text-right text-[9px] font-bold tracking-[0.12em]">
+      <span className="min-w-0 flex-1 truncate text-right text-[11px] font-bold tracking-[0.12em]">
         {p.cls ? CLASSES[p.cls].name : "—"}
-        <span className="opacity-55"> · {p.ability ? ABILITIES[p.ability].name : "NO ABILITY"}</span>
+        <span className="opacity-70"> · {p.ability ? ABILITIES[p.ability].name : "NO ABILITY"}</span>
       </span>
       {showReady &&
         (p.ready ? (
-          <span className="w-14 shrink-0 rounded bg-[#1d7a37] px-1.5 py-0.5 text-center text-[9px] font-bold tracking-[0.12em] text-[#f7eeda]">
+          <span className="w-14 shrink-0 rounded bg-[#1d7a37] px-1.5 py-0.5 text-center text-[11px] font-bold tracking-[0.12em] text-[#f7eeda]">
             READY
           </span>
         ) : (
-          <span className="w-14 shrink-0 rounded bg-[#2b2118]/15 px-1.5 py-0.5 text-center text-[9px] font-bold tracking-[0.12em] opacity-70">
+          <span className="w-14 shrink-0 rounded bg-[#2b2118]/15 px-1.5 py-0.5 text-center text-[11px] font-bold tracking-[0.12em] opacity-70">
             PICKING
           </span>
         ))}
@@ -83,6 +89,7 @@ export function TitleScreen({
   touchUi,
   onPlay,
   onSettings,
+  onControls,
   onWeapons,
   onEnemies,
   net,
@@ -103,6 +110,7 @@ export function TitleScreen({
   touchUi: boolean;
   onPlay: () => void;
   onSettings: () => void;
+  onControls: () => void;
   onWeapons: () => void;
   onEnemies: () => void;
   net: { role: "host" | "guest"; code: string } | null;
@@ -139,7 +147,7 @@ export function TitleScreen({
     <Scrim className="ui-root flex touch-auto flex-col overflow-y-auto overscroll-contain">
       {/* top strip: studio + version + live map name */}
       <div
-        className={`flex items-center justify-between px-5 pt-4 text-[9px] font-bold tracking-[0.3em] text-[#f3e6cf]/70 sm:px-8 ${compact ? "pt-2.5" : ""}`}
+        className={`flex items-center justify-between px-5 pt-4 text-[11px] font-bold tracking-[0.3em] text-[#f3e6cf]/70 sm:px-8 ${compact ? "pt-2.5" : ""}`}
         style={{ textShadow: "0 1px 0 #2b2118" }}
       >
         <span>SZAKACS MEDIA</span>
@@ -148,7 +156,7 @@ export function TitleScreen({
       </div>
 
       <div
-        className={`mx-auto flex w-full max-w-6xl flex-1 items-center px-5 sm:px-8 ${compact ? "py-2" : "py-6"}`}
+        className={`mx-auto flex w-full max-w-6xl flex-1 items-center px-5 sm:px-8 ${compact ? "py-1" : "py-6"}`}
       >
         <div className={`w-full ${narrow ? "" : "max-w-[30rem]"} ui-rise`}>
           <Logo compact={compact} />
@@ -156,7 +164,7 @@ export function TitleScreen({
           {!inRoom ? (
             <>
               <div
-                className={`${compact ? "mt-4" : "mt-7"} flex max-w-xs flex-col gap-2.5 ui-rise-1`}
+                className={`${compact ? "mt-3" : "mt-7"} flex max-w-xs flex-col ${compact ? "gap-2" : "gap-2.5"} ui-rise-1`}
               >
                 <MenuButton
                   data-pad-start
@@ -183,7 +191,7 @@ export function TitleScreen({
                       onKeyDown={(e) => e.key === "Enter" && startJoin()}
                       placeholder="CODE"
                       aria-label="Room code"
-                      className="pointer-events-auto w-full min-w-0 rounded-md border-2 border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1.5 text-center text-xs font-bold tracking-[0.4em] text-[#f3e6cf] placeholder:text-[#f3e6cf]/30 focus:border-[#e7b25c] focus:outline-none"
+                      className="pointer-events-auto w-full min-w-0 rounded-md border-2 border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1.5 text-center text-xs font-bold tracking-[0.4em] text-[#f3e6cf] placeholder:text-[#f3e6cf]/70 focus:border-[#e7b25c] focus:outline-none"
                     />
                     <MenuButton
                       variant="ink"
@@ -208,12 +216,12 @@ export function TitleScreen({
                 </div>
               </div>
               {netError && (
-                <div className="mt-3 max-w-xs rounded-md border border-[#ffb4a8]/60 bg-[#b3261e]/25 px-3 py-2 text-[10px] font-bold tracking-widest text-[#ffd9d4]">
+                <div className="mt-3 max-w-xs rounded-md border border-[#ffb4a8]/60 bg-[#b3261e]/25 px-3 py-2 text-[11px] font-bold tracking-widest text-[#ffd9d4]">
                   {netError}
                 </div>
               )}
-              <div className="ui-rise-2 mt-4">
-                <ControlsHint touch={touchUi} />
+              <div className={`ui-rise-2 ${compact ? "mt-3" : "mt-4"}`}>
+                <ControlsHint touch={touchUi} onAll={onControls} />
               </div>
             </>
           ) : (
@@ -224,7 +232,7 @@ export function TitleScreen({
                   <SectionLabel className="text-[#e7b25c] opacity-90">
                     {net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}
                   </SectionLabel>
-                  <span className="text-[9px] tracking-[0.2em] text-[#f3e6cf]/60">
+                  <span className="text-[11px] tracking-[0.2em] text-[#f3e6cf]/70">
                     {players.length}/4
                   </span>
                 </div>
@@ -236,11 +244,11 @@ export function TitleScreen({
                   <span className="text-2xl font-black tracking-[0.42em] text-[#f7eeda]">
                     {net.code}
                   </span>
-                  <span className="text-[9px] font-bold tracking-[0.2em] text-[#e7b25c]">
+                  <span className="text-[11px] font-bold tracking-[0.2em] text-[#e7b25c]">
                     {copied ? "COPIED ✓" : "TAP TO COPY"}
                   </span>
                 </button>
-                <div className="mt-1 text-[9px] tracking-[0.18em] text-[#f3e6cf]/60">
+                <div className="mt-1 text-[11px] tracking-[0.18em] text-[#f3e6cf]/70">
                   {net.role === "host"
                     ? "SHARE THE CODE — FRIENDS JOIN FROM THE TITLE SCREEN"
                     : "THE HOST PICKS THE MAP AND DIFFICULTY"}
@@ -252,7 +260,7 @@ export function TitleScreen({
                   {Array.from({ length: Math.max(0, 4 - players.length) }, (_, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-2.5 rounded-md border border-dashed border-[#f3e6cf]/20 px-3 py-2 text-[10px] tracking-[0.18em] text-[#f3e6cf]/35"
+                      className="flex items-center gap-2.5 rounded-md border border-dashed border-[#f3e6cf]/20 px-3 py-2 text-[11px] tracking-[0.18em] text-[#f3e6cf]/70"
                     >
                       <span className="inline-block h-3 w-3 rounded-[3px] border border-[#f3e6cf]/25" />
                       OPEN SLOT
@@ -290,12 +298,12 @@ export function TitleScreen({
                   </MenuButton>
                 </div>
                 {isHost && (
-                  <div className="mt-2 text-center text-[9px] tracking-[0.2em] text-[#f3e6cf]/55">
+                  <div className="mt-2 text-center text-[11px] tracking-[0.2em] text-[#f3e6cf]/70">
                     {readyCount}/{players.length} READY — YOU CAN START ANY TIME
                   </div>
                 )}
                 {netError && (
-                  <div className="mt-3 rounded-md border border-[#ffb4a8]/60 bg-[#b3261e]/25 px-3 py-2 text-[10px] font-bold tracking-widest text-[#ffd9d4]">
+                  <div className="mt-3 rounded-md border border-[#ffb4a8]/60 bg-[#b3261e]/25 px-3 py-2 text-[11px] font-bold tracking-widest text-[#ffd9d4]">
                     {netError}
                   </div>
                 )}
@@ -307,7 +315,7 @@ export function TitleScreen({
 
       {/* footer strip: weather rule + credits */}
       <div
-        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-5 pb-4 text-[9px] font-bold tracking-[0.25em] text-[#f3e6cf]/70 sm:px-8"
+        className={`flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-5 text-[11px] font-bold tracking-[0.25em] text-[#f3e6cf]/70 sm:px-8 ${compact ? "pb-2" : "pb-4"}`}
         style={{ textShadow: "0 1px 0 #2b2118" }}
       >
         <span className="hidden md:inline">{weather.toUpperCase()}</span>

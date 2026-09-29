@@ -8,8 +8,8 @@ import { QualitySettings } from "../QualitySettings";
 import { ViewSettings } from "../PlayerView";
 import { C, Hazard, MenuButton, Panel, Scrim, SectionLabel } from "./kit";
 
-type Tab = "graphics" | "controls" | "audio" | "controller";
-const TABS: { id: Tab; label: string }[] = [
+export type SettingsTab = "graphics" | "controls" | "audio" | "controller";
+const TABS: { id: SettingsTab; label: string }[] = [
   { id: "graphics", label: "Graphics" },
   { id: "controls", label: "Controls" },
   { id: "audio", label: "Audio" },
@@ -53,6 +53,7 @@ function Slider({
 }
 
 export function SettingsScreen({
+  initialTab,
   fov,
   setFov,
   sensX,
@@ -68,6 +69,7 @@ export function SettingsScreen({
   version,
   onClose,
 }: {
+  initialTab?: SettingsTab;
   fov: number;
   setFov: (v: number) => void;
   sensX: number;
@@ -83,35 +85,39 @@ export function SettingsScreen({
   version: string;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("graphics");
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? "graphics");
   return (
     <Scrim
       strong
       z={50}
-      className="ui-root flex touch-auto items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-6"
+      className="ui-root flex touch-auto items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-6 [@media(max-height:480px)]:p-2"
     >
       <Panel
         dark
-        className="ui-rise my-auto flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden p-4 sm:p-5"
+        className="ui-rise my-auto flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden p-4 sm:p-5 [@media(max-height:480px)]:max-h-[98dvh] [@media(max-height:480px)]:p-2.5"
       >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <SectionLabel className="text-[#e7b25c] opacity-80">TUNING BENCH</SectionLabel>
-            <h2 className="mt-0.5 text-xl font-black tracking-[0.16em]">SETTINGS</h2>
+            <SectionLabel className="text-[#e7b25c] opacity-80 [@media(max-height:480px)]:hidden">
+              TUNING BENCH
+            </SectionLabel>
+            <h2 className="mt-0.5 text-xl font-black tracking-[0.16em] [@media(max-height:480px)]:mt-0 [@media(max-height:480px)]:text-sm">
+              SETTINGS
+            </h2>
           </div>
           <MenuButton variant="ghost" size="sm" data-pad-back onClick={onClose}>
             ✕ Close
           </MenuButton>
         </div>
-        <Hazard className="mt-2.5" />
+        <Hazard className="mt-2.5 [@media(max-height:480px)]:mt-1" />
 
         {/* tab row */}
-        <div className="mt-3 flex gap-1.5">
+        <div className="mt-3 flex gap-1.5 [@media(max-height:480px)]:mt-1.5">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`pointer-events-auto flex-1 rounded-md border-2 px-2 py-2 text-[10px] font-bold tracking-[0.12em] transition-[transform,box-shadow] duration-100 ${
+              className={`pointer-events-auto flex-1 rounded-md border-2 px-2 py-2 text-[11px] font-bold tracking-[0.12em] transition-[transform,box-shadow] duration-100 [@media(max-height:480px)]:py-1 ${
                 tab === t.id
                   ? "border-[#e7b25c] bg-[#b4653f] text-[#f7eeda] shadow-[2px_2px_0_0_#161009]"
                   : "border-[#f3e6cf]/20 bg-white/5 text-[#f3e6cf]/70 [@media(hover:hover)]:hover:bg-white/10"
@@ -122,7 +128,7 @@ export function SettingsScreen({
           ))}
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto ui-scroll pr-1 text-left text-xs tracking-widest">
+        <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto ui-scroll pr-1 text-left text-xs tracking-widest [@media(max-height:480px)]:mt-2 [@media(max-height:480px)]:space-y-2">
           {tab === "graphics" && (
             <>
               <Slider
@@ -190,7 +196,7 @@ export function SettingsScreen({
                 format={(v) => `${Math.round(v * 100)}%`}
                 onChange={setAmbVol}
               />
-              <p className="pt-1 text-[10px] leading-relaxed opacity-60">
+              <p className="pt-1 text-xs leading-relaxed opacity-70">
                 THE MENU MARCH PLAYS ON THE SCREENS; EACH MAP'S TRACK OPENS UP IN COMBAT AND
                 THE SOUNDSCAPE PAUSES WITH THE MATCH.
               </p>
@@ -199,11 +205,11 @@ export function SettingsScreen({
           {tab === "controller" && <PadSettingsPanel />}
         </div>
 
-        <div className="mt-4 border-t border-white/10 pt-3">
+        <div className="mt-4 border-t border-white/10 pt-3 [@media(max-height:480px)]:mt-2 [@media(max-height:480px)]:pt-2">
           <MenuButton variant="primary" size="md" className="w-full" onClick={onClose}>
             Done
           </MenuButton>
-          <div className="mt-3 text-center text-[9px] tracking-[0.3em] opacity-45">
+          <div className="mt-3 text-center text-[11px] tracking-[0.3em] opacity-70 [@media(max-height:480px)]:hidden">
             SCRAPFALL · v{version} · TS BUILD
             <div className="mt-0.5 tracking-[0.2em]">
               BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER
