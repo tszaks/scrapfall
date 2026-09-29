@@ -5308,8 +5308,11 @@ function World({
         }
       });
       // waves
-      const remaining =
-        enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      let alive = 0,
+        pend = 0;
+      for (const e of enemies) if (e.alive) alive++;
+      for (const p of pending.current) if (p) pend++;
+      const remaining = alive + pend;
       setWaveClock(
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
