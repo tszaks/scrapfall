@@ -1514,6 +1514,9 @@ function World({
   const trigger = useRef(false);
   const fireCd = useRef(0);
   const viewModel = useRef<THREE.Group>(null);
+  // home-screen showcase: a slow glide through the map behind the menu
+  const menuDrift = useRef(0);
+  const menuStart = useRef({ x: 0, y: EYE, z: 0, yaw: 0 });
   const recoil = useRef(0);
   const pickup = useRef<{ x: number; z: number; active: boolean; gun: Weapon }>({ x: 0, z: 0, active: false, gun: "scatter" });
   const pickupMesh = useRef<THREE.Group>(null);
@@ -1782,6 +1785,8 @@ function World({
   useEffect(() => {
     camera.position.set(alpine?.spawn.x ?? 0, EYE + groundY(alpine?.spawn.x ?? 0, alpine?.spawn.z ?? 0), alpine?.spawn.z ?? 0);
     look.current = { yaw: 0, pitch: 0 };
+    menuDrift.current = 0;
+    menuStart.current = { x: camera.position.x, y: camera.position.y, z: camera.position.z, yaw: 0 };
     wave.current = 0;
     nextWaveTimer.current = 1.5;
     pending.current = [];
