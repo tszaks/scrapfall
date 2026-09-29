@@ -39,3 +39,12 @@
 - [x] v1.0.4: fixed map scenery (tiered trees, biome decor, tighter collision)
 - [x] v1.0.4: themed destructible hazards per map, co-op synced
 - [x] v1.0.4: endless overtime past wave 12 with mutators + best-wave record
+
+## Merge from tszaks/scrapfall (keep all our systems)
+- [x] Controls: Space jump, Shift run, Enter shoot; mobile JUMP + RUN buttons; no gun sway
+- [x] Bullet detail: brass band + glowing tracer
+- [ ] New robot enemy looks (port art kit / rigs)
+- [ ] Detail pass on our 10 maps to match
+- [ ] Big maps (Vice Heights, Beach, Snow Mountain, Western City) co-op only + map picker + minimap
+- [ ] Map events + rolled conditions
+- [ ] New home menu (cycling map showcase, 8s crossfade) + pause menu with our stat sheet
