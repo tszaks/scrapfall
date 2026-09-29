@@ -177,6 +177,9 @@ export function TitleScreen({
                   <MenuButton variant="line" size="sm" className="flex-1" onClick={onWeapons}>
                     Weapons
                   </MenuButton>
+                  <MenuButton variant="line" size="sm" className="flex-1" onClick={onEnemies}>
+                    Enemies
+                  </MenuButton>
                 </div>
               </div>
               {netError && (
