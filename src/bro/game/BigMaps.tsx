@@ -32,6 +32,32 @@ import { BeachWorld } from "./beach/Beach";
 import { CityScene, CitySun } from "./City";
 import { WesternScene, WesternSun } from "./western/Western";
 import { Nuketown } from "./nuketown/Nuketown";
+import { nuketownStructures } from "./nuketown/layout";
+import { MatchRain } from "./MatchRain";
+import { Structures } from "./structures/Structures";
+import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
+import { installStructures, structureList } from "./structures/world";
+import { AlpineLife } from "./life/AlpineLife";
+import { resetWheel } from "./beach/wheelRide";
+import { cityAccess } from "./access/cityAccess";
+import { beachAccess } from "./access/beachAccess";
+import { alpineAccessFull } from "./access/alpineAccess";
+import { westernMarkers } from "./access/westernMarkers";
+import { AccessScene } from "./access/AccessScene";
+import { installAccess } from "./access/world";
+import { westernBelfry } from "./western/belfry";
+import { snugPlazaProps, movePropsFromDoors } from "./posts";
+import { blocked, boundaryBlocked, setNavWalls, BLOCK } from "./level";
+import { raised } from "./terrain";
+import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./soloBounds";
+import { WEED_COUNT, resetWeeds } from "./western/tumbleweedSim";
+import { CityTraffic } from "./Traffic";
+import { CityBlockades } from "./cityBlockades";
+import { WesternTrain } from "./western/Train";
+import { WesternRiders } from "./western/Riders";
+import { Tumbleweeds } from "./western/Tumbleweeds";
+import { WesternWeather } from "./western/Weather";
+import { WesternBlockades } from "./western/Blockades";
 
 export type BigMapId = "alpine" | "beach" | "city" | "western" | "nuketown";
 
@@ -51,6 +77,7 @@ export type BigMap = {
   city: CityLayout | null;
   western: WesternLayout | null;
   alpine: AlpineLayout | null;
+  gaps: Gap[];
   spawn: { x: number; z: number };
   theme: Theme;
 };
@@ -77,92 +104,170 @@ export function bigMinimap(m: BigMap): { base: HTMLCanvasElement; half: number }
 }
 
 /** Same setup order as his Game.tsx: arena size, collision reset, layout, ground, props. */
+/** His Game.tsx map setup, step for step (arena, collision, layout, ground, rooms, lifts, props). */
 export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
-  const size = BIG_MAPS[id].size;
-  configureEnvironment(seed, false);
-  setArenaSize(size, id === "nuketown" ? 1 : 2);
+  const coop = !solo;
+  const mode = id as LayoutMode;
+  configureEnvironment(seed, !coop);
+  const sealed = mode === "city" || mode === "western";
+  if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
+  else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
+  else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
+  else setArenaSize(NUKE_SIZE, 1);
   resetStaticCollision();
-  const level = generateLevel(seed, id as LayoutMode, solo);
-  const alp = level.city && "alpine" in level.city ? (level.city as unknown as AlpineLayout) : null;
-  setTerrain(
-    alp
-      ? (alp as unknown as { alpine: { terrain: Parameters<typeof setTerrain>[0] } }).alpine.terrain
+  const level = generateLevel(seed, mode, !coop);
+  const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
+  setTerrain(alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : level.western ? level.western.terrain : null);
+  installStructures([]);
+  installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
+  const cityOpen = mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout, PLAY_HALF) : [];
+  if (cityOpen.length) installStructures(cityOpen);
+  installAccess(null);
+  if (mode === "nuketown") installStructures(nuketownStructures());
+  const posts0 = mapPosts(level.city, level.western ?? null);
+  const accessList0 =
+    mode === "city" && level.city
+      ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
       : isBeach(level.city)
-        ? beachTerrain(level.city)
-        : level.western
-          ? level.western.terrain
-          : null,
-  );
-  resetAlpine(alp !== null, alp ? (alp as unknown as { alpine: { lift: never } }).alpine.lift : null);
+        ? beachAccess(level.city, !coop, posts0)
+        : alp && level.city
+          ? (() => {
+              const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
+              level.blocks = level.blocks.concat(aa.blocks);
+              return aa.list;
+            })()
+          : level.western
+            ? westernBelfry()
+            : null;
+  if (alp && level.city) installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
+  if (mode === "city" && level.city) installStructures([...cityOpen, ...cityRooms(level.city as CityLayout, PLAY_HALF)]);
+  installAccess(accessList0, level.western ? westernMarkers(level.western) : []);
+  resetAlpine(alp !== null, alp ? alp.lift : null);
   resetRide();
+  resetWheel(isBeach(level.city) ? level.city.beach.wheel : null);
   setPosts(null);
+  if (mode === "city" && level.city)
+    snugPlazaProps(level.city as CityLayout, (accessList0 ?? []).map((b) => b.spec.door));
+  movePropsFromDoors(
+    level.city,
+    level.western ?? null,
+    [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap((p) => p.doors)],
+    (x, z) => blocked(level.blocks, x, z, 0.35),
+  );
   setPosts(mapPosts(level.city, level.western ?? null));
+  setNavWalls(level.western?.navWalls ?? null, level.western?.navDoors ?? null);
+  let gaps: Gap[] = [];
+  if (sealed && !coop) {
+    gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
+    level.blocks = level.blocks.concat(sealGaps(gaps));
+  }
+  const weeds: { x: number; y: number; z: number }[] = [];
+  if (level.western) {
+    let v = seed ^ 0x74eeda;
+    const random = () => {
+      v = (Math.imul(v, 1664525) + 1013904223) | 0;
+      return (v >>> 0) / 4294967296;
+    };
+    const origin = level.western.spawn;
+    for (let tries = 0; tries < 3000 && weeds.length < WEED_COUNT; tries++) {
+      const radius = weeds.length < 12 ? 8 + random() * 45 : 35 + random() * 160,
+        angle = random() * Math.PI * 2;
+      const x = origin.x + Math.cos(angle) * radius,
+        z = origin.z + Math.sin(angle) * radius;
+      if (
+        boundaryBlocked(level.blocks, x, z, 0.6) ||
+        blocked(level.blocks, x, z, 0.6) ||
+        raised(x, z) ||
+        weeds.some((p) => Math.hypot(p.x - x, p.z - z) < 3)
+      )
+        continue;
+      weeds.push({ x, y: groundY(x, z), z });
+    }
+  }
+  resetWeeds(seed, weeds);
+  const alpLayout = alp ? (level.city as AlpineLayout) : null;
   return {
     id,
     seed,
-    size,
+    size: BIG_MAPS[id].size,
     blocks: level.blocks,
-    city: alp ? null : level.city,
+    city: alpLayout ? null : level.city,
     western: level.western ?? null,
-    alpine: alp,
-    spawn: id === "nuketown" ? NUKE_SPAWN : (alp ?? level.city ?? level.western)?.spawn ?? { x: 0, z: 0 },
+    alpine: alpLayout,
+    gaps,
+    spawn: id === "nuketown" ? NUKE_SPAWN : (alpLayout ?? level.city ?? level.western)?.spawn ?? { x: 0, z: 0 },
     theme: THEMES.find((t) => t.name === LAYOUT_THEME[id]) ?? THEMES.find((t) => t.layout === id) ?? THEMES[0]!,
   };
 }
 
-/** His match lighting, sky and fog around the map, as his Game.tsx mounts them. */
-export const BigMapScene = memo(function BigMapScene({ map, playing }: { map: BigMap; playing: boolean }) {
+const newLink = (): TrafficLink => ({
+  active: false, px: 0, pz: 0, isHost: true, role: "solo", others: [], encode: null, decode: null,
+  enemies: [], radiusOf: () => 0.6, isBig: () => false, hurtEnemy: null, hitPlayer: () => {},
+});
+
+/** His match lighting, sky, fog, rooms and lifts around the map, as his Game.tsx mounts them. */
+export const BigMapScene = memo(function BigMapScene({ map, playing, isHost = true }: { map: BigMap; playing: boolean; isHost?: boolean }) {
   const big = map.id === "city" || map.id === "western" || map.id === "alpine" || map.id === "beach";
   const night = useMemo(() => new THREE.Color(worldLook(map.theme, "night", map.size).sky), [map]);
+  const time = useTodNearest();
   return (
     <>
+      <Structures seed={map.seed} />
       <TimeDriver theme={map.theme} arena={map.size} />
       <TimeLights ownSun={big} ownFog={map.id === "alpine" || map.id === "beach"} />
       {!big && <SkyDome sunset={arenaSunsetSky(map.theme.name, map.theme.sky, ARENA_SUN.sunset)} night={night} />}
       {map.id !== "alpine" && (
         <NightStars radius={big ? 900 : 90} depth={big ? 200 : 20} count={big ? 3000 : 1500} factor={big ? 26 : 4} />
       )}
-      <MapBody map={map} playing={playing} />
+      <MapBody map={map} playing={playing} isHost={isHost} time={time} />
+      {big && <AccessScene time={time} cityKey={map.id} />}
     </>
   );
 });
 
-function MapBody({ map, playing }: { map: BigMap; playing: boolean }) {
+function MapBody({ map, playing, isHost, time }: { map: BigMap; playing: boolean; isHost: boolean; time: ReturnType<typeof useTodNearest> }) {
+  const link = useRef<TrafficLink>(newLink());
+  link.current.isHost = isHost;
+  const { seed, gaps } = map;
   switch (map.id) {
     case "alpine":
       return (
         <>
           <AlpineSun />
-          <AlpineScene key={map.seed} layout={map.alpine!} isHost playing={playing} />
+          <AlpineScene key={seed} layout={map.alpine!} time={time} isHost={isHost} playing={playing} />
+          <AlpineLife layout={map.alpine!} link={link} />
         </>
       );
     case "beach":
-      return <Beach map={map} />;
+      return (
+        <>
+          <BeachWorld key={`beach-${seed}`} city={map.city as never} seed={seed} time={time} link={link} look={worldLook(map.theme, time, map.size)} />
+          <MatchRain key={`rain-${seed}`} />
+        </>
+      );
     case "city":
       return (
         <>
           <CitySun />
-          <CityScene city={map.city!} isHost />
+          <CityScene city={map.city!} time={time} isHost={isHost} />
+          <CityTraffic city={map.city!} seed={seed} time={time} link={link} />
+          {gaps.length > 0 && <CityBlockades city={map.city!} gaps={gaps} time={time} />}
         </>
       );
     case "western":
       return (
         <>
           <WesternSun />
-          <WesternScene layout={map.western!} />
+          <WesternScene layout={map.western!} time={time} />
+          <MatchRain key={seed} western={map.western!} />
+          <WesternTrain layout={map.western!} seed={seed} time={time} link={link} />
+          <WesternRiders layout={map.western!} seed={seed} link={link} />
+          <Tumbleweeds />
+          <WesternWeather layout={map.western!} time={time} blocks={map.blocks} link={link} />
+          {gaps.length > 0 && <WesternBlockades layout={map.western!} gaps={gaps} time={time} />}
         </>
       );
     case "nuketown":
-      return <Nuketown seed={map.seed} />;
+      return <Nuketown seed={seed} />;
   }
-}
-
-function Beach({ map }: { map: BigMap }) {
-  const time = useTodNearest();
-  const link = useRef<TrafficLink>({
-    active: false, px: 0, pz: 0, isHost: true, role: "solo", others: [], encode: null, decode: null,
-    enemies: [], radiusOf: () => 0.6, isBig: () => false, hurtEnemy: null, hitPlayer: () => {},
-  });
-  const theme = THEMES.find((t) => t.layout === "beach") ?? THEMES[0]!;
-  return <BeachWorld key={map.seed} city={map.city as never} seed={map.seed} time={time} link={link} look={worldLook(theme, time, map.size)} />;
 }
