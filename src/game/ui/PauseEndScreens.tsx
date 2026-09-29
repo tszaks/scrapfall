@@ -1,5 +1,6 @@
 // Pause and the end-of-run recap. Same paper card family as the title/loadout: one panel,
 // a hazard rule, and a single rust primary action.
+import { useState } from "react";
 import { CLASSES, type ClassId } from "../classes";
 import type { Derived } from "../perks";
 import { colorFor } from "../net";
@@ -12,8 +13,6 @@ export function PauseScreen({
   difficultyName,
   stats,
   cls,
-  modBadges,
-  perkBadges,
   bought,
   multiplayer,
   onResume,
@@ -26,10 +25,8 @@ export function PauseScreen({
   difficultyName: string;
   stats: Derived;
   cls: ClassId;
-  modBadges: string[];
-  perkBadges: string[];
-  /** this run's bought shop cards (Toby 1.0.3 stats overhaul) */
-  bought: { id: string; name: string; lvl: number; color: string; mod: boolean }[];
+  /** this run's bought shop cards, with what each does (Toby 1.0.3 stats overhaul) */
+  bought: { id: string; name: string; lvl: number; color: string; mod: boolean; effects: { text: string; tone?: "good" | "bad" | "flat" }[] }[];
   multiplayer: boolean;
   onResume: () => void;
   onSettings: () => void;
@@ -82,27 +79,26 @@ export function PauseScreen({
                         </span>
                       )}
                       <div className="pr-5 text-[9px] font-bold tracking-wider">{c.name}</div>
-                      <div className="text-[8px] tracking-wider opacity-55">
-                        {c.lvl > 1 ? `x${c.lvl}` : ""}
+                      <div className="mt-0.5 space-y-0.5 text-[9px] leading-tight">
+                        {c.effects.map((e, i) => (
+                          <div
+                            key={i}
+                            className={
+                              e.tone === "bad"
+                                ? "font-bold text-[#b3261e]"
+                                : e.tone === "good"
+                                  ? "font-bold text-[#1d7a37]"
+                                  : "opacity-70"
+                            }
+                          >
+                            {e.text}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-1 text-[9px] font-bold tracking-widest opacity-55">
+                        x{c.lvl}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(modBadges.length > 0 || perkBadges.length > 0) && (
-              <div className="mt-3">
-                <SectionLabel>ATTRIBUTES</SectionLabel>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  {modBadges.map((b) => (
-                    <span key={b} className="text-[11px] font-bold tracking-wider">
-                      {b}
-                    </span>
-                  ))}
-                  {perkBadges.map((b) => (
-                    <span key={b} className="text-[11px] tracking-wider">
-                      {b}
-                    </span>
                   ))}
                 </div>
               </div>
@@ -158,17 +154,43 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
       </div>
     </div>
   );
+  const [showCls, setShowCls] = useState(false);
   return (
     <div className="mt-4 rounded-lg bg-[#2b2118] p-3 font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between text-[11px] tracking-[0.25em]">
         <span className="opacity-70">STATS</span>
-        {/* hover shows the class's role and trade-offs (Toby's class tooltip) */}
-        <span
-          className="cursor-help underline decoration-dotted underline-offset-2"
-          style={{ color: CLASSES[cls].color }}
-          title={`${CLASSES[cls].role}\n${CLASSES[cls].pros.join(" · ")}\n${CLASSES[cls].cons.join(" · ")}`}
-        >
-          {CLASSES[cls].name}
+        {/* hover or tap shows the class's role and trade-offs (Toby's class popover) */}
+        <span className="relative">
+          <button
+            onMouseEnter={() => setShowCls(true)}
+            onMouseLeave={() => setShowCls(false)}
+            onClick={() => setShowCls((v) => !v)}
+            className="cursor-help underline decoration-dotted underline-offset-2"
+            style={{ color: CLASSES[cls].color }}
+          >
+            {CLASSES[cls].name}
+          </button>
+          {showCls && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-[#f3e6cf]/20 bg-[#1d160f] p-2 text-left shadow-lg">
+              <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+                {CLASSES[cls].name}
+              </div>
+              <div className="mt-0.5 text-[9px] opacity-60">{CLASSES[cls].role}</div>
+              <div className="mt-1.5 text-[9px] tracking-[0.2em] opacity-50">STARTING STATS</div>
+              <div className="mt-1 space-y-0.5 text-[10px]">
+                {CLASSES[cls].pros.map((p) => (
+                  <div key={p} className="text-[#7cff4f]">
+                    {p}
+                  </div>
+                ))}
+                {CLASSES[cls].cons.map((c) => (
+                  <div key={c} className="text-[#ff6b5e]">
+                    {c}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-x-4">

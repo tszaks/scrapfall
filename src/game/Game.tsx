@@ -372,7 +372,7 @@ import {
   type Perks,
 } from "./perks";
 import { CLASSES, type ClassId } from "./classes";
-import { hazardFor, hazardsEnabled, HAZARD_COUNT, type HazardDef } from "./hazards";
+import { hazardFor, hazardsEnabled, HAZARD_COUNT, BIG_MAP_HAZARDS, type HazardDef } from "./hazards";
 import {
   mutatorById,
   rollMutator,
@@ -986,7 +986,7 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 /** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
-const GAME_VERSION = "1.0.4";
+const GAME_VERSION = "1.0.6";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
 
 const BULLET_SPEED = 22;
@@ -1012,20 +1012,33 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const glow = theme.enemyBullet;
 
   if (shape === "tree") {
-    const trunk = 1 + b.h * 0.25;
+    // trunk stays slim, canopy sits directly on top of it and tapers upward so
+    // the tiers never float apart or read as hollow cones
+    const trunk = 1.1 + b.h * 0.22;
+    const canopy = b.h * 0.85 + 1.4;
     return (
-      <group position={[b.x, 0, b.z]}>
-        <mesh position-y={trunk / 2} castShadow>
-          <cylinderGeometry args={[0.3, 0.4, trunk, 6]} />
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        {/* root flare keeps the base planted in the ground */}
+        <mesh position-y={0.18} castShadow receiveShadow>
+          <cylinderGeometry args={[0.42, 0.68, 0.36, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={trunk / 2 + 0.2} castShadow>
+          <cylinderGeometry args={[0.26, 0.4, trunk, 7]} />
           <meshLambertMaterial color="#4a3320" flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.45} castShadow>
-          <coneGeometry args={[1.3, b.h * 0.9 + 1, 7]} />
+        {/* three overlapping tiers, each seated inside the one below it */}
+        <mesh position-y={trunk + canopy * 0.18} castShadow>
+          <coneGeometry args={[1.35, canopy * 0.6, 8]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={trunk + canopy * 0.42} castShadow>
+          <coneGeometry args={[1.08, canopy * 0.55, 8]} />
           <meshLambertMaterial color={color} flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.9} castShadow>
-          <coneGeometry args={[0.9, b.h * 0.6 + 0.6, 7]} />
-          <meshLambertMaterial color={color} flatShading />
+        <mesh position-y={trunk + canopy * 0.68} castShadow>
+          <coneGeometry args={[0.78, canopy * 0.5, 8]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
         </mesh>
       </group>
     );
@@ -1281,6 +1294,130 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
+/** Small scatter prop that belongs to the map it sits in. */
+function Decor({ theme, seed }: { theme: Theme; seed: number }) {
+  const s = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  // forests: mushroom clusters and mossy stones
+  if (s === "tree" || s === "pagoda") {
+    const cap = s === "tree" ? "#c8543a" : "#f0a0b8";
+    return (
+      <group>
+        <mesh position-y={0.1} receiveShadow>
+          <sphereGeometry args={[0.42, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.1 + seed * 6;
+          const h = 0.26 + ((i + seed) % 1) * 0.22;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.34, 0, Math.sin(a) * 0.34]}>
+              <mesh position-y={h / 2} castShadow>
+                <cylinderGeometry args={[0.055, 0.075, h, 6]} />
+                <meshLambertMaterial color="#e8dcc4" flatShading />
+              </mesh>
+              <mesh position-y={h} castShadow>
+                <sphereGeometry args={[0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshLambertMaterial color={cap} flatShading />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // ice fields: frost shards pushing out of the snow
+  if (s === "crystal" || s === "berg") {
+    return (
+      <group>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.3 + seed * 5;
+          const h = 0.5 + ((i * 7 + seed * 10) % 5) * 0.14;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.3, h / 2, Math.sin(a) * 0.3]} rotation-z={Math.cos(a) * 0.25} castShadow>
+              <coneGeometry args={[0.13, h, 5]} />
+              <meshLambertMaterial color="#e8f7ff" flatShading emissive="#5fd8ff" emissiveIntensity={0.12} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // volcanic and dry maps: cracked slabs with an ember seam
+  if (s === "basalt" || s === "monument" || s === "butte") {
+    return (
+      <group>
+        <mesh position-y={0.14} rotation-y={seed * 3} castShadow receiveShadow>
+          <boxGeometry args={[0.9, 0.28, 0.7]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={0.3} rotation-x={-Math.PI / 2}>
+          <planeGeometry args={[0.7, 0.09]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // deep sea: kelp fronds swaying off a rock
+  if (s === "coral") {
+    return (
+      <group>
+        <mesh position-y={0.12} receiveShadow>
+          <dodecahedronGeometry args={[0.32, 0]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.2 + seed * 4;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.22, 0.6, Math.sin(a) * 0.22]} rotation-z={Math.cos(a) * 0.35} castShadow>
+              <cylinderGeometry args={[0.03, 0.07, 1.1, 5]} />
+              <meshLambertMaterial color={theme.blocks[0]} flatShading emissive={glow} emissiveIntensity={0.15} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // neon city: a low conduit box with a lit strip
+  if (s === "server") {
+    return (
+      <group>
+        <mesh position-y={0.22} castShadow receiveShadow>
+          <boxGeometry args={[0.7, 0.44, 0.5]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.26]}>
+          <boxGeometry args={[0.5, 0.06, 0.03]} />
+          <meshBasicMaterial color={theme.grid[0]} fog={false} />
+        </mesh>
+        <mesh position-y={0.58} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.13, 0.03, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // industrial: a leaking pipe stub with a puddle
+  return (
+    <group>
+      <mesh position-y={0.3} rotation-z={Math.PI / 2} castShadow>
+        <cylinderGeometry args={[0.13, 0.13, 0.8, 8]} />
+        <meshLambertMaterial color={theme.blocks[1]} flatShading />
+      </mesh>
+      <mesh position-y={0.02} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.45, 14]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.45} fog={false} />
+      </mesh>
+    </group>
+  );
+}
+
 const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
@@ -1318,17 +1455,10 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
       ))}
-      {/* marker posts with a lit cap dotted through the arena */}
+      {/* small dressing props, chosen to match the map instead of generic posts */}
       {posts.map((b, i) => (
-        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
-          <mesh position-y={0.55} castShadow>
-            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
-            <meshLambertMaterial color={theme.wall} flatShading />
-          </mesh>
-          <mesh position-y={1.18}>
-            <sphereGeometry args={[0.13, 8, 6]} />
-            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
-          </mesh>
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]} rotation-y={b.tone * 6.28}>
+          <Decor theme={theme} seed={b.tone} />
         </group>
       ))}
       {(
@@ -2595,7 +2725,8 @@ function World({
   const hazardDef = hazardFor(theme);
   const hazardRef = useRef(hazardDef);
   hazardRef.current = hazardDef;
-  const hazOn = hazardsEnabled(theme);
+  // arenas always get hazards; big maps only while BIG_MAP_HAZARDS is on (owner's call)
+  const hazOn = hazardsEnabled(theme) && (BIG_MAP_HAZARDS || !(city || western));
   /** the boss-clear win stays latched until the squad picks overtime or a new arena */
   const wonLatch = useRef(false);
   // shard pickups are shared in co-op: one grab removes them for the whole squad
@@ -4497,9 +4628,10 @@ function World({
       onEvent(event);
       netRef.current?.broadcast({ type: "event", name: event });
     }
-    // health: guaranteed pack every wave in co-op, every other wave solo
+    // health: guaranteed pack every wave in co-op (from wave 1, like Toby), solo on the
+    // difficulty's cadence from wave 2
     const healGap = extra > 0 ? 1 : diff.healGap(n);
-    if (n >= 2 && n - lastHealWave.current >= healGap) {
+    if (n >= (extra > 0 ? 1 : 2) && n - lastHealWave.current >= healGap) {
       const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
@@ -5255,7 +5387,10 @@ function World({
       const m = hazardMeshes.current[i];
       if (!m) return;
       m.visible = h.alive;
-      if (h.alive) m.position.set(h.x, groundY(h.x, h.z), h.z);
+      if (h.alive) {
+        m.position.set(h.x, groundY(h.x, h.z), h.z);
+        m.rotation.y = i * 1.3;
+      }
     });
 
     // health pickup
@@ -6580,6 +6715,12 @@ function World({
             const near = (p: THREE.Vector3) =>
               Math.hypot(p.x - hz.x, p.z - hz.z) < 0.85 && p.y - gy < 2;
             if (near(BLAST_AT) || near(HAZ_PT)) {
+              // popping a prop counts as the shot's hit (Toby); the shell dies here,
+              // so it can't double-count against a body afterwards
+              if (b.hitBodies!.size === 0) {
+                onStat("hit", 1);
+                aimStats.current.hit++;
+              }
               blowHazard(hi, true, !isH);
               b.pos.copy(HAZ_PT);
               burst(b);
@@ -7463,7 +7604,6 @@ export function Game() {
   // the deepest wave ever reached, overtime included, kept in localStorage
   const [highWave, setHighWave] = useState(0);
   useEffect(() => setHighWave(readHighWave()), []);
-  const [deathMsg, setDeathMsg] = useState(false);
 
   const publishRoster = () => {
     const list = Object.entries(slots.current)
@@ -7526,7 +7666,8 @@ export function Game() {
     }
     if (m.type === "mut") {
       setMutId(String(m.id) as MutatorId);
-      return;
+      // no return: the World keeps its own mutator ref for the gameplay effects —
+      // guests must let it reach msgSink so fire rate, speed and siphon apply to them too
     }
     if (m.type === "pick") {
       const num = Number(m.num);
@@ -7773,6 +7914,12 @@ export function Game() {
     else if (mode === "nuketown") setArenaSize(NUKE_SIZE, 1);
     else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
     resetStaticCollision();
+    // slim arena props (trunks, coral) get a tighter collision box, so steps and shots
+    // line up with what you see; big maps keep the full cell — theirs are buildings
+    const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
+    setBlockHalf(
+      mode !== "scatter" ? BLOCK / 2 : slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2,
+    );
     const level = generateLevel(seed, mode, !coop);
     const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
     // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
@@ -8006,16 +8153,6 @@ export function Game() {
   };
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
-  // dead co-op players bleed out over a few seconds; the banner tells them the squad fights on
-  useEffect(() => {
-    if (!dead) {
-      setDeathMsg(false);
-      return;
-    }
-    setDeathMsg(true);
-    const t = window.setTimeout(() => setDeathMsg(false), 5000);
-    return () => window.clearTimeout(t);
-  }, [dead]);
   // keep the deepest wave ever reached, overtime included
   useEffect(() => {
     if (!ended) return;
@@ -8362,21 +8499,22 @@ export function Game() {
     setBledOut(false);
   }, [seed]);
 
-  // HUD status lists
-  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
-  const activePerks = PERK_IDS.filter(
-    (id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0,
-  )
-    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
-    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
-  // every purchased card this run, with level and whether it's a pistol mod (Toby 1.0.3)
-  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => ({
-    id,
-    name: PERK_INFO[id].name,
-    lvl: perks[id],
-    color: PERK_INFO[id].color,
-    mod: PISTOL_MODS.includes(id),
-  }));
+  // every purchased card this run: level, pistol-mod flag and its per-card effects (Toby 1.0.3)
+  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => {
+    const info = PERK_INFO[id];
+    const lvl = perks[id];
+    const mod = PISTOL_MODS.includes(id);
+    const effects: { text: string; tone?: "good" | "bad" | "flat" }[] = [];
+    if (info.pros?.length || info.cons?.length) {
+      info.pros?.forEach((t) => effects.push({ text: t, tone: "good" }));
+      info.cons?.forEach((t) => effects.push({ text: t, tone: "bad" }));
+    } else if (info.desc) {
+      effects.push({ text: info.desc, tone: "flat" });
+    }
+    const total = mod ? null : perkBadge(id, lvl);
+    if (total && lvl > 1) effects.push({ text: `Total: ${total}`, tone: "flat" });
+    return { id, name: info.name, color: info.color, lvl, mod, effects };
+  });
 
   return (
     <div
@@ -8768,18 +8906,6 @@ export function Game() {
             </div>
           );
         })()}
-        {/* co-op death: the squad fights on; the wave banner brings you back */}
-        {multiplayer && dead && deathMsg && !ended && locked && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border-2 border-[#2b2118] bg-[#2b2118]/85 px-8 py-5 text-center text-[#f3e6cf] shadow-[4px_4px_0_0_rgba(43,33,24,0.55)]">
-            <div className="text-2xl font-black tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
-            <div className="mt-2 text-xs font-bold tracking-[0.25em] opacity-80">
-              SPECTATING · YOU RESPAWN NEXT WAVE
-            </div>
-            <div className="mt-1 text-[11px] tracking-[0.2em] opacity-50">
-              WALK AROUND FREELY · P TO PAUSE
-            </div>
-          </div>
-        )}
         {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 [.rs-scoped_&]:hidden">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
@@ -8957,8 +9083,6 @@ export function Game() {
           difficultyName={DIFFICULTIES[difficulty].name}
           stats={statsRef.current}
           cls={cls}
-          modBadges={activeMods.map((id) => perkBadge(id, 1) ?? "")}
-          perkBadges={activePerks.map((p) => p.label)}
           bought={boughtCards}
           multiplayer={multiplayer}
           onResume={() => start()}

@@ -212,7 +212,7 @@ export function SettingsScreen({
           <div className="mt-3 text-center text-[11px] tracking-[0.3em] opacity-70 [@media(max-height:480px)]:hidden">
             SCRAPFALL · v{version} · TS BUILD
             <div className="mt-0.5 tracking-[0.2em]">
-              BASED ON TOBY&apos;S 1.0.4 · BIG MAPS BY TYLER
+              BASED ON TOBY&apos;S 1.0.6 · BIG MAPS BY TYLER
             </div>
           </div>
         </div>

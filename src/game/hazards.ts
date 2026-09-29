@@ -42,8 +42,8 @@ const BY_SHAPE: Record<Theme["blockShape"], HazardDef> = {
   western: { name: "POWDER KEG", effect: "fire", shell: "#6a4a2a", core: "#ffb02a", radius: 6, damage: 15, look: "drum" },
   // Pacific Pier: boat gas canisters
   beach: { name: "GAS CANISTER", effect: "fire", shell: "#b43a2a", core: "#ff8c2a", radius: 6, damage: 13, look: "drum" },
-  // Whiteout Pass: propane tanks by the lodge
-  alpine: { name: "PROPANE TANK", effect: "fire", shell: "#8fa3b8", core: "#7fd8ff", radius: 6, damage: 14, look: "drum" },
+  // Whiteout Pass: snow cannons parked by the lodge flash-freeze the run (Toby 1.0.6)
+  alpine: { name: "SNOW CANNON", effect: "freeze", shell: "#c8302a", core: "#bff4ff", radius: 7.5, damage: 7, look: "condenser" },
   // Nuketown is being rebuilt; a def exists so the type is total but none spawn there
   nuketown: { name: "WASTE DRUM", effect: "toxic", shell: "#5a6a2a", core: "#9aff3a", radius: 6.5, damage: 10, look: "drum" },
 };
@@ -56,6 +56,13 @@ export function hazardFor(theme: Theme): HazardDef {
 export function hazardsEnabled(theme: Theme): boolean {
   return theme.blockShape !== "nuketown";
 }
+
+/**
+ * Whether the four big maps (Vice Heights, Dry Gulch, Pacific Pier, Whiteout Pass) spawn
+ * shootable landmark hazards — drums at the gas station, kegs at the mine, and so on.
+ * Toby's arenas always get theirs; this single switch decides ours either way.
+ */
+export const BIG_MAP_HAZARDS = true;
 
 /** How many hazard props an arena gets. */
 export const HAZARD_COUNT = 5;
