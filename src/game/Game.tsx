@@ -35,7 +35,8 @@ import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
-import { Hazard, Logo, UiStyles } from "@/bro/game/ui/kit";
+import { Hazard, UiStyles } from "@/bro/game/ui/kit";
+import { BrandLogo } from "./ui/BrandLogo";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -4491,7 +4492,7 @@ export function Game() {
           <UiStyles />
           {home && (
             <div className="ui-rise mb-6 text-center">
-              <Logo />
+              <BrandLogo />
             </div>
           )}
           <div
