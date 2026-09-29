@@ -36,6 +36,8 @@ import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
+import { LoadoutScreen } from "./ui/LoadoutScreen";
+import { SettingsScreen } from "./ui/SettingsScreen";
 import { TitleScreen } from "./ui/TitleScreen";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
@@ -3384,6 +3386,7 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showWeapons, setShowWeapons] = useState(false);
+  const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
   const [sensX, setSensX] = useState(1);
   const [sensY, setSensY] = useState(1);
