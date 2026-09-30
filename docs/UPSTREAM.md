@@ -4,11 +4,10 @@ This repo was forked from `tobyszaks/robotshooter` at `1a073af` ("Renamed game t
 Scrapfall", Toby's v1.0.2). This file records which upstream commit we have ported
 up to, and where each change lives here — the next sync only has to diff from this SHA.
 
-**Synced with tobyszaks/robotshooter at `a2a4efa` (v1.0.6, 2026-09-29)** — covers
-v1.0.3 through the post-1.0.4 range `838f321`…`a2a4efa` ("Dressed all 10 maps",
-boss/special art, muzzle-convergent bullets, big-map integration, SNOW CANNON).
-Upstream has since moved to `9955437` (v1.0.7); that range is his adoption of our
-gun/menu modules and is listed under "originates here" below.
+**Synced with tobyszaks/robotshooter at `9955437` (v1.0.7, 2026-09-29)** — covers
+v1.0.3 through the post-1.0.4 range `838f321`…`9955437` ("Dressed all 10 maps",
+boss/special art, muzzle-convergent bullets, big-map integration, SNOW CANNON, and
+his adoption of our gun/menu modules — those are marked "originates here" below).
 
 ## Legend
 
@@ -74,7 +73,7 @@ behaviour are listed; everything else is "skipped: originates here".
 | Big-map integration (`BIG_BASE` seeds, `?bigmap=`, `setupBigMap`, `BigMapScene`, `MapEvents`, `bigMinimap`, `bigPlayerBlocked`, `feetY`, `spawnFocus` drive, menu drift cam) | skipped | — | originates here: all of it is his port of our maps, events and collision |
 | `Minimap.tsx`, `ui/TitleScreen.tsx`, `ui/RunScreens.tsx`, `ui/BrandLogo.tsx`, `ui/LoadoutScreen.tsx`, `ui/SettingsScreen.tsx`, menu fade/drift showcase | skipped | — | originates here: his extraction/rematch of our menu kit |
 | `GunView`/`gunFx`/`readGunMuzzle` adoption | skipped | — | originates here: he imports our `src/game/art/*` via `src/bro/` |
-| `VERSION = "1.0.6"` | ported | `GAME_VERSION` | upstream HEAD is already 1.0.7 — covered by the next sync |
+| `VERSION = "1.0.6"` | ported | `GAME_VERSION` | upstream's v1.0.7 label rides on our-content commits (all "originates here"); v1.0.8 is listed under Not yet synced |
 
 ## Intentional differences
 
@@ -103,3 +102,19 @@ future sync:
   originate them; all host-authoritative rules unchanged.
 - No upstream `Game.tsx` hunk was copied wholesale — every change was re-expressed
   against our World/Game split, `waveLineup` difficulty curves and landmark maps.
+
+## Not yet synced — `9955437`…`77046d5` (v1.0.8 "mobile polish")
+
+Pushed upstream 2026-09-29; deliberately left out of this sync — the next one starts here:
+
+- Touch-device perf on big maps: `setAutoTier("low")`, no sun shadows
+  (`shadows={!touchUi}`), `dpr={touchUi ? [0.6,1] : [1,1.6]}`, alpine far plane
+  1200→700 on touch.
+- Phone minimap/map guide moved under the health/shard readout (off the buttons),
+  92 px fixed box.
+- `MobileControls`: movement stick driven directly (no HUD re-render per finger
+  move); jump moved to the right side, stacked above the ability button.
+- 4-player co-op join fixes: stale slot pruning, keep-alive heartbeat, full-room
+  notice, lobby catch-up (`net.ts`, ~+84).
+- Version bumps to `1.0.8`; roadmap gains "his 10 new enemy types on big maps" and
+  "preload/warm big maps" items.

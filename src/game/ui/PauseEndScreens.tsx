@@ -159,11 +159,13 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
     <div className="mt-4 rounded-lg bg-[#2b2118] p-3 font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between text-[11px] tracking-[0.25em]">
         <span className="opacity-70">STATS</span>
-        {/* hover or tap shows the class's role and trade-offs (Toby's class popover) */}
+        {/* hover or tap shows the class's role and trade-offs (Toby's class popover);
+            a tap also fires pointerenter, so hover opens/closes for a real mouse only
+            and touch just toggles on click */}
         <span className="relative">
           <button
-            onMouseEnter={() => setShowCls(true)}
-            onMouseLeave={() => setShowCls(false)}
+            onPointerEnter={(e) => e.pointerType === "mouse" && setShowCls(true)}
+            onPointerLeave={(e) => e.pointerType === "mouse" && setShowCls(false)}
             onClick={() => setShowCls((v) => !v)}
             className="cursor-help underline decoration-dotted underline-offset-2"
             style={{ color: CLASSES[cls].color }}
