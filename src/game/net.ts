@@ -38,7 +38,12 @@ export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
 export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
 const PREFIX = "scrapfall-arena-v1-";
+/** ms of silence before the host lets a guest's slot go */
+const HEARTBEAT = 5000;
+/** joining rebuilds the whole map, so hold off judging silence at first */
+const JOIN_GRACE = 15000;
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 
 export function makeCode() {
   let s = "";
