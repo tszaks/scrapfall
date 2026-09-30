@@ -192,6 +192,9 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     opts.onMsg(raw as NetMsg);
   });
   conn.on("close", lost);
+  // hand over whatever showed up while we were checking for a full room
+  setTimeout(() => backlog.forEach((m) => opts.onMsg(m)), 0);
+
 
 
   const self = peer.id;
