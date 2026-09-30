@@ -377,7 +377,7 @@ export const WesternScene = memo(function WesternScene({
     () =>
       registerStaticGeometry(
         "map",
-        built.chunks.flatMap((c) => [c.main, c.detail]),
+        built.chunks.flatMap((c) => [c.main]).concat(built.details.map((d) => d.geometry)),
       ),
     [built],
   );
@@ -415,6 +415,18 @@ export const WesternScene = memo(function WesternScene({
       flame: new THREE.MeshBasicMaterial({ color: "#ffa040", toneMapped: false }),
     }),
     [nightK],
+  );
+  // detail cells fade out over a band instead of snapping: a sign's trim popping in at
+  // the far side of a 120 m sightline reads as a blink, so each cell gets its own
+  // material (same factory — the night/time uniforms are shared objects)
+  const detailMats = useMemo(
+    () =>
+      built.details.map(() => {
+        const m = facadeMaterial(nightK);
+        m.transparent = true;
+        return m;
+      }),
+    [built, nightK],
   );
   const ground = useMemo(() => groundMaterial(layout, true), [layout]);
   const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
@@ -487,12 +499,13 @@ export const WesternScene = memo(function WesternScene({
 
   useEffect(
     () => () => {
-      for (const c of built.chunks)
-        [c.main, c.detail, c.glow, c.pools].forEach((g) => g?.dispose());
+      for (const c of built.chunks) [c.main, c.glow, c.pools].forEach((g) => g?.dispose());
+      for (const d of built.details) d.geometry.dispose();
       built.far.dispose();
     },
     [built],
   );
+  useEffect(() => () => detailMats.forEach((m) => m.dispose()), [detailMats]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
   // ---- windmill wheels (animated) ----
@@ -605,10 +618,24 @@ export const WesternScene = memo(function WesternScene({
         const dx = Math.max(c.x0 - cam.position.x, 0, cam.position.x - c.x1);
         const dz = Math.max(c.z0 - cam.position.z, 0, cam.position.z - c.z1);
         const d = Math.hypot(dx, dz);
-        const det = detailRefs.current[i];
-        if (det) det.visible = d < DETAIL_RANGE;
         const pl = poolRefs.current[i];
         if (pl) pl.visible = poolsOn.current && d < 500;
+      });
+      built.details.forEach((d, i) => {
+        const dx = Math.max(d.x0 - cam.position.x, 0, cam.position.x - d.x1);
+        const dz = Math.max(d.z0 - cam.position.z, 0, cam.position.z - d.z1);
+        const det = detailRefs.current[i],
+          dm = detailMats[i];
+        if (!det || !dm) return;
+        // fade over the last 15 m of range rather than popping at the cutoff
+        const o = Math.min(1, Math.max(0, (DETAIL_RANGE + 15 - Math.hypot(dx, dz)) / 15));
+        det.visible = o > 0;
+        if (o !== dm.opacity) dm.opacity = o;
+        if (dm.envMap !== mats.facade.envMap) {
+          dm.envMap = mats.facade.envMap;
+          dm.needsUpdate = true;
+        }
+        dm.envMapIntensity = mats.facade.envMapIntensity;
       });
     }
   });
@@ -646,17 +673,6 @@ export const WesternScene = memo(function WesternScene({
       {built.chunks.map((c, i) => (
         <group key={i}>
           {c.main && <mesh geometry={c.main} material={mats.facade} castShadow receiveShadow />}
-          {c.detail && (
-            <mesh
-              ref={(m) => {
-                detailRefs.current[i] = m;
-              }}
-              geometry={c.detail}
-              material={mats.facade}
-              castShadow
-              receiveShadow
-            />
-          )}
           {c.glow && <mesh geometry={c.glow} material={mats.glow} />}
           {c.pools && (
             <mesh
@@ -670,6 +686,18 @@ export const WesternScene = memo(function WesternScene({
             />
           )}
         </group>
+      ))}
+      {built.details.map((d, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            detailRefs.current[i] = m;
+          }}
+          geometry={d.geometry}
+          material={detailMats[i]!}
+          castShadow
+          receiveShadow
+        />
       ))}
       {built.windmills.length > 0 && (
         <instancedMesh

@@ -147,8 +147,12 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
   // walk-ins by kind (the general store is the walk-in "store"); named landmarks by sign
   const W = western.W;
   const FIXED = ["HOTEL", "OPERA HOUSE"];
+  // both grid sizes: the town core is fixed-position but the collision cell grid
+  // shifts with the arena, so a flush wall's block can graze a corridor on one
+  // size and not the other
+  for (const size of [400, 520])
   for (let seed = 1; seed <= 50; seed++) {
-    const { layout } = western.generateWestern(rng(seed), 400, 400);
+    const { layout, blocks } = western.generateWestern(rng(seed), size, size);
     for (const t of ["store", "saloon", "bank", "sheriff", "stable"])
       assert.ok(
         layout.buildings.some((b) => b.t === t && b.walkIn),
@@ -203,6 +207,181 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
           Math.abs(p.x - (d.x1 - 0.6)) > 0.15,
       );
       assert.ok(!pole, `seed ${seed}: post at ${pole?.x},${pole?.z} blocks a bridge lane`);
+    }
+    // the strip between two buildings' facing backs is a shared alley lane: clutter
+    // may hug a wall but must never pile up enough to seal it mid-block (seed 7's
+    // store alley walled shut with crates)
+    const strips = [];
+    for (const a of layout.buildings) {
+      if (a.front === 2)
+        for (const b of layout.buildings) {
+          if (b.front !== 0) continue;
+          const gap = a.z0 - b.z1;
+          // a gap under ~3 m is a dead crevice, not a lane — junk may fill it
+          if (gap < 3 || gap > 8) continue;
+          const x0 = Math.max(a.x0, b.x0),
+            x1 = Math.min(a.x1, b.x1);
+          if (x1 - x0 < 3) continue;
+          strips.push({ x0: x0 + 0.15, z0: b.z1 + 0.1, x1: x1 - 0.15, z1: a.z0 - 0.1, ax: "z" });
+        }
+      if (a.front === 3)
+        for (const b of layout.buildings) {
+          if (b.front !== 1) continue;
+          const gap = b.x0 - a.x1;
+          if (gap < 3 || gap > 8) continue;
+          const z0 = Math.max(a.z0, b.z0),
+            z1 = Math.min(a.z1, b.z1);
+          if (z1 - z0 < 3) continue;
+          strips.push({ x0: a.x1 + 0.1, z0: z0 + 0.15, x1: b.x0 - 0.1, z1: z1 - 0.15, ax: "x" });
+        }
+    }
+    // a lane may slalom around wall-hugging junk — the invariant is connectivity: an
+    // open end must reach the other open end on ~0.3 m cells (player radius 0.45).
+    // Overhead wire (clotheslines) and lanterns don't block walking.
+    for (const s of strips) {
+      const nb = layout.buildings.filter(
+        (b) => b.x1 > s.x0 - 1 && b.x0 < s.x1 + 1 && b.z1 > s.z0 - 1 && b.z0 < s.z1 + 1,
+      );
+      const np = layout.props.filter(
+        (p) =>
+          p.k !== "clothesline" &&
+          p.k !== "lantern" &&
+          p.x > s.x0 - 2 && p.x < s.x1 + 2 && p.z > s.z0 - 2 && p.z < s.z1 + 2,
+      );
+      const ns = layout.posts.filter(
+        (p) => p.r > 0.12 && p.x > s.x0 - 2 && p.x < s.x1 + 2 && p.z > s.z0 - 2 && p.z < s.z1 + 2,
+      );
+      const cellFree = (x, z) => {
+        for (const b of nb)
+          if (x > b.x0 - 0.2 && x < b.x1 + 0.2 && z > b.z0 - 0.2 && z < b.z1 + 0.2)
+            return false;
+        for (const p of np) if (Math.hypot(p.x - x, p.z - z) < 0.75) return false;
+        for (const p of ns) if (Math.hypot(p.x - x, p.z - z) < p.r + 0.35) return false;
+        return true;
+      };
+      const step = 0.3,
+        nx = Math.floor((s.x1 - s.x0) / step),
+        nz = Math.floor((s.z1 - s.z0) / step);
+      if (nx < 2 || nz < 2) continue;
+      const blocked = (ix, iz) =>
+        !cellFree(s.x0 + (ix + 0.5) * step, s.z0 + (iz + 0.5) * step);
+      const grid = Array.from({ length: nx }, (_, ix) =>
+        Array.from({ length: nz }, (_, iz) => blocked(ix, iz)),
+      );
+      let built = 0;
+      for (const col of grid) for (const c of col) if (c) built++;
+      if (built / (nx * nz) > 0.4) continue; // an intruding wall crosses it — not a lane
+      // lane runs along x for z-gap pairs, along z for x-gap pairs
+      const ends =
+        s.ax === "z"
+          ? [
+              grid[0].map((c, iz) => (c ? -1 : iz)).filter((i) => i >= 0),
+              grid[nx - 1].map((c, iz) => (c ? -1 : iz)).filter((i) => i >= 0),
+            ]
+          : [
+              grid.map((c, ix) => (c[0] ? -1 : ix)).filter((i) => i >= 0),
+              grid.map((c, ix) => (c[nz - 1] ? -1 : ix)).filter((i) => i >= 0),
+            ];
+      if (!ends[0].length || !ends[1].length) continue; // blind seam, no through-lane
+      const seen = new Set(),
+        queue = [];
+      for (const e of ends[0])
+        queue.push(s.ax === "z" ? [0, e] : [e, 0]);
+      let through = false;
+      while (queue.length) {
+        const [ix, iz] = queue.pop();
+        const key = ix * 4096 + iz;
+        if (seen.has(key) || ix < 0 || iz < 0 || ix >= nx || iz >= nz || grid[ix][iz])
+          continue;
+        seen.add(key);
+        if (
+          (s.ax === "z" && ix === nx - 1 && ends[1].includes(iz)) ||
+          (s.ax === "x" && iz === nz - 1 && ends[1].includes(ix))
+        ) {
+          through = true;
+          break;
+        }
+        queue.push([ix + 1, iz], [ix - 1, iz], [ix, iz + 1], [ix, iz - 1]);
+      }
+      assert.ok(
+        through,
+        `seed ${seed}: back lane sealed at ${s.x0.toFixed(1)},${s.z0.toFixed(1)}`,
+      );
+    }
+    // nothing may sit across a walk-in's doorway — the corridors (front AND back)
+    // are reserved on layout.doorZones. No building may intrude: the corridor's
+    // owner legitimately overlaps a 0.2 m sliver at its own wall, so find it as
+    // the building containing one of the zone's shallow edge midpoints.
+    for (const z of layout.doorZones) {
+      const cx = (z.x0 + z.x1) / 2,
+        cz = (z.z0 + z.z1) / 2;
+      const owner = layout.buildings.find((b) =>
+        [
+          [cx, z.z0 + 0.1],
+          [cx, z.z1 - 0.1],
+          [z.x0 + 0.1, cz],
+          [z.x1 - 0.1, cz],
+        ].some(([px, pz]) => px > b.x0 && px < b.x1 && pz > b.z0 && pz < b.z1),
+      );
+      assert.ok(
+        owner,
+        `seed ${seed} size ${size}: door corridor at ${z.x0.toFixed(1)},${z.z0.toFixed(1)} has no owner`,
+      );
+      const intruder = layout.buildings.find(
+        (b) => b !== owner && b.x1 > z.x0 && b.x0 < z.x1 && b.z1 > z.z0 && b.z0 < z.z1,
+      );
+      assert.ok(
+        !intruder,
+        `seed ${seed} size ${size}: ${intruder?.t} (${intruder?.x0.toFixed(1)}..${intruder?.x1.toFixed(1)}, ${intruder?.z0.toFixed(1)}..${intruder?.z1.toFixed(1)}) sits in a door corridor`,
+      );
+      // and no collision cell may reach into it either (blocks are 2 m cells)
+      const block = blocks.find(
+        (b) => b.x + 1 > z.x0 && b.x - 1 < z.x1 && b.z + 1 > z.z0 && b.z - 1 < z.z1,
+      );
+      assert.ok(
+        !block,
+        `seed ${seed} size ${size}: collision block at ${block?.x},${block?.z} intrudes on a door corridor`,
+      );
+    }
+    // check each prop's full footprint, not just its centre (the
+    // half-extents mirror approachFoot in layout.ts)
+    const HALF = {
+      crate: [0.5, 0.5],
+      crates: [1.1, 1.3],
+      barrel: [0.5, 0.5],
+      barrels: [0.9, 0.9],
+      trough: [1.3, 0.5],
+      streetlamp: [0.28, 0.28],
+      bench: [1, 0.4],
+      sacks: [0.7, 0.7],
+      woodpile: [1.3, 0.8],
+      outhouse: [0.9, 0.9],
+      hay: [0.75, 0.5],
+      brokencrate: [0.6, 0.6],
+      brokenbarrel: [0.6, 0.5],
+      anvil: [0.4, 0.45],
+      wheel: [0.7, 0.2],
+      wagon: [1.1, 2.6],
+      covered: [1.1, 2.6],
+      cart: [0.8, 1.7],
+      horse: [0.6, 1.6],
+    };
+    for (const z of layout.doorZones) {
+      const bad = layout.props.find((p) => {
+        // lanterns/clotheslines hang overhead; straw is loose ground litter — none can
+        // block a doorway
+        if (p.k === "lantern" || p.k === "clothesline" || p.k === "straw") return false;
+        const h = p.k === "hitch" ? [p.s / 2, 0.2] : (HALF[p.k] ?? [0.4, 0.4]);
+        const cs = Math.abs(Math.cos(p.rot)),
+          sn = Math.abs(Math.sin(p.rot));
+        const hw = (h[0] * cs + h[1] * sn) * (p.k === "hitch" ? 1 : p.s),
+          hd = (h[0] * sn + h[1] * cs) * (p.k === "hitch" ? 1 : p.s);
+        return p.x + hw > z.x0 && p.x - hw < z.x1 && p.z + hd > z.z0 && p.z - hd < z.z1;
+      });
+      assert.ok(
+        !bad,
+        `seed ${seed}: ${bad?.k} at ${bad?.x.toFixed(1)},${bad?.z.toFixed(1)} blocks a walk-in door`,
+      );
     }
   }
 });

@@ -35,7 +35,10 @@ import { tumbleweedGeometry } from "./tumbleweed";
 import { roomPlan, saloonBalcony, type RoomItem, type RoomPlan } from "./rooms";
 
 export const CHUNK = 200;
-export const DETAIL_RANGE = 280;
+// detail cells are CHUNK/2 across; the range counts from a cell's near edge and the
+// renderer fades it in over the last 15 m — 120 m hides the far half of town while a
+// barrel or sign rail still resolves at a distance it can matter
+export const DETAIL_RANGE = 120;
 
 /** aFac.z flags: +1 windows light up at night (random), +2 always lit (saloon), +10 ground AO */
 const LIT = 1;
@@ -62,12 +65,13 @@ export type WChunk = {
   x1: number;
   z1: number;
   main: THREE.BufferGeometry | null;
-  detail: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
   pools: THREE.BufferGeometry | null;
 };
 export type WesternMeshes = {
   chunks: WChunk[];
+  /** the detail layer on its finer grid: props and trim hidden beyond DETAIL_RANGE */
+  details: { x0: number; z0: number; x1: number; z1: number; geometry: THREE.BufferGeometry }[];
   /** rolling backdrop terrain beyond the rim and the distant buttes (one geometry) */
   far: THREE.BufferGeometry;
   /** windmill wheels: animated separately */
@@ -5074,10 +5078,34 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
         glow: new Geo(),
         pools: new Geo(),
       });
-  const chunkAt = (x: number, z: number) => {
+  // the detail layer gets a finer grid than the walls: a 200 m chunk is within range of
+  // most of town, so distance culling never engages; 100 m cells let it actually bite
+  const dn = n * 2,
+    DCHUNK = CHUNK / 2;
+  const dCells: { x0: number; z0: number; x1: number; z1: number; geo: Geo }[] = [];
+  const dGrid = new Int32Array(dn * dn).fill(-1);
+  const detailAt = (x: number, z: number) => {
+    const a = Math.max(0, Math.min(dn - 1, Math.floor((x + E) / DCHUNK)));
+    const b = Math.max(0, Math.min(dn - 1, Math.floor((z + E) / DCHUNK)));
+    const i = a * dn + b;
+    let cell = dCells[dGrid[i]!];
+    if (!cell) {
+      cell = {
+        x0: -E + a * DCHUNK,
+        z0: -E + b * DCHUNK,
+        x1: -E + (a + 1) * DCHUNK,
+        z1: -E + (b + 1) * DCHUNK,
+        geo: new Geo(),
+      };
+      dGrid[i] = dCells.push(cell) - 1;
+    }
+    return cell;
+  };
+  const chunkAt = (x: number, z: number): ChunkGeo => {
     const a = Math.max(0, Math.min(n - 1, Math.floor((x + E) / CHUNK)));
     const b = Math.max(0, Math.min(n - 1, Math.floor((z + E) / CHUNK)));
-    return list[a * n + b]!;
+    const c = list[a * n + b]!;
+    return { ...c, detail: detailAt(x, z).geo };
   };
   const r = mulberry(1234);
   const windmills: WesternMeshes["windmills"] = [];
@@ -5358,11 +5386,17 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   let verts = far.getAttribute("position").count;
   const chunks: WChunk[] = list.map((c) => {
     const main = c.main.n ? c.main.build() : null;
-    const detail = c.detail.n ? c.detail.build() : null;
     const glow = c.glow.n ? c.glow.build() : null;
     const pools = c.pools.n ? c.pools.build("uv") : null;
-    for (const g of [main, detail, glow, pools]) if (g) verts += g.getAttribute("position").count;
-    return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, detail, glow, pools };
+    for (const g of [main, glow, pools]) if (g) verts += g.getAttribute("position").count;
+    return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, glow, pools };
   });
-  return { chunks, far, windmills, fires, stats: { verts } };
+  const details = dCells
+    .filter((c) => c.geo.n)
+    .map((c) => {
+      const geometry = c.geo.build();
+      verts += geometry.getAttribute("position").count;
+      return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, geometry };
+    });
+  return { chunks, details, far, windmills, fires, stats: { verts } };
 }
