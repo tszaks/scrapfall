@@ -151,8 +151,41 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     peer.on("error", (e) => { clearTimeout(t); reject(e); });
   });
 
-  conn.on("data", (raw) => opts.onMsg(raw as NetMsg));
-  conn.on("close", () => opts.onClose?.());
+  // the host answers a fourth guest with "full" right after the link opens
+  let full = false;
+  const early = (raw: unknown) => { if ((raw as NetMsg)?.type === "full") full = true; };
+  conn.on("data", early);
+  await new Promise<void>((r) => setTimeout(r, 700));
+  conn.off("data", early);
+  if (full) {
+    try { conn.close(); } catch { /* already closed */ }
+    peer.destroy();
+    throw new Error("That arena is already full");
+  }
+
+  // the host chatters constantly; a long silence means the room is gone
+  const openedAt = Date.now();
+  let heardAt = openedAt;
+  let closed = false;
+  const lost = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(beat);
+    opts.onClose?.();
+  };
+  const beat = setInterval(() => {
+    const now = Date.now();
+    if (now - openedAt >= JOIN_GRACE && now - heardAt > HEARTBEAT + 3000) lost();
+    else if (conn.open) conn.send({ type: "hb", from: peer.id });
+  }, 1000);
+
+  conn.on("data", (raw) => {
+    heardAt = Date.now();
+    if ((raw as NetMsg)?.type === "hb") return;
+    opts.onMsg(raw as NetMsg);
+  });
+  conn.on("close", lost);
+
 
   const self = peer.id;
   return {
