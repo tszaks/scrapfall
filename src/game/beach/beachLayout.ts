@@ -1,4 +1,5 @@
 import { wheelGround, wheelPoint, type Wheel } from "./wheelRide";
+import { beachDoorApproach, beachStallBounds, swimLineBuoys } from "./doorways";
 import {
   BEACH_MAT_Z,
   beachPropBounds,
@@ -654,6 +655,15 @@ export function generateBeach(
   // lifeguard headquarters (on the sand) and restrooms
   const bld = (b: Omit<BBld, "seed" | "tone"> & { seed?: number; tone?: number }) => {
     const full: BBld = { seed: r(), tone: r(), ...b };
+    // Keep the whole doorway approach, not just its centre, clear of midway booths.
+    // Consume the same random values even when a booth is omitted.
+    if (
+      b.t === "stall" &&
+      buildings.some(
+        (host) => host.t !== "stall" && overlaps(beachStallBounds(b), beachDoorApproach(host)),
+      )
+    )
+      return full;
     buildings.push(full);
     if (!b.backdrop) {
       solidify(b, b.y0 - 6, b.y0 + b.h);
@@ -1019,12 +1029,9 @@ export function generateBeach(
       props.push({ k: "mat", x, z, y: heightAt(x, z), rot: 0 });
   for (const z of [-178, 182]) prop("shower", 94, z, 0);
   // The rope lies on the exact blocked cell edge, with no buoys below the amusement deck.
-  for (let z = -half + 8; z <= half - 8; z += 8) {
-    if (Math.abs(z) < 40) continue;
+  for (const z of swimLineBuoys(half)) {
     props.push({ k: "buoy", x: X.surf, z, y: SEA, rot: 0 });
   }
-
-  for (const z of [-36, 36]) props.push({ k: "buoy", x: X.surf, z, y: SEA, rot: 0 });
 
   const inFeature = (x: number, z: number) =>
     [skate, gym, courts, lot, rect(96, -128, X.bike, -100)].some(
@@ -1093,10 +1100,7 @@ export function generateBeach(
       Math.abs(Math.abs(z) - 100) < 14 ||
       (z > 188 && z < 224) ||
       activity.lanes.some((p) => overlaps(rc, p)) ||
-      buildings.some(
-        (b) =>
-          b.front === 3 && b.x0 >= X.shops && b.x0 < 170 && Math.abs(z - (b.z0 + b.z1) / 2) < 8,
-      ) ||
+      buildings.some((b) => b.t !== "stall" && overlaps(rc, beachDoorApproach(b))) ||
       props.some((p) => overlaps(rc, beachPropBounds(p, 0.6)))
     )
       continue;
@@ -1173,6 +1177,14 @@ export function generateBeach(
     [36, 14],
   ] as const)
     props.push({ k: "flag", x, z, y: DECK, rot: 0, c: 0 });
+
+  // Check all loose dressing too, before either navigation or visible geometry is built.
+  const doorApproaches = buildings
+    .filter((b) => !b.backdrop && b.t !== "stall")
+    .map(beachDoorApproach);
+  for (let i = props.length - 1; i >= 0; i--)
+    if (doorApproaches.some((door) => overlaps(door, beachPropBounds(props[i]!, 0.25))))
+      props.splice(i, 1);
 
   // ---- 9b. anything you would bump into in real life is solid (and it is cover) ----
   const foot = (

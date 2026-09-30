@@ -97,7 +97,8 @@ future sync:
 
 ## Sync mechanics
 
-- Room namespace bumped to `scrapfall-ts-arena-v9-` (`net.ts`): new message kinds
+- Room namespace bumped to `scrapfall-ts-arena-v11-` (`net.ts`; main took v9 for the
+  Pier/Whiteout doorway work and v10 is reserved for Dry Gulch): new message kinds
   `shard`, `haz`, `hazset`, `mut`, `ot`, `kill` — appended to `RELAYED` where guests
   originate them; all host-authoritative rules unchanged.
 - No upstream `Game.tsx` hunk was copied wholesale — every change was re-expressed

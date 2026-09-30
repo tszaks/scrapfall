@@ -59,9 +59,10 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v6 adds shared match weather, ballistic trajectories, Longshot and the fifth map.
 // v7 reserves generated doorway approaches and aligns physical door/window openings.
 // v8 furnishes Pier/Whiteout interiors and adds pier activities
-// v9 brings in Toby's 1.0.3/1.0.4: shootable hazards, endless overtime mutators,
-// single-use shards and per-player kill credit — all new or changed messages.
-const PREFIX = "scrapfall-ts-arena-v9-";
+// v9 clears Pier door approaches and grades Whiteout entrance thresholds.
+// v11 brings in Toby's 1.0.3-1.0.6: hazards, endless overtime, shard and stat fixes
+// — all new or changed messages, so rooms split from v9/v10 clients.
+const PREFIX = "scrapfall-ts-arena-v11-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
