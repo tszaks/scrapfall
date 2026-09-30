@@ -3581,17 +3581,25 @@ export function Game() {
     if (m.type === "begin") { startRef.current(true); return; }
     if (m.type === "joined") {
       const id = String(m.from);
+      // clear out anyone who is no longer connected, so their number frees up
+      const live = new Set(netHolder.current?.peers() ?? []);
+      for (const key of Object.keys(slots.current)) if (!live.has(key)) delete slots.current[key];
       if (!slots.current[id]) {
         const used = new Set(Object.values(slots.current));
         for (let n = 2; n <= 4; n++) if (!used.has(n)) { slots.current[id] = n; break; }
       }
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
       publishRoster();
+      // catch the newcomer up on what everyone else already picked
+      Object.entries(picksRef.current).forEach(([num, ab]) => {
+        netHolder.current?.sendTo(id, { type: "pick", num: Number(num), ability: ab, cls: clsPicksRef.current[Number(num)] });
+      });
     }
     if (m.type === "left") {
       delete slots.current[String(m.from)];
       publishRoster();
     }
+
     if (m.type === "status" && m.banner) setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
