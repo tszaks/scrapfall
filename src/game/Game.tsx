@@ -3596,10 +3596,19 @@ export function Game() {
       netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
       publishRoster();
       // catch the newcomer up on what everyone else already picked
-      Object.entries(picksRef.current).forEach(([num, ab]) => {
-        netHolder.current?.sendTo(id, { type: "pick", num: Number(num), ability: ab, cls: clsPicksRef.current[Number(num)] });
-      });
+      const catchUp = () => {
+        netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
+        netHolder.current?.sendTo(id, { type: "roster", slots: { ...slots.current } });
+        Object.entries(picksRef.current).forEach(([num, ab]) => {
+          netHolder.current?.sendTo(id, { type: "pick", num: Number(num), ability: ab, cls: clsPicksRef.current[Number(num)] });
+        });
+      };
+      catchUp();
+      // the first second of a join is busy; repeat so nothing is missed
+      setTimeout(catchUp, 1200);
+      setTimeout(catchUp, 2600);
     }
+
     if (m.type === "left") {
       delete slots.current[String(m.from)];
       publishRoster();
