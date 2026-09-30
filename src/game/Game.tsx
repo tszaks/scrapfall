@@ -7527,8 +7527,10 @@ export function Game() {
   const isHost = !net || net.role === "host";
   // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick.
   // picking the map already showing is a no-op — Enter Arena on it must not rebuild.
+  const [enterQueued, setEnterQueued] = useState(false);
   const pickMap = (choice: number | null) => {
     if (!isHost || choice === mapChoice) return;
+    setEnterQueued(false);
     setMapChoice(choice);
     const s = newSeed(choice);
     setSeed(s);
@@ -7667,6 +7669,14 @@ export function Game() {
     }
   };
   startRef.current = start;
+
+  // a queued Enter Arena fires as soon as its world has applied
+  useEffect(() => {
+    if (enterQueued && !pending) {
+      setEnterQueued(false);
+      startRef.current();
+    }
+  }, [enterQueued, pending]);
 
   // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
   const [fought, setFought] = useState(0);
@@ -8387,8 +8397,12 @@ export function Game() {
               ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
               : "RANDOM WEATHER · FIXED EACH MATCH"
           }
-          onEnter={() => start()}
-          onBack={() => setPicking(false)}
+          onEnter={() => (pending ? setEnterQueued(true) : start())}
+          onBack={() => {
+            setEnterQueued(false);
+            setPicking(false);
+          }}
+          enterQueued={enterQueued}
           touchUi={touchUi}
         />
       )}
