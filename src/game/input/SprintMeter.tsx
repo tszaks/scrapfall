@@ -41,7 +41,7 @@ export function SprintMeter({ className = "" }: { className?: string }) {
   return (
     <div
       ref={box}
-      className={`pointer-events-none w-40 rounded-md bg-[#f3e6cf]/80 px-2 py-1 font-mono text-[9px] tracking-widest text-[#2b2118] ${className}`}
+      className={`pointer-events-none w-40 rounded-md bg-[#f3e6cf]/80 px-2 py-1 font-mono text-[11px] tracking-widest text-[#2b2118] ${className}`}
     >
       <span ref={tag}>TAC SPRINT READY</span>
       <div className="mt-0.5 h-1.5 overflow-hidden rounded bg-[#2b2118]/25">

@@ -82,11 +82,14 @@ export function defineRobot<const N extends string>(typed: RobotDef<N>): RobotKi
   return { def, near, far, inverses, names, rest, parents, radius };
 }
 
-const mats = new Map<string, THREE.MeshStandardMaterial>();
+// (nested maps keyed on the raw wear number: a `${variant}|${wear}` string used to be
+// built for every enemy every frame)
+const mats = new Map<string, Map<number, THREE.MeshStandardMaterial>>();
 /** the shared skinned art material for a wear level / variant */
 export function robotMaterial(variant: "base" | "elite" | "hot" = "base", wear = 0.75) {
-  const k = `${variant}|${wear}`;
-  let mt = mats.get(k);
+  let byWear = mats.get(variant);
+  if (!byWear) mats.set(variant, (byWear = new Map()));
+  let mt = byWear.get(wear);
   if (!mt) {
     mt = artMaterial({
       skin: true,
@@ -101,7 +104,7 @@ export function robotMaterial(variant: "base" | "elite" | "hot" = "base", wear =
             ? new THREE.Vector4(1.0, 0.96, 0.9, 0.4)
             : undefined,
     });
-    mats.set(k, mt);
+    byWear.set(wear, mt);
   }
   return mt;
 }

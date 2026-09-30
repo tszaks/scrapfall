@@ -1,6 +1,7 @@
 // Scrapfall menu kit: one type scale, one spacing grid, one button style, shared by every
 // screen (title, loadout, pause, recap, settings, shop). Warm paper-and-ink industrial look.
 import { useEffect, useState, type ReactNode } from "react";
+import { THEMES, offered } from "../themes";
 
 export const C = {
   ink: "#2b2118",
@@ -78,7 +79,7 @@ export function Hazard({ className = "" }: { className?: string }) {
 /** small uppercase tracking label above a section */
 export function SectionLabel({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`text-[10px] font-bold tracking-[0.3em] opacity-55 ${className}`}>
+    <div className={`text-[11px] font-bold tracking-[0.3em] opacity-70 ${className}`}>
       {children}
     </div>
   );
@@ -104,7 +105,7 @@ const BTN_VARIANT: Record<BtnVariant, string> = {
 };
 
 const BTN_SIZE: Record<BtnSize, string> = {
-  sm: "px-3 py-1.5 text-[10px]",
+  sm: "px-3 py-1.5 text-[11px]",
   md: "px-4 py-2.5 text-xs",
   lg: "px-6 py-3 text-sm",
 };
@@ -138,7 +139,7 @@ export function OptionChip({
     <button
       {...rest}
       disabled={disabled}
-      className={`pointer-events-auto select-none rounded-md border-2 px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.12em] transition-[transform,box-shadow] duration-100 disabled:cursor-default ${className}`}
+      className={`pointer-events-auto select-none rounded-md border-2 px-2.5 py-2 text-[11px] font-bold uppercase tracking-[0.12em] transition-[transform,box-shadow] duration-100 disabled:cursor-default ${className}`}
       style={{
         borderColor: C.ink,
         background: on ? (color ?? C.ink) : `${C.ink}14`,
@@ -217,7 +218,7 @@ export function Logo({ compact }: { compact?: boolean }) {
   return (
     <div className="select-none">
       <div
-        className="flex items-center gap-3 text-[10px] font-bold tracking-[0.5em] text-[#e7b25c]"
+        className="flex items-center gap-3 text-[11px] font-bold tracking-[0.5em] text-[#e7b25c]"
         style={{ textShadow: "0 1px 0 #2b2118, 0 0 18px rgba(20,14,8,0.9)" }}
       >
         <span className="inline-block h-[7px] w-16" style={{ background: `repeating-linear-gradient(-45deg, ${C.gold} 0 8px, transparent 8px 14px)` }} />
@@ -226,7 +227,7 @@ export function Logo({ compact }: { compact?: boolean }) {
       </div>
       <h1
         className={`mt-2 font-black leading-none tracking-[0.04em] text-[#f7eeda] ${
-          compact ? "text-[2.6rem]" : "text-6xl sm:text-7xl"
+          compact ? "text-[clamp(1.9rem,7.5vh,2.6rem)]" : "text-6xl sm:text-7xl"
         }`}
         style={{
           textShadow:
@@ -236,11 +237,11 @@ export function Logo({ compact }: { compact?: boolean }) {
         SCRAP<span className="text-[#e7b25c]">FALL</span>
       </h1>
       <div
-        className="mt-3 flex items-center gap-2 text-[10px] font-bold tracking-[0.34em] text-[#f3e6cf]"
+        className="mt-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.34em] text-[#f3e6cf]"
         style={{ textShadow: "0 1px 0 #2b2118, 0 0 16px rgba(20,14,8,0.9)" }}
       >
         <Hazard className="w-10 opacity-90" />
-        12 WAVES · 5 ARENAS · 4-PLAYER CO-OP
+        {`12 WAVES · ${THEMES.filter(offered).length} ARENAS · 4-PLAYER CO-OP`}
       </div>
     </div>
   );

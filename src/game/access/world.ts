@@ -299,8 +299,27 @@ function roofBlocked(b: AccessBuilding, x: number, z: number, r: number, fixture
   if (x < R.x0 + r || x > R.x1 - r || z < R.z0 + r || z > R.z1 - r) return true;
   for (const o of b.obstacles)
     if (x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r) return true;
-  const [a, d] = toLocal(b, x, z);
-  return fixtures && furnishingBlocked(b, 1, a, d, r, b.top + 0.08, b.top + 1.8);
+  // (inlined toLocal + a looped furnishingBlocked: blocked() calls this for every body
+  // query that lands on a roof cell — the tuple and .some closure were per-call garbage)
+  const dx = x - b.ox;
+  const dz = z - b.oz;
+  const a = dx * b.tx + dz * b.tz;
+  const d = dx * b.ix + dz * b.iz;
+  if (!fixtures) return false;
+  const y0 = b.top + 0.08,
+    y1 = b.top + 1.8;
+  for (const p of b.furnishings)
+    if (
+      p.level === 1 &&
+      p.y1 > y0 &&
+      p.y0 < y1 &&
+      a > p.a0 - r &&
+      a < p.a1 + r &&
+      d > p.d0 - r &&
+      d < p.d1 + r
+    )
+      return true;
+  return false;
 }
 
 // ---------------------------------------------------------------- cars

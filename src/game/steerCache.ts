@@ -31,6 +31,14 @@ const MOVED = 1.4;
 
 const out = { x: 0, z: 0 };
 
+/** The lazy probes steerTo runs (only on a memo miss): `los` is the LOS ray-march and
+ * `route` the fallback field descent. Passed as one reusable object with mutable fields —
+ * a pair of closures per enemy per frame was a measurable GC source in a crowd. */
+export type SteerProbe = {
+  los: () => boolean;
+  route: () => { x: number; z: number } | null;
+};
+
 /**
  * Where to walk this frame: the target if the straight line is clear (`los`), else the
  * route the grid suggests (`route`). Returns a shared scratch object — read it
@@ -40,8 +48,7 @@ export function steerTo<T extends { x: number; z: number }>(
   e: SteerMem & { x: number; z: number },
   t: T,
   time: number,
-  los: () => boolean,
-  route: () => { x: number; z: number } | null,
+  probe: SteerProbe,
 ): { x: number; z: number } {
   if (
     e.svT !== undefined &&
@@ -53,7 +60,7 @@ export function steerTo<T extends { x: number; z: number }>(
     out.z = e.svZ!;
     return out;
   }
-  const p = los() ? t : (route() ?? t);
+  const p = probe.los() ? t : (probe.route() ?? t);
   const jit = Math.abs(Math.sin(e.x * 12.9898 + e.z * 78.233));
   e.svT = time + TTL * (0.6 + 0.8 * jit);
   e.svX = p.x;

@@ -1,0 +1,67 @@
+{
+  "pass": true,
+  "base": "4e5da66",
+  "sourceCommit": "5f4465c",
+  "bundle": "routes-DuC1F7LO.js",
+  "counts": {
+    "pacific": {
+      "1": {
+        "roundTrips": 30,
+        "boundary": 1,
+        "pass": true
+      },
+      "4": {
+        "roundTrips": 27,
+        "boundary": 1,
+        "pass": true
+      },
+      "7": {
+        "roundTrips": 27,
+        "boundary": 1,
+        "pass": true
+      },
+      "11": {
+        "roundTrips": 27,
+        "boundary": 1,
+        "pass": true
+      },
+      "42": {
+        "roundTrips": 27,
+        "boundary": 1,
+        "pass": true
+      }
+    },
+    "whiteout": {
+      "1": {
+        "roundTrips": 36,
+        "boundary": 0,
+        "pass": true
+      },
+      "4": {
+        "roundTrips": 33,
+        "boundary": 0,
+        "pass": true
+      },
+      "7": {
+        "roundTrips": 33,
+        "boundary": 0,
+        "pass": true
+      },
+      "11": {
+        "roundTrips": 36,
+        "boundary": 0,
+        "pass": true
+      },
+      "42": {
+        "roundTrips": 33,
+        "boundary": 0,
+        "pass": true
+      }
+    }
+  },
+  "roundTrips": 309,
+  "boundaryChecks": 5,
+  "errors": [],
+  "webkitTargetedTrips": 27,
+  "coop": "Pier and Whiteout pass after 26 seconds, matching v9 worlds and zero settled remote error"
+}

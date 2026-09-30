@@ -566,18 +566,24 @@ const DIRS = [
  * standing by a railing is in a solid cell that touches both levels, so the field would leak
  * down to the sand below. There the nearest open cell on the player's own level is used.
  */
+const navTargetOut: [number, number] = [0, 0];
 export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]): [number, number] {
   const ti = toNav(x);
   const tj = toNav(z);
-  if (!strictNav()) return [ti, tj];
+  // (shared result: callers destructure immediately — this runs inside enemy route picks)
+  const r = navTargetOut;
+  r[0] = ti;
+  r[1] = tj;
+  if (!strictNav()) return r;
   const n = nav.n;
   const gy = groundY(x, z);
   const same = (k: number) => !nav.g[k] && Math.abs(groundY(nav.px[k]!, nav.pz[k]!) - gy) < 1.2;
-  if (same(ti * n + tj)) return [ti, tj];
+  if (same(ti * n + tj)) return r;
   // prefer the nearest open cell on the same level that has a clear walk to the point, so an
   // enemy that arrives there can step straight to a player standing along a railing
-  let best: [number, number] = [ti, tj];
   let bd = Infinity;
+  let bi = ti;
+  let bj = tj;
   for (let di = -3; di <= 3; di++)
     for (let dj = -3; dj <= 3; dj++) {
       const i = ti + di;
@@ -588,10 +594,13 @@ export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]):
       if (blocks && !clearLine(blocks, nav.px[k]!, nav.pz[k]!, x, z, 0.45)) d += 1000;
       if (d < bd) {
         bd = d;
-        best = [i, j];
+        bi = i;
+        bj = j;
       }
     }
-  return best;
+  r[0] = bi;
+  r[1] = bj;
+  return r;
 }
 
 /**
@@ -652,8 +661,14 @@ export function fineField(blocks: Block[], x: number, z: number, R = 24): FineFi
   }
   return { i0, j0, w, dist };
 }
-/** next point down a fine field from (x, z), or null when outside it / not connected / there */
-export function fineStep(f: FineField, x: number, z: number): { x: number; z: number } | null {
+/** next point down a fine field from (x, z), or null when outside it / not connected / there.
+ * `out` is a caller scratch — read it before the next call. */
+export function fineStep(
+  f: FineField,
+  x: number,
+  z: number,
+  out: { x: number; z: number },
+): { x: number; z: number } | null {
   const a = toCell(x) - f.i0;
   const b = toCell(z) - f.j0;
   const w = f.w;
@@ -676,7 +691,9 @@ export function fineStep(f: FineField, x: number, z: number): { x: number; z: nu
     }
   }
   if (ba === a && bb === b) return null;
-  return { x: cellCenter(f.i0 + ba), z: cellCenter(f.j0 + bb) };
+  out.x = cellCenter(f.i0 + ba);
+  out.z = cellCenter(f.j0 + bb);
+  return out;
 }
 
 /** Distance (in steps) from every nav cell to the target nav cell. `maxD` bounds the search
@@ -712,8 +729,15 @@ export function flowField(nav: NavGrid, ti: number, tj: number, maxD = Infinity)
   return dist;
 }
 
-/** World-space point the enemy should walk to next. */
-export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: number) {
+/** World-space point the enemy should walk to next. `out` is a caller scratch (this runs
+ * per enemy per frame) — read it before the next call. */
+export function nextWaypoint(
+  nav: NavGrid,
+  dist: Float32Array,
+  x: number,
+  z: number,
+  out: { x: number; z: number },
+) {
   const { g: solid, n } = nav;
   const ci = toNav(x);
   const cj = toNav(z);
@@ -734,8 +758,14 @@ export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: num
     }
   }
   const k = bi * n + bj;
-  if (NAV_SCALE === 1) return { x: cellCenter(bi), z: cellCenter(bj) };
-  return { x: nav.px[k]!, z: nav.pz[k]! };
+  if (NAV_SCALE === 1) {
+    out.x = cellCenter(bi);
+    out.z = cellCenter(bj);
+    return out;
+  }
+  out.x = nav.px[k]!;
+  out.z = nav.pz[k]!;
+  return out;
 }
 
 /** True when a straight walk from a to b is clear for the given radius. */

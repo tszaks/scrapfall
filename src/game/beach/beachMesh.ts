@@ -1,4 +1,6 @@
 import { wheelRails, wheelGround } from "./wheelRide";
+import { beachDoorApproach, swimLineBuoys, SWIM_LINE_SPACING } from "./doorways";
+import { beachPropBounds, overlaps } from "./beachActivity";
 // Turns the Pacific Pier layout into merged geometry, one set of meshes per 200 m chunk:
 //   ground - the terrain: beach, bowls, bluff, streets (its own material: wet sand shines)
 //   main   - buildings, the pier structure, railings, palms (always drawn; casts shadows)
@@ -309,11 +311,34 @@ function templates(): Tmpls {
       g.box(0, 0.01, 0, 0.9, 0.02, 1.8);
     }),
     board: t((g) => {
-      // surfboard standing in the sand
+      // Rounded rails, a pointed nose, squash tail and a real fin instead of a tall box.
+      const outline: [number, number][] = [
+        [-0.12, 0],
+        [-0.22, 0.2],
+        [-0.29, 0.85],
+        [-0.28, 1.45],
+        [-0.19, 2.08],
+        [0, 2.4],
+        [0.19, 2.08],
+        [0.28, 1.45],
+        [0.29, 0.85],
+        [0.22, 0.2],
+        [0.12, 0],
+      ];
       g.col("#ffffff");
-      g.obox(0, -0.3, 0, 0.55, 2.3, 0.07, 0.2);
+      for (let i = 0; i < outline.length; i++) {
+        const [ax, ay] = outline[i]!,
+          [bx, by] = outline[(i + 1) % outline.length]!;
+        g.tri(0, 1.1, 0.045, bx, by, 0.035, ax, ay, 0.035);
+        g.tri(0, 1.1, -0.045, ax, ay, -0.035, bx, by, -0.035);
+        g.quad(ax, ay, 0.035, bx, by, 0.035, bx, by, -0.035, ax, ay, -0.035);
+      }
       g.col("#3a3a3a");
-      g.obox(0, 1.3, 0, 0.1, 0.7, 0.08, 0.2);
+      g.box(0, 0.24, -0.047, 0.035, 1.8, 0.006);
+      g.tri(-0.015, 0.22, 0.035, -0.015, 0.32, 0.24, -0.015, 0.68, 0.035);
+      g.tri(0.015, 0.22, 0.035, 0.015, 0.68, 0.035, 0.015, 0.32, 0.24);
+      g.quad(-0.015, 0.22, 0.035, 0.015, 0.22, 0.035, 0.015, 0.32, 0.24, -0.015, 0.32, 0.24);
+      g.quad(-0.015, 0.32, 0.24, 0.015, 0.32, 0.24, 0.015, 0.68, 0.035, -0.015, 0.68, 0.035);
     }),
     firering: t((g) => {
       g.col("#9a948a");
@@ -744,7 +769,7 @@ function awning(G: Geo, b: Rect, front: number, y: number, depth: number, cols: 
   }
 }
 
-function building(b: BBld, C: Ctx) {
+function building(b: BBld, C: Ctx, T: Tmpls) {
   const r = mulberry(Math.floor(b.seed * 1e9));
   const G = C.main;
   const poly = rectPoly(b.x0, b.z0, b.x1, b.z1);
@@ -1135,14 +1160,23 @@ function building(b: BBld, C: Ctx) {
     G.cyl(cx, top + 1.2, cz, 1.4, 0.25, 12);
   }
   if (b.t === "surf") {
-    // surfboards racked along the front wall
+    // Displays flank the full opening and its approach; nothing is planted in the doorway.
     const D = C.detail;
     const fr = frontLine(b, b.front, 0.3);
+    const approach = beachDoorApproach(b);
     for (let k = 0; k < 7; k++) {
-      D.mat(L.plain, b.seed, 0).col(pick(UMB, r));
+      const tint = new THREE.Color(pick(UMB, r));
       const a = -fr.half + 1.5 + k * ((fr.half * 2 - 3) / 6);
-      if (b.front === 3 || b.front === 1) D.obox(fr.x, y0, fr.z + a, 0.08, 2.4, 0.55, 0);
-      else D.obox(fr.x + a, y0, fr.z, 0.55, 2.4, 0.08, 0);
+      const alongX = b.front === 0 || b.front === 2;
+      const p: BProp = {
+        k: "board",
+        x: fr.x + (alongX ? a : 0),
+        z: fr.z + (alongX ? 0 : a),
+        y: y0,
+        rot: [Math.PI, Math.PI / 2, 0, -Math.PI / 2][b.front]!,
+      };
+      if (overlaps(approach, beachPropBounds(p))) continue;
+      D.stamp(T.board, p.x, y0, p.z, p.rot, 1, 1, 1, tint);
     }
   }
 }
@@ -1992,7 +2026,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
 
   // ---- buildings ----
-  for (const b of beach.buildings) building(b, ctx((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2));
+  for (const b of beach.buildings) building(b, ctx((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2), T);
 
   // ---- set-piece statics: wheel frame, drop tower, coaster track, carousel pavilion ----
   {
@@ -2256,18 +2290,16 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
   // A continuous rope joins the visible buoys at the movement boundary. End sections leave
   // the pier itself clear; the existing deck railings carry the boundary through that gap.
-  for (let z = -half + 8; z < half - 8; z += 8) {
-    if (z < 40 && z + 8 > -40) continue;
-    const D = ctx(X.surf, z + 4).detail;
+  const swimBuoys = swimLineBuoys(half);
+  for (let i = 1; i < swimBuoys.length; i++) {
+    const z0 = swimBuoys[i - 1]!,
+      z1 = swimBuoys[i]!;
+    if (z1 - z0 > SWIM_LINE_SPACING) continue;
+    const mid = (z0 + z1) / 2;
+    const D = ctx(X.surf, mid).detail;
     D.mat(L.plain, 0.6, 0).col("#e8d8aa");
-    railBar(D, [X.surf, SEA + 0.16, z], [X.surf, SEA + 0.08, z + 4], 0.028);
-    railBar(D, [X.surf, SEA + 0.08, z + 4], [X.surf, SEA + 0.16, z + 8], 0.028);
-  }
-
-  for (const side of [-1, 1]) {
-    const D = ctx(X.surf, side * 38).detail;
-    D.mat(L.plain, 0.6, 0).col("#e8d8aa");
-    railBar(D, [X.surf, SEA + 0.16, side * 36], [X.surf, SEA + 0.16, side * 40], 0.028);
+    railBar(D, [X.surf, SEA + 0.42, z0], [X.surf, SEA + 0.34, mid], 0.045);
+    railBar(D, [X.surf, SEA + 0.34, mid], [X.surf, SEA + 0.42, z1], 0.045);
   }
 
   // ---- props ----
