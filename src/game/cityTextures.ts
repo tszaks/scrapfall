@@ -7,6 +7,7 @@
 //   day   RGB = albedo (walls near white, vertex colours tint them), A = glass (reflectivity)
 //   night RGB = lit-window colour,                                  A = window mask
 import * as THREE from "three";
+import { drain, runSliced } from "./slice";
 
 export const TILE_COLS = 8;
 export const TILE_ROWS = 16;
@@ -535,7 +536,11 @@ PAINT[L.paving] = (P) => {
 let facadeArr: { day: THREE.DataArrayTexture; night: THREE.DataArrayTexture } | null = null;
 
 /** The facade texture arrays (built once). */
-export function facadeArrays() {
+function* bakeFacadeArrays(): Generator<
+  void,
+  { day: THREE.DataArrayTexture; night: THREE.DataArrayTexture },
+  void
+> {
   if (facadeArr) return facadeArr;
   const day = new Uint8Array(TW * TH * 4 * LAYERS);
   const night = new Uint8Array(TW * TH * 4 * LAYERS);
@@ -544,6 +549,7 @@ export function facadeArrays() {
   const [, n] = canvas(TW, TH);
   const [, m] = canvas(TW, TH);
   for (let layer = 0; layer < LAYERS; layer++) {
+    yield;
     rect(d, "#fff", 0, 0, TW, TH);
     rect(g, "#000", 0, 0, TW, TH);
     rect(n, "#000", 0, 0, TW, TH);
@@ -586,6 +592,13 @@ export function facadeArrays() {
   };
   facadeArr = { day: make(day, true), night: make(night, true) };
   return facadeArr;
+}
+export function facadeArrays() {
+  return (facadeArr ??= drain(bakeFacadeArrays()));
+}
+/** the world build bakes the atlas across tasks; the scene's call is then a hit */
+export async function prepareFacadeArrays(): Promise<void> {
+  facadeArr ??= await runSliced(bakeFacadeArrays());
 }
 
 let adsTex: THREE.CanvasTexture | null = null;

@@ -33,6 +33,7 @@ import {
 import { FAC_COLS, FAC_ROWS, MODULE_W, TILE_M, WL, signUV } from "./textures";
 import { tumbleweedGeometry } from "./tumbleweed";
 import { roomPlan, saloonBalcony, type RoomItem, type RoomPlan } from "./rooms";
+import { drain, runSliced } from "../slice";
 
 export const CHUNK = 200;
 // detail cells are CHUNK/2 across; the range counts from a cell's near edge and the
@@ -4242,7 +4243,7 @@ function templates() {
 // rock: a heightfield on the 2 m cell corners (min of the four cells, so rock never
 // spills onto walkable cells), terraced into sandstone ledges
 
-function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, Float32Array, void> {
   const { cells, half, rock } = L;
   const n = cells + 1;
   const hv = new Float32Array(n * n);
@@ -4251,14 +4252,17 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     const cj = Math.max(0, Math.min(cells - 1, j));
     return rock[ci * cells + cj]!;
   };
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++)
       hv[i * n + j] = Math.min(cellH(i - 1, j - 1), cellH(i, j - 1), cellH(i - 1, j), cellH(i, j));
+  }
   // crumbly faces: noise on the steep parts only, so mesa tops and ledges stay flat
   const raw = hv.slice();
   const R = (i: number, j: number) =>
     raw[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const h = raw[i * n + j]!;
       if (h <= 0) continue;
@@ -4273,6 +4277,7 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       const z = -half + j * 2;
       hv[i * n + j] = h + (fbm(x * 0.21, z * 0.21, 91) - 0.5) * Math.min(3.5, h * 0.25) * k;
     }
+  }
   const H = (i: number, j: number) =>
     hv[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
   const _n = new THREE.Vector3();
@@ -4281,7 +4286,8 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     return _n;
   };
   const [tu, tv] = TILE_M[WL.ROCK]!;
-  for (let i = 0; i < cells; i++)
+  for (let i = 0; i < cells; i++) {
+    yield;
     for (let j = 0; j < cells; j++) {
       const h00 = H(i, j);
       const h10 = H(i + 1, j);
@@ -4337,13 +4343,14 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
         tri([i + 1, j, h10], [i, j + 1, h01], [i + 1, j + 1, h11]);
       }
     }
+  }
   return hv;
 }
 
 const terraceH = (h: number, step: number) => Math.round(h / step) * step;
 
 /** the land beyond the rim (rolling desert and mesas), plus distant buttes on the horizon */
-function farTerrain(L: WesternLayout, hv: Float32Array) {
+function* farTerrain(L: WesternLayout, hv: Float32Array): Generator<void, THREE.BufferGeometry, void> {
   const G = new Geo();
   const { half, cells } = L;
   const n = cells + 1;
@@ -4372,12 +4379,15 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
   const [tu, tv] = TILE_M[WL.ROCK]!;
   const nG = Math.round((R * 2) / S);
   const hs = new Float32Array((nG + 1) * (nG + 1));
-  for (let a = 0; a <= nG; a++)
+  for (let a = 0; a <= nG; a++) {
+    yield;
     for (let b = 0; b <= nG; b++) hs[a * (nG + 1) + b] = hAt(-R + a * S, -R + b * S);
+  }
   const Hs = (a: number, b: number) =>
     hs[Math.max(0, Math.min(nG, a)) * (nG + 1) + Math.max(0, Math.min(nG, b))]!;
   const _n = new THREE.Vector3();
-  for (let a = 0; a < nG; a++)
+  for (let a = 0; a < nG; a++) {
+    yield;
     for (let b = 0; b < nG; b++) {
       const x0 = -R + a * S;
       const z0 = -R + b * S;
@@ -4414,6 +4424,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
       v(a + 1, b + 1);
       v(a + 1, b);
     }
+  }
   // Monument Valley buttes on the horizon: sheer-sided towers on talus skirts
   const r = mulberry(4242);
   const buttes: [number, number, number, number][] = [];
@@ -4425,6 +4436,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
     buttes.push([Math.cos(bias) * d, Math.sin(bias) * d, 50 + r() * 110, 60 + r() * 170]);
   }
   for (const [bx, bz, h, rad] of buttes) {
+    yield;
     const seg = 14;
     const skirt = h * 0.35;
     const pts: [number, number, number][] = [];
@@ -4485,7 +4497,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
 // ---------------------------------------------------------------------------------------
 // the railroad: ties, rails, the trestle, embankments and tunnel portals
 
-function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const { half, rock, cells } = L;
   const rockAt = (z: number) => {
     const i = Math.floor((RAIL_X + half) / 2);
@@ -4498,6 +4510,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
   const { z0: tz0, z1: tz1 } = L.trestle;
   // ties and rails, every visible metre of the line
   for (let z = -half; z < half; z += 0.62) {
+    yield;
     if (inTunnel(z)) continue;
     const ch = chunkAt(RAIL_X, z);
     const G = ch.detail;
@@ -4601,6 +4614,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
   }
   // embankments: a trapezoid of fill under the ramps
   for (let z = tz0 - 46; z < tz1 + 46; z += 2) {
+    yield;
     if (z + 2 > tz0 && z < tz1) continue;
     const ya = y(z);
     const yb = y(z + 2);
@@ -4739,6 +4753,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     return k >= 6;
   };
   for (let j = 1; j < cells; j++) {
+    yield;
     const a = rock[iRail * cells + j - 1]! > 0;
     const bb = rock[iRail * cells + j]! > 0;
     if (a === bb) continue;
@@ -4869,8 +4884,9 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
 
 /** the crib-walled causeways (the river crossings and the stock chute's bank): plank
  * tops, timber retaining faces on the downhill sides, and the rail fences town.ts posted */
-function decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   for (const dk of L.decks) {
+    yield;
     const G = chunkAt((dk.x0 + dk.x1) / 2, (dk.z0 + dk.z1) / 2).main;
     // plank running surface: alternating board tones so the deck never reads as a flat
     // plane (it used to turn into one dark slab at night)
@@ -4933,7 +4949,7 @@ function decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
 
 /** The saloon's alley stair to its balcony matches the layout terrain. The church uses
  * the shared spiral access mesh, with its real floor opening cut into the tower above. */
-function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const st = L.saloonStairs;
   if (st) {
     const G = chunkAt((st.x0 + st.x1) / 2, st.zTop).main;
@@ -5014,7 +5030,7 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
 }
 
 /** the mine portal: timber sets in the canyon face, a black adit, ore-cart rails */
-function minePortal(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* minePortal(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const { x, z } = L.mine;
   const ch = chunkAt(x, z);
   const G = ch.main;
@@ -5061,7 +5077,7 @@ export function propTemplate(k: PKey) {
   return templates()[k] ?? null;
 }
 
-export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
+export function* buildWesternMeshes(L: WesternLayout): Generator<void, WesternMeshes, void> {
   const { half } = L;
   const E = half;
   const n = Math.ceil((E * 2) / CHUNK);
@@ -5113,6 +5129,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
 
   // ---- buildings ----
   for (const b of L.buildings) {
+    yield;
     const B = building(b, mulberry(b.seed), b.t === "saloon" && !!L.saloonStairs);
     const { out } = frameOf(b);
     const ch = chunkAt(out.x, out.z);
@@ -5129,12 +5146,13 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   }
 
   // ---- the climbable high ground: the saloon's outside stair, the church stair and landing ----
-  stairs(L, chunkAt);
+  yield* stairs(L, chunkAt);
 
   // ---- props ----
   const T = templates();
   const tint = new THREE.Color();
   for (const p of L.props) {
+    yield;
     const t = T[p.k];
     if (!t) continue;
     const ch = chunkAt(p.x, p.z);
@@ -5183,8 +5201,9 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   }
 
   // ---- rock, the railroad, the mine ----
-  const hv = rockMesh(L, chunkAt);
+  const hv = yield* rockMesh(L, chunkAt);
   for (const b of L.overhangs) {
+    yield;
     const G = chunkAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2).main;
     const [tu, tv] = TILE_M[WL.ROCK]!;
     for (const [a, c, d] of overhangTriangles(b)) {
@@ -5223,7 +5242,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     const rk = (i: number, j: number) =>
       i < 0 || j < 0 || i >= cells || j >= cells ? 1 : rock[i * cells + j]!;
     const rubble = new THREE.Color();
-    for (let i = 1; i < cells - 1; i++)
+    for (let i = 1; i < cells - 1; i++) {
+      yield;
       for (let j = 1; j < cells - 1; j++) {
         const h = rock[i * cells + j]!;
         if (h < 3) continue;
@@ -5303,10 +5323,11 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
           }
         }
       }
+    }
   }
-  railroad(L, chunkAt);
-  minePortal(L, chunkAt);
-  decks(L, chunkAt);
+  yield* railroad(L, chunkAt);
+  yield* minePortal(L, chunkAt);
+  yield* decks(L, chunkAt);
 
   // ---- the station platform and the level-crossing planks ----
   {
@@ -5333,6 +5354,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   {
     const poles = L.props.filter((p) => p.k === "pole").sort((a, b) => a.z - b.z);
     for (let i = 0; i + 1 < poles.length; i++) {
+      yield;
       const a = poles[i]!;
       const b = poles[i + 1]!;
       const G = chunkAt(a.x, (a.z + b.z) / 2).detail;
@@ -5382,21 +5404,36 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   void r;
   void WK;
 
-  const far = farTerrain(L, hv);
+  yield;
+  const far = yield* farTerrain(L, hv);
   let verts = far.getAttribute("position").count;
-  const chunks: WChunk[] = list.map((c) => {
+  const chunks: WChunk[] = [];
+  for (const c of list) {
+    yield;
     const main = c.main.n ? c.main.build() : null;
     const glow = c.glow.n ? c.glow.build() : null;
     const pools = c.pools.n ? c.pools.build("uv") : null;
     for (const g of [main, glow, pools]) if (g) verts += g.getAttribute("position").count;
-    return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, glow, pools };
-  });
-  const details = dCells
-    .filter((c) => c.geo.n)
-    .map((c) => {
-      const geometry = c.geo.build();
-      verts += geometry.getAttribute("position").count;
-      return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, geometry };
-    });
+    chunks.push({ x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, glow, pools });
+  }
+  const details: WesternMeshes["details"] = [];
+  for (const c of dCells) {
+    if (!c.geo.n) continue;
+    yield;
+    const geometry = c.geo.build();
+    verts += geometry.getAttribute("position").count;
+    details.push({ x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, geometry });
+  }
   return { chunks, details, far, windmills, fires, stats: { verts } };
+}
+
+// World builds prepare the meshes off the render path (worldBuild.ts runs this coroutine
+// across tasks); the scene attaches the finished geometry in one fast commit. A render
+// that missed the cache drains the coroutine synchronously — same result, slower path.
+const prepared = new WeakMap<WesternLayout, WesternMeshes>();
+export async function prepareWesternMeshes(L: WesternLayout): Promise<void> {
+  if (!prepared.has(L)) prepared.set(L, await runSliced(buildWesternMeshes(L)));
+}
+export function westernMeshes(L: WesternLayout): WesternMeshes {
+  return prepared.get(L) ?? drain(buildWesternMeshes(L));
 }

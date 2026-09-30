@@ -239,7 +239,11 @@ type LotInfo = {
   cham: number;
 };
 
-export function generateCity(rand: () => number, cells: number, half: number) {
+export function* generateCity(
+  rand: () => number,
+  cells: number,
+  half: number,
+): Generator<void, { blocks: Block[]; layout: CityLayout; sealed?: number }, void> {
   const cc = (i: number) => -half + 1 + i * 2; // cell centre
   const ce = (i: number) => -half + i * 2; // cell lower edge
   const BEYOND = 330; // backdrop cells beyond the arena (660 m of skyline filler)
@@ -283,6 +287,7 @@ export function generateCity(rand: () => number, cells: number, half: number) {
       else if (sb >= 0) k = sb;
       kind[idx(i, j)] = k;
     }
+    yield;
   }
 
   // ---- roads carrying traffic ----
@@ -1045,7 +1050,10 @@ export function generateCity(rand: () => number, cells: number, half: number) {
       }
     }
   };
-  for (const q of blocks) blockBuild(q, !(inArena(q.a) && inArena(q.b)));
+  for (const q of blocks) {
+    blockBuild(q, !(inArena(q.a) && inArena(q.b)));
+    yield;
+  }
   // drop backdrop buildings over the sea
   for (let k = buildings.length - 1; k >= 0; k--)
     if (buildings[k]!.backdrop && buildings[k]!.z1 > waterZ) buildings.splice(k, 1);
@@ -1116,6 +1124,7 @@ export function generateCity(rand: () => number, cells: number, half: number) {
     return a.kind === "street" ? a.cls! : b.kind === "street" ? b.cls! : "side";
   };
   for (let i = 1; i < cells - 1; i++) {
+    yield;
     for (let j = 1; j < cells - 1; j++) {
       const k = kind[idx(i, j)]!;
       if (k === K_PARKLANE) {
@@ -1198,7 +1207,8 @@ export function generateCity(rand: () => number, cells: number, half: number) {
     }
   }
   // palms down the boulevard median and along the boardwalk
-  for (let i = 1; i < cells - 1; i++)
+  for (let i = 1; i < cells - 1; i++) {
+    yield;
     for (let j = 1; j < cells - 1; j++) {
       const k = kind[idx(i, j)]!;
       if (k === K_MEDIAN && j % 5 === 0 && isK(i + 1, j, K_MEDIAN) && !nearIntersection(i, j))
@@ -1213,6 +1223,7 @@ export function generateCity(rand: () => number, cells: number, half: number) {
           props.push({ x: cc(i), z: cc(j), rot: 0, k: "lightLED" });
       }
     }
+  }
   // the boardwalk railing is solid (you can't walk into the sea)
   for (let i = 0; i < cells; i++)
     if (isK(i, cells - 1, K_BOARD)) markSolid(i, cells - 1, i + 1, cells, 1.1);

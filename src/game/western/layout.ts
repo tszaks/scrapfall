@@ -392,7 +392,11 @@ const terrace = (h: number, step: number) => {
 export { riverZ, riverW } from "./river";
 import { riverZ, riverW } from "./river";
 
-export function generateWestern(rand: () => number, cells: number, half: number) {
+export function* generateWestern(
+  rand: () => number,
+  cells: number,
+  half: number,
+): Generator<void, { blocks: Block[]; layout: WesternLayout; sealed?: number }, void> {
   const N = cells * cells;
   const ground = new Uint8Array(N);
   const solid = new Uint8Array(N);
@@ -611,13 +615,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
       if (h < 1.2) continue;
       rock[k] = terrace(h, 8);
     }
+    yield;
   }
   // no slot canyons: open ground squeezed between rock less than 6 m apart is filled in
   // (a 2-4 m crack reads as a path, but it is a trap for the player and no enemy can follow)
   for (let pass = 0; pass < 3; pass++) {
     const fill: [number, number][] = [];
     const rk = (i: number, j: number) => (inside(i, j) ? rock[idx(i, j)]! : 0);
-    for (let i = 2; i < cells - 2; i++)
+    for (let i = 2; i < cells - 2; i++) {
       for (let j = 2; j < cells - 2; j++) {
         if (rock[idx(i, j)]! > 0) continue;
         const x = cc(i);
@@ -630,6 +635,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         if (ax > 0 && bx > 0) fill.push([idx(i, j), Math.min(ax, bx)]);
         else if (az > 0 && bz > 0) fill.push([idx(i, j), Math.min(az, bz)]);
       }
+      yield;
+    }
     if (!fill.length) break;
     for (const [k, h] of fill) rock[k] = h;
   }
@@ -2140,7 +2147,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   // 9. Walkable height: boardwalks, the platform, the saloon balcony and its stair.
   //    The belfry uses shared spiral access. 1 m samples; climbs steeper than 1:1 are walls.
   // ======================================================================
-  const earth = valleyEarth(half, buildings, props, rock, cells, riverZ, decks);
+  const earth = yield* valleyEarth(half, buildings, props, rock, cells, riverZ, decks);
   const tn = half * 2;
   const th = new Float32Array((tn + 1) * (tn + 1));
   const tset = (x: number, z: number, h: number) => {
@@ -2149,7 +2156,7 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     if (i >= 0 && j >= 0 && i <= tn && j <= tn)
       th[i * (tn + 1) + j] = Math.max(th[i * (tn + 1) + j]!, h);
   };
-  for (let i = 0; i <= tn; i++)
+  for (let i = 0; i <= tn; i++) {
     for (let j = 0; j <= tn; j++) {
       const x = -half + i;
       const z = -half + j;
@@ -2170,10 +2177,14 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         }
       }
     }
+    yield;
+  }
   // Add the same triangulated earth used by the visible ground beneath every surface.
-  for (let i = 0; i <= tn; i++)
+  for (let i = 0; i <= tn; i++) {
     for (let j = 0; j <= tn; j++)
       th[i * (tn + 1) + j]! += sampleTerrain(earth, -half + i, -half + j);
+    yield;
+  }
   const platforms: { x0: number; z0: number; x1: number; z1: number; y: number }[] = [];
   const tbox = (
     x0: number,

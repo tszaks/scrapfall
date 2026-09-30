@@ -1,20 +1,16 @@
-import { Nuketown } from "./nuketown/Nuketown";
-import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nuketown/layout";
+import { nuketownMinimap, NUKE_SPAWN } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
 import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
-import { configureEnvironment, matchEnvironment } from "./matchEnvironment";
+import { matchEnvironment } from "./matchEnvironment";
 import { aimState, stepAim, aimSensitivity } from "./input/aim";
 import { advanceBallistic, bulletGravity, ballisticDirection } from "./ballistics";
-import { Tumbleweeds } from "./western/Tumbleweeds";
 import {
   weedWorld,
   weedView,
   stepWeedView,
-  WEED_COUNT,
-  resetWeeds,
   stepWeeds,
   weedContacts,
   breakWeed,
@@ -32,7 +28,6 @@ import {
 } from "./soloRevive";
 import { boundaryBlocked } from "./level";
 import {
-  resetStaticCollision,
   staticBody,
   staticSegment,
   staticCeiling,
@@ -49,18 +44,14 @@ import {
   keyLabel,
   type ControlAction,
 } from "./input/remap";
-import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
-import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
 import {
-  installStructures,
   structureList,
   structurePlayer,
   structureFloor,
   structureBody,
   structureShot,
 } from "./structures/world";
-import { AlpineLife } from "./life/AlpineLife";
 import {
   wheelRide,
   wheelWorld,
@@ -81,7 +72,17 @@ import {
 import { getViewMode } from "./viewMode";
 import { setLocalMuzzle } from "./projectiles";
 import { Canvas, useFrame, useThree, type RootState } from "@react-three/fiber";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { firstWorldHit, firstShotImpact, type ShotTarget } from "./enemyProjectiles";
 
@@ -90,7 +91,6 @@ import {
   HALF,
   BLOCK,
   blocked,
-  generateLevel,
   randomSpawn,
   pushOut,
   type Block,
@@ -108,15 +108,7 @@ import {
   toNav,
   spawnNear,
   closeRaised,
-  setNavWalls,
-  setArenaSize,
-  setBlockHalf,
-  SOLO_ARENA,
-  COOP_ARENA,
-  CITY_COOP,
   PLAY_HALF,
-  BEACH_SIZE,
-  setPosts,
   jumpBody,
   shotBlocked,
   shotStop,
@@ -124,21 +116,20 @@ import {
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
+import { buildWorld, type BuiltWorld } from "./worldBuild";
+
+// Each map's scene (meshes, textures, weather, life) loads as its own chunk — a session
+// downloads only the map it shows. The veil covers the one-frame suspend on first mount.
+const CityMap = lazy(() => import("./scenes/CityMap"));
+const WesternMap = lazy(() => import("./scenes/WesternMap"));
+const AlpineMap = lazy(() => import("./scenes/AlpineMap"));
+const BeachMap = lazy(() => import("./scenes/BeachMap"));
+const NuketownMap = lazy(() => import("./scenes/NuketownMap"));
 import { isBeach } from "./beach/beachLayout";
-import { mapPosts, movePropsFromDoors, snugPlazaProps } from "./posts";
-import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
-import { CityScene, CitySun } from "./City";
-import { CityTraffic } from "./Traffic";
 import { CURB } from "./cityLayout";
-import { CityBlockades } from "./cityBlockades";
-import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./soloBounds";
+import type { Gap } from "./soloBounds";
 import type { WesternLayout } from "./western/layout";
-import { WesternScene, WesternSun } from "./western/Western";
-import { WesternTrain } from "./western/Train";
-import { WesternRiders } from "./western/Riders";
-import { WesternWeather } from "./western/Weather";
-import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
 import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
@@ -169,21 +160,14 @@ import {
   groundSpeed,
   groundY,
   baseGroundY,
-  setTerrain,
   wind,
   worldFx,
 } from "./terrain";
 import { steerTo } from "./steerCache";
-import { beachTerrain } from "./beach/terrain";
-import { AlpineScene, AlpineSun } from "./alpine/Alpine";
-import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { alpine, decodeAlpine, encodeAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
-import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
+import { alpineZone, type AlpineLayout } from "./alpine/layout";
 import { leaveRide, resetRide, ride, riderEye, stepRide } from "./alpine/ride";
-import { cityAccess } from "./access/cityAccess";
-import { beachAccess } from "./access/beachAccess";
-import { alpineAccessFull } from "./access/alpineAccess";
-import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
 import {
   accessActive,
@@ -195,7 +179,6 @@ import {
   decodeCars,
   doorstep,
   encodeCars,
-  installAccess,
   patchNav,
   player as accPlayer,
   playerAz,
@@ -2594,6 +2577,7 @@ function World({
   menuCam,
   buildN,
   onWarm,
+  worldHidden = false,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -2654,6 +2638,11 @@ function World({
   buildN: number;
   /** the shader warm for buildN finished: the loading veil can lift */
   onWarm: (n: number) => void;
+  /** hide the map's draw calls until its warm slices have uploaded every buffer —
+   *  otherwise the first real frame behind the veil uploads ~300 MB of geometry in one
+   *  task. Prewarm force-shows each slice's ancestors for its own draw, so the warm
+   *  still runs (and uploads) while this group stays hidden. */
+  worldHidden?: boolean;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
@@ -7099,59 +7088,60 @@ function World({
           factor={big ? 26 : 4}
         />
       )}
-      {western ? (
-        <WesternSun key="sun-western" />
-      ) : alpineMap ? (
-        <AlpineSun key="sun-alpine" />
-      ) : isBeach(city) ? null : city ? (
-        // city sun: shadow frustum follows the player, auto-off on slow devices
-        <CitySun key="sun-city" />
-      ) : null}
+      <group visible={!worldHidden}>
       {alpineMap ? (
-        <>
-          <AlpineScene
-            key={seed}
+        <Suspense fallback={null}>
+          <AlpineMap
             layout={alpineMap}
+            seed={seed}
             time={time}
             isHost={isHost}
             playing={locked && !gameOver}
+            link={traffic}
           />
-          <AlpineLife layout={alpineMap} link={traffic} />
-        </>
+        </Suspense>
       ) : isBeach(city) ? (
         <>
-          <BeachWorld
-            key={`beach-${seed}`}
-            city={city}
-            seed={seed}
-            time={time}
-            link={traffic}
-            look={look3}
-          />
+          <Suspense fallback={null}>
+            <BeachMap city={city} seed={seed} time={time} link={traffic} look={look3} />
+          </Suspense>
           <MatchRain key={`rain-${seed}`} />
         </>
       ) : city ? (
-        <>
-          <CityScene city={city} time={time} isHost={isHost} />
-          <CityTraffic city={trafficCity ?? city} seed={seed} time={time} link={traffic} />
-          {gaps.length > 0 && <CityBlockades city={city} gaps={gaps} time={time} />}
-        </>
+        <Suspense fallback={null}>
+          <CityMap
+            city={city}
+            trafficCity={trafficCity ?? city}
+            seed={seed}
+            time={time}
+            link={traffic}
+            isHost={isHost}
+            gaps={gaps}
+          />
+        </Suspense>
       ) : western ? (
         <>
-          <WesternScene layout={western} time={time} />
+          <Suspense fallback={null}>
+            <WesternMap
+              layout={western}
+              seed={seed}
+              time={time}
+              link={traffic}
+              blocks={blocks}
+              gaps={gaps}
+            />
+          </Suspense>
           <MatchRain key={seed} western={western} />
-          <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
-          <WesternRiders layout={western} seed={seed} link={traffic} />
-          <Tumbleweeds />
-          <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
-          {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
       ) : layoutOf(theme) === "nuketown" ? (
-        <Nuketown seed={seed} />
+        <Suspense fallback={null}>
+          <NuketownMap seed={seed} />
+        </Suspense>
       ) : (
         <Level blocks={blocks} theme={theme} />
       )}
       {big && <AccessScene time={time} cityKey={big} />}
+      </group>
       <MapEvents
         theme={theme}
         city={city}
@@ -8037,7 +8027,8 @@ export function Game() {
     let alive = true;
     const raf = requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        if (alive) setBuilt({ seed, coop, mapChoice, n: ++buildN.current });
+        if (alive)
+          startTransition(() => setBuilt({ seed, coop, mapChoice, n: ++buildN.current }));
       }),
     );
     return () => {
@@ -8051,6 +8042,21 @@ export function Game() {
   const wantedTheme =
     (!coop && mapChoice !== null ? THEMES[mapChoice] : undefined) ??
     THEMES[seed % THEMES.length]!;
+  // The world build is a staged async pipeline (worldBuild.ts): generation runs as a
+  // coroutine that hands the event loop a turn between chunks, so the menu stays
+  // clickable while it works. `applied` is the last finished build.
+  const [applied, setApplied] = useState<{ n: number; out: BuiltWorld } | null>(null);
+  useEffect(() => {
+    if (!built) return;
+    let dead = false;
+    void buildWorld(built.seed, built.coop, built.mapChoice, () => dead).then((out) => {
+      if (new URLSearchParams(location.search).has("debug")) console.info(`[wb] applied @${Math.round(performance.now())}`);
+      if (!dead && out) setApplied({ n: built.n, out });
+    });
+    return () => {
+      dead = true;
+    };
+  }, [built]);
   const world = useMemo(() => {
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
@@ -8066,7 +8072,7 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    if (!built)
+    if (!built || !applied || applied.n !== built.n)
       return {
         blocks: [] as Block[],
         enemies: list,
@@ -8076,145 +8082,11 @@ export function Game() {
         western: null,
         gaps: [] as Gap[],
       };
-    const { seed, coop, mapChoice } = built;
-    // the map decides the layout, so pick the theme first (still purely from the shared seed)
-    const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
-    const theme = forced ?? THEMES[seed % THEMES.length]!;
-    // co-op gets a bigger field. The big real-scale maps always build the full co-op map and
-    // route on 4 m nav cells; solo fences the city and Dry Gulch into the middle 70% with
-    // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
-    // and beach maps seal their own solo squares inside their generators.
-    const mode = layoutOf(theme);
-    configureEnvironment(seed, !coop);
-    const sealed = mode === "city" || mode === "western";
-    if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
-    else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
-    else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
-    else if (mode === "nuketown") setArenaSize(NUKE_SIZE, 1);
-    else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    resetStaticCollision();
-    // slim arena props (trunks, coral) get a tighter collision box, so steps and shots
-    // line up with what you see; big maps keep the full cell — theirs are buildings
-    const slim = theme.blockShape === "tree" || theme.blockShape === "coral";
-    setBlockHalf(
-      mode !== "scatter" ? BLOCK / 2 : slim ? 0.72 : theme.blockShape === "pagoda" ? 0.86 : BLOCK / 2,
-    );
-    const level = generateLevel(seed, mode, !coop);
-    const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
-    // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
-    // Gulch's boardwalks, balconies and riverbed, or flat
-    setTerrain(
-      alp
-        ? alp.terrain
-        : isBeach(level.city)
-          ? beachTerrain(level.city)
-          : level.western
-            ? level.western.terrain
-            : null,
-    );
-    // building access (elevators, stairwells, walkable roofs): Vice Heights today. Solo only
-    // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
-    const accessOn =
-      typeof window === "undefined" ||
-      new URLSearchParams(window.location.search).get("access") !== "0";
-    installStructures([]);
-    installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
-    const cityOpen =
-      mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout, PLAY_HALF) : [];
-    if (cityOpen.length) installStructures(cityOpen);
-    installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
-    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
-    // the access adapters keep their doors clear of them
-    if (mode === "nuketown") installStructures(nuketownStructures());
-    const posts0 = mapPosts(level.city, level.western ?? null);
-    const accessList0 = !accessOn
-      ? null
-      : mode === "city" && level.city
-        ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
-        : isBeach(level.city)
-          ? beachAccess(level.city, !coop, posts0)
-          : alp && level.city
-            ? (() => {
-                // (chalet balconies wall off the ground under them: extra collision)
-                const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
-                level.blocks = level.blocks.concat(aa.blocks);
-                return aa.list;
-              })()
-            : level.western
-              ? westernBelfry()
-              : null;
-    if (alp && level.city)
-      installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
-    if (mode === "city" && level.city)
-      installStructures([...cityOpen, ...cityRooms(level.city as CityLayout, PLAY_HALF)]);
-    installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
-    resetAlpine(alp !== null, alp ? alp.lift : null);
-    resetRide();
-    resetWheel(isBeach(level.city) ? level.city.beach.wheel : null);
-    // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
-    // moves along the facade and stays solid (before the map's meshes are built from it)
-    setPosts(null);
-    // Close narrow plaza masonry gaps without relocating ordinary kerb furniture.
-    if (mode === "city" && level.city)
-      snugPlazaProps(
-        level.city as CityLayout,
-        (accessList0 ?? []).map((b) => b.spec.door),
-      );
-    movePropsFromDoors(
-      level.city,
-      level.western ?? null,
-      [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap((p) => p.doors)],
-      (x, z) => blocked(level.blocks, x, z, 0.35),
-    );
-    setPosts(mapPosts(level.city, level.western ?? null));
-    // Dry Gulch's walk-in buildings: their thin walls, for the enemies' route planner
-    setNavWalls(level.western?.navWalls ?? null, level.western?.navDoors ?? null);
-    let gaps: Gap[] = [];
-    if (sealed && !coop) {
-      gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
-      level.blocks = level.blocks.concat(sealGaps(gaps));
-    }
-    const weedPositions: { x: number; y: number; z: number }[] = [];
-    if (level.western) {
-      let v = seed ^ 0x74eeda;
-      const random = () => {
-        v = (Math.imul(v, 1664525) + 1013904223) | 0;
-        return (v >>> 0) / 4294967296;
-      };
-      const origin = level.western.spawn;
-      for (let tries = 0; tries < 3000 && weedPositions.length < WEED_COUNT; tries++) {
-        const radius = weedPositions.length < 12 ? 8 + random() * 45 : 35 + random() * 160,
-          angle = random() * Math.PI * 2;
-        const x = origin.x + Math.cos(angle) * radius,
-          z = origin.z + Math.sin(angle) * radius;
-        if (
-          boundaryBlocked(level.blocks, x, z, 0.6) ||
-          blocked(level.blocks, x, z, 0.6) ||
-          raised(x, z) ||
-          weedPositions.some((p) => Math.hypot(p.x - x, p.z - z) < 3)
-        )
-          continue;
-        weedPositions.push({ x, y: groundY(x, z), z });
-      }
-    }
-    resetWeeds(seed, weedPositions);
-    // the city generator keeps its own spawn plaza clear and every cell reachable;
-    // trimming its blocks here would leave buildings without collision
-    if (!level.city && !level.western) {
-      level.blocks = level.blocks.filter(
-        (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
-      );
-    }
-    return {
-      blocks: level.blocks,
-      enemies: list,
-      rand: level.rand,
-      theme,
-      city: level.city,
-      western: level.western,
-      gaps,
-    };
-  }, [built]);
+    return { ...applied.out, enemies: list };
+  }, [built, applied]);
+  useLayoutEffect(() => {
+    if (applied && new URLSearchParams(location.search).has("debug")) console.info(`[wb] mounted @${Math.round(performance.now())}`);
+  }, [applied]);
   const { blocks, enemies, rand, city, western, gaps } = world;
   const theme = world.theme ?? wantedTheme;
   // the HUD radar for the big maps (solo dims everything beyond the blockades)
@@ -8334,8 +8206,10 @@ export function Game() {
   const isHost = !net || net.role === "host";
   // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick.
   // picking the map already showing is a no-op — Enter Arena on it must not rebuild.
+  const [enterQueued, setEnterQueued] = useState(false);
   const pickMap = (choice: number | null) => {
     if (!isHost || choice === mapChoice) return;
+    setEnterQueued(false);
     setMapChoice(choice);
     const s = newSeed(choice);
     setSeed(s);
@@ -8365,7 +8239,12 @@ export function Game() {
   // warm — it is pointer-transparent and sits under the menus, so it never gates them, and
   // it never stays up over a live match (the warm keeps running, unseen, in the background)
   const pending =
-    !built || built.seed !== seed || built.coop !== coop || built.mapChoice !== mapChoice;
+    !built ||
+    built.seed !== seed ||
+    built.coop !== coop ||
+    built.mapChoice !== mapChoice ||
+    applied === null ||
+    applied.n !== built.n;
   const veilUp = pending || (!started && built !== null && warmDone < built.n);
   const veilProgress = pending ? 0.2 : 0.72;
   // keep my own pick in the squad list and tell everyone else about it
@@ -8474,6 +8353,14 @@ export function Game() {
     }
   };
   startRef.current = start;
+
+  // a queued Enter Arena fires as soon as its world has applied
+  useEffect(() => {
+    if (enterQueued && !pending) {
+      setEnterQueued(false);
+      startRef.current();
+    }
+  }, [enterQueued, pending]);
 
   // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
   const [fought, setFought] = useState(0);
@@ -8717,8 +8604,9 @@ export function Game() {
       >
         <QualityGovernor />
         <PostFx />
-        {built && (
+        {applied !== null && applied.n === built?.n && (
           <StableWorld
+          worldHidden={!started && warmDone < built.n}
           blocks={blocks}
           enemies={enemies}
           rand={rand}
@@ -9232,8 +9120,12 @@ export function Game() {
               ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
               : "RANDOM WEATHER · FIXED EACH MATCH"
           }
-          onEnter={() => start()}
-          onBack={() => setPicking(false)}
+          onEnter={() => (pending ? setEnterQueued(true) : start())}
+          onBack={() => {
+            setEnterQueued(false);
+            setPicking(false);
+          }}
+          enterQueued={enterQueued}
           touchUi={touchUi}
         />
       )}

@@ -5,6 +5,7 @@ import { registerStaticGeometry } from "../staticCollision";
 // a single splat-blended plane; chunks cull by frustum and their prop layer by distance.
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { drain, runSliced, yieldControl } from "../slice";
 import { useSunShadow } from "../quality";
 import * as THREE from "three";
 
@@ -28,7 +29,8 @@ import {
 } from "./layout";
 import { WESTERN_LOOK, type WesternLook } from "./look";
 import { facadeMaterial, facadeTime, westernBackground, westernEnv } from "./materials";
-import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
+import { WESTERN_SUNSET } from "./look";
+import { westernMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
   TILE_M,
@@ -49,11 +51,14 @@ const _e = new THREE.Euler();
 
 /** The ground: desert sand everywhere, blended with street dirt, riverbed mud, packed yards
  * and ballast from a per-cell splat map, with large-scale colour drift so it never tiles. */
-function groundMaterial(L: WesternLayout, cutRiver: boolean) {
-  const arr = westernArrays(WORDS);
+// the ground-class splat (street / trail / river / rail per cell, blurred): one texture
+// shared by both ground material variants — prepared off the render path via
+// prepareWesternExtras (worldBuild.ts), so this stays a WeakMap hit at mount
+function* groundSplat(L: WesternLayout): Generator<void, THREE.DataTexture, void> {
   const n = L.cells;
   const raw = new Float32Array(n * n * 4);
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const g = L.ground[i * n + j]!;
       const o = (j * n + i) * 4; // texture x = world x, texture y = world z
@@ -64,12 +69,14 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
       else if (g === WK.YARD || g === WK.PLATFORM) raw[o + 2] = 1;
       else if (g === WK.RAIL) raw[o + 3] = 1;
     }
+  }
   // soften the edges: two box-blur passes
   const data = new Uint8Array(n * n * 4);
   let src = raw;
   for (let pass = 0; pass < 2; pass++) {
     const dst = new Float32Array(n * n * 4);
-    for (let y = 0; y < n; y++)
+    for (let y = 0; y < n; y++) {
+      yield;
       for (let x = 0; x < n; x++)
         for (let c = 0; c < 4; c++) {
           let s = 0;
@@ -84,6 +91,7 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
             }
           dst[(y * n + x) * 4 + c] = s / k;
         }
+    }
     src = dst;
   }
   for (let i = 0; i < src.length; i++) data[i] = Math.round(Math.min(1, src[i]!) * 255);
@@ -91,7 +99,11 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
   splat.magFilter = THREE.LinearFilter;
   splat.minFilter = THREE.LinearFilter;
   splat.needsUpdate = true;
+  return splat;
+}
 
+function groundMaterial(L: WesternLayout, cutRiver: boolean, splat: THREE.DataTexture) {
+  const arr = westernArrays(WORDS);
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   const tl = (l: number) => (TILE_M[l] ?? [8, 8])[0].toFixed(1);
   mat.onBeforeCompile = (sh) => {
@@ -245,13 +257,14 @@ diffuseColor.rgb *= col;`,
 }
 
 /** Indexed terrain and collision sample the identical fixed diagonal in every cell. */
-function earthMesh(L: WesternLayout) {
+function* earthMesh(L: WesternLayout): Generator<void, THREE.BufferGeometry, void> {
   const t = L.earth,
     side = t.n + 1,
     p = new Float32Array(side * side * 3),
     uv = new Float32Array(side * side * 2),
     indices: number[] = [];
-  for (let i = 0; i <= t.n; i++)
+  for (let i = 0; i <= t.n; i++) {
+    yield;
     for (let j = 0; j <= t.n; j++) {
       const k = i * side + j,
         x = -t.half + i * t.cell,
@@ -266,6 +279,7 @@ function earthMesh(L: WesternLayout) {
         indices.push(a, c, b, b, c, d);
       }
     }
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(p, 3));
   g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
@@ -276,7 +290,7 @@ function earthMesh(L: WesternLayout) {
 
 /** the dry riverbed: a strip of ground carved below grade along the wash, following the
  * layout's terrain (so you walk exactly on what you see); its edge tucks just under the plain */
-function riverbedMesh(L: WesternLayout) {
+function* riverbedMesh(L: WesternLayout): Generator<void, THREE.BufferGeometry, void> {
   const pos: number[] = [];
   const nor: number[] = [];
   const x0 = -L.half + RIVER_END;
@@ -284,6 +298,7 @@ function riverbedMesh(L: WesternLayout) {
   const cols: [number, number, number][][] = [];
   const Y = (x: number, z: number) => sampleTerrain(L.terrain, x, z);
   for (let x = x0; x <= x1 + 1e-6; x += 2) {
+    yield;
     const rz = riverZ(x);
     const hw = riverW(x) / 2 + RIVER_EDGE;
     const col: [number, number, number][] = [];
@@ -319,6 +334,44 @@ function riverbedMesh(L: WesternLayout) {
   g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   g.computeBoundingSphere();
   return g;
+}
+
+// the earth/river geometry and the shared ground splat: heavy vertex/texture work that
+// used to sit in the scene's useMemos. worldBuild.ts runs it across tasks; the scene's
+// memos below are WeakMap lookups.
+type WesternExtras = {
+  splat: THREE.DataTexture;
+  earth: THREE.BufferGeometry;
+  river: THREE.BufferGeometry;
+};
+const extrasCache = new WeakMap<WesternLayout, WesternExtras>();
+export async function prepareWesternExtras(L: WesternLayout): Promise<void> {
+  if (extrasCache.has(L)) return;
+  // the texture-array bake and the painted skies are module-cached: run them here, one
+  // task each, so the mount commit doesn't pay them all at once
+  const t = await import("./textures");
+  const m = await import("./materials");
+  const s = await import("../sky");
+  await t.prepareWesternArrays(WORDS);
+  await t.prepareWesternSky("sunset");
+  await t.prepareWesternSky("night");
+  // the sunset background bakes a 1536x768 sky; prepareSunsetBackground slices it
+  await s.prepareSunsetBackground("western-sunset", WESTERN_SUNSET, 1536, 768);
+  m.westernBackground("night");
+  await yieldControl();
+  const splat = await runSliced(groundSplat(L));
+  const earth = await runSliced(earthMesh(L));
+  const river = await runSliced(riverbedMesh(L));
+  extrasCache.set(L, { splat, earth, river });
+}
+function westernExtras(L: WesternLayout): WesternExtras {
+  return (
+    extrasCache.get(L) ?? {
+      splat: drain(groundSplat(L)),
+      earth: drain(earthMesh(L)),
+      river: drain(riverbedMesh(L)),
+    }
+  );
 }
 
 /** the look part-way from sunset (0) to night (1): the waves carry the match into night */
@@ -364,15 +417,9 @@ export const WesternScene = memo(function WesternScene({
     return () => provideEventHooks("train-robbery", null);
   }, []);
   const look = westernLookAt(nk);
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildWesternMeshes(layout);
-    if (import.meta.env.DEV)
-      console.info(
-        `[western] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [layout]);
+  // geometry was built across tasks while the world assembled (mesh.ts prepares it);
+  // this useMemo is a cache lookup, not the multi-second vertex pass it used to be
+  const built = useMemo(() => westernMeshes(layout), [layout]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(
@@ -428,16 +475,17 @@ export const WesternScene = memo(function WesternScene({
       }),
     [built, nightK],
   );
-  const ground = useMemo(() => groundMaterial(layout, true), [layout]);
-  const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
-  const earthGeo = useMemo(() => earthMesh(layout), [layout]);
-  const riverGeo = useMemo(() => riverbedMesh(layout), [layout]);
+  // splat + earth + riverbed were baked across tasks in the world build (extras cache)
+  const extras = useMemo(() => westernExtras(layout), [layout]);
+  const earthGeo = extras.earth;
+  const riverGeo = extras.river;
+  const ground = useMemo(() => groundMaterial(layout, true, extras.splat), [layout, extras]);
+  const riverMat = useMemo(() => groundMaterial(layout, false, extras.splat), [layout, extras]);
   useEffect(
     () => () => {
       ground.mat.dispose();
       ground.splat.dispose();
       riverMat.mat.dispose();
-      riverMat.splat.dispose();
       riverGeo.dispose();
       earthGeo.dispose();
     },
@@ -445,25 +493,40 @@ export const WesternScene = memo(function WesternScene({
   );
 
   // reflection env maps: a small PMREM of each sky
-  const env = useMemo(() => {
-    const pm = new THREE.PMREMGenerator(gl);
-    const sunsetSrc = westernBackground("sunset");
-    const sunset = pm.fromEquirectangular(sunsetSrc);
-    // same width as the sunset so both PMREMs share one size (no shader change at the swap)
-    const nightSrc = resized(
-      westernSky("night"),
-      (sunsetSrc.image as { width: number }).width,
-      (sunsetSrc.image as { height: number }).height,
-    );
-    const nightRT = pm.fromEquirectangular(nightSrc);
-    nightSrc.dispose();
-    pm.dispose();
-    return { sunset, night: nightRT };
+  // PMREM renders are synchronous GL work: keep them out of the mount commit — they run
+  // as their own task a frame later (materials render without an envmap until it lands,
+  // behind the loading veil)
+  const [env, setEnv] = useState<{ sunset: THREE.WebGLRenderTarget; night: THREE.WebGLRenderTarget } | null>(null);
+  useEffect(() => {
+    let dead = false;
+    void (async () => {
+      await yieldControl();
+      if (dead) return;
+      const pm = new THREE.PMREMGenerator(gl);
+      const sunsetSrc = westernBackground("sunset");
+      const sunset = pm.fromEquirectangular(sunsetSrc);
+      await yieldControl();
+      if (dead) { sunset.dispose(); pm.dispose(); return; }
+      // same width as the sunset so both PMREMs share one size (no shader change at the swap)
+      const nightSrc = resized(
+        westernSky("night"),
+        (sunsetSrc.image as { width: number }).width,
+        (sunsetSrc.image as { height: number }).height,
+      );
+      const nightRT = pm.fromEquirectangular(nightSrc);
+      nightSrc.dispose();
+      pm.dispose();
+      if (dead) { sunset.dispose(); nightRT.dispose(); return; }
+      setEnv({ sunset, night: nightRT });
+    })();
+    return () => {
+      dead = true;
+    };
   }, [gl]);
   useEffect(
     () => () => {
-      env.sunset.dispose();
-      env.night.dispose();
+      env?.sunset.dispose();
+      env?.night.dispose();
     },
     [env],
   );
@@ -471,6 +534,7 @@ export const WesternScene = memo(function WesternScene({
   // reflections: the sunset or the night map, swapped at the midpoint while they are faded
   // right down (so the swap never shows)
   useEffect(() => {
+    if (!env) return;
     const e = mode === "night" ? env.night.texture : env.sunset.texture;
     mats.facade.envMap = e;
     westernEnv.map = e;
