@@ -37,6 +37,7 @@ import {
 } from "./beachLayout";
 import { CLOSED_WORD, W, beachWordUV } from "./beachTextures";
 import { K_OPEN, K_PARK, K_PARKLANE, K_PATH, K_ROAD, K_WALK, K_LOT } from "../cityLayout";
+import { drain, runSliced } from "../slice";
 
 export const CHUNK = 200;
 export const FAR_CHUNK = 800;
@@ -1183,7 +1184,7 @@ function building(b: BBld, C: Ctx, T: Tmpls) {
 
 // ---------------------------------------------------------------------------------------
 
-export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
+export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshes, void> {
   const { half, cells: n, kind, beach } = city;
   const T = templates();
   const makeGrid = (reach: number, size: number) => {
@@ -1318,6 +1319,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     return [c, h < -0.05 ? 0.45 : 0.75];
   };
   for (let i = 0; i < n; i++) {
+    yield;
     const x = cx(i) - 1;
     for (let j = 0; j < n; j++) {
       const z = cx(j) - 1;
@@ -1357,6 +1359,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     return K_WALK;
   };
   for (let i = 0; i < n; i++) {
+    yield;
     const x0 = cx(i) - 1;
     if (x0 < X.strip || (x0 >= X.bluff && x0 < X.top)) continue;
     let j = 0;
@@ -1393,6 +1396,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   // Boardwalk plank seams are merged into the ground batch: no extra objects or draw calls.
   // Short staggered joints and a wider edge board distinguish the promenade from shop paving.
   for (let z = -half; z < half; z += 0.6) {
+    yield;
     const G = chunkAt(138, z + 0.3).ground;
     G.mat(L.plain, 0.9, 0).col("#71583c");
     G.flat(X.prom, z, X.shops, z + 0.025, 0.156);
@@ -1402,6 +1406,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
   // curbs along the sidewalks and the promenade edge
   for (let z = -half; z < half; z += CHUNK / 4) {
+    yield;
     for (const x of [X.road0, X.road1]) {
       const G = chunkAt(x, z + 1).main;
       G.mat(L.ground, 0, 0).col("#b8b2a6");
@@ -1412,6 +1417,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
 
   // ---- road markings (detail) ----
   for (let z = -half; z < half; z += 6) {
+    yield;
     const D = chunkAt(ROAD_C, z + 1).detail;
     D.mat(L.plain, 0.5, 0).col("#f2c21f");
     D.flat(ROAD_C - 0.25, z, ROAD_C - 0.1, z + 6, 0.045);
@@ -1424,6 +1430,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
   // crosswalks by the pier plaza
   for (const zc of [0, -100, 100]) {
+    yield;
     const D = chunkAt(ROAD_C, zc).detail;
     D.col("#f4f2ea");
     for (let x = X.road0 + 0.5; x < X.road1; x += 1.2)
@@ -1448,6 +1455,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   // ---- the pier: decks, fascia, piles, bracing ----
   const pierMain = (x: number, z: number) => ctx(x, z).main;
   for (const rg of beach.regions) {
+    yield;
     const onBluff = rg.x0 >= X.walkE - 4 && rg.x1 <= X.top;
     const G = pierMain((rg.x0 + rg.x1) / 2, (rg.z0 + rg.z1) / 2);
     if (onBluff) {
@@ -1720,7 +1728,8 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   // under the pier isn't walkable, so show it (boards between the piles, not an invisible wall)
   {
     const regionOf = beach.regionOf;
-    for (let i = 1; i < n - 1; i++)
+    for (let i = 1; i < n - 1; i++) {
+      yield;
       for (let j = 1; j < n - 1; j++) {
         const c = i * n + j;
         if (regionOf[c]! < 0) continue;
@@ -1755,6 +1764,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           }
         }
       }
+    }
   }
 
   // ---- railings: a white rail along every railing cell's side that faces open deck ----
@@ -1766,7 +1776,8 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       regionOf[c]! >= 0 &&
       beach.pTop[c]! - beach.pBot[c]! < 1.2 &&
       beach.pTop[c]! - beach.pBot[c]! > 1.0;
-    for (let i = 1; i < n - 1; i++)
+    for (let i = 1; i < n - 1; i++) {
+      yield;
       for (let j = 1; j < n - 1; j++) {
         const c = i * n + j;
         if (!isRail(c)) continue;
@@ -1808,6 +1819,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
           }
         }
       }
+    }
   }
 
   // ---- the pier arch over the ramp foot: a beam on two posts and a big lit board on top ----
@@ -2015,6 +2027,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
 
   // ---- the clifftop railing along the bluff edge (gaps at the stair landings) ----
   for (let z = -half + 1; z < half - 1; z += 2.5) {
+    yield;
     const c = Math.floor((X.top + 1 + half) / 2) * n + Math.floor((z + half) / 2);
     const cl = Math.floor((X.top - 1 + half) / 2) * n + Math.floor((z + half) / 2);
     if (beach.regionOf[cl]! >= 0 || beach.regionOf[c]! >= 0) continue;
@@ -2026,7 +2039,10 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
 
   // ---- buildings ----
-  for (const b of beach.buildings) building(b, ctx((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2), T);
+  for (const b of beach.buildings) {
+    yield;
+    building(b, ctx((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2), T);
+  }
 
   // ---- set-piece statics: wheel frame, drop tower, coaster track, carousel pavilion ----
   {
@@ -2183,6 +2199,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
 
   // ---- lifeguard towers ----
   for (const t of beach.towers) {
+    yield;
     const y = gv(t.x, t.z);
     const Cx = ctx(t.x, t.z);
     const G = Cx.main;
@@ -2266,6 +2283,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
 
   // Court boundary tapes lie on the same sand profile as the feet and net posts.
   for (const court of beach.activity.courts) {
+    yield;
     const D = ctx(court.x, court.z).detail;
     D.mat(L.plain, 0.8, 0).col("#f4e7bb");
     const strip = (x0: number, z0: number, x1: number, z1: number) =>
@@ -2292,6 +2310,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   // the pier itself clear; the existing deck railings carry the boundary through that gap.
   const swimBuoys = swimLineBuoys(half);
   for (let i = 1; i < swimBuoys.length; i++) {
+    yield;
     const z0 = swimBuoys[i - 1]!,
       z1 = swimBuoys[i]!;
     if (z1 - z0 > SWIM_LINE_SPACING) continue;
@@ -2303,13 +2322,19 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
   }
 
   // ---- props ----
-  for (const p of beach.props) prop(p, ctx(p.x, p.z), T, gv);
+  for (const p of beach.props) {
+    yield;
+    prop(p, ctx(p.x, p.z), T, gv);
+  }
   for (const f of beach.firesLit) fires.push({ x: f.x, y: gv(f.x, f.z) + 0.2, z: f.z });
 
   // ---- parked cars: drawn instanced with the traffic (Traffic.tsx / art/cars.ts) ----
 
   // ---- blockades ----
-  for (const b of beach.blockades) blockade(b, ctx(b.x, b.z), T);
+  for (const b of beach.blockades) {
+    yield;
+    blockade(b, ctx(b.x, b.z), T);
+  }
 
   // ---- tunnel portals in the bluff where traffic leaves ----
   for (const z of TUNNEL_Z)
@@ -2335,7 +2360,9 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
     ...near.list.map((c) => ({ c, far: false })),
     ...far.list.map((c) => ({ c, far: true })),
   ];
-  const out: BeachChunk[] = list.map(({ c, far: isFar }) => {
+  const out: BeachChunk[] = [];
+  for (const { c, far: isFar } of list) {
+    yield;
     // the bulbs and neon share the sign atlas material: their uvs point at its white corner,
     // so glow + signs are one draw call per chunk
     if (c.glow.n) {
@@ -2348,7 +2375,7 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       c.glow.n = 0;
     }
     verts += c.ground.n + c.main.n + c.detail.n + c.signs.n + c.pools.n;
-    return {
+    out.push({
       x0: c.x0,
       z0: c.z0,
       x1: c.x1,
@@ -2360,8 +2387,8 @@ export function buildBeachMeshes(city: BeachLayout): BeachMeshes {
       signs: c.signs.n ? c.signs.build("uv") : null,
       pools: c.pools.n ? c.pools.build("uv") : null,
       far: isFar,
-    };
-  });
+    });
+  }
   return {
     chunks: out.filter((c) => c.ground || c.main || c.detail || c.glow || c.signs || c.pools),
     fires,
@@ -3026,3 +3053,12 @@ function backdrop(
   void kindUnused;
 }
 const kindUnused = [K_BLUFF, K_WALK, K_PATH];
+
+// worldBuild.ts prepares these across tasks; the scene attaches the result in one commit.
+const prepared = new WeakMap<BeachLayout, BeachMeshes>();
+export async function prepareBeachMeshes(city: BeachLayout): Promise<void> {
+  if (!prepared.has(city)) prepared.set(city, await runSliced(buildBeachMeshes(city)));
+}
+export function beachMeshes(city: BeachLayout): BeachMeshes {
+  return prepared.get(city) ?? drain(buildBeachMeshes(city));
+}

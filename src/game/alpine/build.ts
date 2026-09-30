@@ -2369,13 +2369,14 @@ function signBoard(
 
 // ---------------------------------------------------------------------------------------
 
-export function buildInto(
+export function* buildInto(
   kitAt: (x: number, z: number) => Kit,
   a: AlpineData,
   ground: (x: number, z: number) => number,
-) {
+): Generator<void, void, void> {
   groundFn = ground;
   for (const b of a.buildings) {
+    yield;
     const k = kitAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const r = mulberry(Math.floor(b.seed * 1e9) + 7);
     const pitch = 0.62 + r() * 0.2;
@@ -2546,7 +2547,10 @@ export function buildInto(
   }
   const r = mulberry(99173);
   coveredBridge(kitAt(a.bridge.x0, a.bridge.z), a);
-  for (const t of a.terminals) terminal(kitAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2), a, t);
+  for (const t of a.terminals) {
+    yield;
+    terminal(kitAt((t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2), a, t);
+  }
   // retaining walls where the pads cut into the mountain
   const bt = a.terminals[0]!;
   retaining(kitAt(40, bt.z0), 6, 84, bt.z0 - 2.6, bt.y, 1);
@@ -2565,8 +2569,12 @@ export function buildInto(
     a,
   );
   for (const p of a.props) {
+    yield;
     if (p.k === "tower") continue;
     propGeo(kitAt(p.x, p.z), p, r);
   }
-  for (const bl of a.blockades) blockadeGeo(kitAt(bl.x, bl.z), bl, r);
+  for (const bl of a.blockades) {
+    yield;
+    blockadeGeo(kitAt(bl.x, bl.z), bl, r);
+  }
 }

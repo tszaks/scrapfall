@@ -23,8 +23,20 @@ if (typeof window !== "undefined") (window as unknown as { __rsWarm?: unknown })
 
 /** layer tag for the object slice being warmed this frame (the game uses no layers) */
 const WARM_LAYER = 20;
-/** how many frames a warm run spreads over */
-const BATCHES = 8;
+/** groups drawables whose draw shares one driver program (material + light-dependence) */
+const matIds = new WeakMap<THREE.Material, number>();
+let nextMatId = 1;
+function materialKey(o: Drawable): number {
+  const m = (o as THREE.Mesh).material;
+  const one = Array.isArray(m) ? m[0] : m;
+  if (!one) return 0;
+  let id = matIds.get(one);
+  if (!id) matIds.set(one, (id = nextMatId++));
+  return id;
+}
+/** how many frames a warm run spreads over — finer slices keep each warm task small even
+ *  when a batch carries several driver program links (throttled CPU makes links pricey) */
+const BATCHES = 16;
 
 type Drawable = THREE.Object3D & {
   isMesh?: boolean;
@@ -129,8 +141,13 @@ export function Prewarm({
           if (d.isMesh || d.isSprite || d.isLine || d.isPoints) drawables.push(d);
         }
       });
+      // order by material so a batch shares programs: the driver's program links land a
+      // few per warm frame instead of piling onto whichever batch draws first
+      drawables.sort((a, b) => materialKey(a) - materialKey(b));
       const slices: THREE.Object3D[][] = [];
-      drawables.forEach((o, i) => (slices[i % batches] ??= []).push(o));
+      drawables.forEach((o, i) =>
+        (slices[Math.min(batches - 1, Math.floor((i * batches) / drawables.length))] ??= []).push(o),
+      );
       p.batches = slices;
       for (const l of p.lights) l.layers.enable(WARM_LAYER);
       const cam = camera.clone();

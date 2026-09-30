@@ -130,7 +130,12 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
   const bundle = await rolldown({
     input: fileURLToPath(new URL("../src/game/western/layout.ts", import.meta.url)),
   });
-  const { output } = await bundle.generate({ format: "esm" });
+  // the generator's map imports are dynamic; inline them so the whole graph lands in
+  // one data:-URL module
+  const { output } = await bundle.generate({
+    format: "esm",
+    codeSplitting: false,
+  });
   const western = await import(
     `data:text/javascript;base64,${Buffer.from(output[0].code).toString("base64")}`
   );
@@ -147,8 +152,15 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
   // walk-ins by kind (the general store is the walk-in "store"); named landmarks by sign
   const W = western.W;
   const FIXED = ["HOTEL", "OPERA HOUSE"];
+  // generateWestern is a coroutine now (it yields between chunks so the browser can
+  // breathe); in a test just drain it synchronously
+  const drain = (g) => {
+    let r = g.next();
+    while (!r.done) r = g.next();
+    return r.value;
+  };
   for (let seed = 1; seed <= 50; seed++) {
-    const { layout } = western.generateWestern(rng(seed), 400, 400);
+    const { layout } = drain(western.generateWestern(rng(seed), 400, 400));
     for (const t of ["store", "saloon", "bank", "sheriff", "stable"])
       assert.ok(
         layout.buildings.some((b) => b.t === t && b.walkIn),
