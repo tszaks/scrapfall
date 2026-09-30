@@ -3435,6 +3435,11 @@ export function Game() {
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
+  const picksRef = useRef(picks);
+  picksRef.current = picks;
+  const clsPicksRef = useRef(clsPicks);
+  clsPicksRef.current = clsPicks;
+
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   /** phones and tablets play with on-screen controls instead of mouse + keyboard */
   useEffect(() => {
