@@ -72,7 +72,7 @@ function SprintButton() {
     <Btn
       label={st === "tac" ? "TAC" : "SPRINT"}
       {...(st === "off" ? { sub: "2× TAC" } : {})}
-      size={54}
+      size={68}
       lit={st !== "off"}
       onTap={() => (touchInput.sprint = true)}
     />
@@ -178,7 +178,7 @@ export function MobileControls({
         className="absolute"
         style={{
           left: "max(1.25rem, env(safe-area-inset-left))",
-          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 120px)",
+          bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)",
         }}
       >
         <SprintButton />

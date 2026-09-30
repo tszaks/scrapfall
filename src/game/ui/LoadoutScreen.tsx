@@ -313,8 +313,12 @@ export function LoadoutScreen({
           </div>
         )}
 
-        {/* footer */}
-        <div className="mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5">
+        {/* footer — sticky on small screens so the primary action is always visible */}
+        <div
+          className={`mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5 ${
+            compact ? "sticky bottom-0 -mx-3 -mb-3 bg-[#f3e6cf] px-3 pb-3" : ""
+          }`}
+        >
           {guest ? (
             <>
               <MenuButton
