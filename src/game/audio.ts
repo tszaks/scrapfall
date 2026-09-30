@@ -250,8 +250,18 @@ export function playGun(w: string, quiet = false) {
   );
 }
 
-type Sfx = "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret" | "thud" | "horn";
+type Sfx = "shard" | "hurt" | "buy" | "pickup" | "deny" | "turret" | "thud" | "horn" | "boom";
 export function playSfx(kind: Sfx) {
+  if (kind === "boom") {
+    // hazard prop rupturing: deep thump plus a long debris hiss
+    tone({ wave: "sine", f0: 180, f1: 34, dur: 0.5, gain: 0.5, noise: 0.9, cut: 900 });
+    if (ctx)
+      tone(
+        { wave: "sawtooth", f0: 90, f1: 40, dur: 0.7, gain: 0.22, noise: 1.6, cut: 2200 },
+        sfxGain,
+        ctx.currentTime + 0.02,
+      );
+  }
   if (kind === "thud") {
     // dull body-meets-bumper thump
     tone({ wave: "sine", f0: 110, f1: 40, dur: 0.3, gain: 0.7, noise: 0.8, cut: 700 });

@@ -35,6 +35,14 @@ export let HALF = ARENA / 2;
  * map in solo, where blockades fence play into a smaller square (see soloBounds.ts). */
 export let PLAY_HALF = HALF;
 export const BLOCK = 2; // block footprint (square)
+/**
+ * Collision half-width of a piece of cover. Slim props (trees, coral) use a
+ * tighter box than the grid cell so shots and steps line up with what you see.
+ */
+export let BLOCK_HALF = BLOCK / 2;
+export function setBlockHalf(v: number) {
+  BLOCK_HALF = v;
+}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -238,7 +246,7 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (radius >= 0.2 ? hitsPost(x, z, radius) : hitsPost(x, z, radius, true)) return true;
   const room = structureStreet(x, z, radius);
   if (room !== undefined) return room;
-  const half = BLOCK / 2 + radius;
+  const half = BLOCK_HALF + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes
   const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
@@ -274,7 +282,7 @@ export function shotBlocked(blocks: Block[], x: number, y: number, z: number) {
     if (h !== undefined) return h;
   }
   if (shotPost(x, y, z)) return true;
-  const half = BLOCK / 2 + r;
+  const half = BLOCK_HALF + r;
   const grid = gridFor(blocks);
   const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
   const i1 = Math.min(CELLS - 1, Math.ceil((x + half + HALF - BLOCK / 2) / BLOCK));

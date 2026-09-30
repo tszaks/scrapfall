@@ -1,5 +1,6 @@
 // Pause and the end-of-run recap. Same paper card family as the title/loadout: one panel,
 // a hazard rule, and a single rust primary action.
+import { useState } from "react";
 import { CLASSES, type ClassId } from "../classes";
 import type { Derived } from "../perks";
 import { colorFor } from "../net";
@@ -12,8 +13,7 @@ export function PauseScreen({
   difficultyName,
   stats,
   cls,
-  modBadges,
-  perkBadges,
+  bought,
   multiplayer,
   onResume,
   onSettings,
@@ -25,8 +25,8 @@ export function PauseScreen({
   difficultyName: string;
   stats: Derived;
   cls: ClassId;
-  modBadges: string[];
-  perkBadges: string[];
+  /** this run's bought shop cards, with what each does (Toby 1.0.3 stats overhaul) */
+  bought: { id: string; name: string; lvl: number; color: string; mod: boolean; effects: { text: string; tone?: "good" | "bad" | "flat" }[] }[];
   multiplayer: boolean;
   onResume: () => void;
   onSettings: () => void;
@@ -63,19 +63,42 @@ export function PauseScreen({
         {!compact && (
           <>
             <StatMini d={stats} cls={cls} />
-            {(modBadges.length > 0 || perkBadges.length > 0) && (
+            {bought.length > 0 && (
               <div className="mt-3">
-                <SectionLabel>ATTRIBUTES</SectionLabel>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  {modBadges.map((b) => (
-                    <span key={b} className="text-[11px] font-bold tracking-wider">
-                      {b}
-                    </span>
-                  ))}
-                  {perkBadges.map((b) => (
-                    <span key={b} className="text-[11px] tracking-wider">
-                      {b}
-                    </span>
+                <SectionLabel>UPGRADES BOUGHT</SectionLabel>
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                  {bought.map((c) => (
+                    <div
+                      key={c.id}
+                      className="relative rounded-md border p-1.5"
+                      style={{ borderColor: `${c.color}80`, background: `${c.color}14` }}
+                    >
+                      {c.mod && (
+                        <span className="absolute right-1 top-1 rounded-sm bg-[#2b2118] px-1 text-[7px] font-bold tracking-widest text-[#f3e6cf]">
+                          MOD
+                        </span>
+                      )}
+                      <div className="pr-5 text-[9px] font-bold tracking-wider">{c.name}</div>
+                      <div className="mt-0.5 space-y-0.5 text-[9px] leading-tight">
+                        {c.effects.map((e, i) => (
+                          <div
+                            key={i}
+                            className={
+                              e.tone === "bad"
+                                ? "font-bold text-[#b3261e]"
+                                : e.tone === "good"
+                                  ? "font-bold text-[#1d7a37]"
+                                  : "opacity-70"
+                            }
+                          >
+                            {e.text}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-1 text-[9px] font-bold tracking-widest opacity-55">
+                        x{c.lvl}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -131,11 +154,46 @@ function StatMini({ d, cls }: { d: Derived; cls: ClassId }) {
       </div>
     </div>
   );
+  const [showCls, setShowCls] = useState(false);
   return (
     <div className="mt-4 rounded-lg bg-[#2b2118] p-3 font-mono text-[#f3e6cf]">
       <div className="flex items-center justify-between text-[11px] tracking-[0.25em]">
         <span className="opacity-70">STATS</span>
-        <span style={{ color: CLASSES[cls].color }}>{CLASSES[cls].name}</span>
+        {/* hover or tap shows the class's role and trade-offs (Toby's class popover);
+            a tap also fires pointerenter, so hover opens/closes for a real mouse only
+            and touch just toggles on click */}
+        <span className="relative">
+          <button
+            onPointerEnter={(e) => e.pointerType === "mouse" && setShowCls(true)}
+            onPointerLeave={(e) => e.pointerType === "mouse" && setShowCls(false)}
+            onClick={() => setShowCls((v) => !v)}
+            className="cursor-help underline decoration-dotted underline-offset-2"
+            style={{ color: CLASSES[cls].color }}
+          >
+            {CLASSES[cls].name}
+          </button>
+          {showCls && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-[#f3e6cf]/20 bg-[#1d160f] p-2 text-left shadow-lg">
+              <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
+                {CLASSES[cls].name}
+              </div>
+              <div className="mt-0.5 text-[9px] opacity-60">{CLASSES[cls].role}</div>
+              <div className="mt-1.5 text-[9px] tracking-[0.2em] opacity-50">STARTING STATS</div>
+              <div className="mt-1 space-y-0.5 text-[10px]">
+                {CLASSES[cls].pros.map((p) => (
+                  <div key={p} className="text-[#7cff4f]">
+                    {p}
+                  </div>
+                ))}
+                {CLASSES[cls].cons.map((c) => (
+                  <div key={c} className="text-[#ff6b5e]">
+                    {c}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-x-4">
         {col(combat, "COMBAT")}
@@ -164,6 +222,12 @@ export function EndScreen({
   myNum,
   multiplayer,
   isHost,
+  /** the run went past the last wave (the squad picked overtime before ending) */
+  endless,
+  /** deepest wave ever reached, kept in localStorage (Toby 1.0.4) */
+  highWave,
+  /** host only: push the run into endless overtime past the last wave */
+  onOvertime,
   onNewArena,
   onLoadout,
   onLeave,
@@ -177,6 +241,9 @@ export function EndScreen({
   myNum: number;
   multiplayer: boolean;
   isHost: boolean;
+  endless?: boolean;
+  highWave?: number;
+  onOvertime?: () => void;
   onNewArena: () => void;
   onLoadout: () => void;
   onLeave: () => void;
@@ -192,7 +259,9 @@ export function EndScreen({
   }
   if (won) badges.push("BOSS SLAYER");
   const stats: [string, string][] = [
-    ["WAVES SURVIVED", `${won ? totalWaves : Math.max(0, wave - 1)}`],
+    // a win that went into overtime counts the overtime waves survived, not the clean 12
+    ["WAVES SURVIVED", `${won && !endless ? totalWaves : Math.max(0, wave - 1)}`],
+    ...(highWave ? ([["BEST EVER", `WAVE ${highWave}`]] as [string, string][]) : []),
     ["KILLS", `${mine.kills}`],
     ["DAMAGE DEALT", `${mine.dmg}`],
     ["ACCURACY", `${mine.acc}%`],
@@ -266,6 +335,12 @@ export function EndScreen({
         )}
 
         <div className={`flex flex-col gap-2 ${compact ? "mt-3.5" : "mt-5"}`}>
+          {/* beat the boss: bank the win, or the host pushes the run into overtime (Toby 1.0.4) */}
+          {won && onOvertime && isHost && (
+            <MenuButton variant="line" size="md" className="w-full" onClick={onOvertime}>
+              Overtime // keep going
+            </MenuButton>
+          )}
           {multiplayer && !isHost ? (
             <>
               <div className="rounded-md border border-[#2b2118]/25 bg-[#2b2118]/8 px-4 py-2 text-center text-[11px] font-bold tracking-[0.2em] opacity-75">
