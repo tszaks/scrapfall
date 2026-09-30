@@ -231,11 +231,14 @@ export function townRow(
         const lat = 0.2 + rand() * 0.6;
         const cxw = made.x0 + (made.x1 - made.x0) * lat;
         // a lean-to leaning into a back lane eats the lane — skip it where the gap
-        // behind is a registered strip
+        // behind is a registered strip or a walk-in's door corridor
         const lr = north
           ? { x0: cxw - lw / 2, z0: made.z0 - LEAN_D, x1: cxw + lw / 2, z1: made.z0 }
           : { x0: cxw - lw / 2, z0: made.z1, x1: cxw + lw / 2, z1: made.z1 + LEAN_D };
-        if (!K.noClutter.some((r) => K.overlaps(lr, r))) {
+        if (
+          !K.noClutter.some((r) => K.overlaps(lr, r)) &&
+          !K.doorApproaches().some((a) => K.overlaps(lr, a))
+        ) {
           made.lean = lw;
           made.leanAt = lat;
           markSolid(lr.x0, lr.z0, lr.x1, lr.z1, 3);

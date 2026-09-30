@@ -430,12 +430,21 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     const j0 = Math.max(0, Math.floor((z0 + half) / 2 + 1e-6));
     const i1 = Math.min(cells, Math.ceil((x1 + half) / 2 - 1e-6));
     const j1 = Math.min(cells, Math.ceil((z1 + half) / 2 - 1e-6));
+    // door corridors take no collision cells at all: even emitters that bypass
+    // isFree (porch strips, lean-tos, fixed rails) can never wall off a doorway
+    const lanes = doorApproaches();
     for (let i = i0; i < i1; i++)
       for (let j = j0; j < j1; j++) {
         const k = idx(i, j);
         if (solid[k]) continue;
+        const x = cc(i),
+          z = cc(j);
+        if (
+          lanes.some((a) => x + 1 > a.x0 && x - 1 < a.x1 && z + 1 > a.z0 && z - 1 < a.z1)
+        )
+          continue;
         solid[k] = 1;
-        blocks.push({ x: cc(i), z: cc(j), h, tone: 0 });
+        blocks.push({ x, z, h, tone: 0 });
       }
   };
   const setGround = (x0: number, z0: number, x1: number, z1: number, k: number) => {
@@ -446,6 +455,12 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) ground[idx(i, j)] = k;
   };
   const isFree = (x0: number, z0: number, x1: number, z1: number) => {
+    // a walk-in's door corridor is reserved open ground, with margin: a wall held
+    // ~2 m clear of the corridor can never leak a collision cell into it, so the
+    // door always opens onto walkable space (props are steered off it separately,
+    // inside prop())
+    for (const a of doorKeep())
+      if (a.x1 > x0 && a.x0 < x1 && a.z1 > z0 && a.z0 < z1) return false;
     for (let x = x0 + 1; x < x1; x += 2)
       for (let z = z0 + 1; z < z1; z += 2) {
         const k = at(x, z);
@@ -955,10 +970,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   };
   let approachBuildingCount = -1;
   let approaches: Approach[] = [];
+  // corridors inflated by the collision-cell reach: markSolid rounds a building's
+  // footprint outward to whole cells, so a wall must stand ~2 m off a corridor for
+  // none of its cells to land inside it
+  let keepRects: Rect[] = [];
   const doorApproaches = () => {
     if (approachBuildingCount === buildings.length) return approaches;
     approachBuildingCount = buildings.length;
     approaches = [];
+    keepRects = [];
     for (const b of buildings) {
       const plan = roomPlan(b, b.deck ?? DECK_Y, STOREY);
       if (!plan) continue;
@@ -968,19 +988,35 @@ export function generateWestern(rand: () => number, cells: number, half: number)
         const front = d.wall === "front",
           v0 = front ? -0.2 : -D - 5,
           v1 = front ? 10 : -D + 0.2;
-        const a = toWorld(b, d.a - 0.22, v0),
-          c = toWorld(b, d.b + 0.22, v1);
-        approaches.push({
+        // a back door must let a body step out and turn: the corridor is a full
+        // 3 m wide even where the doorway itself is narrow, but it stays inside
+        // the building's own facade span — a corridor spilling past the wall edge
+        // would forbid the row-mate's back corner
+        const { W } = frameWD(b),
+          hw = Math.max((d.b - d.a) / 2 + 0.22, front ? 0 : 1.5),
+          mid = Math.min(Math.max((d.a + d.b) / 2, -W / 2 + hw), W / 2 - hw);
+        const a = toWorld(b, mid - hw, v0),
+          c = toWorld(b, mid + hw, v1);
+        const r = {
           x0: Math.min(a[0], c[0]),
           x1: Math.max(a[0], c[0]),
           z0: Math.min(a[1], c[1]),
           z1: Math.max(a[1], c[1]),
-          alongX: b.front === 0 || b.front === 2,
-          building: b,
+        };
+        approaches.push({ ...r, alongX: b.front === 0 || b.front === 2, building: b });
+        keepRects.push({
+          x0: r.x0 - 2.05,
+          x1: r.x1 + 2.05,
+          z0: r.z0 - 2.05,
+          z1: r.z1 + 2.05,
         });
       }
     }
     return approaches;
+  };
+  const doorKeep = () => {
+    doorApproaches();
+    return keepRects;
   };
   const footprint = (k: WPropKind, x: number, z: number, rot: number, scale: number) => {
     const f =
@@ -2043,6 +2079,19 @@ export function generateWestern(rand: () => number, cells: number, half: number)
   }
   // the station's bay window pokes out onto the platform
   markSolid(138, -29, 139.2, -25, 3);
+
+  // a walk-in's door corridor wins even over collision laid before the doorway
+  // existed — a neighbour's lean-to can predate it in the row build order, so the
+  // cells get reopened here once every building has landed
+  for (const a of doorApproaches())
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i]!;
+      if (b.x + 1 > a.x0 && b.x - 1 < a.x1 && b.z + 1 > a.z0 && b.z - 1 < a.z1) {
+        const k = at(b.x, b.z);
+        if (k >= 0) solid[k] = 0;
+        blocks.splice(i, 1);
+      }
+    }
 
   // ======================================================================
   // 8. collision for the rock, then connectivity from the spawn

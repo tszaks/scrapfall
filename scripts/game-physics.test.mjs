@@ -147,8 +147,12 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
   // walk-ins by kind (the general store is the walk-in "store"); named landmarks by sign
   const W = western.W;
   const FIXED = ["HOTEL", "OPERA HOUSE"];
+  // both grid sizes: the town core is fixed-position but the collision cell grid
+  // shifts with the arena, so a flush wall's block can graze a corridor on one
+  // size and not the other
+  for (const size of [400, 520])
   for (let seed = 1; seed <= 50; seed++) {
-    const { layout } = western.generateWestern(rng(seed), 400, 400);
+    const { layout, blocks } = western.generateWestern(rng(seed), size, size);
     for (const t of ["store", "saloon", "bank", "sheriff", "stable"])
       assert.ok(
         layout.buildings.some((b) => b.t === t && b.walkIn),
@@ -304,8 +308,42 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
         `seed ${seed}: back lane sealed at ${s.x0.toFixed(1)},${s.z0.toFixed(1)}`,
       );
     }
-    // nothing may sit across a walk-in's doorway — the corridors are reserved on
-    // layout.doorZones; check each prop's full footprint, not just its centre (the
+    // nothing may sit across a walk-in's doorway — the corridors (front AND back)
+    // are reserved on layout.doorZones. No building may intrude: the corridor's
+    // owner legitimately overlaps a 0.2 m sliver at its own wall, so find it as
+    // the building containing one of the zone's shallow edge midpoints.
+    for (const z of layout.doorZones) {
+      const cx = (z.x0 + z.x1) / 2,
+        cz = (z.z0 + z.z1) / 2;
+      const owner = layout.buildings.find((b) =>
+        [
+          [cx, z.z0 + 0.1],
+          [cx, z.z1 - 0.1],
+          [z.x0 + 0.1, cz],
+          [z.x1 - 0.1, cz],
+        ].some(([px, pz]) => px > b.x0 && px < b.x1 && pz > b.z0 && pz < b.z1),
+      );
+      assert.ok(
+        owner,
+        `seed ${seed} size ${size}: door corridor at ${z.x0.toFixed(1)},${z.z0.toFixed(1)} has no owner`,
+      );
+      const intruder = layout.buildings.find(
+        (b) => b !== owner && b.x1 > z.x0 && b.x0 < z.x1 && b.z1 > z.z0 && b.z0 < z.z1,
+      );
+      assert.ok(
+        !intruder,
+        `seed ${seed} size ${size}: ${intruder?.t} (${intruder?.x0.toFixed(1)}..${intruder?.x1.toFixed(1)}, ${intruder?.z0.toFixed(1)}..${intruder?.z1.toFixed(1)}) sits in a door corridor`,
+      );
+      // and no collision cell may reach into it either (blocks are 2 m cells)
+      const block = blocks.find(
+        (b) => b.x + 1 > z.x0 && b.x - 1 < z.x1 && b.z + 1 > z.z0 && b.z - 1 < z.z1,
+      );
+      assert.ok(
+        !block,
+        `seed ${seed} size ${size}: collision block at ${block?.x},${block?.z} intrudes on a door corridor`,
+      );
+    }
+    // check each prop's full footprint, not just its centre (the
     // half-extents mirror approachFoot in layout.ts)
     const HALF = {
       crate: [0.5, 0.5],
