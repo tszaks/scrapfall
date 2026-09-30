@@ -96,6 +96,7 @@ export function LoadoutScreen({
   onEnter,
   onBack,
   touchUi,
+  building,
 }: {
   cls: ClassId;
   setCls: (c: ClassId) => void;
@@ -115,6 +116,8 @@ export function LoadoutScreen({
   onEnter: () => void;
   onBack: () => void;
   touchUi: boolean;
+  /** the picked map's world is still being generated: Enter waits for it */
+  building?: boolean;
 }) {
   const { short, narrow } = useViewport();
   const compact = short || touchUi;
@@ -313,8 +316,12 @@ export function LoadoutScreen({
           </div>
         )}
 
-        {/* footer */}
-        <div className="mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5">
+        {/* footer — sticky on small screens so the primary action is always visible */}
+        <div
+          className={`mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5 ${
+            compact ? "sticky bottom-0 -mx-3 -mb-3 bg-[#f3e6cf] px-3 pb-3" : ""
+          }`}
+        >
           {guest ? (
             <>
               <MenuButton
@@ -342,8 +349,9 @@ export function LoadoutScreen({
                 size={compact ? "md" : "lg"}
                 className="flex-1"
                 onClick={onEnter}
+                disabled={building}
               >
-                Enter arena
+                {building ? "Building map…" : "Enter arena"}
               </MenuButton>
               {multiplayer && (
                 <span className="whitespace-nowrap text-[11px] tracking-[0.15em] opacity-70">

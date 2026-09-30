@@ -86,9 +86,9 @@ export const TILE_M: Record<number, [number, number]> = {
   [WL.IRON]: [2, 2],
   [WL.PAINT]: [2, 2],
 };
-/** sign atlas: 2 columns x 14 rows of painted boards */
+/** sign atlas: 2 columns x 16 rows of painted boards */
 export const SIGN_COLS = 2;
-export const SIGN_ROWS = 14;
+export const SIGN_ROWS = 16;
 
 function rng(seed: number) {
   let a = seed >>> 0;

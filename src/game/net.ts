@@ -60,6 +60,7 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v7 reserves generated doorway approaches and aligns physical door/window openings.
 // v8 furnishes Pier/Whiteout interiors and adds pier activities
 // v9 clears Pier door approaches and grades Whiteout entrance thresholds.
+// v10 rebuilds Dry Gulch as a multi-district boomtown (new street grid, decks, districts)
 // v11 brings in Toby's 1.0.3-1.0.6: hazards, endless overtime, shard and stat fixes
 // — all new or changed messages, so rooms split from v9/v10 clients.
 const PREFIX = "scrapfall-ts-arena-v11-";

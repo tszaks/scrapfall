@@ -33,6 +33,8 @@ export type QualitySpec = {
   particles: number;
   /** multisample antialiasing (a context attribute: applies on the next load) */
   antialias: boolean;
+  /** bloom overlay: 0 off, 1 a single quarter-res glow, 2 adds a wider second halo */
+  bloom: number;
 };
 
 const STORE_KEY = "scrapfall-quality";
@@ -62,6 +64,7 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
       rooms: true,
       particles: 1,
       antialias: true,
+      bloom: 2,
     };
   if (tier === "medium")
     return {
@@ -74,6 +77,7 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
       rooms: true,
       particles: 0.7,
       antialias: true,
+      bloom: 1,
     };
   return {
     dprMin: pref === "low" ? 1 : MOBILE ? 0.7 : 0.85,
@@ -88,6 +92,7 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
     rooms: false,
     particles: 0.45,
     antialias: pref !== "low",
+    bloom: 0,
   };
 }
 

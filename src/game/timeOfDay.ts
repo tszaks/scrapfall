@@ -285,14 +285,14 @@ export function blendLook(theme: Theme, arena: number, k: number, out: Blend): B
     const rain = matchEnvironment.kind === "rain";
     out.sky.set(rain ? "#788894" : "#6dafdc");
     out.fogColor.set(rain ? "#879395" : "#bbd3d9");
-    out.hemiSky.set(rain ? "#b8c7d0" : "#d8ecff");
+    out.hemiSky.set(rain ? "#b8c7d0" : "#c4defa");
     out.hemiGround.set("#8e806d");
-    out.hemiI = rain ? 1.15 : 1.6;
-    out.ambient = rain ? 0.35 : 0.4;
+    out.hemiI = rain ? 1.15 : 1.15;
+    out.ambient = rain ? 0.35 : 0.26;
     out.ambientColor.set("#ffffff");
     out.sunDir.set(-0.5, 0.82, 0.28).normalize();
-    out.sunColor.set(rain ? "#d3dce4" : "#fff3dc");
-    out.sunI = rain ? 0.55 : 2.3;
+    out.sunColor.set(rain ? "#d3dce4" : "#fff1d2");
+    out.sunI = rain ? 0.55 : 3.1;
     out.hazeColor.copy(out.fogColor);
     out.hazeK = rain ? 0.12 : 0.045;
     if (rain) {
