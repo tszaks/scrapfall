@@ -254,7 +254,16 @@ import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
-import { cancelJump, canFire, moveState, stepJump, startFall, tryJump } from "./input/movement";
+import {
+  cancelJump,
+  canFire,
+  chase,
+  moveState,
+  SPEED,
+  stepJump,
+  startFall,
+  tryJump,
+} from "./input/movement";
 import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
 import {
   clearControls,
@@ -810,16 +819,19 @@ const M_SHRED = 1,
   M_BOUNTY = 4;
 
 const BOSS_HP = 450; // 1.5x tougher arena boss
+// chase() re-tunes each authored chase speed from the old 7 m/s run to today's SPEED.run
+// (input/movement.ts): pursuits keep their shape relative to the player. Attack dashes,
+// projectiles and attack timings are deliberately not scaled.
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
-  drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
-  brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
-  shooter: { hp: 3, speed: 2, radius: 0.6, dmg: 1 },
-  runner: { hp: 2, speed: 4.3, radius: 0.45, dmg: 1 },
-  boss: { hp: BOSS_HP, speed: 1.4, radius: 1.5, dmg: 3 },
-  specter: { hp: 3, speed: 3.3, radius: 0.55, dmg: 2 },
-  bomber: { hp: 4, speed: 1.5, radius: 0.7, dmg: 2 },
-  vanguard: { hp: 11, speed: 1.2, radius: 0.9, dmg: 2 },
-  special: { hp: 6, speed: 2.6, radius: 0.65, dmg: 1 },
+  drifter: { hp: 2, speed: chase(2.6), radius: 0.6, dmg: 1 },
+  brute: { hp: 7, speed: chase(1.6), radius: 0.8, dmg: 2 },
+  shooter: { hp: 3, speed: chase(2), radius: 0.6, dmg: 1 },
+  runner: { hp: 2, speed: chase(4.3), radius: 0.45, dmg: 1 },
+  boss: { hp: BOSS_HP, speed: chase(1.4), radius: 1.5, dmg: 3 },
+  specter: { hp: 3, speed: chase(3.3), radius: 0.55, dmg: 2 },
+  bomber: { hp: 4, speed: chase(1.5), radius: 0.7, dmg: 2 },
+  vanguard: { hp: 11, speed: chase(1.2), radius: 0.9, dmg: 2 },
+  special: { hp: 6, speed: chase(2.6), radius: 0.65, dmg: 1 },
   ...NEW_STATS,
 };
 
@@ -979,7 +991,7 @@ const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
 const TURN_SPEED = 2.4;
 const MAX_BULLETS = 90;
-const SPEED = 7;
+// the player's run/sprint/tactical speeds: the SPEED table in input/movement.ts
 const EYE = 1.6;
 
 const FORWARD = new THREE.Vector3();
@@ -5028,7 +5040,10 @@ function World({
     FORWARD.y = 0;
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
-    MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
+    // backpedal / strafe paces from the SPEED table (1 = as fast as forward)
+    MOVE.set(0, 0, 0)
+      .addScaledVector(FORWARD, fwd < 0 ? fwd * SPEED.backpedal : fwd)
+      .addScaledVector(RIGHT, strafe * SPEED.strafe);
     if (wheelRide.cabin >= 0) MOVE.set(0, 0, 0);
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
@@ -5045,15 +5060,16 @@ function World({
     // HEAVY GRAVITY rounds weigh on the jump arc too
     moveState.gravityMul = mut === "gravity" ? 1.4 : 1;
     const spd =
-      SPEED *
+      SPEED.run * // the SPEED table in input/movement.ts: run/sprint/tactical and every drag
       stats.current.speed *
-      (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1) *
-      (overdrive.current > 0 ? 1.3 : 1) *
+      (stats.current.holster && weapon.current === "pistol" ? SPEED.holster : 1) *
+      (overdrive.current > 0 ? SPEED.overdrive : 1) *
       // CRYO SURGE chills the legs a little; HEAVY GRAVITY weighs every step down
-      (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1) *
+      (mut === "cryo" ? SPEED.cryo : mut === "gravity" ? SPEED.heavyGravity : 1) *
       groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
       runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
-      (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
+      (1 + (SPEED.ads - 1) * aimState.blend) * // ADS move multiplier (1 = no slow today)
+      (downedRef.current ? SPEED.downed : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
@@ -5149,7 +5165,10 @@ function World({
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
-    bob.current += delta * 9 * bobAmt.current;
+    // the bob's 9 rad/s was tuned at the old 7 m/s run: it follows real pace now, so a
+    // slower step swings slower (the same bob cycles per metre travelled)
+    bob.current +=
+      delta * bobAmt.current * Math.hypot(slide.current.x, slide.current.z) * (9 / 7);
     {
       // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
       // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
