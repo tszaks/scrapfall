@@ -62,6 +62,17 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
 
   const conns = new Map<string, DataConnection>();
   const list = () => [...conns.keys()];
+  // a guest that goes quiet is gone: browsers often never fire "close" on a shut tab,
+  // and a stale slot used to block the 4th player from ever joining
+  const heard = new Map<string, { at: number; opened: number }>();
+  const drop = new Map<string, () => void>();
+  const beat = setInterval(() => {
+    const now = Date.now();
+    heard.forEach((t, id) => {
+      if (now - t.opened >= JOIN_GRACE && now - t.at > HEARTBEAT) drop.get(id)?.();
+    });
+    conns.forEach((c) => { if (c.open) c.send({ type: "hb", from: "host" }); });
+  }, 1000);
 
   const handle: NetHandle = {
     role: "host",
@@ -76,16 +87,27 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       if (c?.open) c.send({ ...m, from: "host" });
     },
     peers: list,
-    close: () => { conns.forEach((c) => c.close()); peer.destroy(); },
+    close: () => { clearInterval(beat); conns.forEach((c) => c.close()); peer.destroy(); },
   };
 
   peer.on("connection", (conn) => {
     conn.on("open", () => {
+      // a room holds the host plus three guests
+      if (conns.size >= 3) {
+        try { conn.send({ type: "full", from: "host" }); } catch { /* already gone */ }
+        setTimeout(() => { try { conn.close(); } catch { /* already closed */ } }, 300);
+        return;
+      }
       conns.set(conn.peer, conn);
+      const now = Date.now();
+      heard.set(conn.peer, { at: now, opened: now });
       opts.onPeers(list());
       opts.onMsg({ type: "joined", from: conn.peer });
     });
     conn.on("data", (raw) => {
+      if (!conns.has(conn.peer)) return; // dropped already
+      heard.get(conn.peer)!.at = Date.now();
+      if ((raw as NetMsg)?.type === "hb") return;
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
       if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume" || m.type === "pick" || m.type === "shard" || m.type === "haz") {
@@ -94,16 +116,22 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       opts.onMsg(m);
     });
     const gone = () => {
+      if (conns.get(conn.peer) !== conn) return; // already dropped or replaced
       conns.delete(conn.peer);
+      heard.delete(conn.peer);
+      drop.delete(conn.peer);
       opts.onPeers(list());
       opts.onMsg({ type: "left", from: conn.peer });
+      try { conn.close(); } catch { /* already closed */ }
     };
+    drop.set(conn.peer, gone);
     conn.on("close", gone);
     conn.on("error", gone);
   });
 
   return handle;
 }
+
 
 export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
   const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), { debug: 0 });
