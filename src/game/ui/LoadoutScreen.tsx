@@ -97,6 +97,7 @@ export function LoadoutScreen({
   onBack,
   touchUi,
   building,
+  enterQueued,
 }: {
   cls: ClassId;
   setCls: (c: ClassId) => void;
@@ -118,6 +119,8 @@ export function LoadoutScreen({
   touchUi: boolean;
   /** the picked map's world is still being generated: Enter waits for it */
   building?: boolean;
+  /** Enter was clicked while the world builds: it starts the moment it's ready */
+  enterQueued?: boolean;
 }) {
   const { short, narrow } = useViewport();
   const compact = short || touchUi;
@@ -351,10 +354,15 @@ export function LoadoutScreen({
                 size={compact ? "md" : "lg"}
                 className="flex-1"
                 onClick={onEnter}
-                disabled={building}
+                disabled={enterQueued}
               >
-                {building ? "Building map…" : "Enter arena"}
+                Enter arena
               </MenuButton>
+              {(building || enterQueued) && (
+                <span className="whitespace-nowrap text-[11px] tracking-[0.15em] opacity-70">
+                  {enterQueued ? "STARTS WHEN READY" : "BUILDING MAP…"}
+                </span>
+              )}
               {multiplayer && (
                 <span className="whitespace-nowrap text-[11px] tracking-[0.15em] opacity-70">
                   {players.filter((p) => p.ready).length}/{players.length} READY

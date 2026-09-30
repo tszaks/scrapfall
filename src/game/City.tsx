@@ -10,7 +10,7 @@ import { useSunShadow } from "./quality";
 import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
-import { buildCityMeshes, DETAIL_RANGE, groundHeights } from "./cityMesh";
+import { cityMeshes, DETAIL_RANGE, groundHeights } from "./cityMesh";
 import {
   FACADE_LAYERS,
   L,
@@ -414,15 +414,9 @@ export const CityScene = memo(function CityScene({
   isHost?: boolean;
 }) {
   const gl = useThree((s) => s.gl);
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildCityMeshes(city);
-    if (import.meta.env.DEV)
-      console.info(
-        `[city] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [city]);
+  // geometry was built across tasks while the world assembled (cityMesh.ts prepares
+  // it); this useMemo is a cache lookup, not the vertex pass it used to be
+  const built = useMemo(() => cityMeshes(city), [city]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(

@@ -5,10 +5,9 @@ import {
   withoutStaticPoints,
 } from "./staticCollision";
 import { structureStreet, structureShot, structurePathClear } from "./structures/world";
-import { generateCity, type CityLayout } from "./cityLayout";
-import { generateWestern, type WesternLayout } from "./western/layout";
-import { generateAlpine } from "./alpine/layout";
-import { generateBeach } from "./beach/beachLayout";
+import type { CityLayout } from "./cityLayout";
+import type { WesternLayout } from "./western/layout";
+import type { BeachLayout } from "./beach/beachLayout";
 import {
   baseGroundY,
   groundHits,
@@ -18,6 +17,7 @@ import {
   shotHits,
   strictNav,
 } from "./terrain";
+import { runSliced } from "./slice";
 
 export type Block = { x: number; z: number; h: number; tone: number; boundary?: boolean };
 export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western" | "nuketown";
@@ -55,17 +55,32 @@ function mulberry32(seed: number) {
   };
 }
 
+export type LevelGen = {
+  blocks: Block[];
+  seed: number;
+  rand: () => number;
+  city: CityLayout | null;
+  western: WesternLayout | null;
+};
+
 /**
  * Procedurally lay out the arena, keeping spawn clear. "scatter" is the classic
  * sparse block maze; "city" is a street grid of multi-cell buildings (one Block
  * per occupied cell, so collision and pathfinding work unchanged).
+ *
+ * Staged: each map's module loads on demand (so a session downloads only the map it
+ * shows) and its generator runs as a coroutine — it `yield`s between chunks of work
+ * and runSliced hands the event loop a turn whenever a slice runs long.
  */
-export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo = false) {
+export async function generateLevelStaged(
+  seed: number,
+  mode: LayoutMode = "scatter",
+  solo = false,
+): Promise<LevelGen> {
   const rand = mulberry32(seed);
   const blocks: Block[] = [];
   const cells = Math.floor(ARENA / BLOCK);
-  let city: CityLayout | null = null;
-  let western: WesternLayout | null = null;
+  const base = { seed, rand };
 
   if (mode === "nuketown") {
     // Coarse navigation only; the rendered fence and vehicle models own precise contact.
@@ -81,30 +96,31 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
         )
           blocks.push({ x, z, h: 4, tone: 0 });
       }
-    return { blocks, seed, rand, city, western };
+    return { ...base, blocks, city: null, western: null };
   }
   if (mode === "beach") {
     // the full map in solo and co-op; solo seals a smaller square with blockades. The caller
     // installs its ground (beachTerrain) through terrain.ts, like the alpine heightfield.
-    const out = generateBeach(rand, cells, HALF, solo);
-    return { blocks: out.blocks, seed, rand, city: out.layout as CityLayout, western };
+    const { generateBeach } = await import("./beach/beachLayout");
+    const out = await runSliced(generateBeach(rand, cells, HALF, solo));
+    return { ...base, blocks: out.blocks, city: out.layout as CityLayout, western: null };
   }
 
   if (mode === "city") {
-    const out = generateCity(rand, cells, HALF);
-    city = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateCity } = await import("./cityLayout");
+    const out = await runSliced(generateCity(rand, cells, HALF));
+    return { ...base, blocks: out.blocks, city: out.layout, western: null };
   }
   if (mode === "western") {
-    const out = generateWestern(rand, cells, HALF);
-    western = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateWestern } = await import("./western/layout");
+    const out = await runSliced(generateWestern(rand, cells, HALF));
+    return { ...base, blocks: out.blocks, city: null, western: out.layout };
   }
   if (mode === "alpine") {
     // the full map in solo and co-op; solo seals a smaller square with blockades
-    const out = generateAlpine(seed, solo);
-    city = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateAlpine } = await import("./alpine/layout");
+    const out = await runSliced(generateAlpine(seed, solo));
+    return { ...base, blocks: out.blocks, city: out.layout, western: null };
   }
 
   for (let i = 0; i < cells; i++) {
@@ -121,7 +137,7 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
       });
     }
   }
-  return { blocks, seed, rand, city, western };
+  return { ...base, blocks, city: null, western: null };
 }
 
 // Collision lookups go through a per-array cell grid: the city map has hundreds of

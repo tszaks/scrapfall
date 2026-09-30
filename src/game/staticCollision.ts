@@ -2,6 +2,7 @@
 // Collision stays installed when render LOD hides a mesh; decoration is explicitly excluded.
 import { Box3, BufferGeometry, DoubleSide, Line3, Matrix3, Matrix4, Ray, Vector3 } from "three";
 import { MeshBVH, ExtendedTriangle } from "three-mesh-bvh";
+import { yieldControl } from "./slice";
 
 type Flags = { body: boolean; shot: boolean; support: boolean };
 type Shape = { tree: MeshBVH; box: Box3 };
@@ -54,6 +55,17 @@ function install(key: string, list: Surface[]) {
       rebuild();
     }
   };
+}
+/** worldBuild.ts walks the freshly built chunk geometries through `shape()` across
+ * tasks — the map scene's layout-effect registration then finds every BVH already in
+ * the WeakMap cache and the mount commit stays light. */
+export async function prepareStaticSurfaces(
+  geometries: (BufferGeometry | null | undefined)[],
+): Promise<void> {
+  for (const g of geometries) {
+    if (g) shape(g);
+    await yieldControl();
+  }
 }
 export function registerStaticGeometry(
   key: string,

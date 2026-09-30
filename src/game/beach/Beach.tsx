@@ -36,7 +36,7 @@ import {
   type BeachLayout,
 } from "./beachLayout";
 import { BEACH_SKY_KEY, BEACH_SUNSET, beachLook, type BeachLook } from "./beachLook";
-import { DETAIL_RANGE, buildBeachMeshes } from "./beachMesh";
+import { DETAIL_RANGE, beachMeshes } from "./beachMesh";
 import { beachSignTexture } from "./beachTextures";
 import { provideEventHooks } from "../events/mapHooks";
 import { SurgeFx } from "./SurgeFx";
@@ -366,15 +366,8 @@ const BeachScene = memo(function BeachScene({
 }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildBeachMeshes(city);
-    if (import.meta.env.DEV || debugOn())
-      console.info(
-        `[beach] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [city]);
+  // geometry is prepared across tasks during the world build; this memo is a cache hit
+  const built = useMemo(() => beachMeshes(city), [city]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(

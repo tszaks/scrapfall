@@ -12,7 +12,7 @@ import { setIndoor } from "../ambience";
 import { sfxBus } from "../audio";
 import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
-import { buildAccess, doorHeight, type DisplaySpot, type Interior } from "./build";
+import { builtAccessFor, doorHeight, type DisplaySpot, type Interior } from "./build";
 import { CAR_H, type AccessBuilding } from "./layout";
 import {
   concreteTexture,
@@ -231,7 +231,7 @@ function Building({
 }: {
   b: AccessBuilding;
   m: Mats;
-  g: ReturnType<typeof buildAccess>["per"][number];
+  g: ReturnType<typeof builtAccessFor>["per"][number];
   refs: Refs;
   display: Display | null;
   cop: CopPanel | null;
@@ -597,7 +597,7 @@ export const AccessScene = memo(function AccessScene({
   cityKey: unknown;
 }) {
   const list = useMemo(() => accessList(), [cityKey]); // eslint-disable-line react-hooks/exhaustive-deps -- the installed list changes with the city
-  const built = useMemo(() => buildAccess(list), [list]);
+  const built = useMemo(() => builtAccessFor(list), [list]);
   useLayoutEffect(() => registerStaticGeometry("access-exterior", [built.ext]), [built]);
   useLayoutEffect(() => {
     const instances: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = [];

@@ -56,6 +56,7 @@ Where things live, and where to go to change them. Every folder under `src/` mus
 | `src/game/art/` | Shared art kit: guns (`guns.ts`, `GunView.tsx`), the player rig, cars, muzzle flash and gun effects, debris, shadows, boss models |
 | `src/game/art/robots/` | Robot enemy models: classic kinds, new kinds, specials, bosses |
 | `src/game/access/` | Elevators, stairs, ladders and rooftops, shared by every big map (4 floors or fewer get stairs, 5 or more get an elevator) |
+| `src/game/scenes/` | Lazy per-map scene bundles: one `React.lazy` wrapper per big map so its meshes/textures download only when picked |
 | `src/game/structures/` | Physical rooms and stacked floors (the plan that rendering, feet, cameras and shots all read), facades and openings |
 | `src/game/events/` | Mid-match map events: the Vice blackout, the Whiteout avalanche, and hooks for the Gulch train robbery and the Pier wave surge |
 | `src/game/life/` | Ambient life: marine animals on the Pier, skiers and wildlife on Whiteout |

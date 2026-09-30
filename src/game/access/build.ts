@@ -22,6 +22,7 @@ import {
   type AccessBuilding,
 } from "./layout";
 import { IGeo, IDENTITY, type BakeLight } from "./geo";
+import { drain, runSliced } from "../slice";
 import { SIGN, signUV } from "./textures";
 import type { LRect } from "./types";
 
@@ -1282,7 +1283,9 @@ function edgeRail(E: IGeo, b: AccessBuilding) {
 
 // ------------------------------------------------------------------ everything
 
-export function buildAccess(list: AccessBuilding[]): BuiltAccess {
+function* buildAccessGen(
+  list: AccessBuilding[],
+): Generator<void, BuiltAccess, void> {
   const E = new IGeo();
   const GL = new IGeo();
   const SG = new IGeo();
@@ -1290,6 +1293,7 @@ export function buildAccess(list: AccessBuilding[]): BuiltAccess {
   const beacons: [number, number, number][] = [];
   const per: BuiltBuilding[] = [];
   for (const b of list) {
+    yield;
     const displays: DisplaySpot[] = [];
     const low = set4();
     let high: Interior | null = null;
@@ -1332,6 +1336,18 @@ export function buildAccess(list: AccessBuilding[]): BuiltAccess {
     });
   }
   return { ext: E.build(), glow: GL.build(), sign: SG.build(), pools: PL.build(), beacons, per };
+}
+
+// built per installed access list (the world rebuild swaps the list), so cache on it
+const builtAccess = new WeakMap<AccessBuilding[], BuiltAccess>();
+export function builtAccessFor(list: AccessBuilding[]): BuiltAccess {
+  let b = builtAccess.get(list);
+  if (!b) builtAccess.set(list, (b = drain(buildAccessGen(list))));
+  return b;
+}
+/** the world build bakes interiors across tasks; the scene mount is then a cache hit */
+export async function prepareAccess(list: AccessBuilding[]): Promise<void> {
+  if (!builtAccess.has(list)) builtAccess.set(list, await runSliced(buildAccessGen(list)));
 }
 
 export { CAR_W, CAR_D };

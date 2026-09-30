@@ -38,7 +38,7 @@ export function LoadingVeil({
       <style>{`@keyframes veil-sheen { from { transform: translateX(-110%) } to { transform: translateX(320%) } }`}</style>
       <div className="absolute inset-x-0 bottom-0 flex justify-center pb-6">
         <div className="w-[min(22rem,72vw)]">
-          <div className="flex items-baseline justify-between text-[9px] font-bold tracking-[0.3em]">
+          <div className="flex items-baseline justify-between text-[11px] font-bold tracking-[0.3em]">
             <span className="text-[#f3e6cf]/60">ENTERING</span>
             <span className="text-[#e7b25c]">{mapName.toUpperCase()}</span>
           </div>

@@ -4,7 +4,7 @@ import { roadNet } from "./riderSim";
 
 /** A graded valley floor. Roads, railway, structures and rock shelves share level pads;
  * the land between them rises into walkable foothills, not invisible collision walls. */
-export function valleyEarth(
+export function* valleyEarth(
   half: number,
   buildings: WBld[],
   props: WProp[],
@@ -12,7 +12,7 @@ export function valleyEarth(
   cells: number,
   river: (x: number) => number,
   decks: readonly { x0: number; z0: number; x1: number; z1: number; y: number; axis: "x" | "z" }[] = [],
-): Terrain {
+): Generator<void, Terrain, void> {
   const cell = 4,
     n = Math.round((half * 2) / cell),
     h = new Float32Array((n + 1) ** 2);
@@ -87,7 +87,7 @@ export function valleyEarth(
   // Continuous distance to rock: no finite search radius that suddenly releases a pad.
   const side = n + 1,
     rockDistance = new Float32Array(side * side).fill(half * 4);
-  for (let i = 0; i <= n; i++)
+  for (let i = 0; i <= n; i++) {
     for (let j = 0; j <= n; j++) {
       const ix = i * 2,
         iz = j * 2;
@@ -99,8 +99,10 @@ export function valleyEarth(
             rockDistance[i * side + j] = 0;
         }
     }
+    yield;
+  }
   for (const direction of [1, -1]) {
-    for (let ii = 0; ii <= n; ii++)
+    for (let ii = 0; ii <= n; ii++) {
       for (let jj = 0; jj <= n; jj++) {
         const i = direction === 1 ? ii : n - ii,
           j = direction === 1 ? jj : n - jj,
@@ -120,8 +122,10 @@ export function valleyEarth(
             );
         }
       }
+      yield;
+    }
   }
-  for (let i = 0; i <= n; i++)
+  for (let i = 0; i <= n; i++) {
     for (let j = 0; j <= n; j++) {
       const x = -half + i * cell,
         z = -half + j * cell;
@@ -159,6 +163,8 @@ export function valleyEarth(
       // Maximum rise .42 m per metre from each pad; all entrances remain at grade.
       h[i * (n + 1) + j] = Math.max(0, Math.min(raw, Math.max(0, d - 2) * 0.42));
     }
+    yield;
+  }
   // The bridge abutments are real dirt: the same ramps the collision heightfield carries,
   // written into the visible earth so the rendered bank, the walkable slope and
   // baseHeight (the step check) never disagree about where the approach climbs.
@@ -188,7 +194,8 @@ export function valleyEarth(
     };
     const lo = dk.axis === "z" ? [dk.x0 - FLANK, dk.z0 - RAMP] : [dk.x0 - RAMP, dk.z0 - FLANK];
     const hi = dk.axis === "z" ? [dk.x1 + FLANK, dk.z1 + RAMP] : [dk.x1 + RAMP, dk.z1 + FLANK];
-    for (let i = 0; i <= n; i++)
+    for (let i = 0; i <= n; i++) {
+      if (i % 16 === 0) yield;
       for (let j = 0; j <= n; j++) {
         const x = -half + i * cell,
           z = -half + j * cell;
@@ -196,6 +203,7 @@ export function valleyEarth(
         const r = ramp(x, z);
         if (r > h[i * (n + 1) + j]!) h[i * (n + 1) + j] = r;
       }
+    }
   }
   return { half, cell, n, h, triangular: true };
 }

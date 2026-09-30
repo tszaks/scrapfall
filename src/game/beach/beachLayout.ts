@@ -382,12 +382,12 @@ function mulberry(seed: number) {
  * Build Pacific Pier. `cells` x `cells` 2 m cells centred on the origin (`half` metres to each
  * edge). `solo` seals the 70% playable square with blockades; the map itself is identical.
  */
-export function generateBeach(
+export function* generateBeach(
   rand: () => number,
   cells: number,
   half: number,
   solo: boolean,
-): { layout: BeachLayout; blocks: Block[] } {
+): Generator<void, { layout: BeachLayout; blocks: Block[] }, void> {
   const n = cells;
   const N = n * n;
   const kind = new Uint8Array(N).fill(K_SAND);
@@ -491,6 +491,7 @@ export function generateBeach(
       kind[c] = k;
       if (x < X.surf) deep[c] = 1;
     }
+    yield;
   }
   // parking lanes along PCH
   paint(rect(X.road0, -half, X.road0 + 2, half), K_PARKLANE);
@@ -747,6 +748,7 @@ export function generateBeach(
     hotel: [9],
   };
   for (const s of strips) {
+    yield;
     if (keepOpen(s.a, s.b)) continue;
     const signs = SIGNS[s.t as BType] ?? [-1];
     const sign = signs[Math.floor(r() * signs.length)]!;
@@ -1259,9 +1261,13 @@ export function generateBeach(
 
   // ---- 11. railings: wherever a raised region drops more than a step to an open neighbour ----
   const hC = new Float32Array(N);
-  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) hC[i * n + j] = heightAt(cx(i), cx(j));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) hC[i * n + j] = heightAt(cx(i), cx(j));
+    yield;
+  }
   const rail: number[] = [];
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const c = i * n + j;
       if (solid[c] || deep[c] || regionOf[c]! < 0) continue;
@@ -1280,6 +1286,7 @@ export function generateBeach(
           }
         }
     }
+  }
   for (const c of rail) {
     solid[c] = 1;
     pBot[c] = hC[c]!;
@@ -1369,7 +1376,8 @@ export function generateBeach(
   {
     const m = n >> 1;
     const navOpen = new Uint8Array(m * m);
-    for (let a = 0; a < m; a++)
+    for (let a = 0; a < m; a++) {
+      yield;
       for (let b = 0; b < m; b++) {
         const i = a * 2;
         const j = b * 2;
@@ -1381,6 +1389,7 @@ export function generateBeach(
             ? 1
             : 0;
       }
+    }
     const seen = new Uint8Array(m * m);
     const s0 = (ci(spawn.x) >> 1) * m + (ci(spawn.z) >> 1);
     const q = [s0];
@@ -1411,7 +1420,8 @@ export function generateBeach(
     }
   }
   const blocks: Block[] = [];
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const c = i * n + j;
       if (!reach[c]) {
@@ -1426,6 +1436,7 @@ export function generateBeach(
         solid[c] = 1;
       }
     }
+  }
 
   const layout: BeachLayout = {
     cells: n,
