@@ -370,6 +370,7 @@ import {
 } from "./perks";
 import { CLASSES, type ClassId } from "./classes";
 import { QualityGovernor } from "./QualityGovernor";
+import { PostFx } from "./PostFx";
 import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
 import { antialiasAtLoad, liveDpr } from "./quality";
@@ -7874,6 +7875,7 @@ export function Game() {
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}
       >
         <QualityGovernor />
+        <PostFx />
         <StableWorld
           blocks={blocks}
           enemies={enemies}
