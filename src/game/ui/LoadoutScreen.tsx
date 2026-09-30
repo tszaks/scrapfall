@@ -120,7 +120,9 @@ export function LoadoutScreen({
   const compact = short || touchUi;
   const maps = THEMES.flatMap((t, i) => (offered(t) || mapChoice === i ? [i] : []));
   const guest = multiplayer && !isHost;
-  const pad = compact ? "p-3" : "p-4 sm:p-5";
+  // compact drops the panel's bottom padding: the sticky footer sits flush against the
+  // border so scrolled content can't peek through the padding strip
+  const pad = compact ? "p-3 pb-0" : "p-4 sm:p-5";
 
   return (
     <Scrim
@@ -128,7 +130,7 @@ export function LoadoutScreen({
       className="ui-root flex touch-auto items-start justify-center overflow-y-auto overscroll-contain p-3 sm:p-6"
     >
       <Panel
-        className={`ui-rise my-auto max-h-[96dvh] w-full max-w-3xl overflow-y-auto ui-scroll ${pad} [@media(max-height:760px)]:p-3`}
+        className={`ui-rise my-auto max-h-[96dvh] w-full max-w-3xl overflow-y-auto ui-scroll ${pad} [@media(max-height:760px)]:p-3 ${compact ? "[@media(max-height:760px)]:pb-0" : ""}`}
       >
         {/* header */}
         <div className="flex items-start justify-between gap-3">
@@ -316,7 +318,7 @@ export function LoadoutScreen({
         {/* footer — sticky on small screens so the primary action is always visible */}
         <div
           className={`mt-4 flex items-center gap-2 border-t-2 border-[#2b2118]/20 pt-3.5 [@media(max-height:760px)]:mt-2.5 [@media(max-height:760px)]:pt-2.5 ${
-            compact ? "sticky bottom-0 -mx-3 -mb-3 bg-[#f3e6cf] px-3 pb-3" : ""
+            compact ? "sticky bottom-0 -mx-3 rounded-b-[9px] bg-[#f3e6cf] px-3 pb-3" : ""
           }`}
         >
           {guest ? (
