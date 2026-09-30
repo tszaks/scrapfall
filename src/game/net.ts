@@ -195,6 +195,6 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     broadcast: (m) => { if (conn.open) conn.send({ ...m, from: self }); },
     sendTo: (_id, m) => { if (conn.open) conn.send({ ...m, from: self }); },
     peers: () => ["host"],
-    close: () => { conn.close(); peer.destroy(); },
+    close: () => { closed = true; clearInterval(beat); conn.close(); peer.destroy(); },
   };
 }
