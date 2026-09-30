@@ -247,8 +247,9 @@ export async function buildWorld(
     const w = await import("./western/mesh");
     await w.prepareWesternMeshes(level.western);
     await (await import("./western/Western")).prepareWesternExtras(level.western);
+    const wm = w.westernMeshes(level.western);
     await prepareStaticSurfaces(
-      w.westernMeshes(level.western).chunks.flatMap((c) => [c.main, c.detail]),
+      wm.chunks.flatMap((c) => [c.main]).concat(wm.details.map((d) => d.geometry)),
     );
   } else if (isB) {
     const m = await import("./beach/beachMesh");
