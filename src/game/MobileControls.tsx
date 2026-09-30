@@ -132,25 +132,23 @@ export function MobileControls({
         />
       </div>
 
-      {/* jump sits on the left, away from the aim side */}
-      <div className="absolute" style={{ left: "max(1.25rem, env(safe-area-inset-left))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
-        <Btn
-          label="JUMP"
-          size={60}
-          onDown={() => (touchInput.jump = true)}
-          onUp={() => (touchInput.jump = false)}
-        />
-      </div>
-
-      {/* right side: look drag + run, ability, fire */}
+      {/* right side: look drag + jump, run, ability, fire */}
       <div className="absolute flex items-end gap-4" style={{ right: "max(1.25rem, env(safe-area-inset-right))", bottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
-        <Btn
-          label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
-          sub="ABILITY"
-          size={66}
-          dim={abilityLeft > 0}
-          onTap={() => (touchInput.ability = true)}
-        />
+        <div className="flex flex-col items-center gap-3">
+          <Btn
+            label="JUMP"
+            size={60}
+            onDown={() => (touchInput.jump = true)}
+            onUp={() => (touchInput.jump = false)}
+          />
+          <Btn
+            label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
+            sub="ABILITY"
+            size={66}
+            dim={abilityLeft > 0}
+            onTap={() => (touchInput.ability = true)}
+          />
+        </div>
         <Btn
           label="RUN"
           size={60}
@@ -164,6 +162,7 @@ export function MobileControls({
           onUp={() => (touchInput.fire = false)}
         />
       </div>
+
 
     </div>
   );
