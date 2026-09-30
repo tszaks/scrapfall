@@ -11,6 +11,7 @@ export function valleyEarth(
   rock: Float32Array,
   cells: number,
   river: (x: number) => number,
+  decks: readonly { x0: number; z0: number; x1: number; z1: number; y: number; axis: "x" | "z" }[] = [],
 ): Terrain {
   const cell = 4,
     n = Math.round((half * 2) / cell),
@@ -140,16 +141,61 @@ export function valleyEarth(
       d = Math.min(d, rockDistance[i * side + j]!);
       const hill = (cx: number, cz: number, r: number, y: number) =>
         y * Math.exp(-((x - cx) ** 2 + (z - cz) ** 2) / (r * r));
+      // the fringe dune field stays low: hills roll down to the river flats instead of
+      // throwing a shoulder a player can never climb onto, and the west mesa's east
+      // tail dies out before the south camp (a sheer-sided dune traps the camera in it)
+      const mesaT = Math.min(1, Math.max(0, (-150 - x) / 50)),
+        mesaFade = mesaT * mesaT * (3 - 2 * mesaT);
+      const southT = Math.min(1, Math.max(0, (z - 168) / 26)),
+        southFade = southT * southT * (3 - 2 * southT);
       const raw =
         hill(-175, -105, 85, 18) +
         hill(68, -118, 68, 16) +
-        hill(-98, 113, 62, 12) +
-        hill(66, 122, 64, 10) +
-        hill(-210, 182, 100, 17) +
+        hill(-98, 113, 62, 12) * (1 - southFade) +
+        hill(66, 122, 64, 10) * (1 - southFade) +
+        hill(-210, 182, 100, 17) * mesaFade +
         hill(236, -76, 80, 20) +
         hill(230, 200, 72, 13);
       // Maximum rise .42 m per metre from each pad; all entrances remain at grade.
       h[i * (n + 1) + j] = Math.max(0, Math.min(raw, Math.max(0, d - 2) * 0.42));
     }
+  // The bridge abutments are real dirt: the same ramps the collision heightfield carries,
+  // written into the visible earth so the rendered bank, the walkable slope and
+  // baseHeight (the step check) never disagree about where the approach climbs.
+  const RAMP = 8,
+    FLANK = 4;
+  for (const dk of decks) {
+    const ramp = (x: number, z: number) => {
+      const along =
+        dk.axis === "z"
+          ? z < dk.z0
+            ? dk.z0 - z
+            : z > dk.z1
+              ? z - dk.z1
+              : 0
+          : x < dk.x0
+            ? dk.x0 - x
+            : x > dk.x1
+              ? x - dk.x1
+              : 0;
+      if (along > RAMP) return 0;
+      const across =
+        dk.axis === "z"
+          ? Math.max(0, dk.x0 - x, x - dk.x1)
+          : Math.max(0, dk.z0 - z, z - dk.z1);
+      if (across > FLANK) return 0;
+      return dk.y * (1 - along / RAMP) * (1 - across / FLANK);
+    };
+    const lo = dk.axis === "z" ? [dk.x0 - FLANK, dk.z0 - RAMP] : [dk.x0 - RAMP, dk.z0 - FLANK];
+    const hi = dk.axis === "z" ? [dk.x1 + FLANK, dk.z1 + RAMP] : [dk.x1 + RAMP, dk.z1 + FLANK];
+    for (let i = 0; i <= n; i++)
+      for (let j = 0; j <= n; j++) {
+        const x = -half + i * cell,
+          z = -half + j * cell;
+        if (x < lo[0]! || x > hi[0]! || z < lo[1]! || z > hi[1]!) continue;
+        const r = ramp(x, z);
+        if (r > h[i * (n + 1) + j]!) h[i * (n + 1) + j] = r;
+      }
+  }
   return { half, cell, n, h, triangular: true };
 }
