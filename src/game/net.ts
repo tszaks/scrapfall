@@ -151,9 +151,15 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     peer.on("error", (e) => { clearTimeout(t); reject(e); });
   });
 
-  // the host answers a fourth guest with "full" right after the link opens
+  // the host answers a fourth guest with "full" right after the link opens;
+  // anything else that arrives in that moment is kept and handed over below
   let full = false;
-  const early = (raw: unknown) => { if ((raw as NetMsg)?.type === "full") full = true; };
+  const backlog: NetMsg[] = [];
+  const early = (raw: unknown) => {
+    const t = (raw as NetMsg)?.type;
+    if (t === "full") full = true;
+    else if (t !== "hb") backlog.push(raw as NetMsg);
+  };
   conn.on("data", early);
   await new Promise<void>((r) => setTimeout(r, 700));
   conn.off("data", early);
@@ -162,6 +168,7 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     peer.destroy();
     throw new Error("That arena is already full");
   }
+
 
   // the host chatters constantly; a long silence means the room is gone
   const openedAt = Date.now();
