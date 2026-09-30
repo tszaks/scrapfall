@@ -204,6 +204,106 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
       );
       assert.ok(!pole, `seed ${seed}: post at ${pole?.x},${pole?.z} blocks a bridge lane`);
     }
+    // the strip between two buildings' facing backs is a shared alley lane: clutter
+    // may hug a wall but must never pile up enough to seal it mid-block (seed 7's
+    // store alley walled shut with crates)
+    const strips = [];
+    for (const a of layout.buildings) {
+      if (a.front === 2)
+        for (const b of layout.buildings) {
+          if (b.front !== 0) continue;
+          const gap = a.z0 - b.z1;
+          // a gap under ~3 m is a dead crevice, not a lane — junk may fill it
+          if (gap < 3 || gap > 8) continue;
+          const x0 = Math.max(a.x0, b.x0),
+            x1 = Math.min(a.x1, b.x1);
+          if (x1 - x0 < 3) continue;
+          strips.push({ x0: x0 + 0.15, z0: b.z1 + 0.1, x1: x1 - 0.15, z1: a.z0 - 0.1, ax: "z" });
+        }
+      if (a.front === 3)
+        for (const b of layout.buildings) {
+          if (b.front !== 1) continue;
+          const gap = b.x0 - a.x1;
+          if (gap < 3 || gap > 8) continue;
+          const z0 = Math.max(a.z0, b.z0),
+            z1 = Math.min(a.z1, b.z1);
+          if (z1 - z0 < 3) continue;
+          strips.push({ x0: a.x1 + 0.1, z0: z0 + 0.15, x1: b.x0 - 0.1, z1: z1 - 0.15, ax: "x" });
+        }
+    }
+    // a lane may slalom around wall-hugging junk — the invariant is connectivity: an
+    // open end must reach the other open end on ~0.3 m cells (player radius 0.45).
+    // Overhead wire (clotheslines) and lanterns don't block walking.
+    for (const s of strips) {
+      const nb = layout.buildings.filter(
+        (b) => b.x1 > s.x0 - 1 && b.x0 < s.x1 + 1 && b.z1 > s.z0 - 1 && b.z0 < s.z1 + 1,
+      );
+      const np = layout.props.filter(
+        (p) =>
+          p.k !== "clothesline" &&
+          p.k !== "lantern" &&
+          p.x > s.x0 - 2 && p.x < s.x1 + 2 && p.z > s.z0 - 2 && p.z < s.z1 + 2,
+      );
+      const ns = layout.posts.filter(
+        (p) => p.r > 0.12 && p.x > s.x0 - 2 && p.x < s.x1 + 2 && p.z > s.z0 - 2 && p.z < s.z1 + 2,
+      );
+      const cellFree = (x, z) => {
+        for (const b of nb)
+          if (x > b.x0 - 0.2 && x < b.x1 + 0.2 && z > b.z0 - 0.2 && z < b.z1 + 0.2)
+            return false;
+        for (const p of np) if (Math.hypot(p.x - x, p.z - z) < 0.75) return false;
+        for (const p of ns) if (Math.hypot(p.x - x, p.z - z) < p.r + 0.35) return false;
+        return true;
+      };
+      const step = 0.3,
+        nx = Math.floor((s.x1 - s.x0) / step),
+        nz = Math.floor((s.z1 - s.z0) / step);
+      if (nx < 2 || nz < 2) continue;
+      const blocked = (ix, iz) =>
+        !cellFree(s.x0 + (ix + 0.5) * step, s.z0 + (iz + 0.5) * step);
+      const grid = Array.from({ length: nx }, (_, ix) =>
+        Array.from({ length: nz }, (_, iz) => blocked(ix, iz)),
+      );
+      let built = 0;
+      for (const col of grid) for (const c of col) if (c) built++;
+      if (built / (nx * nz) > 0.4) continue; // an intruding wall crosses it — not a lane
+      // lane runs along x for z-gap pairs, along z for x-gap pairs
+      const ends =
+        s.ax === "z"
+          ? [
+              grid[0].map((c, iz) => (c ? -1 : iz)).filter((i) => i >= 0),
+              grid[nx - 1].map((c, iz) => (c ? -1 : iz)).filter((i) => i >= 0),
+            ]
+          : [
+              grid.map((c, ix) => (c[0] ? -1 : ix)).filter((i) => i >= 0),
+              grid.map((c, ix) => (c[nz - 1] ? -1 : ix)).filter((i) => i >= 0),
+            ];
+      if (!ends[0].length || !ends[1].length) continue; // blind seam, no through-lane
+      const seen = new Set(),
+        queue = [];
+      for (const e of ends[0])
+        queue.push(s.ax === "z" ? [0, e] : [e, 0]);
+      let through = false;
+      while (queue.length) {
+        const [ix, iz] = queue.pop();
+        const key = ix * 4096 + iz;
+        if (seen.has(key) || ix < 0 || iz < 0 || ix >= nx || iz >= nz || grid[ix][iz])
+          continue;
+        seen.add(key);
+        if (
+          (s.ax === "z" && ix === nx - 1 && ends[1].includes(iz)) ||
+          (s.ax === "x" && iz === nz - 1 && ends[1].includes(ix))
+        ) {
+          through = true;
+          break;
+        }
+        queue.push([ix + 1, iz], [ix - 1, iz], [ix, iz + 1], [ix, iz - 1]);
+      }
+      assert.ok(
+        through,
+        `seed ${seed}: back lane sealed at ${s.x0.toFixed(1)},${s.z0.toFixed(1)}`,
+      );
+    }
   }
 });
 

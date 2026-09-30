@@ -16,7 +16,7 @@ function beam(m: Model, a: V3, b: V3, w: number, d: number, c: string, s: Surf) 
   });
 }
 /** Separate instanced parts preserve the existing gait, driver seats and network poses. */
-export function horseArt() {
+export function horseArt(lod: 0 | 1 = 0) {
   const body = new Model();
   // Smooth overlapping muscle volumes retain the saddle height and grounded hoof datum.
   body.sphere(1, [0, 1.34, -0.06], "#ffffff", COAT, { s: [0.32, 0.34, 0.73] });
@@ -104,7 +104,7 @@ export function horseArt() {
     muscle(ankle, [0, -0.97, 0.05], 0.036, 0.048);
     m.sphere(1, [0, -0.993, 0.067], "#393128", LEATHER, { s: [0.07, 0.057, 0.093] });
     m.box(0.13, 0.014, 0.17, [0, -1.048, 0.063], "#6b655c", IRON, { bevel: 0.007 });
-    return m.build();
+    return m.build({ lod });
   };
   const legs = new Model();
   for (const s of [-1, 1]) {
@@ -139,11 +139,11 @@ export function horseArt() {
   hat.cyl(0.155, 0.039, [0, 2.74, 0.01], "#4c3628", LEATHER, { seg: 12 });
   hat.box(0.1, 0.017, 0.2, [0, 2.891, 0.01], "#d5c5ad", CLOTH, { bevel: 0.008 });
   return {
-    body: body.build(),
+    body: body.build({ lod }),
     leg: limb(false),
     hind: limb(true),
-    legs: legs.build(),
-    torso: torso.build(),
-    hat: hat.build(),
+    legs: legs.build({ lod }),
+    torso: torso.build({ lod }),
+    hat: hat.build({ lod }),
   };
 }

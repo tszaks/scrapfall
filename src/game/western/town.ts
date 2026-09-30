@@ -27,7 +27,14 @@ export type Rect = { x0: number; x1: number; z0: number; z1: number };
 export type Kit = {
   rand: () => number;
   bld: (b: Omit<WBld, "seed" | "tone"> & { tone?: number }) => WBld;
-  prop: (k: WPropKind, x: number, z: number, rot?: number, s?: number, a?: number) => void;
+  prop: (
+    k: WPropKind,
+    x: number,
+    z: number,
+    rot?: number,
+    s?: number,
+    a?: number,
+  ) => WProp | undefined;
   solidProp: (
     k: WPropKind,
     x: number,
@@ -222,11 +229,17 @@ export function townRow(
       if (!p.walkIn && p.t !== "saloon" && p.t !== "stable" && p.w >= 10 && rand() < 0.5) {
         const lw = Math.min(p.w - 2, 4 + Math.round(rand() * 4));
         const lat = 0.2 + rand() * 0.6;
-        made.lean = lw;
-        made.leanAt = lat;
         const cxw = made.x0 + (made.x1 - made.x0) * lat;
-        if (north) markSolid(cxw - lw / 2, made.z0 - LEAN_D, cxw + lw / 2, made.z0, 3);
-        else markSolid(cxw - lw / 2, made.z1, cxw + lw / 2, made.z1 + LEAN_D, 3);
+        // a lean-to leaning into a back lane eats the lane — skip it where the gap
+        // behind is a registered strip
+        const lr = north
+          ? { x0: cxw - lw / 2, z0: made.z0 - LEAN_D, x1: cxw + lw / 2, z1: made.z0 }
+          : { x0: cxw - lw / 2, z0: made.z1, x1: cxw + lw / 2, z1: made.z1 + LEAN_D };
+        if (!K.noClutter.some((r) => K.overlaps(lr, r))) {
+          made.lean = lw;
+          made.leanAt = lat;
+          markSolid(lr.x0, lr.z0, lr.x1, lr.z1, 3);
+        }
       }
     }
     const deck = p.t === "saloon" ? DECK_Y : 0.2 + Math.round(rand() * 5) * 0.05;
@@ -367,18 +380,11 @@ export function townRow(
     if (clutter && rand() < 0.3) place("sacks", 1.2, x + 1 + rand() * (p.w - 2), rand() * 6.28);
     if (porch > 0)
       prop("lantern", x + p.w / 2, north ? zf + BOARD_D - 0.2 : zf - BOARD_D + 0.2, 0, 1, 2.9);
-    const backOff = buildings[buildings.length - 1]!.lean ? 4.4 : 3;
-    const back = north ? bz0 - backOff : bz1 + backOff;
+    // back-lot junk hugs the wall: two facing rows share the lane behind them, and junk
+    // thrown metres off the wall is what seals the alley mid-block
+    const back = north ? bz0 - 1.3 : bz1 + 1.3;
     if (rand() < 0.35)
-      solidProp(
-        "outhouse",
-        x + 2 + rand() * (p.w - 4),
-        back - (north ? 4 : -4),
-        0,
-        1.6,
-        1.6,
-        2.4,
-      );
+      solidProp("outhouse", x + 2 + rand() * (p.w - 4), back, 0, 1.6, 1.6, 2.4);
     else if (rand() < 0.4) prop("woodpile", x + p.w / 2, back, rand() * 0.3, 1);
     else if (rand() < 0.3) prop("barrels", x + p.w / 2, back, rand(), 1);
     {
@@ -387,15 +393,18 @@ export function townRow(
       prop("barrel", bxw, wz, rand() * 6.28, 1);
       if (p.t === "store" && rand() < 0.6) {
         const cxw = x + p.w * (0.35 + rand() * 0.3);
-        const czw = north
-          ? bz0 - (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1)
-          : bz1 + (buildings[buildings.length - 1]!.lean ? 3.6 : 1.1);
+        const czw = north ? bz0 - 1.0 : bz1 + 1.0;
         prop(rand() < 0.5 ? "crates" : "crate", cxw, czw, rand() * 0.6, 0.9);
       }
     }
     // the gap junk: but not where it would wall off the saloon's alley stair —
     // the strip stands in the gap before a north-front saloon, after a south one
     const stairGap = north ? order[oi + 1]?.t === "saloon" : p.t === "saloon";
+    // an enterable gap is a mouth into the lane that runs behind the row: hold its
+    // back stretch open (the lane wanders a couple metres where neighbouring lots
+    // differ in depth), or a stray cart or woodpile seals the alley at the mouth
+    if (gap > 1.2)
+      K.noClutter.push({ x0: x + p.w - 0.4, z0: back - 6, x1: x + p.w + gap + 0.4, z1: back + 6 });
     if (gap > 0 && !stairGap) {
       const ax0 = x + p.w;
       const ax1 = ax0 + gap;
@@ -634,8 +643,8 @@ function chinatown(K: Kit) {
         if (rand() < 0.8) {
           const clx = x + w / 2;
           const clz = zFar + side * (2.5 + rand() * 2);
-          prop("clothesline", clx, clz, Math.PI / 2, 1, Math.floor(rand() * 4));
-          for (const e of [-2.4, 2.4]) K.posts.push({ x: clx, z: clz + e, r: 0.1 });
+          if (prop("clothesline", clx, clz, Math.PI / 2, 1, Math.floor(rand() * 4)))
+            for (const e of [-2.4, 2.4]) K.posts.push({ x: clx, z: clz + e, r: 0.1 });
         }
       }
       x += w + (rand() < 0.5 ? 1.5 : 0.4);

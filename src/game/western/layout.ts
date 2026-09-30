@@ -844,6 +844,29 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     // (a walk-in building's walls are thin posts, laid once its floor height is known)
     if (!b.walkIn) markSolid(b.x0, b.z0, b.x1, b.z1, b.storeys * STOREY + 2);
     setGround(b.x0, b.z0, b.x1, b.z1, WK.LOT);
+    // two facing backs a narrow gap apart share a back lane — register the gap the moment
+    // the second wall exists so every later emitter (yard junk, scatter, another row's
+    // dressing) keeps the lane's middle open
+    const want = [2, 3, 0, 1][b.front];
+    for (const o of buildings) {
+      if (o === full || o.front !== want) continue;
+      if (b.front === 0 || b.front === 2) {
+        const [g0, g1] = b.front === 2 ? [o.z1, b.z0] : [b.z1, o.z0];
+        // under ~3 m it's a dead crevice that fills with junk, not a lane
+        if (g1 - g0 < 3 || g1 - g0 > 8) continue;
+        const x0 = Math.max(b.x0, o.x0),
+          x1 = Math.min(b.x1, o.x1);
+        if (x1 - x0 < 3) continue;
+        noClutter.push({ x0: x0 + 0.15, z0: g0 + 0.1, x1: x1 - 0.15, z1: g1 - 0.1 });
+      } else {
+        const [g0, g1] = b.front === 1 ? [o.x1, b.x0] : [b.x1, o.x0];
+        if (g1 - g0 < 3 || g1 - g0 > 8) continue;
+        const z0 = Math.max(b.z0, o.z0),
+          z1 = Math.min(b.z1, o.z1);
+        if (z1 - z0 < 3) continue;
+        noClutter.push({ x0: g0 + 0.1, z0: z0 + 0.15, x1: g1 - 0.1, z1: z1 - 0.15 });
+      }
+    }
     // an adobe's ramada: its two pole posts are thin collision
     if (b.porch > 0 && b.t === "adobe") {
       const W = b.front === 0 || b.front === 2 ? b.x1 - b.x0 : b.z1 - b.z0;
@@ -990,7 +1013,11 @@ export function generateWestern(rand: () => number, cells: number, half: number)
                 : q.z0 < b.z0 + 0.15 || q.z1 > b.z1 - 0.15
             )
               continue;
-            if (lanes.some((l) => overlaps(q, l)) || buildings.some((b) => overlaps(q, b, 0.1)))
+            if (
+              lanes.some((l) => overlaps(q, l)) ||
+              noClutter.some((r) => overlaps(q, r)) ||
+              buildings.some((b) => overlaps(q, b, 0.1))
+            )
               continue;
             if (
               props.some((p) => {
@@ -1082,21 +1109,24 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     ];
     const rot = Math.atan2(-oz, ox);
     const side = rand() < 0.5 ? 1 : -1;
-    const [ohx, ohz] = at2(side * (w / 2 - 0.4), 6.5 + rand() * 1.5);
+    // yard junk hugs the wall: whatever lies behind may be the far side of a back lane,
+    // and an outhouse thrown deep into it is what seals the lane mid-block
+    const [ohx, ohz] = at2(side * (w / 2 - 0.4), 1.0 + rand() * 0.15);
     solidProp("outhouse", ohx, ohz, rot + Math.PI / 2, 1.6, 1.6, 2.4);
-    const [wpx, wpz] = at2(-side * (w / 2 + 0.9), 1.2 + rand() * 2);
+    const [wpx, wpz] = at2(-side * (w / 2 + 0.9), 0.8 + rand() * 0.3);
     prop("woodpile", wpx, wpz, rot + Math.PI / 2, 0.9 + rand() * 0.3);
     if (rand() < 0.7) {
-      const [clx, clz] = at2(-side * 1, 4 + rand() * 1.5);
-      prop("clothesline", clx, clz, rot + Math.PI / 2, 1, Math.floor(rand() * 4));
-      const cr = Math.atan2(-pz, px);
-      for (const e of [-2.4, 2.4])
-        posts.push({ x: clx + Math.cos(cr) * e, z: clz - Math.sin(cr) * e, r: 0.1 });
+      const [clx, clz] = at2(-side * 1, 1.1 + rand() * 0.15);
+      if (prop("clothesline", clx, clz, rot + Math.PI / 2, 1, Math.floor(rand() * 4))) {
+        const cr = Math.atan2(-pz, px);
+        for (const e of [-2.4, 2.4])
+          posts.push({ x: clx + Math.cos(cr) * e, z: clz - Math.sin(cr) * e, r: 0.1 });
+      }
     }
     const [rbx, rbz] = at2(side * (w / 2 - 0.5), 0.6);
     prop("barrel", rbx, rbz, rand() * 6.28, 1);
     if (rand() < 0.55) {
-      const [gx, gz] = at2(-side * (w / 2 - 2), 7 + rand() * 2);
+      const [gx, gz] = at2(-side * (w / 2 - 2), 1.0 + rand() * 0.2);
       prop("garden", gx, gz, rot + Math.PI / 2, 1);
     }
   };
