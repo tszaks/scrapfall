@@ -89,7 +89,9 @@ export function ShopBar({
         </div>
         <div
           className={`mt-1.5 flex items-stretch gap-1.5 ${
-            touchUi ? "ui-scroll justify-start overflow-x-auto overscroll-contain" : "flex-wrap justify-center"
+            touchUi
+              ? "ui-scroll pointer-events-auto justify-start overflow-x-auto overscroll-contain"
+              : "flex-wrap justify-center"
           }`}
         >
           {!multiplayer && (
@@ -136,7 +138,7 @@ export function ShopBar({
       <div
         className={`mt-2 flex gap-2 px-3 sm:gap-3 ${
           touchUi
-            ? "ui-scroll justify-start overflow-x-auto overscroll-contain pb-1"
+            ? "ui-scroll pointer-events-auto justify-start overflow-x-auto overscroll-contain pb-1"
             : "flex-wrap justify-center"
         }`}
       >
