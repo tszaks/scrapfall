@@ -1,0 +1,238 @@
+{
+  "tag": "current-chromium-4-confirm",
+  "engine": "chromium",
+  "rate": 4,
+  "dsf": 1,
+  "weather": "sunset",
+  "sampleMs": 6000,
+  "quality": "high",
+  "base": "4e5da66",
+  "cases": [
+    {
+      "map": "pacific",
+      "variant": "baseline",
+      "repeat": 0,
+      "frames": 596,
+      "fps": 99.5673165271722,
+      "p50": 9.600000000000364,
+      "p95": 15.600000000000364,
+      "p99": 24.100000000000364,
+      "over25": 5,
+      "over50": 0,
+      "max": 32.5,
+      "rafCpuMsPerFrame": 9.015100669590819,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 909436,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5367/game/assets/routes-Cro2rFLx.js"
+      ],
+      "errors": []
+    },
+    {
+      "map": "pacific",
+      "variant": "candidate",
+      "repeat": 0,
+      "frames": 276,
+      "fps": 46.11605874784877,
+      "p50": 19.200000000000728,
+      "p95": 48.79999999999927,
+      "p99": 53.600000000000364,
+      "over25": 99,
+      "over50": 11,
+      "max": 80.20000000000073,
+      "rafCpuMsPerFrame": 19.731159419145275,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 923362,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5347/game/assets/routes-DuC1F7LO.js"
+      ],
+      "errors": []
+    },
+    {
+      "map": "pacific",
+      "variant": "candidate",
+      "repeat": 1,
+      "frames": 402,
+      "fps": 66.99776674110865,
+      "p50": 13.200000000000728,
+      "p95": 33.600000000000364,
+      "p99": 43.80000000000291,
+      "over25": 47,
+      "over50": 0,
+      "max": 47.5,
+      "rafCpuMsPerFrame": 13.510945272979452,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 923362,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5347/game/assets/routes-DuC1F7LO.js"
+      ],
+      "errors": []
+    },
+    {
+      "map": "pacific",
+      "variant": "baseline",
+      "repeat": 1,
+      "frames": 751,
+      "fps": 125.01248460232381,
+      "p50": 6.100000000002183,
+      "p95": 21.299999999999272,
+      "p99": 34.30000000000109,
+      "over25": 27,
+      "over50": 0,
+      "max": 47.69999999999891,
+      "rafCpuMsPerFrame": 7.200798934888586,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 909436,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5367/game/assets/routes-Cro2rFLx.js"
+      ],
+      "errors": []
+    },
+    {
+      "map": "pacific",
+      "variant": "baseline",
+      "repeat": 2,
+      "frames": 999,
+      "fps": 166.56107239321088,
+      "p50": 5.600000000000364,
+      "p95": 9.800000000001091,
+      "p99": 11.899999999999636,
+      "over25": 0,
+      "over50": 0,
+      "max": 14.799999999999272,
+      "rafCpuMsPerFrame": 5.389389389657879,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 909436,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5367/game/assets/routes-Cro2rFLx.js"
+      ],
+      "errors": []
+    },
+    {
+      "map": "pacific",
+      "variant": "candidate",
+      "repeat": 2,
+      "frames": 1021,
+      "fps": 170.12413563275848,
+      "p50": 5.5,
+      "p95": 9.299999999999272,
+      "p99": 12.199999999998909,
+      "over25": 0,
+      "over50": 0,
+      "max": 16.100000000000364,
+      "rafCpuMsPerFrame": 5.301469146971838,
+      "searches": 0,
+      "searchMs": 0,
+      "searchMsPerFrame": 0,
+      "meanCalls": 122,
+      "meanTriangles": 923362,
+      "pose": [
+        142,
+        1.6,
+        3
+      ],
+      "after": [
+        142,
+        1.6,
+        3
+      ],
+      "dpr": 1,
+      "programs": 73,
+      "root": false,
+      "objects": 3836,
+      "assets": [
+        "http://127.0.0.1:5347/game/assets/routes-DuC1F7LO.js"
+      ],
+      "errors": []
+    }
+  ],
+  "note": "Controlled scene-only benchmark: frozen enemies, invulnerability, fixed seed11 and identical pose. Uncapped Chromium. Shared Mac: timings are not a device-wide FPS guarantee.",
+  "started": 1790652662332,
+  "closed": true,
+  "finished": 1790652769010
+}
