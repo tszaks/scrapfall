@@ -63,7 +63,9 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v10 rebuilds Dry Gulch as a multi-district boomtown (new street grid, decks, districts)
 // v11 brings in Toby's 1.0.3-1.0.6: hazards, endless overtime, shard and stat fixes
 // — all new or changed messages, so rooms split from v9/v10 clients.
-const PREFIX = "scrapfall-ts-arena-v11-";
+// v12 keeps lane clutter and door approaches out of Dry Gulch's generated town,
+// so host and guest would disagree on props with v11 peers.
+const PREFIX = "scrapfall-ts-arena-v12-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

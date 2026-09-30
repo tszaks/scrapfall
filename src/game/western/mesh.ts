@@ -35,9 +35,9 @@ import { tumbleweedGeometry } from "./tumbleweed";
 import { roomPlan, saloonBalcony, type RoomItem, type RoomPlan } from "./rooms";
 
 export const CHUNK = 200;
-// detail cells are CHUNK/2 across; the range counts from a cell's near edge, so a
-// barrel or sign rail pops out around RANGE+CELL — 170 m keeps every prop that can
-// still be cover-sized on screen while hiding the far half of town
+// detail cells are CHUNK/2 across; the range counts from a cell's near edge and the
+// renderer fades it in over the last 15 m — 120 m hides the far half of town while a
+// barrel or sign rail still resolves at a distance it can matter
 export const DETAIL_RANGE = 120;
 
 /** aFac.z flags: +1 windows light up at night (random), +2 always lit (saloon), +10 ground AO */

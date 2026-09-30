@@ -304,6 +304,47 @@ test("Dry Gulch's reserved landmarks exist on every seed", async () => {
         `seed ${seed}: back lane sealed at ${s.x0.toFixed(1)},${s.z0.toFixed(1)}`,
       );
     }
+    // nothing may sit across a walk-in's doorway — the corridors are reserved on
+    // layout.doorZones; check each prop's full footprint, not just its centre (the
+    // half-extents mirror approachFoot in layout.ts)
+    const HALF = {
+      crate: [0.5, 0.5],
+      crates: [1.1, 1.3],
+      barrel: [0.5, 0.5],
+      barrels: [0.9, 0.9],
+      trough: [1.3, 0.5],
+      streetlamp: [0.28, 0.28],
+      bench: [1, 0.4],
+      sacks: [0.7, 0.7],
+      woodpile: [1.3, 0.8],
+      outhouse: [0.9, 0.9],
+      hay: [0.75, 0.5],
+      brokencrate: [0.6, 0.6],
+      brokenbarrel: [0.6, 0.5],
+      anvil: [0.4, 0.45],
+      wheel: [0.7, 0.2],
+      wagon: [1.1, 2.6],
+      covered: [1.1, 2.6],
+      cart: [0.8, 1.7],
+      horse: [0.6, 1.6],
+    };
+    for (const z of layout.doorZones) {
+      const bad = layout.props.find((p) => {
+        // lanterns/clotheslines hang overhead; straw is loose ground litter — none can
+        // block a doorway
+        if (p.k === "lantern" || p.k === "clothesline" || p.k === "straw") return false;
+        const h = p.k === "hitch" ? [p.s / 2, 0.2] : (HALF[p.k] ?? [0.4, 0.4]);
+        const cs = Math.abs(Math.cos(p.rot)),
+          sn = Math.abs(Math.sin(p.rot));
+        const hw = (h[0] * cs + h[1] * sn) * (p.k === "hitch" ? 1 : p.s),
+          hd = (h[0] * sn + h[1] * cs) * (p.k === "hitch" ? 1 : p.s);
+        return p.x + hw > z.x0 && p.x - hw < z.x1 && p.z + hd > z.z0 && p.z - hd < z.z1;
+      });
+      assert.ok(
+        !bad,
+        `seed ${seed}: ${bad?.k} at ${bad?.x.toFixed(1)},${bad?.z.toFixed(1)} blocks a walk-in door`,
+      );
+    }
   }
 });
 

@@ -416,6 +416,18 @@ export const WesternScene = memo(function WesternScene({
     }),
     [nightK],
   );
+  // detail cells fade out over a band instead of snapping: a sign's trim popping in at
+  // the far side of a 120 m sightline reads as a blink, so each cell gets its own
+  // material (same factory — the night/time uniforms are shared objects)
+  const detailMats = useMemo(
+    () =>
+      built.details.map(() => {
+        const m = facadeMaterial(nightK);
+        m.transparent = true;
+        return m;
+      }),
+    [built, nightK],
+  );
   const ground = useMemo(() => groundMaterial(layout, true), [layout]);
   const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
   const earthGeo = useMemo(() => earthMesh(layout), [layout]);
@@ -493,6 +505,7 @@ export const WesternScene = memo(function WesternScene({
     },
     [built],
   );
+  useEffect(() => () => detailMats.forEach((m) => m.dispose()), [detailMats]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
   // ---- windmill wheels (animated) ----
@@ -611,8 +624,18 @@ export const WesternScene = memo(function WesternScene({
       built.details.forEach((d, i) => {
         const dx = Math.max(d.x0 - cam.position.x, 0, cam.position.x - d.x1);
         const dz = Math.max(d.z0 - cam.position.z, 0, cam.position.z - d.z1);
-        const det = detailRefs.current[i];
-        if (det) det.visible = Math.hypot(dx, dz) < DETAIL_RANGE;
+        const det = detailRefs.current[i],
+          dm = detailMats[i];
+        if (!det || !dm) return;
+        // fade over the last 15 m of range rather than popping at the cutoff
+        const o = Math.min(1, Math.max(0, (DETAIL_RANGE + 15 - Math.hypot(dx, dz)) / 15));
+        det.visible = o > 0;
+        if (o !== dm.opacity) dm.opacity = o;
+        if (dm.envMap !== mats.facade.envMap) {
+          dm.envMap = mats.facade.envMap;
+          dm.needsUpdate = true;
+        }
+        dm.envMapIntensity = mats.facade.envMapIntensity;
       });
     }
   });
@@ -671,7 +694,7 @@ export const WesternScene = memo(function WesternScene({
             detailRefs.current[i] = m;
           }}
           geometry={d.geometry}
-          material={mats.facade}
+          material={detailMats[i]!}
           castShadow
           receiveShadow
         />

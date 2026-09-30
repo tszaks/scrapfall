@@ -294,6 +294,8 @@ export type WesternLayout = {
   posts: { x: number; z: number; r: number; shot?: boolean; h?: number }[];
   /** raised walkable decks (the river bridges and the loading-chute ramp), for the mesh */
   decks: { x0: number; z0: number; x1: number; z1: number; y: number; axis: "x" | "z" }[];
+  /** every walk-in's reserved door corridor (front and back doors) — clutter stays out */
+  doorZones: Rect[];
   extent: number;
 };
 
@@ -933,6 +935,15 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     brokenbarrel: [1.2, 1],
     anvil: [0.8, 0.9],
     wheel: [1.4, 0.4],
+    // a parked wagon covers the whole doorway — without a footprint it can sit dead
+    // centre in a walk-in's approach (seed 7's saloon porch)
+    wagon: [2.2, 5.2],
+    covered: [2.2, 5.2],
+    cart: [1.6, 3.4],
+    // a pen rail or a garden bed can drift across the livery's door the same way
+    // (straw is knee-deep litter a player steps through, so it stays unlisted)
+    fence: [2.5, 0.3],
+    garden: [1.8, 1.8],
   };
   type Approach = {
     x0: number;
@@ -2338,6 +2349,8 @@ export function generateWestern(rand: () => number, cells: number, half: number)
     navDoors,
     posts,
     decks,
+    // computed once every building exists: corridors in front of each walk-in door
+    doorZones: doorApproaches(),
     extent: half + 3000,
   };
   return { blocks, layout, sealed };
