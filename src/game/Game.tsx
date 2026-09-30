@@ -288,6 +288,8 @@ import { useInputDevice } from "./input/useInputDevice";
 import { KeyHint } from "./input/Glyph";
 import { SprintMeter } from "./input/SprintMeter";
 import { HudChip, UiStyles } from "./ui/kit";
+import { LoadingVeil } from "./LoadingVeil";
+import { titleShot } from "./titleCam";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
@@ -2331,6 +2333,8 @@ function World({
   downed,
   pingWorld,
   menuCam,
+  buildN,
+  onWarm,
 }: {
   blocks: Block[];
   enemies: Enemy[];
@@ -2383,13 +2387,20 @@ function World({
   pingWorld: React.MutableRefObject<PingWorld | null>;
   /** menus are up: the camera slowly pans across the arena as a live backdrop */
   menuCam?: boolean;
+  /** which world build this scene is: Prewarm re-runs whenever it changes */
+  buildN: number;
+  /** the shader warm for buildN finished: the loading veil can lift */
+  onWarm: (n: number) => void;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
-  // menu backdrop: a slow pan from the arena's spawn look, restored when a match takes over
+  // menu backdrop: a slow drift through the map's framed shot (titleCam.ts), restored when
+  // a match takes over; scatter arenas keep the plain spawn pan
   const menuBase = useRef({ yaw: 0, pitch: 0 });
   const menuT = useRef(0);
   const menuWasOn = useRef(false);
+  const menuFrom = useRef(new THREE.Vector3());
+  const shot = useMemo(() => titleShot(theme, city, western), [theme, city, western]);
   const meleeCooldown = useRef(0);
   const camera = useThree((s) => s.camera);
   const lockedRef = useRef(locked);
@@ -4328,19 +4339,41 @@ function World({
       padLook(delta, look.current, cam.position, aimTargets, aimVisible);
     }
     if (menuCam) {
-      // the title/recap backdrop: a slow surveyor's pan from wherever the camera rests
+      // the title/recap backdrop: a slow drift through the map's framed shot, gliding in
+      // from wherever the camera rests
       if (!menuWasOn.current) {
         menuWasOn.current = true;
         menuT.current = 0;
         menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
+        menuFrom.current.copy(cam.position);
       }
       menuT.current += delta;
-      look.current.yaw = menuBase.current.yaw + menuT.current * 0.045;
-      look.current.pitch = menuBase.current.pitch + Math.sin(menuT.current * 0.32) * 0.05;
+      const t = menuT.current;
+      if (shot) {
+        const g = Math.min(1, t / 1.7);
+        const e = g * g * (3 - 2 * g);
+        const px = shot.pos[0] + shot.right[0] * Math.sin(t * shot.rate) * shot.sway * e;
+        const py = shot.pos[1] + Math.sin(t * 0.23) * 0.4 * e;
+        const pz = shot.pos[2] + shot.right[1] * Math.sin(t * shot.rate) * shot.sway * e;
+        cam.position.set(
+          menuFrom.current.x + (px - menuFrom.current.x) * e,
+          menuFrom.current.y + (py - menuFrom.current.y) * e,
+          menuFrom.current.z + (pz - menuFrom.current.z) * e,
+        );
+        const dx = shot.target[0] - cam.position.x,
+          dy = shot.target[1] - cam.position.y,
+          dz = shot.target[2] - cam.position.z;
+        look.current.yaw = Math.atan2(-dx, -dz) + Math.sin(t * 0.09) * shot.yawAmp * e;
+        look.current.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      } else {
+        look.current.yaw = menuBase.current.yaw + t * 0.045;
+        look.current.pitch = menuBase.current.pitch + Math.sin(t * 0.32) * 0.05;
+      }
     } else if (menuWasOn.current) {
       menuWasOn.current = false;
       look.current.yaw = menuBase.current.yaw;
       look.current.pitch = menuBase.current.pitch;
+      placeAtSpawn();
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -6389,11 +6422,13 @@ function World({
 
   return (
     <>
-      {/* every material compiled (drawn once, unseen) before the player walks into it */}
+      {/* every material drawn once (unseen, spread over several frames) before the player
+          walks into it; onDone lifts the loading veil */}
       <Prewarm
-        when={seed}
+        when={buildN}
         withSpot={theme.blockShape === "city"}
         withTarget={theme.blockShape === "city"}
+        onDone={() => onWarm(buildN)}
       />
       <WarmKinds enemies={enemies} theme={theme} />
       <Structures seed={seed} />
@@ -6834,10 +6869,24 @@ function seedParam(): number | null {
 let inCarHud = false;
 
 const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
-/** Every visit opens on the city unless `?map=` names another; the start-menu picker
- * switches for the rest of the visit. null = random. */
+/** the map this visit opened on / last played, so the next visit rolls a different one */
+const LAST_MAP_KEY = "scrapfall-last-map";
+/** Every visit opens on a random offered map, never the same one twice in a row
+ * (the last visit's is remembered in localStorage). `?map=` still names one directly.
+ * null = random, for the picker only. */
 function initialMapChoice(): number | null {
-  return forcedMapIndex() ?? CITY_MAP;
+  const forced = forcedMapIndex();
+  if (forced !== null) return forced;
+  const pool = THEMES.map((t, i) => (offered(t) ? i : -1)).filter((i) => i >= 0);
+  if (!pool.length) return CITY_MAP;
+  let last = -1;
+  try {
+    last = Number(window.localStorage.getItem(LAST_MAP_KEY) ?? -1);
+  } catch {
+    /* private mode */
+  }
+  const roll = pool.length > 1 ? pool.filter((i) => i !== last) : pool;
+  return roll[Math.floor(Math.random() * roll.length)]!;
 }
 
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
@@ -7275,7 +7324,65 @@ export function Game() {
       { x: 0, z: 0, kind: "crate", color: "#9fe8ff", active: false },
     ],
   });
-  const { blocks, enemies, rand, theme, city, western, gaps } = useMemo(() => {
+  /**
+   * What the rendered world is actually built from. The generator is one synchronous pass,
+   * so {seed, coop, mapChoice} changes are applied a couple of frames later: the loading
+   * veil gets to paint first (initial load, map picks, hosting a room, New Arena all flow
+   * through this) instead of the page freezing on a half-built world.
+   */
+  const [built, setBuilt] = useState<{
+    seed: number;
+    coop: boolean;
+    mapChoice: number | null;
+    n: number;
+  } | null>(null);
+  const buildN = useRef(0);
+  useEffect(() => {
+    if (built && built.seed === seed && built.coop === coop && built.mapChoice === mapChoice)
+      return;
+    let alive = true;
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (alive) setBuilt({ seed, coop, mapChoice, n: ++buildN.current });
+      }),
+    );
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [built, seed, coop, mapChoice]);
+  /** buildN of the world whose shader warm finished — the veil lifts on it */
+  const [warmDone, setWarmDone] = useState(0);
+  /** the map the pending inputs land on — what the veil names while it builds */
+  const wantedTheme =
+    (!coop && mapChoice !== null ? THEMES[mapChoice] : undefined) ??
+    THEMES[seed % THEMES.length]!;
+  const world = useMemo(() => {
+    const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
+      kind: "drifter" as Kind,
+      x: 0,
+      z: 0,
+      hp: 0,
+      alive: false,
+      cooldown: 0,
+      swing: 0,
+      flash: 0,
+      shot: 0,
+      slow: 0,
+      burn: 0,
+      burnTick: 0,
+    }));
+    if (!built)
+      return {
+        blocks: [] as Block[],
+        enemies: list,
+        rand: Math.random,
+        theme: null,
+        city: null,
+        western: null,
+        gaps: [] as Gap[],
+      };
+    const { seed, coop, mapChoice } = built;
     // the map decides the layout, so pick the theme first (still purely from the shared seed)
     const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
     const theme = forced ?? THEMES[seed % THEMES.length]!;
@@ -7398,20 +7505,6 @@ export function Game() {
         (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
       );
     }
-    const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
-      kind: "drifter" as Kind,
-      x: 0,
-      z: 0,
-      hp: 0,
-      alive: false,
-      cooldown: 0,
-      swing: 0,
-      flash: 0,
-      shot: 0,
-      slow: 0,
-      burn: 0,
-      burnTick: 0,
-    }));
     return {
       blocks: level.blocks,
       enemies: list,
@@ -7421,7 +7514,9 @@ export function Game() {
       western: level.western,
       gaps,
     };
-  }, [seed, coop, mapChoice]);
+  }, [built]);
+  const { blocks, enemies, rand, city, western, gaps } = world;
+  const theme = world.theme ?? wantedTheme;
   // the HUD radar for the big maps (solo dims everything beyond the blockades)
   const miniSrc = useMemo(
     () =>
@@ -7526,14 +7621,25 @@ export function Game() {
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
   const isHost = !net || net.role === "host";
-  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
+  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick.
+  // picking the map already showing is a no-op — Enter Arena on it must not rebuild.
   const pickMap = (choice: number | null) => {
-    if (!isHost) return;
+    if (!isHost || choice === mapChoice) return;
     setMapChoice(choice);
     const s = newSeed(choice);
     setSeed(s);
     net?.broadcast({ type: "seed", seed: s });
   };
+  // remember the map on screen so the next visit's title rotation rolls a different one
+  useEffect(() => {
+    const i = THEMES.indexOf(theme);
+    if (i < 0) return;
+    try {
+      localStorage.setItem(LAST_MAP_KEY, String(i));
+    } catch {
+      /* private mode */
+    }
+  }, [theme]);
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
   const lobbyPlayers: LobbyPlayer[] = connected.map((p) => ({
@@ -7544,6 +7650,13 @@ export function Game() {
     me: p.num === myNum,
   }));
   const paused = started && !ended && !locked;
+  // the veil covers the canvas while a world applies and, in the menus, while its shaders
+  // warm — it is pointer-transparent and sits under the menus, so it never gates them, and
+  // it never stays up over a live match (the warm keeps running, unseen, in the background)
+  const pending =
+    !built || built.seed !== seed || built.coop !== coop || built.mapChoice !== mapChoice;
+  const veilUp = pending || (!started && built !== null && warmDone < built.n);
+  const veilProgress = pending ? 0.2 : 0.72;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
@@ -7876,7 +7989,8 @@ export function Game() {
       >
         <QualityGovernor />
         <PostFx />
-        <StableWorld
+        {built && (
+          <StableWorld
           blocks={blocks}
           enemies={enemies}
           rand={rand}
@@ -7964,13 +8078,16 @@ export function Game() {
           downed={downed}
           pingWorld={pingWorld}
           menuCam={!started || ended}
+          buildN={built.n}
+          onWarm={setWarmDone}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
           onInv={setInv}
-        />
+          />
+        )}
         {!multiplayer && (
           <SoloReviveDriver
             active={started && locked && !ended && !showSettings}
@@ -7993,6 +8110,9 @@ export function Game() {
         />
         <AmbienceListener />
       </Canvas>
+      {/* opaque card over the canvas while a world builds/warms behind it; mounted before
+          every menu so it never covers or intercepts them */}
+      <LoadingVeil up={veilUp} mapName={wantedTheme.name} progress={veilProgress} />
       {!multiplayer && downed && locked && !showSettings && <SoloRevivePrompt />}
       <HudOverlay
         remotes={remotes}
@@ -8343,6 +8463,7 @@ export function Game() {
           setAbility={setAbility}
           mapChoice={mapChoice}
           pickMap={pickMap}
+          building={pending}
           seed={seed}
           difficulty={difficulty}
           pickDifficulty={pickDifficulty}
