@@ -816,9 +816,8 @@ const M_SHRED = 1,
   M_BOUNTY = 4;
 
 const BOSS_HP = 450; // 1.5x tougher arena boss
-// chase() re-tunes each authored chase speed from the old 7 m/s run to today's SPEED.run
-// (input/movement.ts): pursuits keep their shape relative to the player. Attack dashes,
-// projectiles and attack timings are deliberately not scaled.
+// chase() preserves the slower enemy balance independently of player comfort speed.
+// Attack dashes, projectiles and attack timings remain separate.
 // shared hit-band scratch for the per-enemy step tests (hitBandInto fills it)
 const EB_BAND: [number, number] = [0, 0];
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {

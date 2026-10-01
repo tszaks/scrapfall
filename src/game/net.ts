@@ -68,7 +68,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v13 re-tunes movement, enemy chase speed and hazard warning windows.
 // v14 adds effective shot spread and retunes player projectile speed and lifetime.
 // v15 ground enemies collide with traffic and rendered map geometry.
-const PREFIX = "scrapfall-ts-arena-v15-";
+// v16 raises player movement to a middle pace while retaining enemy chase speeds.
+const PREFIX = "scrapfall-ts-arena-v16-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
