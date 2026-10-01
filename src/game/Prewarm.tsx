@@ -111,20 +111,16 @@ export function Prewarm({
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   useEffect(() => {
-    plan.current = idle(delay);
+    const p = idle(delay);
+    plan.current = p;
     // the map's first seconds (and this warm run) are slow by design: keep AUTO from reacting
     holdQuality(8000);
-  }, [when, delay]);
-  // teardown halfway through a run still frees the target/spot and the lights' warm tag
-  useEffect(
-    () => () => {
-      const p = plan.current;
+    return () => {
       for (const l of p.lights) l.layers.disable(WARM_LAYER);
       p.rt?.dispose();
       p.spot?.dispose();
-    },
-    [],
-  );
+    };
+  }, [when, delay]);
   useFrame(() => {
     const p = plan.current;
     if (p.done) return;
@@ -146,7 +142,9 @@ export function Prewarm({
       drawables.sort((a, b) => materialKey(a) - materialKey(b));
       const slices: THREE.Object3D[][] = [];
       drawables.forEach((o, i) =>
-        (slices[Math.min(batches - 1, Math.floor((i * batches) / drawables.length))] ??= []).push(o),
+        (slices[Math.min(batches - 1, Math.floor((i * batches) / drawables.length))] ??= []).push(
+          o,
+        ),
       );
       p.batches = slices;
       for (const l of p.lights) l.layers.enable(WARM_LAYER);
@@ -163,9 +161,11 @@ export function Prewarm({
     }
     const batch = p.batches[p.i];
     const prevRT = gl.getRenderTarget();
+    const previousWarm = scene.userData["scrapfallPrewarm"];
     const shown: THREE.Object3D[] = [];
     const culled: THREE.Object3D[] = [];
     try {
+      scene.userData["scrapfallPrewarm"] = true;
       if (batch) {
         const cam = p.cam!;
         for (const o of batch) {
@@ -200,6 +200,9 @@ export function Prewarm({
       }
     } finally {
       gl.setRenderTarget(prevRT);
+      if (p.spot) scene.remove(p.spot);
+      if (previousWarm === undefined) delete scene.userData["scrapfallPrewarm"];
+      else scene.userData["scrapfallPrewarm"] = previousWarm;
       for (const o of batch ?? []) o.layers.disable(WARM_LAYER);
       for (const o of shown) o.visible = false;
       for (const o of culled) o.frustumCulled = true;
