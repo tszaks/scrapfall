@@ -14,7 +14,7 @@ const NEW_SET = new Set<string>(NEW_KINDS);
 export const isNewKind = (k: string): k is NewKind => NEW_SET.has(k);
 
 /** hp / speed (m/s) / body radius (m) / damage per hit. Same meaning as the old STATS table.
- * chase() re-tunes authored chase speeds from the old 7 m/s run to today's SPEED.run. */
+ * chase() preserves the slower enemy balance independently of player comfort speed. */
 export const NEW_STATS: Record<NewKind, { hp: number; speed: number; radius: number; dmg: number }> = {
   sniper: { hp: 3, speed: chase(2.2), radius: 0.55, dmg: 3 },
   flanker: { hp: 3, speed: chase(3.4), radius: 0.55, dmg: 1 },

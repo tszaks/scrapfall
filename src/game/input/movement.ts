@@ -12,20 +12,16 @@
 
 // ---- THE SPEED TABLE -------------------------------------------------------------
 // Every player movement speed in one place (m/s; entries marked "x" multiply the run).
-// The run is a real jog now; the tactical sprint inherited the OLD run's pace, so a
-// double-tap burst covers ground exactly as fast as running used to:
-//
-//   run         3.7 m/s   the default (a jog)
-//   sprint      ~5.5      x1.5, unlimited, lowers the gun
-//   tactical    ~7.0      x1.9 — the old run speed — 3 s burst, 6 s recharge
-//
-// `run` is the one dial: sprint and tactical keep their ratios and follow it. There is
-// no crouch — Scrapfall doesn't have one.
+// A middle ground between the original 7 m/s run and the slower 3.7 m/s revision:
+// run 4.6, sprint 6.9, tactical 8.74. Class, terrain and aiming modifiers still apply.
+// Changing player comfort speed must not quietly speed up the robots as well.
+const BALANCE_RUN = 3.7;
+
 export const SPEED = {
-  run: 3.7,
+  run: 4.6,
   /** sprint, x run */
   sprintMul: 1.5,
-  /** tactical sprint, x run (x1.9 = the old 7 m/s run) */
+  /** tactical sprint, x run */
   tacMul: 1.9,
   /** walking backwards / sidestepping, x run (1 = as fast as forward) */
   backpedal: 1,
@@ -54,18 +50,16 @@ export const SPEED = {
   gravity: 17.96,
 } as const;
 
-/** Keep warning-to-impact escape distance comparable after slowing the player. */
-export const HAZARD_WARNING_SCALE = 7 / SPEED.run;
+/** Keep the existing hazard warning windows during player comfort tuning. */
+export const HAZARD_WARNING_SCALE = 7 / BALANCE_RUN;
 
 /** sprint / tactical top speeds in m/s (for tuning notes and HUD copy) */
 export const SPRINT_MPS = SPEED.run * SPEED.sprintMul;
 export const TACTICAL_MPS = SPEED.run * SPEED.tacMul;
 
-/** Enemy chase speeds were tuned against the old 7 m/s run; `chase` re-tunes an authored
- * m/s to today's run (about x0.53) so every pursuit keeps its shape relative to you.
- * Attack dashes, projectiles and timings are NOT scaled — they live in enemyAI/Game.
- * Bumping `run` re-balances the whole roster at once. */
-export const chase = (mps: number) => Math.round(((mps * SPEED.run) / 7) * 100) / 100;
+/** Preserve the existing enemy chase pace when the player speed is adjusted.
+ * Attack dashes and their warnings remain separate in enemyAI/Game. */
+export const chase = (mps: number) => Math.round(((mps * BALANCE_RUN) / 7) * 100) / 100;
 
 export const MOVE = {
   tacDur: 3,
