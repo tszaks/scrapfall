@@ -4522,6 +4522,23 @@ export function Game() {
         </>
       )}
 
+      {bigLoading && pendingStart.current !== null && (
+        <div className="absolute inset-0 z-[60] grid place-items-center bg-[#0b0a09]/95 text-center">
+          <div>
+            <div className="text-2xl tracking-[0.3em] text-[#f3ead9]">BUILDING ARENA</div>
+            <div className="mt-3 text-xs tracking-[0.25em] text-[#f3ead9]/60">
+              {bigId ? BIG_MAPS[bigId].name : ""} · DOWNLOADING THE WHOLE MAP
+            </div>
+            <div className="mx-auto mt-6 h-1 w-56 overflow-hidden rounded bg-[#f3ead9]/15">
+              <div className="h-full w-1/3 animate-[sfbar_1.1s_ease-in-out_infinite] bg-[#c2703d]" />
+            </div>
+          </div>
+          <style>{`@keyframes sfbar{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}`}</style>
+        </div>
+      )}
+
+
+
 
       {(!locked || ended) && !picking && (
         <>
