@@ -9,7 +9,7 @@ import type { TrafficLink } from "./trafficCore";
 import { worldLook } from "./lighting";
 import { useTodNearest } from "./timeOfDay";
 import { THEMES } from "./themes";
-import { setArenaSize, generateLevel, CITY_COOP, BEACH_SIZE, type Block, type LayoutMode } from "./level";
+import { setArenaSize, generateLevelStaged, CITY_COOP, BEACH_SIZE, type Block, type LayoutMode } from "./level";
 import { resetStaticCollision, staticBody, staticSupport, staticCollisionReady } from "./staticCollision";
 import { setTerrain } from "./terrain";
 import { configureEnvironment } from "./matchEnvironment";
@@ -108,7 +108,7 @@ export const bigFeed: { current: MapFeed } = { current: { x: 0, z: 0, yaw: 0, it
 export { Minimap as BigMinimap } from "./Minimap";
 
 /** His Game.tsx map setup, step for step (arena, collision, layout, ground, rooms, lifts, props). */
-export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
+export async function setupBigMap(id: BigMapId, seed: number, solo: boolean): Promise<BigMap> {
   const coop = !solo;
   const mode = id as LayoutMode;
   configureEnvironment(seed, !coop);
@@ -118,7 +118,7 @@ export function setupBigMap(id: BigMapId, seed: number, solo: boolean): BigMap {
   else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
   else setArenaSize(NUKE_SIZE, 1);
   resetStaticCollision();
-  const level = generateLevel(seed, mode, !coop);
+  const level = await generateLevelStaged(seed, mode, !coop);
   const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
   setTerrain(alp ? alp.terrain : isBeach(level.city) ? beachTerrain(level.city) : level.western ? level.western.terrain : null);
   installStructures([]);
