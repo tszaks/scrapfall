@@ -3760,6 +3760,7 @@ export function Game() {
   }, [bigId, seed, coop]);
   const bigLoading = !!bigId && (!bigMap || bigMap.seed !== seed);
   const pendingStart = useRef<boolean | null>(null);
+  const [waitingStart, setWaitingStart] = useState(false);
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
     const alpine = bigId && bigMap && bigMap.seed === seed ? bigMap : null;
     setBigGround(!!alpine);
@@ -3903,6 +3904,7 @@ export function Game() {
     // a big map waits until it is fully built, so nobody walks into a half-loaded arena
     if (bigLoading) {
       pendingStart.current = fromNet;
+      setWaitingStart(true);
       setPicking(false);
       return;
     }
@@ -3962,6 +3964,7 @@ export function Game() {
     if (bigLoading || pendingStart.current === null) return;
     const fromNet = pendingStart.current;
     pendingStart.current = null;
+    setWaitingStart(false);
     startRef.current?.(fromNet);
   }, [bigLoading]);
 
@@ -4522,7 +4525,7 @@ export function Game() {
         </>
       )}
 
-      {bigLoading && pendingStart.current !== null && (
+      {bigLoading && waitingStart && (
         <div className="absolute inset-0 z-[60] grid place-items-center bg-[#0b0a09]/95 text-center">
           <div>
             <div className="text-2xl tracking-[0.3em] text-[#f3ead9]">BUILDING ARENA</div>
