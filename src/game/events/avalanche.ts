@@ -15,7 +15,7 @@ import type { EventCtx, MapEventDef } from "./mapEvents";
 export const AV_WARN = 5 * HAZARD_WARNING_SCALE;
 export const AV_SPEED = 19; // m/s down the run
 export const AV_CLEAR = 8; // seconds the mounds take to settle away
-export const AV_LEN = 34;
+export const AV_LEN = 34 + (AV_WARN - 5);
 
 export type AvPlan = {
   run: APath;
