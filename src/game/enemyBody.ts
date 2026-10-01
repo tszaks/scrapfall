@@ -54,7 +54,10 @@ export function trafficDepth(
     if (feet >= c.h || feet + height <= base) continue;
     const dx = x - c.x,
       dz = z - c.z;
-    if (Math.abs(dx) > c.hl + r || Math.abs(dz) > c.hl + r) continue;
+    // Rotation can project a corner beyond the unrotated half-length.
+    const extentX = Math.abs(c.sin) * c.hl + Math.abs(c.cos) * c.hw;
+    const extentZ = Math.abs(c.cos) * c.hl + Math.abs(c.sin) * c.hw;
+    if (Math.abs(dx) > extentX + r || Math.abs(dz) > extentZ + r) continue;
     const along = dx * c.sin + dz * c.cos;
     const lat = dx * c.cos - dz * c.sin;
     const inL = c.hl - Math.abs(along),

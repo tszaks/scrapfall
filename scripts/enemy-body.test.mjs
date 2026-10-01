@@ -80,3 +80,9 @@ test("body sweep catches a thin prop on a long charge and allows a clear route a
   assert.equal(p.bodyStepFree(blocks, 0, 4, 4, 4, 0.6, 2), true);
   wall.dispose();
 });
+
+test("rotated wide vehicles retain collision at their outer corners", () => {
+  p.liveCars[0] = { ...car(Math.PI / 4), hl: 1.2, hw: 1.2 };
+  assert.ok(p.trafficDepth(1.8, 0, 0.3, 0, 2) > 0);
+  assert.equal(p.bodyFree(blocks, 1.8, 0, 0.3, 2), false);
+});
