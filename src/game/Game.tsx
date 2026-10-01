@@ -5,7 +5,18 @@ import { bodyContacts, worldContact, type Body } from "./projectileContact";
 import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { matchEnvironment } from "./matchEnvironment";
-import { aimState, stepAim, aimSensitivity } from "./input/aim";
+import { aimInput, aimState, stepAim, aimSensitivity } from "./input/aim";
+import { sightOf, viewModelPos } from "./art/sights";
+import {
+  accReset,
+  accShot,
+  accState,
+  effSpread,
+  moveFactor,
+  spreadGap,
+  stepAccuracy,
+} from "./accuracy";
+import { HipCrosshair } from "./HipCrosshair";
 import { advanceBallistic, bulletGravity, ballisticDirection } from "./ballistics";
 import {
   weedWorld,
@@ -985,6 +996,7 @@ const EYE = 1.6;
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const MOVE = new THREE.Vector3();
+const VM_POS = new THREE.Vector3(); // the viewmodel's camera-space origin (ADS pose)
 const TMP_A = new THREE.Vector3();
 const TMP_B = new THREE.Vector3();
 const PLAYER_R = 0.4; // player body radius for enemy contact
@@ -2904,7 +2916,8 @@ function World({
         los: (ax: number, az: number, bx: number, bz: number) =>
           clearLine(blocks, ax, az, bx, bz, 0.1),
       });
-      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      // weapon testing: every gun with deep ammo, a trigger and the aim input to hold,
+      // stats for the co-op fire feed
       const giveAll = () => {
         for (const w of ORDER) {
           owned.current.add(w);
@@ -2915,6 +2928,8 @@ function World({
       Object.assign(handle, {
         giveAll,
         equip,
+        aimInput,
+        aimState,
         trigger,
         weapon,
         invuln,
@@ -3685,6 +3700,7 @@ function World({
 
   const equip = (w: Weapon) => {
     burstQueue.current = 0;
+    accReset();
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
@@ -4313,15 +4329,10 @@ function World({
     let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
     if (aimState.on) vf |= VF.ADS;
     if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
+    // the live cone: hip → aimed blend + movement + bloom (accuracy.ts), sent to viewers
+    const eff = effSpread(w, g);
     for (let s = 0; s < g.count; s++) {
-      const dir = aimDir(
-        new THREE.Vector3(),
-        FORWARD,
-        g.count,
-        g.spread * (aimState.on ? (w === "sniper" ? 0 : 0.65) : 1),
-        s,
-        spread,
-      );
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, eff, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -4357,9 +4368,12 @@ function World({
       onStat("shot", 1);
       aimStats.current.shot++;
     }
-    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current, undefined, eff);
     playGun(w, w === "pistol" && s2.suppr);
-    recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
+    accShot(w); // bloom grows after the shot leaves, so the first round is clean
+    recoil.current =
+      (w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5) *
+      (1 - aimState.blend * 0.45); // aimed recoil reads smaller than hip
     gunKick();
   };
 
@@ -4790,25 +4804,31 @@ function World({
     recoil.current = Math.max(0, recoil.current - delta * 6);
     const v = viewModel.current;
     if (!v) return;
+    const sg = sightOf(weapon.current, stats.current);
     v.visible =
       !menuCam &&
       !deadRef.current &&
       (getViewMode() === "first" || aimState.scoped) &&
-      !(weapon.current === "sniper" && aimState.blend > 0.96); // spectators carry no weapon
+      !(sg.type === "scope" && aimState.blend > 0.96); // spectators carry no weapon
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
     const ads = aimState.blend;
     const sway = bobAmt.current * (1 - ads * 0.9);
-    v.translateX(0.3 * (1 - ads) + Math.sin(bob.current * 0.5) * 0.012 * sway);
+    const rec = recoil.current * (1 - ads * 0.5);
+    // ADS puts the gun's sight line on the centre ray: the rear element lands `relief`
+    // metres out and the whole line (0, y, ·) in gun space then lies on the axis.
+    viewModelPos(sg, ads, VM_POS);
+    v.translateX(VM_POS.x + Math.sin(bob.current * 0.5) * 0.012 * sway);
     v.translateY(
-      -0.28 +
-        ads * (weapon.current === "sniper" ? 0.155 : weapon.current === "pistol" ? 0.23 : 0.215) -
-        Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway +
-        recoil.current * 0.03,
+      VM_POS.y - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + rec * 0.03,
     );
-    v.translateZ(-0.75 + ads * 0.25 + recoil.current * 0.08);
-    v.rotateX(recoil.current * 0.15);
+    v.translateZ(VM_POS.z + rec * 0.08);
+    v.rotateX(rec * 0.15);
+    // aimed breathing: a slow drift once the sights are up
+    const t0 = state.clock.elapsedTime;
+    v.rotateY(Math.sin(t0 * 1.9) * 0.0011 * ads);
+    v.rotateX(Math.sin(t0 * 2.3 + 1.2) * 0.0008 * ads);
     sprintPose(v); // lowered while sprinting, raised for a tactical sprint
     // the gun joins the transparent queue at the very end, after a depth clear (see below)
     v.traverse((o) => {
@@ -4828,11 +4848,12 @@ function World({
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
-    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current);
-    aimState.scoped = weapon.current === "sniper" && aimState.blend > 0.1;
+    const sg = sightOf(weapon.current, stats.current);
+    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current, 4 / sg.adsIn);
+    aimState.scoped = sg.type === "scope" && aimState.blend > 0.1;
     const lens = cam as THREE.PerspectiveCamera;
-    const wantedFov =
-      fov + ((weapon.current === "sniper" ? 20 : fov * 0.72) - fov) * aimState.blend;
+    const wantedFov = fov + ((sg.fovAbs ?? fov * sg.fovMul) - fov) * aimState.blend;
+    aimState.zoom = wantedFov / fov; // drives zoom-proportional aim sensitivity
     if (Math.abs(lens.fov - wantedFov) > 0.001) {
       lens.fov = wantedFov;
       lens.updateProjectionMatrix();
@@ -5053,9 +5074,22 @@ function World({
       (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1) *
       groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
       runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
+      (1 - aimState.blend * (1 - sg.moveMul)) * // the gun's ADS move-speed multiplier
       (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    // the accuracy model: eased move intensity + bloom decay, then the live cone
+    stepAccuracy(
+      delta,
+      weapon.current,
+      moveFactor(
+        Math.hypot(slide.current.x, slide.current.z),
+        runMul > 1.01,
+        moveState.airborne,
+      ),
+    );
+    accState.disp = spreadGap(weapon.current, GUNS[weapon.current]);
+    accState.fov = lens.fov;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const steps = Math.max(
         1,
@@ -8987,12 +9021,7 @@ export function Game() {
             </div>
           );
         })()}
-        {locked && !ended && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 [.rs-scoped_&]:hidden">
-            <div className="h-5 w-[2px] bg-[#2b2118]/70" />
-            <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
-          </div>
-        )}
+        {locked && !ended && <HipCrosshair />}
         {miniSrc && started && !ended && (
           // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
           // list sits under the shards, so a smaller map sits just left of the buttons

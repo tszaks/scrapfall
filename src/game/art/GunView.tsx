@@ -59,6 +59,29 @@ export function GunView({
   const key = w === "pistol" ? modKey(forced ?? mods) : "";
   const g = useMemo(() => gunBuild(w, key, color, body), [w, key, color, body]);
   const mats = useMemo(() => ({ main: gunMaterial(), pulse: gunMaterial() }), []);
+  const sightMats = useMemo(
+    () => ({
+      // the reticle is an emissive unlit dot/ring: readable day and night, no bloom
+      reticle: new THREE.MeshBasicMaterial({
+        color,
+        fog: false,
+        toneMapped: false,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+      glass: new THREE.MeshBasicMaterial({
+        color: "#a8cfd8",
+        fog: false,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    }),
+    [color],
+  );
   const beamMat = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -74,9 +97,11 @@ export function GunView({
     () => () => {
       mats.main.dispose();
       mats.pulse.dispose();
+      sightMats.reticle.dispose();
+      sightMats.glass.dispose();
       beamMat.dispose();
     },
-    [mats, beamMat],
+    [mats, sightMats, beamMat],
   );
   const root = useRef<THREE.Group>(null);
   const parts = useRef<(THREE.Group | null)[]>([]);
@@ -219,6 +244,12 @@ export function GunView({
           />
         </group>
       ))}
+      {g.sight.glass && (
+        <mesh geometry={g.sight.glass} material={sightMats.glass} renderOrder={1001} />
+      )}
+      {g.sight.reticle && (
+        <mesh geometry={g.sight.reticle} material={sightMats.reticle} renderOrder={1002} />
+      )}
       {g.laser && view && (
         <mesh position={[g.laser[0], g.laser[1], g.laser[2] - 3]} material={beamMat}>
           <boxGeometry args={[0.005, 0.005, 6]} />

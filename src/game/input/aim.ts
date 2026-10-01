@@ -1,5 +1,5 @@
 import { controlSettings } from "./remap";
-export const aimState = { on: false, blend: 0, scoped: false };
+export const aimState = { on: false, blend: 0, scoped: false, zoom: 1 };
 const held = new Set<string>();
 const suppressed = new Set<string>();
 let blocked = false;
@@ -21,12 +21,15 @@ export function clearAim() {
   held.clear();
   aimState.on = false;
 }
-export function stepAim(dt: number, preventAim: boolean) {
+export function stepAim(dt: number, preventAim: boolean, rate = 16) {
   blocked = preventAim;
   if (blocked) {
     aimState.on = false;
     for (const source of held) suppressed.add(source);
   }
-  aimState.blend += ((aimState.on ? 1 : 0) - aimState.blend) * (1 - Math.exp(-dt * 16));
+  const target = aimState.on ? 1 : 0;
+  aimState.blend += (target - aimState.blend) * (1 - Math.exp(-dt * rate));
+  if (Math.abs(aimState.blend - target) < 0.004) aimState.blend = target;
 }
-export const aimSensitivity = () => 1 - 0.45 * aimState.blend;
+// sensitivity tracks the zoom ratio: screen-space aim speed stays constant at any fov
+export const aimSensitivity = () => 1 - (1 - (aimState.zoom || 1)) * aimState.blend;

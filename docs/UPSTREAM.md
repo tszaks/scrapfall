@@ -93,6 +93,12 @@ future sync:
   they sit near the usual fights (owner note: drums were only reachable at gas stations).
 - Whiteout's hazard prop was our PROPANE TANK before a2a4efa; the lodge-deck propane
   anchors are superseded by the village SNOW CANNON spots.
+- **ADS + per-gun accuracy model.** Upstream has one generic aim offset, a flat
+  `spread * 0.65` while aimed and no sights; here every gun declares a sight in
+  `art/sights.ts` (iron / reflex / holo / scope, eye line, relief, fov, ADS-in time,
+  move multiplier) and `accuracy.ts` owns the cones — hip > ads always, movement and
+  sustained-fire bloom on top, first aimed shot from standstill exact. The live cone
+  is broadcast in the fire group so co-op replays stay deterministic (`PREFIX` v13).
 
 ## Sync mechanics
 
