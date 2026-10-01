@@ -30,6 +30,9 @@ type SepDeps = {
   kraken: boolean;
   /** the caller's kind -> body table (Game.tsx STATS) */
   stats: Record<string, { radius: number }>;
+  /** full body test for a step destination — cars, props, the rendered mesh.
+   *  Without it a packed crowd shoves members into geometry the grid misses. */
+  free?: (e: SepBody, x: number, z: number) => boolean;
 };
 
 type Grid = {
@@ -59,25 +62,30 @@ const cellX = (x: number, half: number, cols: number) =>
   Math.min(cols - 1, Math.max(0, Math.floor((x + half) / CELL)));
 
 function bodyR(e: SepBody, kraken: boolean) {
-  return e.kind === "boss" && kraken
-    ? KRAKEN_R
-    : deps.stats[e.kind]!.radius * (e.elite ? 1.6 : 1);
+  return e.kind === "boss" && kraken ? KRAKEN_R : deps.stats[e.kind]!.radius * (e.elite ? 1.6 : 1);
 }
 
 function nudge(e: SepBody, px: number, pz: number) {
   const rr = Math.min(deps.stats[e.kind]!.radius, 0.8);
   const ghost = e.kind === "specter";
+  // a shove is legal only where the body itself could stand — never into a car
+  // or a prop face the nav cells under-read. Ghosts and fliers keep their rules.
+  const open = deps.free && !ghost && !FLYERS.has(e.kind) ? deps.free : null;
   // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
   if (
     ghost
       ? ghostOK(e.x + px, e.z)
-      : !blocked(deps.blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)
+      : !blocked(deps.blocks, e.x + px, e.z, rr) &&
+        climbable(e.x, e.z, e.x + px, e.z) &&
+        (!open || open(e, e.x + px, e.z))
   )
     e.x += px;
   if (
     ghost
       ? ghostOK(e.x, e.z + pz)
-      : !blocked(deps.blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)
+      : !blocked(deps.blocks, e.x, e.z + pz, rr) &&
+        climbable(e.x, e.z, e.x, e.z + pz) &&
+        (!open || open(e, e.x, e.z + pz))
   )
     e.z += pz;
 }

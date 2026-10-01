@@ -6,6 +6,7 @@ import {
   HALF,
   NAV_SCALE,
   blocked,
+  boundaryBlocked,
   clearLine,
   toNav,
   type Block,
@@ -22,9 +23,11 @@ import {
   PH_AFTER,
   PH_IDLE,
   PH_WIND,
+  hitBandInto,
   packVis,
   type NewKind,
 } from "./enemyKinds";
+import { bodyStepFree } from "./enemyBody";
 
 export type Bot = {
   kind: string;
@@ -168,6 +171,10 @@ export type AICtx = {
 };
 
 const rad = (e: Bot) => Math.min(NEW_STATS[e.kind as NewKind].radius, 0.8);
+/** the real footprint — the nav cap never shrinks what a body physically occupies */
+const bodyR = (e: Bot) => NEW_STATS[e.kind as NewKind].radius * (e.elite ? 1.6 : 1);
+// shared hit-band scratch for the step tests (walk/dash run thousands of times)
+const _band: [number, number] = [0, 0];
 const speedOf = (e: Bot) => NEW_STATS[e.kind as NewKind].speed * (e.slow > 0 ? 0.5 : 1);
 const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
@@ -196,13 +203,32 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   const nx = e.x + (mx / md) * s;
   const nz = e.z + (mz / md) * s;
   const r = rad(e);
+  // walkers get the full body test — cars, props, the rendered mesh; fliers hover
+  // over all that so only the grid, the posts and the blockade ring still apply.
+  // A walker already inside a car (a bad spawn or a shove) may still move, but
+  // only to shallower overlap — the box must never become a pin.
+  const fly = FLYERS.has(e.kind);
+  const body = bodyR(e);
+  const hgt = hitBandInto(e.kind, _band)[1];
   let moved = false;
   // (only steps it could walk: never up a balcony edge or the church tower's face)
-  if (!blocked(ctx.blocks, nx, e.z, r) && climbable(e.x, e.z, nx, e.z)) {
+  if (
+    !blocked(ctx.blocks, nx, e.z, r) &&
+    climbable(e.x, e.z, nx, e.z) &&
+    (fly
+      ? !boundaryBlocked(ctx.blocks, nx, e.z, r)
+      : bodyStepFree(ctx.blocks, e.x, e.z, nx, e.z, body, hgt))
+  ) {
     e.x = nx;
     moved = true;
   }
-  if (!blocked(ctx.blocks, e.x, nz, r) && climbable(e.x, e.z, e.x, nz)) {
+  if (
+    !blocked(ctx.blocks, e.x, nz, r) &&
+    climbable(e.x, e.z, e.x, nz) &&
+    (fly
+      ? !boundaryBlocked(ctx.blocks, e.x, nz, r)
+      : bodyStepFree(ctx.blocks, e.x, e.z, e.x, nz, body, hgt))
+  ) {
     e.z = nz;
     moved = true;
   }
@@ -810,12 +836,19 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
         const uz = Math.cos(e.yaw ?? face);
         const total = 15 * (e.slow > 0 ? 0.5 : 1) * dt;
         const reach = rad(e) * (e.elite ? 1.6 : 1) + 0.4 + 0.45;
+        // the charge stops on the same bodies as walking: a car on the lane is a wall
+        const chgR = bodyR(e),
+          chgH = hitBandInto(e.kind, _band)[1];
         let wall = false;
         for (let s = 0; s < total; s += 0.35) {
           const step = Math.min(0.35, total - s);
           const nx = e.x + ux * step;
           const nz = e.z + uz * step;
-          if (blocked(ctx.blocks, nx, nz, rad(e)) || !climbable(e.x, e.z, nx, nz)) {
+          if (
+            blocked(ctx.blocks, nx, nz, rad(e)) ||
+            !climbable(e.x, e.z, nx, nz) ||
+            !bodyStepFree(ctx.blocks, e.x, e.z, nx, nz, chgR, chgH)
+          ) {
             wall = true;
             break;
           }

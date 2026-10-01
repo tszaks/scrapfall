@@ -65,7 +65,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // — all new or changed messages, so rooms split from v9/v10 clients.
 // v12 keeps lane clutter and door approaches out of Dry Gulch's generated town,
 // so host and guest would disagree on props with v11 peers.
-const PREFIX = "scrapfall-ts-arena-v12-";
+// v15 ground enemies collide with traffic and rendered map geometry.
+const PREFIX = "scrapfall-ts-arena-v15-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
