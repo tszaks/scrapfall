@@ -42,8 +42,7 @@ const report = {
   seconds,
   repeats,
   soak: process.env.SOAK === "1",
-  method:
-    "Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted; no FPS uncapping flags. Separate scene startup and warm-up. Not native Safari or physical display FPS.",
+  method: `Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
   dirty: !!execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim(),
   cases: [],
 };
@@ -53,6 +52,7 @@ save();
 const browserType = engine === "webkit" ? webkit : chromium;
 const b = await browserType.launch({
   headless: true,
+  ...(engine === "chromium" ? { args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"] } : {}),
   ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}),
 });
 report.browserVersion = b.version();

@@ -28,7 +28,7 @@ candidate; otherwise reports contain HEAD. The report records whether the workin
 
 Run baseline and candidate sequentially on the same powered device and viewport.
 The benchmark uses real game simulation with assisted aiming, ammunition and
-invulnerability. It reports browser frame intervals, not physical display delivery.
+invulnerability. Chromium disables GPU vsync and frame-rate limiting to measure headroom; WebKit keeps its default pacing. It reports browser frame intervals, not physical display delivery. Historical reports explicitly marked as capped must be kept separate.
 It is not a substitute for native Safari, an unassisted match or co-op play.
 `SOAK=1` replenishes late-wave combat when fewer than five enemies remain and
 there are no pending spawns. Minute checkpoints record graphics-resource counts,
