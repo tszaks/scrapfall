@@ -71,3 +71,17 @@ test("discarding stale protection does not postpone the next upward probe", () =
   assert.equal(r.protectsQuality(40, 33.3, 4), false);
   assert.equal(r.due(65), true);
 });
+
+test("recovery waits for three stable slow windows and rejects transient pressure", () => {
+  const r = new QualityRecovery();
+  assert.equal(r.stableSlow(false, 16.7, 4), false);
+  assert.equal(r.stableSlow(true, 33.3, 4), false);
+  assert.equal(r.stableSlow(true, 60, 4), false);
+  assert.equal(r.stableSlow(true, 33.3, 4), false);
+  assert.equal(r.stableSlow(true, 33.4, 4), false);
+  assert.equal(r.stableSlow(true, 33.3, 4), true);
+  assert.equal(r.stableSlow(true, 33.3, 28), false);
+  assert.equal(r.stableSlow(true, 33.3, 4), false);
+  r.reset(50);
+  assert.equal(r.stableSlow(true, 33.3, 4), false);
+});

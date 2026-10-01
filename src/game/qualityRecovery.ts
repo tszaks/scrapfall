@@ -5,6 +5,8 @@
 export type RecoverySetting = { tier: "low" | "medium" | "high"; dpr: number };
 export class QualityRecovery {
   private nextAt = 30;
+  private slowWindows = 0;
+  private previousFrameMs = 0;
   private acceptedFrameMs: number | null = null;
   private acceptedUntil = 0;
   private trial: {
@@ -14,7 +16,17 @@ export class QualityRecovery {
     frames: number[];
     cpus: number[];
   } | null = null;
+  stableSlow(slow: boolean, frameMs: number, cpuMs: number) {
+    const stable =
+      this.previousFrameMs > 0 &&
+      Math.abs(frameMs - this.previousFrameMs) <= this.previousFrameMs * 0.1;
+    this.slowWindows = slow && cpuMs < 13 ? (stable ? this.slowWindows + 1 : 1) : 0;
+    this.previousFrameMs = frameMs;
+    return this.slowWindows >= 3;
+  }
   reset(now: number) {
+    this.slowWindows = 0;
+    this.previousFrameMs = 0;
     this.trial = null;
     this.acceptedFrameMs = null;
     this.acceptedUntil = 0;

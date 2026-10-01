@@ -36,10 +36,10 @@ not the game shipped to players.
 Compare fixed HIGH separately from AUTO; AUTO gains can be improved quality rather
 than more FPS. Never compare frame rates across changing power/display conditions.
 `renderSubmit*` is outer renderer wall time, not GPU execution time. `callback*` is
-individual RAF callback duration, not all CPU work per frame. GPU time is sampled
+individual RAF callback duration, not all CPU work per frame. GPU time per sampled outer render pass is recorded as `gpuRenderPassP95`, not whole-frame GPU time. A pass may include nested reflections or be only a fullscreen postprocessing pass; do not compare this mixed distribution across differing pass counts. GPU time is sampled
 only when EXT_disjoint_timer_query_webgl2 is exposed; unavailable timing is null,
 not zero. Samples surround outer rendering including nested reflection passes,
-and disjoint samples are discarded. Current main uses per-batch preparation logs (`ms` per batch). The original candidate recorded aggregate `ms`, `wallMs`, `maxStepMs` and `passes`; those historical fields must not be compared as if they were the same measurement.
+and disjoint samples are discarded. Draw calls and triangles accumulate all passes between animation callbacks, with one statistics reset per callback. Current main uses per-batch preparation logs (`ms` per batch). The original candidate recorded aggregate `ms`, `wallMs`, `maxStepMs` and `passes`; those historical fields must not be compared as if they were the same measurement.
 
 ## Acceptance gates
 

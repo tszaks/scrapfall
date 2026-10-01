@@ -216,6 +216,7 @@ export function QualityGovernor() {
     const bad = miss60 > 0.08;
     const good = miss60 < 0.015;
     const frameP95 = sorted[Math.floor(sorted.length * 0.95)] ?? ms;
+    const stableSlow = recovery.current.stableSlow(bad, frameP95, cpuMed);
     const result = recovery.current.sample(S.clock, frameP95, cpuMed);
     if (result) {
       debug.recovery = result.keep ? "higher quality retained" : "probe rolled back";
@@ -230,7 +231,7 @@ export function QualityGovernor() {
     if (recovery.current.active) return;
     // At sustained slow cadence, periodically test whether a higher setting is free.
     // This is an experiment, not a claim that we have detected a browser/display cap.
-    if (bad && cpuMed < 13 && recovery.current.due(S.clock)) {
+    if (stableSlow && recovery.current.due(S.clock)) {
       if (liveDpr() < spec.dprMax - 0.01 || tier !== "high") {
         recovery.current.begin(S.clock, { tier, dpr: liveDpr() }, frameP95, cpuMed);
         debug.recovery = "testing higher quality";

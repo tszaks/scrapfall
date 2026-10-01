@@ -161,6 +161,9 @@ try {
               frame = 0,
               lastProgress = 0;
             const original = r.gl.render;
+            const previousAutoReset = r.gl.info.autoReset;
+            r.gl.info.autoReset = false;
+            r.gl.info.reset();
             const context = r.gl.getContext();
             const timer = context.getExtension("EXT_disjoint_timer_query_webgl2");
             const pendingQueries = [],
@@ -213,6 +216,7 @@ try {
                 renderTotal = 0;
                 calls.push(r.gl.info.render.calls);
                 triangles.push(r.gl.info.render.triangles);
+                r.gl.info.reset();
                 enemies.push(r.enemies.filter((e) => e.alive).length);
                 const alive = r.enemies.filter((e) => e.alive);
                 // Endurance mode continually replenishes late-wave combat through the
@@ -268,6 +272,8 @@ try {
             r.trigger.current = false;
             r.keys.current.clear();
             r.gl.render = original;
+            r.gl.info.autoReset = previousAutoReset;
+            r.gl.info.reset();
             pendingQueries.forEach((q) => context.deleteQuery(q));
             const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
             const pct = (a, q) =>
@@ -276,8 +282,8 @@ try {
               programsStart,
               programsEnd: r.gl.info.programs.length,
               gpuTimerAvailable: !!timer,
-              gpuSamples: gpuMs.length,
-              gpuP95: gpuMs.length ? pct(gpuMs, 0.95) : null,
+              gpuRenderPassSamples: gpuMs.length,
+              gpuRenderPassP95: gpuMs.length ? pct(gpuMs, 0.95) : null,
               shots: r.aimStats.current.shot,
               fps: 1000 / avg(ms),
               p50: pct(ms, 0.5),
