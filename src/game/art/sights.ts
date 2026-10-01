@@ -57,7 +57,7 @@ const SIGHTS: Record<Exclude<GunId, "pistol">, SightSpec> = {
     mountZ: [0.06, -0.62],
   },
   smg: {
-    type: "reflex", // the built-in red dot gets a painted reticle
+    type: "reflex", // a see-through window above the top rail
     y: 0.086,
     rear: -0.02,
     front: -0.094,
@@ -65,7 +65,7 @@ const SIGHTS: Record<Exclude<GunId, "pistol">, SightSpec> = {
     fovMul: 0.8,
     adsIn: 0.12,
     moveMul: 0.9,
-    built: true,
+    mount: 0.052,
   },
   rail: {
     type: "holo", // ring sight on a rail where the placeholder scope sat
@@ -200,8 +200,8 @@ const SIGHTS: Record<Exclude<GunId, "pistol">, SightSpec> = {
     mountZ: [0.16, -0.04],
   },
   voidorb: {
-    type: "holo",
-    y: 0.092,
+    type: "holo", // clears the upper containment prong
+    y: 0.12,
     rear: 0.14,
     front: -0.02,
     relief: 0.28,
@@ -318,7 +318,7 @@ function riser(m: Model, s: SightSpec, top: number) {
 /** rear notch: two wings with a gap, on a shoe that tops out just under the line */
 function rearNotch(m: Model, s: SightSpec) {
   const base = s.mount ?? s.y - 0.02;
-  const shoe = Math.max(0.004, s.y - 0.006 - base);
+  const shoe = Math.max(0.004, s.y - 0.002 - base);
   m.box(0.034, shoe, 0.008, [0, base + shoe / 2, s.rear], BLK, S.gunmetal);
   for (const x of [-0.0125, 0.0125])
     m.box(0.007, 0.018, 0.007, [x, s.y + 0.006, s.rear], GM, S.gunmetal, { bevel: 0.002 });

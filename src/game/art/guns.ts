@@ -678,9 +678,7 @@ const smg: Build = (m, add, col, body) => {
   trigger(m, 0.1, -0.03);
   // top rail and a red-dot sight
   rail(m, -0.3, 0.05, 0.052);
-  m.box(0.04, 0.04, 0.07, [0, 0.082, -0.06], BLK, S.gunmetal, { bevel: 0.006 });
-  m.box(0.034, 0.03, 0.004, [0, 0.086, -0.096], col, S.lens);
-  m.box(0.03, 0.026, 0.004, [0, 0.086, -0.024], "#0a1a20", S.glass);
+  // The shared sight builder adds an open housing and transparent glass.
   // side glow strips + folding wire stock
   for (const x of [-0.03, 0.03]) m.box(0.004, 0.008, 0.26, [x, 0.02, -0.16], col, S.glow);
   for (const x of [-0.022, 0.022])

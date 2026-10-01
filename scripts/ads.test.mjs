@@ -236,3 +236,42 @@ test("optic side supports meet their hood instead of leaving a floating top bar"
       );
   }
 });
+
+test("reflex and holographic sight lines have no opaque geometry in front of the eye", () => {
+  for (const w of GUN_IDS) {
+    const s = sights.sightOf(w);
+    if (!["reflex", "holo"].includes(s.type)) continue;
+    const g = guns.gunBuild(w, "", "#ffffff", "#333333");
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(0, s.y, s.rear + 0.1),
+      new THREE.Vector3(0, 0, -1),
+    );
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    for (const geometry of [g.body, ...g.parts.map((p) => p.geo)]) {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.updateMatrixWorld();
+      assert.equal(
+        ray.intersectObject(mesh).length,
+        0,
+        `${w} blocks the target behind its reticle`,
+      );
+    }
+    material.dispose();
+  }
+});
+test("iron sight wings join their mounting shoe", () => {
+  for (const w of GUN_IDS) {
+    const s = sights.sightOf(w);
+    if (s.built || s.type !== "iron" || w === "scatter") continue;
+    const boxes = [];
+    sights.drawSight(
+      { box: (width, height, depth, at) => boxes.push({ width, height, at }) },
+      w,
+      "#ffffff",
+    );
+    const shoe = boxes.find((b) => b.width === 0.034);
+    const wings = boxes.filter((b) => b.width === 0.007);
+    for (const wing of wings)
+      assert.ok(wing.at[1] - wing.height / 2 < shoe.at[1] + shoe.height / 2, `${w} wing floats`);
+  }
+});
