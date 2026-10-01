@@ -3759,6 +3759,7 @@ export function Game() {
     };
   }, [bigId, seed, coop]);
   const bigLoading = !!bigId && (!bigMap || bigMap.seed !== seed);
+  const pendingStart = useRef<boolean | null>(null);
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
     const alpine = bigId && bigMap && bigMap.seed === seed ? bigMap : null;
     setBigGround(!!alpine);
