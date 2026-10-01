@@ -67,7 +67,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // so host and guest would disagree on props with v11 peers.
 // v13 appends the shot's effective spread (ADS + movement + bloom) to each fire group;
 // v12 viewers replayed a static spread and would scatter pellets differently.
-const PREFIX = "scrapfall-ts-arena-v13-";
+// v14 retunes player projectile speed and lifetime; old ghost rounds expire differently.
+const PREFIX = "scrapfall-ts-arena-v14-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

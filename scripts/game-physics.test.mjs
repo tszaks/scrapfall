@@ -67,7 +67,7 @@ test("sight zero is reached at fixed speed for level, uphill and downhill shots"
 });
 
 test("Longshot has a 50m zero and drops below that sight line farther away", () => {
-  const speed = 120,
+  const speed = 600,
     gravity = physics.bulletGravity(19);
   assert.ok(gravity > 0);
   const from = { x: 0, y: 1.6, z: 0 },
@@ -78,7 +78,7 @@ test("Longshot has a 50m zero and drops below that sight line farther away", () 
     return from.y + dir.y * speed * t - 0.5 * gravity * t * t;
   };
   close(height(50), 1.6, "sniper zero");
-  assert.ok(height(150) < 1.4, "long range requires aiming higher");
+  assert.ok(height(300) < 1.0, "long range requires aiming higher");
 });
 
 test("unreachable and degenerate sight inputs remain finite", () => {

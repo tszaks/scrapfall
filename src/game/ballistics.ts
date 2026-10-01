@@ -1,7 +1,7 @@
 /** Acceleration in game metres/s². Energy weapons remain straight; metal rounds arc.
  * Both damage simulation and remote visuals call this exact integration. */
 const GRAVITY: Record<number, number> = {
-  19: 4.8,
+  19: 9.81,
   0: 0.65,
   1: 1.1,
   2: 0.75,
