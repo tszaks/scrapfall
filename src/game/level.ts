@@ -30,10 +30,12 @@ export function generateLevel(seed: number) {
       const z = -HALF + BLOCK / 2 + j * BLOCK;
       if (Math.hypot(x, z) < 6) continue; // spawn clearing
       if (rand() > 0.16) continue;
+      // about a third of the cover is low enough to hop onto and vault over
+      const low = rand() < 0.34;
       blocks.push({
         x,
         z,
-        h: 2 + Math.floor(rand() * 3) * 1.4,
+        h: low ? 1 + rand() * 0.25 : 2 + Math.floor(rand() * 3) * 1.4,
         tone: rand(),
       });
     }

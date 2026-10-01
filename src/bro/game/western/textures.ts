@@ -13,6 +13,7 @@
 import * as THREE from "three";
 
 import type { TimeOfDay } from "../lighting";
+import { drain, runSliced } from "../slice";
 
 export const TEX = 512;
 export const FAC_COLS = 4;
@@ -86,9 +87,9 @@ export const TILE_M: Record<number, [number, number]> = {
   [WL.IRON]: [2, 2],
   [WL.PAINT]: [2, 2],
 };
-/** sign atlas: 2 columns x 14 rows of painted boards */
+/** sign atlas: 2 columns x 16 rows of painted boards */
 export const SIGN_COLS = 2;
-export const SIGN_ROWS = 14;
+export const SIGN_ROWS = 16;
 
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -1170,8 +1171,9 @@ let arr: { day: THREE.DataArrayTexture; night: THREE.DataArrayTexture } | null =
 const NIGHT_TEX = 256;
 
 /** The western texture arrays (built once). `words` fills the sign layer. */
-export function westernArrays(words: readonly string[]) {
-  if (arr) return arr;
+function* bakeWesternArrays(
+  words: readonly string[],
+): Generator<void, { day: THREE.DataArrayTexture; night: THREE.DataArrayTexture }, void> {
   const day = new Uint8Array(TEX * TEX * 4 * LAYERS);
   const night = new Uint8Array(NIGHT_TEX * NIGHT_TEX * 4 * LAYERS);
   const [, d] = canvas(TEX, TEX);
@@ -1185,6 +1187,7 @@ export function westernArrays(words: readonly string[]) {
     rect(n, "#000", 0, 0, TEX, TEX);
     rect(m, "#000", 0, 0, TEX, TEX);
     PAINT[layer]?.({ d, g, n, m, r: rng(733 + layer * 7919), words });
+    yield;
     const D = d.getImageData(0, 0, TEX, TEX).data;
     const G = g.getImageData(0, 0, TEX, TEX).data;
     const off = layer * TEX * TEX * 4;
@@ -1217,6 +1220,7 @@ export function westernArrays(words: readonly string[]) {
         night[dst + x + 3] = M[src + x]!;
       }
     }
+    yield;
   }
   const make = (data: Uint8Array, size: number) => {
     const t = new THREE.DataArrayTexture(data, size, size, LAYERS);
@@ -1231,8 +1235,14 @@ export function westernArrays(words: readonly string[]) {
     t.needsUpdate = true;
     return t;
   };
-  arr = { day: make(day, TEX), night: make(night, NIGHT_TEX) };
-  return arr;
+  return { day: make(day, TEX), night: make(night, NIGHT_TEX) };
+}
+export function westernArrays(words: readonly string[]) {
+  return (arr ??= drain(bakeWesternArrays(words)));
+}
+/** worldBuild.ts bakes the arrays across tasks; the scene's call is then a cache hit */
+export async function prepareWesternArrays(words: readonly string[]) {
+  arr ??= await runSliced(bakeWesternArrays(words));
 }
 
 /** UV rectangle [u0, v0, u1, v1] of a word in the sign layer */
@@ -1257,7 +1267,7 @@ export const SKY_DIR: Record<WMode, [number, number, number]> = {
 };
 const skyCache: Partial<Record<WMode, THREE.CanvasTexture>> = {};
 
-export function westernSky(mode: WMode) {
+function* bakeWesternSky(mode: WMode): Generator<void, THREE.CanvasTexture, void> {
   const hit = skyCache[mode];
   if (hit) return hit;
   const W = 2048;
@@ -1283,6 +1293,7 @@ export function westernSky(mode: WMode) {
     g.fillRect(0, 0, W, H);
     // the whole western half glows; the east fades to dusky violet
     for (let x = 0; x < W; x += 4) {
+      if (x % 256 === 0) yield;
       let du = Math.abs(x - su);
       if (du > W / 2) du = W - du;
       const k = 1 - du / (W / 2);
@@ -1339,6 +1350,7 @@ export function westernSky(mode: WMode) {
     g.translate(W * 0.5, H * 0.22);
     g.rotate(-0.35);
     for (let k = 0; k < 60; k++) {
+      if (k % 20 === 0) yield;
       const x = (r() - 0.5) * W * 1.4;
       const y = (r() - 0.5) * 70;
       const rad = 40 + r() * 90;
@@ -1349,6 +1361,7 @@ export function westernSky(mode: WMode) {
       g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
     for (let k = 0; k < 4000; k++) {
+      if (k % 300 === 0) yield;
       const x = (r() - 0.5) * W * 1.4;
       const y = (r() + r() + r() - 1.5) * 60;
       g.fillStyle = `rgba(230,235,255,${(0.2 + r() * 0.5).toFixed(2)})`;
@@ -1356,6 +1369,7 @@ export function westernSky(mode: WMode) {
     }
     g.restore();
     for (let k = 0; k < 2200; k++) {
+      if (k % 300 === 0) yield;
       const y = Math.pow(r(), 1.4) * horizon;
       g.fillStyle = `rgba(240,240,255,${(0.25 + r() * 0.6).toFixed(2)})`;
       const s = r() < 0.04 ? 2 : 1;
@@ -1381,6 +1395,14 @@ export function westernSky(mode: WMode) {
   t.needsUpdate = true;
   skyCache[mode] = t;
   return t;
+}
+
+export function westernSky(mode: WMode) {
+  return drain(bakeWesternSky(mode));
+}
+/** the world build paints the skies across tasks; scene calls then hit skyCache */
+export async function prepareWesternSky(mode: WMode): Promise<void> {
+  await runSliced(bakeWesternSky(mode));
 }
 
 let discTex: THREE.CanvasTexture | null = null;

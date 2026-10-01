@@ -109,7 +109,8 @@ export function WesternRiders({
 }) {
   const sim = useRef<Sim>(newSim(seed));
   const mat = useMemo(() => artMaterial({ paint: true, wear: 0.3 }), []);
-  const geos = useMemo(horseArt, []);
+  const geos = useMemo(() => horseArt(0), []);
+  const geosLo = useMemo(() => horseArt(1), []);
   const movingContacts = useRef(
     new Map<
       number,
@@ -226,17 +227,21 @@ export function WesternRiders({
   useEffect(
     () => () => {
       Object.values(geos).forEach((g) => g.dispose());
+      Object.values(geosLo).forEach((g) => g.dispose());
       mat.dispose();
       coaches.batch.dispose();
       wheelGeo.dispose();
       wheelMat.dispose();
     },
-    [geos, mat, coaches, wheelGeo, wheelMat],
+    [geos, geosLo, mat, coaches, wheelGeo, wheelMat],
   );
   const refs = {
     body: useRef<THREE.InstancedMesh>(null),
+    bodyLo: useRef<THREE.InstancedMesh>(null),
     leg: useRef<THREE.InstancedMesh>(null),
+    legLo: useRef<THREE.InstancedMesh>(null),
     hind: useRef<THREE.InstancedMesh>(null),
+    hindLo: useRef<THREE.InstancedMesh>(null),
     torso: useRef<THREE.InstancedMesh>(null),
     hat: useRef<THREE.InstancedMesh>(null),
     legs: useRef<THREE.InstancedMesh>(null),
@@ -336,13 +341,17 @@ export function WesternRiders({
     // ---- draw ----
     const r = refs;
     const body = r.body.current;
+    const bodyLo = r.bodyLo.current;
     const leg = r.leg.current;
+    const legLo = r.legLo.current;
     const hind = r.hind.current;
+    const hindLo = r.hindLo.current;
     const torso = r.torso.current;
     const hat = r.hat.current;
     const legs = r.legs.current;
     const wheel = r.wheel.current;
-    if (!body || !leg || !hind || !torso || !hat || !legs || !wheel) return;
+    if (!body || !bodyLo || !leg || !legLo || !hind || !hindLo || !torso || !hat || !legs || !wheel)
+      return;
     const C = coaches;
     const lit = tod.v > 0.45;
     let nwh = 0;
@@ -375,6 +384,10 @@ export function WesternRiders({
     let nh = 0;
     let nl = 0;
     let nr = 0;
+    let nhf = 0;
+    let nlf = 0;
+    // horses beyond ~80m keep their silhouette on the lo geometry (fewer sphere/cyl segs)
+    const far2 = 80 * 80;
     for (let ai = 0; ai < S.agents.length; ai++) {
       const a = S.agents[ai]!;
       if (a.hold === Infinity) continue;
@@ -401,17 +414,22 @@ export function WesternRiders({
       const bob = Math.abs(Math.sin(a.ph)) * Math.min(0.12, sp * 0.015);
       const coatAt = (k: number) => _c.set(COATS[(a.look + k) % COATS.length]!);
       team(a).forEach(([lx, lz], k) => {
-        body.setMatrixAt(nh, _m.compose(at(lx, lz, bob), _q, _s));
+        const hp = at(lx, lz, bob);
+        const far = (hp.x - cam.x) ** 2 + (hp.z - cam.z) ** 2 > far2;
+        const bT = far ? bodyLo : body;
+        const slot = far ? nhf : nh;
+        bT.setMatrixAt(slot, _m.compose(hp, _q, _s));
         remember(geos.body, _m);
-        body.setColorAt(
-          nh,
+        bT.setColorAt(
+          slot,
           a.role === ROLE_POSSE
             ? _c.set("#8a5a32")
             : a.role === ROLE_OUTLAW
               ? _c.set("#1e1a18")
               : coatAt(k),
         );
-        nh++;
+        if (far) nhf++;
+        else nh++;
         const hips: [number, number, number][] = [
           [-0.19, 0.55, 0],
           [0.19, 0.55, Math.PI],
@@ -421,19 +439,20 @@ export function WesternRiders({
         for (const [hxo, hzo, off] of hips) {
           const sw = Math.sin(a.ph + off + k) * amp;
           _qa.setFromAxisAngle(_x, sw).premultiply(_q);
-          const limb = hzo < 0 ? hind : leg;
-          limb.setMatrixAt(nl, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
-          (hzo < 0 ? leg : hind).setMatrixAt(nl, _fr.makeScale(0, 0, 0));
+          const [A, B] = far ? [hindLo, legLo] : [hind, leg];
+          const limb = hzo < 0 ? A! : B!;
+          const lN = far ? nlf++ : nl++;
+          limb.setMatrixAt(lN, _m.compose(at(lx + hxo, lz + hzo, 1.05 + bob), _qa, _s));
+          (hzo < 0 ? B! : A!).setMatrixAt(lN, _fr.makeScale(0, 0, 0));
           remember(hzo < 0 ? geos.hind : geos.leg, _m);
           limb.setColorAt(
-            nl,
+            lN,
             a.role === ROLE_OUTLAW
               ? _c.set("#1e1a18")
               : a.role === ROLE_POSSE
                 ? _c.set("#8a5a32")
                 : coatAt(k),
           );
-          nl++;
         }
       });
       // the rider (or the driver)
@@ -483,11 +502,15 @@ export function WesternRiders({
     // Tied and stable horses use the same art and footprints as the moving teams.
     for (const h of standing) {
       if (Math.hypot(h.x - cam.x, h.z - cam.z) > 420) continue;
+      const far = (h.x - cam.x) ** 2 + (h.z - cam.z) ** 2 > far2;
+      const bT = far ? bodyLo : body;
       _q.setFromAxisAngle(_up, h.rot);
       _ws.setScalar(h.s);
-      body.setMatrixAt(nh, _m.compose(_p.set(h.x, h.y, h.z), _q, _ws));
-      body.setColorAt(nh++, _c.set(COATS[h.coat]!));
+      const nb = far ? nhf++ : nh++;
+      bT.setMatrixAt(nb, _m.compose(_p.set(h.x, h.y, h.z), _q, _ws));
+      bT.setColorAt(nb, _c.set(COATS[h.coat]!));
       _fr.copy(_m);
+      const [A, B] = far ? [hindLo, legLo] : [hind, leg];
       for (const [x, z] of [
         [-0.19, 0.55],
         [0.19, 0.55],
@@ -495,10 +518,11 @@ export function WesternRiders({
         [0.19, -0.6],
       ]) {
         _m.makeTranslation(x!, 1.05, z!).premultiply(_fr);
-        const limb = z! < 0 ? hind : leg;
-        limb.setMatrixAt(nl, _m);
-        (z! < 0 ? leg : hind).setMatrixAt(nl, _m.makeScale(0, 0, 0));
-        limb.setColorAt(nl++, _c.set(COATS[h.coat]!));
+        const limb = z! < 0 ? A! : B!;
+        const lN = far ? nlf++ : nl++;
+        limb.setMatrixAt(lN, _m);
+        (z! < 0 ? B! : A!).setMatrixAt(lN, _m.makeScale(0, 0, 0));
+        limb.setColorAt(lN, _c.set(COATS[h.coat]!));
       }
     }
     // (a coach off stage or out of range is parked far off the map, where the batch culls it)
@@ -611,21 +635,29 @@ export function WesternRiders({
     wheel.count = nwh;
     wheel.instanceMatrix.needsUpdate = true;
     body.count = nh;
+    bodyLo.count = nhf;
     leg.count = hind.count = nl;
+    legLo.count = hindLo.count = nlf;
     torso.count = hat.count = legs.count = nr;
-    for (const m of [body, leg, hind, torso, hat, legs]) {
+    for (const m of [body, bodyLo, leg, legLo, hind, hindLo, torso, hat, legs]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
   });
 
   const white = useMemo(() => new THREE.Color("#ffffff"), []);
-  const inst = (k: keyof typeof geos, count: number, colored: boolean) => (
+  const inst = (
+    k: keyof typeof geos,
+    ref: React.RefObject<THREE.InstancedMesh | null>,
+    count: number,
+    colored: boolean,
+    lo = false,
+  ) => (
     <instancedMesh
-      ref={refs[k]}
-      args={[geos[k], mat, count]}
+      ref={ref}
+      args={[(lo ? geosLo : geos)[k], mat, count]}
       frustumCulled={false}
-      castShadow
+      castShadow={!lo}
       receiveShadow
       onUpdate={(m) => {
         if (colored && !m.instanceColor) {
@@ -636,12 +668,15 @@ export function WesternRiders({
   );
   return (
     <group>
-      {inst("body", horseCapacity, true)}
-      {inst("leg", horseCapacity * 4, true)}
-      {inst("hind", horseCapacity * 4, true)}
-      {inst("torso", TOWNFOLK + 4, true)}
-      {inst("hat", TOWNFOLK + 4, true)}
-      {inst("legs", TOWNFOLK + 4, false)}
+      {inst("body", refs.body, horseCapacity, true)}
+      {inst("body", refs.bodyLo, horseCapacity, true, true)}
+      {inst("leg", refs.leg, horseCapacity * 4, true)}
+      {inst("leg", refs.legLo, horseCapacity * 4, true, true)}
+      {inst("hind", refs.hind, horseCapacity * 4, true)}
+      {inst("hind", refs.hindLo, horseCapacity * 4, true, true)}
+      {inst("torso", refs.torso, TOWNFOLK + 4, true)}
+      {inst("hat", refs.hat, TOWNFOLK + 4, true)}
+      {inst("legs", refs.legs, TOWNFOLK + 4, false)}
       <primitive object={coaches.batch.group} />
       <instancedMesh
         ref={refs.wheel}

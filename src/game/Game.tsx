@@ -3735,10 +3735,34 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
+  const bigId = useMemo(() => {
+    let b = bigIdOf(seed);
+    if (b && b !== "nuketown" && !coop && !testMap()) b = null; // the 4 huge maps are co-op only
+    return b;
+  }, [seed, coop]);
+  // the big maps build in slices (his worldBuild pipeline) so the page never freezes:
+  // the arena is fully downloaded and assembled before anyone walks into it
+  const [bigMap, setBigMap] = useState<BigMap | null>(null);
+  useEffect(() => {
+    if (!bigId) {
+      setBigMap(null);
+      return;
+    }
+    let cancelled = false;
+    setBigMap(null);
+    void (async () => {
+      const m = await setupBigMap(bigId, seed, !coop);
+      if (!cancelled) setBigMap(m);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bigId, seed, coop]);
+  const bigLoading = !!bigId && (!bigMap || bigMap.seed !== seed);
+  const pendingStart = useRef<boolean | null>(null);
+  const [waitingStart, setWaitingStart] = useState(false);
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
-    let bigId = bigIdOf(seed);
-    if (bigId && bigId !== "nuketown" && !coop && !testMap()) bigId = null; // the 4 huge maps are co-op only
-    const alpine = bigId ? setupBigMap(bigId, seed, !coop) : null;
+    const alpine = bigId && bigMap && bigMap.seed === seed ? bigMap : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
     if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
@@ -3764,7 +3788,7 @@ export function Game() {
       burnTick: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme, alpine };
-  }, [seed, coop]);
+  }, [seed, coop, bigId, bigMap]);
   const alpineMap = useMemo(() => (alpine && typeof document !== "undefined" ? bigMinimap(alpine) : null), [alpine]);
 
 
@@ -3877,6 +3901,13 @@ export function Game() {
 
   const start = (fromNet = false) => {
     initAudio();
+    // a big map waits until it is fully built, so nobody walks into a half-loaded arena
+    if (bigLoading) {
+      pendingStart.current = fromNet;
+      setWaitingStart(true);
+      setPicking(false);
+      return;
+    }
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     // going into overtime keeps the current run, build and map intact
     const overtime = goingOvertime.current;
@@ -3929,6 +3960,15 @@ export function Game() {
     }
   };
   startRef.current = start;
+  useEffect(() => {
+    if (bigLoading || pendingStart.current === null) return;
+    const fromNet = pendingStart.current;
+    pendingStart.current = null;
+    setWaitingStart(false);
+    startRef.current?.(fromNet);
+  }, [bigLoading]);
+
+
 
   // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
   const [fought, setFought] = useState(0);
@@ -4206,13 +4246,9 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
-            {alpineMap && locked && (
-              // phones: the radar tucks under the health/shard readout, so it can never sit
-              // over the fire/run/ability buttons or swallow an aim drag
-              <div data-minimap className={touchUi ? "pointer-events-none mt-1 h-[92px] w-[92px]" : "fixed bottom-5 right-5"}>
-                <div className={touchUi ? "origin-top-right scale-[0.5]" : ""}>
-                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
-                </div>
+            {alpineMap && locked && !touchUi && (
+              <div data-minimap className="fixed bottom-5 right-5">
+                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
               </div>
             )}
         {multiplayer && locked && !ended && (
@@ -4234,8 +4270,18 @@ export function Game() {
             ))}
           </div>
         )}
+            {alpineMap && locked && touchUi && (
+              // phones: the radar sits last in the stack, under the teammate health rows,
+              // so it never covers them or the action buttons
+              <div data-minimap className="pointer-events-none mt-1 h-[82px] w-[82px]">
+                <div className="origin-top-right scale-[0.45]">
+                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
 
         <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
@@ -4484,6 +4530,23 @@ export function Game() {
           />
         </>
       )}
+
+      {bigLoading && waitingStart && (
+        <div className="absolute inset-0 z-[60] grid place-items-center bg-[#0b0a09]/95 text-center">
+          <div>
+            <div className="text-2xl tracking-[0.3em] text-[#f3ead9]">BUILDING ARENA</div>
+            <div className="mt-3 text-xs tracking-[0.25em] text-[#f3ead9]/60">
+              {bigId ? BIG_MAPS[bigId].name : ""} · DOWNLOADING THE WHOLE MAP
+            </div>
+            <div className="mx-auto mt-6 h-1 w-56 overflow-hidden rounded bg-[#f3ead9]/15">
+              <div className="h-full w-1/3 animate-[sfbar_1.1s_ease-in-out_infinite] bg-[#c2703d]" />
+            </div>
+          </div>
+          <style>{`@keyframes sfbar{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}`}</style>
+        </div>
+      )}
+
+
 
 
       {(!locked || ended) && !picking && (
