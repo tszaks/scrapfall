@@ -10,9 +10,64 @@
 // Pure state: the game loop feeds it the inputs and the ground each frame and reads the speed
 // multiplier, whether the trigger may fire, and the feet height. No React, no three.js.
 
-export const MOVE = {
+// ---- THE SPEED TABLE -------------------------------------------------------------
+// Every player movement speed in one place (m/s; entries marked "x" multiply the run).
+// The run is a real jog now; the tactical sprint inherited the OLD run's pace, so a
+// double-tap burst covers ground exactly as fast as running used to:
+//
+//   run         3.7 m/s   the default (a jog)
+//   sprint      ~5.5      x1.5, unlimited, lowers the gun
+//   tactical    ~7.0      x1.9 — the old run speed — 3 s burst, 6 s recharge
+//
+// `run` is the one dial: sprint and tactical keep their ratios and follow it. There is
+// no crouch — Scrapfall doesn't have one.
+export const SPEED = {
+  run: 3.7,
+  /** sprint, x run */
   sprintMul: 1.5,
+  /** tactical sprint, x run (x1.9 = the old 7 m/s run) */
   tacMul: 1.9,
+  /** walking backwards / sidestepping, x run (1 = as fast as forward) */
+  backpedal: 1,
+  strafe: 1,
+  /** aiming down sights, x run — the ADS branch sets this; wired in Game.tsx (1 = no slow) */
+  ads: 1,
+  /** the crawl while DOWN, x run */
+  downed: 0.2,
+  /** SPEED HOLSTER perk with the pistol out, x run */
+  holster: 1.15,
+  /** OVERDRIVE, x run */
+  overdrive: 1.3,
+  /** CRYO SURGE / HEAVY GRAVITY mutators, x run */
+  cryo: 0.85,
+  heavyGravity: 0.9,
+  /** loose-ground drag (what each map's ground.speed returns): Pacific Pier, then Whiteout */
+  sand: 0.75,
+  wetSand: 0.88,
+  surf: 0.55,
+  snow: 0.78,
+  forest: 0.8,
+  rock: 0.85,
+  piste: 0.95,
+  /** the jump: a 1.45 m apex clears the authored 1.3 m fences; ~0.8 s in the air */
+  jumpApex: 1.45,
+  gravity: 17.96,
+} as const;
+
+/** Keep warning-to-impact escape distance comparable after slowing the player. */
+export const HAZARD_WARNING_SCALE = 7 / SPEED.run;
+
+/** sprint / tactical top speeds in m/s (for tuning notes and HUD copy) */
+export const SPRINT_MPS = SPEED.run * SPEED.sprintMul;
+export const TACTICAL_MPS = SPEED.run * SPEED.tacMul;
+
+/** Enemy chase speeds were tuned against the old 7 m/s run; `chase` re-tunes an authored
+ * m/s to today's run (about x0.53) so every pursuit keeps its shape relative to you.
+ * Attack dashes, projectiles and timings are NOT scaled — they live in enemyAI/Game.
+ * Bumping `run` re-balances the whole roster at once. */
+export const chase = (mps: number) => Math.round(((mps * SPEED.run) / 7) * 100) / 100;
+
+export const MOVE = {
   tacDur: 3,
   tacRecharge: 6,
   /** double-tap window (s) */
@@ -22,9 +77,7 @@ export const MOVE = {
   tacToFire: 0.28,
   /** a sprint needs the stick / keys pushed mostly forward */
   forwardMin: 0.35,
-  // A 1.45 m jump clears waist-height cover and the authored 1.3 m fences.
-  gravity: 17.96,
-  jumpV: Math.sqrt(2 * 17.96 * 1.45),
+  jumpV: Math.sqrt(2 * SPEED.gravity * SPEED.jumpApex),
   /** how far a jump may climb onto (or drop off) a ledge the walk rules would refuse (m) */
   ledge: 1.5,
 } as const;
@@ -157,9 +210,9 @@ export function stepSprint(i: MoveInput) {
   s.tacPose += ((s.tactical ? 1 : 0) - s.tacPose) * k;
 }
 
-/** the speed multiplier for this frame (run 1, sprint 1.5, tactical 1.9) */
+/** the speed multiplier for this frame (run 1, sprint 1.5, tactical 1.9 — SPEED table) */
 export function sprintMul() {
-  return moveState.tactical ? MOVE.tacMul : moveState.sprinting ? MOVE.sprintMul : 1;
+  return moveState.tactical ? SPEED.tacMul : moveState.sprinting ? SPEED.sprintMul : 1;
 }
 
 /** can the trigger fire this frame (not sprinting, sprint-to-fire delay done) */
@@ -202,9 +255,8 @@ export function stepJump(dt: number, ground: number) {
     return ground;
   }
   // Analytic constant-gravity integration: the same arc at 20, 30, 60 or 120 fps.
-  const G = MOVE.gravity * s.gravityMul;
-  if (s.vy > 0 && s.vy <= G * dt)
-    s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * G));
+  const G = SPEED.gravity * s.gravityMul;
+  if (s.vy > 0 && s.vy <= G * dt) s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * G));
   s.feet += s.vy * dt - 0.5 * G * dt * dt;
   s.vy -= G * dt;
   s.fallTop = Math.max(s.fallTop, s.feet);

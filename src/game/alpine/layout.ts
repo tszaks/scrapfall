@@ -16,6 +16,7 @@ import type { Block } from "../level";
 import type { CityLayout } from "../cityLayout";
 import type { Terrain } from "../terrain";
 import { findGaps, sealGaps, soloHalf, type Gap } from "../soloBounds";
+import { SPEED } from "../input/movement";
 import { clamp, fbm, mulberry, naturalHeight, smooth, valleyCentre } from "./noise";
 
 export const ALPINE_SIZE = 800;
@@ -1677,11 +1678,12 @@ export function* generateAlpine(
     }
 
   // ---- 10. walking speed: deep snow off the paths slows you down ----
+  // (the drags live in the SPEED table in input/movement.ts with every player speed)
   const speedOf = new Float32Array(16).fill(1);
-  speedOf[S_SNOW] = 0.78;
-  speedOf[S_FOREST] = 0.8;
-  speedOf[S_ROCK] = 0.85;
-  speedOf[S_PISTE] = 0.95;
+  speedOf[S_SNOW] = SPEED.snow;
+  speedOf[S_FOREST] = SPEED.forest;
+  speedOf[S_ROCK] = SPEED.rock;
+  speedOf[S_PISTE] = SPEED.piste;
   const terrain: Terrain = {
     half: HALF,
     cell: CELL,

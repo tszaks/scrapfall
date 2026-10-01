@@ -3,6 +3,7 @@ import { wheelGround } from "./wheelRide";
 // all answered from the layout's cell grids plus a few analytic shapes (ramps, bowls).
 // Cheap enough to call per enemy and per bullet every frame.
 import type { Ground } from "../terrain";
+import { SPEED } from "../input/movement";
 import {
   K_SAND,
   K_SURF,
@@ -67,7 +68,8 @@ export function beachTerrain(city: BeachLayout): Ground {
       const c = cellOf(x, z);
       if (c < 0 || regionOf[c]! >= 0) return 1;
       const k = kind[c];
-      return k === K_SAND ? 0.75 : k === K_WET ? 0.88 : k === K_SURF ? 0.55 : 1;
+      // the drags live in the SPEED table (input/movement.ts) with every player speed
+      return k === K_SAND ? SPEED.sand : k === K_WET ? SPEED.wetSand : k === K_SURF ? SPEED.surf : 1;
     },
     hits: (x, y, z) => {
       if (y < height(x, z)) return true;

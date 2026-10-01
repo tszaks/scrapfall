@@ -1,3 +1,4 @@
+import { HAZARD_WARNING_SCALE } from "../input/movement";
 // Pacific Pier's WAVE SURGE (a map event, see events/mapEvents.ts and events/mapHooks.ts).
 //
 // A telegraphed rogue wave: the banner and a foghorn, then a swell visibly rises on the
@@ -18,20 +19,23 @@ import { playHorn, playRumble } from "../events/sfx";
 import { groundY } from "../terrain";
 import { X, isBeach } from "./beachLayout";
 
+// Extra warning preserves escape distance; the wave itself keeps its original speed.
+const WARNING_EXTRA = 11 * (HAZARD_WARNING_SCALE - 1);
+
 /** timeline, seconds from the start */
 export const SURGE = {
   /** the swell starts to rise far offshore */
-  rise: 3,
+  rise: 3 + WARNING_EXTRA,
   /** it breaks on the shoreline */
-  breaks: 11,
+  breaks: 11 + WARNING_EXTRA,
   /** the run-up reaches its high-water line */
-  peak: 15.5,
+  peak: 15.5 + WARNING_EXTRA,
   /** holding at the top */
-  hold: 17,
+  hold: 17 + WARNING_EXTRA,
   /** back down to the shoreline */
-  drained: 24,
+  drained: 24 + WARNING_EXTRA,
   /** the wet sheen and foam are gone */
-  dry: 30,
+  dry: 30 + WARNING_EXTRA,
   /** where the swell appears, and the high-water line on the sand (just short of the park
    * strip and boardwalk, which stay dry) */
   farX: -280,
