@@ -1,3 +1,4 @@
+import { HAZARD_WARNING_SCALE } from "../input/movement";
 // Map events whose set pieces belong to maps that build them: the Dry Gulch TRAIN ROBBERY
 // and the beach pier WAVE SURGE. The event framework (mapEvents.ts) does the scheduling,
 // the banner, the siren, the co-op sync and the timing; the map fills in what happens.
@@ -63,7 +64,7 @@ export const WAVE_SURGE_EVENT: MapEventDef = {
   cooldown: 4,
   guarantee: 7,
   delay: [8, 20],
-  duration: 30,
+  duration: 30 + 11 * (HAZARD_WARNING_SCALE - 1),
   sound: "horn",
   start: (ctx) => hooks.get("wave-surge")?.start?.(ctx),
   step: (ctx) => hooks.get("wave-surge")?.step?.(ctx),
