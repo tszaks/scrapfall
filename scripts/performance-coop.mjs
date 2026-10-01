@@ -28,9 +28,15 @@ const join = async () => {
   const code = roomCode;
   await guest.getByPlaceholder("CODE").fill(code);
   await guest.getByRole("button", { name: "JOIN", exact: true }).click();
-  await guest.waitForFunction(() => document.body.innerText.includes("JOINED ROOM"), null, {
-    timeout: 30000,
-  });
+  await guest.waitForFunction(
+    () =>
+      document.body.innerText.includes("JOINED ROOM") ||
+      (window.__rs?.remotes.current.size ?? 0) > 0,
+    null,
+    {
+      timeout: 30000,
+    },
+  );
 };
 try {
   for (const p of [host, guest]) {
