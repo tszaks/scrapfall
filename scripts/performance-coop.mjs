@@ -31,7 +31,7 @@ const join = async () => {
   await guest.waitForFunction(
     () =>
       document.body.innerText.includes("JOINED ROOM") ||
-      (window.__rs?.remotes.current.size ?? 0) > 0,
+      /ROOM [A-Z0-9]{4} · 2 PLAYERS/.test(document.body.innerText),
     null,
     {
       timeout: 30000,
