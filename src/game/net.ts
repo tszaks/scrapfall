@@ -67,6 +67,7 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // so host and guest would disagree on props with v11 peers.
 // v13 re-tunes every movement speed (slower run; enemy chase speeds follow it), so
 // v12 and v13 clients would play different-feeling lobbies.
+// v13 also extends hazard warnings to preserve escape distance at slower player speeds.
 const PREFIX = "scrapfall-ts-arena-v13-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;

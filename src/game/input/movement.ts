@@ -54,6 +54,9 @@ export const SPEED = {
   gravity: 17.96,
 } as const;
 
+/** Keep warning-to-impact escape distance comparable after slowing the player. */
+export const HAZARD_WARNING_SCALE = 7 / SPEED.run;
+
 /** sprint / tactical top speeds in m/s (for tuning notes and HUD copy) */
 export const SPRINT_MPS = SPEED.run * SPEED.sprintMul;
 export const TACTICAL_MPS = SPEED.run * SPEED.tacMul;
@@ -253,8 +256,7 @@ export function stepJump(dt: number, ground: number) {
   }
   // Analytic constant-gravity integration: the same arc at 20, 30, 60 or 120 fps.
   const G = SPEED.gravity * s.gravityMul;
-  if (s.vy > 0 && s.vy <= G * dt)
-    s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * G));
+  if (s.vy > 0 && s.vy <= G * dt) s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * G));
   s.feet += s.vy * dt - 0.5 * G * dt * dt;
   s.vy -= G * dt;
   s.fallTop = Math.max(s.fallTop, s.feet);

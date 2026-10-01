@@ -1,3 +1,4 @@
+import { HAZARD_WARNING_SCALE } from "../input/movement";
 // WHITEOUT PASS AVALANCHE: a telegraphed hazard. A rumble and a banner, the threatened
 // ski run flashes red for a few seconds, then a wall of snow sweeps down the mountain face
 // and spills out into the village below it. Anyone caught in the front is knocked flat and
@@ -10,7 +11,8 @@ import { alpineZone, type AlpineLayout, type APath, type P2 } from "../alpine/la
 import { groundY } from "../terrain";
 import type { EventCtx, MapEventDef } from "./mapEvents";
 
-export const AV_WARN = 5;
+// Preserve the old escape distance during the warning at the new walking speed.
+export const AV_WARN = 5 * HAZARD_WARNING_SCALE;
 export const AV_SPEED = 19; // m/s down the run
 export const AV_CLEAR = 8; // seconds the mounds take to settle away
 export const AV_LEN = 34;
@@ -94,7 +96,9 @@ export function avalanchePlan(layout: AlpineLayout, seed: number): AvPlan | null
     // keep the part of the run inside the playable square, top (highest) first
     let pts = run.pts.filter(([x, z]) => Math.abs(x) < lim - 6 && Math.abs(z) < lim - 6);
     if (pts.length >= 2) {
-      if (groundY(pts[0]![0], pts[0]![1]) < groundY(pts[pts.length - 1]![0], pts[pts.length - 1]![1]))
+      if (
+        groundY(pts[0]![0], pts[0]![1]) < groundY(pts[pts.length - 1]![0], pts[pts.length - 1]![1])
+      )
         pts = [...pts].reverse();
       // the snow keeps going past the foot of the run and spills into the village
       const a = pts[pts.length - 2]!;
@@ -104,10 +108,21 @@ export function avalanchePlan(layout: AlpineLayout, seed: number): AvPlan | null
       pts = [...pts, out];
       const acc = [0];
       for (let k = 1; k < pts.length; k++)
-        acc.push(acc[k - 1]! + Math.hypot(pts[k]![0] - pts[k - 1]![0], pts[k]![1] - pts[k - 1]![1]));
+        acc.push(
+          acc[k - 1]! + Math.hypot(pts[k]![0] - pts[k - 1]![0], pts[k]![1] - pts[k - 1]![1]),
+        );
       const total = acc[acc.length - 1]!;
       const half = run.w / 2 + 6;
-      const base: AvPlan = { run, walkFrom: 0, pts, acc, total, half, mounds: [], name: (run.name ?? "the run").toUpperCase() };
+      const base: AvPlan = {
+        run,
+        walkFrom: 0,
+        pts,
+        acc,
+        total,
+        half,
+        mounds: [],
+        name: (run.name ?? "the run").toUpperCase(),
+      };
       // where the walkable village ground starts along the run
       const walk = (x: number, z: number) => alpineZone(x, z) === 0 && !solidAt(layout, x, z);
       let wf = total;
@@ -158,7 +173,8 @@ function step(ctx: EventCtx) {
   const front = t < AV_WARN ? -1 : Math.min(p.total + 12, (t - AV_WARN) * AV_SPEED);
   avState.front = front;
   const passedAt = AV_WARN + p.total / AV_SPEED;
-  avState.mounds = t < passedAt - 1 ? 0 : t < AV_LEN - AV_CLEAR ? 1 : Math.max(0, (AV_LEN - t) / AV_CLEAR);
+  avState.mounds =
+    t < passedAt - 1 ? 0 : t < AV_LEN - AV_CLEAR ? 1 : Math.max(0, (AV_LEN - t) / AV_CLEAR);
   // the front: knock down and hurt whoever it catches (each once)
   if (front >= 0 && front <= p.total + 10) {
     const me = ctx.player;
