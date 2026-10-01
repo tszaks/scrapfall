@@ -174,7 +174,9 @@ test("ADS is tighter than hipfire for every gun", () => {
     }
     const mx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
     const my = pts.reduce((s, p) => s + p[1], 0) / pts.length;
-    const rms = Math.sqrt(pts.reduce((s, p) => s + (p[0] - mx) ** 2 + (p[1] - my) ** 2, 0) / pts.length);
+    const rms = Math.sqrt(
+      pts.reduce((s, p) => s + (p[0] - mx) ** 2 + (p[1] - my) ** 2, 0) / pts.length,
+    );
     const max = Math.max(...pts.map((p) => Math.hypot(p[0] - mx, p[1] - my)));
     return { rms, max };
   };
@@ -211,5 +213,26 @@ test("sustained fire blooms and recovers; the first aimed shot from rest is exac
     assert.ok(peak > acc.ACC[w].ads, `${w}: bloom did not open the cone`);
     assert.ok(peak <= acc.ACC[w].ads + acc.ACC[w].bloomMax * 0.55 + 1e-9, `${w}: bloom cap`);
     acc.accState.bloom = 0;
+  }
+});
+
+test("optic side supports meet their hood instead of leaving a floating top bar", () => {
+  for (const w of GUN_IDS) {
+    const s = sights.sightOf(w);
+    if (s.built || !["reflex", "holo"].includes(s.type)) continue;
+    const boxes = [];
+    sights.drawSight(
+      { box: (width, height, depth, at) => boxes.push({ width, height, depth, at }) },
+      w,
+      "#ffffff",
+    );
+    const hood = boxes.find((b) => b.width === (s.type === "reflex" ? 0.035 : 0.042));
+    const sides = boxes.filter((b) => Math.abs(b.at[0]) === (s.type === "reflex" ? 0.015 : 0.018));
+    assert.equal(sides.length, 2, `${w} has both supports`);
+    for (const side of sides)
+      assert.ok(
+        side.at[1] + side.height / 2 > hood.at[1] - hood.height / 2,
+        `${w} hood touches its side`,
+      );
   }
 });

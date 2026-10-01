@@ -310,15 +310,9 @@ function riser(m: Model, s: SightSpec, top: number) {
   m.box(0.032, top - s.mount, z0 - z1, [0, (top + s.mount) / 2, (z0 + z1) / 2], BLK, S.gunmetal);
   const n = Math.max(2, Math.round((z0 - z1) / 0.022));
   for (let i = 0; i < n; i++)
-    m.box(
-      0.036,
-      0.004,
-      0.008,
-      [0, top - 0.004, z0 - ((z0 - z1) * (i + 0.5)) / n],
-      GM,
-      S.gunmetal,
-      { lod: 1 },
-    );
+    m.box(0.036, 0.004, 0.008, [0, top - 0.004, z0 - ((z0 - z1) * (i + 0.5)) / n], GM, S.gunmetal, {
+      lod: 1,
+    });
 }
 
 /** rear notch: two wings with a gap, on a shoe that tops out just under the line */
@@ -349,9 +343,17 @@ function reflexBody(m: Model, s: SightSpec) {
   });
   // side walls framing the glass, and a low hood lip over the top edge
   for (const x of [-0.015, 0.015])
-    m.box(0.005, 0.034, z0 - z1, [x, base + 0.017, (z0 + z1) / 2], BLK, S.gunmetal, {
-      bevel: 0.002,
-    });
+    m.box(
+      0.005,
+      s.y + 0.018 - base,
+      z0 - z1,
+      [x, (base + s.y + 0.018) / 2, (z0 + z1) / 2],
+      BLK,
+      S.gunmetal,
+      {
+        bevel: 0.002,
+      },
+    );
   m.box(0.035, 0.005, z0 - z1, [0, s.y + 0.017, (z0 + z1) / 2], BLK, S.gunmetal, {
     bevel: 0.002,
   });
@@ -368,9 +370,17 @@ function holoBody(m: Model, s: SightSpec) {
     bevel: 0.003,
   });
   for (const x of [-0.018, 0.018])
-    m.box(0.006, 0.04, z0 - z1, [x, base + 0.02, (z0 + z1) / 2], BLK, S.gunmetal, {
-      bevel: 0.002,
-    });
+    m.box(
+      0.006,
+      s.y + 0.022 - base,
+      z0 - z1,
+      [x, (base + s.y + 0.022) / 2, (z0 + z1) / 2],
+      BLK,
+      S.gunmetal,
+      {
+        bevel: 0.002,
+      },
+    );
   m.box(0.042, 0.006, z0 - z1, [0, s.y + 0.02, (z0 + z1) / 2], BLK, S.gunmetal, {
     bevel: 0.002,
   });
@@ -389,7 +399,14 @@ export function drawSight(m: Model, w: GunId, col: string, mods?: PistolMods) {
     if (w === "scatter") {
       // ghost ring on the receiver, bead-post on the vent rib
       const top = s.y - 0.016;
-      m.box(0.03, top - (s.mount ?? 0) + 0.02, 0.014, [0, (top + (s.mount ?? 0)) / 2 - 0.01, s.rear], BLK, S.gunmetal);
+      m.box(
+        0.03,
+        top - (s.mount ?? 0) + 0.02,
+        0.014,
+        [0, (top + (s.mount ?? 0)) / 2 - 0.01, s.rear],
+        BLK,
+        S.gunmetal,
+      );
       m.torus(0.013, 0.0028, [0, s.y - 0.002, s.rear], GM, S.gunmetal, { seg: 18 });
       for (const x of [-0.016, 0.016])
         m.box(0.006, 0.006, 0.006, [x, s.y - 0.014, s.rear], GM, S.gunmetal);
@@ -408,7 +425,10 @@ export function drawSight(m: Model, w: GunId, col: string, mods?: PistolMods) {
  * The transparent pane and the emissive reticle, rendered with their own materials.
  * Gun space, so they ride the same viewmodel transform as the body.
  */
-export function sightGlass(w: GunId, mods?: PistolMods): {
+export function sightGlass(
+  w: GunId,
+  mods?: PistolMods,
+): {
   glass: THREE.BufferGeometry | null;
   reticle: THREE.BufferGeometry | null;
 } {
