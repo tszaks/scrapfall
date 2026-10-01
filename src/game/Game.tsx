@@ -4246,13 +4246,9 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
-            {alpineMap && locked && (
-              // phones: the radar tucks under the health/shard readout, so it can never sit
-              // over the fire/run/ability buttons or swallow an aim drag
-              <div data-minimap className={touchUi ? "pointer-events-none mt-1 h-[92px] w-[92px]" : "fixed bottom-5 right-5"}>
-                <div className={touchUi ? "origin-top-right scale-[0.5]" : ""}>
-                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
-                </div>
+            {alpineMap && locked && !touchUi && (
+              <div data-minimap className="fixed bottom-5 right-5">
+                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
               </div>
             )}
         {multiplayer && locked && !ended && (
@@ -4274,8 +4270,18 @@ export function Game() {
             ))}
           </div>
         )}
+            {alpineMap && locked && touchUi && (
+              // phones: the radar sits last in the stack, under the teammate health rows,
+              // so it never covers them or the action buttons
+              <div data-minimap className="pointer-events-none mt-1 h-[82px] w-[82px]">
+                <div className="origin-top-right scale-[0.45]">
+                  <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
 
         <div className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}>
           {inv.map((slot, i) => {
