@@ -3786,7 +3786,7 @@ export function Game() {
       burnTick: 0,
     }));
     return { blocks: level.blocks, enemies: list, rand: level.rand, theme, alpine };
-  }, [seed, coop]);
+  }, [seed, coop, bigId, bigMap]);
   const alpineMap = useMemo(() => (alpine && typeof document !== "undefined" ? bigMinimap(alpine) : null), [alpine]);
 
 
