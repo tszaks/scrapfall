@@ -54,6 +54,7 @@ export function ScopeOverlay({ weapon, active }: { weapon: string; active: boole
             right: 0,
             height: 1,
             background: "#131715",
+            boxShadow: "0 0 0 1px rgba(235, 240, 230, 0.35)",
           }}
         />
         <div
@@ -64,6 +65,7 @@ export function ScopeOverlay({ weapon, active }: { weapon: string; active: boole
             bottom: 0,
             width: 1,
             background: "#131715",
+            boxShadow: "0 0 0 1px rgba(235, 240, 230, 0.35)",
           }}
         />
         {[1, 2, 3, 4].map((i) => (
@@ -77,6 +79,7 @@ export function ScopeOverlay({ weapon, active }: { weapon: string; active: boole
               width: 14 + i * 4,
               height: 1,
               background: "#131715",
+              boxShadow: "0 0 0 1px rgba(235, 240, 230, 0.35)",
               transform: "translateX(-50%)",
             }}
           />
@@ -88,7 +91,8 @@ export function ScopeOverlay({ weapon, active }: { weapon: string; active: boole
             left: "50%",
             width: 3,
             height: 3,
-            background: "#ab3426",
+            background: "#ff5a43",
+            boxShadow: "0 0 0 1px #1a0905, 0 0 5px #ff5a4380",
             borderRadius: "50%",
             transform: "translate(-50%,-50%)",
           }}
