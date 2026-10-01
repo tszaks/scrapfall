@@ -246,17 +246,10 @@ export function QualityGovernor() {
         return;
       }
     }
-    // Keep a proven cadence-neutral quality increase, including at the maximum.
-    // Upward probes still run above; pressure or periodic reassessment releases it.
-    if (bad && recovery.current.protectsQuality(S.clock, frameP95, cpuMed)) {
-      S.bad = 0;
-      return;
-    }
     S.bad = bad ? S.bad + 1 : 0;
     S.good = good ? S.good + 1 : 0;
     if (S.bad >= 3) {
       S.bad = 0;
-      recovery.current.discardProtection();
       // failing right after a step up: that level is too much for now
       if (S.clock - S.lastUp < 10) {
         S.ceiling = liveDpr();

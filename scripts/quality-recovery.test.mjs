@@ -46,32 +46,6 @@ test("visibility or loading reset discards a partial probe and delays the next o
   assert.equal(r.due(62), true);
 });
 
-test("an accepted cadence-neutral setting stays protected after the next probe is due", () => {
-  const r = new QualityRecovery();
-  r.begin(30, before, 33.3, 4);
-  r.sample(33, 33.3, 4);
-  r.sample(34, 33.3, 4);
-  r.sample(35, 33.3, 4);
-  assert.equal(r.due(95), true);
-  assert.equal(r.protectsQuality(95, 33.4, 5), true);
-  assert.equal(r.protectsQuality(95, 45, 5), false);
-  assert.equal(r.protectsQuality(95, 33.4, 16), false);
-  assert.equal(r.protectsQuality(336, 33.4, 5), false, "periodic reassessment remains possible");
-  r.reset(100);
-  assert.equal(r.protectsQuality(95, 33.4, 5), false);
-});
-
-test("discarding stale protection does not postpone the next upward probe", () => {
-  const r = new QualityRecovery();
-  r.begin(30, before, 33.3, 4);
-  r.sample(33, 33.3, 4);
-  r.sample(34, 33.3, 4);
-  r.sample(35, 33.3, 4);
-  r.discardProtection();
-  assert.equal(r.protectsQuality(40, 33.3, 4), false);
-  assert.equal(r.due(65), true);
-});
-
 test("recovery waits for three stable slow windows and rejects transient pressure", () => {
   const r = new QualityRecovery();
   assert.equal(r.stableSlow(false, 16.7, 4), false);

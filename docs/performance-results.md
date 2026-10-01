@@ -8,7 +8,7 @@ Historical GPU `gpuP95` values sampled individual outer render passes, not compl
 
 ## Integration with current production
 
-Current main (984ff06) introduced sliced world construction, sixteen shader warm batches, new menus, postprocessing and an endgame victory latch. Those implementations are preserved. The original async whole-scene preparation and disabled-entry gate are superseded by main's batched preparation and queued entry. The release retains AUTO recovery, the desktop DPR ceiling, nested render timing that includes the final postprocessing pass, and reflection/prewarm state restoration. The historical compile-failure/context-recovery assertions below do not describe the retained upstream preparation implementation. Release validation is recorded separately in the live deployment report.
+Current main (984ff06) introduced sliced world construction, sixteen shader warm batches, new menus, postprocessing and an endgame victory latch. Those implementations are preserved. The original async whole-scene preparation and disabled-entry gate are superseded by main's batched preparation and queued entry. The release removes the original five-minute cadence-neutral protection: equal 30 FPS timing is not GPU headroom, and normal downward exploration continues after an upward trial. The release retains AUTO recovery, the desktop DPR ceiling, nested render timing that includes the final postprocessing pass, and reflection/prewarm state restoration. The historical compile-failure/context-recovery assertions below do not describe the retained upstream preparation implementation. Release validation is recorded separately in the live deployment report.
 
 ## Verified changes
 

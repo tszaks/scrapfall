@@ -2,7 +2,9 @@
 
 Target: highest sustainable AUTO graphics at 60 FPS. Desktop AUTO may reach HIGH's DPR 2;
 mobile starts conservatively. Manual presets remain available. The controller trades
-visual detail, never enemy counts, physics rates or network simulation.
+visual detail, never enemy counts, physics rates or network simulation. An accepted
+upward trial never suspends subsequent downscaling: equal 30 FPS cadence does not
+prove GPU headroom.
 
 ## Reproduce
 

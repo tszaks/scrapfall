@@ -7,8 +7,6 @@ export class QualityRecovery {
   private nextAt = 30;
   private slowWindows = 0;
   private previousFrameMs = 0;
-  private acceptedFrameMs: number | null = null;
-  private acceptedUntil = 0;
   private trial: {
     before: RecoverySetting;
     frameMs: number;
@@ -28,24 +26,10 @@ export class QualityRecovery {
     this.slowWindows = 0;
     this.previousFrameMs = 0;
     this.trial = null;
-    this.acceptedFrameMs = null;
-    this.acceptedUntil = 0;
     this.nextAt = now + 30;
   }
   due(now: number) {
     return !this.trial && now >= this.nextAt;
-  }
-  discardProtection() {
-    this.acceptedFrameMs = null;
-    this.acceptedUntil = 0;
-  }
-  protectsQuality(now: number, frameMs: number, cpuMs: number) {
-    return (
-      now < this.acceptedUntil &&
-      this.acceptedFrameMs !== null &&
-      frameMs <= this.acceptedFrameMs * 1.1 &&
-      cpuMs < 13
-    );
   }
   get active() {
     return this.trial !== null;
@@ -66,11 +50,8 @@ export class QualityRecovery {
     if (t.frames.length < 3) return null;
     const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
     const keep = mean(t.frames) <= t.frameMs * 1.05 && mean(t.cpus) <= Math.max(13, t.cpuMs * 1.1);
-    if (keep) {
-      this.acceptedFrameMs = mean(t.frames);
-      // Reassess occasionally even if the observed cadence is unchanged.
-      this.acceptedUntil = now + 300;
-    }
+    // Equal presentation cadence is not proof of GPU headroom. A successful
+    // trial never prevents normal downward exploration in subsequent windows.
     this.trial = null;
     this.nextAt = now + 30;
     return { keep, before: t.before };
