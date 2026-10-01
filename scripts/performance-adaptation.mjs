@@ -29,8 +29,9 @@ try {
   await p.goto(
     `${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=nuketown&seed=11&quality=auto`,
   );
-  await p.getByRole("button", { name: "START", exact: true }).click();
-  await p.getByRole("button", { name: "ENTER ARENA", exact: true }).click();
+  await p.getByRole("button", { name: /^START$/i }).click();
+  await p.getByRole("button", { name: /^ENTER ARENA$/i }).click();
+  await p.waitForFunction(() => window.__rs?.camera);
   await p.evaluate(() => {
     __rs.invuln.current = 1e6;
     __rs.nextWaveTimer.current = 9999;
@@ -66,7 +67,7 @@ try {
   });
   // Paused/manual selection remains the user choice under the same synthetic pressure.
   await p.keyboard.press("p");
-  await p.getByRole("button", { name: "SETTINGS", exact: true }).click();
+  await p.getByRole("button", { name: /^SETTINGS$/i }).click();
   await p.getByRole("button", { name: "HIGH", exact: true }).click();
   await p.evaluate(() => {
     window.__pressure = 28;

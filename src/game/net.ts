@@ -1,4 +1,5 @@
 import Peer, { type DataConnection } from "peerjs";
+import { connectionTimedOut } from "./netHeartbeat";
 
 // loose on purpose: messages are tiny ad-hoc payloads
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,11 +57,19 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v5 adds rendered-shape physics and persistent shared tumbleweeds. Older clients
 // have different physical maps and cannot interpret that state; keep rooms separate.
 // v6 adds shared match weather, ballistic trajectories, Longshot and the fifth map.
-const PREFIX = "scrapfall-ts-arena-v6-";
+// v7 reserves generated doorway approaches and aligns physical door/window openings.
+// v8 furnishes Pier/Whiteout interiors and adds pier activities
+// v9 clears Pier door approaches and grades Whiteout entrance thresholds.
+// v10 rebuilds Dry Gulch as a multi-district boomtown (new street grid, decks, districts)
+// v11 brings in Toby's 1.0.3-1.0.6: hazards, endless overtime, shard and stat fixes
+// — all new or changed messages, so rooms split from v9/v10 clients.
+// v12 keeps lane clutter and door approaches out of Dry Gulch's generated town,
+// so host and guest would disagree on props with v11 peers.
+const PREFIX = "scrapfall-ts-arena-v12-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
-const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping", "pick"]);
+const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping", "pick", "shard", "haz"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
@@ -85,14 +94,14 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
 
   const conns = new Map<string, DataConnection>();
   const list = () => [...conns.keys()];
-  // heartbeat: a closed tab often never sends PeerJS "close"; a guest silent for 5 s is gone
-  // (guests send their position 20 times a second)
-  const heard = new Map<string, number>();
+  // After the initial world-loading grace, a guest silent for5s is gone.
+  // A closed tab often never sends PeerJS "close"; guests normally send at20Hz.
+  const heard = new Map<string, { at: number; opened: number }>();
   const drop = new Map<string, () => void>();
   const beat = setInterval(() => {
     const now = performance.now();
     heard.forEach((t, id) => {
-      if (now - t > HEARTBEAT) drop.get(id)?.();
+      if (connectionTimedOut(now, t.at, t.opened, HEARTBEAT)) drop.get(id)?.();
     });
     // keep-alive both ways, also while menus / pause stop the game's own traffic
     conns.forEach((c) => {
@@ -125,13 +134,14 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
   peer.on("connection", (conn) => {
     conn.on("open", () => {
       conns.set(conn.peer, conn);
-      heard.set(conn.peer, performance.now());
+      const now = performance.now();
+      heard.set(conn.peer, { at: now, opened: now });
       opts.onPeers(list());
       opts.onMsg({ type: "joined", from: conn.peer });
     });
     conn.on("data", (raw) => {
       if (!conns.has(conn.peer)) return; // timed out already
-      heard.set(conn.peer, performance.now());
+      heard.get(conn.peer)!.at = performance.now();
       if ((raw as NetMsg)?.type === "hb") return;
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
@@ -183,7 +193,8 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
   });
 
   // heartbeat: the host streams snapshots many times a second; 8 s of silence = it's gone
-  let heardAt = performance.now();
+  const openedAt = performance.now();
+  let heardAt = openedAt;
   let closed = false;
   const lost = () => {
     if (closed) return;
@@ -192,7 +203,7 @@ export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
     opts.onClose?.();
   };
   const beat = setInterval(() => {
-    if (performance.now() - heardAt > HEARTBEAT + 3000) lost();
+    if (connectionTimedOut(performance.now(), heardAt, openedAt, HEARTBEAT + 3000)) lost();
     else if (conn.open) conn.send({ type: "hb" });
   }, 1000);
   conn.on("data", (raw) => {

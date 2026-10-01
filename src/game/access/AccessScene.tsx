@@ -12,7 +12,7 @@ import { setIndoor } from "../ambience";
 import { sfxBus } from "../audio";
 import { glowTexture } from "../cityTextures";
 import type { TimeOfDay } from "../lighting";
-import { buildAccess, doorHeight, type DisplaySpot, type Interior } from "./build";
+import { builtAccessFor, doorHeight, type DisplaySpot, type Interior } from "./build";
 import { CAR_H, type AccessBuilding } from "./layout";
 import {
   concreteTexture,
@@ -231,7 +231,7 @@ function Building({
 }: {
   b: AccessBuilding;
   m: Mats;
-  g: ReturnType<typeof buildAccess>["per"][number];
+  g: ReturnType<typeof builtAccessFor>["per"][number];
   refs: Refs;
   display: Display | null;
   cop: CopPanel | null;
@@ -597,7 +597,7 @@ export const AccessScene = memo(function AccessScene({
   cityKey: unknown;
 }) {
   const list = useMemo(() => accessList(), [cityKey]); // eslint-disable-line react-hooks/exhaustive-deps -- the installed list changes with the city
-  const built = useMemo(() => buildAccess(list), [list]);
+  const built = useMemo(() => builtAccessFor(list), [list]);
   useLayoutEffect(() => registerStaticGeometry("access-exterior", [built.ext]), [built]);
   useLayoutEffect(() => {
     const instances: { geometry: THREE.BufferGeometry; matrix: THREE.Matrix4 }[] = [];
@@ -614,7 +614,7 @@ export const AccessScene = memo(function AccessScene({
   const mats = useMemo(makeMats, []);
   const displays = useMemo(() => list.map((b) => (b.elev ? new Display() : null)), [list]);
   const cops = useMemo(() => list.map((b) => (b.elev ? new CopPanel() : null)), [list]);
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const refs = useMemo<Refs[]>(
     () =>
       list.map(() => ({
@@ -674,7 +674,12 @@ export const AccessScene = memo(function AccessScene({
     [mats, beaconGeo, sound],
   );
 
-  const cityRoot = useRef<THREE.Object3D | null>(null);
+  // Cache a missing root too: only Vice has city-root. Retrying a miss walks every
+  // pooled enemy and map object each frame on the other maps. A new world resets it.
+  const cityRoot = useRef<THREE.Object3D | null | undefined>(undefined);
+  useLayoutEffect(() => {
+    cityRoot.current = undefined;
+  }, [scene, cityKey]);
   const preRefs = useRef<(THREE.Mesh | null)[]>([]);
   const terraceRefs = useRef<(THREE.Mesh | null)[]>([]);
   // high on a roof the city is hundreds of metres below: stretch the view distance and the
@@ -829,7 +834,7 @@ export const AccessScene = memo(function AccessScene({
       }
     });
     sound.ride(riding);
-    if (!cityRoot.current || !cityRoot.current.parent)
+    if (cityRoot.current === undefined || (cityRoot.current && !cityRoot.current.parent))
       cityRoot.current = scene.getObjectByName("city-root") ?? null;
     if (cityRoot.current) cityRoot.current.visible = !hideCity;
   });

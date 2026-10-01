@@ -21,6 +21,7 @@ import { alpineLookAt, type AlpineLook } from "./look";
 import { liveLook, useTodK } from "../timeOfDay";
 import { mulberry } from "./noise";
 import { alpineArray, glowTexture, signTexture, T, WHITE_UV } from "./textures";
+import { drain, runSliced } from "../slice";
 import {
   FOREST_EXTENT,
   farTrees,
@@ -29,6 +30,7 @@ import {
   aoTexture,
   playTerrain,
   surfTexture,
+  type TerrainChunk,
 } from "./terrainMesh";
 import { alpine, tickAlpine } from "./weather";
 
@@ -756,7 +758,7 @@ type Built = {
     signs: THREE.BufferGeometry | null;
     pools: THREE.BufferGeometry | null;
   }[];
-  terrain: ReturnType<typeof playTerrain>;
+  terrain: TerrainChunk[];
   outer: THREE.BufferGeometry;
   /** every tree's instance matrix and tint; split into near / mid LOD at run time */
   trees: { n: number; mats: Float32Array; cols: Float32Array; x: Float32Array; z: Float32Array };
@@ -771,7 +773,7 @@ type Built = {
   stats: { verts: number; trees: number; far: number };
 };
 
-function build(layout: AlpineLayout): Built {
+function* build(layout: AlpineLayout): Generator<void, Built, void> {
   const a = layout.alpine;
   const half = layout.half;
   const nc = Math.ceil((half * 2) / CHUNK);
@@ -792,7 +794,7 @@ function build(layout: AlpineLayout): Built {
     const j = Math.max(0, Math.min(nc - 1, Math.floor((z + half) / CHUNK)));
     return kits[i * nc + j]!;
   };
-  buildInto(kitAt, a, terrainY);
+  yield* buildInto(kitAt, a, terrainY);
   // unlit glow boxes share the sign material: point their uvs at the atlas's white texel
   for (const k of kits) {
     const gb = k.glow.buf;
@@ -804,7 +806,10 @@ function build(layout: AlpineLayout): Built {
     k.glow.n = 0;
   }
   let verts = 0;
-  const chunks: Built["chunks"] = kits.map((k, idx) => {
+  const chunks: Built["chunks"] = [];
+  for (let idx = 0; idx < kits.length; idx++) {
+    yield;
+    const k = kits[idx]!;
     const i = Math.floor(idx / nc);
     const j = idx % nc;
     const mk = (g: Geo, uv = "aUv2") => {
@@ -812,7 +817,7 @@ function build(layout: AlpineLayout): Built {
       verts += g.n;
       return g.build(uv);
     };
-    return {
+    chunks.push({
       x0: -half + i * CHUNK,
       z0: -half + j * CHUNK,
       x1: -half + (i + 1) * CHUNK,
@@ -822,8 +827,8 @@ function build(layout: AlpineLayout): Built {
       glow: mk(k.glow),
       signs: mk(k.signs, "uv"),
       pools: mk(k.pools, "uv"),
-    };
-  });
+    });
+  }
   // trees: matrices and tints, bucketed by distance every few metres of travel
   const n = a.trees.length;
   const trees: Built["trees"] = {
@@ -840,19 +845,22 @@ function build(layout: AlpineLayout): Built {
   const s = new THREE.Vector3();
   const r = mulberry(4711);
   const c = new THREE.Color();
-  a.trees.forEach((t, k) => {
+  let k = 0;
+  for (const t of a.trees) {
+    if (k++ % 512 === 0) yield;
     e.set((r() - 0.5) * 0.06, t.rot, (r() - 0.5) * 0.06);
     const wk = (t.w / 0.3) * (t.k === 1 ? 0.72 : 1);
     m4.compose(v.set(t.x, t.y - 0.3, t.z), q.setFromEuler(e), s.set(t.h * wk, t.h, t.h * wk));
     m4.toArray(trees.mats, k * 16);
     c.setHSL(0.36 + (r() - 0.5) * 0.06, 0.1 + r() * 0.15, 0.85 + r() * 0.3);
-    trees.cols.set([c.r, c.g, c.b], k * 3);
-    trees.x[k] = t.x;
-    trees.z[k] = t.z;
-  });
-  const ft = farTrees(half, 820);
+    trees.cols.set([c.r, c.g, c.b], (k - 1) * 3);
+    trees.x[k - 1] = t.x;
+    trees.z[k - 1] = t.z;
+  }
+  const ft = yield* farTrees(half, 820);
   const far: THREE.Matrix4[] = [];
   for (let k = 0; k < ft.length; k += 5) {
+    if (k % 2560 === 0) yield;
     e.set(0, ft[k + 4]!, 0);
     const h = ft[k + 3]!;
     m4.compose(v.set(ft[k]!, ft[k + 1]! - 0.3, ft[k + 2]!), q.setFromEuler(e), s.set(h, h, h));
@@ -866,21 +874,38 @@ function build(layout: AlpineLayout): Built {
     lamps.push(...k.lamps);
     lights.push(...k.lights);
   }
+  const terrain = yield* playTerrain(a);
+  const outer = yield* outerTerrain(half);
+  const surf = yield* surfTexture(a);
+  const ao = yield* aoTexture(a);
+  const light = lightMap(lights, half);
+  yield;
+  const ground = groundTexture(withPlatforms(a), a.terrain.n + 1);
+  const forest = yield* forestTexture();
   return {
     chunks,
-    terrain: playTerrain(a),
-    outer: outerTerrain(half),
+    terrain,
+    outer,
     trees,
     far,
     smoke,
     lamps,
-    surf: surfTexture(a),
-    ao: aoTexture(a),
-    light: lightMap(lights, half),
-    ground: groundTexture(withPlatforms(a), a.terrain.n + 1),
-    forest: forestTexture(),
+    surf,
+    ao,
+    light,
+    ground,
+    forest,
     stats: { verts, trees: a.trees.length, far: far.length },
   };
+}
+
+// the world build prepares this across tasks so the scene mount is a cache lookup
+const prepared = new WeakMap<AlpineLayout, Built>();
+export async function prepareAlpineBuild(layout: AlpineLayout): Promise<void> {
+  if (!prepared.has(layout)) prepared.set(layout, await runSliced(build(layout)));
+}
+export function alpineBuild(layout: AlpineLayout): Built {
+  return prepared.get(layout) ?? drain(build(layout));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -899,15 +924,9 @@ export const AlpineScene = memo(function AlpineScene({
   // the time of day in 1/64 steps (the match runs from sunset into night)
   const nk = useTodK();
   const nl = (n: number, s: number) => s + (n - s) * nk;
-  const { scene, camera } = useThree();
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const b = build(layout);
-    console.info(
-      `[alpine] built ${b.chunks.length} chunks, ${b.stats.verts} verts, ${b.stats.trees} trees + ${b.stats.far} far in ${Math.round(performance.now() - t0)} ms`,
-    );
-    return b;
-  }, [layout]);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const built = useMemo(() => alpineBuild(layout), [layout]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(

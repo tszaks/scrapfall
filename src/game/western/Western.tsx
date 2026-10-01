@@ -5,6 +5,7 @@ import { registerStaticGeometry } from "../staticCollision";
 // a single splat-blended plane; chunks cull by frustum and their prop layer by distance.
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { drain, runSliced, yieldControl } from "../slice";
 import { useSunShadow } from "../quality";
 import * as THREE from "three";
 
@@ -28,7 +29,8 @@ import {
 } from "./layout";
 import { WESTERN_LOOK, type WesternLook } from "./look";
 import { facadeMaterial, facadeTime, westernBackground, westernEnv } from "./materials";
-import { buildWesternMeshes, DETAIL_RANGE } from "./mesh";
+import { WESTERN_SUNSET } from "./look";
+import { westernMeshes, DETAIL_RANGE } from "./mesh";
 import {
   SKY_DIR,
   TILE_M,
@@ -49,11 +51,14 @@ const _e = new THREE.Euler();
 
 /** The ground: desert sand everywhere, blended with street dirt, riverbed mud, packed yards
  * and ballast from a per-cell splat map, with large-scale colour drift so it never tiles. */
-function groundMaterial(L: WesternLayout, cutRiver: boolean) {
-  const arr = westernArrays(WORDS);
+// the ground-class splat (street / trail / river / rail per cell, blurred): one texture
+// shared by both ground material variants — prepared off the render path via
+// prepareWesternExtras (worldBuild.ts), so this stays a WeakMap hit at mount
+function* groundSplat(L: WesternLayout): Generator<void, THREE.DataTexture, void> {
   const n = L.cells;
   const raw = new Float32Array(n * n * 4);
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const g = L.ground[i * n + j]!;
       const o = (j * n + i) * 4; // texture x = world x, texture y = world z
@@ -64,12 +69,14 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
       else if (g === WK.YARD || g === WK.PLATFORM) raw[o + 2] = 1;
       else if (g === WK.RAIL) raw[o + 3] = 1;
     }
+  }
   // soften the edges: two box-blur passes
   const data = new Uint8Array(n * n * 4);
   let src = raw;
   for (let pass = 0; pass < 2; pass++) {
     const dst = new Float32Array(n * n * 4);
-    for (let y = 0; y < n; y++)
+    for (let y = 0; y < n; y++) {
+      yield;
       for (let x = 0; x < n; x++)
         for (let c = 0; c < 4; c++) {
           let s = 0;
@@ -84,6 +91,7 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
             }
           dst[(y * n + x) * 4 + c] = s / k;
         }
+    }
     src = dst;
   }
   for (let i = 0; i < src.length; i++) data[i] = Math.round(Math.min(1, src[i]!) * 255);
@@ -91,7 +99,11 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
   splat.magFilter = THREE.LinearFilter;
   splat.minFilter = THREE.LinearFilter;
   splat.needsUpdate = true;
+  return splat;
+}
 
+function groundMaterial(L: WesternLayout, cutRiver: boolean, splat: THREE.DataTexture) {
+  const arr = westernArrays(WORDS);
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   const tl = (l: number) => (TILE_M[l] ?? [8, 8])[0].toFixed(1);
   mat.onBeforeCompile = (sh) => {
@@ -108,10 +120,13 @@ function groundMaterial(L: WesternLayout, cutRiver: boolean) {
     while (wet.length < 16) wet.push(new THREE.Vector3(0, 0, 0));
     sh.uniforms["uWet"] = { value: wet };
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vGxz;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec2 vGxz;\nvarying float vGNy;\nvarying float vGy;",
+      )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;",
+        "#include <begin_vertex>\nvGxz = (modelMatrix * vec4(transformed, 1.0)).xz;\nvGy = (modelMatrix * vec4(transformed, 1.0)).y;\nvGNy = normal.y;",
       );
     sh.fragmentShader = sh.fragmentShader
       .replace(
@@ -123,6 +138,8 @@ uniform sampler2D uSplat;
 uniform float uHalf;
 uniform vec3 uWet[16];
 varying vec2 vGxz;
+varying float vGNy;
+varying float vGy;
 ${riverGLSL}
 float gHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float gNoise(vec2 p) {
@@ -157,9 +174,43 @@ vec3 mud = texture(uArr, vec3(wp / ${tl(WL.MUD)}, ${WL.MUD}.0)).rgb;
 vec3 yard = texture(uArr, vec3(wp / ${tl(WL.YARD)}, ${WL.YARD}.0)).rgb;
 vec3 bal = texture(uArr, vec3(wp / ${tl(WL.BALLAST)}, ${WL.BALLAST}.0)).rgb;
 vec3 col = sand;
+// wind ripples: parallel sand ridges ~40 cm apart, patchy (they live on the open flats,
+// die out where the ground is worked) so bare desert stops reading as smooth clay
+{
+  float field = smoothstep(0.35, 0.75, gNoise(wp * 0.045 + 31.0));
+  float worked = smoothstep(0.15, 0.5, w.r + w.g + w.b + w.a);
+  float ridge = sin(dot(wp, vec2(0.86, 0.51)) * 14.0 + gNoise(wp * 0.12) * 5.0);
+  col *= 1.0 + ridge * 0.045 * field * (1.0 - worked);
+}
 col = mix(col, dirt, smoothstep(0.15, 0.6, w.r + (n1 - 0.5) * 0.25));
 col = mix(col, mud, smoothstep(0.2, 0.6, w.g + (n1 - 0.5) * 0.2));
 col = mix(col, yard, smoothstep(0.2, 0.6, w.b));
+// the big packed yards are worked ground, not a slab: churn of dirt and gravel through
+// them, drifting stains, and a tone that breathes with the noise
+{
+  float inYard = smoothstep(0.25, 0.6, w.b);
+  float churn = gNoise(wp * 0.09 + 11.0) * 0.6 + gNoise(wp * 0.23 + 43.0) * 0.4;
+  col = mix(col, dirt, inYard * smoothstep(0.42, 0.72, churn) * 0.7);
+  col = mix(col, bal, inYard * smoothstep(0.5, 0.78, gNoise(wp * 0.14 + 23.0)) * 0.55);
+  col *= 1.0 - inYard * (0.1 + 0.16 * (gNoise(wp * 0.3 + 57.0) - 0.5));
+  // wheel ruts and hoof-churn wandering across the working yards
+  float track = abs(sin(wp.x * 0.9 + gNoise(wp * 0.05) * 9.0 + wp.y * 0.35));
+  col *= 1.0 - inYard * smoothstep(0.94, 0.99, track) * 0.16;
+}
+// cut faces (rail berms, banks, gully sides): the XZ-splatted texture smears down them,
+// so steep ground reads as darker rubble-and-stone instead of smeared sand
+{
+  float steep = smoothstep(0.86, 0.62, vGNy);
+  vec3 rubble = col * vec3(0.62, 0.55, 0.5) + vec3(0.05, 0.04, 0.035);
+  col = mix(col, rubble * (0.85 + 0.3 * gNoise(wp * 0.6)), steep);
+  // sedimentary strata: an exposed berm face shows the bands it was cut through —
+  // pale caliche lines alternating with the darker packed dirt between them
+  float band = sin(vGy * 2.6 + gNoise(wp * 0.11) * 1.4);
+  float stratum = smoothstep(0.55, 0.9, band) * steep;
+  col = mix(col, col * vec3(1.3, 1.26, 1.16) + vec3(0.1, 0.095, 0.08), stratum * 0.5);
+  float darkBand = smoothstep(0.75, 0.97, -band) * steep;
+  col *= 1.0 - darkBand * 0.22;
+}
 col = mix(col, bal, smoothstep(0.3, 0.7, w.a));
 // ---- a street people use: wheel ruts down each lane, hoof-churned dirt between them ----
 {
@@ -206,13 +257,14 @@ diffuseColor.rgb *= col;`,
 }
 
 /** Indexed terrain and collision sample the identical fixed diagonal in every cell. */
-function earthMesh(L: WesternLayout) {
+function* earthMesh(L: WesternLayout): Generator<void, THREE.BufferGeometry, void> {
   const t = L.earth,
     side = t.n + 1,
     p = new Float32Array(side * side * 3),
     uv = new Float32Array(side * side * 2),
     indices: number[] = [];
-  for (let i = 0; i <= t.n; i++)
+  for (let i = 0; i <= t.n; i++) {
+    yield;
     for (let j = 0; j <= t.n; j++) {
       const k = i * side + j,
         x = -t.half + i * t.cell,
@@ -227,6 +279,7 @@ function earthMesh(L: WesternLayout) {
         indices.push(a, c, b, b, c, d);
       }
     }
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(p, 3));
   g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
@@ -237,7 +290,7 @@ function earthMesh(L: WesternLayout) {
 
 /** the dry riverbed: a strip of ground carved below grade along the wash, following the
  * layout's terrain (so you walk exactly on what you see); its edge tucks just under the plain */
-function riverbedMesh(L: WesternLayout) {
+function* riverbedMesh(L: WesternLayout): Generator<void, THREE.BufferGeometry, void> {
   const pos: number[] = [];
   const nor: number[] = [];
   const x0 = -L.half + RIVER_END;
@@ -245,6 +298,7 @@ function riverbedMesh(L: WesternLayout) {
   const cols: [number, number, number][][] = [];
   const Y = (x: number, z: number) => sampleTerrain(L.terrain, x, z);
   for (let x = x0; x <= x1 + 1e-6; x += 2) {
+    yield;
     const rz = riverZ(x);
     const hw = riverW(x) / 2 + RIVER_EDGE;
     const col: [number, number, number][] = [];
@@ -282,6 +336,44 @@ function riverbedMesh(L: WesternLayout) {
   return g;
 }
 
+// the earth/river geometry and the shared ground splat: heavy vertex/texture work that
+// used to sit in the scene's useMemos. worldBuild.ts runs it across tasks; the scene's
+// memos below are WeakMap lookups.
+type WesternExtras = {
+  splat: THREE.DataTexture;
+  earth: THREE.BufferGeometry;
+  river: THREE.BufferGeometry;
+};
+const extrasCache = new WeakMap<WesternLayout, WesternExtras>();
+export async function prepareWesternExtras(L: WesternLayout): Promise<void> {
+  if (extrasCache.has(L)) return;
+  // the texture-array bake and the painted skies are module-cached: run them here, one
+  // task each, so the mount commit doesn't pay them all at once
+  const t = await import("./textures");
+  const m = await import("./materials");
+  const s = await import("../sky");
+  await t.prepareWesternArrays(WORDS);
+  await t.prepareWesternSky("sunset");
+  await t.prepareWesternSky("night");
+  // the sunset background bakes a 1536x768 sky; prepareSunsetBackground slices it
+  await s.prepareSunsetBackground("western-sunset", WESTERN_SUNSET, 1536, 768);
+  m.westernBackground("night");
+  await yieldControl();
+  const splat = await runSliced(groundSplat(L));
+  const earth = await runSliced(earthMesh(L));
+  const river = await runSliced(riverbedMesh(L));
+  extrasCache.set(L, { splat, earth, river });
+}
+function westernExtras(L: WesternLayout): WesternExtras {
+  return (
+    extrasCache.get(L) ?? {
+      splat: drain(groundSplat(L)),
+      earth: drain(earthMesh(L)),
+      river: drain(riverbedMesh(L)),
+    }
+  );
+}
+
 /** the look part-way from sunset (0) to night (1): the waves carry the match into night */
 const blended = new Map<number, WesternLook>();
 function westernLookAt(k: number): WesternLook {
@@ -315,7 +407,7 @@ export const WesternScene = memo(function WesternScene({
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
 }) {
-  const { gl } = useThree();
+  const gl = useThree((s) => s.gl);
   // the time of day in 1/64 steps; the reflections and the sky disc swap at the midpoint
   const nk = useTodK();
   const mode: WMode = nk >= 0.5 ? "night" : "sunset";
@@ -325,20 +417,14 @@ export const WesternScene = memo(function WesternScene({
     return () => provideEventHooks("train-robbery", null);
   }, []);
   const look = westernLookAt(nk);
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildWesternMeshes(layout);
-    if (import.meta.env.DEV)
-      console.info(
-        `[western] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [layout]);
+  // geometry was built across tasks while the world assembled (mesh.ts prepares it);
+  // this useMemo is a cache lookup, not the multi-second vertex pass it used to be
+  const built = useMemo(() => westernMeshes(layout), [layout]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(
         "map",
-        built.chunks.flatMap((c) => [c.main, c.detail]),
+        built.chunks.flatMap((c) => [c.main]).concat(built.details.map((d) => d.geometry)),
       ),
     [built],
   );
@@ -377,16 +463,29 @@ export const WesternScene = memo(function WesternScene({
     }),
     [nightK],
   );
-  const ground = useMemo(() => groundMaterial(layout, true), [layout]);
-  const riverMat = useMemo(() => groundMaterial(layout, false), [layout]);
-  const earthGeo = useMemo(() => earthMesh(layout), [layout]);
-  const riverGeo = useMemo(() => riverbedMesh(layout), [layout]);
+  // detail cells fade out over a band instead of snapping: a sign's trim popping in at
+  // the far side of a 120 m sightline reads as a blink, so each cell gets its own
+  // material (same factory — the night/time uniforms are shared objects)
+  const detailMats = useMemo(
+    () =>
+      built.details.map(() => {
+        const m = facadeMaterial(nightK);
+        m.transparent = true;
+        return m;
+      }),
+    [built, nightK],
+  );
+  // splat + earth + riverbed were baked across tasks in the world build (extras cache)
+  const extras = useMemo(() => westernExtras(layout), [layout]);
+  const earthGeo = extras.earth;
+  const riverGeo = extras.river;
+  const ground = useMemo(() => groundMaterial(layout, true, extras.splat), [layout, extras]);
+  const riverMat = useMemo(() => groundMaterial(layout, false, extras.splat), [layout, extras]);
   useEffect(
     () => () => {
       ground.mat.dispose();
       ground.splat.dispose();
       riverMat.mat.dispose();
-      riverMat.splat.dispose();
       riverGeo.dispose();
       earthGeo.dispose();
     },
@@ -394,25 +493,40 @@ export const WesternScene = memo(function WesternScene({
   );
 
   // reflection env maps: a small PMREM of each sky
-  const env = useMemo(() => {
-    const pm = new THREE.PMREMGenerator(gl);
-    const sunsetSrc = westernBackground("sunset");
-    const sunset = pm.fromEquirectangular(sunsetSrc);
-    // same width as the sunset so both PMREMs share one size (no shader change at the swap)
-    const nightSrc = resized(
-      westernSky("night"),
-      (sunsetSrc.image as { width: number }).width,
-      (sunsetSrc.image as { height: number }).height,
-    );
-    const nightRT = pm.fromEquirectangular(nightSrc);
-    nightSrc.dispose();
-    pm.dispose();
-    return { sunset, night: nightRT };
+  // PMREM renders are synchronous GL work: keep them out of the mount commit — they run
+  // as their own task a frame later (materials render without an envmap until it lands,
+  // behind the loading veil)
+  const [env, setEnv] = useState<{ sunset: THREE.WebGLRenderTarget; night: THREE.WebGLRenderTarget } | null>(null);
+  useEffect(() => {
+    let dead = false;
+    void (async () => {
+      await yieldControl();
+      if (dead) return;
+      const pm = new THREE.PMREMGenerator(gl);
+      const sunsetSrc = westernBackground("sunset");
+      const sunset = pm.fromEquirectangular(sunsetSrc);
+      await yieldControl();
+      if (dead) { sunset.dispose(); pm.dispose(); return; }
+      // same width as the sunset so both PMREMs share one size (no shader change at the swap)
+      const nightSrc = resized(
+        westernSky("night"),
+        (sunsetSrc.image as { width: number }).width,
+        (sunsetSrc.image as { height: number }).height,
+      );
+      const nightRT = pm.fromEquirectangular(nightSrc);
+      nightSrc.dispose();
+      pm.dispose();
+      if (dead) { sunset.dispose(); nightRT.dispose(); return; }
+      setEnv({ sunset, night: nightRT });
+    })();
+    return () => {
+      dead = true;
+    };
   }, [gl]);
   useEffect(
     () => () => {
-      env.sunset.dispose();
-      env.night.dispose();
+      env?.sunset.dispose();
+      env?.night.dispose();
     },
     [env],
   );
@@ -420,6 +534,7 @@ export const WesternScene = memo(function WesternScene({
   // reflections: the sunset or the night map, swapped at the midpoint while they are faded
   // right down (so the swap never shows)
   useEffect(() => {
+    if (!env) return;
     const e = mode === "night" ? env.night.texture : env.sunset.texture;
     mats.facade.envMap = e;
     westernEnv.map = e;
@@ -448,12 +563,13 @@ export const WesternScene = memo(function WesternScene({
 
   useEffect(
     () => () => {
-      for (const c of built.chunks)
-        [c.main, c.detail, c.glow, c.pools].forEach((g) => g?.dispose());
+      for (const c of built.chunks) [c.main, c.glow, c.pools].forEach((g) => g?.dispose());
+      for (const d of built.details) d.geometry.dispose();
       built.far.dispose();
     },
     [built],
   );
+  useEffect(() => () => detailMats.forEach((m) => m.dispose()), [detailMats]);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
   // ---- windmill wheels (animated) ----
@@ -566,10 +682,24 @@ export const WesternScene = memo(function WesternScene({
         const dx = Math.max(c.x0 - cam.position.x, 0, cam.position.x - c.x1);
         const dz = Math.max(c.z0 - cam.position.z, 0, cam.position.z - c.z1);
         const d = Math.hypot(dx, dz);
-        const det = detailRefs.current[i];
-        if (det) det.visible = d < DETAIL_RANGE;
         const pl = poolRefs.current[i];
         if (pl) pl.visible = poolsOn.current && d < 500;
+      });
+      built.details.forEach((d, i) => {
+        const dx = Math.max(d.x0 - cam.position.x, 0, cam.position.x - d.x1);
+        const dz = Math.max(d.z0 - cam.position.z, 0, cam.position.z - d.z1);
+        const det = detailRefs.current[i],
+          dm = detailMats[i];
+        if (!det || !dm) return;
+        // fade over the last 15 m of range rather than popping at the cutoff
+        const o = Math.min(1, Math.max(0, (DETAIL_RANGE + 15 - Math.hypot(dx, dz)) / 15));
+        det.visible = o > 0;
+        if (o !== dm.opacity) dm.opacity = o;
+        if (dm.envMap !== mats.facade.envMap) {
+          dm.envMap = mats.facade.envMap;
+          dm.needsUpdate = true;
+        }
+        dm.envMapIntensity = mats.facade.envMapIntensity;
       });
     }
   });
@@ -607,17 +737,6 @@ export const WesternScene = memo(function WesternScene({
       {built.chunks.map((c, i) => (
         <group key={i}>
           {c.main && <mesh geometry={c.main} material={mats.facade} castShadow receiveShadow />}
-          {c.detail && (
-            <mesh
-              ref={(m) => {
-                detailRefs.current[i] = m;
-              }}
-              geometry={c.detail}
-              material={mats.facade}
-              castShadow
-              receiveShadow
-            />
-          )}
           {c.glow && <mesh geometry={c.glow} material={mats.glow} />}
           {c.pools && (
             <mesh
@@ -631,6 +750,18 @@ export const WesternScene = memo(function WesternScene({
             />
           )}
         </group>
+      ))}
+      {built.details.map((d, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            detailRefs.current[i] = m;
+          }}
+          geometry={d.geometry}
+          material={detailMats[i]!}
+          castShadow
+          receiveShadow
+        />
       ))}
       {built.windmills.length > 0 && (
         <instancedMesh

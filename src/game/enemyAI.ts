@@ -14,6 +14,7 @@ import {
   type FineField,
 } from "./level";
 import { climbable, groundY } from "./terrain";
+import { steerTo } from "./steerCache";
 import {
   NEW_STATS,
   FLYERS,
@@ -61,6 +62,14 @@ export type Bot = {
   hitT?: number;
   /** medic heal target (enemy index) */
   tgt?: number;
+  /** steering memo (steerCache.ts): memo time, waypoint, sampled target and own spot */
+  svT?: number;
+  svX?: number;
+  svZ?: number;
+  stX?: number;
+  stZ?: number;
+  seX?: number;
+  seZ?: number;
 };
 
 /** `air`: riding the chairlift, so only ranged fire can reach them */
@@ -200,15 +209,64 @@ function walk(e: Bot, tx: number, tz: number, dist: number, ctx: AICtx) {
   return moved;
 }
 
+// reusable probes/scratches for waypoint(): per-enemy-per-frame closures and {x,z}
+// temporaries were a measurable GC source in a crowd
+const _fsOut = { x: 0, z: 0 };
+const _descOut = { x: 0, z: 0 };
+const _flank = { x: 0, z: 0 };
+const _bias = { px: 0, pz: 0, fx: 0, fz: 0, w: 0 };
+const FL_DR = [0, -1.5, 1.5, -3] as const;
+const FL_DA = [0, 0.25, -0.25, 0.5] as const;
+/** flanker's orbit pick: nearest open spot around `ang` — closure + array literals per call
+ * were GC churn in a crowd; the shared record is consumed synchronously */
+function findFlank(
+  ctx: AICtx,
+  t: Target,
+  fx: number,
+  fz: number,
+  px: number,
+  pz: number,
+  r: number,
+  ang: number,
+) {
+  for (const dr of FL_DR)
+    for (const da of FL_DA) {
+      const a = ang + da * Math.sign(ang || 1);
+      const x = t.x + (fx * Math.cos(a) + px * Math.sin(a)) * (r + dr);
+      const z = t.z + (fz * Math.cos(a) + pz * Math.sin(a)) * (r + dr);
+      if (ctx.navOpen(x, z) && !blocked(ctx.blocks, x, z, 0.6)) {
+        _flank.x = x;
+        _flank.z = z;
+        return _flank;
+      }
+    }
+  return null;
+}
+const wpProbe = {
+  e: null as Bot | null,
+  t: null as Target | null,
+  ctx: null as AICtx | null,
+  los() {
+    const { e, t, ctx } = this;
+    return clearLine(ctx!.blocks, e!.x, e!.z, t!.x, t!.z, rad(e!) * 0.9);
+  },
+  route() {
+    const { e, t, ctx } = this;
+    const ff = ctx!.fineFor?.(t!);
+    const fs = ff ? fineStep(ff, e!.x, e!.z, _fsOut) : null;
+    if (fs) return fs;
+    const dist = ctx!.fieldFor(t!);
+    if (!dist) return null;
+    return descend(ctx!.solid, dist, e!.x, e!.z, null, _descOut);
+  },
+};
+
 /** Next point on the way to the target: straight if the line is clear, else the flow field. */
 function waypoint(e: Bot, t: Target, ctx: AICtx) {
-  if (clearLine(ctx.blocks, e.x, e.z, t.x, t.z, rad(e) * 0.9)) return { x: t.x, z: t.z };
-  const ff = ctx.fineFor?.(t);
-  const fs = ff ? fineStep(ff, e.x, e.z) : null;
-  if (fs) return fs;
-  const dist = ctx.fieldFor(t);
-  if (!dist) return { x: t.x, z: t.z };
-  return descend(ctx.solid, dist, e.x, e.z, null) ?? { x: t.x, z: t.z };
+  wpProbe.e = e;
+  wpProbe.t = t;
+  wpProbe.ctx = ctx;
+  return steerTo(e, t, ctx.time, wpProbe);
 }
 
 /**
@@ -222,23 +280,21 @@ function descend(
   x: number,
   z: number,
   bias: { px: number; pz: number; fx: number; fz: number; w: number } | null,
+  out: { x: number; z: number },
 ) {
   const { g: solid, n } = nav;
   const ci = toNav(x);
   const cj = toNav(z);
-  const cost = (k: number) => {
-    let c = dist[k]!;
-    if (bias && c < Infinity) {
-      const ox = nav.px[k]! - bias.px;
-      const oz = nav.pz[k]! - bias.pz;
-      const od = Math.hypot(ox, oz) || 1;
-      const front = (ox * bias.fx + oz * bias.fz) / od; // 1 = dead ahead of the player
-      const near = Math.max(0, 1 - od / 34);
-      c += bias.w * Math.max(0, front + 0.35) * near;
-    }
-    return c;
-  };
-  let best = cost(ci * n + cj);
+  // (inlined: a `cost` closure per enemy per frame was GC churn — bias read directly)
+  let best = dist[ci * n + cj]!;
+  if (bias && best < Infinity) {
+    const ox = nav.px[ci * n + cj]! - bias.px;
+    const oz = nav.pz[ci * n + cj]! - bias.pz;
+    const od = Math.hypot(ox, oz) || 1;
+    const front = (ox * bias.fx + oz * bias.fz) / od; // 1 = dead ahead of the player
+    const near = Math.max(0, 1 - od / 34);
+    best += bias.w * Math.max(0, front + 0.35) * near;
+  }
   let bi = ci;
   let bj = cj;
   for (let di = -1; di <= 1; di++) {
@@ -250,7 +306,15 @@ function descend(
       const k = ni * n + nj;
       if (solid[k]) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
-      const c = cost(k);
+      let c = dist[k]!;
+      if (bias && c < Infinity) {
+        const ox = nav.px[k]! - bias.px;
+        const oz = nav.pz[k]! - bias.pz;
+        const od = Math.hypot(ox, oz) || 1;
+        const front = (ox * bias.fx + oz * bias.fz) / od;
+        const near = Math.max(0, 1 - od / 34);
+        c += bias.w * Math.max(0, front + 0.35) * near;
+      }
       if (c < best) {
         best = c;
         bi = ni;
@@ -260,7 +324,9 @@ function descend(
   }
   const k = bi * n + bj;
   if (bi === ci && bj === cj && (bias || best === 0)) return null; // at the target's cell: go straight
-  return { x: nav.px[k]!, z: nav.pz[k]! };
+  out.x = nav.px[k]!;
+  out.z = nav.pz[k]!;
+  return out;
 }
 
 /** approach (1), hold (0) or back off (-1) along the route to the target */
@@ -412,22 +478,20 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
             const r = Math.abs(gap) > 0.35 ? Math.max(8, Math.min(d, 11)) : 7;
             // the exact point may sit in cover: take the nearest open spot around it, and only
             // switch to the other side when this side is walled off (or it has stalled for 3 s)
-            const find = (ang: number) => {
-              for (const dr of [0, -1.5, 1.5, -3]) {
-                for (const da of [0, 0.25, -0.25, 0.5]) {
-                  const a = ang + da * Math.sign(ang || 1);
-                  const x = target.x + (fx * Math.cos(a) + px * Math.sin(a)) * (r + dr);
-                  const z = target.z + (fz * Math.cos(a) + pz * Math.sin(a)) * (r + dr);
-                  if (ctx.navOpen(x, z) && !blocked(ctx.blocks, x, z, 0.6)) return { x, z };
-                }
-              }
-              return null;
-            };
-            let g = (e.stuck ?? 0) < 3 ? find(next) : null;
+            let g = (e.stuck ?? 0) < 3 ? findFlank(ctx, target, fx, fz, px, pz, r, next) : null;
             if (!g) {
               e.side = -e.side;
               e.stuck = 0;
-              g = find(cur + Math.max(-0.8, Math.min(0.8, e.side * 2.0 - cur)));
+              g = findFlank(
+                ctx,
+                target,
+                fx,
+                fz,
+                px,
+                pz,
+                r,
+                cur + Math.max(-0.8, Math.min(0.8, e.side * 2.0 - cur)),
+              );
             }
             e.ax = g ? g.x : target.x;
             e.az = g ? g.z : target.z;
@@ -448,15 +512,14 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
               // (the city's streets; the small arenas are open enough to just arc round)
               if ((e.stuck ?? 0) >= 0.8) e.detour = 2;
               e.detour = (e.detour ?? 0) - dt;
+              _bias.px = target.x;
+              _bias.pz = target.z;
+              _bias.fx = fx;
+              _bias.fz = fz;
+              _bias.w = 14;
               const wp =
                 dist && NAV_SCALE > 1 && e.detour <= 0
-                  ? descend(ctx.solid, dist, e.x, e.z, {
-                      px: target.x,
-                      pz: target.z,
-                      fx,
-                      fz,
-                      w: 14,
-                    })
+                  ? descend(ctx.solid, dist, e.x, e.z, _bias, _descOut)
                   : null;
               if (wp) walk(e, wp.x, wp.z, spd * dt, ctx);
               else {
@@ -758,9 +821,12 @@ export function stepNewKind(e: Bot, idx: number, target: Target, d: number, ctx:
           }
           e.x = nx;
           e.z = nz;
-          const hitT = ctx.targets.find(
-            (t) => Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z),
-          );
+          let hitT: Target | undefined;
+          for (const t of ctx.targets)
+            if (Math.hypot(t.x - e.x, t.z - e.z) < reach && meleeOK(t, e.x, e.z)) {
+              hitT = t;
+              break;
+            }
           if (hitT) {
             ctx.hurtTarget(hitT, stats.dmg, ux * 14, uz * 14);
             e.st = 4;
@@ -1083,7 +1149,12 @@ export function stepOrds(ctx: AICtx) {
       continue;
     }
     // rocket: homes on its target, turning slowly, so a late sidestep beats it
-    let t = ctx.targets.find((q) => q.id === o.tgt);
+    let t: Target | undefined;
+    for (const q of ctx.targets)
+      if (q.id === o.tgt) {
+        t = q;
+        break;
+      }
     if (!t) {
       let bd = Infinity;
       for (const q of ctx.targets) {

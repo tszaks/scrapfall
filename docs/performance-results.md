@@ -2,7 +2,11 @@
 
 Baseline: `8decaa5`. Candidate: `codex/scrapfall-adaptive-performance`.
 Reference machine: Mac16,6, 36 GiB memory, macOS 26.5.1, AC power.
-These results describe local builds. Nothing was deployed.
+These results describe the original local candidate a3cf0a3 against 8decaa5, before integration with current main. They are historical measurements, not measurements of the integrated release.
+
+## Integration with current production
+
+Current main (984ff06) introduced sliced world construction, sixteen shader warm batches, new menus, postprocessing and an endgame victory latch. Those implementations are preserved. The original async whole-scene preparation and disabled-entry gate are superseded by main's batched preparation and queued entry. The release retains AUTO recovery, the desktop DPR ceiling, nested render timing that includes the final postprocessing pass, and reflection/prewarm state restoration. The historical compile-failure/context-recovery assertions below do not describe the retained upstream preparation implementation. Release validation is recorded separately in the live deployment report.
 
 ## Verified changes
 

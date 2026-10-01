@@ -71,12 +71,21 @@ export function QualityGovernor() {
     vsync: 16.7,
     cpu: [] as number[],
     t0: 0,
+    tEnd: 0,
   });
   useEffect(() => holdQuality(8000), []);
-  // CPU per frame: from the first frame callback to the end of the main render. When frames
-  // are slow but the CPU is the long pole, fewer pixels won't help: step the tier instead.
+  // CPU per frame: from the first frame callback to the end of the frame's last
+  // to-screen render — post passes run after the scene render, so sampling the first
+  // one would hide their cost. When frames are slow but the CPU is the long pole,
+  // fewer pixels won't help: step the tier instead.
   useFrame(() => {
-    st.current.t0 = performance.now();
+    const S = st.current;
+    if (S.t0 > 0 && S.tEnd > 0 && !document.hidden && !qualityHeld()) {
+      S.cpu.push(S.tEnd - S.t0);
+      if (S.cpu.length > 240) S.cpu.shift();
+    }
+    S.t0 = performance.now();
+    S.tEnd = 0;
   }, -1000);
   useEffect(() => {
     const orig = gl.render;
@@ -89,13 +98,7 @@ export function QualityGovernor() {
         orig.call(this, scene, camera);
       } finally {
         depth--;
-        if (main && S.t0 > 0) {
-          if (!document.hidden && !qualityHeld()) {
-            S.cpu.push(performance.now() - S.t0);
-            if (S.cpu.length > 240) S.cpu.shift();
-          }
-          S.t0 = 0;
-        }
+        if (main && S.t0 > 0) S.tEnd = performance.now();
       }
     };
     return () => {

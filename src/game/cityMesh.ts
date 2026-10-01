@@ -43,6 +43,7 @@ import {
 import { MODULE_W, SIGN_WORDS, W_DINER, W_GAS, W_HOTEL, adUV, wordUV } from "./cityTextures";
 import { bakeCar } from "./art/cars";
 import type { Vehicle } from "./vehicles";
+import { drain, runSliced } from "./slice";
 
 export const CHUNK = 150;
 /** the skyline filler outside the arena merges into much bigger chunks (massing only) */
@@ -2240,7 +2241,7 @@ function groundGrid(city: CityLayout) {
 
 // ---------------------------------------------------------------------------------------
 
-export function buildCityMeshes(city: CityLayout): CityMeshes {
+export function* buildCityMeshes(city: CityLayout): Generator<void, CityMeshes, void> {
   const { half, cells } = city;
   const makeGrid = (reach: number, size: number) => {
     const E = Math.ceil(reach / size) * size;
@@ -2289,14 +2290,17 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
   };
 
   // ---- buildings ----
-  for (const b of city.buildings)
+  for (const b of city.buildings) {
+    yield;
     building(b, ctxAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, !!b.backdrop));
+  }
 
   // ---- ground (arena): merged runs along z, curbs where heights step ----
   const grid = groundGrid(city);
   const cc0 = (i: number) => -half + i * 2;
   const H = (c: number) => GROUND[grid[c]!]!.h;
   for (let i = 0; i < cells; i++) {
+    yield;
     let j = 0;
     while (j < cells) {
       const s = grid[i * cells + j]!;
@@ -2317,7 +2321,8 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
       j = j1;
     }
   }
-  for (let i = 0; i < cells; i++)
+  for (let i = 0; i < cells; i++) {
+    yield;
     for (let j = 0; j < cells; j++) {
       const c = i * cells + j;
       const h = H(c);
@@ -2341,6 +2346,7 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
         }
       }
     }
+  }
   // seawall below the boardwalk
   for (let x = -half; x < half; x += CHUNK / 3) {
     const G = chunkAt(x + 1, half - 1).main;
@@ -2350,7 +2356,8 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
 
   // ---- backdrop ground: street bands as asphalt, blocks as raised pads ----
   const wx = (i: number) => -half + i * 2;
-  for (const A of city.bandsX)
+  for (const A of city.bandsX) {
+    yield;
     for (const B of city.bandsZ) {
       const inA = A.a >= 0 && A.b <= cells;
       const inB = B.a >= 0 && B.b <= cells;
@@ -2381,16 +2388,18 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
         for (let k = 0; k < 4; k++) G.wall(p[k]!, p[(k + 1) % 4]!, 0, 0.15, [0, 0, 1, 0.05]);
       }
     }
+  }
 
   // ---- road markings (detail) ----
   const paintStarts = chunks.map((c) => c.detail.n);
-  markings(city, chunkAt);
+  yield* markings(city, chunkAt);
   chunks.forEach((c, i) => c.detail.excludeSince(paintStarts[i]!));
 
   // ---- props ----
   const T = templates();
   const tint = new THREE.Color();
   for (const p of city.props) {
+    yield;
     const ch = chunkAt(p.x, p.z);
     if (p.k === "manhole" || p.k === "drain") ch.detail.decoration(() => prop(p, ch, T, tint));
     else prop(p, ch, T, tint);
@@ -2398,12 +2407,14 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
   // ---- parked cars: drawn instanced with the traffic (Traffic.tsx / art/cars.ts) ----
 
   // ---- traffic signals: mast arms + heads (static), lamps (instanced, driven by the sim) ----
-  const lamps = signals(city, chunkAt);
+  const lamps = yield* signals(city, chunkAt);
 
   let verts = 0;
-  const out: ChunkMesh[] = chunks.map((c) => {
+  const out: ChunkMesh[] = [];
+  for (const c of chunks) {
+    yield;
     verts += c.main.n + c.detail.n + c.glow.n + c.signs.n + c.pools.n;
-    return {
+    out.push({
       x0: c.x0,
       z0: c.z0,
       x1: c.x1,
@@ -2413,8 +2424,8 @@ export function buildCityMeshes(city: CityLayout): CityMeshes {
       glow: c.glow.n ? c.glow.build() : null,
       signs: c.signs.n ? c.signs.build("uv") : null,
       pools: c.pools.n ? c.pools.build("uv") : null,
-    };
-  });
+    });
+  }
   return {
     chunks: out.filter((c) => c.main || c.detail || c.glow || c.signs || c.pools),
     beacons,
@@ -2530,7 +2541,7 @@ function prop(p: Prop, ch: ChunkGeo, T: Tmpls, tint: THREE.Color) {
   }
 }
 
-function markings(city: CityLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* markings(city: CityLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
   const { half } = city;
   const Y = 0.015;
   const strip = (x0: number, z0: number, x1: number, z1: number, col: string) => {
@@ -2596,14 +2607,24 @@ function markings(city: CityLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       }
     }
   };
-  for (const R of city.roadX) road(R, city.roadZ, true, -half, southEnd);
-  for (const R of city.roadZ) road(R, city.roadX, false, -half, half);
+  for (const R of city.roadX) {
+    yield;
+    road(R, city.roadZ, true, -half, southEnd);
+  }
+  for (const R of city.roadZ) {
+    yield;
+    road(R, city.roadX, false, -half, half);
+  }
 }
 
-function signals(city: CityLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* signals(
+  city: CityLayout,
+  chunkAt: (x: number, z: number) => ChunkGeo,
+): Generator<void, Lamp[], void> {
   const lamps: Lamp[] = [];
   const nZ = city.roadZ.length;
-  city.roadX.forEach((rx, a) =>
+  for (const [a, rx] of city.roadX.entries()) {
+    yield;
     city.roadZ.forEach((rz, b) => {
       const node = a * nZ + b;
       for (const axis of [0, 1] as const)
@@ -2645,7 +2666,18 @@ function signals(city: CityLayout, chunkAt: (x: number, z: number) => ChunkGeo) 
             );
           }
         }
-    }),
-  );
+    });
+  }
   return lamps;
+}
+
+// World builds prepare the meshes off the render path (worldBuild.ts runs this coroutine
+// across tasks); the scene attaches the finished geometry in one fast commit. A render
+// that missed the cache drains the coroutine synchronously — same result, slower path.
+const prepared = new WeakMap<CityLayout, CityMeshes>();
+export async function prepareCityMeshes(city: CityLayout): Promise<void> {
+  if (!prepared.has(city)) prepared.set(city, await runSliced(buildCityMeshes(city)));
+}
+export function cityMeshes(city: CityLayout): CityMeshes {
+  return prepared.get(city) ?? drain(buildCityMeshes(city));
 }

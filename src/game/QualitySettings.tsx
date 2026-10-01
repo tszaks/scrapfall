@@ -18,7 +18,7 @@ export function QualitySettings() {
     <div className="space-y-2 border-t border-white/10 pt-4">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold tracking-[0.3em]">GRAPHICS</span>
-        <span className="text-[9px] tracking-widest opacity-60">
+        <span className="text-[11px] tracking-widest opacity-70">
           {q.pref === "auto" ? `AUTO · NOW ${q.tier.toUpperCase()}` : q.pref.toUpperCase()}
         </span>
       </div>
@@ -29,9 +29,9 @@ export function QualitySettings() {
           </button>
         ))}
       </div>
-      <div className="text-[9px] tracking-widest opacity-60">{HINT[q.pref]}</div>
+      <div className="text-[11px] tracking-widest opacity-70">{HINT[q.pref]}</div>
       {q.spec.antialias !== antialiasAtLoad && (
-        <div className="text-[9px] tracking-widest opacity-60">
+        <div className="text-[11px] tracking-widest opacity-70">
           ANTIALIASING CHANGES ON THE NEXT LOAD
         </div>
       )}

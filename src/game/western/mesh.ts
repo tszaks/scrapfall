@@ -33,9 +33,13 @@ import {
 import { FAC_COLS, FAC_ROWS, MODULE_W, TILE_M, WL, signUV } from "./textures";
 import { tumbleweedGeometry } from "./tumbleweed";
 import { roomPlan, saloonBalcony, type RoomItem, type RoomPlan } from "./rooms";
+import { drain, runSliced } from "../slice";
 
 export const CHUNK = 200;
-export const DETAIL_RANGE = 280;
+// detail cells are CHUNK/2 across; the range counts from a cell's near edge and the
+// renderer fades it in over the last 15 m — 120 m hides the far half of town while a
+// barrel or sign rail still resolves at a distance it can matter
+export const DETAIL_RANGE = 120;
 
 /** aFac.z flags: +1 windows light up at night (random), +2 always lit (saloon), +10 ground AO */
 const LIT = 1;
@@ -62,12 +66,13 @@ export type WChunk = {
   x1: number;
   z1: number;
   main: THREE.BufferGeometry | null;
-  detail: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
   pools: THREE.BufferGeometry | null;
 };
 export type WesternMeshes = {
   chunks: WChunk[];
+  /** the detail layer on its finer grid: props and trim hidden beyond DETAIL_RANGE */
+  details: { x0: number; z0: number; x1: number; z1: number; geometry: THREE.BufferGeometry }[];
   /** rolling backdrop terrain beyond the rim and the distant buttes (one geometry) */
   far: THREE.BufferGeometry;
   /** windmill wheels: animated separately */
@@ -667,6 +672,10 @@ const WIN_COLS: Record<WBld["mat"], number[]> = {
 };
 
 type Hole = { u0: number; u1: number; y0: number; y1: number };
+/** Reserve the complete sill/head trim, not just the glass, beside a real door. */
+function windowOverlapsDoor(center: number, doors: { u0: number; u1: number }[]) {
+  return doors.some((d) => center + 0.95 > d.u0 && center - 0.95 < d.u1);
+}
 /** Trim follows the same apertures as its wall, including low threshold openings. */
 function solidSpans(start: number, end: number, holes: { u0: number; u1: number }[]) {
   const out: [number, number][] = [];
@@ -888,10 +897,10 @@ function walkIn(
       boxP(
         D2,
         WL.P_BOARD,
-        d.a + 0.02,
+        d.a - 0.07,
         fl,
         -T - (d.b - d.a) + 0.02,
-        d.a + 0.07,
+        d.a - 0.02,
         d.h - 0.02,
         -T - 0.02,
       );
@@ -909,10 +918,10 @@ function walkIn(
       boxP(
         D2,
         WL.P_BOARD,
-        d.b - 0.07,
+        d.b + 0.02,
         fl,
         z0 + T + 0.02,
-        d.b - 0.02,
+        d.b + 0.07,
         d.h - 0.02,
         z0 + T + (d.b - d.a) - 0.02,
       );
@@ -928,10 +937,10 @@ function walkIn(
     boxP(
       D2,
       WL.P_BOARD,
-      ud.b - 0.07,
+      ud.b + 0.02,
       ud.y + 0.02,
       -T - (ud.b - ud.a),
-      ud.b - 0.02,
+      ud.b + 0.07,
       ud.y + 2.26,
       -T - 0.02,
     );
@@ -946,12 +955,12 @@ function walkIn(
   const [ftu, ftv] = TILE_M[finishLayer] ?? [2, 2];
   const finUV = (ua: number, ub: number, ya: number, yb: number) =>
     [ua / ftu, ya / ftv, ub / ftu, yb / ftv] as const;
-  const winHoles = (len: number, skipLastBay: boolean): Hole[] => {
+  const winHoles = (len: number, doors: { u0: number; u1: number }[] = []): Hole[] => {
     const nWin = Math.floor((len - 1.2) / 3.6);
     const out: Hole[] = [];
     for (let k = 0; k < nWin; k++) {
-      if (skipLastBay && k === nWin - 1) continue;
       const tc = ((k + 0.5) / nWin) * len;
+      if (windowOverlapsDoor(tc, doors)) continue;
       out.push({ u0: tc - 0.75, u1: tc + 0.75, y0: 0.8, y1: 2.8 });
     }
     return out;
@@ -963,14 +972,19 @@ function walkIn(
   const iw: IW[] = [];
   // front: from the right corner to the left (u from x1)
   {
-    const holes: Hole[] = front.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a, y0: 0, y1: d.h }));
+    const holes: Hole[] = front.map((d) => ({
+      u0: x1 - T - d.b,
+      u1: x1 - T - d.a,
+      y0: 0,
+      y1: d.h,
+    }));
     const win: Hole[] = [];
     for (let m = 0; m < mods; m++) {
       const xa = x0 + m * mw;
       const xb = xa + mw;
       if (front.some((d) => d.b > xa && d.a < xb)) continue;
       const c = (xa + xb) / 2;
-      win.push({ u0: x1 - c - 0.7, u1: x1 - c + 0.7, y0: 0.9, y1: 2.6 });
+      win.push({ u0: x1 - T - c - 0.7, u1: x1 - T - c + 0.7, y0: 0.9, y1: 2.6 });
     }
     iw.push({ ax: x1 - T, az: -T, bx: x0 + T, bz: -T, holes: [...holes, ...win], win });
   }
@@ -979,7 +993,10 @@ function walkIn(
     const holes: Hole[] = back.map((d) => ({ u0: d.a - x0 - T, u1: d.b - x0 - T, y0: 0, y1: d.h }));
     // the outer back wall's windows run from x1 to x0: mirror them
     const lenB = W;
-    const win = winHoles(lenB, back.length > 0).map((h) => ({
+    const win = winHoles(
+      lenB,
+      back.map((d) => ({ u0: x1 - d.b, u1: x1 - d.a })),
+    ).map((h) => ({
       ...h,
       u0: lenB - h.u1 - T,
       u1: lenB - h.u0 - T,
@@ -989,7 +1006,7 @@ function walkIn(
   // the sides (outer windows run from the front corner back along x1, and from the back along x0)
   {
     // (both side walls' outer windows sit at D - tc from the inner walls' start)
-    const win = winHoles(D, false).map((h) => ({ ...h, u0: D - h.u1 - T, u1: D - h.u0 - T }));
+    const win = winHoles(D).map((h) => ({ ...h, u0: D - h.u1 - T, u1: D - h.u0 - T }));
     iw.push({ ax: x0 + T, az: -T, bx: x0 + T, bz: z0 + T, holes: win, win });
     iw.push({ ax: x1 - T, az: z0 + T, bx: x1 - T, bz: -T, holes: win, win });
   }
@@ -2017,7 +2034,7 @@ function backWorks(
   void plainL;
 }
 
-function building(b: WBld, r: () => number): BGeo {
+function building(b: WBld, r: () => number, stairOpen = false): BGeo {
   const B: BGeo = { main: new Geo(), detail: new Geo(), glow: new Geo(), pools: new Geo() };
   const { W, D } = frameOf(b);
   const G = B.main;
@@ -2072,7 +2089,14 @@ function building(b: WBld, r: () => number): BGeo {
   // upper-storey row (so they match the front)
   {
     const winCol = (k: number) => (b.mat === "barn" ? (k % 2 ? 3 : 0) : (k + uOff) % FAC_COLS);
-    const wallWindows = (ax: number, az: number, bx: number, bz: number, skipLast = false) => {
+    const wallWindows = (
+      ax: number,
+      az: number,
+      bx: number,
+      bz: number,
+      skipLast = false,
+      doors: { u0: number; u1: number }[] = [],
+    ) => {
       const len = Math.hypot(bx - ax, bz - az);
       const nWin = Math.floor((len - 1.2) / 3.6);
       if (nWin < 1) return;
@@ -2088,6 +2112,7 @@ function building(b: WBld, r: () => number): BGeo {
           // (the ground-floor bay by the back door has the door instead)
           if (skipLast && st === 0 && k === nWin - 1) continue;
           const tc = ((k + 0.5) / nWin) * len;
+          if (st === 0 && windowOverlapsDoor(tc, doors)) continue;
           const c = winCol(k + st);
           const uv = [c * 0.25 + 0.05, 0.295, c * 0.25 + 0.2, 0.465] as const;
           const pa = [ax + ux * (tc - 0.75) + nx, az + uz * (tc - 0.75) + nz] as const;
@@ -2134,9 +2159,8 @@ function building(b: WBld, r: () => number): BGeo {
       z0,
       x0,
       z0,
-      plan
-        ? plan.doors.some((d) => d.wall === "back")
-        : STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch",
+      !plan && (STREET_KINDS.has(b.t) || b.t === "house" || b.t === "shack" || b.t === "ranch"),
+      plan?.doors.filter((d) => d.wall === "back").map((d) => ({ u0: x1 - d.b, u1: x1 - d.a })),
     );
     wallWindows(x0, z0, x0, 0);
     // a painted advertisement on one tall side wall of the bigger stores
@@ -2467,7 +2491,8 @@ function building(b: WBld, r: () => number): BGeo {
         G.col("#ffffff", 0.9);
         boxP(G, WL.DECK, ba + 0.01, py, -0.1, bb, py + 0.18, bd, true, true);
         rail(ba, bb, bd - 0.07);
-        endRail(ba + 0.07, 0.2, bd - 0.07);
+        // the alley stair's landing joins the balcony on this end: leave it open
+        if (!stairOpen) endRail(ba + 0.07, 0.2, bd - 0.07);
         endRail(bb - 0.07, 0.2, bd - 0.07);
         const nb = Math.max(2, Math.round((bb - ba) / 3.2));
         for (let i = 0; i <= nb; i++) {
@@ -2772,7 +2797,10 @@ function tent(B: BGeo, W: number, D: number, r: () => number): BGeo {
   const x0 = -W / 2;
   const x1 = W / 2;
   const z0 = -D;
-  G.col("#ffffff", 0.95 - r() * 0.1).mat(WL.CANVAS, r(), 0);
+  // weathered canvas, never clean white: sun-faded oiled cloth reads pale tan and
+  // stays dim instead of glaring under the moon
+  const canvasTint = pick(["#e6dbc2", "#d8cbab", "#cfc0a0", "#e2d8c4"], r);
+  G.col(canvasTint, 0.95 - r() * 0.1).mat(WL.CANVAS, r(), 0);
   // the two slopes (ridge along the depth), flaps out at the front
   slope(G, WL.CANVAS, 0, 0.2, 0, z0 - 0.2, h, x1 + 0.2, 0, 0.35);
   slope(G, WL.CANVAS, 0, z0 - 0.2, 0, 0.2, h, x0 - 0.2, 0, 0.35);
@@ -2798,9 +2826,15 @@ function tent(B: BGeo, W: number, D: number, r: () => number): BGeo {
     B.detail.col("#3a3634");
     cylP(B.detail, WL.IRON, x1 * 0.5, h * 0.5, z0 * 0.5, 0.07, 1.8, 6);
   }
-  // a lamp glowing through the canvas at night
-  B.glow.col("#ffb060", 0.25);
-  B.glow.quad(-0.45, 0.02, 0.05, 0.45, 0.02, 0.05, 0, h - 0.45, 0.05, 0, h - 0.45, 0.05);
+  // a lamp glowing through the canvas at night: some tents burn a light, some are dark.
+  // (glow geo draws opaque, so the lit interior is a warm plane just off the open flap —
+  // big enough to read at a distance, shaped to the flap opening, not over the canvas)
+  if (r() < 0.55) {
+    B.glow.col("#ff9a3c", 0.55);
+    B.glow.quad(-0.56, 0.02, 0.07, 0.56, 0.02, 0.07, 0.3, h - 0.55, 0.07, -0.3, h - 0.55, 0.07);
+    B.glow.col("#ffc878", 0.85);
+    B.glow.quad(-0.3, 0.02, 0.08, 0.3, 0.02, 0.08, 0, h - 0.7, 0.08, 0, h - 0.7, 0.08);
+  }
   return B;
 }
 
@@ -3978,6 +4012,41 @@ function templates() {
     d.col("#2a2420");
     for (const x of [-0.33, 0.33]) beam(d, x, 1.6, 0.02, x, 1.2, 0.02, 0.03, WL.IRON);
   });
+  make("steer", (d) => {
+    // a range longhorn in the pens: heavy slab body, drooped head, the wide horn span
+    const hide = pick(["#6a4a34", "#4a332a", "#7a5a42", "#3a2c24", "#8a6a4c"], r);
+    const dark = "#241a14";
+    d.col(hide);
+    boxP(d, WL.PAINT, -0.36, 0.9, -0.85, 0.36, 1.62, 0.82);
+    boxP(d, WL.PAINT, -0.3, 0.96, 0.8, 0.3, 1.7, 1.0); // hump of the shoulders
+    beam(d, 0, 1.5, 0.9, 0, 1.1, 1.45, 0.26, WL.PAINT); // neck, carried low
+    d.col(hide);
+    boxP(d, WL.PAINT, -0.16, 0.92, 1.4, 0.16, 1.34, 1.85); // head
+    d.col("#d8cdb8");
+    // the span: a long upward-curved horn each side
+    beam(d, -0.14, 1.3, 1.5, -0.85, 1.62, 1.3, 0.07, WL.PAINT);
+    beam(d, 0.14, 1.3, 1.5, 0.85, 1.62, 1.3, 0.07, WL.PAINT);
+    beam(d, -0.85, 1.62, 1.3, -0.95, 1.8, 1.24, 0.05, WL.PAINT);
+    beam(d, 0.85, 1.62, 1.3, 0.95, 1.8, 1.24, 0.05, WL.PAINT);
+    d.col(dark);
+    beam(d, 0, 1.45, -0.85, 0, 0.55, -1.06, 0.09, WL.PAINT); // tail
+    d.col(hide);
+    for (const [x, z] of [
+      [-0.2, 0.6],
+      [0.2, 0.6],
+      [-0.2, -0.66],
+      [0.2, -0.66],
+    ] as const)
+      beam(d, x, 0.95, z, x, 0.1, z + 0.02, 0.14, WL.PAINT);
+    d.col("#1a1410");
+    for (const [x, z] of [
+      [-0.2, 0.62],
+      [0.2, 0.62],
+      [-0.2, -0.64],
+      [0.2, -0.64],
+    ] as const)
+      boxC(d, WL.PAINT, x, 0, z, 0.16, 0.11, 0.18);
+  });
   // ---- the moving riders' parts (Riders.tsx animates the legs; tints come per instance) ----
   make("horsebody", (d) => {
     // a saddled horse without its legs (they swing), nose toward +z
@@ -4108,6 +4177,64 @@ function templates() {
     d.col("#7a5a3a");
     boxP(d, WL.TIMBER, -0.08, 0, -0.08, 0.08, 2.2, 0.08);
   });
+  // rolling stock: freight cars on the yard sidings (rolled along +z, like wagonBed)
+  const car = (k: "boxcar" | "stockcar" | "flatcar", paint: string) =>
+    make(k, (d, g) => {
+      const LW = 1.5; // half-width
+      const L0 = -6.4;
+      const L1 = 6.4;
+      // trucks (bogies at either end, wheel blocks hanging at the rails)
+      d.col("#3a3430").mat(WL.IRON);
+      for (const tz of [-4.2, 4.2]) {
+        boxP(d, WL.IRON, -1.1, 0.35, tz - 1.0, 1.1, 0.95, tz + 1.0);
+        for (const wz of [tz - 0.6, tz + 0.6])
+          for (const wx of [-0.85, 0.85]) boxP(d, WL.IRON, wx - 0.1, 0.02, wz - 0.34, wx + 0.1, 0.72, wz + 0.34);
+      }
+      // underframe and end beams
+      boxP(d, WL.TIMBER, -LW + 0.2, 0.85, L0, LW - 0.2, 1.25, L1);
+      d.col("#4a3a2e");
+      boxP(d, WL.TIMBER, -LW, 1.15, L0, LW, 1.3, L0 + 0.4);
+      boxP(d, WL.TIMBER, -LW, 1.15, L1 - 0.4, LW, 1.3, L1);
+      d.col(paint);
+      if (k === "flatcar") {
+        // deck with stake pockets and a few crates aboard
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 1.5, L1);
+        d.col("#6a5240");
+        for (let z = L0 + 0.5; z < L1 - 0.4; z += 1.1) {
+          boxP(d, WL.TIMBER, -LW - 0.04, 1.5, z, -LW + 0.14, 2.0, z + 0.14);
+          boxP(d, WL.TIMBER, LW - 0.14, 1.5, z, LW + 0.04, 2.0, z + 0.14);
+        }
+      } else if (k === "stockcar") {
+        // slatted sides so the stock breathes
+        for (let z = L0 + 0.4; z < L1 - 0.3; z += 0.62) {
+          boxP(d, WL.P_BOARD, -LW, 1.3, z, -LW + 0.12, 3.5, z + 0.3);
+          boxP(d, WL.P_BOARD, LW - 0.12, 1.3, z, LW, 3.5, z + 0.3);
+        }
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 3.5, L0 + 0.4);
+        boxP(d, WL.P_BOARD, -LW, 1.3, L1 - 0.4, LW, 3.5, L1);
+        d.col("#7a6a56");
+        // shallow arched tin roof: ridge down the centreline, eaves over each side
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 3.9, -LW - 0.2, 0, 3.5);
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 3.9, LW + 0.2, 0, 3.5);
+      } else {
+        // boxcar: boarded body, sliding door, tin roof
+        boxP(d, WL.P_BOARD, -LW, 1.3, L0, LW, 3.6, L1, false);
+        d.col("#54402e");
+        boxP(d, WL.P_BOARD, -LW - 0.03, 1.5, -1.3, LW + 0.03, 3.4, 1.3);
+        d.col("#7a6a56");
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 4.0, -LW - 0.2, 0, 3.6);
+        slope(d, WL.TIN, 0, L0 - 0.2, 0, L1 + 0.2, 4.0, LW + 0.2, 0, 3.6);
+      }
+      // couplers and a brake wheel on the B end
+      d.col("#3a3430").mat(WL.IRON);
+      boxP(d, WL.IRON, -0.15, 0.9, L0 - 0.9, 0.15, 1.1, L0 + 0.2);
+      boxP(d, WL.IRON, -0.15, 0.9, L1 - 0.2, 0.15, 1.1, L1 + 0.9);
+      cylP(d, WL.IRON, LW - 0.3, 3.0, L1 - 0.2, 0.25, 0.25, 0.08);
+      void g;
+    });
+  car("boxcar", "#8a4a34");
+  car("stockcar", "#6a5138");
+  car("flatcar", "#7a6248");
   TM = T;
   return T;
 }
@@ -4116,7 +4243,7 @@ function templates() {
 // rock: a heightfield on the 2 m cell corners (min of the four cells, so rock never
 // spills onto walkable cells), terraced into sandstone ledges
 
-function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, Float32Array, void> {
   const { cells, half, rock } = L;
   const n = cells + 1;
   const hv = new Float32Array(n * n);
@@ -4125,14 +4252,17 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     const cj = Math.max(0, Math.min(cells - 1, j));
     return rock[ci * cells + cj]!;
   };
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++)
       hv[i * n + j] = Math.min(cellH(i - 1, j - 1), cellH(i, j - 1), cellH(i - 1, j), cellH(i, j));
+  }
   // crumbly faces: noise on the steep parts only, so mesa tops and ledges stay flat
   const raw = hv.slice();
   const R = (i: number, j: number) =>
     raw[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const h = raw[i * n + j]!;
       if (h <= 0) continue;
@@ -4147,6 +4277,7 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       const z = -half + j * 2;
       hv[i * n + j] = h + (fbm(x * 0.21, z * 0.21, 91) - 0.5) * Math.min(3.5, h * 0.25) * k;
     }
+  }
   const H = (i: number, j: number) =>
     hv[Math.max(0, Math.min(n - 1, i)) * n + Math.max(0, Math.min(n - 1, j))]!;
   const _n = new THREE.Vector3();
@@ -4155,7 +4286,8 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     return _n;
   };
   const [tu, tv] = TILE_M[WL.ROCK]!;
-  for (let i = 0; i < cells; i++)
+  for (let i = 0; i < cells; i++) {
+    yield;
     for (let j = 0; j < cells; j++) {
       const h00 = H(i, j);
       const h10 = H(i + 1, j);
@@ -4211,13 +4343,14 @@ function rockMesh(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
         tri([i + 1, j, h10], [i, j + 1, h01], [i + 1, j + 1, h11]);
       }
     }
+  }
   return hv;
 }
 
 const terraceH = (h: number, step: number) => Math.round(h / step) * step;
 
 /** the land beyond the rim (rolling desert and mesas), plus distant buttes on the horizon */
-function farTerrain(L: WesternLayout, hv: Float32Array) {
+function* farTerrain(L: WesternLayout, hv: Float32Array): Generator<void, THREE.BufferGeometry, void> {
   const G = new Geo();
   const { half, cells } = L;
   const n = cells + 1;
@@ -4246,12 +4379,15 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
   const [tu, tv] = TILE_M[WL.ROCK]!;
   const nG = Math.round((R * 2) / S);
   const hs = new Float32Array((nG + 1) * (nG + 1));
-  for (let a = 0; a <= nG; a++)
+  for (let a = 0; a <= nG; a++) {
+    yield;
     for (let b = 0; b <= nG; b++) hs[a * (nG + 1) + b] = hAt(-R + a * S, -R + b * S);
+  }
   const Hs = (a: number, b: number) =>
     hs[Math.max(0, Math.min(nG, a)) * (nG + 1) + Math.max(0, Math.min(nG, b))]!;
   const _n = new THREE.Vector3();
-  for (let a = 0; a < nG; a++)
+  for (let a = 0; a < nG; a++) {
+    yield;
     for (let b = 0; b < nG; b++) {
       const x0 = -R + a * S;
       const z0 = -R + b * S;
@@ -4288,6 +4424,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
       v(a + 1, b + 1);
       v(a + 1, b);
     }
+  }
   // Monument Valley buttes on the horizon: sheer-sided towers on talus skirts
   const r = mulberry(4242);
   const buttes: [number, number, number, number][] = [];
@@ -4299,6 +4436,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
     buttes.push([Math.cos(bias) * d, Math.sin(bias) * d, 50 + r() * 110, 60 + r() * 170]);
   }
   for (const [bx, bz, h, rad] of buttes) {
+    yield;
     const seg = 14;
     const skirt = h * 0.35;
     const pts: [number, number, number][] = [];
@@ -4359,7 +4497,7 @@ function farTerrain(L: WesternLayout, hv: Float32Array) {
 // ---------------------------------------------------------------------------------------
 // the railroad: ties, rails, the trestle, embankments and tunnel portals
 
-function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const { half, rock, cells } = L;
   const rockAt = (z: number) => {
     const i = Math.floor((RAIL_X + half) / 2);
@@ -4372,6 +4510,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
   const { z0: tz0, z1: tz1 } = L.trestle;
   // ties and rails, every visible metre of the line
   for (let z = -half; z < half; z += 0.62) {
+    yield;
     if (inTunnel(z)) continue;
     const ch = chunkAt(RAIL_X, z);
     const G = ch.detail;
@@ -4475,6 +4614,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
   }
   // embankments: a trapezoid of fill under the ramps
   for (let z = tz0 - 46; z < tz1 + 46; z += 2) {
+    yield;
     if (z + 2 > tz0 && z < tz1) continue;
     const ya = y(z);
     const yb = y(z + 2);
@@ -4613,6 +4753,7 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
     return k >= 6;
   };
   for (let j = 1; j < cells; j++) {
+    yield;
     const a = rock[iRail * cells + j - 1]! > 0;
     const bb = rock[iRail * cells + j]! > 0;
     if (a === bb) continue;
@@ -4705,84 +4846,175 @@ function railroad(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo)
       tz + 0.25,
     );
   }
+  // ---- the freight-yard siding: a second track at x = 162, laid at grade, with a
+  // turnout off the main at its north end and the parked cars left to props ----
+  {
+    const SX = 162;
+    for (let z = -120; z < 118; z += 0.62) {
+      const G = chunkAt(SX, z).detail;
+      G.col(pick(["#6a5646", "#5a4a3c", "#7a6450"], mulberry(Math.floor(z * 100 + 7))));
+      boxP(G, WL.TIMBER, SX - 1.3, 0.16, z - 0.11, SX + 1.3, 0.3, z + 0.11);
+    }
+    for (let z = -120; z < 118; z += 8) {
+      const G = chunkAt(SX, z + 4).main;
+      G.col("#8a8078");
+      for (const sd of [-1, 1]) {
+        const x = SX + (sd * gauge) / 2;
+        beam(G, x, 0.37, z, x, 0.37, Math.min(118, z + 8), 0.12, WL.IRON);
+      }
+      G.col("#9a8a78").mat(WL.BALLAST);
+      const ze = Math.min(118, z + 8);
+      G.quad(SX - 1.4, 0.2, ze, SX + 1.4, 0.2, ze, SX + 1.4, 0.2, z, SX - 1.4, 0.2, z, [
+        0, 0, 1, 3,
+      ]);
+    }
+    // the turnout: a switch panel and a short diverging lead tying into the main
+    const G = chunkAt(156, -60).detail;
+    G.col("#8a8078");
+    beam(G, RAIL_X + gauge / 2, y(-68) + 0.39, -68, SX - gauge / 2, 0.37, -50, 0.12, WL.IRON);
+    beam(G, RAIL_X + gauge / 2 + 1.2, y(-68) + 0.39, -68, SX - gauge / 2 + 1.2, 0.37, -50, 0.1, WL.IRON);
+    G.col("#5a4636");
+    boxP(G, WL.TIMBER, 158.6, 0.3, -56.8, 159.2, 0.42, -55.6);
+    G.col("#c8b8a0");
+    boxP(G, WL.TIMBER, 158.7, 0.42, -56.4, 159.1, 1.15, -56.2); // switch stand
+    G.col("#a83020");
+    boxP(G, WL.PAINT, 158.55, 1.15, -56.55, 159.25, 1.45, -56.05); // target
+  }
+}
+
+/** the crib-walled causeways (the river crossings and the stock chute's bank): plank
+ * tops, timber retaining faces on the downhill sides, and the rail fences town.ts posted */
+function* decks(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
+  for (const dk of L.decks) {
+    yield;
+    const G = chunkAt((dk.x0 + dk.x1) / 2, (dk.z0 + dk.z1) / 2).main;
+    // plank running surface: alternating board tones so the deck never reads as a flat
+    // plane (it used to turn into one dark slab at night)
+    {
+      const long = dk.axis === "x" ? "z" : "x"; // boards lie across the direction of travel
+      const tones = ["#a88968", "#988058", "#b09860"];
+      if (long === "z") {
+        let s = dk.z0, i = 0;
+        while (s < dk.z1 - 0.01) {
+          const e = Math.min(dk.z1, s + 0.42 + ((i * 7) % 5) * 0.09);
+          G.col(tones[i % 3]!).mat(WL.DECK);
+          G.quad(dk.x0, dk.y + 0.06, e, dk.x1, dk.y + 0.06, e, dk.x1, dk.y + 0.06, s,
+            dk.x0, dk.y + 0.06, s, [0, 0, (dk.x1 - dk.x0) / 3, 0.3]);
+          s = e;
+          i++;
+        }
+      } else {
+        let s = dk.x0, i = 0;
+        while (s < dk.x1 - 0.01) {
+          const e = Math.min(dk.x1, s + 0.42 + ((i * 7) % 5) * 0.09);
+          G.col(tones[i % 3]!).mat(WL.DECK);
+          G.quad(s, dk.y + 0.06, dk.z1, e, dk.y + 0.06, dk.z1, e, dk.y + 0.06, dk.z0,
+            s, dk.y + 0.06, dk.z0, [0, 0, 0.3, (dk.z1 - dk.z0) / 3]);
+          s = e;
+          i++;
+        }
+      }
+    }
+    G.col("#3a2d22").mat(WL.P_BOARD, 0.5, 0);
+    G.quad(dk.x0, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z0, dk.x1, dk.y + 0.05, dk.z1,
+      dk.x0, dk.y + 0.05, dk.z1, [0, 0, 1, 1]); // dark underside (visible from the gully)
+    G.col("#4a3a2c").mat(WL.P_BOARD, 0.5, 0);
+    // the timber deck edge: a fascia board round the rim — flush at the two ends the
+    // ramps land on (a lip above the planks snags the body capsule mid-step)
+    const fx = 0.16,
+      lipX = dk.axis === "x" ? dk.y + 0.01 : dk.y + 0.1,
+      lipZ = dk.axis === "z" ? dk.y + 0.01 : dk.y + 0.1;
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x0, lipX, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x1, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, lipX, dk.z1 + fx);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z0 - fx, dk.x1 + fx, lipZ, dk.z0);
+    boxP(G, WL.TIMBER, dk.x0 - fx, dk.y - 0.3, dk.z1, dk.x1 + fx, lipZ, dk.z1 + fx);
+    // the crib walls: vertical plank faces where the berm meets the carved bed, on
+    // posts down into the channel
+    const sideX: number[] = dk.axis === "z" ? [dk.x0, dk.x1] : [];
+    const sideZ: number[] = dk.axis === "x" ? [dk.z0, dk.z1] : [];
+    for (const sx of sideX) {
+      const e = sx === dk.x0 ? -0.15 : 0.15;
+      boxP(G, WL.P_BOARD, sx - 0.15, dk.y - 1.7, dk.z0, sx + e, dk.y, dk.z1);
+      for (let z = dk.z0 + 1; z <= dk.z1 - 1; z += 4)
+        boxP(G, WL.TIMBER, sx - 0.22, dk.y - 1.9, z - 0.18, sx + e + 0.08, dk.y + 0.02, z + 0.18);
+    }
+    for (const sz of sideZ) {
+      const e = sz === dk.z0 ? -0.15 : 0.15;
+      boxP(G, WL.P_BOARD, dk.x0, dk.y - 1.7, sz - 0.15, dk.x1, dk.y, sz + e);
+      for (let x = dk.x0 + 1; x <= dk.x1 - 1; x += 4)
+        boxP(G, WL.TIMBER, x - 0.18, dk.y - 1.9, sz - 0.22, x + 0.18, dk.y + 0.02, sz + e + 0.08);
+    }
+  }
 }
 
 /** The saloon's alley stair to its balcony matches the layout terrain. The church uses
  * the shared spiral access mesh, with its real floor opening cut into the tower above. */
-function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const st = L.saloonStairs;
   if (st) {
     const G = chunkAt((st.x0 + st.x1) / 2, st.zTop).main;
     const dir = Math.sign(st.zTop - st.zBottom); // toward the street
     const run = Math.abs(st.zTop - st.zBottom);
-    const n = Math.round(run);
     const xa = st.x0 + 0.25;
     const xb = st.x1 - 0.3;
+    const n = Math.max(10, Math.ceil(run / 0.8)); // ~0.19 m risers: a taller face reads as a wall to the step clearance
+    const rise = BALCONY_Y / n;
     for (let i = 0; i < n; i++) {
-      const za = st.zBottom + dir * i;
-      const h = (BALCONY_Y * (i + 1)) / n;
+      const za = st.zBottom + (dir * run * i) / n;
+      const zb = st.zBottom + (dir * run * (i + 1)) / n;
+      const h = BALCONY_Y - rise * (n - i - 1);
       G.col("#a88660");
       boxP(
         G,
         WL.DECK,
         xa,
-        h - 0.08,
-        Math.min(za, za + dir),
+        h - 0.05,
+        Math.min(za, zb + dir * 0.03),
         xb,
         h,
-        Math.max(za, za + dir),
+        Math.max(za, zb + dir * 0.03),
         true,
         true,
       );
-      // risers
+      // the riser is one board between treads, top edge under the step budget
       G.col("#7a5e44");
-      boxP(
-        G,
-        WL.TIMBER,
-        xa,
-        0,
-        Math.min(za, za + dir * 0.06),
-        xb,
-        h - 0.08,
-        Math.max(za, za + dir * 0.06),
-        false,
-      );
+      if (dir > 0) wallq(G, xb, za, xa, za, h - rise, h - 0.05, [0, 0, 1, 0.2]);
+      else wallq(G, xa, za, xb, za, h - rise, h - 0.05, [0, 0, 1, 0.2]);
     }
-    // the boarded side toward the open half of the alley, and a handrail
+    // the boarded side toward the open half of the alley, and a handrail — on whichever
+    // edge is farther from the saloon (the stair can run either side of the lot)
+    const sb = L.buildings.find((b) => b.t === "saloon");
+    const openL =
+      !sb || (st.x0 + st.x1) / 2 < (sb.x0 + sb.x1) / 2; // open edge on the west side
+    const ox = openL ? xa - 0.28 : xb; // rail line on the open edge
     G.col("#8a7258");
     for (let i = 0; i < n; i++) {
-      const za = st.zBottom + dir * i;
-      const h = (BALCONY_Y * (i + 1)) / n;
-      boxP(G, WL.P_BOARD, xb, 0, Math.min(za, za + dir), xb + 0.1, h, Math.max(za, za + dir));
+      const za = st.zBottom + (dir * run * i) / n;
+      const zb = st.zBottom + (dir * run * (i + 1)) / n;
+      const h = rise * (i + 1);
+      boxP(G, WL.P_BOARD, ox, 0, Math.min(za, zb), ox + 0.1, h, Math.max(za, zb));
     }
     G.col("#6a4a30");
-    beam(G, xb + 0.05, 1.0, st.zBottom, xb + 0.05, BALCONY_Y + 1.0, st.zTop, 0.08);
+    beam(G, ox + 0.05, 1.0, st.zBottom, ox + 0.05, BALCONY_Y + 1.0, st.zTop, 0.08);
     for (let i = 0; i <= n; i += 2) {
-      const z = st.zBottom + dir * i;
-      const h = (BALCONY_Y * i) / n;
-      boxP(G, WL.TIMBER, xb, h, z - 0.05, xb + 0.1, h + 1.0, z + 0.05);
+      const z = st.zBottom + (dir * run * i) / n;
+      boxP(G, WL.TIMBER, ox, rise * i, z - 0.05, ox + 0.1, rise * i + 1.0, z + 0.05);
     }
     // the landing: a deck at balcony height on posts, railed on its open sides
     const edge = st.zTop + dir * SALOON_BALCONY; // (as deep as the balcony it joins)
     const zl0 = Math.min(st.zTop, edge);
     const zl1 = Math.max(st.zTop, edge);
     G.col("#b89a78");
-    boxP(G, WL.DECK, st.x0 - 0.1, BALCONY_Y - 0.18, zl0, xb + 0.1, BALCONY_Y, zl1, true, true);
+    // the deck runs a touch past the stair strip, onto the balcony's end
+    const dx0 = openL ? st.x0 - 0.1 : st.x0 - 0.9,
+      dx1 = openL ? st.x1 + 0.9 : st.x1 + 0.1;
+    boxP(G, WL.DECK, dx0, BALCONY_Y - 0.18, zl0, dx1, BALCONY_Y, zl1, true, true);
     G.col("#6a4a30");
-    boxP(G, WL.TIMBER, xb - 0.1, 0, edge - 0.1, xb + 0.1, BALCONY_Y, edge + 0.1);
+    boxP(G, WL.TIMBER, ox - 0.1, 0, edge - 0.1, ox + 0.1, BALCONY_Y, edge + 0.1);
     G.col("#e8dcc0");
-    boxP(
-      G,
-      WL.TIMBER,
-      st.x0 - 0.1,
-      BALCONY_Y + 0.95,
-      edge - 0.06,
-      xb + 0.1,
-      BALCONY_Y + 1.05,
-      edge + 0.06,
-    );
-    boxP(G, WL.TIMBER, xb, BALCONY_Y + 0.95, zl0, xb + 0.1, BALCONY_Y + 1.05, zl1);
-    for (let x = st.x0; x <= xb; x += 0.42)
+    boxP(G, WL.TIMBER, dx0, BALCONY_Y + 0.95, edge - 0.06, dx1, BALCONY_Y + 1.05, edge + 0.06);
+    boxP(G, WL.TIMBER, ox, BALCONY_Y + 0.95, zl0, ox + 0.1, BALCONY_Y + 1.05, zl1);
+    for (let x = dx0; x <= dx1; x += 0.42)
       boxP(
         G,
         WL.TIMBER,
@@ -4798,7 +5030,7 @@ function stairs(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
 }
 
 /** the mine portal: timber sets in the canyon face, a black adit, ore-cart rails */
-function minePortal(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo) {
+function* minePortal(L: WesternLayout, chunkAt: (x: number, z: number) => ChunkGeo): Generator<void, void, void> {
   const { x, z } = L.mine;
   const ch = chunkAt(x, z);
   const G = ch.main;
@@ -4845,7 +5077,7 @@ export function propTemplate(k: PKey) {
   return templates()[k] ?? null;
 }
 
-export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
+export function* buildWesternMeshes(L: WesternLayout): Generator<void, WesternMeshes, void> {
   const { half } = L;
   const E = half;
   const n = Math.ceil((E * 2) / CHUNK);
@@ -4862,10 +5094,34 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
         glow: new Geo(),
         pools: new Geo(),
       });
-  const chunkAt = (x: number, z: number) => {
+  // the detail layer gets a finer grid than the walls: a 200 m chunk is within range of
+  // most of town, so distance culling never engages; 100 m cells let it actually bite
+  const dn = n * 2,
+    DCHUNK = CHUNK / 2;
+  const dCells: { x0: number; z0: number; x1: number; z1: number; geo: Geo }[] = [];
+  const dGrid = new Int32Array(dn * dn).fill(-1);
+  const detailAt = (x: number, z: number) => {
+    const a = Math.max(0, Math.min(dn - 1, Math.floor((x + E) / DCHUNK)));
+    const b = Math.max(0, Math.min(dn - 1, Math.floor((z + E) / DCHUNK)));
+    const i = a * dn + b;
+    let cell = dCells[dGrid[i]!];
+    if (!cell) {
+      cell = {
+        x0: -E + a * DCHUNK,
+        z0: -E + b * DCHUNK,
+        x1: -E + (a + 1) * DCHUNK,
+        z1: -E + (b + 1) * DCHUNK,
+        geo: new Geo(),
+      };
+      dGrid[i] = dCells.push(cell) - 1;
+    }
+    return cell;
+  };
+  const chunkAt = (x: number, z: number): ChunkGeo => {
     const a = Math.max(0, Math.min(n - 1, Math.floor((x + E) / CHUNK)));
     const b = Math.max(0, Math.min(n - 1, Math.floor((z + E) / CHUNK)));
-    return list[a * n + b]!;
+    const c = list[a * n + b]!;
+    return { ...c, detail: detailAt(x, z).geo };
   };
   const r = mulberry(1234);
   const windmills: WesternMeshes["windmills"] = [];
@@ -4873,7 +5129,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
 
   // ---- buildings ----
   for (const b of L.buildings) {
-    const B = building(b, mulberry(b.seed));
+    yield;
+    const B = building(b, mulberry(b.seed), b.t === "saloon" && !!L.saloonStairs);
     const { out } = frameOf(b);
     const ch = chunkAt(out.x, out.z);
     if (B.main.n) ch.main.stamp(B.main.freeze(), out.x, 0, out.z, out.rot);
@@ -4889,12 +5146,13 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   }
 
   // ---- the climbable high ground: the saloon's outside stair, the church stair and landing ----
-  stairs(L, chunkAt);
+  yield* stairs(L, chunkAt);
 
   // ---- props ----
   const T = templates();
   const tint = new THREE.Color();
   for (const p of L.props) {
+    yield;
     const t = T[p.k];
     if (!t) continue;
     const ch = chunkAt(p.x, p.z);
@@ -4943,8 +5201,9 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   }
 
   // ---- rock, the railroad, the mine ----
-  const hv = rockMesh(L, chunkAt);
+  const hv = yield* rockMesh(L, chunkAt);
   for (const b of L.overhangs) {
+    yield;
     const G = chunkAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2).main;
     const [tu, tv] = TILE_M[WL.ROCK]!;
     for (const [a, c, d] of overhangTriangles(b)) {
@@ -4983,7 +5242,8 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
     const rk = (i: number, j: number) =>
       i < 0 || j < 0 || i >= cells || j >= cells ? 1 : rock[i * cells + j]!;
     const rubble = new THREE.Color();
-    for (let i = 1; i < cells - 1; i++)
+    for (let i = 1; i < cells - 1; i++) {
+      yield;
       for (let j = 1; j < cells - 1; j++) {
         const h = rock[i * cells + j]!;
         if (h < 3) continue;
@@ -5063,9 +5323,11 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
           }
         }
       }
+    }
   }
-  railroad(L, chunkAt);
-  minePortal(L, chunkAt);
+  yield* railroad(L, chunkAt);
+  yield* minePortal(L, chunkAt);
+  yield* decks(L, chunkAt);
 
   // ---- the station platform and the level-crossing planks ----
   {
@@ -5092,6 +5354,7 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   {
     const poles = L.props.filter((p) => p.k === "pole").sort((a, b) => a.z - b.z);
     for (let i = 0; i + 1 < poles.length; i++) {
+      yield;
       const a = poles[i]!;
       const b = poles[i + 1]!;
       const G = chunkAt(a.x, (a.z + b.z) / 2).detail;
@@ -5141,15 +5404,36 @@ export function buildWesternMeshes(L: WesternLayout): WesternMeshes {
   void r;
   void WK;
 
-  const far = farTerrain(L, hv);
+  yield;
+  const far = yield* farTerrain(L, hv);
   let verts = far.getAttribute("position").count;
-  const chunks: WChunk[] = list.map((c) => {
+  const chunks: WChunk[] = [];
+  for (const c of list) {
+    yield;
     const main = c.main.n ? c.main.build() : null;
-    const detail = c.detail.n ? c.detail.build() : null;
     const glow = c.glow.n ? c.glow.build() : null;
     const pools = c.pools.n ? c.pools.build("uv") : null;
-    for (const g of [main, detail, glow, pools]) if (g) verts += g.getAttribute("position").count;
-    return { x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, detail, glow, pools };
-  });
-  return { chunks, far, windmills, fires, stats: { verts } };
+    for (const g of [main, glow, pools]) if (g) verts += g.getAttribute("position").count;
+    chunks.push({ x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, main, glow, pools });
+  }
+  const details: WesternMeshes["details"] = [];
+  for (const c of dCells) {
+    if (!c.geo.n) continue;
+    yield;
+    const geometry = c.geo.build();
+    verts += geometry.getAttribute("position").count;
+    details.push({ x0: c.x0, z0: c.z0, x1: c.x1, z1: c.z1, geometry });
+  }
+  return { chunks, details, far, windmills, fires, stats: { verts } };
+}
+
+// World builds prepare the meshes off the render path (worldBuild.ts runs this coroutine
+// across tasks); the scene attaches the finished geometry in one fast commit. A render
+// that missed the cache drains the coroutine synchronously — same result, slower path.
+const prepared = new WeakMap<WesternLayout, WesternMeshes>();
+export async function prepareWesternMeshes(L: WesternLayout): Promise<void> {
+  if (!prepared.has(L)) prepared.set(L, await runSliced(buildWesternMeshes(L)));
+}
+export function westernMeshes(L: WesternLayout): WesternMeshes {
+  return prepared.get(L) ?? drain(buildWesternMeshes(L));
 }

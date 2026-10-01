@@ -1,11 +1,19 @@
 import { wheelGround, wheelPoint, type Wheel } from "./wheelRide";
+import { beachDoorApproach, beachStallBounds, swimLineBuoys } from "./doorways";
+import {
+  BEACH_MAT_Z,
+  beachPropBounds,
+  overlaps,
+  planBeachActivity,
+  type BeachActivity,
+} from "./beachActivity";
 // Pacific Pier: a deterministic, real-scale Southern California beach town (1 unit = 1 m,
 // 2 m collision cells). Pure data, no three.js, so every co-op client builds the identical
 // map from the seed.
 //
 // The coast runs north-south; the Pacific is to the WEST (-x), so the sun sets at the end of
 // the pier. West to east (x, metres):
-//   -400..-110 deep ocean (not walkable)   -108..-68 surf (wading, slow)   -68..-36 wet sand
+//   -400..-104 deep ocean (not walkable)   -104..-68 surf (wading, slow)   -68..-36 wet sand
 //   -36..96 dry sand (slow)                96..120 park strip (skate park, Muscle Beach, courts)
 //   120..128 bike path                     128..148 promenade (vendors, palms)
 //   148..192 shops, motels, taco stands    192..232 PCH (sidewalks + 4 lanes, centre x 214)
@@ -59,7 +67,7 @@ export const BEACH_PALETTE: Record<number, [number, number, number]> = {
   [K_SURF]: [104, 170, 190],
   [K_SEA]: [79, 143, 176],
   [K_BIKE]: [96, 110, 120],
-  [K_PROM]: [214, 200, 176],
+  [K_PROM]: [171, 139, 98],
   [K_SKATE]: [190, 190, 186],
   [K_BLUFF]: [128, 120, 84],
   [K_COURT]: [70, 120, 150],
@@ -68,10 +76,14 @@ export const BEACH_PALETTE: Record<number, [number, number, number]> = {
 // ---- the fixed cross-section ----
 export const DECK = 6.5;
 export const SEA = -1.0;
+export const WADING_DEPTH = 0.9;
+export const SURF_FLOOR = SEA - WADING_DEPTH;
+export const OFFSHORE_X = -148;
+export const OFFSHORE_FLOOR = -3;
 export const BLUFF_H = 16;
 export const X = {
-  seal: -110,
-  surf: -108,
+  seal: -106,
+  surf: -104,
   wet: -68,
   dry: -36,
   strip: 96,
@@ -270,6 +282,7 @@ export type BeachData = {
   /** lifeguard towers (x, z, facing) */
   towers: { x: number; z: number; rot: number; n: number }[];
   firesLit: { x: number; z: number }[];
+  activity: BeachActivity;
   skate: Rect;
   /** quarter pipes: footprint + the side the ramp faces (0 -z, 1 +x, 2 +z, 3 -x) */
   qpipes: (Rect & { face: 0 | 1 | 2 | 3 })[];
@@ -295,8 +308,12 @@ const STEP = 0.9; // tallest height change between open neighbours before a rail
 
 /** Natural ground (no structures, no bowls): the beach profile, the town level and the clifftop. */
 export function baseProfile(x: number, z: number): number {
-  if (x < X.surf) return -3;
-  if (x < X.wet) return -2 + ((x - X.surf) / (X.wet - X.surf)) * 1.05; // -2 .. -0.95
+  if (x < OFFSHORE_X) return OFFSHORE_FLOOR;
+  if (x < X.surf)
+    return (
+      OFFSHORE_FLOOR + ((x - OFFSHORE_X) / (X.surf - OFFSHORE_X)) * (SURF_FLOOR - OFFSHORE_FLOOR)
+    );
+  if (x < X.wet) return SURF_FLOOR + ((x - X.surf) / (X.wet - X.surf)) * (-0.95 - SURF_FLOOR);
   if (x < X.dry) return -0.95 + ((x - X.wet) / (X.dry - X.wet)) * 0.35; // -0.95 .. -0.6
   if (x < X.strip) {
     const t = (x - X.dry) / (X.strip - X.dry);
@@ -365,12 +382,12 @@ function mulberry(seed: number) {
  * Build Pacific Pier. `cells` x `cells` 2 m cells centred on the origin (`half` metres to each
  * edge). `solo` seals the 70% playable square with blockades; the map itself is identical.
  */
-export function generateBeach(
+export function* generateBeach(
   rand: () => number,
   cells: number,
   half: number,
   solo: boolean,
-): { layout: BeachLayout; blocks: Block[] } {
+): Generator<void, { layout: BeachLayout; blocks: Block[] }, void> {
   const n = cells;
   const N = n * n;
   const kind = new Uint8Array(N).fill(K_SAND);
@@ -474,6 +491,7 @@ export function generateBeach(
       kind[c] = k;
       if (x < X.surf) deep[c] = 1;
     }
+    yield;
   }
   // parking lanes along PCH
   paint(rect(X.road0, -half, X.road0 + 2, half), K_PARKLANE);
@@ -638,6 +656,15 @@ export function generateBeach(
   // lifeguard headquarters (on the sand) and restrooms
   const bld = (b: Omit<BBld, "seed" | "tone"> & { seed?: number; tone?: number }) => {
     const full: BBld = { seed: r(), tone: r(), ...b };
+    // Keep the whole doorway approach, not just its centre, clear of midway booths.
+    // Consume the same random values even when a booth is omitted.
+    if (
+      b.t === "stall" &&
+      buildings.some(
+        (host) => host.t !== "stall" && overlaps(beachStallBounds(b), beachDoorApproach(host)),
+      )
+    )
+      return full;
     buildings.push(full);
     if (!b.backdrop) {
       solidify(b, b.y0 - 6, b.y0 + b.h);
@@ -721,6 +748,7 @@ export function generateBeach(
     hotel: [9],
   };
   for (const s of strips) {
+    yield;
     if (keepOpen(s.a, s.b)) continue;
     const signs = SIGNS[s.t as BType] ?? [-1];
     const sign = signs[Math.floor(r() * signs.length)]!;
@@ -982,46 +1010,30 @@ export function generateBeach(
     // the stilts stop you walking through, the hut stops bullets only above the stilts
     each(rect(x - 2, z - 2, x + 2, z + 2), (_i, _j, c) => (pBot[c] = heightAt(x, z) + 2.1));
   }
-  for (const z of [-300, -236, -196, -128, 52, 120, 200, 236, 312]) {
-    const x = 8 + r() * 30;
-    if (!free(x - 6, z - 2, x + 6, z + 2)) continue;
-    props.push({ k: "net", x, z, y: heightAt(x, z), rot: 0 });
-  }
-  const umbrellaOK = (x: number, z: number) =>
-    free(x - 2, z - 2, x + 2, z + 2) && !(x > 50 && z > 44 && z < 108) && !(Math.abs(z) < 40);
-  for (let k = 0; k < 420; k++) {
-    const x = -30 + r() * 88;
-    const z = (r() - 0.5) * (half * 2 - 20);
-    if (!umbrellaOK(x, z)) continue;
-    const c = Math.floor(r() * 8);
-    const roll = r();
-    if (roll < 0.45) prop("umbrella", x, z, r() * 6, 1, c);
-    if (roll < 0.8) prop("towel", x + 1.4, z + (r() - 0.5) * 2, r() * 6, 1, c);
-    if (roll > 0.7 && roll < 0.8) prop("board", x - 1.2, z + 1, r() * 6, 1, c);
-    if (roll > 0.92) prop("cooler", x + 0.6, z - 1.1, r() * 6, 1, c);
-  }
-  for (const z of [-270, -226, -190, -118, 118, 176, 280, 332]) {
-    for (let k = 0; k < 3; k++) {
-      const x = 30 + k * 9 + r() * 3;
-      const zz = z + (r() - 0.5) * 8;
-      if (!free(x - 2, zz - 2, x + 2, zz + 2)) continue;
-      prop("firering", x, zz, 0);
-      if ((k + Math.abs(z)) % 2 === 0) firesLit.push({ x, z: zz });
-    }
-  }
-  for (let z = -half + 20; z < half - 20; z += 24) {
-    if (Math.abs(z) < 24) continue;
-    if (free(84, z - 1, 88, z + 1)) prop("trash", 86, z, 0);
-    if (r() < 0.3 && free(-4, z - 1, 0, z + 1)) prop("trash", -2, z + 6, 0);
-  }
-  // beach access mats from the bike path down to the water
-  for (const z of [-200, -120, 120, 264]) {
-    for (let x = -30; x < 96; x += 2.4) props.push({ k: "mat", x, z, y: heightAt(x, z), rot: 0 });
-  }
+  const planned = planBeachActivity({
+    half,
+    random: r,
+    height: heightAt,
+    free,
+    buildings,
+    regions,
+    towers,
+    existing: props,
+    features: [skate, gym, courts, lot, rect(96, -128, X.bike, -100)],
+  });
+  props.push(...planned.props);
+  firesLit.push(...planned.fires);
+  const activity = planned.activity;
+  // Four continuous 4 m mats meet dry shoreline and the cycle path. Full crossing widths
+  // were reserved before any beach dressing; the park destinations avoid its solid features.
+  for (const z of BEACH_MAT_Z)
+    for (let x = -68.4; x < 120; x += 2.4)
+      props.push({ k: "mat", x, z, y: heightAt(x, z), rot: 0 });
   for (const z of [-178, 182]) prop("shower", 94, z, 0);
-  // buoys marking the swim area (the deep-water line)
-  for (let z = -half + 6; z < half; z += 12)
-    props.push({ k: "buoy", x: X.seal - 2, z, y: SEA, rot: 0 });
+  // The rope lies on the exact blocked cell edge, with no buoys below the amusement deck.
+  for (const z of swimLineBuoys(half)) {
+    props.push({ k: "buoy", x: X.surf, z, y: SEA, rot: 0 });
+  }
 
   const inFeature = (x: number, z: number) =>
     [skate, gym, courts, lot, rect(96, -128, X.bike, -100)].some(
@@ -1042,32 +1054,17 @@ export function generateBeach(
   }
   // ---- 9. palms, lamps, benches, vendors along the promenade and the bike path ----
   for (let z = -half + 6; z < half - 4; z += 12) {
-    const nearPier = Math.abs(z) < 12;
-    if (!nearPier) {
+    const crossing = (at: number) => BEACH_MAT_Z.some((m) => Math.abs(at - m) < 4);
+    const nearPier = Math.abs(z) < 18;
+    if (!nearPier && !crossing(z)) {
       props.push({ k: "palm", x: X.prom + 2, z, y: 0, rot: r() * 6, s: 22 + r() * 7 });
-      if (!inFeature(X.bike - 2, z + 6))
+      if (!inFeature(X.bike - 2, z + 6) && !crossing(z + 6))
         props.push({ k: "palm", x: X.bike - 2, z: z + 6, y: 0, rot: r() * 6, s: 19 + r() * 8 });
     }
-    if (!nearPier && Math.round((z + half) / 12) % 2 === 0)
+    if (!nearPier && !crossing(z + 3) && Math.round((z + half) / 12) % 2 === 0)
       props.push({ k: "lamp", x: X.shops - 3, z: z + 3, y: 0, rot: -Math.PI / 2 });
-    if (!nearPier) props.push({ k: "bench", x: X.prom + 3.4, z: z + 4, y: 0, rot: -Math.PI / 2 });
-    if (!nearPier && r() < 0.28)
-      props.push({
-        k: "cart",
-        x: X.prom + 10,
-        z: z + 6,
-        y: 0,
-        rot: r() < 0.5 ? 0 : Math.PI,
-        c: Math.floor(r() * 6),
-      });
-    if (!nearPier && r() < 0.18)
-      props.push({
-        k: "bike",
-        x: X.bike + 3,
-        z: z + r() * 8,
-        y: 0,
-        rot: (Math.PI / 2) * (r() < 0.5 ? 1 : -1),
-      });
+    if (!nearPier && !crossing(z + 4))
+      props.push({ k: "bench", x: X.prom + 3, z: z + 4, y: 0.13, rot: -Math.PI / 2 });
     // PCH: palms and cobra-head lights on both sidewalks, a bus stop now and then
     props.push({ k: "palm", x: X.walkW + 4, z: z + 2, y: 0, rot: r() * 6, s: 24 + r() * 6 });
     if (Math.floor((z + half) / 12) % 3 === 0) {
@@ -1095,6 +1092,23 @@ export function generateBeach(
         s: 1 + r() * 0.5,
       });
     props.push({ k: "bench", x: X.top + 3, z: z + 9, y: BLUFF_H, rot: -Math.PI / 2 });
+  }
+  // Compact vendor courts beside a continuous 4 m boardwalk lane. Shopfront approaches,
+  // the pier, beach crossings, crosswalk plazas and the parking driveway all remain open.
+  for (let z = -half + 20, k = 0; z < half - 16; z += 18, k++) {
+    const rc = rect(139.4, z - 5, 144, z + 5);
+    if (
+      Math.abs(z) < 24 ||
+      Math.abs(Math.abs(z) - 100) < 14 ||
+      (z > 188 && z < 224) ||
+      activity.lanes.some((p) => overlaps(rc, p)) ||
+      buildings.some((b) => b.t !== "stall" && overlaps(rc, beachDoorApproach(b))) ||
+      props.some((p) => overlaps(rc, beachPropBounds(p, 0.6)))
+    )
+      continue;
+    props.push({ k: "cart", x: 142, z: z - 2.6, y: 0.15, rot: -Math.PI / 2, c: k % 6 });
+    props.push({ k: "table", x: 142, z: z + 2.4, y: 0, rot: 0, c: k % 6 });
+    activity.pockets.push({ ...rc, kind: "vendor" });
   }
   for (const z of [-236, -96, 44, 232])
     props.push({ k: "busstop", x: X.road1 + 3.5, z, y: 0, rot: -Math.PI / 2 });
@@ -1166,6 +1180,14 @@ export function generateBeach(
   ] as const)
     props.push({ k: "flag", x, z, y: DECK, rot: 0, c: 0 });
 
+  // Check all loose dressing too, before either navigation or visible geometry is built.
+  const doorApproaches = buildings
+    .filter((b) => !b.backdrop && b.t !== "stall")
+    .map(beachDoorApproach);
+  for (let i = props.length - 1; i >= 0; i--)
+    if (doorApproaches.some((door) => overlaps(door, beachPropBounds(props[i]!, 0.25))))
+      props.splice(i, 1);
+
   // ---- 9b. anything you would bump into in real life is solid (and it is cover) ----
   const foot = (
     x: number,
@@ -1233,16 +1255,19 @@ export function generateBeach(
     );
   }
 
-  // ---- 10. seal the deep ocean (a line just past the swim buoys) ----
-  each(rect(X.seal, -half, X.surf, half), (_i, _j, c) => {
-    if (regionOf[c]! < 0) solid[c] = 1;
-  });
+  // ---- 10. deep ocean is an authored height-independent boundary, including in a jump ----
+  // Raised pier regions deliberately cleared deep[] when they were created.
+  for (let c = 0; c < N; c++) if (deep[c]) solid[c] = 1;
 
   // ---- 11. railings: wherever a raised region drops more than a step to an open neighbour ----
   const hC = new Float32Array(N);
-  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) hC[i * n + j] = heightAt(cx(i), cx(j));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) hC[i * n + j] = heightAt(cx(i), cx(j));
+    yield;
+  }
   const rail: number[] = [];
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const c = i * n + j;
       if (solid[c] || deep[c] || regionOf[c]! < 0) continue;
@@ -1261,6 +1286,7 @@ export function generateBeach(
           }
         }
     }
+  }
   for (const c of rail) {
     solid[c] = 1;
     pBot[c] = hC[c]!;
@@ -1350,7 +1376,8 @@ export function generateBeach(
   {
     const m = n >> 1;
     const navOpen = new Uint8Array(m * m);
-    for (let a = 0; a < m; a++)
+    for (let a = 0; a < m; a++) {
+      yield;
       for (let b = 0; b < m; b++) {
         const i = a * 2;
         const j = b * 2;
@@ -1362,6 +1389,7 @@ export function generateBeach(
             ? 1
             : 0;
       }
+    }
     const seen = new Uint8Array(m * m);
     const s0 = (ci(spawn.x) >> 1) * m + (ci(spawn.z) >> 1);
     const q = [s0];
@@ -1392,7 +1420,8 @@ export function generateBeach(
     }
   }
   const blocks: Block[] = [];
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const c = i * n + j;
       if (!reach[c]) {
@@ -1407,6 +1436,7 @@ export function generateBeach(
         solid[c] = 1;
       }
     }
+  }
 
   const layout: BeachLayout = {
     cells: n,
@@ -1446,6 +1476,7 @@ export function generateBeach(
       stairs,
       towers,
       firesLit,
+      activity,
       skate,
       qpipes,
       gym,

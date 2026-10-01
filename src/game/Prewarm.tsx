@@ -1,207 +1,226 @@
+// Shader pre-warm: draws the whole scene once, everything visible and nothing culled, a few
+// frames after a map is built, so every material's GPU program (and, on Safari/Metal, its
+// pipeline) exists before the player walks into it.
+//
+// Without it a material compiles the first time it comes into view, and that frame stalls:
+// 150-200 ms hitches were measured walking Dry Gulch and at the start of the pier's wave surge
+// (WebKit compiles on first draw, so three's `compile()` alone doesn't help there: the draw
+// is what matters).
+//
+// The warm is spread over several frames instead of one giant one: drawables are sliced into
+// batches, tagged onto a private layer for one frame each, and drawn with a camera that sees
+// only that layer — so each warm frame compiles a slice of the scene's programs. It all runs
+// before the normal render of the same frame, which overwrites it, so it is never seen
+// (during loading the veil covers the canvas anyway).
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
+
 import { holdQuality } from "./quality";
 
-export type Preparation = {
-  phase: "preparing" | "ready" | "error";
-  completed: number;
-  total: number;
-  error?: string;
-};
-const warmLog: {
-  frame: number;
-  ms: number;
-  wallMs: number;
-  maxStepMs: number;
-  programs: number;
-  before: number;
-  passes: number[];
-}[] = [];
+const warmLog: { frame: number; ms: number; programs: number; before: number }[] = [];
 if (typeof window !== "undefined") (window as unknown as { __rsWarm?: unknown }).__rsWarm = warmLog;
 
-/** Prepare each lighting/output variant separately. Safari still needs an actual draw
- * after compilation. All temporary scene/renderer changes are restored in the same tick;
- * asynchronous completion never owns live scene state. */
+/** layer tag for the object slice being warmed this frame (the game uses no layers) */
+const WARM_LAYER = 20;
+/** groups drawables whose draw shares one driver program (material + light-dependence) */
+const matIds = new WeakMap<THREE.Material, number>();
+let nextMatId = 1;
+function materialKey(o: Drawable): number {
+  const m = (o as THREE.Mesh).material;
+  const one = Array.isArray(m) ? m[0] : m;
+  if (!one) return 0;
+  let id = matIds.get(one);
+  if (!id) matIds.set(one, (id = nextMatId++));
+  return id;
+}
+/** how many frames a warm run spreads over — finer slices keep each warm task small even
+ *  when a batch carries several driver program links (throttled CPU makes links pricey) */
+const BATCHES = 16;
+
+type Drawable = THREE.Object3D & {
+  isMesh?: boolean;
+  isSprite?: boolean;
+  isLine?: boolean;
+  isPoints?: boolean;
+};
+
+type Plan = {
+  /** countdown before the warm frames start */
+  left: number;
+  /** drawable slices, or null until the first warm frame builds them */
+  batches: THREE.Object3D[][] | null;
+  /** lights ride on the warm layer for the whole run so the compiles see real lighting */
+  lights: THREE.Object3D[];
+  i: number;
+  cam: THREE.Camera | null;
+  rt: THREE.WebGLRenderTarget | null;
+  spot: THREE.SpotLight | null;
+  /** wall-clock start: a slow GPU caps the run instead of holding the veil up forever */
+  t0: number;
+  done: boolean;
+};
+
+const idle = (delay: number): Plan => ({
+  left: delay,
+  batches: null,
+  lights: [],
+  i: 0,
+  cam: null,
+  rt: null,
+  spot: null,
+  t0: performance.now(),
+  done: false,
+});
+
+/** the frame-count delay before warming starts is also wall-clock bounded (slow GPUs
+ *  render few frames per second; the veil must not wait on them) */
+const DELAY_CAP_MS = 1200;
+/** the whole warm run caps out here — batches left unwarmed compile lazily, as before */
+const WARM_CAP_MS = 3500;
+
+/**
+ * `withSpot`: also draw each batch once more with a (dark) spot light in the scene: the
+ * blackout's flashlight is a spot light, and every lit material needs a variant for it.
+ * Compiling them is not enough on Safari/Metal: the first real draw still builds the
+ * pipelines (a 0.5-1.7 s freeze at the blackout's first dark frame), so they are drawn here,
+ * unseen.
+ */
 export function Prewarm({
   when,
+  delay = 20,
   withSpot = false,
   withTarget = false,
-  onProgress,
+  batches = BATCHES,
+  onDone,
 }: {
-  when: number;
+  when: unknown;
+  delay?: number;
   withSpot?: boolean;
+  /** also draw into an HDR render target (the city's rain mirror) */
   withTarget?: boolean;
-  onProgress: (seed: number, state: Preparation) => void;
+  /** frames the warm spreads over */
+  batches?: number;
+  /** after the last warm frame (fires once per `when`) */
+  onDone?: () => void;
 }) {
-  const { gl, scene, camera } = useThree();
-  const [generation, setGeneration] = useState(0);
-  const notify = useRef(onProgress);
-  notify.current = onProgress;
-  const job = useRef<{
-    seed: number;
-    cancelled: boolean;
-    compiling: boolean;
-    compiled: boolean;
-    index: number;
-    variants: { spot: boolean; target: boolean }[];
-    passes: number[];
-    before: number;
-    started: number;
-    steps: number[];
-    activeMs: number;
-    rt: THREE.WebGLRenderTarget | null;
-    spot: THREE.SpotLight | null;
-  } | null>(null);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const plan = useRef<Plan>(idle(delay));
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   useEffect(() => {
-    const variants = [{ spot: false, target: false }];
-    if (withTarget) variants.push({ spot: false, target: true });
-    if (withSpot) {
-      variants.push({ spot: true, target: false });
-      if (withTarget) variants.push({ spot: true, target: true });
-    }
-    const j = {
-      seed: when,
-      cancelled: false,
-      compiling: false,
-      compiled: false,
-      index: 0,
-      variants,
-      passes: [] as number[],
-      before: gl.info.programs?.length ?? 0,
-      started: performance.now(),
-      steps: [] as number[],
-      activeMs: 0,
-      rt: withTarget
+    const p = idle(delay);
+    plan.current = p;
+    // the map's first seconds (and this warm run) are slow by design: keep AUTO from reacting
+    holdQuality(8000);
+    return () => {
+      for (const l of p.lights) l.layers.disable(WARM_LAYER);
+      p.rt?.dispose();
+      p.spot?.dispose();
+    };
+  }, [when, delay]);
+  useFrame(() => {
+    const p = plan.current;
+    if (p.done) return;
+    if (p.left-- > 0 && performance.now() - p.t0 < DELAY_CAP_MS) return;
+    const t0 = performance.now();
+    const before = gl.info.programs?.length ?? 0;
+    if (!p.batches) {
+      const drawables: Drawable[] = [];
+      scene.traverse((o) => {
+        const l = o as THREE.Light;
+        if (l.isLight) p.lights.push(o);
+        else {
+          const d = o as Drawable;
+          if (d.isMesh || d.isSprite || d.isLine || d.isPoints) drawables.push(d);
+        }
+      });
+      // order by material so a batch shares programs: the driver's program links land a
+      // few per warm frame instead of piling onto whichever batch draws first
+      drawables.sort((a, b) => materialKey(a) - materialKey(b));
+      const slices: THREE.Object3D[][] = [];
+      drawables.forEach((o, i) =>
+        (slices[Math.min(batches - 1, Math.floor((i * batches) / drawables.length))] ??= []).push(
+          o,
+        ),
+      );
+      p.batches = slices;
+      for (const l of p.lights) l.layers.enable(WARM_LAYER);
+      const cam = camera.clone();
+      cam.layers.set(WARM_LAYER);
+      p.cam = cam;
+      // the wet streets' mirror renders the scene into a linear HDR target: every material
+      // needs a second (linear output) variant, compiled the first time it rains otherwise
+      p.rt = withTarget
         ? new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType, depthBuffer: true })
-        : null,
-      spot: withSpot ? new THREE.SpotLight("#ffffff", 0) : null,
-    };
-    job.current = j;
-    holdQuality(2000);
-    notify.current(when, { phase: "preparing", completed: 0, total: variants.length });
-    return () => {
-      j.cancelled = true;
-      j.rt?.dispose();
-      j.spot?.dispose();
-      if (job.current === j) job.current = null;
-    };
-  }, [when, withSpot, withTarget, gl, generation]);
-  useEffect(() => {
-    const lost = () => {
-      if (job.current) job.current.cancelled = true;
-      notify.current(when, {
-        phase: "error",
-        completed: 0,
-        total: 0,
-        error: "Graphics context lost",
-      });
-    };
-    const restored = () => setGeneration((g) => g + 1);
-    gl.domElement.addEventListener("webglcontextlost", lost);
-    gl.domElement.addEventListener("webglcontextrestored", restored);
-    return () => {
-      gl.domElement.removeEventListener("webglcontextlost", lost);
-      gl.domElement.removeEventListener("webglcontextrestored", restored);
-    };
-  }, [gl, when]);
-
-  useFrame((_, delta) => {
-    const j = job.current;
-    if (!j || j.seed !== when || j.cancelled || j.index >= j.variants.length) return;
-    holdQuality(2000);
-    if (!document.hidden) j.activeMs += Math.min(delta * 1000, 1000);
-    if (j.activeMs > 30000) {
-      j.cancelled = true;
-      notify.current(when, {
-        phase: "error",
-        completed: j.index,
-        total: j.variants.length,
-        error: "Preparation timed out",
-      });
-      return;
+        : null;
+      p.spot = withSpot ? new THREE.SpotLight("#ffffff", 0) : null;
+      if (p.spot) p.spot.layers.set(WARM_LAYER);
     }
-    if (j.compiling) return;
-    const stepStarted = performance.now();
-    const variant = j.variants[j.index]!;
-    const visible: THREE.Object3D[] = [],
-      culled: THREE.Object3D[] = [];
-    const previousTarget = gl.getRenderTarget();
+    const batch = p.batches[p.i];
+    const prevRT = gl.getRenderTarget();
     const previousWarm = scene.userData["scrapfallPrewarm"];
-    let compilation: Promise<unknown> | undefined;
-    const fail = (error: unknown) => {
-      if (j.cancelled) return;
-      j.cancelled = true;
-      notify.current(when, {
-        phase: "error",
-        completed: j.index,
-        total: j.variants.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    };
+    const shown: THREE.Object3D[] = [];
+    const culled: THREE.Object3D[] = [];
     try {
       scene.userData["scrapfallPrewarm"] = true;
-      scene.traverse((o) => {
-        if (!o.visible) {
-          o.visible = true;
-          visible.push(o);
+      if (batch) {
+        const cam = p.cam!;
+        for (const o of batch) {
+          o.layers.enable(WARM_LAYER);
+          if (o.frustumCulled) {
+            o.frustumCulled = false;
+            culled.push(o);
+          }
+          // invisible ancestors would still keep the batch out of the draw
+          for (let a: THREE.Object3D | null = o; a; a = a.parent)
+            if (!a.visible) {
+              a.visible = true;
+              shown.push(a);
+            }
         }
-        if (o.frustumCulled) {
-          o.frustumCulled = false;
-          culled.push(o);
+        gl.render(scene, cam);
+        if (p.rt) {
+          gl.setRenderTarget(p.rt);
+          gl.render(scene, cam);
+          gl.setRenderTarget(prevRT);
         }
-      });
-      if (variant.spot && j.spot) scene.add(j.spot);
-      gl.setRenderTarget(variant.target ? j.rt : previousTarget);
-      if (!j.compiled) {
-        j.compiling = true;
-        compilation = gl.compileAsync(scene, camera);
-      } else {
-        const t = performance.now();
-        gl.render(scene, camera);
-        j.passes.push(performance.now() - t);
-        j.index++;
-        j.compiled = false;
-        const ready = j.index === j.variants.length;
-        notify.current(when, {
-          phase: ready ? "ready" : "preparing",
-          completed: j.index,
-          total: j.variants.length,
-        });
+        if (p.spot) {
+          scene.add(p.spot);
+          gl.render(scene, cam);
+          if (p.rt) {
+            gl.setRenderTarget(p.rt);
+            gl.render(scene, cam);
+            gl.setRenderTarget(prevRT);
+          }
+          scene.remove(p.spot);
+        }
       }
-    } catch (error) {
-      fail(error);
     } finally {
-      gl.setRenderTarget(previousTarget);
-      if (j.spot) scene.remove(j.spot);
-      for (const o of visible) o.visible = false;
-      for (const o of culled) o.frustumCulled = true;
+      gl.setRenderTarget(prevRT);
+      if (p.spot) scene.remove(p.spot);
       if (previousWarm === undefined) delete scene.userData["scrapfallPrewarm"];
       else scene.userData["scrapfallPrewarm"] = previousWarm;
+      for (const o of batch ?? []) o.layers.disable(WARM_LAYER);
+      for (const o of shown) o.visible = false;
+      for (const o of culled) o.frustumCulled = true;
     }
-    j.steps.push(performance.now() - stepStarted);
-    if (!j.cancelled && j.index === j.variants.length) {
-      warmLog.push({
-        frame: gl.info.render.frame,
-        ms: Math.round(j.steps.reduce((a, b) => a + b, 0)),
-        wallMs: performance.now() - j.started,
-        maxStepMs: Math.max(...j.steps),
-        programs: gl.info.programs?.length ?? 0,
-        before: j.before,
-        passes: [...j.passes],
-      });
-      if (warmLog.length > 20) warmLog.shift();
-      j.rt?.dispose();
-      j.rt = null;
-      j.spot?.dispose();
-      j.spot = null;
+    warmLog.push({
+      frame: gl.info.render.frame,
+      ms: Math.round(performance.now() - t0),
+      programs: gl.info.programs?.length ?? 0,
+      before,
+    });
+    if (warmLog.length > 128) warmLog.splice(0, warmLog.length - 128);
+    if (++p.i >= p.batches.length || t0 - p.t0 > WARM_CAP_MS) {
+      p.done = true;
+      for (const l of p.lights) l.layers.disable(WARM_LAYER);
+      p.rt?.dispose();
+      p.spot?.dispose();
+      onDoneRef.current?.();
     }
-    compilation?.then(() => {
-      if (!j.cancelled) {
-        j.compiling = false;
-        j.compiled = true;
-      }
-    }, fail);
   }, -999);
   return null;
 }

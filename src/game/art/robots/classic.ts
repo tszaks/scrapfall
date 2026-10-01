@@ -824,22 +824,27 @@ function vanguard(c: C, glowCol: string): RobotKind {
 
 /** attack wind-up for melee swingers: 0 idle, 0..1 through the 0.4 s swing */
 /** shooter: wind-up in the last 0.5 s before the shot, aux = cooldown (for the recoil) */
-export const shooterInputs: RobotInputs = (d) => {
+export const shooterInputs: RobotInputs = (d, o) => {
   const cd = d.cooldown ?? 9;
-  return { wind: cd > 0 && cd < 0.5 ? 1 - cd / 0.5 : 0, aux: cd };
+  o.wind = cd > 0 && cd < 0.5 ? 1 - cd / 0.5 : 0;
+  o.aux = cd;
 };
 /** bomber: wind-up in the last 0.8 s of the shot timer, aux = the timer (for the recoil) */
-export const bomberInputs: RobotInputs = (d) => {
+export const bomberInputs: RobotInputs = (d, o) => {
   const s = d.shot ?? 9;
-  return { wind: s > 0 && s < 0.8 ? 1 - s / 0.8 : 0, aux: s };
+  o.wind = s > 0 && s < 0.8 ? 1 - s / 0.8 : 0;
+  o.aux = s;
 };
 /** specter: aux = cooldown (1.4 right after a slash) */
-export const specterInputs: RobotInputs = (d) => ({ wind: 0, aux: d.cooldown ?? 0 });
+export const specterInputs: RobotInputs = (d, o) => {
+  o.wind = 0;
+  o.aux = d.cooldown ?? 0;
+};
 
-export const swingInputs: RobotInputs = (d) => ({
-  wind: (d.swing ?? 0) > 0 ? 1 - (d.swing ?? 0) / 0.4 : 0,
-  aux: 0,
-});
+export const swingInputs: RobotInputs = (d, o) => {
+  o.wind = (d.swing ?? 0) > 0 ? 1 - (d.swing ?? 0) / 0.4 : 0;
+  o.aux = 0;
+};
 
 export type ClassicKind =
   "drifter" | "runner" | "brute" | "shooter" | "specter" | "bomber" | "vanguard";

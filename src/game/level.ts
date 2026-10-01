@@ -5,10 +5,9 @@ import {
   withoutStaticPoints,
 } from "./staticCollision";
 import { structureStreet, structureShot, structurePathClear } from "./structures/world";
-import { generateCity, type CityLayout } from "./cityLayout";
-import { generateWestern, type WesternLayout } from "./western/layout";
-import { generateAlpine } from "./alpine/layout";
-import { generateBeach } from "./beach/beachLayout";
+import type { CityLayout } from "./cityLayout";
+import type { WesternLayout } from "./western/layout";
+import type { BeachLayout } from "./beach/beachLayout";
 import {
   baseGroundY,
   groundHits,
@@ -18,6 +17,7 @@ import {
   shotHits,
   strictNav,
 } from "./terrain";
+import { runSliced } from "./slice";
 
 export type Block = { x: number; z: number; h: number; tone: number; boundary?: boolean };
 export type LayoutMode = "scatter" | "city" | "alpine" | "beach" | "western" | "nuketown";
@@ -35,6 +35,14 @@ export let HALF = ARENA / 2;
  * map in solo, where blockades fence play into a smaller square (see soloBounds.ts). */
 export let PLAY_HALF = HALF;
 export const BLOCK = 2; // block footprint (square)
+/**
+ * Collision half-width of a piece of cover. Slim props (trees, coral) use a
+ * tighter box than the grid cell so shots and steps line up with what you see.
+ */
+export let BLOCK_HALF = BLOCK / 2;
+export function setBlockHalf(v: number) {
+  BLOCK_HALF = v;
+}
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -47,17 +55,32 @@ function mulberry32(seed: number) {
   };
 }
 
+export type LevelGen = {
+  blocks: Block[];
+  seed: number;
+  rand: () => number;
+  city: CityLayout | null;
+  western: WesternLayout | null;
+};
+
 /**
  * Procedurally lay out the arena, keeping spawn clear. "scatter" is the classic
  * sparse block maze; "city" is a street grid of multi-cell buildings (one Block
  * per occupied cell, so collision and pathfinding work unchanged).
+ *
+ * Staged: each map's module loads on demand (so a session downloads only the map it
+ * shows) and its generator runs as a coroutine — it `yield`s between chunks of work
+ * and runSliced hands the event loop a turn whenever a slice runs long.
  */
-export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo = false) {
+export async function generateLevelStaged(
+  seed: number,
+  mode: LayoutMode = "scatter",
+  solo = false,
+): Promise<LevelGen> {
   const rand = mulberry32(seed);
   const blocks: Block[] = [];
   const cells = Math.floor(ARENA / BLOCK);
-  let city: CityLayout | null = null;
-  let western: WesternLayout | null = null;
+  const base = { seed, rand };
 
   if (mode === "nuketown") {
     // Coarse navigation only; the rendered fence and vehicle models own precise contact.
@@ -73,30 +96,31 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
         )
           blocks.push({ x, z, h: 4, tone: 0 });
       }
-    return { blocks, seed, rand, city, western };
+    return { ...base, blocks, city: null, western: null };
   }
   if (mode === "beach") {
     // the full map in solo and co-op; solo seals a smaller square with blockades. The caller
     // installs its ground (beachTerrain) through terrain.ts, like the alpine heightfield.
-    const out = generateBeach(rand, cells, HALF, solo);
-    return { blocks: out.blocks, seed, rand, city: out.layout as CityLayout, western };
+    const { generateBeach } = await import("./beach/beachLayout");
+    const out = await runSliced(generateBeach(rand, cells, HALF, solo));
+    return { ...base, blocks: out.blocks, city: out.layout as CityLayout, western: null };
   }
 
   if (mode === "city") {
-    const out = generateCity(rand, cells, HALF);
-    city = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateCity } = await import("./cityLayout");
+    const out = await runSliced(generateCity(rand, cells, HALF));
+    return { ...base, blocks: out.blocks, city: out.layout, western: null };
   }
   if (mode === "western") {
-    const out = generateWestern(rand, cells, HALF);
-    western = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateWestern } = await import("./western/layout");
+    const out = await runSliced(generateWestern(rand, cells, HALF));
+    return { ...base, blocks: out.blocks, city: null, western: out.layout };
   }
   if (mode === "alpine") {
     // the full map in solo and co-op; solo seals a smaller square with blockades
-    const out = generateAlpine(seed, solo);
-    city = out.layout;
-    return { blocks: out.blocks, seed, rand, city, western };
+    const { generateAlpine } = await import("./alpine/layout");
+    const out = await runSliced(generateAlpine(seed, solo));
+    return { ...base, blocks: out.blocks, city: out.layout, western: null };
   }
 
   for (let i = 0; i < cells; i++) {
@@ -113,7 +137,7 @@ export function generateLevel(seed: number, mode: LayoutMode = "scatter", solo =
       });
     }
   }
-  return { blocks, seed, rand, city, western };
+  return { ...base, blocks, city: null, western: null };
 }
 
 // Collision lookups go through a per-array cell grid: the city map has hundreds of
@@ -166,37 +190,49 @@ export type Post = {
 /** the local player's feet above the ground while jumping (input/movement.ts); 0 on foot.
  * Set only around the player's own movement, so enemies are never affected. */
 export const jumpBody = { lift: 0 };
-let postGrid: Map<number, Post[]> | null = null;
-const postKey = (i: number, j: number) => i * 65536 + j;
+// dense 4 m bucket grid: blocked() -> hitsPost runs thousands of times a frame in a
+// crowd, and the old Map lookups were its biggest single cost
+const POST_CELL = 4;
+let postGrid: (Post[] | undefined)[] | null = null;
+let postGW = 0;
+const postI = (v: number) => Math.floor((v + HALF) / POST_CELL) + 1;
 export function setPosts(list: Post[] | null) {
   if (!list || list.length === 0) {
     postGrid = null;
     return;
   }
-  postGrid = new Map();
-  for (const p of list)
-    for (let i = Math.floor((p.x - p.r) / 4); i <= Math.floor((p.x + p.r) / 4); i++)
-      for (let j = Math.floor((p.z - p.r) / 4); j <= Math.floor((p.z + p.r) / 4); j++) {
-        const k = postKey(i, j);
-        let a = postGrid.get(k);
-        if (!a) postGrid.set(k, (a = []));
-        a.push(p);
+  postGW = postI(HALF) + 1;
+  const g = new Array<Post[] | undefined>(postGW * postGW);
+  for (const p of list) {
+    const i0 = Math.max(0, postI(p.x - p.r));
+    const i1 = Math.min(postGW - 1, postI(p.x + p.r));
+    const j0 = Math.max(0, postI(p.z - p.r));
+    const j1 = Math.min(postGW - 1, postI(p.z + p.r));
+    for (let i = i0; i <= i1; i++)
+      for (let j = j0; j <= j1; j++) {
+        const k = i * postGW + j;
+        (g[k] ??= []).push(p);
       }
+  }
+  postGrid = g;
 }
 export function hitsPost(x: number, z: number, radius: number, shotsOnly = false, feet?: number) {
   if (!postGrid) return false;
-  const i0 = Math.floor((x - radius - 1) / 4);
-  const i1 = Math.floor((x + radius + 1) / 4);
-  const j0 = Math.floor((z - radius - 1) / 4);
-  const j1 = Math.floor((z + radius + 1) / 4);
+  const i0 = Math.max(0, postI(x - radius - 1));
+  const i1 = Math.min(postGW - 1, postI(x + radius + 1));
+  const j0 = Math.max(0, postI(z - radius - 1));
+  const j1 = Math.min(postGW - 1, postI(z + radius + 1));
   for (let i = i0; i <= i1; i++)
     for (let j = j0; j <= j1; j++) {
-      const a = postGrid.get(postKey(i, j));
+      const a = postGrid[i * postGW + j];
       if (!a) continue;
       for (const p of a) {
         if (feet !== undefined && feet > groundY(p.x, p.z) + (p.h ?? 4.5)) continue;
         if (shotsOnly ? !p.shot : p.h !== undefined && jumpBody.lift > p.h) continue; // jumped over it
-        if (Math.hypot(p.x - x, p.z - z) < p.r + radius) return true;
+        const dx = p.x - x,
+          dz = p.z - z,
+          rr = p.r + radius;
+        if (dx * dx + dz * dz < rr * rr) return true;
       }
     }
   return false;
@@ -204,7 +240,7 @@ export function hitsPost(x: number, z: number, radius: number, shotsOnly = false
 /** shot-stopping posts (horses, hay, walk-in walls) at height y: a low one (h) only below its top */
 function shotPost(x: number, y: number, z: number) {
   if (!postGrid) return false;
-  const a = postGrid.get(postKey(Math.floor(x / 4), Math.floor(z / 4)));
+  const a = postGrid[postI(x) * postGW + postI(z)];
   if (!a) return false;
   let base = NaN;
   for (const p of a) {
@@ -226,7 +262,7 @@ export function blocked(blocks: Block[], x: number, z: number, radius: number) {
   if (radius >= 0.2 ? hitsPost(x, z, radius) : hitsPost(x, z, radius, true)) return true;
   const room = structureStreet(x, z, radius);
   if (room !== undefined) return room;
-  const half = BLOCK / 2 + radius;
+  const half = BLOCK_HALF + radius;
   const grid = gridFor(blocks);
   // cells whose centre lies within `half` of the point on both axes
   const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
@@ -262,7 +298,7 @@ export function shotBlocked(blocks: Block[], x: number, y: number, z: number) {
     if (h !== undefined) return h;
   }
   if (shotPost(x, y, z)) return true;
-  const half = BLOCK / 2 + r;
+  const half = BLOCK_HALF + r;
   const grid = gridFor(blocks);
   const i0 = Math.max(0, Math.floor((x - half + HALF - BLOCK / 2) / BLOCK));
   const i1 = Math.min(CELLS - 1, Math.ceil((x + half + HALF - BLOCK / 2) / BLOCK));
@@ -554,18 +590,24 @@ const DIRS = [
  * standing by a railing is in a solid cell that touches both levels, so the field would leak
  * down to the sand below. There the nearest open cell on the player's own level is used.
  */
+const navTargetOut: [number, number] = [0, 0];
 export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]): [number, number] {
   const ti = toNav(x);
   const tj = toNav(z);
-  if (!strictNav()) return [ti, tj];
+  // (shared result: callers destructure immediately — this runs inside enemy route picks)
+  const r = navTargetOut;
+  r[0] = ti;
+  r[1] = tj;
+  if (!strictNav()) return r;
   const n = nav.n;
   const gy = groundY(x, z);
   const same = (k: number) => !nav.g[k] && Math.abs(groundY(nav.px[k]!, nav.pz[k]!) - gy) < 1.2;
-  if (same(ti * n + tj)) return [ti, tj];
+  if (same(ti * n + tj)) return r;
   // prefer the nearest open cell on the same level that has a clear walk to the point, so an
   // enemy that arrives there can step straight to a player standing along a railing
-  let best: [number, number] = [ti, tj];
   let bd = Infinity;
+  let bi = ti;
+  let bj = tj;
   for (let di = -3; di <= 3; di++)
     for (let dj = -3; dj <= 3; dj++) {
       const i = ti + di;
@@ -576,10 +618,13 @@ export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]):
       if (blocks && !clearLine(blocks, nav.px[k]!, nav.pz[k]!, x, z, 0.45)) d += 1000;
       if (d < bd) {
         bd = d;
-        best = [i, j];
+        bi = i;
+        bj = j;
       }
     }
-  return best;
+  r[0] = bi;
+  r[1] = bj;
+  return r;
 }
 
 /**
@@ -640,8 +685,14 @@ export function fineField(blocks: Block[], x: number, z: number, R = 24): FineFi
   }
   return { i0, j0, w, dist };
 }
-/** next point down a fine field from (x, z), or null when outside it / not connected / there */
-export function fineStep(f: FineField, x: number, z: number): { x: number; z: number } | null {
+/** next point down a fine field from (x, z), or null when outside it / not connected / there.
+ * `out` is a caller scratch — read it before the next call. */
+export function fineStep(
+  f: FineField,
+  x: number,
+  z: number,
+  out: { x: number; z: number },
+): { x: number; z: number } | null {
   const a = toCell(x) - f.i0;
   const b = toCell(z) - f.j0;
   const w = f.w;
@@ -664,7 +715,9 @@ export function fineStep(f: FineField, x: number, z: number): { x: number; z: nu
     }
   }
   if (ba === a && bb === b) return null;
-  return { x: cellCenter(f.i0 + ba), z: cellCenter(f.j0 + bb) };
+  out.x = cellCenter(f.i0 + ba);
+  out.z = cellCenter(f.j0 + bb);
+  return out;
 }
 
 /** Distance (in steps) from every nav cell to the target nav cell. `maxD` bounds the search
@@ -700,8 +753,15 @@ export function flowField(nav: NavGrid, ti: number, tj: number, maxD = Infinity)
   return dist;
 }
 
-/** World-space point the enemy should walk to next. */
-export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: number) {
+/** World-space point the enemy should walk to next. `out` is a caller scratch (this runs
+ * per enemy per frame) — read it before the next call. */
+export function nextWaypoint(
+  nav: NavGrid,
+  dist: Float32Array,
+  x: number,
+  z: number,
+  out: { x: number; z: number },
+) {
   const { g: solid, n } = nav;
   const ci = toNav(x);
   const cj = toNav(z);
@@ -722,8 +782,14 @@ export function nextWaypoint(nav: NavGrid, dist: Float32Array, x: number, z: num
     }
   }
   const k = bi * n + bj;
-  if (NAV_SCALE === 1) return { x: cellCenter(bi), z: cellCenter(bj) };
-  return { x: nav.px[k]!, z: nav.pz[k]! };
+  if (NAV_SCALE === 1) {
+    out.x = cellCenter(bi);
+    out.z = cellCenter(bj);
+    return out;
+  }
+  out.x = nav.px[k]!;
+  out.z = nav.pz[k]!;
+  return out;
 }
 
 /** True when a straight walk from a to b is clear for the given radius. */

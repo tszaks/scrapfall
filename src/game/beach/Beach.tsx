@@ -25,13 +25,23 @@ import { paletteSkyTextures, prewarmPalette, skyEnvSource, skyTexture } from "..
 import { addSkyFogUniforms, skyFog } from "../skyFog";
 import { CityTraffic } from "../Traffic";
 import type { TrafficLink } from "../trafficCore";
-import { BLUFF_H, DECK, SEA, X, type BeachLayout } from "./beachLayout";
+import {
+  BLUFF_H,
+  DECK,
+  SEA,
+  SURF_FLOOR,
+  OFFSHORE_X,
+  OFFSHORE_FLOOR,
+  X,
+  type BeachLayout,
+} from "./beachLayout";
 import { BEACH_SKY_KEY, BEACH_SUNSET, beachLook, type BeachLook } from "./beachLook";
-import { DETAIL_RANGE, buildBeachMeshes } from "./beachMesh";
+import { DETAIL_RANGE, beachMeshes } from "./beachMesh";
 import { beachSignTexture } from "./beachTextures";
 import { provideEventHooks } from "../events/mapHooks";
 import { SurgeFx } from "./SurgeFx";
 import { waveSurge } from "./waveSurge";
+import { BeachSports } from "./BeachSports";
 
 const _m4 = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -149,8 +159,9 @@ uniform float uTime;
 varying vec3 vWPos;
 // the sand under the water (same profile as the layout): surf floor, then the wet sand
 float floorAt(float x) {
-  if (x < ${X.surf.toFixed(1)}) return -3.0;
-  if (x < ${X.wet.toFixed(1)}) return -2.0 + (x - (${X.surf.toFixed(1)})) / ${(X.wet - X.surf).toFixed(1)} * 1.05;
+  if (x < ${OFFSHORE_X.toFixed(1)}) return ${OFFSHORE_FLOOR.toFixed(2)};
+  if (x < ${X.surf.toFixed(1)}) return ${OFFSHORE_FLOOR.toFixed(2)} + (x - (${OFFSHORE_X.toFixed(1)})) / ${(X.surf - OFFSHORE_X).toFixed(1)} * ${(SURF_FLOOR - OFFSHORE_FLOOR).toFixed(2)};
+  if (x < ${X.wet.toFixed(1)}) return ${SURF_FLOOR.toFixed(2)} + (x - (${X.surf.toFixed(1)})) / ${(X.wet - X.surf).toFixed(1)} * ${(-0.95 - SURF_FLOOR).toFixed(2)};
   return -0.95 + (x - (${X.wet.toFixed(1)})) / ${(X.dry - X.wet).toFixed(1)} * 0.35;
 }
 // the wash: a slow swell that runs the waterline up and back down the beach
@@ -306,6 +317,7 @@ export const BeachWorld = memo(function BeachWorld({
     <>
       <SurgeFx city={city} />
       <MarineLife />
+      <BeachSports city={city} />
       <CitySun time={time} color={look.sun.color} intensity={look.sun.intensity} dir={L.lightDir} />
       <BeachScene city={city} time={time} />
       <BeachPalms city={city} />
@@ -352,16 +364,10 @@ const BeachScene = memo(function BeachScene({
   /** legacy: the time of day now comes from timeOfDay.ts */
   time?: TimeOfDay;
 }) {
-  const { gl, scene } = useThree();
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildBeachMeshes(city);
-    if (import.meta.env.DEV || debugOn())
-      console.info(
-        `[beach] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [city]);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  // geometry is prepared across tasks during the world build; this memo is a cache hit
+  const built = useMemo(() => beachMeshes(city), [city]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(

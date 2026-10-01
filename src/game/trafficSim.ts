@@ -161,6 +161,20 @@ const _near: Car[] = [];
 const _specials: Car[] = [];
 const _braking: number[] = [];
 const _index = new Map<Car, number>();
+// per-step tighten-room scratch: a fresh `lim` closure per car per sim step used to be
+// a measurable GC source (~9k closures/s at the full rate)
+const _opts: (-1 | 0 | 1)[] = [];
+const _optsW: number[] = [];
+const _copOpts: (-1 | 0 | 1)[] = [];
+const _optsF: (-1 | 0 | 1)[] = [];
+const _skip: Car[] = [];
+const _room = { room: Infinity, who: -1 };
+const lim = (v: number, o: Car | null) => {
+  if (v < _room.room) {
+    _room.room = v;
+    _room.who = o ? (_index.get(o) ?? -1) : -1;
+  }
+};
 
 /** lateral offset of a lane from the road centre line */
 export const laneOffset = (road: Road, axis: 0 | 1, dir: 1 | -1, lane: number) => {
@@ -174,10 +188,14 @@ export const corridorLat = (road: Road, axis: 0 | 1, dir: 1 | -1) => {
   return laneSign(axis, dir) * (ls.length > 1 ? (ls[0]! + ls[1]!) / 2 : 0.4);
 };
 
+const _pos = { x: 0, z: 0 };
+/** World position of a car. Returns a shared scratch — read it before the next call. */
 export const posOf = (c: Car, roadX: Road[], roadZ: Road[]) => {
   const road = (c.axis === 0 ? roadZ : roadX)[c.line]!;
   const perp = road.c + c.lat;
-  return c.axis === 0 ? { x: c.s, z: perp } : { x: perp, z: c.s };
+  _pos.x = c.axis === 0 ? c.s : perp;
+  _pos.z = c.axis === 0 ? perp : c.s;
+  return _pos;
 };
 export const headingOf = (c: Car) => c.yaw;
 const axisYaw = (axis: 0 | 1, dir: 1 | -1) =>
@@ -251,27 +269,41 @@ export function makeCar(
 }
 
 /** new heading after turning (1 right / -1 left) from (axis, dir) */
+// (there are only 8 axis/dir/turn combinations: precompute them — this used to return a
+// fresh {naxis, ndir} for every call, several per car per frame)
+const TURNED = (() => {
+  const t: { naxis: 0 | 1; ndir: 1 | -1 }[][][] = [];
+  for (const axis of [0, 1] as const)
+    for (const dir of [1, -1] as const) {
+      const dx = axis === 0 ? dir : 0;
+      const dz = axis === 1 ? dir : 0;
+      for (const turn of [1, -1] as const) {
+        // right of heading (dx, dz) is (-dz, dx)
+        const nx = turn === 1 ? -dz : dz;
+        const nz = turn === 1 ? dx : -dx;
+        const naxis = (1 - axis) as 0 | 1;
+        const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
+        (t[axis] ??= [])[dir === 1 ? 0 : 1] ??= [];
+        t[axis]![dir === 1 ? 0 : 1]![turn === 1 ? 0 : 1] = { naxis, ndir };
+      }
+    }
+  return t;
+})();
 export function turned(axis: 0 | 1, dir: 1 | -1, turn: 1 | -1) {
-  const dx = axis === 0 ? dir : 0;
-  const dz = axis === 1 ? dir : 0;
-  // right of heading (dx, dz) is (-dz, dx)
-  const nx = turn === 1 ? -dz : dz;
-  const nz = turn === 1 ? dx : -dx;
-  const naxis = (1 - axis) as 0 | 1;
-  const ndir = (naxis === 0 ? nx : nz) as 1 | -1;
-  return { naxis, ndir };
+  return TURNED[axis]![dir === 1 ? 0 : 1]![turn === 1 ? 0 : 1]!;
 }
 
 /** which turns are possible at the next intersection (only roads that continue) */
-function turnOptions(c: Car, cross: Road[], along: Road[]) {
-  const opts: (-1 | 0 | 1)[] = [];
-  if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) opts.push(0);
-  for (const turn of [1, -1] as const) {
+const TURNS: readonly (1 | -1)[] = [1, -1];
+function turnOptions(c: Car, cross: Road[], along: Road[], out: (-1 | 0 | 1)[]) {
+  out.length = 0;
+  if (c.next + c.dir >= 0 && c.next + c.dir < cross.length) out.push(0);
+  for (const turn of TURNS) {
     const { ndir } = turned(c.axis, c.dir, turn);
     const nextIdx = c.line + ndir;
-    if (nextIdx >= 0 && nextIdx < along.length) opts.push(turn);
+    if (nextIdx >= 0 && nextIdx < along.length) out.push(turn);
   }
-  return opts;
+  return out;
 }
 
 /**
@@ -293,6 +325,17 @@ function exitLane(c: Car, ownRoad: Road, crossRoad: Road, turn: 1 | -1) {
   return Math.min(c.lane, newLast);
 }
 
+type Geom = {
+  R: number;
+  sStart: number;
+  naxis: 0 | 1;
+  ndir: 1 | -1;
+  nlane: number;
+  nlat: number;
+};
+// the result lives only within the caller's step iteration — a fresh object per turning car
+// per frame was a measurable GC source
+const _geom: Geom = { R: 0, sStart: 0, naxis: 0, ndir: 1, nlane: 0, nlat: 0 };
 function turnGeom(c: Car, crossRoad: Road, ownRoad: Road, turn: 1 | -1, special: boolean) {
   const { naxis, ndir } = turned(c.axis, c.dir, turn);
   const nlane = exitLane(c, ownRoad, crossRoad, turn);
@@ -316,11 +359,15 @@ function turnGeom(c: Car, crossRoad: Road, ownRoad: Road, turn: 1 | -1, special:
     if (a <= 0 || b <= 0 || Math.hypot(a, b) + c.v.wid / 2 + 0.4 <= R) break;
   }
   R = Math.max(1.5, R);
-  const sStart = crossRoad.c + c.dir * (uNew - R);
-  return { R, sStart, naxis, ndir, nlane, nlat };
+  const g = _geom;
+  g.R = R;
+  g.sStart = crossRoad.c + c.dir * (uNew - R);
+  g.naxis = naxis;
+  g.ndir = ndir;
+  g.nlane = nlane;
+  g.nlat = nlat;
+  return g;
 }
-
-type Geom = ReturnType<typeof turnGeom>;
 
 function startArc(c: Car, g: Geom, ownRoad: Road, turn: 1 | -1) {
   const fx = c.axis === 0 ? c.dir : 0;
@@ -650,7 +697,7 @@ const nodeOf = (c: Car, nz: number) => (c.axis === 0 ? c.next * nz + c.line : c.
 
 /** where a cop should turn: the suspect's own choice if we're on its trail, else toward it */
 function copTurn(c: Car, cars: Car[], cross: Road[], along: Road[]): -1 | 0 | 1 {
-  const opts = turnOptions(c, cross, along);
+  const opts = turnOptions(c, cross, along, _copOpts);
   if (opts.length === 0) return 0;
   const trail = c.chase!.trail;
   for (let k = trail.length - 1; k >= 0; k--) {
@@ -685,17 +732,26 @@ function copTurn(c: Car, cars: Car[], cross: Road[], along: Road[]): -1 | 0 | 1 
 }
 
 /** lateral lines a special may drive on, with how much it dislikes each (metres of free road) */
+const _lines: { lat: number; cost: number }[] = [];
+let _linesLen = 0;
+const _line = (lat: number, cost: number) => {
+  const o = (_lines[_linesLen] ??= { lat: 0, cost: 0 });
+  o.lat = lat;
+  o.cost = cost;
+  _linesLen++;
+};
 function specialLines(road: Road, axis: 0 | 1, dir: 1 | -1, suspect: boolean, pref: number) {
   const sg = laneSign(axis, dir);
   const ls = LANES[road.cls];
-  const out: { lat: number; cost: number }[] = [];
-  ls.forEach((o, k) => out.push({ lat: sg * o, cost: suspect ? (k === pref ? -4 : 0) : 3 }));
-  out.push({ lat: corridorLat(road, axis, dir), cost: suspect ? 2 : 0 });
+  _linesLen = 0;
+  for (let k = 0; k < ls.length; k++) _line(sg * ls[k]!, suspect ? (k === pref ? -4 : 0) : 3);
+  _line(corridorLat(road, axis, dir), suspect ? 2 : 0);
   if (road.cls === "avenue") {
-    out.push({ lat: 0, cost: suspect ? 4 : 5 });
-    out.push({ lat: -sg * 4, cost: suspect ? 9 : 12 });
-  } else if (road.cls === "side") out.push({ lat: -sg * 2, cost: suspect ? 9 : 12 });
-  return out;
+    _line(0, suspect ? 4 : 5);
+    _line(-sg * 4, suspect ? 9 : 12);
+  } else if (road.cls === "side") _line(-sg * 2, suspect ? 9 : 12);
+  _lines.length = _linesLen;
+  return _lines;
 }
 
 /** keep a lateral line on the tarmac (and off the boulevard median) */
@@ -768,9 +824,18 @@ export function stepCars(
     scanSkip = NO_SKIP;
     if (c.ghost.length) {
       c.ghostT += dt;
-      const apart = c.ghost.every((g) => Math.hypot(cars[g]!.x - c.x, cars[g]!.z - c.z) > 14);
+      let apart = true;
+      for (const g of c.ghost)
+        if (Math.hypot(cars[g]!.x - c.x, cars[g]!.z - c.z) <= 14) {
+          apart = false;
+          break;
+        }
       if (c.ghostT > 4 || apart) c.ghost = [];
-      else scanSkip = c.ghost.map((g) => cars[g]!);
+      else {
+        scanSkip = _skip;
+        scanSkip.length = 0;
+        for (const g of c.ghost) scanSkip.push(cars[g]!);
+      }
     }
     // A pursuit car that has just been released is still doing pursuit speed and may be
     // metres from a red it was always going to run: it keeps driving like one through the
@@ -795,16 +860,26 @@ export function stepCars(
         const dNode = (cross[c.next]!.c - c.s) * c.dir;
         if (c.turn === null || dNode > 35) c.turn = copTurn(c, cars, cross, along);
       } else if (c.turn === null) {
-        let opts = turnOptions(c, cross, along);
+        let opts = turnOptions(c, cross, along, _opts);
         // on two-lane roads: left turns from the inner lane, right turns from the outer one
         // (turning across the other lane is what used to cause side-swipes in junctions)
         const nl = LANES[along[c.line]!.cls].length;
         if (c.role === ROLE_NORMAL && nl > 1) {
-          const ok = opts.filter((o) => o === 0 || (o === -1 ? c.lane === 0 : c.lane === nl - 1));
+          const ok = _optsF;
+          ok.length = 0;
+          for (const o of opts)
+            if (o === 0 || (o === -1 ? c.lane === 0 : c.lane === nl - 1)) ok.push(o);
           if (ok.length) opts = ok;
         }
-        const w = opts.map((o) => (o === 0 ? (c.role === ROLE_SUSPECT ? 1.3 : 2.2) : 1));
-        let r = rand() * w.reduce((a, b) => a + b, 0);
+        const w = _optsW;
+        w.length = 0;
+        let wsum = 0;
+        for (const o of opts) {
+          const v = o === 0 ? (c.role === ROLE_SUSPECT ? 1.3 : 2.2) : 1;
+          w.push(v);
+          wsum += v;
+        }
+        let r = rand() * wsum;
         c.turn = opts[opts.length - 1] ?? 0;
         for (let k = 0; k < opts.length; k++) {
           r -= w[k]!;
@@ -873,15 +948,8 @@ export function stepCars(
     const ty = travelYaw(c);
     const fx = Math.sin(ty);
     const fz = Math.cos(ty);
-    let room = Infinity;
-    let who = -1;
-    /** tighten the room we have, remembering which car (if any) caused it */
-    const lim = (v: number, o: Car | null) => {
-      if (v < room) {
-        room = v;
-        who = o ? (index.get(o) ?? -1) : -1;
-      }
-    };
+    _room.room = Infinity;
+    _room.who = -1;
     let vcap = c.vmax;
     if (deadSignal && !committed) {
       const toStop = (stopCentre - c.s) * c.dir;
@@ -1257,19 +1325,20 @@ export function stepCars(
 
     // ---- speed ----
     const aPlan = special ? 11 : 7;
-    const target = Math.min(vcap, Math.sqrt(Math.max(0, 2 * aPlan * room)));
+    const target = Math.min(vcap, Math.sqrt(Math.max(0, 2 * aPlan * _room.room)));
     const v0 = c.speed;
     const accel = special ? (c.v.type === "sports" ? 8 : 6.5) : 3.5;
     const decel = special ? 14 : 16;
     if (c.speed < target) c.speed = Math.min(target, c.speed + accel * dt);
     else c.speed = Math.max(target, c.speed - decel * dt);
     if (c.speed < 0) c.speed = 0;
-    c.blocker = who;
+    c.blocker = _room.who;
     c.stuckT = c.speed < 0.3 && target < 0.5 ? c.stuckT + dt : 0;
     let move = ((v0 + c.speed) / 2) * dt;
     // never roll past a stop line (or the car ahead) we're braking for: the speed curve
     // alone can overshoot by a few centimetres, and a coarse far step by metres
-    if (!special && !committed && room < Infinity) move = Math.min(move, Math.max(0, room));
+    if (!special && !committed && _room.room < Infinity)
+      move = Math.min(move, Math.max(0, _room.room));
 
     // ---- longitudinal motion ----
     if (c.arc) advanceArc(c, move, roadX, roadZ);
@@ -1435,10 +1504,24 @@ export function spawnTraffic(
  * only moves every fourth step (that let a suspect slide through a far car).
  */
 export function markFar(cars: Car[], players: { x: number; z: number }[], range: number) {
-  const near = (x: number, z: number, list: { x: number; z: number }[], r: number) =>
-    list.some((p) => Math.abs(p.x - x) < r && Math.abs(p.z - z) < r);
-  const specials = cars.filter((c) => c.role !== ROLE_NORMAL);
-  for (const c of cars)
-    c.far =
-      c.role === ROLE_NORMAL && !near(c.x, c.z, players, range) && !near(c.x, c.z, specials, 70);
+  // (no closures or fresh arrays: this runs every frame before the near step)
+  const specials = _specials;
+  specials.length = 0;
+  for (const c of cars) if (c.role !== ROLE_NORMAL) specials.push(c);
+  for (const c of cars) {
+    let far = c.role === ROLE_NORMAL;
+    if (far)
+      for (const p of players)
+        if (Math.abs(p.x - c.x) < range && Math.abs(p.z - c.z) < range) {
+          far = false;
+          break;
+        }
+    if (far)
+      for (const o of specials)
+        if (Math.abs(o.x - c.x) < 70 && Math.abs(o.z - c.z) < 70) {
+          far = false;
+          break;
+        }
+    c.far = far;
+  }
 }

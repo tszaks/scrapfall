@@ -70,7 +70,7 @@ export function MapEvents({
   spawnEnemies: EventCtx["spawnEnemies"];
   alive: React.MutableRefObject<boolean>;
 }) {
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const cb = useRef({ hurtPlayer, movePlayer, hurtEnemy, spawnEnemies, net, isHost, playing });
   cb.current = { hurtPlayer, movePlayer, hurtEnemy, spawnEnemies, net, isHost, playing };
   const ctx = useMemo<EventCtx>(
@@ -199,7 +199,9 @@ const _r = new THREE.Vector3();
  * after the power is back it leaves again. The variants stay cached for the next one.
  */
 function Flashlight() {
-  const { camera, scene, gl } = useThree();
+  const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const light = useMemo(() => {
     const l = new THREE.SpotLight("#fff2dc", 0, 70, 0.4, 0.55, 1.4);
     l.castShadow = false;

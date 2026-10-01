@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { newPlayerRig } from "./art/player";
 import { artFrame } from "./art/kit";
 import { getViewMode, toggleView, setViewMode, useViewMode } from "./viewMode";
+import { renderWithPost } from "./PostFx";
 import { showToast } from "./squadState";
 
 const eye = new THREE.Vector3(),
@@ -192,7 +193,8 @@ export function PlayerView({
   useFrame(({ camera, gl, scene }) => {
     const on = shoulderView.active;
     if (on) updateViewCamera(camera, stop);
-    gl.render(scene, on ? viewCamera : camera);
+    // the single scene render per frame; PostFx layers its bloom on top of it
+    renderWithPost(gl, scene, on ? viewCamera : camera);
   }, 1);
   return (
     <>

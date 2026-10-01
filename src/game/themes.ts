@@ -632,6 +632,7 @@ export const THEMES: Theme[] = [
   },
   {
     name: "Nuketown",
+    wip: true,
     sky: "#e5b884",
     ground: "#819460",
     grid: ["#798956", "#8b9b69"],

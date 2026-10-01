@@ -22,6 +22,7 @@ import {
   type AccessBuilding,
 } from "./layout";
 import { IGeo, IDENTITY, type BakeLight } from "./geo";
+import { drain, runSliced } from "../slice";
 import { SIGN, signUV } from "./textures";
 import type { LRect } from "./types";
 
@@ -84,6 +85,19 @@ const built = (s: Set4): Interior => ({
   wood: s.wood.build(),
   conc: s.conc.build(),
 });
+/** Fixtures join the existing material buffers: no per-chair meshes or scene lights. */
+function buildFurnishings(b: AccessBuilding, S: Set4, level: 0 | 1, lights: BakeLight[]) {
+  const keys = ["base", "wood", "steel", "conc"] as const;
+  const starts = keys.map((key) => S[key].count);
+  for (const p of b.furnishings) {
+    if (p.level !== level) continue;
+    const g = S[p.material];
+    g.color(p.color);
+    g.box(p.a0, p.a1, p.y0, p.y1, p.d0, p.d1);
+  }
+  keys.forEach((key, i) => S[key].bake(lights, 0.36, starts[i]!));
+}
+
 /** thin square tube along a (fixed d), for handrails across a wall */
 function railA(G: IGeo, d: number, y: number, a0: number, a1: number, r = 0.025) {
   G.box(a0, a1, y - r, y + r, d - r, d + r, "-a+a");
@@ -582,6 +596,7 @@ function buildLobby(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   }
   G.bake(lights, 0.3, first);
   S.steel.bake(lights, 0.36);
+  buildFurnishings(b, S, 0, lights);
 }
 
 function buildCar(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
@@ -1213,6 +1228,7 @@ function buildRoom(b: AccessBuilding, S: Set4, displays: DisplaySpot[]) {
   G.bake(lights, 0.3, firstG);
   P.bake(lights, 0.3, firstP);
   S.steel.bake(lights, 0.34);
+  buildFurnishings(b, S, 1, lights);
 }
 
 /** a steel ladder on the wall face (the rails run on past the deck edge as handholds) */
@@ -1267,7 +1283,9 @@ function edgeRail(E: IGeo, b: AccessBuilding) {
 
 // ------------------------------------------------------------------ everything
 
-export function buildAccess(list: AccessBuilding[]): BuiltAccess {
+function* buildAccessGen(
+  list: AccessBuilding[],
+): Generator<void, BuiltAccess, void> {
   const E = new IGeo();
   const GL = new IGeo();
   const SG = new IGeo();
@@ -1275,6 +1293,7 @@ export function buildAccess(list: AccessBuilding[]): BuiltAccess {
   const beacons: [number, number, number][] = [];
   const per: BuiltBuilding[] = [];
   for (const b of list) {
+    yield;
     const displays: DisplaySpot[] = [];
     const low = set4();
     let high: Interior | null = null;
@@ -1317,6 +1336,18 @@ export function buildAccess(list: AccessBuilding[]): BuiltAccess {
     });
   }
   return { ext: E.build(), glow: GL.build(), sign: SG.build(), pools: PL.build(), beacons, per };
+}
+
+// built per installed access list (the world rebuild swaps the list), so cache on it
+const builtAccess = new WeakMap<AccessBuilding[], BuiltAccess>();
+export function builtAccessFor(list: AccessBuilding[]): BuiltAccess {
+  let b = builtAccess.get(list);
+  if (!b) builtAccess.set(list, (b = drain(buildAccessGen(list))));
+  return b;
+}
+/** the world build bakes interiors across tasks; the scene mount is then a cache hit */
+export async function prepareAccess(list: AccessBuilding[]): Promise<void> {
+  if (!builtAccess.has(list)) builtAccess.set(list, await runSliced(buildAccessGen(list)));
 }
 
 export { CAR_W, CAR_D };

@@ -12,7 +12,6 @@ then `npm run serve:static`. In another terminal:
 ```
 QUALITY=auto WAVE=10 REPEATS=3 SECONDS=600 npm run benchmark
 ENGINE=webkit QUALITY=auto WAVE=10 REPEATS=3 SECONDS=600 npm run benchmark
-node scripts/performance-flows.mjs
 node scripts/performance-adaptation.mjs
 node scripts/performance-coop.mjs
 node scripts/performance-loading.mjs
@@ -40,10 +39,7 @@ than more FPS. Never compare frame rates across changing power/display condition
 individual RAF callback duration, not all CPU work per frame. GPU time is sampled
 only when EXT_disjoint_timer_query_webgl2 is exposed; unavailable timing is null,
 not zero. Samples surround outer rendering including nested reflection passes,
-and disjoint samples are discarded. Preparation `ms` is
-summed synchronous preparation work; `wallMs` includes asynchronous waiting and
-`maxStepMs` is the longest preparation callback. `passes` contains draw-only times.
-The old preparation log had only a single synchronous `ms` measurement.
+and disjoint samples are discarded. Current main uses per-batch preparation logs (`ms` per batch). The original candidate recorded aggregate `ms`, `wallMs`, `maxStepMs` and `passes`; those historical fields must not be compared as if they were the same measurement.
 
 ## Acceptance gates
 
@@ -59,8 +55,4 @@ The old preparation log had only a single synchronous `ms` measurement.
   mouse, first effects, interiors and weather; physical input latency remains a
   hardware check. An unmet native gate is not an automated pass.
 
-The preparation state is local: cancelled map generations cannot unlock a new map.
-Context restoration repeats preparation; failure keeps controls blocked with a reload
-message. Existing co-op messages and host authority are unchanged. The co-op test uses
-keyboard fallback and accelerated final-wave damage. A pre-existing victory-state
-overwrite (WAVE 13/12) is guarded against until React commits the end-of-match state. No telemetry is sent.
+Current main owns sliced world construction, shader batches, queued entry and the victory latch; this release preserves them. No telemetry is sent. `performance-flows.mjs` is retained only as historical coverage of the original a3cf0a3 preparation implementation; it is not a current release check. Use `npm run smoke` for current map entry coverage.

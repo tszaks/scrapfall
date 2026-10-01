@@ -22,6 +22,8 @@ import { groundHook, groundY } from "../terrain";
 import { BODY_R, CAR_D, CAR_W, rideY, toLocal, toWorld, type AccessBuilding } from "./layout";
 import type { LRect, Portal } from "./types";
 import { registerPingTarget } from "../ping";
+import { furnishingBlocked } from "./roomFurnishings";
+import { dressResortRooms } from "./resortRooms";
 
 let unping: (() => void) | null = null;
 
@@ -179,6 +181,7 @@ const LABEL: Record<AccessBuilding["kind"], [string, string]> = {
 
 /** Install the access buildings for a new map (null / [] uninstalls every hook). */
 export function installAccess(list: AccessBuilding[] | null, extra: AccessMarker[] = []) {
+  dressResortRooms(list);
   setStaticShotExemption(
     list?.length
       ? (x, y, z) => {
@@ -291,11 +294,31 @@ export const zoneAt = (x: number, z: number) => {
   return k < 0 ? 0 : ROOF_KEY + k;
 };
 
-function roofBlocked(b: AccessBuilding, x: number, z: number, r: number) {
+function roofBlocked(b: AccessBuilding, x: number, z: number, r: number, fixtures = true) {
   const R = b.spec.roof;
   if (x < R.x0 + r || x > R.x1 - r || z < R.z0 + r || z > R.z1 - r) return true;
   for (const o of b.obstacles)
     if (x > o.x0 - r && x < o.x1 + r && z > o.z0 - r && z < o.z1 + r) return true;
+  // (inlined toLocal + a looped furnishingBlocked: blocked() calls this for every body
+  // query that lands on a roof cell — the tuple and .some closure were per-call garbage)
+  const dx = x - b.ox;
+  const dz = z - b.oz;
+  const a = dx * b.tx + dz * b.tz;
+  const d = dx * b.ix + dz * b.iz;
+  if (!fixtures) return false;
+  const y0 = b.top + 0.08,
+    y1 = b.top + 1.8;
+  for (const p of b.furnishings)
+    if (
+      p.level === 1 &&
+      p.y1 > y0 &&
+      p.y0 < y1 &&
+      a > p.a0 - r &&
+      a < p.a1 + r &&
+      d > p.d0 - r &&
+      d < p.d1 + r
+    )
+      return true;
   return false;
 }
 
@@ -636,7 +659,9 @@ export function playerBlocked(
   const rects = b.elev
     ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!)
     : stairRects(b, p, w.doors[p.b]!);
-  return !insideStair(b, p, rects, a, d, r);
+  return (
+    !insideStair(b, p, rects, a, d, r) || furnishingBlocked(b, 0, a, d, r, feet + 0.08, feet + 1.8)
+  );
 }
 
 const CLIMB = 2.4; // m/s up or down a ladder
@@ -1006,12 +1031,24 @@ export function bulletBlocked(x: number, y: number, z: number): boolean | undefi
   if (rk >= 0) {
     const rb = w.list[rk]!;
     if (y >= rb.top - 0.05 && y <= rb.top + rb.roomH)
-      return y < rb.top || roofBlocked(rb, x, z, 0.02) || (rb.room && y > rb.top + rb.roomH - 0.08);
+      return (
+        y < rb.top ||
+        roofBlocked(rb, x, z, 0.02, false) ||
+        furnishingBlocked(rb, 1, ...toLocal(rb, x, z), 0.02, y - 0.02, y + 0.02) ||
+        (rb.room && y > rb.top + rb.roomH - 0.08)
+      );
   }
   if (p.zone !== 1 || w.list[p.b]!.ladder) return undefined;
   const I = w.list[p.b]!.interior;
   if (x < I.x0 || x > I.x1 || z < I.z0 || z > I.z1) return undefined;
   if (Math.abs(y - (p.y + 1.3)) > 3) return undefined;
   if (y < p.y + 0.04 || y > p.y + 2.55) return true;
-  return playerBlocked(x, z, 0.02);
+  const b = w.list[p.b]!;
+  const [a, d] = toLocal(b, x, z);
+  const rects = b.elev
+    ? elevRects(b, p, w.cars[p.b]!, w.doors[p.b]!)
+    : stairRects(b, p, w.doors[p.b]!);
+  return (
+    !insideStair(b, p, rects, a, d, 0.02) || furnishingBlocked(b, 0, a, d, 0.02, y - 0.02, y + 0.02)
+  );
 }

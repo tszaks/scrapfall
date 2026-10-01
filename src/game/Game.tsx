@@ -1,19 +1,16 @@
-import { Nuketown } from "./nuketown/Nuketown";
-import { nuketownStructures, nuketownMinimap, NUKE_SIZE, NUKE_SPAWN } from "./nuketown/layout";
+import { nuketownMinimap, NUKE_SPAWN } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
 import { bodyContacts, worldContact, type Body } from "./projectileContact";
+import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
-import { configureEnvironment, matchEnvironment } from "./matchEnvironment";
+import { matchEnvironment } from "./matchEnvironment";
 import { aimState, stepAim, aimSensitivity } from "./input/aim";
 import { advanceBallistic, bulletGravity, ballisticDirection } from "./ballistics";
-import { Tumbleweeds } from "./western/Tumbleweeds";
 import {
   weedWorld,
   weedView,
   stepWeedView,
-  WEED_COUNT,
-  resetWeeds,
   stepWeeds,
   weedContacts,
   breakWeed,
@@ -31,7 +28,6 @@ import {
 } from "./soloRevive";
 import { boundaryBlocked } from "./level";
 import {
-  resetStaticCollision,
   staticBody,
   staticSegment,
   staticCeiling,
@@ -48,19 +44,14 @@ import {
   keyLabel,
   type ControlAction,
 } from "./input/remap";
-import { ControlSettings } from "./input/ControlSettings";
-import { westernBelfry } from "./western/belfry";
 import { Structures } from "./structures/Structures";
-import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
 import {
-  installStructures,
   structureList,
   structurePlayer,
   structureFloor,
   structureBody,
   structureShot,
 } from "./structures/world";
-import { AlpineLife } from "./life/AlpineLife";
 import {
   wheelRide,
   wheelWorld,
@@ -73,7 +64,6 @@ import {
 } from "./beach/wheelRide";
 import {
   PlayerView,
-  ViewSettings,
   shoulderAim,
   shoulderView,
   playerMuzzle,
@@ -82,7 +72,17 @@ import {
 import { getViewMode } from "./viewMode";
 import { setLocalMuzzle } from "./projectiles";
 import { Canvas, useFrame, useThree, type RootState } from "@react-three/fiber";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  startTransition,
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { firstWorldHit, firstShotImpact, type ShotTarget } from "./enemyProjectiles";
 
@@ -91,7 +91,6 @@ import {
   HALF,
   BLOCK,
   blocked,
-  generateLevel,
   randomSpawn,
   pushOut,
   type Block,
@@ -103,19 +102,13 @@ import {
   fineStep,
   toCell,
   type FineField,
+  type NavGrid,
   nextWaypoint,
   clearLine,
   toNav,
   spawnNear,
   closeRaised,
-  setNavWalls,
-  setArenaSize,
-  SOLO_ARENA,
-  COOP_ARENA,
-  CITY_COOP,
   PLAY_HALF,
-  BEACH_SIZE,
-  setPosts,
   jumpBody,
   shotBlocked,
   shotStop,
@@ -123,21 +116,20 @@ import {
 } from "./level";
 
 import { THEMES, layoutOf, offered, type Theme } from "./themes";
+import { buildWorld, type BuiltWorld } from "./worldBuild";
+
+// Each map's scene (meshes, textures, weather, life) loads as its own chunk — a session
+// downloads only the map it shows. The veil covers the one-frame suspend on first mount.
+const CityMap = lazy(() => import("./scenes/CityMap"));
+const WesternMap = lazy(() => import("./scenes/WesternMap"));
+const AlpineMap = lazy(() => import("./scenes/AlpineMap"));
+const BeachMap = lazy(() => import("./scenes/BeachMap"));
+const NuketownMap = lazy(() => import("./scenes/NuketownMap"));
 import { isBeach } from "./beach/beachLayout";
-import { mapPosts, movePropsFromDoors, snugPlazaProps } from "./posts";
-import { BeachWorld } from "./beach/Beach";
 import type { CityLayout } from "./cityLayout";
-import { CityScene, CitySun } from "./City";
-import { CityTraffic } from "./Traffic";
 import { CURB } from "./cityLayout";
-import { CityBlockades } from "./cityBlockades";
-import { findGaps, sealGaps, soloHalf, walkableFromBlocks, type Gap } from "./soloBounds";
+import type { Gap } from "./soloBounds";
 import type { WesternLayout } from "./western/layout";
-import { WesternScene, WesternSun } from "./western/Western";
-import { WesternTrain } from "./western/Train";
-import { WesternRiders } from "./western/Riders";
-import { WesternWeather } from "./western/Weather";
-import { WesternBlockades } from "./western/Blockades";
 import { bossSpot as trainBossSpot, callBossTrain, trainClock } from "./western/trainSim";
 import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
@@ -168,20 +160,14 @@ import {
   groundSpeed,
   groundY,
   baseGroundY,
-  setTerrain,
   wind,
   worldFx,
 } from "./terrain";
-import { beachTerrain } from "./beach/terrain";
-import { AlpineScene, AlpineSun } from "./alpine/Alpine";
-import { alpine, decodeAlpine, encodeAlpine, resetAlpine } from "./alpine/weather";
+import { steerTo } from "./steerCache";
+import { alpine, decodeAlpine, encodeAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
-import { ALPINE_SIZE, alpineZone, type AlpineLayout } from "./alpine/layout";
+import { alpineZone, type AlpineLayout } from "./alpine/layout";
 import { leaveRide, resetRide, ride, riderEye, stepRide } from "./alpine/ride";
-import { cityAccess } from "./access/cityAccess";
-import { beachAccess } from "./access/beachAccess";
-import { alpineAccessFull } from "./access/alpineAccess";
-import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
 import {
   accessActive,
@@ -193,7 +179,6 @@ import {
   decodeCars,
   doorstep,
   encodeCars,
-  installAccess,
   patchNav,
   player as accPlayer,
   playerAz,
@@ -242,7 +227,6 @@ import {
 import { NewEnemyModel, OrdnancePool } from "./EnemyModels";
 import {
   DIFFICULTIES,
-  DIFFICULTY_IDS,
   DIFFICULTY_KEY,
   DEFAULT_DIFFICULTY,
   crowdMul,
@@ -252,6 +236,7 @@ import {
   type DifficultyId,
 } from "./difficulty";
 import { RobotModel } from "./art/RobotModel";
+import { Ground, MapDressing } from "./art/MapDressing";
 import { ArtBoss, ArtSpecial } from "./art/SpecialBoss";
 import { hasArtBoss } from "./art/robots/bosses";
 import { hasArtSpecial } from "./art/robots/specials";
@@ -285,9 +270,16 @@ import {
 } from "./input/controls";
 import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
-import { ControlsHelp, KeyHint } from "./input/Glyph";
-import { PadSettingsPanel } from "./input/PadSettings";
+import { KeyHint } from "./input/Glyph";
 import { SprintMeter } from "./input/SprintMeter";
+import { HudChip, UiStyles } from "./ui/kit";
+import { LoadingVeil } from "./LoadingVeil";
+import { titleShot } from "./titleCam";
+import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
+import { LoadoutScreen } from "./ui/LoadoutScreen";
+import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
+import { SettingsScreen, type SettingsTab } from "./ui/SettingsScreen";
+import { ShopBar } from "./ui/ShopBar";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
@@ -333,7 +325,7 @@ import {
   setAmbienceTime,
 } from "./ambience";
 import { AmbienceListener } from "./AmbienceListener";
-import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
+import { ABILITIES, type AbilityId } from "./abilities";
 import { MapEvents } from "./events/EventsLayer";
 import { forceMapEvent, mapEvent, onMapEventMsg } from "./events/mapEvents";
 import { power } from "./events/power";
@@ -364,12 +356,21 @@ import {
   type PerkId,
   type Perks,
 } from "./perks";
-import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
+import { CLASSES, type ClassId } from "./classes";
+import { hazardFor, hazardsEnabled, HAZARD_COUNT, HAZARD_COUNT_BIG, BIG_MAP_HAZARDS, type HazardDef } from "./hazards";
+import {
+  mutatorById,
+  rollMutator,
+  readHighWave,
+  saveHighWave,
+  type Mutator,
+  type MutatorId,
+} from "./endless";
 import { QualityGovernor } from "./QualityGovernor";
-import { Prewarm, type Preparation } from "./Prewarm";
+import { PostFx } from "./PostFx";
+import { Prewarm } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
 import { antialiasAtLoad, liveDpr } from "./quality";
-import { QualitySettings } from "./QualitySettings";
 
 // hidden subtrees skip the per-frame world-matrix walk (sceneOpt.ts)
 skipHiddenMatrixUpdates();
@@ -725,7 +726,7 @@ const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   mine: { name: "CRYO MINE", color: "#9fe8ff" },
   ammo: { name: "AMMO CACHE", color: "#e7b25c" },
 };
-const TURRET_LIFE = 15;
+const TURRET_LIFE = 30;
 
 type Enemy = {
   generation?: number;
@@ -772,6 +773,14 @@ type Enemy = {
   tgt?: number;
   /** who set it on fire (co-op kill credit for burn kills; null = host) */
   burnFrom?: string | null;
+  /** steering memo (steerCache.ts): memo time, waypoint, sampled target and own spot */
+  svT?: number;
+  svX?: number;
+  svZ?: number;
+  stX?: number;
+  stZ?: number;
+  seX?: number;
+  seZ?: number;
 };
 type Bullet = {
   hitBodies?: Map<Body, number>;
@@ -963,7 +972,7 @@ const MAX_ENEMIES = 110;
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 /** Toby's release this build is based on (shown on the settings page with "TS BUILD") */
-const GAME_VERSION = "1.0.2";
+const GAME_VERSION = "1.0.6";
 const PATCH_COST = 6; // permanent emergency heal slot in the shop
 
 const BULLET_SPEED = 22;
@@ -989,20 +998,33 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const glow = theme.enemyBullet;
 
   if (shape === "tree") {
-    const trunk = 1 + b.h * 0.25;
+    // trunk stays slim, canopy sits directly on top of it and tapers upward so
+    // the tiers never float apart or read as hollow cones
+    const trunk = 1.1 + b.h * 0.22;
+    const canopy = b.h * 0.85 + 1.4;
     return (
-      <group position={[b.x, 0, b.z]}>
-        <mesh position-y={trunk / 2} castShadow>
-          <cylinderGeometry args={[0.3, 0.4, trunk, 6]} />
+      <group position={[b.x, 0, b.z]} rotation-y={b.tone * Math.PI * 2}>
+        {/* root flare keeps the base planted in the ground */}
+        <mesh position-y={0.18} castShadow receiveShadow>
+          <cylinderGeometry args={[0.42, 0.68, 0.36, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={trunk / 2 + 0.2} castShadow>
+          <cylinderGeometry args={[0.26, 0.4, trunk, 7]} />
           <meshLambertMaterial color="#4a3320" flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.45} castShadow>
-          <coneGeometry args={[1.3, b.h * 0.9 + 1, 7]} />
+        {/* three overlapping tiers, each seated inside the one below it */}
+        <mesh position-y={trunk + canopy * 0.18} castShadow>
+          <coneGeometry args={[1.35, canopy * 0.6, 8]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={trunk + canopy * 0.42} castShadow>
+          <coneGeometry args={[1.08, canopy * 0.55, 8]} />
           <meshLambertMaterial color={color} flatShading />
         </mesh>
-        <mesh position-y={trunk + b.h * 0.9} castShadow>
-          <coneGeometry args={[0.9, b.h * 0.6 + 0.6, 7]} />
-          <meshLambertMaterial color={color} flatShading />
+        <mesh position-y={trunk + canopy * 0.68} castShadow>
+          <coneGeometry args={[0.78, canopy * 0.5, 8]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
         </mesh>
       </group>
     );
@@ -1258,6 +1280,130 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   );
 }
 
+/** Small scatter prop that belongs to the map it sits in. */
+function Decor({ theme, seed }: { theme: Theme; seed: number }) {
+  const s = theme.blockShape;
+  const glow = theme.enemyBullet;
+
+  // forests: mushroom clusters and mossy stones
+  if (s === "tree" || s === "pagoda") {
+    const cap = s === "tree" ? "#c8543a" : "#f0a0b8";
+    return (
+      <group>
+        <mesh position-y={0.1} receiveShadow>
+          <sphereGeometry args={[0.42, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshLambertMaterial color={theme.wall} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.1 + seed * 6;
+          const h = 0.26 + ((i + seed) % 1) * 0.22;
+          return (
+            <group key={i} position={[Math.cos(a) * 0.34, 0, Math.sin(a) * 0.34]}>
+              <mesh position-y={h / 2} castShadow>
+                <cylinderGeometry args={[0.055, 0.075, h, 6]} />
+                <meshLambertMaterial color="#e8dcc4" flatShading />
+              </mesh>
+              <mesh position-y={h} castShadow>
+                <sphereGeometry args={[0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshLambertMaterial color={cap} flatShading />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // ice fields: frost shards pushing out of the snow
+  if (s === "crystal" || s === "berg") {
+    return (
+      <group>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.3 + seed * 5;
+          const h = 0.5 + ((i * 7 + seed * 10) % 5) * 0.14;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.3, h / 2, Math.sin(a) * 0.3]} rotation-z={Math.cos(a) * 0.25} castShadow>
+              <coneGeometry args={[0.13, h, 5]} />
+              <meshLambertMaterial color="#e8f7ff" flatShading emissive="#5fd8ff" emissiveIntensity={0.12} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // volcanic and dry maps: cracked slabs with an ember seam
+  if (s === "basalt" || s === "monument" || s === "butte") {
+    return (
+      <group>
+        <mesh position-y={0.14} rotation-y={seed * 3} castShadow receiveShadow>
+          <boxGeometry args={[0.9, 0.28, 0.7]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        <mesh position-y={0.3} rotation-x={-Math.PI / 2}>
+          <planeGeometry args={[0.7, 0.09]} />
+          <meshBasicMaterial color={theme.boss.glow} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // deep sea: kelp fronds swaying off a rock
+  if (s === "coral") {
+    return (
+      <group>
+        <mesh position-y={0.12} receiveShadow>
+          <dodecahedronGeometry args={[0.32, 0]} />
+          <meshLambertMaterial color={theme.blocks[2]} flatShading />
+        </mesh>
+        {[0, 1, 2].map((i) => {
+          const a = i * 2.2 + seed * 4;
+          return (
+            <mesh key={i} position={[Math.cos(a) * 0.22, 0.6, Math.sin(a) * 0.22]} rotation-z={Math.cos(a) * 0.35} castShadow>
+              <cylinderGeometry args={[0.03, 0.07, 1.1, 5]} />
+              <meshLambertMaterial color={theme.blocks[0]} flatShading emissive={glow} emissiveIntensity={0.15} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  }
+
+  // neon city: a low conduit box with a lit strip
+  if (s === "server") {
+    return (
+      <group>
+        <mesh position-y={0.22} castShadow receiveShadow>
+          <boxGeometry args={[0.7, 0.44, 0.5]} />
+          <meshLambertMaterial color={theme.blocks[1]} flatShading />
+        </mesh>
+        <mesh position={[0, 0.3, 0.26]}>
+          <boxGeometry args={[0.5, 0.06, 0.03]} />
+          <meshBasicMaterial color={theme.grid[0]} fog={false} />
+        </mesh>
+        <mesh position-y={0.58} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.13, 0.03, 6, 12]} />
+          <meshBasicMaterial color={theme.grid[1]} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  // industrial: a leaking pipe stub with a puddle
+  return (
+    <group>
+      <mesh position-y={0.3} rotation-z={Math.PI / 2} castShadow>
+        <cylinderGeometry args={[0.13, 0.13, 0.8, 8]} />
+        <meshLambertMaterial color={theme.blocks[1]} flatShading />
+      </mesh>
+      <mesh position-y={0.02} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[0.45, 14]} />
+        <meshBasicMaterial color={glow} transparent opacity={0.45} fog={false} />
+      </mesh>
+    </group>
+  );
+}
+
 const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: Theme }) {
   // deterministic scatter so the arena dressing matches for everyone in co-op
   const debris = blocks.flatMap((b, i) => {
@@ -1277,11 +1423,9 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
   const posts = blocks.filter((_, i) => i % 3 === 0).slice(0, 14);
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[ARENA, ARENA]} />
-        <meshLambertMaterial color={theme.ground} />
-      </mesh>
-      <gridHelper args={[ARENA, ARENA / 2, theme.grid[0], theme.grid[1]]} position-y={0.01} />
+      {/* painted ground + cover + a skyline ring instead of the bare plane (Toby 1.0.4) */}
+      <Ground theme={theme} size={ARENA} />
+      <MapDressing theme={theme} blocks={blocks} half={HALF} />
       {blocks.map((b, i) => (
         <Obstacle key={i} b={b} theme={theme} />
       ))}
@@ -1297,17 +1441,10 @@ const Level = memo(function Level({ blocks, theme }: { blocks: Block[]; theme: T
           <meshLambertMaterial color={theme.blocks[2]} flatShading />
         </mesh>
       ))}
-      {/* marker posts with a lit cap dotted through the arena */}
+      {/* small dressing props, chosen to match the map instead of generic posts */}
       {posts.map((b, i) => (
-        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]}>
-          <mesh position-y={0.55} castShadow>
-            <cylinderGeometry args={[0.07, 0.11, 1.1, 6]} />
-            <meshLambertMaterial color={theme.wall} flatShading />
-          </mesh>
-          <mesh position-y={1.18}>
-            <sphereGeometry args={[0.13, 8, 6]} />
-            <meshBasicMaterial color={theme.enemy.drifter.eye} fog={false} />
-          </mesh>
+        <group key={`p${i}`} position={[b.x + 1.9, 0, b.z - 1.9]} rotation-y={b.tone * 6.28}>
+          <Decor theme={theme} seed={b.tone} />
         </group>
       ))}
       {(
@@ -2106,7 +2243,143 @@ const BULLET_GEO = new THREE.LatheGeometry(
 const BULLET_UP = new THREE.Vector3(0, 1, 0);
 const TMP_DIR = new THREE.Vector3();
 const BLAST_AT = new THREE.Vector3();
+const HAZ_PT = new THREE.Vector3();
+const BULLET_END = new THREE.Vector3();
+// scratches for the per-enemy route picks (steerTo returns shared objects already)
+const WP_SCRATCH = { x: 0, z: 0 };
+const FINE_SCRATCH = { x: 0, z: 0 };
+// per-frame pools for the squad target list and the field-cache sweep (cleared each frame)
+const targetPool: {
+  id: string | null;
+  x: number;
+  z: number;
+  y: number;
+  fx: number;
+  fz: number;
+  zn?: number;
+  air?: boolean;
+}[] = [];
+const usedSet = new Set<number>();
+const usedFSet = new Set<number>();
 const WORLD_CONTACT = new THREE.Vector3();
+/** host: where cars look for the rest of the squad (filled in place every frame) */
+const trafficOthers: { x: number; z: number; y: number }[] = [];
+
+/** The themed shootable prop (Toby 1.0.4): fuel drum, cryo condenser, EMP relay, ... */
+const HazardProp = memo(function HazardProp({ def }: { def: HazardDef }) {
+  const { shell, core, look } = def;
+  if (look === "pod") {
+    return (
+      <group>
+        <mesh position-y={0.12}>
+          <cylinderGeometry args={[0.22, 0.34, 0.24, 7]} />
+          <meshLambertMaterial color="#3b2818" flatShading />
+        </mesh>
+        <mesh position-y={0.72} castShadow>
+          <sphereGeometry args={[0.55, 10, 8]} />
+          <meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.25} />
+        </mesh>
+        <mesh position-y={1.28}>
+          <coneGeometry args={[0.2, 0.42, 6]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "condenser") {
+    return (
+      <group>
+        <mesh position-y={0.15}>
+          <cylinderGeometry args={[0.42, 0.5, 0.3, 8]} />
+          <meshLambertMaterial color="#5f7f95" flatShading />
+        </mesh>
+        <mesh position-y={0.85} castShadow>
+          <icosahedronGeometry args={[0.55, 0]} />
+          <meshLambertMaterial color={shell} flatShading emissive={core} emissiveIntensity={0.35} />
+        </mesh>
+        <mesh position-y={0.85} rotation-x={Math.PI / 2}>
+          <torusGeometry args={[0.62, 0.05, 6, 16]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "relay") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow>
+          <boxGeometry args={[0.6, 1, 0.6]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={1.15}>
+          <sphereGeometry args={[0.3, 10, 8]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        {[0.35, 0.7].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.31]}>
+            <boxGeometry args={[0.42, 0.06, 0.03]} />
+            <meshBasicMaterial color={core} fog={false} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (look === "geyser") {
+    return (
+      <group>
+        <mesh position-y={0.2} castShadow>
+          <cylinderGeometry args={[0.45, 0.75, 0.4, 9]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={0.42}>
+          <cylinderGeometry args={[0.36, 0.36, 0.08, 9]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        <mesh position-y={0.9}>
+          <coneGeometry args={[0.3, 0.9, 8, 1, true]} />
+          <meshBasicMaterial color={core} transparent opacity={0.5} fog={false} />
+        </mesh>
+      </group>
+    );
+  }
+  if (look === "vat") {
+    return (
+      <group>
+        <mesh position-y={0.5} castShadow>
+          <cylinderGeometry args={[0.45, 0.45, 1, 10]} />
+          <meshLambertMaterial color={shell} flatShading />
+        </mesh>
+        <mesh position-y={1.02}>
+          <cylinderGeometry args={[0.4, 0.45, 0.14, 10]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+        <mesh position-y={0.55}>
+          <cylinderGeometry args={[0.47, 0.47, 0.18, 10]} />
+          <meshLambertMaterial color="#2b2118" flatShading />
+        </mesh>
+      </group>
+    );
+  }
+  // drum
+  return (
+    <group>
+      <mesh position-y={0.55} castShadow>
+        <cylinderGeometry args={[0.42, 0.42, 1.1, 12]} />
+        <meshLambertMaterial color={shell} flatShading />
+      </mesh>
+      {[0.35, 0.75].map((y, i) => (
+        <mesh key={i} position-y={y}>
+          <cylinderGeometry args={[0.44, 0.44, 0.09, 12]} />
+          <meshBasicMaterial color={core} fog={false} />
+        </mesh>
+      ))}
+      <mesh position-y={1.12}>
+        <cylinderGeometry args={[0.44, 0.42, 0.1, 12]} />
+        <meshLambertMaterial color="#2b2118" flatShading />
+      </mesh>
+    </group>
+  );
+});
 
 const BulletPool = memo(function BulletPool({
   meshes,
@@ -2261,7 +2534,6 @@ function World({
   rand,
   theme,
   locked,
-  onPreparation,
   gameOver,
   onScore,
   onHurt,
@@ -2279,7 +2551,7 @@ function World({
   dead,
   players,
   msgSink,
-  health,
+  healthRef,
   slots,
   stats,
   renderStats,
@@ -2297,16 +2569,21 @@ function World({
   onAbilityCd,
   onStat,
   onEvent,
+  onMutator,
+  endless,
   mapFeed,
   downed,
   pingWorld,
+  menuCam,
+  buildN,
+  onWarm,
+  worldHidden = false,
 }: {
   blocks: Block[];
   enemies: Enemy[];
   rand: () => number;
   theme: Theme;
   locked: boolean;
-  onPreparation: (seed: number, state: Preparation) => void;
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
@@ -2324,7 +2601,8 @@ function World({
   dead: boolean;
   players: number;
   msgSink: React.MutableRefObject<(m: NetMsg) => void>;
-  health: number;
+  /** live health as a ref so hits don't re-render the whole scene graph */
+  healthRef: React.MutableRefObject<number>;
   slots: React.MutableRefObject<Record<string, number>>;
   stats: React.MutableRefObject<Derived>;
   renderStats: Derived;
@@ -2343,6 +2621,10 @@ function World({
   onAbilityCd: (left: number, max: number) => void;
   onStat: (k: "shot" | "hit" | "dmg" | "taken", n: number) => void;
   onEvent: (name: string | null) => void;
+  /** overtime's rolled condition; "none" clears it (back to normal waves) */
+  onMutator: (id: MutatorId) => void;
+  /** endless overtime past the last wave: the host's OVERTIME button or the "ot" message */
+  endless: React.MutableRefObject<boolean>;
   mapFeed: React.MutableRefObject<MapFeed>;
   /** the host's difficulty (synced to guests like the map pick) */
   difficulty: DifficultyId;
@@ -2350,11 +2632,29 @@ function World({
   downed: boolean;
   /** what pings can hit (filled here, read by the SquadDriver) */
   pingWorld: React.MutableRefObject<PingWorld | null>;
+  /** menus are up: the camera slowly pans across the arena as a live backdrop */
+  menuCam?: boolean;
+  /** which world build this scene is: Prewarm re-runs whenever it changes */
+  buildN: number;
+  /** the shader warm for buildN finished: the loading veil can lift */
+  onWarm: (n: number) => void;
+  /** hide the map's draw calls until its warm slices have uploaded every buffer —
+   *  otherwise the first real frame behind the veil uploads ~300 MB of geometry in one
+   *  task. Prewarm force-shows each slice's ancestors for its own draw, so the warm
+   *  still runs (and uploads) while this group stays hidden. */
+  worldHidden?: boolean;
 }) {
   const keys = useKeyboard();
   const look = useRef({ yaw: 0, pitch: 0 });
+  // menu backdrop: a slow drift through the map's framed shot (titleCam.ts), restored when
+  // a match takes over; scatter arenas keep the plain spawn pan
+  const menuBase = useRef({ yaw: 0, pitch: 0 });
+  const menuT = useRef(0);
+  const menuWasOn = useRef(false);
+  const menuFrom = useRef(new THREE.Vector3());
+  const shot = useMemo(() => titleShot(theme, city, western), [theme, city, western]);
   const meleeCooldown = useRef(0);
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
   const shardActive = useRef(false);
@@ -2412,6 +2712,31 @@ function World({
   const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
+  /** active overtime condition, null during the normal 12 waves */
+  const mutator = useRef<Mutator | null>(null);
+  /** set once so network messages can trigger a blast too */
+  const hazardBlow = useRef<(i: number, visualOnly?: boolean, from?: string | null) => void>(
+    () => {},
+  );
+  // shootable map hazards (fuel drums, cryo condensers, powder kegs, ...)
+  // sized for the big maps; arenas leave the tail asleep (alive stays false)
+  const hazards = useRef<{ x: number; z: number; alive: boolean }[]>(
+    Array.from({ length: HAZARD_COUNT_BIG }, () => ({ x: 0, z: 0, alive: false })),
+  );
+  const hazardMeshes = useRef<(THREE.Group | null)[]>([]);
+  const hazardDef = hazardFor(theme);
+  const hazardRef = useRef(hazardDef);
+  hazardRef.current = hazardDef;
+  // arenas always get hazards; big maps only while BIG_MAP_HAZARDS is on (owner's call)
+  const hazOn = hazardsEnabled(theme) && (BIG_MAP_HAZARDS || !(city || western));
+  /** the boss-clear win stays latched until the squad picks overtime or a new arena */
+  const wonLatch = useRef(false);
+  // shard pickups are shared in co-op: one grab removes them for the whole squad
+  const takenShards = useRef<Set<string>>(new Set());
+  // weapon-drop pacing: a gun that ran dry sits the next wave out, and two waves
+  // with no drop guarantee a double drop
+  const depletedWave = useRef<Partial<Record<Weapon, number>>>({});
+  const dryWaves = useRef(0);
   const thornsPending = useRef(0);
   // ---- active ability (F) ----
   const abilityRef = useRef<AbilityId>(ability);
@@ -2506,7 +2831,8 @@ function World({
     };
   }, [city, gaps]);
   const alpineMap = city && "alpine" in city ? (city as AlpineLayout) : null;
-  const { gl, scene } = useThree();
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
   useEffect(() => {
     // dev-only handle for poking at the scene from the console / test tooling
     if (debugHandles()) {
@@ -2531,6 +2857,24 @@ function World({
         spawnWave,
         groundAt: groundY,
         blockedAt: (x: number, z: number, r: number) => blocked(blocks, x, z, r),
+        // walkable-space probes: the full player body test (cells + BVH meshes) and the
+        // support raycast — what walkTo() and the ground follow actually see
+        bodyAt: (x: number, z: number, feet: number) => {
+          if (boundaryBlocked(blocks, x, z, 0.4)) return "boundary";
+          const interior = playerBlocked(x, z, 0.4, feet);
+          if (interior !== undefined) return interior ? "interior" : false;
+          const sb = structureBody(x, z, 0.4, feet);
+          if (sb !== undefined) return sb ? "structure" : false;
+          return staticBody(x, z, 0.396, feet, 1.8, moveState.airborne ? 0 : 0.2)
+            ? "static"
+            : false;
+        },
+        supportAt: (x: number, z: number, feet: number) =>
+          staticSupport(x, z, feet, baseGroundY(x, z)),
+        // the live body state: what the walk controller thinks the feet are doing
+        moveState,
+        terrainStepAt: (x: number, z: number, tx: number, tz: number) =>
+          terrainStep(x, z, tx, tz, moveState.feet),
       });
       // enemy testing: ordnance, the hit log, the wave director, the damage path
       Object.assign(handle, {
@@ -2617,6 +2961,14 @@ function World({
         downedRef,
         weedWorld,
         weedView,
+      });
+      // toby-sync testing: hazard props, the overtime mutator and endless state
+      Object.assign(handle, {
+        hazards,
+        mutator,
+        endless,
+        takenShards,
+        blowHazard: (i: number) => blowHazard(i, true, !isHostRef.current),
       });
       (window as unknown as { __rs?: unknown }).__rs = handle;
     }
@@ -2739,7 +3091,6 @@ function World({
   const guestRef = useRef(false);
   // hornet packs: index of the pack leader each follower spawns beside (-1 = none)
   const packLead = useRef(new Int16Array(MAX_ENEMIES).fill(-1));
-  const sepGrid = useRef(new Map<number, number[]>());
 
   // ---------- networking ----------
   const netRef = useRef<NetHandle | null>(net);
@@ -2798,8 +3149,6 @@ function World({
 
   const playersRef = useRef(players);
   playersRef.current = players;
-  const healthRef = useRef(health);
-  healthRef.current = health;
   const coopRef = useRef(!!net);
   coopRef.current = !!net;
 
@@ -2816,6 +3165,36 @@ function World({
   /** fine 2 m fields round each target (stacked-ground maps only, see level.ts fineField) */
   const fines = useRef(new Map<number, FineField>());
   const fineKey = (t: { x: number; z: number }) => toCell(t.x) * 1000 + toCell(t.z);
+  // one reusable probe for the per-enemy route pick in the frame loop: a pair of closures
+  // per enemy per frame was a measurable GC source (steerCache.ts). blocks/solid are
+  // refreshed every frame below — they change when the map does.
+  const steerProbe = useRef({
+    e: null as Enemy | null,
+    t: null as { x: number; z: number } | null,
+    st: null as { radius: number } | null,
+    blocks: [] as Block[],
+    solid: null as NavGrid | null,
+    los() {
+      const { e, t, st, blocks } = this;
+      return clearLine(blocks, e!.x, e!.z, t!.x, t!.z, Math.min(st!.radius, 0.8) * 0.9);
+    },
+    route() {
+      const { e, t, solid, blocks } = this;
+      const [ni, nj] = navTarget(solid!, t!.x, t!.z, blocks);
+      const dist = fields.current.get(ni * 1000 + nj);
+      // close in: the fine field knows the 2 m corridors the nav grid can't see
+      const ff = strictNav()
+        ? fines.current.get(toCell(t!.x) * 1000 + toCell(t!.z))
+        : undefined;
+      const fs = ff ? fineStep(ff, e!.x, e!.z, FINE_SCRATCH) : null;
+      if (fs) return fs;
+      // at the field's own cell (the target is right there, e.g. against a railing)
+      // walk straight at it instead of parking on the cell centre
+      if (dist && dist[toNav(e!.x) * solid!.n + toNav(e!.z)]! > 0)
+        return nextWaypoint(solid!, dist, e!.x, e!.z, WP_SCRATCH);
+      return null;
+    },
+  }).current;
   const recycleT = useRef(1);
   const krakenT = useRef(4);
   const dropGunRef = useRef<Weapon>("scatter");
@@ -2961,6 +3340,10 @@ function World({
         upsertRemote(m);
         return;
       }
+      if (m.type === "shard") {
+        takenShards.current.add(String(m.id));
+        return;
+      }
       if (m.type === "fire") {
         fxRemoteFire(m, remotes.current);
         return;
@@ -3086,6 +3469,14 @@ function World({
             won: false,
             banner: true,
           });
+          // a late joiner lands mid-overtime: give it the round's condition and mode
+          if (mutator.current) n?.sendTo(String(m.from), { type: "mut", id: mutator.current.id });
+          if (endless.current) n?.sendTo(String(m.from), { type: "ot" });
+          // and where this round's hazard props stand (null = already blown)
+          n?.sendTo(String(m.from), {
+            type: "hazset",
+            p: hazards.current.map((h) => (h.alive ? ([h.x, h.z] as [number, number]) : null)),
+          });
         }
       } else {
         if (m.type === "snap") applySnap(m);
@@ -3110,6 +3501,32 @@ function World({
           takeHit(Number(m.dmg) || 1, String(m.src ?? ""));
         }
       }
+      // a hazard someone shot: the blast shows everywhere; the host alone scores the damage,
+      // credited to whoever's bullet set it off (per-player kill credit)
+      if (m.type === "haz")
+        hazardBlow.current(
+          Number(m.i),
+          !isHostRef.current,
+          typeof m.from === "string" && m.from !== "host" ? m.from : null,
+        );
+      // the host decides where the hazard props stand each round
+      if (m.type === "hazset" && !isHostRef.current) {
+        const p = m.p as ([number, number] | null)[];
+        hazards.current.forEach((h, i) => {
+          const spot = p[i];
+          if (!spot) {
+            h.alive = false;
+            return;
+          }
+          h.x = spot[0];
+          h.z = spot[1];
+          h.alive = true;
+        });
+      }
+      // overtime's condition for the round: guests mirror what the host rolled so their own
+      // shots, movement and siphon follow it too (the host set its own when it rolled)
+      if (m.type === "mut" && !isHostRef.current)
+        mutator.current = mutatorById(String(m.id) as MutatorId);
     };
   });
 
@@ -3125,6 +3542,7 @@ function World({
             : 0,
       pitch: city ? 0.12 : 0,
     };
+    menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
     placeAtSpawn();
     resetRide();
     resetWheel(isBeach(city) ? city.beach.wheel : null);
@@ -3139,6 +3557,12 @@ function World({
     heal.current.active = false;
     lastHealWave.current = -99;
     lostQueue.current = [];
+    mutator.current = null;
+    wonLatch.current = false;
+    depletedWave.current = {};
+    dryWaves.current = 0;
+    takenShards.current.clear();
+    hazards.current.forEach((h) => (h.alive = false));
     turrets.current = [];
     mines.current = [];
     remoteDeps.current.clear();
@@ -3510,6 +3934,12 @@ function World({
     // (not up on a roof, where the pack would drop into the building below)
     if ((e.kind === "boss" || e.kind === "vanguard") && !blocked(blocks, e.x, e.z, 0.5))
       heal.current = { x: e.x, z: e.z, active: true };
+    // SOLAR FLARE round: every corpse pops in a small fire blast
+    if (mutator.current?.id === "flare") {
+      playFx("#ff9a3a", 0.4, 3.2, 0.3, e.x, e.z);
+      if (!deadRef.current && Math.hypot(camera.position.x - e.x, camera.position.z - e.z) < 2.6)
+        takeHit(1, "flare");
+    }
     if (from === null) creditKill(e, elite, bounty);
     else
       netRef.current?.sendTo(from, { type: "kill", i: idx, el: elite ? 1 : 0, bo: bounty ? 1 : 0 });
@@ -3528,6 +3958,11 @@ function World({
     if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
     if (e.kind === "special" && theme.special.type === "crawler") dmg *= 0.7; // crab shell
     dmg *= damageMul(e); // a charger stunned against a wall takes extra
+    // the overtime condition bends every hit, whoever fired it (host decides):
+    // CRYO SURGE chills everything, HEAVY GRAVITY doubles the shove
+    const mid = mutator.current?.id;
+    if (mid === "cryo") h = { ...h, slow: Math.max(h.slow ?? 0, 1.2) };
+    else if (mid === "gravity") h = { ...h, kb: (h.kb ?? 0) * 2 };
     const kb = h.kb ?? 0;
     if (kb > 0 && e.kind !== "boss") {
       const kx = h.kx ?? 0;
@@ -3577,9 +4012,10 @@ function World({
     kz = 0,
     fx: Omit<HitFx, "slow" | "burn" | "kb" | "kx" | "kz"> = {},
   ) => {
-    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the damage
+    // life steal (Blood Siphon, Blood Pact, the Bio-Siphon class) heals whoever dealt the
+    // damage — BLOOD MOON rounds double it
     if (stats.current.steal > 0 && dmg > 0 && e.alive) {
-      stealBank.current += dmg * stats.current.steal;
+      stealBank.current += dmg * stats.current.steal * (mutator.current?.id === "blood" ? 2 : 1);
       if (stealBank.current >= 1) {
         stealBank.current -= 1;
         onLeech();
@@ -3606,6 +4042,145 @@ function World({
       return;
     }
     applyHit(e, idx, dmg, { slow, burn, kb, kx, kz, ...fx }, null);
+  };
+  /**
+   * A hazard prop blew (Toby): local flash + sfx, and the blast ring scales with the
+   * map's effect radius. On the host the blast also hurts, credited to `from` — the
+   * player whose bullet set it off — so a guest's drum kill shows up on their card.
+   */
+  const blowHazard = (i: number, share = false, visualOnly = false, from: string | null = null) => {
+    const h = hazards.current[i];
+    if (!h?.alive) return;
+    const def = hazardRef.current;
+    if (!def) return;
+    h.alive = false;
+    playFx(def.core, 0.5, def.radius * 0.9, 0.45, h.x, h.z);
+    playSfx("boom");
+    if (share) netRef.current?.broadcast({ type: "haz", i });
+    for (let ei = 0; !visualOnly && ei < enemies.length; ei++) {
+      const e = enemies[ei]!;
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - h.x, e.z - h.z);
+      if (d > def.radius) continue;
+      const dx = (e.x - h.x) / (d || 1);
+      const dz = (e.z - h.z) / (d || 1);
+      // each themed prop pushes a different effect (host applies them, hit ms keep syncing)
+      const fx: HitFx =
+        def.effect === "fire"
+          ? { burn: 3, kb: 3, kx: dx, kz: dz }
+          : def.effect === "freeze"
+            ? { freeze: 3, slow: 3 }
+            : def.effect === "toxic"
+              ? { slow: 2.5, burn: 2.5 }
+              : def.effect === "shock"
+                ? { slow: 1.5, kb: 2, kx: dx, kz: dz }
+                : def.effect === "root"
+                  ? { slow: 4 }
+                  : { slow: 1, kb: Math.max(0, d - 1), kx: -dx, kz: -dz }; // pull
+      applyHit(e, ei, def.damage, fx, from);
+    }
+    // players standing in a blast get singed too — each client checks its own player
+    if (
+      !deadRef.current &&
+      Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < def.radius * 0.7
+    )
+      takeHit(2, "hazard");
+  };
+  hazardBlow.current = (i, visualOnly = false, from = null) =>
+    blowHazard(i, false, visualOnly, from);
+  /**
+   * Big maps get themed props at the landmarks (fuel drums round the Vice gas stations,
+   * construction yards, loading bays and alley dumpsters; powder kegs by the Gulch mine;
+   * gas canisters along the Pier's midway; snow cannons round Whiteout's village square)
+   * — each candidate still gets a clear-ground check at spawn time, so a drum never seals
+   * a door or a stair. Arena maps keep Toby's random open-ground spots.
+   */
+  /** extra ground rules beyond `blocked`: Whiteout keeps props off the rink ice and off
+   * the lift-only summit island. */
+  const hazardOk = (x: number, z: number): boolean => {
+    if (alpineMap) {
+      const a = alpineMap.alpine;
+      if (x > a.rink.x0 - 2 && x < a.rink.x1 + 2 && z > a.rink.z0 - 2 && z < a.rink.z1 + 2)
+        return false;
+      if (x > a.island.x0 - 1 && x < a.island.x1 + 1 && z > a.island.z0 - 1 && z < a.island.z1 + 1)
+        return false;
+    }
+    return true;
+  };
+  const hazardAnchors = (): [number, number][] => {
+    const out: [number, number][] = [];
+    const push = (x: number, z: number) => {
+      if (hazardOk(x, z)) out.push([x, z]);
+    };
+    if (western) {
+      const m = western.mine;
+      const st = western.station;
+      push(m.x + 3, m.z + 2);
+      push(m.x - 3, m.z + 3);
+      push(m.x + 1, m.z + 6);
+      push(st.x - 3, st.z + 3);
+      push(st.x + 4, st.z - 2);
+      push(western.campfire.x + 3, western.campfire.z + 1);
+    } else if (alpineMap) {
+      // village level only: beside the cafes, chalets and shops round the main square
+      alpineMap.alpine.buildings
+        .filter((b) => b.t === "cafe" || b.t === "chalet" || b.t === "shop" || b.t === "rental" || b.t === "lodge")
+        .forEach((b) => {
+          // beside the building, on the side away from its street front
+          const midX = (b.x0 + b.x1) / 2;
+          const midZ = (b.z0 + b.z1) / 2;
+          const rear = b.front ^ 2;
+          push(
+            rear === 1 ? b.x1 + 2.2 : rear === 3 ? b.x0 - 2.2 : midX,
+            rear === 0 ? b.z0 - 2.2 : rear === 2 ? b.z1 + 2.2 : midZ,
+          );
+        });
+    } else if (isBeach(city)) {
+      const b = city.beach;
+      push(b.wheel.x + 6, b.wheel.z + 4);
+      push(b.wheel.x - 4, b.wheel.z - 5);
+      const st = b.coaster.station;
+      push(st.x0 - 2, (st.z0 + st.z1) / 2);
+      b.firesLit.slice(0, 2).forEach((f) => push(f.x + 2.2, f.z + 1.4));
+      b.towers.slice(0, 2).forEach((t) => push(t.x + 2.5, t.z));
+    } else if (city) {
+      // the gas-station apron: drums stand just off the pump canopy
+      city.buildings
+        .filter((b) => b.t === "gas")
+        .forEach((b) => {
+          const cp = b.parts.find((p) => p.role === "canopy") ?? b.parts[1];
+          if (!cp) return;
+          const midZ = (cp.z0 + cp.z1) / 2;
+          push(cp.x0 - 2.5, midZ);
+          push(cp.x1 + 2.5, midZ);
+          push(cp.x0 - 2.5, cp.z0 - 2);
+          push((cp.x0 + cp.x1) / 2, cp.z1 + 2.5);
+        });
+      // and a few more where the fights are: construction yards, the apron behind
+      // garages/warehouses (the loading bay), and beside the alley dumpsters
+      city.buildings
+        .filter((b) => b.t === "construction")
+        .forEach((b) => {
+          push(b.x0 + 3, b.z0 + 3);
+          push(b.x1 - 3, b.z1 - 3);
+        });
+      city.buildings
+        .filter((b) => b.t === "garage" || b.t === "warehouse")
+        .forEach((b) => {
+          const midX = (b.x0 + b.x1) / 2;
+          const midZ = (b.z0 + b.z1) / 2;
+          const rear = b.front ^ 2;
+          push(
+            rear === 1 ? b.x1 + 2.2 : rear === 3 ? b.x0 - 2.2 : midX,
+            rear === 0 ? b.z0 - 2.2 : rear === 2 ? b.z1 + 2.2 : midZ,
+          );
+        });
+      city.props
+        .filter((p) => p.k === "dumpster")
+        .slice(0, 6)
+        .forEach((p) => push(p.x + 1.4, p.z));
+    }
+    return out;
   };
   /**
    * BOOMER / FLAK splash, host only: every robot within `r` of the blast (and in its line of
@@ -3663,7 +4238,8 @@ function World({
     onStat("hit", 1);
     onStat("dmg", dmg);
     if (stats.current.steal > 0) {
-      stealBank.current += dmg * stats.current.steal;
+      stealBank.current +=
+        dmg * stats.current.steal * (mutator.current?.id === "blood" ? 2 : 1);
       if (stealBank.current >= 1) {
         stealBank.current -= 1;
         onLeech();
@@ -3805,9 +4381,9 @@ function World({
     }
     if (ammo.current[w] <= 0) {
       owned.current.delete(w);
+      // a dry gun is gone until a future drop roll brings it back — never next wave (Toby)
+      depletedWave.current[w] = wave.current;
       equip("pistol");
-      if (pickup.current.active) lostQueue.current.push(w);
-      else placePickup(w);
     } else {
       syncInv();
     }
@@ -3897,9 +4473,19 @@ function World({
     // multiplier (the curve grows it wave by wave) and an overall count multiplier
     const diff = diffRef.current;
     const waveMul = crowdMul(diff, n, !!big) * diff.countMul;
-    const enemyMul = (1 + 0.6 * extra) * waveMul;
-    const lootMul = 1 + 0.65 * extra;
-    const spec = waveLineup(diff, n, WAVES) as WaveSpec;
+    // overtime keeps sending bigger crowds (Toby's waveMul never stops growing)
+    const enemyMul =
+      (1 + 0.6 * extra) * waveMul * (n > WAVES.length ? 1 + 0.08 * (n - WAVES.length) : 1);
+    // past the last wave the run goes into overtime (Toby): the pre-boss wave's lineup keeps
+    // coming, with a boss on every fifth overtime wave
+    const spec = (
+      n <= WAVES.length
+        ? waveLineup(diff, n, WAVES)
+        : {
+            ...waveLineup(diff, WAVES.length - 1, WAVES),
+            ...((n - WAVES.length) % 5 === 0 ? { boss: 1 } : {}),
+          }
+    ) as WaveSpec;
     // the curve rounds each count up or down at random, so a crowd multiplier of 1.5 doesn't
     // turn every lone newcomer into a pair (the old table keeps its plain rounding)
     const scale = (v: number) => {
@@ -3972,7 +4558,55 @@ function World({
     }
     kinds.length = Math.min(kinds.length, MAX_ENEMIES);
     waveTotal.current = Math.max(1, kinds.length); // progress is retained for wave and network state
-    const hpMul = diff.hpMul * (1 + diff.hpRamp * (n - 1)); // later rounds send sturdier enemies
+    // later rounds send sturdier enemies; overtime ramps ~1.7x harder on top of wave 12's level
+    const hpMul =
+      diff.hpMul *
+      (1 +
+        diff.hpRamp * (Math.min(n, WAVES.length) - 1) +
+        (n > WAVES.length ? diff.hpRamp * 1.67 * (n - WAVES.length) : 0));
+    // overtime rolls a new global condition every round; the squad mirrors the host's pick
+    if (n > WAVES.length && isHostRef.current) {
+      const m = rollMutator(rand);
+      mutator.current = m;
+      onMutator(m.id);
+      netRef.current?.broadcast({ type: "mut", id: m.id });
+    } else if (n <= WAVES.length && mutator.current) {
+      mutator.current = null;
+      onMutator("none");
+    }
+    // hazard props reset each round so there is always something to shoot open; the host
+    // places them and tells the squad where (hazset)
+    if (isHostRef.current && hazOn) {
+      // big maps are much bigger than an arena — a couple more props out there
+      const want = city || western ? HAZARD_COUNT_BIG : HAZARD_COUNT;
+      const spots = hazardAnchors().filter(([x, z]) => !blocked(blocks, x, z, 0.9));
+      for (let i = spots.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        const t = spots[i]!;
+        spots[i] = spots[j]!;
+        spots[j] = t;
+      }
+      spots.length = Math.min(spots.length, want);
+      let guard = 40;
+      while (spots.length < want && guard-- > 0) {
+        const p = spot(6, 30, false);
+        if (!blocked(blocks, p.x, p.z, 0.9) && hazardOk(p.x, p.z)) spots.push([p.x, p.z]);
+      }
+      hazards.current.forEach((h, i) => {
+        const s = spots[i];
+        if (!s) {
+          h.alive = false;
+          return;
+        }
+        h.x = s[0];
+        h.z = s[1];
+        h.alive = true;
+      });
+      netRef.current?.broadcast({
+        type: "hazset",
+        p: hazards.current.map((h) => (h.alive ? ([h.x, h.z] as [number, number]) : null)),
+      });
+    }
     // Dry Gulch: the Iron Marshal rides in on his own train and steps off at the platform
     const bossTrain = western && kinds.includes("boss") ? callBossTrain(trainClock.t) : 0;
 
@@ -4059,9 +4693,10 @@ function World({
       onEvent(event);
       netRef.current?.broadcast({ type: "event", name: event });
     }
-    // health: guaranteed pack every wave in co-op, every other wave solo
+    // health: guaranteed pack every wave in co-op (from wave 1, like Toby), solo on the
+    // difficulty's cadence from wave 2
     const healGap = extra > 0 ? 1 : diff.healGap(n);
-    if (n >= 2 && n - lastHealWave.current >= healGap) {
+    if (n >= (extra > 0 ? 1 : 2) && n - lastHealWave.current >= healGap) {
       const h = spot(8, 28, false);
       heal.current = { x: h.x, z: h.z, active: true };
       lastHealWave.current = n;
@@ -4074,22 +4709,34 @@ function World({
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
     }
-    // weapons: 80% chance each wave (more rolls in co-op), following this run's shuffled gun order
-    const rolls = Math.max(1, Math.round(lootMul));
-    const chance = Math.min(0.95, (0.8 * lootMul) / rolls);
-    for (let i = 0; i < rolls; i++) {
+    // weapons: one new gun per wave at 80%, doubled after two dry waves.
+    // co-op multiplies the number of guns by the player count.
+    const pity = dryWaves.current >= 2;
+    const wantSolo = pity ? 2 : Math.random() < 0.8 ? 1 : 0;
+    let want = wantSolo * (1 + extra);
+    let placed = 0;
+    while (want > 0) {
+      want--;
       // in co-op a gun you are carrying can still drop for your teammates
-      const candidates = dropOrder.current.filter(
+      const fresh = dropOrder.current.filter(
         (w) =>
           (coopRef.current || !owned.current.has(w)) &&
           !lostQueue.current.includes(w) &&
           !(pickup.current.active && pickup.current.gun === w),
       );
-      const drop = candidates[0];
-      if (!drop || Math.random() >= chance) continue;
+      // a gun you just ran dry on almost never comes straight back
+      const ready = fresh.filter((w) => {
+        const d = depletedWave.current[w];
+        return d === undefined || n - d >= 2 || Math.random() < 0.05;
+      });
+      const drop = ready[0] ?? (pity ? fresh[0] : undefined);
+      if (!drop) break;
+      delete depletedWave.current[drop];
       if (pickup.current.active) lostQueue.current.push(pickup.current.gun);
       placePickup(drop);
+      placed++;
     }
+    dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
   const outOfBounds = (p: { x: number; y: number; z: number }) =>
@@ -4144,6 +4791,7 @@ function World({
     const v = viewModel.current;
     if (!v) return;
     v.visible =
+      !menuCam &&
       !deadRef.current &&
       (getViewMode() === "first" || aimState.scoped) &&
       !(weapon.current === "sniper" && aimState.blend > 0.96); // spectators carry no weapon
@@ -4170,6 +4818,7 @@ function World({
       if (m && !Array.isArray(m)) addGunRim(m);
     });
     const rig = playerPose.current?.(cam, state.clock.elapsedTime, delta) ?? null;
+    if (menuCam && rig) rig.visible = false;
     const source = getViewMode() === "third" && !aimState.scoped ? rig : v;
     if (!readGunMuzzle(source, shotMuzzle.current, weapon.current))
       shotMuzzle.current.copy(cam.position);
@@ -4198,17 +4847,29 @@ function World({
     if (traffic.current.role === "host") {
       // the host's cars must brake for every live player in the lane, not just the host
       const now = performance.now();
-      traffic.current.others = [...remotes.current.values()]
-        .filter((r) => r.hp > 0 && now - r.last < 4000)
-        .map((r) => {
-          if (alpineMap && (r.rc ?? -1) >= 0) return riderEye(alpineMap.alpine.lift, r.rc!);
-          if (isBeach(city) && (r.wr ?? -1) >= 0) return wheelEye(city.beach.wheel, r.wr!);
-          return {
-            x: r.x,
-            z: r.z,
-            y: (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE,
-          };
-        });
+      const oth = trafficOthers;
+      oth.length = 0;
+      remotes.current.forEach((r) => {
+        if (!(r.hp > 0 && now - r.last < 4000)) return;
+        const slot = (oth[oth.length] ??= { x: 0, z: 0, y: 0 });
+        if (alpineMap && (r.rc ?? -1) >= 0) {
+          const p = riderEye(alpineMap.alpine.lift, r.rc!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else if (isBeach(city) && (r.wr ?? -1) >= 0) {
+          const p = wheelEye(city.beach.wheel, r.wr!);
+          slot.x = p.x;
+          slot.z = p.z;
+          slot.y = p.y;
+        } else {
+          slot.x = r.x;
+          slot.z = r.z;
+          slot.y =
+            (r.sy ?? remoteFloorY(r.az, r.ay, groundY(r.x, r.z))) + (r.jy ?? 0) + EYE;
+        }
+      });
+      traffic.current.others = oth;
     } else if (traffic.current.others.length) traffic.current.others = [];
 
     if (!gameOver && locked) {
@@ -4246,6 +4907,43 @@ function World({
       }
       // controller right stick (+ aim assist on the nearest robot in view)
       padLook(delta, look.current, cam.position, aimTargets, aimVisible);
+    }
+    if (menuCam) {
+      // the title/recap backdrop: a slow drift through the map's framed shot, gliding in
+      // from wherever the camera rests
+      if (!menuWasOn.current) {
+        menuWasOn.current = true;
+        menuT.current = 0;
+        menuBase.current = { yaw: look.current.yaw, pitch: look.current.pitch };
+        menuFrom.current.copy(cam.position);
+      }
+      menuT.current += delta;
+      const t = menuT.current;
+      if (shot) {
+        const g = Math.min(1, t / 1.7);
+        const e = g * g * (3 - 2 * g);
+        const px = shot.pos[0] + shot.right[0] * Math.sin(t * shot.rate) * shot.sway * e;
+        const py = shot.pos[1] + Math.sin(t * 0.23) * 0.4 * e;
+        const pz = shot.pos[2] + shot.right[1] * Math.sin(t * shot.rate) * shot.sway * e;
+        cam.position.set(
+          menuFrom.current.x + (px - menuFrom.current.x) * e,
+          menuFrom.current.y + (py - menuFrom.current.y) * e,
+          menuFrom.current.z + (pz - menuFrom.current.z) * e,
+        );
+        const dx = shot.target[0] - cam.position.x,
+          dy = shot.target[1] - cam.position.y,
+          dz = shot.target[2] - cam.position.z;
+        look.current.yaw = Math.atan2(-dx, -dz) + Math.sin(t * 0.09) * shot.yawAmp * e;
+        look.current.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      } else {
+        look.current.yaw = menuBase.current.yaw + t * 0.045;
+        look.current.pitch = menuBase.current.pitch + Math.sin(t * 0.32) * 0.05;
+      }
+    } else if (menuWasOn.current) {
+      menuWasOn.current = false;
+      look.current.yaw = menuBase.current.yaw;
+      look.current.pitch = menuBase.current.pitch;
+      placeAtSpawn();
     }
     cam.rotation.order = "YXZ";
     const kn = knock.current;
@@ -4334,15 +5032,25 @@ function World({
     if (wheelRide.cabin >= 0) MOVE.set(0, 0, 0);
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
-    const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
-    alpine.boss = wave.current === WAVES.length; // the alpine boss round brings a blizzard
+    // the last wave and every fifth overtime wave are boss rounds — the arena's hazard
+    // floor (ice slip, the marine layer, the alpine blizzard) comes back for each
+    const bossWave =
+      wave.current === WAVES.length ||
+      (wave.current > WAVES.length && (wave.current - WAVES.length) % 5 === 0);
+    const slip = bossWave ? theme.hazard.slip : 0;
+    alpine.boss = bossWave; // the alpine boss round brings a blizzard
     worldFx.hazard = slip > 0 || enemies.some((e) => e.alive && e.kind === "boss"); // the beach's marine layer
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
+    const mut = mutator.current?.id;
+    // HEAVY GRAVITY rounds weigh on the jump arc too
+    moveState.gravityMul = mut === "gravity" ? 1.4 : 1;
     const spd =
       SPEED *
       stats.current.speed *
       (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1) *
       (overdrive.current > 0 ? 1.3 : 1) *
+      // CRYO SURGE chills the legs a little; HEAVY GRAVITY weighs every step down
+      (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1) *
       groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
       runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
       (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
@@ -4474,15 +5182,22 @@ function World({
       ) {
         const bare = baseGroundY(cam.position.x, cam.position.z);
         // Never select a roof merely because its footprint is above us.
-        gy = staticSupport(
+        const bound =
+          bare <= moveState.feet + (moveState.airborne ? 0.02 : 0.24)
+            ? bare
+            : Math.min(bare, moveState.feet);
+        const sup = staticSupport(
           cam.position.x,
           cam.position.z,
           moveState.feet,
-          bare <= moveState.feet + (moveState.airborne ? 0.02 : 0.24)
-            ? bare
-            : Math.min(bare, moveState.feet),
+          bound,
           moveState.airborne ? 0 : 0.22,
         );
+        // a static surface above `bound` wins, and bare ground is the floor itself; but
+        // when the bare ground towers over the feet and nothing static holds them (a hill
+        // climbed past the step limit, or a teleport into a dune) keep the walk system's
+        // ground instead of pinning the feet inside the rise
+        if (sup > bound || bound === bare) gy = sup;
         if (roomFloor && roomFloor.y <= moveState.feet + (moveState.airborne ? 0.03 : 0.55))
           gy = Math.max(gy, roomFloor.y);
       }
@@ -4673,7 +5388,8 @@ function World({
       // the sidearm always fires at its stock cadence; fire-rate perks skip it
       fireCd.current =
         (w === "pistol" ? GUNS.pistol.cooldown : GUNS[w].cooldown / stats.current.rate) *
-        (overdrive.current > 0 ? 0.5 : 1);
+        (overdrive.current > 0 ? 0.5 : 1) *
+        (mutator.current?.id === "surge" ? 0.77 : 1); // OVERDRIVE: everyone shoots faster
     }
 
     // minimap feed (the HUD reads it)
@@ -4760,6 +5476,17 @@ function World({
       } else n?.broadcast({ type: "take", what: "gun" });
     }
 
+    // hazard props sit on the ground under them; a popped one stays down until next wave
+    hazards.current.forEach((h, i) => {
+      const m = hazardMeshes.current[i];
+      if (!m) return;
+      m.visible = h.alive;
+      if (h.alive) {
+        m.position.set(h.x, groundY(h.x, h.z), h.z);
+        m.rotation.y = i * 1.3;
+      }
+    });
+
     // health pickup
     const hp = heal.current;
     if (healMesh.current) {
@@ -4814,11 +5541,11 @@ function World({
         mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
-          if (w === "pistol") return;
-          ammo.current[w] = Math.min(
-            Math.round(GUNS[w].ammo * stats.current.ammoMul),
-            ammo.current[w] + Math.round(GUNS[w].ammo * 0.5),
+          // ammo crates refill the sidearm too — its cap is 220 with the Extended Mag mod
+          const cap = Math.round(
+            (w === "pistol" && stats.current.extmag ? 220 : GUNS[w].ammo) * stats.current.ammoMul,
           );
+          ammo.current[w] = Math.min(cap, ammo.current[w] + Math.round(cap * 0.5));
         });
         onAmmo(ammo.current[weapon.current]);
         syncInv();
@@ -5214,18 +5941,25 @@ function World({
         }
       });
       // waves
-      const remaining =
-        enemies.filter((e) => e.alive).length + pending.current.filter(Boolean).length;
+      let alive = 0,
+        pend = 0;
+      for (const e of enemies) if (e.alive) alive++;
+      for (const p of pending.current) if (p) pend++;
+      const remaining = alive + pend;
       setWaveClock(
         wave.current,
         wave.current > WAVES.length ? 1 : 1 - remaining / waveTotal.current,
       );
-      if (remaining === 0 && wave.current <= WAVES.length) {
-        if (wave.current === WAVES.length) {
-          wave.current++;
-          status(WAVES.length, 0, true, false);
+      if (remaining === 0 && (wave.current <= WAVES.length || endless.current)) {
+        // endgame latch: sit on the last wave until the host picks overtime
+        if (wave.current === WAVES.length && !endless.current) {
+          if (!wonLatch.current) {
+            wonLatch.current = true;
+            status(WAVES.length, 0, true, false);
+          }
           return;
         }
+        wonLatch.current = false;
         // wave cleared: tell everyone so the shop opens during the break
         if (wave.current > 0 && lastRemaining.current !== 0) {
           lastRemaining.current = 0;
@@ -5239,9 +5973,7 @@ function World({
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
-        // Victory may take another frame to reach this component through React.
-        // Do not overwrite it with a non-winning wave 13 status in that interval.
-      } else if (wave.current <= WAVES.length && remaining !== lastRemaining.current) {
+      } else if (remaining !== lastRemaining.current) {
         lastRemaining.current = remaining;
         status(Math.max(1, wave.current), remaining, false, false);
       }
@@ -5261,17 +5993,28 @@ function World({
         air?: boolean;
       };
       const lf = { fx: -Math.sin(look.current.yaw), fz: -Math.cos(look.current.yaw) };
-      const targets: Target[] = [];
-      if (!spectating && !downedRef.current)
-        targets.push({
+      // (pooled slots: fresh target records every frame were a steady GC source)
+      const targets: Target[] = targetPool;
+      targets.length = 0;
+      if (!spectating && !downedRef.current) {
+        const t = (targetPool[0] ??= {
           id: null,
-          x: cam.position.x,
-          z: cam.position.z,
-          y: cam.position.y,
-          ...lf,
-          zn: myZone(),
-          air: ride.chair >= 0 || wheelRide.cabin >= 0,
+          x: 0,
+          z: 0,
+          y: 0,
+          fx: 0,
+          fz: 0,
         });
+        t.id = null;
+        t.x = cam.position.x;
+        t.z = cam.position.z;
+        t.y = cam.position.y;
+        t.fx = lf.fx;
+        t.fz = lf.fz;
+        t.zn = myZone();
+        t.air = ride.chair >= 0 || wheelRide.cabin >= 0;
+        targets.push(t);
+      }
       remotes.current.forEach((r) => {
         if (r.hp > 0 && downTable.get(r.id)?.st !== DOWN && now - r.last < 4000) {
           const ry =
@@ -5280,16 +6023,23 @@ function World({
               : alpineMap && (r.rc ?? -1) >= 0
                 ? riderEye(alpineMap.alpine.lift, r.rc!).y
                 : EYE + (r.sy ?? r.ay ?? groundY(r.x, r.z)) + (r.jy ?? 0);
-          targets.push({
-            id: r.id,
-            x: r.x,
-            z: r.z,
-            y: ry,
-            fx: -Math.sin(r.yaw),
-            fz: -Math.cos(r.yaw),
-            zn: remoteZone(r),
-            air: (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0,
+          const t = (targetPool[targets.length] ??= {
+            id: null,
+            x: 0,
+            z: 0,
+            y: 0,
+            fx: 0,
+            fz: 0,
           });
+          t.id = r.id;
+          t.x = r.x;
+          t.z = r.z;
+          t.y = ry;
+          t.fx = -Math.sin(r.yaw);
+          t.fz = -Math.cos(r.yaw);
+          t.zn = remoteZone(r);
+          t.air = (r.rc ?? -1) >= 0 || (r.wr ?? -1) >= 0;
+          targets.push(t);
         }
       });
       enemyShotTargets.current = targets.length ? targets : [];
@@ -5337,7 +6087,8 @@ function World({
       hornetCd.current.v -= atkDt;
 
       // flow field per target cell (cached)
-      const used = new Set<number>();
+      const used = usedSet;
+      used.clear();
       for (const t of targets) {
         const key = navKey(t);
         const [ni, nj] = navTarget(solid, t.x, t.z, blocks);
@@ -5351,7 +6102,8 @@ function World({
         });
       }
       if (strictNav()) {
-        const usedF = new Set<number>();
+        const usedF = usedFSet;
+        usedF.clear();
         for (const t of targets) {
           const key = fineKey(t);
           usedF.add(key);
@@ -5505,6 +6257,10 @@ function World({
           }
         }
         const st = STATS[e.kind];
+        // BLOOD MOON knits their wounds back; OVERDRIVE picks their pace up
+        const mutId2 = mutator.current?.id;
+        if (mutId2 === "blood" && e.max && e.hp < e.max)
+          e.hp = Math.min(e.max, e.hp + delta * 0.8);
         // nearest player (alpine: chase someone in your own zone if there is anyone; others are
         // unreachable. Building access: only players in this enemy's zone, a player on a roof or
         // inside a building can't be reached from the street, so it holds)
@@ -5554,21 +6310,17 @@ function World({
         let tx = target.x;
         let tz = target.z;
         const ghost = e.kind === "specter"; // specters drift straight through cover
-        if (!ghost && !clearLine(blocks, e.x, e.z, tx, tz, Math.min(st.radius, 0.8) * 0.9)) {
-          const dist = fields.current.get(navKey(target));
-          // at the field's own cell (the target is right there, e.g. against a railing) walk
-          // straight at it instead of parking on the cell centre
-          // close in: the fine field knows the 2 m corridors the nav grid can't see
-          const ff = strictNav() ? fines.current.get(fineKey(target)) : undefined;
-          const fs = ff ? fineStep(ff, e.x, e.z) : null;
-          if (fs) {
-            tx = fs.x;
-            tz = fs.z;
-          } else if (dist && dist[toNav(e.x) * solid.n + toNav(e.z)]! > 0) {
-            const wp = nextWaypoint(solid, dist, e.x, e.z);
-            tx = wp.x;
-            tz = wp.z;
-          }
+        if (!ghost) {
+          // route pick is memoised per enemy (steerCache.ts): the LOS probe plus the
+          // field descent used to run per frame per enemy — the crowd's biggest CPU line
+          steerProbe.e = e;
+          steerProbe.t = target;
+          steerProbe.st = st;
+          steerProbe.blocks = blocks;
+          steerProbe.solid = solid;
+          const wp = steerTo(e, target, state.clock.elapsedTime, steerProbe);
+          tx = wp.x;
+          tz = wp.z;
         }
         const mx = tx - e.x;
         const mz = tz - e.z;
@@ -5609,6 +6361,7 @@ function World({
         const step =
           st.speed *
           spMul *
+          (mutId2 === "surge" ? 1.25 : 1) *
           (e.slow > 0 ? 0.5 : 1) *
           delta *
           dir *
@@ -5975,100 +6728,14 @@ function World({
 
       // solid bodies. Enemies stay out of every player (melee attackers stop touching you, not
       // inside you), and push apart lightly so a crowd doesn't stack into one blob. Fliers pass
-      // over everything. A spatial hash keeps the pair checks cheap with 110 enemies.
-      const grid = sepGrid.current;
-      if (grid.size > 3000) grid.clear(); // the crowd wanders the whole city: drop stale cells
-      grid.forEach((cell) => (cell.length = 0));
-      const CELL = 2.5;
-      const keyOf = (x: number, z: number) =>
-        Math.floor((x + HALF) / CELL) * 4096 + Math.floor((z + HALF) / CELL);
-      const bodyR = (e: Enemy) =>
-        e.kind === "boss" && theme.boss.shape === "kraken"
-          ? KRAKEN_R
-          : STATS[e.kind].radius * (e.elite ? 1.6 : 1);
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const e = enemies[ei]!;
-        if (!e.alive || FLYERS.has(e.kind)) continue;
-        const k = keyOf(e.x, e.z);
-        let cell = grid.get(k);
-        if (!cell) grid.set(k, (cell = []));
-        cell.push(ei);
-      }
-      const nudge = (e: Enemy, px: number, pz: number) => {
-        const rr = Math.min(STATS[e.kind].radius, 0.8);
-        const ghost = e.kind === "specter";
-        // (the crowd never pushes anyone up a step it couldn't walk: the tower face, a balcony edge)
-        if (
-          ghost
-            ? ghostOK(e.x + px, e.z)
-            : !blocked(blocks, e.x + px, e.z, rr) && climbable(e.x, e.z, e.x + px, e.z)
-        )
-          e.x += px;
-        if (
-          ghost
-            ? ghostOK(e.x, e.z + pz)
-            : !blocked(blocks, e.x, e.z + pz, rr) && climbable(e.x, e.z, e.x, e.z + pz)
-        )
-          e.z += pz;
-      };
-      for (let ei = 0; ei < enemies.length; ei++) {
-        const a = enemies[ei]!;
-        if (!a.alive || FLYERS.has(a.kind)) continue;
-        const ra = bodyR(a);
-        const ci = Math.floor((a.x + HALF) / CELL);
-        const cj = Math.floor((a.z + HALF) / CELL);
-        for (let di = -1; di <= 1; di++) {
-          for (let dj = -1; dj <= 1; dj++) {
-            const cell = grid.get((ci + di) * 4096 + cj + dj);
-            if (!cell) continue;
-            for (const oj of cell) {
-              if (oj <= ei) continue;
-              const b = enemies[oj]!;
-              const rb = bodyR(b);
-              const reach = (ra + rb) * 0.8; // light: a little overlap is fine
-              const ox = b.x - a.x;
-              const oz = b.z - a.z;
-              const dd = ox * ox + oz * oz;
-              if (dd >= reach * reach) continue;
-              const dist = Math.sqrt(dd) || 0.01;
-              const nx = dd > 1e-6 ? ox / dist : Math.cos(ei);
-              const nz = dd > 1e-6 ? oz / dist : Math.sin(ei);
-              // soft: resolve part of the overlap per frame; the bigger body gives less ground
-              const push = Math.min(reach - dist, 0.5) * Math.min(1, delta * 10);
-              const wa = (rb * rb) / (ra * ra + rb * rb);
-              const bossA = a.kind === "boss" ? 0.1 : 1;
-              const bossB = b.kind === "boss" ? 0.1 : 1;
-              nudge(a, -nx * push * wa * bossA, -nz * push * wa * bossA);
-              nudge(b, nx * push * (1 - wa) * bossB, nz * push * (1 - wa) * bossB);
-            }
-          }
-        }
-        // keep out of the players: at most touching
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(a.x, a.z)) > 1.8) continue;
-          const r = ra + PLAYER_R;
-          const ox = a.x - t.x;
-          const oz = a.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(a, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
-      // fliers aren't solid, but they still hover at arm's length rather than inside your head
-      for (const f of enemies) {
-        if (!f.alive || !FLYERS.has(f.kind)) continue;
-        for (const t of targets) {
-          if (Math.abs(t.y - EYE - groundY(f.x, f.z)) > 3) continue;
-          const r = STATS[f.kind].radius + PLAYER_R + 0.3;
-          const ox = f.x - t.x;
-          const oz = f.z - t.z;
-          const dd = ox * ox + oz * oz;
-          if (dd >= r * r) continue;
-          const dist = Math.sqrt(dd) || 0.01;
-          nudge(f, (ox / dist) * (r - dist), (oz / dist) * (r - dist));
-        }
-      }
+      // over everything. A dense flat grid keeps the pair checks cheap with 110 enemies
+      // (separate.ts: no per-frame cells, no hash lookups).
+      separateEnemies(enemies, targets, delta, {
+        blocks,
+        half: HALF,
+        kraken: theme.boss.shape === "kraken",
+        stats: STATS,
+      });
     }
 
     // player bullets
@@ -6109,7 +6776,7 @@ function World({
         advanceBallistic(b.pos, b.vel, b.gravity, Math.min(delta, Math.max(0, b.life)));
         b.life -= delta;
         const contact = firstWorldHit(BLAST_AT, b.pos, outOfBounds);
-        const end = b.pos.clone();
+        const end = BULLET_END.copy(b.pos);
         const hits = bodyContacts(
           BLAST_AT,
           end,
@@ -6129,6 +6796,34 @@ function World({
             stopAt = h.t;
             break;
           }
+        }
+        // shooting a hazard prop sets it off before anything else (Toby): the shell dies
+        // where the drum stands; on a guest the blast is visual-only, the host scores it
+        if (hazOn) {
+          const reach = Math.min(stopAt, 1);
+          HAZ_PT.lerpVectors(BLAST_AT, end, reach);
+          for (let hi = 0; hi < hazards.current.length; hi++) {
+            const hz = hazards.current[hi]!;
+            if (!hz.alive) continue;
+            const gy = groundY(hz.x, hz.z);
+            const near = (p: THREE.Vector3) =>
+              Math.hypot(p.x - hz.x, p.z - hz.z) < 0.85 && p.y - gy < 2;
+            if (near(BLAST_AT) || near(HAZ_PT)) {
+              // popping a prop counts as the shot's hit (Toby); the shell dies here,
+              // so it can't double-count against a body afterwards
+              if (b.hitBodies!.size === 0) {
+                onStat("hit", 1);
+                aimStats.current.hit++;
+              }
+              blowHazard(hi, true, !isH);
+              b.pos.copy(HAZ_PT);
+              burst(b);
+              b.active = false;
+              if (m) m.visible = false;
+              break;
+            }
+          }
+          if (!b.active) return; // popped: done with this shell
         }
         if (western)
           for (const hit of weedContacts(BLAST_AT, end, stopAt)) {
@@ -6178,8 +6873,11 @@ function World({
             bounty: !!(b.mods & M_BOUNTY),
           });
           fxHit(i, b, e);
-          onStat("hit", 1);
-          aimStats.current.hit++;
+          // a shot counts as one hit even when it pierces several enemies (Toby accuracy fix)
+          if (b.hitBodies!.size === 1) {
+            onStat("hit", 1);
+            aimStats.current.hit++;
+          }
           onStat("dmg", dmg);
 
           if (b.chain > 0) {
@@ -6363,12 +7061,13 @@ function World({
 
   return (
     <>
-      {/* every material compiled (drawn once, unseen) before the player walks into it */}
+      {/* every material drawn once (unseen, spread over several frames) before the player
+          walks into it; onDone lifts the loading veil */}
       <Prewarm
-        when={seed}
-        onProgress={onPreparation}
+        when={buildN}
         withSpot={theme.blockShape === "city"}
         withTarget={theme.blockShape === "city"}
+        onDone={() => onWarm(buildN)}
       />
       <WarmKinds enemies={enemies} theme={theme} />
       <Structures seed={seed} />
@@ -6389,59 +7088,60 @@ function World({
           factor={big ? 26 : 4}
         />
       )}
-      {western ? (
-        <WesternSun key="sun-western" />
-      ) : alpineMap ? (
-        <AlpineSun key="sun-alpine" />
-      ) : isBeach(city) ? null : city ? (
-        // city sun: shadow frustum follows the player, auto-off on slow devices
-        <CitySun key="sun-city" />
-      ) : null}
+      <group visible={!worldHidden}>
       {alpineMap ? (
-        <>
-          <AlpineScene
-            key={seed}
+        <Suspense fallback={null}>
+          <AlpineMap
             layout={alpineMap}
+            seed={seed}
             time={time}
             isHost={isHost}
             playing={locked && !gameOver}
+            link={traffic}
           />
-          <AlpineLife layout={alpineMap} link={traffic} />
-        </>
+        </Suspense>
       ) : isBeach(city) ? (
         <>
-          <BeachWorld
-            key={`beach-${seed}`}
-            city={city}
-            seed={seed}
-            time={time}
-            link={traffic}
-            look={look3}
-          />
+          <Suspense fallback={null}>
+            <BeachMap city={city} seed={seed} time={time} link={traffic} look={look3} />
+          </Suspense>
           <MatchRain key={`rain-${seed}`} />
         </>
       ) : city ? (
-        <>
-          <CityScene city={city} time={time} isHost={isHost} />
-          <CityTraffic city={trafficCity ?? city} seed={seed} time={time} link={traffic} />
-          {gaps.length > 0 && <CityBlockades city={city} gaps={gaps} time={time} />}
-        </>
+        <Suspense fallback={null}>
+          <CityMap
+            city={city}
+            trafficCity={trafficCity ?? city}
+            seed={seed}
+            time={time}
+            link={traffic}
+            isHost={isHost}
+            gaps={gaps}
+          />
+        </Suspense>
       ) : western ? (
         <>
-          <WesternScene layout={western} time={time} />
+          <Suspense fallback={null}>
+            <WesternMap
+              layout={western}
+              seed={seed}
+              time={time}
+              link={traffic}
+              blocks={blocks}
+              gaps={gaps}
+            />
+          </Suspense>
           <MatchRain key={seed} western={western} />
-          <WesternTrain layout={western} seed={seed} time={time} link={traffic} />
-          <WesternRiders layout={western} seed={seed} link={traffic} />
-          <Tumbleweeds />
-          <WesternWeather layout={western} time={time} blocks={blocks} link={traffic} />
-          {gaps.length > 0 && <WesternBlockades layout={western} gaps={gaps} time={time} />}
         </>
       ) : layoutOf(theme) === "nuketown" ? (
-        <Nuketown seed={seed} />
+        <Suspense fallback={null}>
+          <NuketownMap seed={seed} />
+        </Suspense>
       ) : (
         <Level blocks={blocks} theme={theme} />
       )}
       {big && <AccessScene time={time} cityKey={big} />}
+      </group>
       <MapEvents
         theme={theme}
         city={city}
@@ -6712,7 +7412,31 @@ function World({
         renderGun={(w) => <GunModel w={w in GUNS ? (w as Weapon) : "pistol"} />}
       />
       <CombatFx />
-      <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} />
+      <Shards
+        enemies={enemies}
+        active={shardActive}
+        magnet={magnetRef}
+        onCollect={onShard}
+        taken={takenShards}
+        onTake={(id) => {
+          takenShards.current.add(id);
+          netRef.current?.broadcast({ type: "shard", id });
+        }}
+      />
+      {/* shootable hazard props (Toby 1.0.4): the host places them, everyone can pop them */}
+      {hazOn &&
+        hazardDef &&
+        Array.from({ length: HAZARD_COUNT_BIG }, (_, i) => (
+          <group
+            key={`hz${i}`}
+            ref={(g) => {
+              hazardMeshes.current[i] = g;
+            }}
+            visible={false}
+          >
+            <HazardProp def={hazardDef} />
+          </group>
+        ))}
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
       <BulletPool meshes={enemyBulletMeshes} color={theme.enemyBullet} size={0.18} shape="sphere" />
@@ -6773,7 +7497,8 @@ function useStableCallbacks<T extends object>(props: T): T {
  */
 const WorldMemo = memo(World);
 function StableWorld(props: React.ComponentProps<typeof World>) {
-  return <WorldMemo {...useStableCallbacks(props)} />;
+  const p = useStableCallbacks(props);
+  return <WorldMemo {...p} />;
 }
 
 /** the `window.__rs` test handle: always in dev, and in production builds with `?debug=1` */
@@ -6808,10 +7533,24 @@ function seedParam(): number | null {
 let inCarHud = false;
 
 const CITY_MAP = THEMES.findIndex((t) => t.blockShape === "city");
-/** Every visit opens on the city unless `?map=` names another; the start-menu picker
- * switches for the rest of the visit. null = random. */
+/** the map this visit opened on / last played, so the next visit rolls a different one */
+const LAST_MAP_KEY = "scrapfall-last-map";
+/** Every visit opens on a random offered map, never the same one twice in a row
+ * (the last visit's is remembered in localStorage). `?map=` still names one directly.
+ * null = random, for the picker only. */
 function initialMapChoice(): number | null {
-  return forcedMapIndex() ?? CITY_MAP;
+  const forced = forcedMapIndex();
+  if (forced !== null) return forced;
+  const pool = THEMES.map((t, i) => (offered(t) ? i : -1)).filter((i) => i >= 0);
+  if (!pool.length) return CITY_MAP;
+  let last = -1;
+  try {
+    last = Number(window.localStorage.getItem(LAST_MAP_KEY) ?? -1);
+  } catch {
+    /* private mode */
+  }
+  const roll = pool.length > 1 ? pool.filter((i) => i !== last) : pool;
+  return roll[Math.floor(Math.random() * roll.length)]!;
 }
 
 /** New arena seed. With a picked map the seed is nudged onto it, so a co-op host's
@@ -6848,10 +7587,7 @@ export function Game() {
 
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
-  const [requestedLock, setLocked] = useState(false);
-  const [preparation, setPreparation] = useState<{ seed: number; state: Preparation } | null>(null);
-  const prepared = preparation?.seed === seed && preparation.state.phase === "ready";
-  const locked = requestedLock && prepared;
+  const [locked, setLocked] = useState(false);
   const pausedRef = useRef(false);
   pausedRef.current = !locked;
   const [started, setStarted] = useState(false);
@@ -6871,6 +7607,11 @@ export function Game() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dev = useInputDevice(); // keyboard / controller / touch: which hints to show
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("graphics");
+  const openSettings = (tab: SettingsTab = "graphics") => {
+    setSettingsTab(tab);
+    setShowSettings(true);
+  };
   const [showWeapons, setShowWeapons] = useState(false);
   const [showEnemies, setShowEnemies] = useState(false);
   const [fov, setFov] = useState(75);
@@ -6906,6 +7647,9 @@ export function Game() {
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
+  // the lobby's READY flags ride along inside the pick broadcast (appended field)
+  const [ready, setReady] = useState(false);
+  const [readyMap, setReadyMap] = useState<Record<number, boolean>>({});
   const [abilCd, setAbilCd] = useState({ left: 0, max: 6 });
   /** phones and tablets play with on-screen controls instead of mouse + keyboard */
   useEffect(() => {
@@ -6964,6 +7708,13 @@ export function Game() {
   // lets network messages kick off / resume the match, and keeps pause state handy
   const startRef = useRef<(fromNet?: boolean) => void>(() => {});
   const phase = useRef({ started: false, ended: false });
+  // endless overtime (Toby 1.0.4): the host's OVERTIME button or the "ot" message flips this
+  const endlessRef = useRef(false);
+  const goingOvertime = useRef(false);
+  const [mutId, setMutId] = useState<MutatorId>("none");
+  // the deepest wave ever reached, overtime included, kept in localStorage
+  const [highWave, setHighWave] = useState(0);
+  useEffect(() => setHighWave(readHighWave()), []);
 
   const publishRoster = () => {
     const list = Object.entries(slots.current)
@@ -7006,6 +7757,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
       return;
     }
     if (m.type === "over") {
@@ -7016,12 +7769,24 @@ export function Game() {
       setEventMsg(String(m.name));
       return;
     }
+    // the host picked overtime: every client rolls past wave 12, the win screen lifts
+    if (m.type === "ot") {
+      endlessRef.current = true;
+      setStatus((s) => ({ ...s, won: false }));
+      return;
+    }
+    if (m.type === "mut") {
+      setMutId(String(m.id) as MutatorId);
+      // no return: the World keeps its own mutator ref for the gameplay effects —
+      // guests must let it reach msgSink so fire rate, speed and siphon apply to them too
+    }
     if (m.type === "pick") {
       const num = Number(m.num);
       const id = String(m.ability) as AbilityId;
       const c = String(m.cls) as ClassId;
       if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
       if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
+      if (num >= 1) setReadyMap((p) => (p[num] === !!m.ready ? p : { ...p, [num]: !!m.ready }));
       return;
     }
 
@@ -7147,6 +7912,9 @@ export function Game() {
     setPeerCount(0);
     setAllDown(false);
     setPicks({});
+    setClsPicks({});
+    setReady(false);
+    setReadyMap({});
   };
 
   /** quit a match in progress and go back to the title screen */
@@ -7240,129 +8008,56 @@ export function Game() {
       { x: 0, z: 0, kind: "crate", color: "#9fe8ff", active: false },
     ],
   });
-  const { blocks, enemies, rand, theme, city, western, gaps } = useMemo(() => {
-    // the map decides the layout, so pick the theme first (still purely from the shared seed)
-    const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
-    const theme = forced ?? THEMES[seed % THEMES.length]!;
-    // co-op gets a bigger field. The big real-scale maps always build the full co-op map and
-    // route on 4 m nav cells; solo fences the city and Dry Gulch into the middle 70% with
-    // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
-    // and beach maps seal their own solo squares inside their generators.
-    const mode = layoutOf(theme);
-    configureEnvironment(seed, !coop);
-    const sealed = mode === "city" || mode === "western";
-    if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
-    else if (mode === "alpine") setArenaSize(ALPINE_SIZE, 2);
-    else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
-    else if (mode === "nuketown") setArenaSize(NUKE_SIZE, 1);
-    else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
-    resetStaticCollision();
-    const level = generateLevel(seed, mode, !coop);
-    const alp = level.city && "alpine" in level.city ? (level.city as AlpineLayout).alpine : null;
-    // one ground API (terrain.ts): the alpine heightfield, the beach's decks and bowls, Dry
-    // Gulch's boardwalks, balconies and riverbed, or flat
-    setTerrain(
-      alp
-        ? alp.terrain
-        : isBeach(level.city)
-          ? beachTerrain(level.city)
-          : level.western
-            ? level.western.terrain
-            : null,
+  /**
+   * What the rendered world is actually built from. The generator is one synchronous pass,
+   * so {seed, coop, mapChoice} changes are applied a couple of frames later: the loading
+   * veil gets to paint first (initial load, map picks, hosting a room, New Arena all flow
+   * through this) instead of the page freezing on a half-built world.
+   */
+  const [built, setBuilt] = useState<{
+    seed: number;
+    coop: boolean;
+    mapChoice: number | null;
+    n: number;
+  } | null>(null);
+  const buildN = useRef(0);
+  useEffect(() => {
+    if (built && built.seed === seed && built.coop === coop && built.mapChoice === mapChoice)
+      return;
+    let alive = true;
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (alive)
+          startTransition(() => setBuilt({ seed, coop, mapChoice, n: ++buildN.current }));
+      }),
     );
-    // building access (elevators, stairwells, walkable roofs): Vice Heights today. Solo only
-    // uses buildings inside the sealed square. (`?access=0` turns it off, for A/B testing)
-    const accessOn =
-      typeof window === "undefined" ||
-      new URLSearchParams(window.location.search).get("access") !== "0";
-    installStructures([]);
-    installStructures(isBeach(level.city) ? beachRooms(level.city, PLAY_HALF) : []);
-    const cityOpen =
-      mode === "city" && level.city ? cityOpenStructures(level.city as CityLayout, PLAY_HALF) : [];
-    if (cityOpen.length) installStructures(cityOpen);
-    installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
-    // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
-    // the access adapters keep their doors clear of them
-    if (mode === "nuketown") installStructures(nuketownStructures());
-    const posts0 = mapPosts(level.city, level.western ?? null);
-    const accessList0 = !accessOn
-      ? null
-      : mode === "city" && level.city
-        ? cityAccess(level.city as CityLayout, coop ? null : PLAY_HALF)
-        : isBeach(level.city)
-          ? beachAccess(level.city, !coop, posts0)
-          : alp && level.city
-            ? (() => {
-                // (chalet balconies wall off the ground under them: extra collision)
-                const aa = alpineAccessFull(level.city as AlpineLayout, !coop, posts0);
-                level.blocks = level.blocks.concat(aa.blocks);
-                return aa.list;
-              })()
-            : level.western
-              ? westernBelfry()
-              : null;
-    if (alp && level.city)
-      installStructures(alpineRooms(level.city as AlpineLayout, PLAY_HALF, accessList0 ?? []));
-    if (mode === "city" && level.city)
-      installStructures([...cityOpen, ...cityRooms(level.city as CityLayout, PLAY_HALF)]);
-    installAccess(accessList0, level.western && accessOn ? westernMarkers(level.western) : []);
-    resetAlpine(alp !== null, alp ? alp.lift : null);
-    resetRide();
-    resetWheel(isBeach(level.city) ? level.city.beach.wheel : null);
-    // a door no adapter could keep clear (the church tower's lamp, a city hydrant): the prop
-    // moves along the facade and stays solid (before the map's meshes are built from it)
-    setPosts(null);
-    // Close narrow plaza masonry gaps without relocating ordinary kerb furniture.
-    if (mode === "city" && level.city)
-      snugPlazaProps(
-        level.city as CityLayout,
-        (accessList0 ?? []).map((b) => b.spec.door),
-      );
-    movePropsFromDoors(
-      level.city,
-      level.western ?? null,
-      [...(accessList0 ?? []).map((b) => b.spec.door), ...structureList().flatMap((p) => p.doors)],
-      (x, z) => blocked(level.blocks, x, z, 0.35),
-    );
-    setPosts(mapPosts(level.city, level.western ?? null));
-    // Dry Gulch's walk-in buildings: their thin walls, for the enemies' route planner
-    setNavWalls(level.western?.navWalls ?? null, level.western?.navDoors ?? null);
-    let gaps: Gap[] = [];
-    if (sealed && !coop) {
-      gaps = findGaps(walkableFromBlocks(level.blocks, CITY_COOP / 2), PLAY_HALF, BLOCK);
-      level.blocks = level.blocks.concat(sealGaps(gaps));
-    }
-    const weedPositions: { x: number; y: number; z: number }[] = [];
-    if (level.western) {
-      let v = seed ^ 0x74eeda;
-      const random = () => {
-        v = (Math.imul(v, 1664525) + 1013904223) | 0;
-        return (v >>> 0) / 4294967296;
-      };
-      const origin = level.western.spawn;
-      for (let tries = 0; tries < 3000 && weedPositions.length < WEED_COUNT; tries++) {
-        const radius = weedPositions.length < 12 ? 8 + random() * 45 : 35 + random() * 160,
-          angle = random() * Math.PI * 2;
-        const x = origin.x + Math.cos(angle) * radius,
-          z = origin.z + Math.sin(angle) * radius;
-        if (
-          boundaryBlocked(level.blocks, x, z, 0.6) ||
-          blocked(level.blocks, x, z, 0.6) ||
-          raised(x, z) ||
-          weedPositions.some((p) => Math.hypot(p.x - x, p.z - z) < 3)
-        )
-          continue;
-        weedPositions.push({ x, y: groundY(x, z), z });
-      }
-    }
-    resetWeeds(seed, weedPositions);
-    // the city generator keeps its own spawn plaza clear and every cell reachable;
-    // trimming its blocks here would leave buildings without collision
-    if (!level.city && !level.western) {
-      level.blocks = level.blocks.filter(
-        (b) => Math.max(Math.abs(b.x), Math.abs(b.z)) > BLOCK / 2 + 2.5,
-      );
-    }
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [built, seed, coop, mapChoice]);
+  /** buildN of the world whose shader warm finished — the veil lifts on it */
+  const [warmDone, setWarmDone] = useState(0);
+  /** the map the pending inputs land on — what the veil names while it builds */
+  const wantedTheme =
+    (!coop && mapChoice !== null ? THEMES[mapChoice] : undefined) ??
+    THEMES[seed % THEMES.length]!;
+  // The world build is a staged async pipeline (worldBuild.ts): generation runs as a
+  // coroutine that hands the event loop a turn between chunks, so the menu stays
+  // clickable while it works. `applied` is the last finished build.
+  const [applied, setApplied] = useState<{ n: number; out: BuiltWorld } | null>(null);
+  useEffect(() => {
+    if (!built) return;
+    let dead = false;
+    void buildWorld(built.seed, built.coop, built.mapChoice, () => dead).then((out) => {
+      if (new URLSearchParams(location.search).has("debug")) console.info(`[wb] applied @${Math.round(performance.now())}`);
+      if (!dead && out) setApplied({ n: built.n, out });
+    });
+    return () => {
+      dead = true;
+    };
+  }, [built]);
+  const world = useMemo(() => {
     const list: Enemy[] = Array.from({ length: MAX_ENEMIES }, () => ({
       kind: "drifter" as Kind,
       x: 0,
@@ -7377,16 +8072,23 @@ export function Game() {
       burn: 0,
       burnTick: 0,
     }));
-    return {
-      blocks: level.blocks,
-      enemies: list,
-      rand: level.rand,
-      theme,
-      city: level.city,
-      western: level.western,
-      gaps,
-    };
-  }, [seed, coop, mapChoice]);
+    if (!built || !applied || applied.n !== built.n)
+      return {
+        blocks: [] as Block[],
+        enemies: list,
+        rand: Math.random,
+        theme: null,
+        city: null,
+        western: null,
+        gaps: [] as Gap[],
+      };
+    return { ...applied.out, enemies: list };
+  }, [built, applied]);
+  useLayoutEffect(() => {
+    if (applied && new URLSearchParams(location.search).has("debug")) console.info(`[wb] mounted @${Math.round(performance.now())}`);
+  }, [applied]);
+  const { blocks, enemies, rand, city, western, gaps } = world;
+  const theme = world.theme ?? wantedTheme;
   // the HUD radar for the big maps (solo dims everything beyond the blockades)
   const miniSrc = useMemo(
     () =>
@@ -7490,24 +8192,68 @@ export function Game() {
   };
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
+  // keep the deepest wave ever reached, overtime included
+  useEffect(() => {
+    if (!ended) return;
+    const reached =
+      status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1);
+    setHighWave((h) => {
+      if (reached <= h) return h;
+      saveHighWave(reached);
+      return reached;
+    });
+  }, [ended, status.won, status.wave]);
   const isHost = !net || net.role === "host";
-  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick
+  // start-menu map picker: the host (or a solo player) rolls a seed that lands on the pick.
+  // picking the map already showing is a no-op — Enter Arena on it must not rebuild.
+  const [enterQueued, setEnterQueued] = useState(false);
   const pickMap = (choice: number | null) => {
-    if (!isHost) return;
+    if (!isHost || choice === mapChoice) return;
+    setEnterQueued(false);
     setMapChoice(choice);
     const s = newSeed(choice);
     setSeed(s);
     net?.broadcast({ type: "seed", seed: s });
   };
+  // remember the map on screen so the next visit's title rotation rolls a different one
+  useEffect(() => {
+    const i = THEMES.indexOf(theme);
+    if (i < 0) return;
+    try {
+      localStorage.setItem(LAST_MAP_KEY, String(i));
+    } catch {
+      /* private mode */
+    }
+  }, [theme]);
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
-  const paused = started && !ended && !requestedLock;
+  const lobbyPlayers: LobbyPlayer[] = connected.map((p) => ({
+    num: p.num,
+    cls: clsPicks[p.num],
+    ability: picks[p.num],
+    ready: p.num === 1 || (readyMap[p.num] ?? false),
+    me: p.num === myNum,
+  }));
+  const paused = started && !ended && !locked;
+  // the veil covers the canvas while a world applies and, in the menus, while its shaders
+  // warm — it is pointer-transparent and sits under the menus, so it never gates them, and
+  // it never stays up over a live match (the warm keeps running, unseen, in the background)
+  const pending =
+    !built ||
+    built.seed !== seed ||
+    built.coop !== coop ||
+    built.mapChoice !== mapChoice ||
+    applied === null ||
+    applied.n !== built.n;
+  const veilUp = pending || (!started && built !== null && warmDone < built.n);
+  const veilProgress = pending ? 0.2 : 0.72;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
     setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
-    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
-  }, [ability, cls, myNum, roster.length, picking]);
+    setReadyMap((p) => (p[myNum] === ready ? p : { ...p, [myNum]: ready }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls, ready });
+  }, [ability, cls, myNum, ready, roster.length, picking]);
 
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
@@ -7540,14 +8286,17 @@ export function Game() {
   const start = (fromNet = false) => {
     initAudio();
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
-    const resuming = started && !ended;
+    // going into overtime keeps the current run, build and map intact
+    const overtime = goingOvertime.current;
+    goingOvertime.current = false;
+    const resuming = (started && !ended) || overtime;
     setPicking(false);
     if (!resuming) {
       beginMatchTime();
       resetSoloRevive();
     }
     setStarted(true);
-    if (ended && !fromNet) {
+    if (ended && !fromNet && !overtime) {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
       if (isHost) {
@@ -7563,6 +8312,8 @@ export function Game() {
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
+      endlessRef.current = false;
+      setMutId("none");
     }
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
@@ -7603,6 +8354,14 @@ export function Game() {
   };
   startRef.current = start;
 
+  // a queued Enter Arena fires as soon as its world has applied
+  useEffect(() => {
+    if (enterQueued && !pending) {
+      setEnterQueued(false);
+      startRef.current();
+    }
+  }, [enterQueued, pending]);
+
   // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
   const [fought, setFought] = useState(0);
   useEffect(() => {
@@ -7612,10 +8371,12 @@ export function Game() {
   // ---- shop: open during the break after a cleared wave ----
   // NOTE: the break itself does not depend on pointer lock, so pausing and
   // resuming keeps the same cards and remembers the ones already bought.
+  // co-op players keep shopping while down (the wave banner revives them); overtime
+  // waves have no shopping break — the win screen leads straight back in
   const shopBreak =
     started &&
     !ended &&
-    !dead &&
+    (multiplayer || !dead) &&
     status.remaining === 0 &&
     fought === status.wave &&
     status.wave < WAVES.length;
@@ -7717,11 +8478,12 @@ export function Game() {
     setBought((b) => [...b, i]);
     playSfx("buy");
     if (id === "heal") {
-      setHealth((h) => Math.min(maxHp, h + 5));
+      // a downed co-op player can shop but can't heal their way back — the wave banner revives
+      setHealth((h) => (h > 0 ? Math.min(maxHp, h + 5) : h));
       return;
     }
     setPerks((p) => ({ ...p, [id]: p[id] + 1 }));
-    if (id === "maxhp") setHealth((h) => h + 2);
+    if (id === "maxhp") setHealth((h) => (h > 0 ? h + 2 : h));
   };
   useEffect(
     () =>
@@ -7809,13 +8571,22 @@ export function Game() {
     setBledOut(false);
   }, [seed]);
 
-  // HUD status lists
-  const activeMods = PISTOL_MODS.filter((id) => perks[id] > 0);
-  const activePerks = PERK_IDS.filter(
-    (id) => !PISTOL_MODS.includes(id) && id !== "heal" && perks[id] > 0,
-  )
-    .map((id) => ({ id, label: perkBadge(id, perks[id]) }))
-    .filter((p): p is { id: PerkId; label: string } => p.label !== null);
+  // every purchased card this run: level, pistol-mod flag and its per-card effects (Toby 1.0.3)
+  const boughtCards = PERK_IDS.filter((id) => id !== "heal" && perks[id] > 0).map((id) => {
+    const info = PERK_INFO[id];
+    const lvl = perks[id];
+    const mod = PISTOL_MODS.includes(id);
+    const effects: { text: string; tone?: "good" | "bad" | "flat" }[] = [];
+    if (info.pros?.length || info.cons?.length) {
+      info.pros?.forEach((t) => effects.push({ text: t, tone: "good" }));
+      info.cons?.forEach((t) => effects.push({ text: t, tone: "bad" }));
+    } else if (info.desc) {
+      effects.push({ text: info.desc, tone: "flat" });
+    }
+    const total = mod ? null : perkBadge(id, lvl);
+    if (total && lvl > 1) effects.push({ text: `Total: ${total}`, tone: "flat" });
+    return { id, name: info.name, color: info.color, lvl, mod, effects };
+  });
 
   return (
     <div
@@ -7824,16 +8595,7 @@ export function Game() {
     >
       {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
       <PadLayer menus={!locked || ended} />
-      {!prepared && (
-        <div
-          role="status"
-          className="pointer-events-none fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 rounded bg-[#2b2118] px-5 py-3 font-mono text-xs text-[#f7eeda]"
-        >
-          {preparation?.seed === seed && preparation.state.phase === "error"
-            ? "ARENA COULD NOT LOAD · RELOAD TO RETRY"
-            : `PREPARING ARENA${preparation?.seed === seed ? ` · ${preparation.state.completed}/${preparation.state.total}` : ""}`}
-        </div>
-      )}
+      <UiStyles />
       <Canvas
         shadows="percentage"
         dpr={liveDpr()}
@@ -7841,13 +8603,15 @@ export function Game() {
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: 120 }}
       >
         <QualityGovernor />
-        <StableWorld
+        <PostFx />
+        {applied !== null && applied.n === built?.n && (
+          <StableWorld
+          worldHidden={!started && warmDone < built.n}
           blocks={blocks}
           enemies={enemies}
           rand={rand}
           theme={theme}
           locked={locked}
-          onPreparation={(seed, state) => setPreparation({ seed, state })}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
@@ -7885,14 +8649,16 @@ export function Game() {
           dead={dead}
           players={multiplayer ? peerCount + 1 : 1}
           msgSink={msgSink}
-          health={health}
+          healthRef={healthRef}
           slots={slots}
           stats={statsRef}
           renderStats={renderStats}
           onShard={(v) => {
             const gain = Math.max(
               1,
-              Math.round(v * statsRef.current.greed * (multiplayer ? 1 + 0.5 * peerCount : 1)),
+              Math.round(
+                v * statsRef.current.greed * (multiplayer ? (1 + 0.5 * peerCount) * 0.8 : 1),
+              ),
             );
             run.current.shards += gain;
             setShards((s) => s + gain);
@@ -7925,17 +8691,23 @@ export function Game() {
             else r.taken += n;
           }}
           onEvent={setEventMsg}
+          onMutator={setMutId}
+          endless={endlessRef}
           mapFeed={mapFeed}
           difficulty={difficulty}
           downed={downed}
           pingWorld={pingWorld}
+          menuCam={!started || ended}
+          buildN={built.n}
+          onWarm={setWarmDone}
 
           onWeapon={(w, picked) => {
             setWeapon(w);
             if (picked) setPickupMsg(true);
           }}
           onInv={setInv}
-        />
+          />
+        )}
         {!multiplayer && (
           <SoloReviveDriver
             active={started && locked && !ended && !showSettings}
@@ -7958,6 +8730,9 @@ export function Game() {
         />
         <AmbienceListener />
       </Canvas>
+      {/* opaque card over the canvas while a world builds/warms behind it; mounted before
+          every menu so it never covers or intercepts them */}
+      <LoadingVeil up={veilUp} mapName={wantedTheme.name} progress={veilProgress} />
       {!multiplayer && downed && locked && !showSettings && <SoloRevivePrompt />}
       <HudOverlay
         remotes={remotes}
@@ -7976,41 +8751,51 @@ export function Game() {
 
       <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className={`flex flex-col items-start gap-2 ${touchUi ? "mt-10 text-xs" : ""}`}>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              WAVE {status.wave}/{WAVES.length}
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              KILLS {score}
-            </div>
+          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
+            {started && !ended && (
+              <>
+                <HudChip className="font-bold">
+                  {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
+                </HudChip>
+                <HudChip>
+                  {status.wave > WAVES.length
+                    ? `WAVE ${status.wave} · OVERTIME +${status.wave - WAVES.length}`
+                    : `WAVE ${status.wave}/${WAVES.length}`}
+                </HudChip>
+                <HudChip>
+                  KILLS <b>{score}</b>
+                </HudChip>
+              </>
+            )}
           </div>
-          <div className={`flex flex-col items-end gap-2`}>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              {"♦".repeat(Math.max(0, health))}
-              <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
-            </div>
-            <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
-              <span className="text-[#1aa6b8]">◆</span> {shards}
-            </div>
+          <div className={`flex flex-col items-end gap-1.5`}>
+            {started && !ended && (
+              <>
+                <HudChip className="text-sm tracking-[0.12em] text-[#b3261e]">
+                  {"♦".repeat(Math.max(0, health))}
+                  <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
+                </HudChip>
+                <HudChip>
+                  <span className="text-[#1aa6b8]">◆</span> <b>{shards}</b>
+                </HudChip>
+              </>
+            )}
             {multiplayer && locked && !ended && (
               <div
-                className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}
+                className="space-y-1 text-right font-mono text-[11px] tracking-widest text-[#2b2118]"
               >
-                <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">
+                <div className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-2 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
                   ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
                 </div>
                 {[...remotes.current.values()].map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-end gap-2 rounded bg-[#f3e6cf]/80 px-2 py-1"
+                    className="flex items-center justify-end gap-2 rounded-md border border-[#2b2118]/50 bg-[#f3e6cf]/85 px-2 py-1 shadow-[2px_2px_0_0_rgba(43,33,24,0.25)]"
                   >
                     <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
                     <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
                     {r.hp > 0 ? (
-                      <span>
+                      <span className="text-[#b3261e]">
                         {/* (a class can lift max health past 10: Vanguard has 16) */}
                         {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
                         <span className="opacity-30">
@@ -8018,7 +8803,7 @@ export function Game() {
                         </span>
                       </span>
                     ) : (
-                      <span className="text-[#b3261e]">DOWN</span>
+                      <span className="font-bold text-[#b3261e]">DOWN</span>
                     )}
                   </div>
                 ))}
@@ -8028,7 +8813,7 @@ export function Game() {
         </div>
 
         <div
-          className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"}`}
+          className={`absolute left-1/2 flex -translate-x-1/2 flex-wrap justify-center transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"} ${started && !ended ? "" : "hidden"}`}
         >
           {inv.map((slot, i) => {
             const g = GUNS[slot.w];
@@ -8043,14 +8828,14 @@ export function Game() {
                       }
                     : undefined
                 }
-                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-xs"} ${
+                className={`relative rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[11px]" : "px-3 py-1.5 text-xs"} ${
                   active
-                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118]"
-                    : "border-transparent bg-[#f3e6cf]/55 text-[#2b2118]/70"
+                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
+                    : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
                 }`}
               >
                 <span
-                  className={`absolute -left-1 -top-1 flex items-center justify-center rounded-full bg-[#2b2118] font-bold text-[#f7eeda] ${touchUi ? "min-h-3 min-w-3 px-1 text-[7px]" : "min-h-4 min-w-4 px-1 text-[10px]"}`}
+                  className="absolute -left-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]"
                 >
                   {i < 10 ? (
                     keyLabel(`slot${i + 1}` as ControlAction)
@@ -8083,10 +8868,16 @@ export function Game() {
 
         {bossHp > 0 && locked && !ended && (
           <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
-            <div className="mb-1 rounded bg-[#f3e6cf]/80 py-0.5">{theme.boss.name}</div>
-            <div className="h-3 overflow-hidden rounded bg-[#2b2118]/60">
+            <div className="mb-1 flex items-center justify-center gap-2">
+              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+              <span className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
+                {theme.boss.name}
+              </span>
+              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+            </div>
+            <div className="h-3 overflow-hidden rounded-md border border-[#2b2118] bg-[#2b2118]/70 shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
               <div
-                className="h-full bg-[#b3261e]"
+                className="h-full bg-gradient-to-r from-[#b3261e] to-[#e8654f]"
                 style={{
                   width: `${Math.min(100, (bossHp / Math.max(1, bossMax)) * 100)}%`,
                 }}
@@ -8095,22 +8886,37 @@ export function Game() {
           </div>
         )}
         {banner && locked && !ended && (
-          <div className="absolute left-1/2 top-1/3 -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-6 py-3 text-center text-2xl font-bold tracking-[0.3em] text-[#f3e6cf]">
-            {status.wave === WAVES.length ? (
-              <>
-                {theme.boss.name}
-                <div className="mt-1 text-xs tracking-[0.3em] text-[#e7b25c]">
-                  {theme.hazard.name}
-                </div>
-              </>
-            ) : (
-              `WAVE ${status.wave}`
-            )}
+          <div
+            className="absolute left-1/2 top-[30%] -translate-x-1/2 text-center"
+            style={{ animation: "ui-banner 1.8s cubic-bezier(0.2,0.9,0.3,1) both" }}
+          >
+            <div
+              className="mb-2 h-[5px] w-56 rounded-sm sm:w-72"
+              style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
+            />
+            <div className="text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
+              {status.wave === WAVES.length ||
+              (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
+                ? theme.boss.name
+                : `WAVE ${status.wave}`}
+            </div>
+            <div className="mt-1 text-[11px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
+              {status.wave === WAVES.length ||
+              (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
+                ? theme.hazard.name
+                : status.wave > WAVES.length
+                  ? `OVERTIME +${status.wave - WAVES.length}`
+                  : `${status.wave} OF ${WAVES.length}`}
+            </div>
+            <div
+              className="mt-2 h-[5px] w-56 rounded-sm sm:w-72"
+              style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
+            />
           </div>
         )}
 
         {pickupMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#f3e6cf]">
+          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-md border-2 border-[#2b2118] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {GUNS[weapon].name} ACQUIRED ·{" "}
             {dev.kind === "pad" ? (
               <>
@@ -8131,14 +8937,14 @@ export function Game() {
           </div>
         )}
         {crateMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-lg bg-[#2b2118]/80 px-4 py-2 text-sm tracking-[0.25em] text-[#9fe8ff]">
+          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-md border-2 border-[#1aa6b8] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#14646e] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {crateMsg} DEPLOYED
           </div>
         )}
         {!multiplayer && locked && !ended && !downed && (
-          <div className="absolute left-5 top-[10.5rem] rounded bg-[#f3e6cf]/80 px-2 py-1 text-[10px] tracking-wider">
+          <HudChip className="absolute left-5 top-[10.5rem] text-[11px] tracking-wider">
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
-          </div>
+          </HudChip>
         )}
         {locked && !ended && (
           <SprintMeter
@@ -8150,21 +8956,37 @@ export function Game() {
           />
         )}
         {locked && !ended && !touchUi && (
-          <div className="absolute bottom-6 left-5 rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-xs tracking-widest">
-            [<KeyHint action="ability" />] {ABILITIES[ability].name} ·{" "}
+          <div className="absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
+            <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
+              <KeyHint action="ability" />
+            </span>{" "}
+            {ABILITIES[ability].name} ·{" "}
             {abilCd.left > 0 ? (
               <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
             ) : (
-              <b>READY</b>
+              <b className="text-[#1d7a37]">READY</b>
             )}
           </div>
         )}
 
         {eventMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-lg bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda]">
+          <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-md border-2 border-[#f3e6cf]/50 bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]">
             ⚠ {eventMsg} ⚠
           </div>
         )}
+        {/* overtime's condition for the round (Toby 1.0.4) */}
+        {(() => {
+          const mu = mutatorById(mutId);
+          if (!mu || !locked || ended) return null;
+          return (
+            <div
+              className="absolute left-1/2 top-[13%] -translate-x-1/2 rounded-md border-2 bg-[#2b2118]/85 px-4 py-1 text-center text-[10px] font-bold tracking-[0.25em] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]"
+              style={{ color: mu.color, borderColor: `${mu.color}80` }}
+            >
+              {mu.name} · {mu.desc}
+            </div>
+          );
+        })()}
         {locked && !ended && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 [.rs-scoped_&]:hidden">
             <div className="h-5 w-[2px] bg-[#2b2118]/70" />
@@ -8194,104 +9016,26 @@ export function Game() {
       </div>
 
       {shopOpen && (
-        <div
-          data-pad-shop
-          className={`pointer-events-none fixed inset-x-0 z-30 font-mono text-[#2b2118] ${touchUi ? "bottom-2 pl-4 pr-48" : "bottom-6"}`}
-        >
-          <div className="mb-2 text-center text-xs tracking-[0.3em] text-[#f3e6cf] [text-shadow:0_1px_2px_#2b2118]">
-            SHOP · NEXT WAVE IN {shopLeft}s · {shards} SHARDS
-            {dev.kind === "pad" && (
-              <>
-                {" "}
-                · <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> SELECT ·{" "}
-                <KeyHint action="shopBuy" /> BUY
-              </>
-            )}
-          </div>
-          <div className="mb-2 flex flex-wrap justify-center gap-2 px-3">
-            {!multiplayer && (
-              <button
-                disabled={soloKit.kit > 0 || health <= 0 || shards < SELF_REVIVE_COST}
-                onClick={() => buyKitRef.current()}
-                className="pointer-events-auto rounded-md border border-black bg-[#f3e6cf]/95 px-3 py-2 text-[11px] disabled:opacity-45"
-              >
-                [<KeyHint action="shopRevive" />] <b>SELF REVIVE</b> ·{" "}
-                {soloKit.kit ? "KIT READY" : `◆ ${SELF_REVIVE_COST}`} · CARRY 1
-              </button>
-            )}
-            <button
-              onClick={() => patchRef.current()}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
-            >
-              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                <KeyHint action="shopHeal" />
-              </span>
-              <span className="font-bold tracking-widest">FIELD DRESSING</span>
-              <span className="opacity-60">
-                +5 HP · {health}/{maxHp}
-              </span>
-              <span className="font-bold">◆ {PATCH_COST}</span>
-            </button>
-            <button
-              onClick={() => rerollRef.current()}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#000] bg-[#f3e6cf]/95 px-2.5 py-1 text-[11px] text-[#000] active:bg-[#e8c98f]"
-            >
-              <span className="flex min-h-4 min-w-4 px-1 items-center justify-center rounded bg-[#2b2118] text-[9px] font-bold text-[#f7eeda]">
-                <KeyHint action="shopReroll" />
-              </span>
-              <span className="font-bold tracking-widest">REROLL</span>
-              <span className="opacity-60">
-                {freeLeft > 0
-                  ? `${freeLeft} FREE LEFT`
-                  : rerolls > 0
-                    ? `USED ${rerolls}x`
-                    : "DOUBLES EACH USE"}
-              </span>
-              <span className="font-bold">{rerollCost === 0 ? "FREE" : `◆ ${rerollCost}`}</span>
-            </button>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2 px-3 sm:gap-3">
-            {offers.map((id, i) => {
-              const info = PERK_INFO[id];
-              const cost = perkCost(id, perks[id]);
-              if (bought.includes(i)) return null;
-              const isMod = PISTOL_MODS.includes(id);
-              return (
-                <button
-                  key={i}
-                  onClick={() => buyRef.current(i)}
-                  className={`pointer-events-auto relative rounded-lg border-2 border-[#000] bg-[#f3e6cf]/95 text-center text-[#000] active:bg-[#e8c98f] ${touchUi ? "w-32 p-2" : "w-36 p-3 sm:w-44"}`}
-                >
-                  <span className="absolute -left-2 -top-2 flex min-h-6 min-w-6 px-1 items-center justify-center rounded bg-[#2b2118] text-xs font-bold text-[#f7eeda]">
-                    <KeyHint action={`shop${i + 1}` as ControlAction} />
-                  </span>
-                  {isMod && <PistolBadge />}
-                  <div className="text-xs font-bold tracking-widest">{info.name}</div>
-                  {info.pros ? (
-                    <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
-                      {info.pros.map((t) => (
-                        <div key={t} className="font-bold text-[#1d7a37]">
-                          ▲ {t}
-                        </div>
-                      ))}
-                      {info.cons?.map((t) => (
-                        <div key={t} className="font-bold text-[#b3261e]">
-                          ▼ {t}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
-                  )}
-                  {id !== "heal" && (
-                    <div className="mt-1 text-[10px] opacity-50">LEVEL {perks[id]}</div>
-                  )}
-                  <div className="mt-2 text-sm font-bold">◆ {cost}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <ShopBar
+          offers={offers}
+          bought={bought}
+          perks={perks}
+          shards={shards}
+          shopLeft={shopLeft}
+          rerollCost={rerollCost}
+          freeLeft={freeLeft}
+          rerolls={rerolls}
+          health={health}
+          maxHp={maxHp}
+          multiplayer={multiplayer}
+          kitReady={soloKit.kit > 0}
+          patchCost={PATCH_COST}
+          touchUi={touchUi}
+          onBuy={(i) => buyRef.current(i)}
+          onReroll={() => rerollRef.current()}
+          onPatch={() => patchRef.current()}
+          onKit={() => buyKitRef.current()}
+        />
       )}
 
       {touchUi && locked && !ended && (
@@ -8354,544 +9098,152 @@ export function Game() {
         </div>
       )}
 
-      {(!requestedLock || ended) && picking && (
-        <div
-          className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}
-        >
-          <div
-            className={`max-h-[96dvh] w-full touch-auto overflow-y-auto overscroll-contain rounded-xl bg-[#f3e6cf] text-center ${touchUi ? "loadout-compact max-w-2xl p-3" : "max-w-md p-7"} font-mono text-[#2b2118] shadow-2xl`}
-          >
-            <h1 className="text-2xl font-bold tracking-tight">Choose your loadout</h1>
-            <p className="mt-1 text-[10px] tracking-[0.25em] opacity-50">CLASS · ABILITY</p>
-
-            <div className="mt-4 grid grid-cols-5 gap-1">
-              {CLASS_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setCls(id)}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    cls === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                  style={cls === id ? { background: CLASSES[id].color } : undefined}
-                >
-                  {CLASSES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">{CLASSES[cls].role}</div>
-            <div className="mt-1 flex flex-wrap justify-center gap-x-3 text-[10px] font-bold">
-              {CLASSES[cls].pros.map((t) => (
-                <span key={t} className="text-[#1d7a37]">
-                  ▲ {t}
-                </span>
-              ))}
-              {CLASSES[cls].cons.map((t) => (
-                <span key={t} className="text-[#b3261e]">
-                  ▼ {t}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-1">
-              {ABILITY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => setAbility(id)}
-                  className={`pointer-events-auto rounded px-2 py-1.5 text-[11px] font-bold tracking-wider ${
-                    ability === id ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  }`}
-                >
-                  {ABILITIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">
-              {ABILITIES[ability].desc}
-            </div>
-
-            {/* map: the five maps + Random (themes.ts offered()); the host picks */}
-            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
-              {isHost ? "MAP" : "MAP · THE HOST PICKS"}
-            </p>
-            <div className="mt-2 grid grid-cols-5 gap-1">
-              {(
-                [
-                  null,
-                  ...THEMES.flatMap((t, i) => (!offered(t) && mapChoice !== i ? [] : [i])),
-                ] as (number | null)[]
-              ).map((i) => {
-                const on = isHost ? mapChoice === i : i === seed % THEMES.length;
-                return (
-                  <button
-                    key={i ?? "random"}
-                    onClick={() => pickMap(i)}
-                    disabled={!isHost}
-                    className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                      on ? "bg-[#2b2118] text-[#f7eeda]" : "bg-[#2b2118]/10"
-                    } ${isHost ? "" : "cursor-default"}`}
-                  >
-                    {i === null ? "RANDOM" : THEMES[i]!.name.toUpperCase()}
-                  </button>
-                );
-              })}
-            </div>
-            {/* difficulty: five levels, the host picks (Overclock is the default) */}
-            <p className="mt-4 text-[10px] tracking-[0.25em] opacity-50">
-              {isHost ? "DIFFICULTY" : "DIFFICULTY · THE HOST PICKS"}
-            </p>
-            <div className="mt-2 grid grid-cols-5 gap-1">
-              {DIFFICULTY_IDS.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => pickDifficulty(id)}
-                  disabled={!isHost}
-                  className={`pointer-events-auto rounded px-1 py-1.5 text-[10px] font-bold tracking-wider ${
-                    difficulty === id ? "text-[#f7eeda]" : "bg-[#2b2118]/10"
-                  } ${isHost ? "" : "cursor-default"}`}
-                  style={difficulty === id ? { background: DIFFICULTIES[id].color } : undefined}
-                >
-                  {DIFFICULTIES[id].name}
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] leading-snug opacity-70">
-              {DIFFICULTIES[difficulty].desc}
-            </div>
-            <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
-              {started
-                ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
-                : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
-            </div>
-
-            {multiplayer && (
-              <div className="mt-5 text-left">
-                <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                  {connected.map((p) => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <span style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}>
-                        ■
-                      </span>
-                      <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                      <span
-                        className="font-bold"
-                        style={{
-                          color: clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].color : undefined,
-                        }}
-                      >
-                        {clsPicks[p.num] ? CLASSES[clsPicks[p.num]!].name : "—"}
-                      </span>
-                      <span className="opacity-60">
-                        {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                      </span>
-                      {p.num === myNum && <span className="opacity-40">(YOU)</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {multiplayer && !isHost ? (
-              <div className="mt-6 rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                WAITING FOR THE HOST TO START
-              </div>
-            ) : (
-              <button
-                onClick={() => start()}
-                disabled={!prepared}
-                className="disabled:opacity-50 pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                ENTER ARENA
-              </button>
-            )}
-            <div>
-              <button
-                onClick={() => setPicking(false)}
-                className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-60 hover:opacity-100"
-              >
-                BACK
-              </button>
-            </div>
-          </div>
-        </div>
+      {(!locked || ended) && picking && (
+        <LoadoutScreen
+          cls={cls}
+          setCls={setCls}
+          ability={ability}
+          setAbility={setAbility}
+          mapChoice={mapChoice}
+          pickMap={pickMap}
+          building={pending}
+          seed={seed}
+          difficulty={difficulty}
+          pickDifficulty={pickDifficulty}
+          isHost={isHost}
+          multiplayer={multiplayer}
+          players={lobbyPlayers}
+          ready={ready}
+          onReady={setReady}
+          weather={
+            started
+              ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
+              : "RANDOM WEATHER · FIXED EACH MATCH"
+          }
+          onEnter={() => (pending ? setEnterQueued(true) : start())}
+          onBack={() => {
+            setEnterQueued(false);
+            setPicking(false);
+          }}
+          enterQueued={enterQueued}
+          touchUi={touchUi}
+        />
       )}
 
-      {(!requestedLock || ended) && !picking && (
-        <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6">
-          <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
-            {!started && !ended && !paused && (
-              <div className="mb-2 text-[10px] tracking-[0.3em] opacity-50">{theme.name}</div>
-            )}
-            <h1 className="text-2xl font-bold tracking-tight">
-              {gameOver
-                ? "You got swarmed"
-                : status.won
-                  ? "Arena cleared!"
-                  : paused
-                    ? "Paused"
-                    : "Scrapfall"}
-            </h1>
-            {(gameOver || status.won || paused) && (
-              <p className="mt-2 text-sm opacity-70">
-                {gameOver
-                  ? `You fell on wave ${status.wave} with ${score} kills · ${DIFFICULTIES[difficulty].name}.`
-                  : status.won
-                    ? `All ${WAVES.length} waves survived · ${score} kills · ${DIFFICULTIES[difficulty].name}.`
-                    : `Wave ${status.wave} · ${score} kills so far · ${DIFFICULTIES[difficulty].name}.`}
-              </p>
-            )}
-            {!paused && (
-              <p className="mt-4 text-xs leading-relaxed opacity-60">
-                {/* keys, controller glyphs or touch, whichever was used last (input/Glyph.tsx) */}
-                <ControlsHelp touch={touchUi} />
-              </p>
-            )}
-            {multiplayer && !isHost && (ended || !started) ? (
-              <div className="mt-6">
-                <div className="rounded-md bg-[#2b2118]/10 px-6 py-2 text-xs tracking-widest opacity-70">
-                  {ended
-                    ? "WAITING FOR THE HOST TO START A NEW ARENA"
-                    : "WAITING FOR THE HOST TO START"}
-                </div>
-                <button
-                  onClick={() => {
-                    initAudio();
-                    setPicking(true);
-                  }}
-                  className="pointer-events-auto mt-3 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  CHOOSE LOADOUT
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  if (started && !ended) {
-                    start();
-                    return;
-                  } // resume straight back in
-                  initAudio();
-                  setPicking(true);
-                }}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-              >
-                {ended ? "NEW ARENA" : started ? "RESUME" : "START"}
-              </button>
-            )}
+      {(!locked || ended) && !picking && !started && !ended && !paused && (
+        <TitleScreen
+          themeName={theme.name}
+          weather={
+            started
+              ? `WEATHER · ${matchEnvironment.kind} · FIXED FOR MATCH`
+              : "RANDOM WEATHER · FIXED FOR EACH MATCH"
+          }
+          touchUi={touchUi}
+          onPlay={() => {
+            initAudio();
+            setPicking(true);
+          }}
+          onSettings={() => openSettings()}
+          onControls={() => openSettings("controls")}
+          onWeapons={() => setShowWeapons(true)}
+          onEnemies={() => setShowEnemies(true)}
+          net={net ? { role: net.role, code: net.code } : null}
+          joining={joining}
+          joinCode={joinCode}
+          setJoinCode={setJoinCode}
+          netError={netError}
+          startHost={startHost}
+          startJoin={startJoin}
+          leaveRoom={leaveRoom}
+          players={lobbyPlayers}
+          ready={ready}
+          onReady={setReady}
+          version={GAME_VERSION}
+        />
+      )}
+      {(!locked || ended) && !picking && paused && (
+        <PauseScreen
+          wave={status.wave}
+          totalWaves={WAVES.length}
+          score={score}
+          difficultyName={DIFFICULTIES[difficulty].name}
+          stats={statsRef.current}
+          cls={cls}
+          bought={boughtCards}
+          multiplayer={multiplayer}
+          onResume={() => start()}
+          onSettings={() => openSettings()}
+          onLeave={leaveGame}
+        />
+      )}
+      {!picking && ended && (() => {
+        const r = run.current;
+        const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
+        const mine: RecapRow = {
+          num: myNum,
+          kills: score,
+          dmg: Math.round(r.dmg),
+          acc,
+          shards: r.shards,
+          taken: r.taken,
+        };
+        const rows = [
+          mine,
+          ...Object.entries(squad)
+            .filter(([n]) => Number(n) !== myNum)
+            .map(([n, v]) => ({ num: Number(n), ...v })),
+        ].sort((a, b) => a.num - b.num);
+        return (
+          <EndScreen
+            won={status.won}
+            wave={status.wave}
+            totalWaves={WAVES.length}
+            difficultyName={DIFFICULTIES[difficulty].name}
+            mine={mine}
+            rows={rows}
+            myNum={myNum}
+            multiplayer={multiplayer}
+            isHost={isHost}
+            endless={endlessRef.current}
+            highWave={highWave}
+            onOvertime={() => {
+              initAudio();
+              endlessRef.current = true;
+              goingOvertime.current = true;
+              setStatus((s) => ({ ...s, won: false }));
+              net?.broadcast({ type: "ot" });
+              start();
+            }}
+            onNewArena={() => start()}
+            onLoadout={() => {
+              initAudio();
+              setPicking(true);
+            }}
+            onLeave={leaveGame}
+          />
+        );
+      })()}
 
-            {ended &&
-              (() => {
-                const r = run.current;
-                const acc = r.shots ? Math.round((r.hits / r.shots) * 100) : 0;
-                const mine = {
-                  kills: score,
-                  dmg: Math.round(r.dmg),
-                  acc,
-                  shards: r.shards,
-                  taken: r.taken,
-                };
-                const rows = [
-                  { num: myNum, ...mine },
-                  ...Object.entries(squad)
-                    .filter(([n]) => Number(n) !== myNum)
-                    .map(([n, v]) => ({ num: Number(n), ...v })),
-                ].sort((a, b) => a.num - b.num);
-                const badges: string[] = [];
-                if (acc >= 60) badges.push("SHARPSHOOTER");
-                // best-in-squad badges need a squad (and something to be best at)
-                if (rows.length > 1) {
-                  if (mine.dmg > 0 && rows.every((x) => mine.dmg >= x.dmg))
-                    badges.push("HEAVY GUNNER");
-                  if (mine.shards > 0 && rows.every((x) => mine.shards >= x.shards))
-                    badges.push("SCAVENGER");
-                  if (rows.every((x) => mine.taken <= x.taken)) badges.push("IRON WILL");
-                }
-                if (status.won) badges.push("BOSS SLAYER");
-                return (
-                  <div className="mt-5 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">RUN REPORT</div>
-                    <div className="mt-2 space-y-1 text-[11px] tracking-wider">
-                      <div>
-                        WAVES SURVIVED · {status.won ? WAVES.length : Math.max(0, status.wave - 1)}
-                      </div>
-                      <div>KILLS · {mine.kills}</div>
-                      <div>DAMAGE DEALT · {mine.dmg}</div>
-                      <div>ACCURACY · {acc}%</div>
-                      <div>SHARDS COLLECTED · {mine.shards}</div>
-                      <div>DAMAGE TAKEN · {mine.taken}</div>
-                    </div>
-                    {badges.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-bold tracking-wider">
-                        {badges.map((b) => (
-                          <span key={b}>{b}</span>
-                        ))}
-                      </div>
-                    )}
-                    {multiplayer && rows.length > 1 && (
-                      <div className="mt-3 space-y-1 text-[10px] tracking-wider">
-                        <div className="text-[9px] tracking-[0.25em] opacity-50">SQUAD</div>
-                        {rows.map((x) => (
-                          <div key={x.num} className="flex items-center gap-2">
-                            <span
-                              style={{ color: colorFor(x.num), WebkitTextStroke: "0.5px #2b2118" }}
-                            >
-                              ■
-                            </span>
-                            <span>{x.num === 1 ? "HOST" : `P${x.num}`}</span>
-                            <span className="opacity-60">
-                              {x.kills} kills · {x.dmg} dmg · {x.acc}%
-                            </span>
-                            {x.num === myNum && <span className="opacity-40">(YOU)</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-            {paused && (
-              <div className="w-full max-w-sm px-4">
-                <StatSheet d={statsRef.current} cls={cls} />
-                {(activeMods.length > 0 || activePerks.length > 0) && (
-                  <div className="mt-3 text-left text-black">
-                    <div className="text-[9px] tracking-[0.25em] opacity-50">ATTRIBUTES</div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {activeMods.map((id) => (
-                        <span key={id} className="text-[10px] font-bold tracking-wider text-black">
-                          {perkBadge(id, 1)}
-                        </span>
-                      ))}
-                      {activePerks.map(({ id, label }) => (
-                        <span key={id} className="text-[10px] tracking-wider text-black">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {paused || (multiplayer && ended) ? (
-              <div className="mt-3">
-                <button
-                  onClick={leaveGame}
-                  className="pointer-events-auto rounded-md bg-[#2b2118] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
-                >
-                  {multiplayer ? "LEAVE ROOM" : "LEAVE GAME"}
-                </button>
-              </div>
-            ) : (
-              <div className="mt-5 border-t border-[#2b2118]/20 pt-4 text-xs tracking-widest">
-                {!net ? (
-                  <>
-                    <div className="opacity-60">CO-OP · UP TO 4 PLAYERS</div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={startHost}
-                        disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                      >
-                        HOST
-                      </button>
-                      <input
-                        value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
-                        placeholder="CODE"
-                        className="pointer-events-auto w-20 rounded-md border border-[#2b2118]/30 bg-transparent px-2 text-center tracking-[0.3em] outline-none"
-                      />
-                      <button
-                        onClick={startJoin}
-                        disabled={joining}
-                        className="pointer-events-auto flex-1 rounded-md bg-[#2b2118] px-3 py-2 font-semibold text-[#f7eeda] disabled:opacity-50"
-                      >
-                        JOIN
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="opacity-60">
-                      {net.role === "host" ? "HOSTING ROOM" : "JOINED ROOM"}
-                    </div>
-                    <div className="mt-1 text-2xl font-bold tracking-[0.4em]">{net.code}</div>
-                    <div className="mt-3 space-y-1 text-left">
-                      {connected.map((p) => (
-                        <div key={p.id} className="flex items-center gap-2">
-                          <span
-                            style={{ color: colorFor(p.num), WebkitTextStroke: "0.5px #2b2118" }}
-                          >
-                            ■
-                          </span>
-                          <span>{p.num === 1 ? "HOST" : `PLAYER ${p.num}`}</span>
-                          <span className="opacity-50">
-                            · {picks[p.num] ? ABILITIES[picks[p.num]!].name : "CHOOSING…"}
-                          </span>
-                          {p.num === myNum && <span className="opacity-50">(YOU)</span>}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 opacity-60">
-                      {net.role === "host" ? "share the code" : "waiting for the host"}
-                    </div>
-                    <button
-                      onClick={leaveRoom}
-                      className="pointer-events-auto mt-2 text-[11px] underline opacity-60 hover:opacity-100"
-                    >
-                      LEAVE ROOM
-                    </button>
-                  </>
-                )}
-                {joining && <div className="mt-2 opacity-60">CONNECTING…</div>}
-                {netError && <div className="mt-2 text-[#b3261e]">{netError}</div>}
-              </div>
-            )}
-
-            {
-              <div>
-                <div className="mt-3 rounded bg-[#2b2118]/10 px-3 py-2 text-[10px] font-bold tracking-wider">
-                  {started
-                    ? `WEATHER · ${matchEnvironment.kind.toUpperCase()} · FIXED FOR MATCH`
-                    : "RANDOM WEATHER · FIXED FOR EACH MATCH"}
-                </div>
-
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="pointer-events-auto mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                >
-                  SETTINGS
-                </button>
-
-                {!paused && (
-                  <button
-                    onClick={() => setShowWeapons(true)}
-                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                  >
-                    WEAPONS
-                  </button>
-                )}
-                {!paused && (
-                  <button
-                    onClick={() => setShowEnemies(true)}
-                    className="pointer-events-auto ml-4 mt-3 text-xs tracking-widest underline opacity-70 hover:opacity-100"
-                  >
-                    ENEMIES
-                  </button>
-                )}
-                {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
-                {showEnemies && (
-                  <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />
-                )}
-              </div>
-            }
-            {showSettings && (
-              <div className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/75 p-4 font-mono text-[#f2ead6]">
-                <div className="my-auto w-full max-w-md rounded-lg border border-[#b4653f] bg-[#2b2118] p-5">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold tracking-[0.3em]">SETTINGS</h2>
-                    <button
-                      onClick={() => setShowSettings(false)}
-                      className="rounded px-3 py-1 text-xs tracking-widest opacity-70 hover:bg-white/10 hover:opacity-100"
-                    >
-                      CLOSE
-                    </button>
-                  </div>
-                  <div className="mt-4 space-y-4 text-left text-xs tracking-widest">
-                    <label className="block">
-                      FIELD OF VIEW · {fov}°
-                      <input
-                        type="range"
-                        min={50}
-                        max={110}
-                        step={1}
-                        value={fov}
-                        onChange={(e) => setFov(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · LEFT/RIGHT · {sensX.toFixed(1)}x
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={3}
-                        step={0.1}
-                        value={sensX}
-                        onChange={(e) => setSensX(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      LOOK SPEED · UP/DOWN · {sensY.toFixed(1)}x
-                      <input
-                        type="range"
-                        min={0.2}
-                        max={3}
-                        step={0.1}
-                        value={sensY}
-                        onChange={(e) => setSensY(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      MUSIC VOLUME · {Math.round(musicVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={musicVol}
-                        onChange={(e) => setMusicVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      EFFECTS VOLUME · {Math.round(sfxVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={sfxVol}
-                        onChange={(e) => setSfxVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <label className="block">
-                      AMBIENCE VOLUME · {Math.round(ambVol * 100)}%
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={ambVol}
-                        onChange={(e) => setAmbVol(Number(e.target.value))}
-                        className="pointer-events-auto mt-1 w-full accent-[#b4653f]"
-                      />
-                    </label>
-                    <ViewSettings />
-                    <QualitySettings />
-                    <ControlSettings />
-                    <PadSettingsPanel />
-                  </div>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="pointer-events-auto mt-5 w-full rounded bg-[#b4653f] py-3 text-sm font-bold tracking-widest active:scale-95"
-                  >
-                    DONE
-                  </button>
-                  <div className="mt-4 border-t border-white/10 pt-3 text-center text-[10px] tracking-[0.3em] opacity-50">
-                    SCRAPFALL · v{GAME_VERSION} · TS BUILD
-                    <div className="mt-1 text-[9px] tracking-[0.2em] opacity-80">
-                      BASED ON TOBY&apos;S 1.0.2 · BIG MAPS BY TYLER
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {showWeapons && <WeaponsPanel onClose={() => setShowWeapons(false)} />}
+      {showEnemies && <EnemiesPanel theme={theme} onClose={() => setShowEnemies(false)} />}
+      {showSettings && (
+        <SettingsScreen
+          initialTab={settingsTab}
+          fov={fov}
+          setFov={setFov}
+          sensX={sensX}
+          setSensX={setSensX}
+          sensY={sensY}
+          setSensY={setSensY}
+          musicVol={musicVol}
+          setMusicVol={setMusicVol}
+          sfxVol={sfxVol}
+          setSfxVol={setSfxVol}
+          ambVol={ambVol}
+          setAmbVol={setAmbVol}
+          version={GAME_VERSION}
+          onClose={() => setShowSettings(false)}
+        />
       )}
     </div>
   );
@@ -8993,94 +9345,6 @@ export function WeaponsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** tiny pistol silhouette shown on pistol-mod shop cards */
-function PistolBadge() {
-  return (
-    <svg viewBox="0 0 24 16" className="absolute right-1.5 top-1.5 h-4 w-6 opacity-70" aria-hidden>
-      <path d="M2 3h16v4h-4l-1 2H9l-1.5 5H4l1.5-5H2z" fill="#2b2118" />
-      <rect x="13" y="6.5" width="8" height="1.6" fill="#2b2118" />
-    </svg>
-  );
-}
-
-type StatRow = { label: string; value: string; tone: -1 | 0 | 1 };
-
-/** Brotato-style stat sheet: green above baseline, red below */
-export function StatSheet({ d, cls }: { d: Derived; cls: ClassId }) {
-  const [tab, setTab] = useState<"combat" | "survival">("combat");
-  const pct = (v: number, base = 1): StatRow["tone"] =>
-    v > base + 1e-6 ? 1 : v < base - 1e-6 ? -1 : 0;
-  const combat: StatRow[] = [
-    { label: "Firepower", value: `${Math.round(d.dmg * 100)}%`, tone: pct(d.dmg) },
-    { label: "Cycle Rate", value: `${Math.round(d.rate * 100)}%`, tone: pct(d.rate) },
-    { label: "Crit Protocol", value: `${Math.round(d.crit * 100)}%`, tone: pct(d.crit, 0) },
-    { label: "Piercing", value: `${d.pierce}`, tone: pct(d.pierce, 0) },
-    { label: "Ricochet", value: `${Math.round(d.ricochet * 100)}%`, tone: pct(d.ricochet, 0) },
-    { label: "Combustion", value: `${Math.round(d.boom * 100)}%`, tone: pct(d.boom, 0) },
-    { label: "Impact Force", value: `${Math.round(d.knock * 100)}%`, tone: pct(d.knock, 0) },
-    { label: "Ammo Capacity", value: `${Math.round(d.ammoMul * 100)}%`, tone: pct(d.ammoMul) },
-  ];
-  const survival: StatRow[] = [
-    { label: "Hull Integrity", value: `${d.maxHp}`, tone: pct(d.maxHp, 10) },
-    { label: "Armor Plating", value: `${Math.round(d.armor * 100)}%`, tone: pct(d.armor, 0) },
-    { label: "Phase Shift", value: `${Math.round(d.dodge * 100)}%`, tone: pct(d.dodge, 0) },
-    { label: "Life Siphon", value: `${Math.round(d.steal * 100)}%`, tone: pct(d.steal, 0) },
-    { label: "Nano-Regen", value: d.regen ? `x${d.regen}` : "0", tone: d.regen ? 1 : 0 },
-    { label: "Shock Thorns", value: `${Math.round(d.thorns * 100)}%`, tone: pct(d.thorns, 0) },
-    { label: "Thruster Speed", value: `${Math.round(d.speed * 100)}%`, tone: pct(d.speed) },
-    { label: "Flux Magnet", value: `${d.magnet.toFixed(1)}m`, tone: pct(d.magnet, 2) },
-    { label: "Salvage Yield", value: `${Math.round(d.greed * 100)}%`, tone: pct(d.greed) },
-    { label: "Recharge Haste", value: `${Math.round(d.haste * 100)}%`, tone: pct(d.haste, 0) },
-    { label: "Free Rerolls", value: `${d.freeRerolls}`, tone: pct(d.freeRerolls, 0) },
-  ];
-  const rows = tab === "combat" ? combat : survival;
-  return (
-    <div className="mt-5 w-full rounded-lg bg-[#2b2118] p-3 text-left font-mono text-[#f3e6cf]">
-      <div className="flex items-center justify-between">
-        <div className="text-[9px] tracking-[0.25em] opacity-60">STATS</div>
-        <div className="text-[9px] tracking-[0.2em]" style={{ color: CLASSES[cls].color }}>
-          {CLASSES[cls].name}
-        </div>
-      </div>
-      <div className="mt-2 flex gap-1">
-        {(["combat", "survival"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`pointer-events-auto flex-1 rounded px-2 py-1 text-[10px] font-bold tracking-widest ${
-              tab === t ? "bg-[#f3e6cf] text-[#2b2118]" : "bg-[#f3e6cf]/10 text-[#f3e6cf]/70"
-            }`}
-          >
-            {t === "combat" ? "COMBAT" : "SURVIVAL"}
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 space-y-0.5 text-[11px]">
-        {rows.map((r) => (
-          <div key={r.label} className="flex items-center justify-between">
-            <span
-              className={
-                r.tone === 1
-                  ? "text-[#7cff4f]"
-                  : r.tone === -1
-                    ? "text-[#ff6b5e]"
-                    : "text-[#f3e6cf]/75"
-              }
-            >
-              {r.label}
-            </span>
-            <span
-              className={`font-bold ${r.tone === 1 ? "text-[#7cff4f]" : r.tone === -1 ? "text-[#ff6b5e]" : ""}`}
-            >
-              {r.value}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- enemy reference
 const PANEL_KINDS = Object.keys(ENEMY_INFO).filter((k): k is Kind =>
   (KINDS as string[]).includes(k),
@@ -9103,7 +9367,7 @@ const fakeEnemy = (kind: Kind, x = 0, z = 0): Enemy => ({
 });
 
 function LookAt({ y, z }: { y: number; z: number }) {
-  const { camera } = useThree();
+  const camera = useThree((s) => s.camera);
   useEffect(() => camera.lookAt(0, y, z), [camera, y, z]);
   return null;
 }

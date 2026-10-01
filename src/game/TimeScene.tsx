@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { power } from "./events/power";
+import { ARENA } from "./level";
 import { skyFog } from "./skyFog";
 import { useSunShadow } from "./quality";
 import type { Theme } from "./themes";
@@ -47,12 +48,16 @@ export function TimeDriver({ theme, arena }: { theme: Theme; arena: number }) {
  * suns at liveLook.sunDir).
  */
 export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolean }) {
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const fog = useMemo(() => new THREE.Fog("#000000", 10, 100), []);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const amb = useRef<THREE.AmbientLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
-  const shadow = useSunShadow(sun, 1024);
+  const shadow = useSunShadow(sun, 2048);
+  // the scatter arenas and Nuketown (at most 96 m across, centred on the origin) get their
+  // sun here: the shadow box has to cover the whole arena — the light's default ±5 m
+  // ortho camera puts every prop outside it and nothing casts a shadow
+  const range = Math.min(64, ARENA / 2 + 12);
   const seen = useRef(-1);
   useEffect(() => {
     const prev = scene.fog;
@@ -90,6 +95,9 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
       s.position.copy(L.sunDir).multiplyScalar(30);
       s.color.copy(L.sunColor);
       s.intensity = L.sunI;
+      // moonlight is diffuse: let the arena shadow fade with the dusk instead of
+      // reading as a hard-edged blob under the night sky
+      s.shadow.intensity = 1 - 0.55 * tod.v;
     }
     skyFog.fogSunDir.value.copy(L.sunDir);
     skyFog.fogSunColor.value.copy(L.hazeColor);
@@ -99,7 +107,20 @@ export function TimeLights({ ownSun, ownFog }: { ownSun: boolean; ownFog: boolea
     <>
       <hemisphereLight ref={hemi} />
       <ambientLight ref={amb} intensity={0} />
-      {!ownSun && <directionalLight ref={sun} castShadow={shadow.cast} />}
+      {!ownSun && (
+        <directionalLight
+          ref={sun}
+          castShadow={shadow.cast}
+          shadow-camera-left={-range}
+          shadow-camera-right={range}
+          shadow-camera-top={range}
+          shadow-camera-bottom={-range}
+          shadow-camera-near={1}
+          shadow-camera-far={180}
+          shadow-bias={-0.0003}
+          shadow-normalBias={0.05}
+        />
+      )}
     </>
   );
 }
@@ -167,7 +188,7 @@ export function SkyDome({
   sunset: THREE.Texture | THREE.Color;
   night: THREE.Texture | THREE.Color;
 }) {
-  const { scene } = useThree();
+  const scene = useThree((s) => s.scene);
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({

@@ -59,6 +59,8 @@ export const moveState = {
   landed: -1,
   /** camera dip after a hard landing (m), easing back to 0 */
   dip: 0,
+  /** gravity scale for the jump arc — overtime's HEAVY GRAVITY mutator pushes it past 1 */
+  gravityMul: 1,
 };
 
 export type MoveInput = {
@@ -92,6 +94,7 @@ export function resetMovement(feet = 0) {
     feet,
     vy: 0,
     lift: 0,
+    gravityMul: 1,
   });
 }
 
@@ -199,10 +202,11 @@ export function stepJump(dt: number, ground: number) {
     return ground;
   }
   // Analytic constant-gravity integration: the same arc at 20, 30, 60 or 120 fps.
-  if (s.vy > 0 && s.vy <= MOVE.gravity * dt)
-    s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * MOVE.gravity));
-  s.feet += s.vy * dt - 0.5 * MOVE.gravity * dt * dt;
-  s.vy -= MOVE.gravity * dt;
+  const G = MOVE.gravity * s.gravityMul;
+  if (s.vy > 0 && s.vy <= G * dt)
+    s.fallTop = Math.max(s.fallTop, s.feet + (s.vy * s.vy) / (2 * G));
+  s.feet += s.vy * dt - 0.5 * G * dt * dt;
+  s.vy -= G * dt;
   s.fallTop = Math.max(s.fallTop, s.feet);
   if (s.feet <= ground && s.vy <= 0) {
     s.feet = ground;

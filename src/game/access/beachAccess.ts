@@ -75,7 +75,10 @@ export function beachAccess(city: BeachLayout, solo: boolean, posts: readonly Po
   // the condo tower
   const condo = blds.find((b) => b.t === "hotel" && b.floors >= 8 && within(b, 6));
   if (condo) {
-    const s = place(condo, "elevator", condo.front, "condo", { helipad: true });
+    const s = place(condo, "elevator", condo.front, "condo", {
+      helipad: true,
+      furnishings: { lobby: "pier-reception" },
+    });
     if (s) {
       out.push(s);
       condo.access = true;

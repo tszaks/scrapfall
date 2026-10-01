@@ -7,6 +7,8 @@
 // Everyone keeps to the right-hand side of the road. At a junction a rider picks a way on (not
 // straight back); at the end of a street they swing round and come back.
 
+import { streetNet } from "./streets";
+
 export type Kind = 0 | 1 | 2; // rider, buckboard, stagecoach
 export const ROLE_TOWN = 0;
 export const ROLE_OUTLAW = 1;
@@ -17,42 +19,10 @@ export type Node = { x: number; z: number; e: number[] };
 export type Edge = { a: number; b: number; len: number; lane: number };
 export type Net = { nodes: Node[]; edges: Edge[] };
 
-/** the road network through town (solo-safe: every end is inside the blockades) */
+/** the road network through town: the full street grid (streets.ts), solo-safe (every end
+ * is inside the blockades) */
 export function roadNet(): Net {
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-  const N = (x: number, z: number) => nodes.push({ x, z, e: [] }) - 1;
-  const E = (a: number, b: number, lane: number) => {
-    const na = nodes[a]!;
-    const nb = nodes[b]!;
-    const i = edges.push({ a, b, len: Math.hypot(nb.x - na.x, nb.z - na.z), lane }) - 1;
-    na.e.push(i);
-    nb.e.push(i);
-  };
-  const mainW = N(-116, 0);
-  const cross = N(-22, 0);
-  const mainE = N(140, 0);
-  const eastRd = N(206, 1);
-  const eastEnd = N(258, 2);
-  const nbJ = N(-22, -64);
-  const nbW = N(-116, -64);
-  const nbE = N(96, -64);
-  const north = N(-22, -102);
-  const sbJ = N(-22, 78);
-  const sbE = N(108, 78);
-  const south = N(-22, 112);
-  E(mainW, cross, 2.6);
-  E(cross, mainE, 2.6);
-  E(mainE, eastRd, 1.8);
-  E(eastRd, eastEnd, 1.8);
-  E(cross, nbJ, 1.6);
-  E(nbJ, nbW, 1.6);
-  E(nbJ, nbE, 1.6);
-  E(nbJ, north, 1.6);
-  E(cross, sbJ, 1.6);
-  E(sbJ, sbE, 1.6);
-  E(sbJ, south, 1.6);
-  return { nodes, edges };
+  return streetNet();
 }
 
 export type Agent = {

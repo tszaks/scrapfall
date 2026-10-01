@@ -24,7 +24,7 @@ const ready = (p) =>
   );
 let roomCode;
 const join = async () => {
-  roomCode ??= await host.locator("div.tracking-\\[0\\.4em\\]").innerText();
+  roomCode ??= await host.getByTitle("Copy room code").locator("span").first().innerText();
   const code = roomCode;
   await guest.getByPlaceholder("CODE").fill(code);
   await guest.getByRole("button", { name: "JOIN", exact: true }).click();
@@ -37,13 +37,13 @@ try {
     await p.goto(`${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=vice&seed=11`);
     await ready(p);
   }
-  await host.getByRole("button", { name: "HOST", exact: true }).click();
+  await host.getByRole("button", { name: /^HOST A ROOM$/i }).click();
   await host.waitForFunction(() => document.body.innerText.includes("HOSTING ROOM"), null, {
     timeout: 30000,
   });
   await join();
-  await host.getByRole("button", { name: "START", exact: true }).click();
-  await host.getByRole("button", { name: "ENTER ARENA", exact: true }).click();
+  await host.getByRole("button", { name: /^START$/i }).click();
+  await host.getByRole("button", { name: /^ENTER ARENA$/i }).click();
   for (const p of [host, guest]) {
     await ready(p);
     await p.waitForFunction(() => __rs.enemies.some((e) => e.alive), null, { timeout: 30000 });
@@ -62,11 +62,13 @@ try {
   assert.ok(worlds.every((w) => Number(w.wave) > 0));
   report.checks.push({ start: worlds });
   await host.keyboard.press("p");
-  for (const p of [host, guest])
-    await p.getByRole("button", { name: "RESUME", exact: true }).waitFor();
-  await host.getByRole("button", { name: "RESUME", exact: true }).click();
+  for (const p of [host, guest]) await p.getByRole("button", { name: /^RESUME$/i }).waitFor();
+  await host.getByRole("button", { name: /^RESUME$/i }).click();
   await guest.waitForFunction(
-    () => !Array.from(document.querySelectorAll("button")).some((b) => b.textContent === "RESUME"),
+    () =>
+      !Array.from(document.querySelectorAll("button")).some(
+        (b) => b.textContent.trim().toUpperCase() === "RESUME",
+      ),
   );
   report.checks.push("synchronized pause/resume");
   // Accelerate to the last-wave death path; normal damage and the wave director
@@ -79,8 +81,8 @@ try {
     __rs.pending.current.fill(null);
   });
   const restartAt = Date.now();
-  await host.getByRole("button", { name: "NEW ARENA", exact: true }).click();
-  await host.getByRole("button", { name: "ENTER ARENA", exact: true }).click();
+  await host.getByRole("button", { name: /^NEW ARENA$/i }).click();
+  // Current main starts the replay directly; there is no second loadout confirmation.
   for (const p of [host, guest]) {
     await ready(p);
     await p.waitForFunction(() => __rs.enemies.some((e) => e.alive), null, { timeout: 30000 });
@@ -90,12 +92,12 @@ try {
     elapsedMs: Date.now() - restartAt,
   });
   await guest.keyboard.press("p");
-  await guest.getByRole("button", { name: "LEAVE ROOM", exact: true }).click();
+  await guest.getByRole("button", { name: /^LEAVE ROOM$/i }).click();
   await guest.getByPlaceholder("CODE").waitFor();
   // The host remains paused after a guest leaves; reconnect uses the saved room code.
   await join();
   await ready(guest);
-  await host.getByRole("button", { name: "RESUME", exact: true }).click();
+  await host.getByRole("button", { name: /^RESUME$/i }).click();
   await guest.waitForFunction(
     () => __rs.remotes.current.size > 0 && !document.body.innerText.includes("RESUME"),
   );

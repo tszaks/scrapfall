@@ -32,8 +32,8 @@ try {
     await page.goto(
       `${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=vice&seed=11&quality=auto`,
     );
-    await page.getByRole("button", { name: "START", exact: true }).click();
-    await page.getByRole("button", { name: "ENTER ARENA", exact: true }).click();
+    await page.getByRole("button", { name: /^START$/i }).click();
+    await page.getByRole("button", { name: /^ENTER ARENA$/i }).click();
     await page.keyboard.down("Enter");
     await page.waitForFunction(() => window.__rs?.aimStats.current.shot > 0);
     row.navigationToFirstShotMs = performance.now() - start;
