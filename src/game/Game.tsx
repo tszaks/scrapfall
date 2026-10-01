@@ -3735,10 +3735,32 @@ export function Game() {
   }, [crateMsg]);
 
   const coop = !!net;
+  const bigId = useMemo(() => {
+    let b = bigIdOf(seed);
+    if (b && b !== "nuketown" && !coop && !testMap()) b = null; // the 4 huge maps are co-op only
+    return b;
+  }, [seed, coop]);
+  // the big maps build in slices (his worldBuild pipeline) so the page never freezes:
+  // the arena is fully downloaded and assembled before anyone walks into it
+  const [bigMap, setBigMap] = useState<BigMap | null>(null);
+  useEffect(() => {
+    if (!bigId) {
+      setBigMap(null);
+      return;
+    }
+    let cancelled = false;
+    setBigMap(null);
+    void (async () => {
+      const m = await setupBigMap(bigId, seed, !coop);
+      if (!cancelled) setBigMap(m);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bigId, seed, coop]);
+  const bigLoading = !!bigId && (!bigMap || bigMap.seed !== seed);
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
-    let bigId = bigIdOf(seed);
-    if (bigId && bigId !== "nuketown" && !coop && !testMap()) bigId = null; // the 4 huge maps are co-op only
-    const alpine = bigId ? setupBigMap(bigId, seed, !coop) : null;
+    const alpine = bigId && bigMap && bigMap.seed === seed ? bigMap : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
     if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
