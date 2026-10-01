@@ -1,3 +1,4 @@
+import { SPEED } from "./input/movement";
 // The accuracy model, in one place: every gun has a hip cone and an aimed cone, and
 // the live cone is hip→ads lerped by the aim blend plus a movement penalty (grown by
 // speed, sprint and air time, eased back down by aiming) plus sustained-fire bloom
@@ -92,7 +93,7 @@ export const accState = {
  * more sprinting or airborne. `speed` is the player's horizontal speed in m/s.
  */
 export function moveFactor(speed: number, sprinting: boolean, airborne: boolean) {
-  return Math.min(1, speed / 7 + (sprinting ? 0.35 : 0) + (airborne ? 1 : 0));
+  return Math.min(1, speed / SPEED.run + (sprinting ? 0.35 : 0) + (airborne ? 1 : 0));
 }
 
 export function stepAccuracy(dt: number, w: GunId, move: number) {
