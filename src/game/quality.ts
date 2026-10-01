@@ -3,7 +3,7 @@
 // A tier is a bundle of the settings that cost the most on the GPU and CPU: the render
 // resolution (device pixel ratio), the sun's shadow map, the wet streets' mirror pass, the
 // rain streak count, the rooms behind the city's windows, effect particle counts and
-// antialiasing. AUTO starts at HIGH's look (at the old 1.6 resolution cap; MEDIUM and at
+// antialiasing. AUTO starts at HIGH's look (up to 2x resolution; MEDIUM and at
 // most 1.5 on phones) and lets the governor (QualityGovernor.tsx) lower the resolution
 // first, then step the tier down, when frames run slow, and back up when there is headroom.
 //
@@ -52,9 +52,9 @@ export function specFor(tier: Tier, pref: QualityPref): QualitySpec {
   const dev = dpr0();
   if (tier === "high")
     return {
-      // HIGH picked by hand: full Retina resolution (up to 2); AUTO keeps the old 1.6 cap
+      // Desktop AUTO can reach the same Retina ceiling as HIGH.
       dprMin: pref === "high" ? Math.min(dev, 2) : MOBILE ? 0.85 : 1,
-      dprMax: pref === "high" ? Math.min(dev, 2) : Math.min(dev, MOBILE ? 1.5 : 1.6),
+      dprMax: pref === "high" ? Math.min(dev, 2) : Math.min(dev, MOBILE ? 1.5 : 2),
       shadowMap: 2048,
       reflScale: 0.5,
       reflEvery: 2,

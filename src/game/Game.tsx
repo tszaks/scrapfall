@@ -366,7 +366,7 @@ import {
 } from "./perks";
 import { CLASSES, CLASS_IDS, type ClassId } from "./classes";
 import { QualityGovernor } from "./QualityGovernor";
-import { Prewarm } from "./Prewarm";
+import { Prewarm, type Preparation } from "./Prewarm";
 import { skipHiddenMatrixUpdates } from "./sceneOpt";
 import { antialiasAtLoad, liveDpr } from "./quality";
 import { QualitySettings } from "./QualitySettings";
@@ -2261,6 +2261,7 @@ function World({
   rand,
   theme,
   locked,
+  onPreparation,
   gameOver,
   onScore,
   onHurt,
@@ -2305,6 +2306,7 @@ function World({
   rand: () => number;
   theme: Theme;
   locked: boolean;
+  onPreparation: (seed: number, state: Preparation) => void;
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
@@ -5237,7 +5239,9 @@ function World({
           status(wave.current, enemies.filter((e) => e.alive).length, false, true);
           lastRemaining.current = -1;
         }
-      } else if (remaining !== lastRemaining.current) {
+        // Victory may take another frame to reach this component through React.
+        // Do not overwrite it with a non-winning wave 13 status in that interval.
+      } else if (wave.current <= WAVES.length && remaining !== lastRemaining.current) {
         lastRemaining.current = remaining;
         status(Math.max(1, wave.current), remaining, false, false);
       }
@@ -6362,6 +6366,7 @@ function World({
       {/* every material compiled (drawn once, unseen) before the player walks into it */}
       <Prewarm
         when={seed}
+        onProgress={onPreparation}
         withSpot={theme.blockShape === "city"}
         withTarget={theme.blockShape === "city"}
       />
@@ -6843,7 +6848,10 @@ export function Game() {
 
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
-  const [locked, setLocked] = useState(false);
+  const [requestedLock, setLocked] = useState(false);
+  const [preparation, setPreparation] = useState<{ seed: number; state: Preparation } | null>(null);
+  const prepared = preparation?.seed === seed && preparation.state.phase === "ready";
+  const locked = requestedLock && prepared;
   const pausedRef = useRef(false);
   pausedRef.current = !locked;
   const [started, setStarted] = useState(false);
@@ -7493,7 +7501,7 @@ export function Game() {
   };
   const myNum = !net || net.role === "host" ? 1 : (roster.find((r) => r.id === net.self)?.num ?? 2);
   const connected = [{ id: "host", num: 1 }, ...roster];
-  const paused = started && !ended && !locked;
+  const paused = started && !ended && !requestedLock;
   // keep my own pick in the squad list and tell everyone else about it
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
@@ -7816,6 +7824,16 @@ export function Game() {
     >
       {/* controller: menu focus / A / B / Start, the device watch, sprint + jump keys */}
       <PadLayer menus={!locked || ended} />
+      {!prepared && (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 rounded bg-[#2b2118] px-5 py-3 font-mono text-xs text-[#f7eeda]"
+        >
+          {preparation?.seed === seed && preparation.state.phase === "error"
+            ? "ARENA COULD NOT LOAD · RELOAD TO RETRY"
+            : `PREPARING ARENA${preparation?.seed === seed ? ` · ${preparation.state.completed}/${preparation.state.total}` : ""}`}
+        </div>
+      )}
       <Canvas
         shadows="percentage"
         dpr={liveDpr()}
@@ -7829,6 +7847,7 @@ export function Game() {
           rand={rand}
           theme={theme}
           locked={locked}
+          onPreparation={(seed, state) => setPreparation({ seed, state })}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
@@ -8335,7 +8354,7 @@ export function Game() {
         </div>
       )}
 
-      {(!locked || ended) && picking && (
+      {(!requestedLock || ended) && picking && (
         <div
           className={`fixed inset-0 z-30 flex items-center justify-center bg-[#2b2118]/80 ${touchUi ? "p-2" : "p-6"}`}
         >
@@ -8479,7 +8498,8 @@ export function Game() {
             ) : (
               <button
                 onClick={() => start()}
-                className="pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
+                disabled={!prepared}
+                className="disabled:opacity-50 pointer-events-auto mt-6 rounded-md bg-[#b4653f] px-6 py-3 text-sm font-semibold tracking-widest text-[#f7eeda] transition-transform active:scale-95 [@media(hover:hover)]:hover:scale-105"
               >
                 ENTER ARENA
               </button>
@@ -8496,7 +8516,7 @@ export function Game() {
         </div>
       )}
 
-      {(!locked || ended) && !picking && (
+      {(!requestedLock || ended) && !picking && (
         <div className="fixed inset-0 z-40 flex touch-auto items-start justify-center overflow-y-auto overscroll-contain bg-[#2b2118]/70 p-6">
           <div className="my-auto w-full max-w-sm touch-auto rounded-xl bg-[#f3e6cf] p-7 text-center font-mono text-[#2b2118] shadow-2xl">
             {!started && !ended && !paused && (
