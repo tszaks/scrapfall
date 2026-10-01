@@ -7,12 +7,14 @@
 // clean seconds (and 15 s since the last step down) step the resolution back up: each change
 // resizes the canvas, which costs a frame, so it moves rarely. A level that failed right after
 // a step up is remembered for a minute so the governor doesn't flip-flop. On a 120 Hz
-// display it also trims the resolution (but not below 1.3) when it can't keep up with it.
+// display it preserves quality once the 60 FPS target is met.
 //
 // The Canvas reads `liveDpr()` (quality.ts) for its `dpr` prop, so a re-render of the game
 // never resets what the governor picked (react-three-fiber re-applies the prop on every render).
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
+
+import { QualityRecovery } from "./qualityRecovery";
 
 import { setParticleScale } from "./fxCore";
 import { setRoomsEnabled } from "./interiors";
@@ -39,6 +41,9 @@ const debug = {
   vsync: 16.7,
   miss: 0,
   cpu: 0,
+  targetFps: 60,
+  targetMet: false,
+  recovery: "idle",
   log: [] as Log[],
 };
 if (typeof window !== "undefined")
@@ -48,6 +53,7 @@ export function QualityGovernor() {
   const setDpr = useThree((s) => s.setDpr);
   const gl = useThree((s) => s.gl);
   const q = useQuality();
+  const recovery = useRef(new QualityRecovery());
   const st = useRef({
     win: [] as number[],
     winT: 0,
@@ -74,17 +80,26 @@ export function QualityGovernor() {
   // fewer pixels won't help: step the tier instead.
   useFrame(() => {
     const S = st.current;
-    if (S.t0 > 0 && S.tEnd > 0) S.cpu.push(S.tEnd - S.t0);
+    if (S.t0 > 0 && S.tEnd > 0 && !document.hidden && !qualityHeld()) {
+      S.cpu.push(S.tEnd - S.t0);
+      if (S.cpu.length > 240) S.cpu.shift();
+    }
     S.t0 = performance.now();
     S.tEnd = 0;
   }, -1000);
   useEffect(() => {
     const orig = gl.render;
     const S = st.current;
+    let depth = 0;
     gl.render = function (scene, camera) {
-      orig.call(this, scene, camera);
-      if (S.t0 > 0 && this.getRenderTarget() === null)
-        S.tEnd = performance.now();
+      const main = depth === 0 && this.getRenderTarget() === null;
+      depth++;
+      try {
+        orig.call(this, scene, camera);
+      } finally {
+        depth--;
+        if (main && S.t0 > 0) S.tEnd = performance.now();
+      }
     };
     return () => {
       gl.render = orig;
@@ -113,6 +128,32 @@ export function QualityGovernor() {
     st.current.cool = 2; // the resize itself costs a frame: skip judging the next windows
   };
 
+  // Drop partial windows around visibility and viewport changes.
+  useEffect(() => {
+    const reset = () => {
+      const S = st.current;
+      S.win = [];
+      S.cpu = [];
+      S.winT = 0;
+      S.bad = 0;
+      S.good = 0;
+      S.t0 = 0;
+      S.cool = 2;
+      recovery.current.reset(S.clock);
+      holdQuality(2000);
+    };
+    document.addEventListener("visibilitychange", reset);
+    window.addEventListener("resize", reset);
+    return () => {
+      document.removeEventListener("visibilitychange", reset);
+      window.removeEventListener("resize", reset);
+    };
+  }, []);
+
+  useEffect(() => {
+    recovery.current.reset(st.current.clock);
+  }, [q.pref]);
+
   // a new pref / tier: pull the resolution into its range (manual tiers sit at the top)
   useEffect(() => {
     const { spec, pref } = q;
@@ -129,9 +170,19 @@ export function QualityGovernor() {
     const ms = raw * 1000;
     S.clock += raw;
     // tab switches, pauses, pointer-lock prompts: not a performance signal
-    if (ms > 1000 || document.hidden) return;
+    if (ms > 1000 || document.hidden) {
+      S.win = [];
+      S.cpu = [];
+      S.winT = 0;
+      S.bad = 0;
+      S.good = 0;
+      recovery.current.reset(S.clock);
+      return;
+    }
     // a map is loading / warming up: not a performance signal either
     if (qualityHeld()) {
+      S.cpu = [];
+      recovery.current.reset(S.clock);
       S.win = [];
       S.winT = 0;
       S.bad = 0;
@@ -154,8 +205,7 @@ export function QualityGovernor() {
     S.cpu = [];
     debug.cpu = +cpuMed.toFixed(1);
     const miss60 = w.filter((f) => f > MISS_60).length / w.length;
-    const hiHz = S.vsync < 12;
-    const missHi = hiHz ? w.filter((f) => f > S.vsync * 1.45).length / w.length : 0;
+    debug.targetMet = miss60 < 0.015;
     debug.miss = +miss60.toFixed(3);
     const { pref, spec, tier } = quality();
     if (pref !== "auto") return;
@@ -163,8 +213,39 @@ export function QualityGovernor() {
       S.cool--;
       return;
     }
-    const bad = miss60 > 0.08 || (hiHz && missHi > 0.3 && liveDpr() > Math.max(spec.dprMin, 1.3));
-    const good = miss60 < 0.015 && (!hiHz || missHi < 0.08);
+    const bad = miss60 > 0.08;
+    const good = miss60 < 0.015;
+    const frameP95 = sorted[Math.floor(sorted.length * 0.95)] ?? ms;
+    const stableSlow = recovery.current.stableSlow(bad, frameP95, cpuMed);
+    const result = recovery.current.sample(S.clock, frameP95, cpuMed);
+    if (result) {
+      debug.recovery = result.keep ? "higher quality retained" : "probe rolled back";
+      if (!result.keep) {
+        setAutoTier(result.before.tier);
+        apply(result.before.dpr, "recovery rollback");
+      }
+      S.bad = 0;
+      S.good = 0;
+      return;
+    }
+    if (recovery.current.active) return;
+    // At sustained slow cadence, periodically test whether a higher setting is free.
+    // This is an experiment, not a claim that we have detected a browser/display cap.
+    if (stableSlow && recovery.current.due(S.clock)) {
+      if (liveDpr() < spec.dprMax - 0.01 || tier !== "high") {
+        recovery.current.begin(S.clock, { tier, dpr: liveDpr() }, frameP95, cpuMed);
+        debug.recovery = "testing higher quality";
+        if (liveDpr() < spec.dprMax - 0.01)
+          apply(Math.min(spec.dprMax, liveDpr() + STEP_UP), "recovery probe");
+        else {
+          setAutoTier(TIERS[TIERS.indexOf(tier) + 1]!);
+          S.cool = 2;
+        }
+        S.bad = 0;
+        S.good = 0;
+        return;
+      }
+    }
     S.bad = bad ? S.bad + 1 : 0;
     S.good = good ? S.good + 1 : 0;
     if (S.bad >= 3) {
