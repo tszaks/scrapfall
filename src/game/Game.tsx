@@ -3957,6 +3957,14 @@ export function Game() {
     }
   };
   startRef.current = start;
+  useEffect(() => {
+    if (bigLoading || pendingStart.current === null) return;
+    const fromNet = pendingStart.current;
+    pendingStart.current = null;
+    startRef.current?.(fromNet);
+  }, [bigLoading]);
+
+
 
   // a wave counts as fought once it had enemies (score is personal, so guests may have 0 kills)
   const [fought, setFought] = useState(0);
