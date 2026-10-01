@@ -3899,6 +3899,12 @@ export function Game() {
 
   const start = (fromNet = false) => {
     initAudio();
+    // a big map waits until it is fully built, so nobody walks into a half-loaded arena
+    if (bigLoading) {
+      pendingStart.current = fromNet;
+      setPicking(false);
+      return;
+    }
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     // going into overtime keeps the current run, build and map intact
     const overtime = goingOvertime.current;
