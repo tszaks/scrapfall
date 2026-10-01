@@ -1,3 +1,4 @@
+import { FLIGHT } from "./weaponFlight";
 import { nuketownMinimap, NUKE_SPAWN } from "./nuketown/layout";
 import { MatchRain } from "./MatchRain";
 import { ScopeOverlay } from "./ScopeOverlay";
@@ -5,7 +6,18 @@ import { bodyContacts, worldContact, type Body } from "./projectileContact";
 import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { matchEnvironment } from "./matchEnvironment";
-import { aimState, stepAim, aimSensitivity } from "./input/aim";
+import { aimInput, aimState, stepAim, aimSensitivity } from "./input/aim";
+import { sightOf, viewModelPos } from "./art/sights";
+import {
+  accReset,
+  accShot,
+  accState,
+  effSpread,
+  moveFactor,
+  spreadGap,
+  stepAccuracy,
+} from "./accuracy";
+import { HipCrosshair } from "./HipCrosshair";
 import { advanceBallistic, bulletGravity, ballisticDirection } from "./ballistics";
 import {
   weedWorld,
@@ -204,10 +216,12 @@ import {
   NEW_KINDS,
   NEW_STATS,
   hitBand,
+  hitBandInto,
   isNewKind,
   packVis,
   type NewKind,
 } from "./enemyKinds";
+import { bodyFree, bodyStepFree, bodyRule, enemyBlock } from "./enemyBody";
 import {
   MAX_ORD,
   MELEE_DY,
@@ -254,7 +268,16 @@ import { RemoteDeployables, type RemoteDeps } from "./RemoteDeployables";
 import { useKeyboard } from "./useKeyboard";
 import { touchInput, resetTouchInput, isTouchDevice } from "./touch";
 import { MobileControls } from "./MobileControls";
-import { cancelJump, canFire, moveState, stepJump, startFall, tryJump } from "./input/movement";
+import {
+  cancelJump,
+  canFire,
+  chase,
+  moveState,
+  SPEED,
+  stepJump,
+  startFall,
+  tryJump,
+} from "./input/movement";
 import { fallDamage, landZone, slideOffFace, tryRoofExit } from "./input/fall";
 import {
   clearControls,
@@ -434,8 +457,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 1.35,
     count: 1,
     spread: 0.016,
-    speed: 120,
-    life: 3.5,
+    ...FLIGHT.sniper,
     damage: 10,
     size: 0.075,
     color: "#e9c98a",
@@ -449,8 +471,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.28,
     count: 1,
     spread: 0,
-    speed: 22,
-    life: 2,
+    ...FLIGHT.pistol,
     damage: 1,
     size: 0.14,
     color: "#ff8a1f",
@@ -463,8 +484,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.7,
     count: 5,
     spread: 0.07,
-    speed: 22,
-    life: 0.8,
+    ...FLIGHT.scatter,
     damage: 1,
     size: 0.12,
     color: "#ffd23f",
@@ -477,8 +497,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.08,
     count: 1,
     spread: 0.03,
-    speed: 26,
-    life: 1.4,
+    ...FLIGHT.smg,
     damage: 1,
     size: 0.09,
     color: "#4fe3ff",
@@ -491,8 +510,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.9,
     count: 1,
     spread: 0,
-    speed: 48,
-    life: 1.5,
+    ...FLIGHT.rail,
     damage: 5,
     size: 0.1,
     color: "#e04bff",
@@ -505,8 +523,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 1.1,
     count: 1,
     spread: 0,
-    speed: 13,
-    life: 3,
+    ...FLIGHT.cannon,
     damage: 8,
     size: 0.38,
     color: "#ff3b2a",
@@ -521,8 +538,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.5,
     count: 1,
     spread: 0,
-    speed: 20,
-    life: 3,
+    ...FLIGHT.rebound,
     damage: 2,
     size: 0.17,
     color: "#7cff4f",
@@ -536,8 +552,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.8,
     count: 1,
     spread: 0,
-    speed: 40,
-    life: 2,
+    ...FLIGHT.harpoon,
     damage: 3,
     size: 0.1,
     color: "#f2ead6",
@@ -551,8 +566,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.25,
     count: 1,
     spread: 0.02,
-    speed: 28,
-    life: 1.5,
+    ...FLIGHT.cryo,
     damage: 1,
     size: 0.12,
     color: "#9fe8ff",
@@ -566,8 +580,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 1,
     count: 1,
     spread: 0,
-    speed: 16,
-    life: 2,
+    ...FLIGHT.flak,
     damage: 3,
     size: 0.3,
     color: "#ff9d3b",
@@ -583,8 +596,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.35,
     count: 1,
     spread: 0,
-    speed: 34,
-    life: 1.2,
+    ...FLIGHT.tesla,
     damage: 2,
     size: 0.14,
     color: "#5f9bff",
@@ -598,8 +610,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.55,
     count: 1,
     spread: 0,
-    speed: 30,
-    life: 2,
+    ...FLIGHT.revolver,
     damage: 4,
     size: 0.13,
     color: "#ffcf6b",
@@ -613,8 +624,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.05,
     count: 1,
     spread: 0.06,
-    speed: 28,
-    life: 1.3,
+    ...FLIGHT.minigun,
     damage: 1,
     size: 0.08,
     color: "#ffe14f",
@@ -627,8 +637,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.75,
     count: 1,
     spread: 0,
-    speed: 44,
-    life: 2,
+    ...FLIGHT.crossbow,
     damage: 4,
     size: 0.09,
     color: "#c8f07a",
@@ -643,8 +652,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.45,
     count: 3,
     spread: 0.05,
-    speed: 24,
-    life: 1.6,
+    ...FLIGHT.plasma,
     damage: 2,
     size: 0.15,
     color: "#ff4fd8",
@@ -658,8 +666,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 1.1,
     count: 1,
     spread: 0,
-    speed: 8,
-    life: 4,
+    ...FLIGHT.voidorb,
     damage: 3,
     size: 0.36,
     color: "#b06bff",
@@ -674,8 +681,7 @@ const GUNS: Record<Weapon, Gun> = {
     cooldown: 0.9,
     count: 1,
     spread: 0,
-    speed: 18,
-    life: 1.8,
+    ...FLIGHT.shatter,
     damage: 3,
     size: 0.25,
     color: "#b8f4ff",
@@ -810,16 +816,21 @@ const M_SHRED = 1,
   M_BOUNTY = 4;
 
 const BOSS_HP = 450; // 1.5x tougher arena boss
+// chase() re-tunes each authored chase speed from the old 7 m/s run to today's SPEED.run
+// (input/movement.ts): pursuits keep their shape relative to the player. Attack dashes,
+// projectiles and attack timings are deliberately not scaled.
+// shared hit-band scratch for the per-enemy step tests (hitBandInto fills it)
+const EB_BAND: [number, number] = [0, 0];
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
-  drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
-  brute: { hp: 7, speed: 1.6, radius: 0.8, dmg: 2 },
-  shooter: { hp: 3, speed: 2, radius: 0.6, dmg: 1 },
-  runner: { hp: 2, speed: 4.3, radius: 0.45, dmg: 1 },
-  boss: { hp: BOSS_HP, speed: 1.4, radius: 1.5, dmg: 3 },
-  specter: { hp: 3, speed: 3.3, radius: 0.55, dmg: 2 },
-  bomber: { hp: 4, speed: 1.5, radius: 0.7, dmg: 2 },
-  vanguard: { hp: 11, speed: 1.2, radius: 0.9, dmg: 2 },
-  special: { hp: 6, speed: 2.6, radius: 0.65, dmg: 1 },
+  drifter: { hp: 2, speed: chase(2.6), radius: 0.6, dmg: 1 },
+  brute: { hp: 7, speed: chase(1.6), radius: 0.8, dmg: 2 },
+  shooter: { hp: 3, speed: chase(2), radius: 0.6, dmg: 1 },
+  runner: { hp: 2, speed: chase(4.3), radius: 0.45, dmg: 1 },
+  boss: { hp: BOSS_HP, speed: chase(1.4), radius: 1.5, dmg: 3 },
+  specter: { hp: 3, speed: chase(3.3), radius: 0.55, dmg: 2 },
+  bomber: { hp: 4, speed: chase(1.5), radius: 0.7, dmg: 2 },
+  vanguard: { hp: 11, speed: chase(1.2), radius: 0.9, dmg: 2 },
+  special: { hp: 6, speed: chase(2.6), radius: 0.65, dmg: 1 },
   ...NEW_STATS,
 };
 
@@ -979,12 +990,13 @@ const BULLET_SPEED = 22;
 const ENEMY_BULLET_SPEED = 11;
 const TURN_SPEED = 2.4;
 const MAX_BULLETS = 90;
-const SPEED = 7;
+// the player's run/sprint/tactical speeds: the SPEED table in input/movement.ts
 const EYE = 1.6;
 
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const MOVE = new THREE.Vector3();
+const VM_POS = new THREE.Vector3(); // the viewmodel's camera-space origin (ADS pose)
 const TMP_A = new THREE.Vector3();
 const TMP_B = new THREE.Vector3();
 const PLAYER_R = 0.4; // player body radius for enemy contact
@@ -2869,6 +2881,9 @@ function World({
             ? "static"
             : false;
         },
+        // which layer stops a ground enemy at a spot — the union every step tests
+        enemyBodyAt: (x: number, z: number, r = 0.6, height = 2) =>
+          enemyBlock(blocks, x, z, r, height),
         supportAt: (x: number, z: number, feet: number) =>
           staticSupport(x, z, feet, baseGroundY(x, z)),
         // the live body state: what the walk controller thinks the feet are doing
@@ -2904,7 +2919,8 @@ function World({
         los: (ax: number, az: number, bx: number, bz: number) =>
           clearLine(blocks, ax, az, bx, bz, 0.1),
       });
-      // weapon testing: every gun with deep ammo, a trigger to hold, stats for the co-op fire feed
+      // weapon testing: every gun with deep ammo, a trigger and the aim input to hold,
+      // stats for the co-op fire feed
       const giveAll = () => {
         for (const w of ORDER) {
           owned.current.add(w);
@@ -2915,6 +2931,8 @@ function World({
       Object.assign(handle, {
         giveAll,
         equip,
+        aimInput,
+        aimState,
         trigger,
         weapon,
         invuln,
@@ -3685,6 +3703,7 @@ function World({
 
   const equip = (w: Weapon) => {
     burstQueue.current = 0;
+    accReset();
     weapon.current = w;
     setHeld(w);
     onWeapon(w, false);
@@ -3725,8 +3744,11 @@ function World({
     return out;
   };
   /** a spawn spot: anywhere on the small maps; near a living player in the big city */
-  const navOpen = (x: number, z: number) =>
-    !solid.g[toNav(x) * solid.n + toNav(z)] && !raised(x, z);
+  const navOpen = (x: number, z: number, r = 0.55) =>
+    !solid.g[toNav(x) * solid.n + toNav(z)] &&
+    !raised(x, z) &&
+    // and not inside a car, a prop or a wall face the 2 m cells never saw
+    bodyFree(blocks, x, z, r, 2);
   /** alpine: which zones (0 village, 1 summit) have a player standing in them (not riding) */
   const liveZones = () => {
     const z = new Set<number>();
@@ -3763,15 +3785,30 @@ function World({
     });
     return out;
   };
-  const streetIn = (zn: number) => (x: number, z: number) => navOpen(x, z) && zoneOf(x, z) === zn;
+  const streetIn = (zn: number, r = 0.55) => (x: number, z: number) =>
+    navOpen(x, z, r) && zoneOf(x, z) === zn;
   /**
    * A spawn spot. Big city: near a living player, out of sight. With building access the spot
    * is in a zone that has players standing in it (`zone` forces one): on a roof it is behind
    * rooftop structures or at the roof door, and a full roof sends the rest to wait round the
    * building's entrance on the street.
    */
-  const spot = (rMin: number, rMax: number, hidden: boolean, zone?: number, already = false) => {
-    if (!big) return randomSpawn(blocks, rand);
+  const spot = (
+    rMin: number,
+    rMax: number,
+    hidden: boolean,
+    zone?: number,
+    already = false,
+    bodyR = 0.55,
+  ) => {
+    // arenas have no traffic, but props still occupy real space the cells miss
+    if (!big) {
+      for (let k = 0; k < 8; k++) {
+        const p = randomSpawn(blocks, rand);
+        if (bodyFree(blocks, p.x, p.z, bodyR, 2)) return p;
+      }
+      return randomSpawn(blocks, rand);
+    }
     if (!accessActive()) {
       const q = spawnNear(
         blocks,
@@ -3782,8 +3819,8 @@ function World({
         hidden,
         1,
         alpineMap && zone !== undefined
-          ? (x, z) => navOpen(x, z) && alpineZone(x, z) === zone
-          : navOpen,
+          ? (x, z) => navOpen(x, z, bodyR) && alpineZone(x, z) === zone
+          : (x, z) => navOpen(x, z, bodyR),
       );
       // the alpine summit is a small open island where the ring search often finds nothing out
       // of sight: fall back to any open island cell no player can see (behind the lodge or the
@@ -3797,7 +3834,7 @@ function World({
           for (let k = 0; k < 120; k++) {
             const x = isl.x0 + 1 + rand() * (isl.x1 - isl.x0 - 2);
             const z = isl.z0 + 1 + rand() * (isl.z1 - isl.z0 - 2);
-            if (blocked(blocks, x, z, 1) || !navOpen(x, z) || seen(x, z)) continue;
+            if (blocked(blocks, x, z, 1) || !navOpen(x, z, bodyR) || seen(x, z)) continue;
             if (ps.some((p) => Math.hypot(p.x - x, p.z - z) < 10)) continue;
             return { x, z };
           }
@@ -3824,13 +3861,13 @@ function World({
           hidden,
         );
       const ds = doorstep(b);
-      return spawnNear(blocks, rand, [ds], rMin, rMax, hidden, 1, streetIn(baseZone(ds.x, ds.z)));
+      return spawnNear(blocks, rand, [ds], rMin, rMax, hidden, 1, streetIn(baseZone(ds.x, ds.z), bodyR));
     }
     let anchors: { x: number; z: number }[] = standing.filter((p) => p.zn === zn);
     // nobody on the street: gather round the buildings the squad went into
     if (!anchors.length) anchors = zp.filter((p) => p.b >= 0).map((p) => doorstep(p.b));
     if (!anchors.length) anchors = livePlayers();
-    return spawnNear(blocks, rand, anchors, rMin, rMax, hidden, 1, streetIn(zn));
+    return spawnNear(blocks, rand, anchors, rMin, rMax, hidden, 1, streetIn(zn, bodyR));
   };
   /** snipers take to the rooftops: a roof with a player on it (and room), if there is one */
   const sniperZone = () => {
@@ -3846,7 +3883,10 @@ function World({
   };
 
   /** where the boss appears: Dry Gulch's Iron Marshal steps off his train at the platform */
-  const bossSpot = () => (western ? trainBossSpot() : spot(25, 40, false));
+  const bossSpot = () =>
+    western
+      ? trainBossSpot()
+      : spot(25, 40, false, undefined, false, STATS.boss.radius);
 
   const placePickup = (gun: Weapon) => {
     const p = spot(8, 26, false);
@@ -3976,12 +4016,24 @@ function World({
       const steps = Math.max(1, Math.ceil(push / 0.35));
       const sx = (kx / len) * (push / steps);
       const sz = (kz / len) * (push / steps);
+      // the shove obeys the same bodies as walking — cars, props, the mesh; fliers
+      // only keep the blockade ring. An enemy already overlapped by a car gets a
+      // shrinking-overlap budget so the shove can still push it back out.
+      const rule = bodyRule(e.kind);
+      const ebr = STATS[e.kind].radius * (e.elite ? 1.6 : 1);
+      const ebh = hitBandInto(e.kind, EB_BAND)[1];
+      const free = (x: number, z: number) =>
+        rule === "walk"
+          ? bodyStepFree(blocks, e.x, e.z, x, z, ebr, ebh)
+          : rule === "fly"
+            ? !boundaryBlocked(blocks, x, z, er)
+            : true;
       for (let s = 0; s < steps; s++) {
         const nx = e.x + sx;
         const nz = e.z + sz;
-        const okX = !blocked(blocks, nx, e.z, er) && climbable(e.x, e.z, nx, e.z);
+        const okX = !blocked(blocks, nx, e.z, er) && climbable(e.x, e.z, nx, e.z) && free(nx, e.z);
         if (okX) e.x = nx;
-        const okZ = !blocked(blocks, e.x, nz, er) && climbable(e.x, e.z, e.x, nz);
+        const okZ = !blocked(blocks, e.x, nz, er) && climbable(e.x, e.z, e.x, nz) && free(e.x, nz);
         if (okZ) e.z = nz;
         if (!okX && !okZ) break;
       }
@@ -4313,15 +4365,10 @@ function World({
     let vf = w === "pistol" ? (s2.magnum ? VF.MAGNUM : 0) | (s2.incend ? VF.INCEND : 0) : 0;
     if (aimState.on) vf |= VF.ADS;
     if (w === "smg" && ++tracerCount.current % 3 === 0) vf |= VF.TRACER;
+    // the live cone: hip → aimed blend + movement + bloom (accuracy.ts), sent to viewers
+    const eff = effSpread(w, g);
     for (let s = 0; s < g.count; s++) {
-      const dir = aimDir(
-        new THREE.Vector3(),
-        FORWARD,
-        g.count,
-        g.spread * (aimState.on ? (w === "sniper" ? 0 : 0.65) : 1),
-        s,
-        spread,
-      );
+      const dir = aimDir(new THREE.Vector3(), FORWARD, g.count, eff, s, spread);
       const isP = w === "pistol";
       const crit = Math.random() < s2.crit + (isP && s2.laser ? 0.25 : 0);
       const dmg = g.damage * s2.dmg * (crit ? (isP && s2.suppr ? 3 : 2) : 1);
@@ -4357,9 +4404,12 @@ function World({
       onStat("shot", 1);
       aimStats.current.shot++;
     }
-    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current);
+    fxFired(kind, vf, pos, FORWARD, seed, g.speed, netRef.current, undefined, eff);
     playGun(w, w === "pistol" && s2.suppr);
-    recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
+    accShot(w); // bloom grows after the shot leaves, so the first round is clean
+    recoil.current =
+      (w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5) *
+      (1 - aimState.blend * 0.45); // aimed recoil reads smaller than hip
     gunKick();
   };
 
@@ -4438,7 +4488,7 @@ function World({
   );
 
   /** an open spot right next to (x, z): hornet pack members land around their leader */
-  const besides = (x: number, z: number) => {
+  const besides = (x: number, z: number, r = 0.5) => {
     // close beside the leader first, then a little wider; never a blocked or stair-only spot,
     // and (like every spawn) out of the players' sight
     const ps = livePlayers();
@@ -4446,7 +4496,12 @@ function World({
       const w = k < 8 ? 2.4 : 7;
       const qx = x + (rand() - 0.5) * w;
       const qz = z + (rand() - 0.5) * w;
-      if (blocked(blocks, qx, qz, 0.5) || raised(qx, qz)) continue;
+      if (
+        blocked(blocks, qx, qz, Math.min(r, 0.8)) ||
+        raised(qx, qz) ||
+        !bodyFree(blocks, qx, qz, r, 2)
+      )
+        continue;
       const zone = zoneOf(qx, qz);
       if (
         zone >= ROOF_KEY &&
@@ -4622,7 +4677,11 @@ function World({
       const lead = leadOf[i] ?? -1;
       packLead.current[i] = lead;
       const lp = lead >= 0 ? pending.current[lead] : null;
-      const p = lp ? besides(lp.x, lp.z) : kind === "boss" ? bossSpot() : spot(25, 45, true);
+      const p = lp
+        ? besides(lp.x, lp.z, STATS[kind].radius)
+        : kind === "boss"
+          ? bossSpot()
+          : spot(25, 45, true, undefined, false, STATS[kind].radius);
       Object.assign(e, {
         generation: (e.generation ?? 0) + 1,
         kind,
@@ -4790,25 +4849,31 @@ function World({
     recoil.current = Math.max(0, recoil.current - delta * 6);
     const v = viewModel.current;
     if (!v) return;
+    const sg = sightOf(weapon.current, stats.current);
     v.visible =
       !menuCam &&
       !deadRef.current &&
       (getViewMode() === "first" || aimState.scoped) &&
-      !(weapon.current === "sniper" && aimState.blend > 0.96); // spectators carry no weapon
+      !(sg.type === "scope" && aimState.blend > 0.96); // spectators carry no weapon
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
     const ads = aimState.blend;
     const sway = bobAmt.current * (1 - ads * 0.9);
-    v.translateX(0.3 * (1 - ads) + Math.sin(bob.current * 0.5) * 0.012 * sway);
+    const rec = recoil.current * (1 - ads * 0.5);
+    // ADS puts the gun's sight line on the centre ray: the rear element lands `relief`
+    // metres out and the whole line (0, y, ·) in gun space then lies on the axis.
+    viewModelPos(sg, ads, VM_POS);
+    v.translateX(VM_POS.x + Math.sin(bob.current * 0.5) * 0.012 * sway);
     v.translateY(
-      -0.28 +
-        ads * (weapon.current === "sniper" ? 0.155 : weapon.current === "pistol" ? 0.23 : 0.215) -
-        Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway +
-        recoil.current * 0.03,
+      VM_POS.y - Math.abs(Math.cos(bob.current * 0.5)) * 0.01 * sway + rec * 0.03,
     );
-    v.translateZ(-0.75 + ads * 0.25 + recoil.current * 0.08);
-    v.rotateX(recoil.current * 0.15);
+    v.translateZ(VM_POS.z + rec * 0.08);
+    v.rotateX(rec * 0.15);
+    // aimed breathing: a slow drift once the sights are up
+    const t0 = state.clock.elapsedTime;
+    v.rotateY(Math.sin(t0 * 1.9) * 0.0011 * ads);
+    v.rotateX(Math.sin(t0 * 2.3 + 1.2) * 0.0008 * ads);
     sprintPose(v); // lowered while sprinting, raised for a tactical sprint
     // the gun joins the transparent queue at the very end, after a depth clear (see below)
     v.traverse((o) => {
@@ -4828,11 +4893,12 @@ function World({
   useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
-    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current);
-    aimState.scoped = weapon.current === "sniper" && aimState.blend > 0.1;
+    const sg = sightOf(weapon.current, stats.current);
+    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current, 4 / sg.adsIn);
+    aimState.scoped = sg.type === "scope" && aimState.blend > 0.1;
     const lens = cam as THREE.PerspectiveCamera;
-    const wantedFov =
-      fov + ((weapon.current === "sniper" ? 20 : fov * 0.72) - fov) * aimState.blend;
+    const wantedFov = fov + ((sg.fovAbs ?? fov * sg.fovMul) - fov) * aimState.blend;
+    aimState.zoom = wantedFov / fov; // drives zoom-proportional aim sensitivity
     if (Math.abs(lens.fov - wantedFov) > 0.001) {
       lens.fov = wantedFov;
       lens.updateProjectionMatrix();
@@ -5028,7 +5094,10 @@ function World({
     FORWARD.y = 0;
     FORWARD.normalize();
     RIGHT.crossVectors(FORWARD, cam.up).normalize();
-    MOVE.set(0, 0, 0).addScaledVector(FORWARD, fwd).addScaledVector(RIGHT, strafe);
+    // backpedal / strafe paces from the SPEED table (1 = as fast as forward)
+    MOVE.set(0, 0, 0)
+      .addScaledVector(FORWARD, fwd < 0 ? fwd * SPEED.backpedal : fwd)
+      .addScaledVector(RIGHT, strafe * SPEED.strafe);
     if (wheelRide.cabin >= 0) MOVE.set(0, 0, 0);
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
@@ -5045,17 +5114,30 @@ function World({
     // HEAVY GRAVITY rounds weigh on the jump arc too
     moveState.gravityMul = mut === "gravity" ? 1.4 : 1;
     const spd =
-      SPEED *
+      SPEED.run * // the SPEED table in input/movement.ts: run/sprint/tactical and every drag
       stats.current.speed *
-      (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1) *
-      (overdrive.current > 0 ? 1.3 : 1) *
+      (stats.current.holster && weapon.current === "pistol" ? SPEED.holster : 1) *
+      (overdrive.current > 0 ? SPEED.overdrive : 1) *
       // CRYO SURGE chills the legs a little; HEAVY GRAVITY weighs every step down
-      (mut === "cryo" ? 0.85 : mut === "gravity" ? 0.9 : 1) *
+      (mut === "cryo" ? SPEED.cryo : mut === "gravity" ? SPEED.heavyGravity : 1) *
       groundSpeed(cam.position.x, cam.position.z) * // deep snow off the paths
       runMul * // sprint 1.5x, tactical sprint 1.9x (multiplies with snow / sand)
-      (downedRef.current ? 0.2 : 1); // DOWN: a slow crawl
+      (1 - aimState.blend * (1 - sg.moveMul * SPEED.ads)) *
+      (downedRef.current ? SPEED.downed : 1); // DOWN: a slow crawl
     slide.current.x += (MOVE.x * spd - slide.current.x) * resp;
     slide.current.z += (MOVE.z * spd - slide.current.z) * resp;
+    // the accuracy model: eased move intensity + bloom decay, then the live cone
+    stepAccuracy(
+      delta,
+      weapon.current,
+      moveFactor(
+        Math.hypot(slide.current.x, slide.current.z),
+        runMul > 1.01,
+        moveState.airborne,
+      ),
+    );
+    accState.disp = spreadGap(weapon.current, GUNS[weapon.current]);
+    accState.fov = lens.fov;
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const steps = Math.max(
         1,
@@ -5149,7 +5231,10 @@ function World({
     }
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
-    bob.current += delta * 9 * bobAmt.current;
+    // the bob's 9 rad/s was tuned at the old 7 m/s run: it follows real pace now, so a
+    // slower step swings slower (the same bob cycles per metre travelled)
+    bob.current +=
+      delta * bobAmt.current * Math.hypot(slide.current.x, slide.current.z) * (9 / 7);
     {
       // follow the ground; the beach eases up and down its stairs and bowls (snapping on big
       // jumps: respawn, a teleport), other maps follow it directly. Building access: doorways,
@@ -5913,15 +5998,17 @@ function World({
           const lead = packLead.current[i]!;
           const lp = lead >= 0 ? pending.current[lead] : null;
           const le = lead >= 0 ? enemies[lead] : undefined;
+          const rk = enemies[i]!.kind;
+          const rr = STATS[rk].radius;
           const q = lp
-            ? besides(lp.x, lp.z)
+            ? besides(lp.x, lp.z, rr)
             : le?.alive && le.kind === "hornet"
-              ? besides(le.x, le.z)
-              : enemies[i]!.kind === "boss"
+              ? besides(le.x, le.z, rr)
+              : rk === "boss"
                 ? bossSpot()
-                : enemies[i]!.kind === "sniper"
-                  ? spot(30, 55, true, sniperZone())
-                  : spot(25, 45, true);
+                : rk === "sniper"
+                  ? spot(30, 55, true, sniperZone(), false, rr)
+                  : spot(25, 45, true, undefined, false, rr);
           // (alpine: spot() only anchors on players standing in a zone, never riders)
           pd.x = q.x;
           pd.z = q.z;
@@ -6135,7 +6222,11 @@ function World({
               const ez = zoneOf(e.x, e.z);
               if (aZones.has(ez)) continue;
               const pick = list[Math.floor(rand() * list.length)]!;
-              const q = e.kind === "boss" ? spot(25, 40, false, pick) : spot(25, 45, true, pick);
+              const er = STATS[e.kind].radius * (e.elite ? 1.6 : 1);
+              const q =
+                e.kind === "boss"
+                  ? spot(25, 40, false, pick, false, er)
+                  : spot(25, 45, true, pick, false, er);
               if (zoneOf(q.x, q.z) === ez) continue; // no room up there: it waits where it is
               e.x = q.x;
               e.z = q.z;
@@ -6161,14 +6252,16 @@ function World({
             for (const e of enemies) {
               if (!e.alive || zones.has(alpineZone(e.x, e.z))) continue;
               if (targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1))) continue;
-              const q = spot(25, 45, true, zoneFor(e.x, e.z));
+              const q = spot(25, 45, true, zoneFor(e.x, e.z), false, STATS[e.kind].radius * (e.elite ? 1.6 : 1));
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
             }
-            pending.current.forEach((pd) => {
+            pending.current.forEach((pd, i) => {
               if (pd?.placed && !zones.has(alpineZone(pd.x, pd.z))) {
-                const q = spot(25, 45, true, zoneFor(pd.x, pd.z));
+                const pe = enemies[i];
+                const q = spot(25, 45, true, zoneFor(pd.x, pd.z), false,
+                  pe ? STATS[pe.kind].radius * (pe.elite ? 1.6 : 1) : 0.55);
                 pd.x = q.x;
                 pd.z = q.z;
               }
@@ -6188,10 +6281,11 @@ function World({
             } else if (dmin > (e.kind === "boss" ? (western ? 160 : 70) : 80)) {
               const home = accOn ? zoneOf(e.x, e.z) : zoneFor(e.x, e.z); // stays in its own zone
               const onRoof = accOn && (home ?? 0) >= ROOF_KEY;
+              const er = STATS[e.kind].radius * (e.elite ? 1.6 : 1);
               const q =
                 e.kind === "boss"
-                  ? spot(25, 40, false, home, onRoof)
-                  : spot(25, 45, true, home, onRoof);
+                  ? spot(25, 40, false, home, onRoof, er)
+                  : spot(25, 45, true, home, onRoof, er);
               e.x = q.x;
               e.z = q.z;
               e.stuckFor = 0;
@@ -6211,9 +6305,10 @@ function World({
               const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
               if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
                 const hidden = e.kind !== "boss";
+                const er = STATS[e.kind].radius * (e.elite ? 1.6 : 1);
                 const q = accOn
-                  ? spot(25, 45, hidden, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY)
-                  : spot(25, 45, hidden, zoneFor(e.x, e.z));
+                  ? spot(25, 45, hidden, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY, er)
+                  : spot(25, 45, hidden, zoneFor(e.x, e.z), false, er);
                 e.x = q.x;
                 e.z = q.z;
                 e.stuckFor = 0;
@@ -6257,6 +6352,15 @@ function World({
           }
         }
         const st = STATS[e.kind];
+        // body-test dims for every move this tick: the real footprint (elites draw
+        // 1.6x), the capsule top, and — when a car already overlaps — an escape
+        // budget that only permits steps shrinking it (never a pin, never a push-in)
+        const ebR = st.radius * (e.elite ? 1.6 : 1);
+        const ebH = hitBandInto(e.kind, EB_BAND)[1];
+        const ghost = e.kind === "specter"; // specters drift straight through cover
+        const ebFree = ghost
+          ? () => true
+          : (x: number, z: number) => bodyStepFree(blocks, e.x, e.z, x, z, ebR, ebH);
         // BLOOD MOON knits their wounds back; OVERDRIVE picks their pace up
         const mutId2 = mutator.current?.id;
         if (mutId2 === "blood" && e.max && e.hp < e.max)
@@ -6284,7 +6388,11 @@ function World({
           const pace = Math.min(st.speed * 0.35, 1.2) * delta;
           const nx = e.x + Math.sin(a) * pace,
             nz = e.z + Math.cos(a) * pace;
-          if (!blocked(blocks, nx, nz, Math.min(st.radius, 0.8)) && climbable(e.x, e.z, nx, nz)) {
+          if (
+            !blocked(blocks, nx, nz, Math.min(st.radius, 0.8)) &&
+            climbable(e.x, e.z, nx, nz) &&
+            ebFree(nx, nz)
+          ) {
             e.x = nx;
             e.z = nz;
             e.yaw = a;
@@ -6309,7 +6417,6 @@ function World({
         // route around obstacles: go straight if clear, else follow the flow field
         let tx = target.x;
         let tz = target.z;
-        const ghost = e.kind === "specter"; // specters drift straight through cover
         if (!ghost) {
           // route pick is memoised per enemy (steerCache.ts): the LOS probe plus the
           // field descent used to run per frame per enemy — the crowd's biggest CPU line
@@ -6403,9 +6510,10 @@ function World({
           }
           const ox = e.x;
           const oz = e.z;
-          // (and only steps it could walk: no hopping up a balcony edge or the tower's face)
+          // (and only steps it could walk: no hopping up a balcony edge or the tower's face,
+          // and no walking into a car, a prop or a wall the 2 m grid under-reads)
           const can = (fx: number, fz: number, tx: number, tz: number) =>
-            !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz);
+            !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz) && ebFree(tx, tz);
           if (can(e.x, e.z, nx, e.z)) e.x = nx;
           if (can(e.x, e.z, e.x, nz)) e.z = nz;
           // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
@@ -6446,7 +6554,14 @@ function World({
             // only onto open, walkable ground near a target standing on it (never under a rider)
             const onGround = Math.abs(target.y - EYE - groundY(bx, bz)) < MELEE_DY;
             const sameZone = !alpineMap || alpineZone(bx, bz) === alpineZone(e.x, e.z);
-            if (onGround && sameZone && ghostOK(bx, bz) && !blocked(blocks, bx, bz, 0.6)) {
+            if (
+              onGround &&
+              sameZone &&
+              ghostOK(bx, bz) &&
+              !blocked(blocks, bx, bz, 0.6) &&
+              // it drifts through things, but it never materialises inside them
+              bodyFree(blocks, bx, bz, 0.55, 2)
+            ) {
               e.x = bx;
               e.z = bz;
             }
@@ -6558,8 +6673,10 @@ function World({
               e.aux = (e.aux ?? 0) - delta;
               const lx = e.x + (dx / d) * 14 * delta;
               const lz = e.z + (dz / d) * 14 * delta;
-              if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z)) e.x = lx;
-              if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz)) e.z = lz;
+              if (!blocked(blocks, lx, e.z, 0.6) && climbable(e.x, e.z, lx, e.z) && ebFree(lx, e.z))
+                e.x = lx;
+              if (!blocked(blocks, e.x, lz, 0.6) && climbable(e.x, e.z, e.x, lz) && ebFree(e.x, lz))
+                e.z = lz;
               if (dm < 1.4) {
                 e.aux = 0;
                 hurtTarget(target, 2);
@@ -6691,8 +6808,9 @@ function World({
             if (e.aux < 0 && e.aux > -1.4) {
               const cx = e.x + (dx / d) * 10 * delta;
               const cz = e.z + (dz / d) * 10 * delta;
-              if (!blocked(blocks, cx, e.z, 1.2)) e.x = cx;
-              if (!blocked(blocks, e.x, cz, 1.2)) e.z = cz;
+              // the blade charge stops on the same bodies too: a car in the lane ends it
+              if (!blocked(blocks, cx, e.z, 1.2) && ebFree(cx, e.z)) e.x = cx;
+              if (!blocked(blocks, e.x, cz, 1.2) && ebFree(e.x, cz)) e.z = cz;
               if (dm < 3.2 && e.cooldown <= 0) {
                 e.cooldown = 1.2;
                 hurtTarget(target, 3);
@@ -6735,6 +6853,12 @@ function World({
         half: HALF,
         kraken: theme.boss.shape === "kraken",
         stats: STATS,
+        // crowd pressure obeys the same bodies: cars, props, the rendered mesh
+        free: (e, x, z) => {
+          const r = STATS[e.kind as Kind].radius * (e.elite ? 1.6 : 1);
+          const h = hitBandInto(e.kind, EB_BAND)[1];
+          return bodyStepFree(blocks, e.x, e.z, x, z, r, h);
+        },
       });
     }
 
@@ -7179,7 +7303,7 @@ function World({
           for (let i = 0; i < enemies.length && placed < n; i++) {
             const e = enemies[i]!;
             if (e.alive || pending.current[i]) continue;
-            const p = besides(x, z);
+            const p = besides(x, z, STATS[kind].radius);
             const hp = Math.max(1, Math.round(STATS[kind].hp * hpMul));
             Object.assign(e, {
               kind,
@@ -8987,12 +9111,7 @@ export function Game() {
             </div>
           );
         })()}
-        {locked && !ended && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 [.rs-scoped_&]:hidden">
-            <div className="h-5 w-[2px] bg-[#2b2118]/70" />
-            <div className="absolute left-1/2 top-1/2 h-[2px] w-5 -translate-x-1/2 -translate-y-1/2 bg-[#2b2118]/70" />
-          </div>
-        )}
+        {locked && !ended && <HipCrosshair />}
         {miniSrc && started && !ended && (
           // phones: the fire / ability / ping buttons own the bottom-right corner and the co-op
           // list sits under the shards, so a smaller map sits just left of the buttons

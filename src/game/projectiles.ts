@@ -3,6 +3,7 @@ import { bodyContacts, worldContact, type Body, type WorldContact } from "./proj
 import { advanceBallistic, bulletGravity } from "./ballistics";
 import { readGunMuzzle, remoteGunRoots } from "./art/muzzle";
 import { firstWorldHit } from "./enemyProjectiles";
+import { aimState } from "./input/aim";
 import * as THREE from "three";
 import { groundY, shotHits } from "./terrain";
 
@@ -764,6 +765,8 @@ export function fxFired(
   speed: number,
   net: NetHandle | null,
   at?: THREE.Vector3,
+  /** the live cone this pull used — broadcast so viewers replay the same pellets */
+  spread = 0,
 ) {
   const lk = LOOKS[kind];
   const muz = at ? MUZ_FIRE.copy(at) : MUZ_FIRE.copy(MUZZLE);
@@ -776,13 +779,14 @@ export function fxFired(
   f.p.copy(muz);
   f.d.copy(dir);
   if (!at) {
-    const k = lk.kick * (flags & VF.MAGNUM ? 2 : 1);
+    // aimed fire kicks the camera half as much as hip fire
+    const k = lk.kick * (flags & VF.MAGNUM ? 2 : 1) * (1 - aimState.blend * 0.5);
     FX.kick.pitch += k;
     FX.kick.yaw += rnd(k * 0.35);
     if (kind === VK.PISTOL || kind === VK.SMG) ejectCasing(kind);
   }
   if (kind === VK.RAIL) railBeam(muz, origin, dir, speed * 1.5);
-  queueFire(kind, flags, origin, dir, seed, speed, net);
+  queueFire(kind, flags, origin, dir, seed, speed, spread, net);
 }
 
 export function fxBounce(i: number, contact?: WorldContact) {
@@ -1505,7 +1509,9 @@ export const fxNetStats = {
   cpuMs: 0,
   frames: 0,
 };
-const GROUP = 11;
+// [kind, ox, oy, oz, dx, dy, dz, seed, flags, speed, shots, spread] — spread is the
+// effective cone (ADS / movement / bloom) the shooter's aimDir used (v13)
+const GROUP = 12;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -1516,13 +1522,14 @@ function queueFire(
   d: THREE.Vector3,
   seed: number,
   speed: number,
+  spread: number,
   net: NetHandle | null,
 ) {
   if (!net) return;
   netRef = net;
   fxNetStats.shots++;
-  // Every trigger keeps its own seed, muzzle pose and ADS flags. The 50 ms envelope
-  // still batches transport, without changing the trajectories inside it.
+  // Every trigger keeps its own seed, muzzle pose, ADS flags and effective spread.
+  // The 50 ms envelope still batches transport, without changing the trajectories inside.
   pending.push(
     kind,
     r2(o.x),
@@ -1535,6 +1542,7 @@ function queueFire(
     flags,
     Math.round(speed * 10) / 10,
     1,
+    r3(spread),
   );
 }
 
@@ -1594,7 +1602,8 @@ function replayRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     if (!g || !LOOKS[kind]) continue;
     const flags = s[j + 8]!,
       speed = s[j + 9]!,
-      n = Math.min(4, s[j + 10]!);
+      n = Math.min(4, s[j + 10]!),
+      eff = s[j + 11] ?? g.spread;
     V1.set(s[j + 1]!, s[j + 2]!, s[j + 3]!);
     V2.set(s[j + 4]!, s[j + 5]!, s[j + 6]!).normalize();
     const muz = kind === VK.TURRET || !r ? V1 : remoteMuzzle(r, MUZ_REMOTE);
@@ -1610,14 +1619,7 @@ function replayRemoteFire(m: NetMsg, remotes: Map<string, RemoteState>) {
     for (let c = 0; c < n; c++) {
       const rand = rng(s[j + 7]! + c);
       for (let p = 0; p < g.count; p++) {
-        const d = aimDir(
-          V3,
-          V2,
-          g.count,
-          g.spread * (flags & VF.ADS ? (kind === VK.SNIPER ? 0 : 0.65) : 1),
-          p,
-          rand,
-        );
+        const d = aimDir(V3, V2, g.count, eff, p, rand);
         spawnGhost(kind, flags, V1, d.multiplyScalar(speed), g, muz, id);
       }
     }

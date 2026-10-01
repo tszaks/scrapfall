@@ -7,6 +7,7 @@
 import * as THREE from "three";
 
 import { Model, SURF, type Surf, type V3 } from "./kit";
+import { drawSight, sightGlass } from "./sights";
 
 export type GunId =
   | "pistol"
@@ -71,6 +72,8 @@ export type GunBuild = {
   laser: V3 | null;
   verts: number;
   muzzle: V3;
+  /** the sight's glass pane and emissive reticle (art/sights.ts), if it has one */
+  sight: { glass: THREE.BufferGeometry | null; reticle: THREE.BufferGeometry | null };
 };
 
 /** Barrel outlets in model space; the rendered socket is the source of firing effects. */
@@ -414,15 +417,17 @@ function pistol(mods: PistolMods): Build {
     // barrel (static; the slide rides over it)
     barrel(m, 0.013, -L, -L + 0.03, 0, STL, S.brushed);
     bore(m, 0.008, -L, 0);
-    // rear hammer
+    // rear hammer (kept below the 0.05 sight line even with the big exec spur)
     if (mods.exec) {
-      m.box(0.022, 0.05, 0.03, [0, 0.03, 0.06], "#6a1010", S.enamel, {
-        rot: [-0.5, 0, 0],
+      m.box(0.022, 0.034, 0.03, [0, 0.024, 0.07], "#6a1010", S.enamel, {
+        rot: [-0.85, 0, 0],
         bevel: 0.004,
       });
-      m.box(0.036, 0.014, 0.014, [0, 0.052, 0.072], "#c8c8c8", S.chrome, { bevel: 0.003 });
+      m.box(0.036, 0.014, 0.014, [0, 0.038, 0.084], "#c8c8c8", S.chrome, { bevel: 0.003 });
       for (let i = 0; i < 4; i++)
-        m.box(0.038, 0.004, 0.004, [0, 0.06, 0.066 + i * 0.005], "#c8c8c8", S.chrome, { lod: 1 });
+        m.box(0.038, 0.004, 0.004, [0, 0.044, 0.078 + i * 0.005], "#c8c8c8", S.chrome, {
+          lod: 1,
+        });
     } else
       m.box(0.016, 0.03, 0.02, [0, 0.02, 0.05], GM, S.gunmetal, {
         rot: [-0.4, 0, 0],
@@ -507,9 +512,10 @@ function pistol(mods: PistolMods): Build {
         });
       p.box(0.012, 0.022, 0.06, [0.034, 0.02, -0.09], "#0b0b0c", S.rubber);
       p.box(0.008, 0.016, 0.05, [0.036, 0.019, -0.09], BRASS, S.brass);
-      // sights with tritium dots in the gun's accent colour
-      p.box(0.036, 0.014, 0.016, [0, 0.046, 0.02], BLK, S.gunmetal, { bevel: 0.002 });
-      for (const x of [-0.011, 0.011]) p.box(0.006, 0.006, 0.004, [x, 0.05, 0.029], col, S.glow);
+      // sights with tritium dots in the gun's accent colour (rear bar rides the slide
+      // top, its notch floor just under the 0.05 sight line; the post tip sits on it)
+      p.box(0.036, 0.009, 0.016, [0, 0.0425, 0.02], BLK, S.gunmetal, { bevel: 0.002 });
+      for (const x of [-0.011, 0.011]) p.box(0.006, 0.006, 0.004, [x, 0.044, 0.029], col, S.glow);
       p.box(0.01, 0.012, 0.018, [0, 0.044, -L + 0.03], BLK, S.gunmetal);
       p.box(0.005, 0.005, 0.004, [0, 0.049, -L + 0.021], col, S.glow);
       p.bolts([-0.038, 0.0, -0.02], [-0.038, 0.0, -L + 0.05], 3, 0.004, STL);
@@ -672,9 +678,7 @@ const smg: Build = (m, add, col, body) => {
   trigger(m, 0.1, -0.03);
   // top rail and a red-dot sight
   rail(m, -0.3, 0.05, 0.052);
-  m.box(0.04, 0.04, 0.07, [0, 0.082, -0.06], BLK, S.gunmetal, { bevel: 0.006 });
-  m.box(0.034, 0.03, 0.004, [0, 0.086, -0.096], col, S.lens);
-  m.box(0.03, 0.026, 0.004, [0, 0.086, -0.024], "#0a1a20", S.glass);
+  // The shared sight builder adds an open housing and transparent glass.
   // side glow strips + folding wire stock
   for (const x of [-0.03, 0.03]) m.box(0.004, 0.008, 0.26, [x, 0.02, -0.16], col, S.glow);
   for (const x of [-0.022, 0.022])
@@ -734,8 +738,8 @@ const rail_: Build = (m, add, col, body) => {
     for (let i = 0; i < 4; i++)
       m.tubeZ(0.017, 0.012, [x, 0, -0.16 + i * 0.07], col, S.glowSoft, { seg: 12 });
   }
-  // scope, grip, stock
-  scope(m, -0.18, 0.06, 0.09, 0.02, col);
+  // a bare top rail (the holo sight rides on it — drawn by drawSight), grip, stock
+  rail(m, -0.18, 0.08, 0.053, 0.034);
   grip(m, -0.06, -0.045, 0.14, 0.05, "#2a2c33", S.polymer, 0.25);
   trigger(m, 0.04, -0.045);
   side(
@@ -1138,20 +1142,21 @@ const tesla: Build = (m, add, col, body) => {
     m.box(0.008, 0.008, 0.1, [x, 0, -0.42], "#b87333", S.copper);
     m.sphere(0.014, [x * 0.55, 0, -0.475], "#d8a070", S.copper);
   }
-  // Tesla tower on top with a glowing crown
-  m.cyl(0.02, 0.1, [0, 0.1, -0.1], "#2a2a2a", S.darkSteel, { seg: 12 });
+  // Tesla tower, off-axis on a side pod so it clears the sight rail
+  m.box(0.06, 0.012, 0.05, [0.06, 0.056, -0.1], "#2a2a2a", S.darkSteel, { bevel: 0.003 });
+  m.cyl(0.02, 0.1, [0.062, 0.1, -0.1], "#2a2a2a", S.darkSteel, { seg: 12 });
   for (let i = 0; i < 5; i++)
-    m.torus(0.024, 0.005, [0, 0.07 + i * 0.016, -0.1], "#b87333", S.copper, {
+    m.torus(0.024, 0.005, [0.062, 0.07 + i * 0.016, -0.1], "#b87333", S.copper, {
       rot: [PI / 2, 0, 0],
     });
-  m.torus(0.04, 0.012, [0, 0.16, -0.1], "#b8bcc2", S.chrome, { rot: [PI / 2, 0, 0], seg: 18 });
+  m.torus(0.04, 0.012, [0.062, 0.16, -0.1], "#b8bcc2", S.chrome, { rot: [PI / 2, 0, 0], seg: 18 });
   grip(m, 0.0, -0.04, 0.14, 0.05, BLK, S.polymer, 0.25);
   trigger(m, 0.1, -0.04);
   m.cable(
     [
       [0.03, 0.02, 0.05],
-      [0.05, 0.06, -0.02],
-      [0.02, 0.1, -0.08],
+      [0.07, 0.06, -0.02],
+      [0.062, 0.11, -0.08],
     ],
     0.005,
     "#1a1a1a",
@@ -1170,7 +1175,7 @@ const tesla: Build = (m, add, col, body) => {
           i % 3 === 1 ? S.glow : S.copper,
           { seg: 16 },
         );
-      p.sphere(0.03, [0, 0.16, -0.1], col, S.glow);
+      p.sphere(0.03, [0.062, 0.16, -0.1], col, S.glow);
       p.sphere(0.012, [0, 0, -0.482], "#ffffff", S.glow, { low: true });
     },
     true,
@@ -1187,8 +1192,7 @@ const revolver: Build = (m, add, col, body) => {
   m.box(0.036, 0.034, 0.34, [0, y - 0.026, -0.29], "#3a3530", S.blued, { bevel: 0.006 });
   m.box(0.004, 0.02, 0.3, [0.019, y - 0.026, -0.29], col, S.brass, { lod: 1 }); // gold inlay
   m.box(0.004, 0.02, 0.3, [-0.019, y - 0.026, -0.29], col, S.brass, { lod: 1 });
-  m.box(0.008, 0.018, 0.012, [0, y + 0.038, -0.46], "#222", S.gunmetal);
-  // frame + top strap + hammer
+  // frame + top strap + hammer (the front blade rides the vent rib — drawSight)
   side(
     m,
     [
@@ -1214,7 +1218,7 @@ const revolver: Build = (m, add, col, body) => {
     },
   );
   m.box(0.03, 0.02, 0.2, [0, 0.07, -0.01], body, S.blued, { bevel: 0.004 });
-  m.box(0.016, 0.04, 0.02, [0, 0.07, 0.08], "#2a2a2a", S.gunmetal, {
+  m.box(0.016, 0.028, 0.02, [0, 0.062, 0.08], "#2a2a2a", S.gunmetal, {
     rot: [-0.5, 0, 0],
     bevel: 0.003,
   });
@@ -1664,11 +1668,12 @@ export function gunBuild(w: GunId, key: string, color: string, body: string): Gu
   };
   const fn = w === "pistol" ? pistol(mods) : BUILDS[w];
   const laser = fn(m, add, color, body) ?? null;
+  drawSight(m, w, color, mods); // ADS furniture: notch/post, risers, reflex & holo housings
   const bodyGeo = m.build();
   const verts =
     bodyGeo.getAttribute("position").count +
     parts.reduce((s, p) => s + p.geo.getAttribute("position").count, 0);
-  g = { body: bodyGeo, parts, laser, verts, muzzle: gunMuzzle(w, mods) };
+  g = { body: bodyGeo, parts, laser, verts, muzzle: gunMuzzle(w, mods), sight: sightGlass(w, mods) };
   cache.set(ck, g);
   return g;
 }
