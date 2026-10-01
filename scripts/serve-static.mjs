@@ -38,4 +38,6 @@ createServer((req, res) => {
   }
   res.writeHead(200, { "content-type": types[extname(file)] ?? "application/octet-stream" });
   createReadStream(file).pipe(res);
-}).listen(port, () => console.log(`serving ${root} at http://localhost:${port}/game/`));
+}).listen(port, process.env.HOST ?? "127.0.0.1", () =>
+  console.log(`serving ${root} at http://localhost:${port}/game/`),
+);

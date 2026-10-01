@@ -1,0 +1,357 @@
+import fs from "node:fs";
+const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODULE || "playwright");
+import { execFileSync } from "node:child_process";
+// start a match on either menu: the old CLICK TO PLAY, or Scrapfall's START -> loadout -> ENTER ARENA
+async function startGame(p) {
+  const old = p.getByRole("button", { name: /CLICK TO PLAY/i });
+  const start = p.getByRole("button", { name: /^start$/i });
+  await p.waitForFunction(
+    () =>
+      [...document.querySelectorAll("button")].some((b) =>
+        /CLICK TO PLAY|^start$/i.test(b.textContent.trim()),
+      ),
+    null,
+    { timeout: 90000 },
+  );
+  if (await old.count()) {
+    await old.first().click();
+    return;
+  }
+  await start.first().click();
+  const enter = p.getByRole("button", { name: /enter arena/i });
+  await enter.waitFor({ timeout: 30000 });
+  await enter.click();
+}
+
+const OUT = process.env.OUT || "artifacts/performance";
+fs.mkdirSync(OUT, { recursive: true });
+const engine = process.env.ENGINE || "chromium",
+  maps = (process.env.MAPS || "vice,pacific,whiteout,gulch,nuketown").split(","),
+  seconds = Number(process.env.SECONDS || 40),
+  repeats = Number(process.env.REPEATS || 1);
+const report = {
+  engine,
+  started: new Date().toISOString(),
+  commit:
+    process.env.COMMIT || execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+  viewport: [1280, 800],
+  dpr: 2,
+  quality: process.env.QUALITY || "high",
+  extra: process.env.EXTRA || "",
+  wave: Number(process.env.WAVE || 1),
+  seconds,
+  repeats,
+  soak: process.env.SOAK === "1",
+  method: `Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
+  dirty: !!execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim(),
+  cases: [],
+};
+const path = `${OUT}/${process.env.TAG || engine}.json`;
+const save = () => fs.writeFileSync(path, JSON.stringify(report, null, 2));
+save();
+const browserType = engine === "webkit" ? webkit : chromium;
+const b = await browserType.launch({
+  headless: true,
+  ...(engine === "chromium" ? { args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"] } : {}),
+  ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}),
+});
+report.browserVersion = b.version();
+save();
+try {
+  for (let repeat = 0; repeat < repeats; repeat++)
+    for (const map of maps) {
+      const context = await b.newContext({
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 2,
+      });
+      const p = await context.newPage();
+      let row = { map, repeat, errors: [], consoleErrors: [] };
+      await p.exposeFunction("__benchProgress", (progress) => {
+        row.progress = progress;
+        (row.progressHistory ??= []).push(progress);
+        save();
+        console.log(JSON.stringify({ progress: true, map, ...progress }));
+      });
+      report.cases.push(row);
+      save();
+      p.on("pageerror", (e) => row.errors.push(e.message));
+      p.on("console", (m) => {
+        if (m.type() === "error") row.consoleErrors.push(m.text());
+      });
+      await context.addInitScript(() => {
+        const orig = requestAnimationFrame.bind(window);
+        window.__bm = { active: false, callback: [], long: [], startupLong: [] };
+        window.requestAnimationFrame = (cb) =>
+          orig((t) => {
+            const s = performance.now();
+            try {
+              return cb(t);
+            } finally {
+              if (window.__bm.active) window.__bm.callback.push(performance.now() - s);
+            }
+          });
+        try {
+          new PerformanceObserver((l) => {
+            window.__bm.startupLong.push(
+              ...l.getEntries().map((e) => ({ start: e.startTime, duration: e.duration })),
+            );
+            if (window.__bm.active)
+              window.__bm.long.push(
+                ...l.getEntries().map((e) => ({ start: e.startTime, duration: e.duration })),
+              );
+          }).observe({ type: "longtask", buffered: false });
+        } catch {}
+      });
+      try {
+        const t0 = Date.now();
+        await p.goto(
+          `${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=${map}&seed=11&weather=rain&quality=${report.quality}${process.env.EXTRA || ""}`,
+        );
+        await startGame(p);
+        await p.waitForFunction(() => window.__rs?.camera, null, { timeout: 120000 });
+        row.navThroughMenuToSceneMs = Date.now() - t0;
+        await p.waitForTimeout(10000);
+        if (process.env.WAVE)
+          await p.evaluate((n) => {
+            __rs.enemies.forEach((e) => (e.alive = false));
+            __rs.pending.current.fill(null);
+            __rs.wave.current = n;
+            __rs.spawnWave(n);
+            __rs.invuln.current = 1e6;
+          }, Number(process.env.WAVE));
+        if (process.env.WAVE) await p.waitForTimeout(8000);
+        row.setup = await p.evaluate(() => {
+          const r = __rs;
+          r.invuln.current = 1e6;
+          r.equip("pistol");
+          return {
+            hud: document.body.innerText.slice(0, 500),
+            camera: r.camera.position.toArray(),
+            keys: r.keys.current,
+            renderer: r.gl.getContext().getParameter(r.gl.getContext().RENDERER),
+            quality: window.__rsQuality,
+            warm: window.__rsWarm,
+            startupLong: window.__bm.startupLong,
+            assets: performance
+              .getEntriesByType("resource")
+              .filter((x) => x.name.endsWith(".js"))
+              .map((x) => ({ url: x.name, bytes: x.encodedBodySize, duration: x.duration })),
+            enemies: r.enemies.filter((e) => e.alive).length,
+            aimStats: r.aimStats.current,
+          };
+        });
+        let cdp;
+        if (process.env.PROFILE && engine === "chromium") {
+          cdp = await context.newCDPSession(p);
+          await cdp.send("Profiler.enable");
+          await cdp.send("Profiler.start");
+        }
+        row.metrics = await p.evaluate(
+          async ({ secs, soak }) => {
+            const r = __rs,
+              bm = __bm;
+            const ms = [],
+              renders = [],
+              calls = [],
+              triangles = [],
+              enemies = [],
+              poses = [];
+            let last = 0,
+              start = performance.now(),
+              frame = 0,
+              lastProgress = 0;
+            const original = r.gl.render;
+            const previousAutoReset = r.gl.info.autoReset;
+            r.gl.info.autoReset = false;
+            r.gl.info.reset();
+            const context = r.gl.getContext();
+            const timer = context.getExtension("EXT_disjoint_timer_query_webgl2");
+            const pendingQueries = [],
+              gpuMs = [];
+            let submissions = 0;
+            let renderTotal = 0,
+              renderDepth = 0;
+            r.gl.render = function (...args) {
+              let s = performance.now();
+              const query =
+                timer && renderDepth === 0 && submissions++ % 120 === 0 && pendingQueries.length < 8
+                  ? context.createQuery()
+                  : null;
+              if (query) context.beginQuery(timer.TIME_ELAPSED_EXT, query);
+              renderDepth++;
+              try {
+                return original.apply(this, args);
+              } finally {
+                renderDepth--;
+                if (query) {
+                  context.endQuery(timer.TIME_ELAPSED_EXT);
+                  pendingQueries.push(query);
+                }
+                if (renderDepth === 0) renderTotal += performance.now() - s;
+              }
+            };
+            bm.active = true;
+            r.trigger.current = true;
+            const startMemory = { ...r.gl.info.memory };
+            const programsStart = r.gl.info.programs.length;
+            await new Promise((resolve) => {
+              function step(now) {
+                const elapsed = (now - start) / 1000;
+                if (timer && frame % 120 === 0 && pendingQueries.length) {
+                  if (context.getParameter(timer.GPU_DISJOINT_EXT)) {
+                    pendingQueries.splice(0).forEach((q) => context.deleteQuery(q));
+                  } else
+                    while (
+                      pendingQueries.length &&
+                      context.getQueryParameter(pendingQueries[0], context.QUERY_RESULT_AVAILABLE)
+                    ) {
+                      const q = pendingQueries.shift();
+                      gpuMs.push(context.getQueryParameter(q, context.QUERY_RESULT) / 1e6);
+                      context.deleteQuery(q);
+                    }
+                }
+                if (last) ms.push(now - last);
+                last = now;
+                renders.push(renderTotal);
+                renderTotal = 0;
+                calls.push(r.gl.info.render.calls);
+                triangles.push(r.gl.info.render.triangles);
+                r.gl.info.reset();
+                enemies.push(r.enemies.filter((e) => e.alive).length);
+                const alive = r.enemies.filter((e) => e.alive);
+                // Endurance mode continually replenishes late-wave combat through the
+                // existing spawn path; it does not change the shipped simulation.
+                if (soak && alive.length < 5 && !r.pending.current.some(Boolean)) {
+                  r.wave.current = 10;
+                  r.spawnWave(10);
+                }
+                if (elapsed - lastProgress >= 60) {
+                  lastProgress = elapsed;
+                  window.__benchProgress({
+                    elapsedSeconds: Math.round(elapsed),
+                    frames: ms.length,
+                    enemies: alive.length,
+                    shots: r.aimStats.current.shot,
+                    memory: { ...r.gl.info.memory },
+                    programs: r.gl.info.programs.length,
+                    quality: { tier: window.__rsQuality?.tier, dpr: window.__rsQuality?.dpr },
+                  });
+                }
+                let target = alive.sort(
+                  (a, b) =>
+                    Math.hypot(a.x - r.camera.position.x, a.z - r.camera.position.z) -
+                    Math.hypot(b.x - r.camera.position.x, b.z - r.camera.position.z),
+                )[0];
+                if (target) {
+                  r.look.current.yaw = Math.atan2(
+                    -(target.x - r.camera.position.x),
+                    -(target.z - r.camera.position.z),
+                  );
+                  r.look.current.pitch = 0;
+                } else r.look.current.yaw += 0.02;
+                const phase = Math.floor(elapsed / 5) % 4;
+                for (const key of ["KeyW", "KeyA", "KeyS", "KeyD"]) r.keys.current.delete(key);
+                r.keys.current.add(["KeyW", "KeyA", "KeyS", "KeyD"][phase]);
+                r.trigger.current = true;
+                r.ammo.current.pistol = 999;
+                r.invuln.current = 1e6;
+                if (frame++ % 60 === 0)
+                  poses.push({
+                    t: elapsed,
+                    p: r.camera.position.toArray(),
+                    hp: r.healthRef.current,
+                    enemies: alive.length,
+                    wave: r.wave.current,
+                  });
+                if (elapsed < secs) requestAnimationFrame(step);
+                else resolve();
+              }
+              requestAnimationFrame(step);
+            });
+            bm.active = false;
+            r.trigger.current = false;
+            r.keys.current.clear();
+            r.gl.render = original;
+            r.gl.info.autoReset = previousAutoReset;
+            r.gl.info.reset();
+            pendingQueries.forEach((q) => context.deleteQuery(q));
+            const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+            const pct = (a, q) =>
+              [...a].sort((a, b) => a - b)[Math.min(a.length - 1, Math.floor(a.length * q))];
+            return {
+              programsStart,
+              programsEnd: r.gl.info.programs.length,
+              gpuTimerAvailable: !!timer,
+              gpuRenderPassSamples: gpuMs.length,
+              gpuRenderPassP95: gpuMs.length ? pct(gpuMs, 0.95) : null,
+              shots: r.aimStats.current.shot,
+              fps: 1000 / avg(ms),
+              p50: pct(ms, 0.5),
+              p95: pct(ms, 0.95),
+              p99: pct(ms, 0.99),
+              worst: ms.reduce((a, b) => Math.max(a, b), 0),
+              over50: ms.filter((x) => x > 50).length,
+              over25: ms.filter((x) => x > 25).length,
+              frames: ms.length,
+              renderSubmitMean: avg(renders),
+              renderSubmitP95: pct(renders, 0.95),
+              callbackMean: avg(bm.callback),
+              callbackP95: pct(bm.callback, 0.95),
+              callsMean: avg(calls),
+              callsMax: calls.reduce((a, b) => Math.max(a, b), 0),
+              trianglesMean: avg(triangles),
+              enemiesMax: enemies.reduce((a, b) => Math.max(a, b), 0),
+              enemiesMean: avg(enemies),
+              poses,
+              longTasks: bm.long,
+              memoryStart: startMemory,
+              memoryEnd: { ...r.gl.info.memory },
+              hud: document.body.innerText,
+              quality: window.__rsQuality,
+              warm: window.__rsWarm,
+            };
+          },
+          { secs: seconds, soak: report.soak },
+        );
+        if (cdp) {
+          const prof = await cdp.send("Profiler.stop");
+          fs.writeFileSync(
+            `${OUT}/${process.env.TAG}-${map}-${repeat}.cpuprofile`,
+            JSON.stringify(prof.profile),
+          );
+        }
+        await p.screenshot({ path: `${OUT}/${process.env.TAG || engine}-${map}-${repeat}.png` });
+        console.log(
+          JSON.stringify({
+            engine,
+            map,
+            repeat,
+            ...Object.fromEntries(
+              Object.entries(row.metrics).filter(([k, v]) => typeof v === "number"),
+            ),
+          }),
+        );
+      } catch (e) {
+        row.failure = e.stack;
+        console.log("FAIL", engine, map, e.message);
+      } finally {
+        save();
+        await context.close();
+      }
+    }
+} finally {
+  await b.close();
+  report.ended = new Date().toISOString();
+  save();
+}
+if (
+  report.cases.some(
+    (c) =>
+      c.failure ||
+      c.errors.length ||
+      !c.metrics?.frames ||
+      c.metrics.shots === 0 ||
+      !c.metrics.poses.every(({ p }) => p.every(Number.isFinite)),
+  )
+)
+  process.exitCode = 1;

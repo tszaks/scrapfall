@@ -373,6 +373,7 @@ export function CityRain({
     const plane = new THREE.Plane();
     const clip = new THREE.Vector4();
     const q = new THREE.Vector4();
+    const previousDomeScale = new THREE.Vector3();
     const texM = wetUniforms.uReflMat.value;
     type SceneHook = (
       this: THREE.Object3D,
@@ -385,7 +386,12 @@ export function CityRain({
     scene.onBeforeRender = function (renderer, sc, cam, arg) {
       const rtarget = arg as unknown as THREE.WebGLRenderTarget | null;
       (prev as unknown as SceneHook).call(this, renderer, sc as THREE.Scene, cam, rtarget);
-      if (refl.busy || rtarget !== null || !(cam as THREE.PerspectiveCamera).isPerspectiveCamera)
+      if (
+        scene.userData["scrapfallPrewarm"] ||
+        refl.busy ||
+        rtarget !== null ||
+        !(cam as THREE.PerspectiveCamera).isPerspectiveCamera
+      )
         return;
       if (!refl.on) {
         wetUniforms.uReflOn.value = 0;
@@ -443,39 +449,42 @@ export function CityRain({
       pm[14] = clip.w;
       vc.projectionMatrixInverse.copy(vc.projectionMatrix).invert();
 
-      refl.busy = true;
       const g0 = group.current;
-      if (g0) g0.visible = false;
-      wetUniforms.uRefl.value = blackTexture;
-      wetUniforms.uReflOn.value = 0;
+      const previousVisible = g0?.visible;
       const prevRT = renderer.getRenderTarget();
       const prevShadow = renderer.shadowMap.autoUpdate;
-      renderer.shadowMap.autoUpdate = false;
-      // the main render has just updated every world matrix: don't walk the scene twice
       const prevAuto = sc.matrixWorldAutoUpdate;
-      sc.matrixWorldAutoUpdate = false;
-      renderer.setRenderTarget(refl.rt);
-      renderer.state.buffers.depth.setMask(true);
-      if (renderer.autoClear === false) renderer.clear();
-      // the cloud deck has to sit inside the mirror's shorter far plane
       const dome = skyRef.current;
-      if (dome) {
-        dome.scale.setScalar((REFL_FAR * 0.9) / SKY_R);
-        dome.updateMatrixWorld();
+      if (dome) previousDomeScale.copy(dome.scale);
+      refl.busy = true;
+      try {
+        if (g0) g0.visible = false;
+        wetUniforms.uRefl.value = blackTexture;
+        wetUniforms.uReflOn.value = 0;
+        renderer.shadowMap.autoUpdate = false;
+        sc.matrixWorldAutoUpdate = false;
+        renderer.setRenderTarget(refl.rt);
+        renderer.state.buffers.depth.setMask(true);
+        if (renderer.autoClear === false) renderer.clear();
+        if (dome) {
+          dome.scale.setScalar((REFL_FAR * 0.9) / SKY_R);
+          dome.updateMatrixWorld();
+        }
+        renderer.render(sc, vc);
+      } finally {
+        if (dome) {
+          dome.scale.copy(previousDomeScale);
+          dome.updateMatrixWorld();
+        }
+        renderer.setRenderTarget(prevRT);
+        renderer.shadowMap.autoUpdate = prevShadow;
+        sc.matrixWorldAutoUpdate = prevAuto;
+        if (g0) g0.visible = previousVisible!;
+        refl.busy = false;
       }
-      renderer.render(sc, vc);
-      if (dome) {
-        dome.scale.setScalar(1);
-        dome.updateMatrixWorld();
-      }
-      renderer.setRenderTarget(prevRT);
-      renderer.shadowMap.autoUpdate = prevShadow;
-      sc.matrixWorldAutoUpdate = prevAuto;
-      if (g0) g0.visible = true;
       wetUniforms.uRefl.value = refl.rt.texture;
       wetUniforms.uReflOn.value = 1;
       wetUniforms.uReflTexel.value.set(1 / w, 1 / h);
-      refl.busy = false;
     };
     return () => {
       scene.onBeforeRender = prev;
