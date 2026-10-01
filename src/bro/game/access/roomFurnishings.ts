@@ -193,14 +193,14 @@ export function furnishAccess(b: AccessBuilding): FurnishingBox[] {
     place("lounge-bookcase", 1, left, room.d1 - 0.65, 0, (box) => {
       cabinet(box, 1.8, 0.74);
       // Low reading cabinet keeps the front facade windows clear.
-      for (let i = 0; i < 8; i++)
+      for (let i = 0; i < 16; i++)
         box(
-          -0.68 + i * 0.16,
-          -0.57 + i * 0.16,
+          -0.68 + i * 0.065,
+          -0.64 + i * 0.065,
           0.74,
           0.96 + (i % 3) * 0.06,
           -0.14,
-          0.17,
+          0.1,
           ["#748275", "#a27650", "#975b4e"][i % 3]!,
         );
     });
@@ -240,14 +240,17 @@ export function furnishingBlocked(
   y0: number,
   y1: number,
 ) {
-  return b.furnishings.some(
-    (p) =>
+  // (a loop, not .some(): called inside blocked()/shot queries thousands of times a frame)
+  for (const p of b.furnishings)
+    if (
       p.level === level &&
       p.y1 > y0 &&
       p.y0 < y1 &&
       a > p.a0 - radius &&
       a < p.a1 + radius &&
       d > p.d0 - radius &&
-      d < p.d1 + radius,
-  );
+      d < p.d1 + radius
+    )
+      return true;
+  return false;
 }

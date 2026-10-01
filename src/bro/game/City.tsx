@@ -10,7 +10,7 @@ import { useSunShadow } from "./quality";
 import * as THREE from "three";
 
 import type { CityLayout } from "./cityLayout";
-import { buildCityMeshes, DETAIL_RANGE, groundHeights } from "./cityMesh";
+import { cityMeshes, DETAIL_RANGE, groundHeights } from "./cityMesh";
 import {
   FACADE_LAYERS,
   L,
@@ -35,6 +35,11 @@ import { SkyDome } from "./TimeScene";
 import { POWER_GLSL, power, powerAt, powerUniforms, setPowerArea } from "./events/power";
 
 const _col = new THREE.Color();
+const lampCols = [
+  new THREE.Color("#ff2a1a"),
+  new THREE.Color("#ffb81a"),
+  new THREE.Color("#2aff6a"),
+];
 const _m4 = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _v = new THREE.Vector3();
@@ -409,15 +414,9 @@ export const CityScene = memo(function CityScene({
   isHost?: boolean;
 }) {
   const gl = useThree((s) => s.gl);
-  const built = useMemo(() => {
-    const t0 = performance.now();
-    const m = buildCityMeshes(city);
-    if (import.meta.env.DEV)
-      console.info(
-        `[city] built ${m.chunks.length} chunks, ${m.stats.verts} verts in ${Math.round(performance.now() - t0)} ms`,
-      );
-    return m;
-  }, [city]);
+  // geometry was built across tasks while the world assembled (cityMesh.ts prepares
+  // it); this useMemo is a cache lookup, not the vertex pass it used to be
+  const built = useMemo(() => cityMeshes(city), [city]);
   useLayoutEffect(
     () =>
       registerStaticGeometry(
@@ -590,10 +589,12 @@ export const CityScene = memo(function CityScene({
       l.instanceMatrix.needsUpdate = true;
       l.computeBoundingSphere();
     }
-    lastPhase.current = "";
+    lampVer.current = -1;
   }, [built]);
 
-  const lastPhase = useRef("");
+  const lampStates = useRef<number[]>([]);
+  const lampSeen = useRef<number[]>([]);
+  const lampVer = useRef(-1);
   const lodTick = useRef(0);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -623,18 +624,25 @@ export const CityScene = memo(function CityScene({
     const lm = lampRef.current;
     if (!lm) return;
     const tt = trafficClock.t;
-    let key = `${power.version}:`;
-    const states = built.lamps.map((l) => signal(l.node, tt, l.axis));
-    for (let i = 0; i < states.length; i += 3) key += states[i];
-    if (key === lastPhase.current) return;
-    lastPhase.current = key;
+    const states = lampStates.current;
+    const seen = lampSeen.current;
+    for (let i = 0; i < built.lamps.length; i++) {
+      const l = built.lamps[i]!;
+      states[i] = signal(l.node, tt, l.axis);
+    }
+    // repaint only when a sampled signal flipped (or the power state changed)
+    let dirty = lampVer.current !== power.version;
+    for (let i = 0; !dirty && i < states.length; i += 3) dirty = states[i] !== seen[i];
+    if (!dirty) return;
+    lampVer.current = power.version;
+    for (let i = 0; i < states.length; i += 3) seen[i] = states[i]!;
     built.lamps.forEach((l, i) => {
       const s = states[i]!;
       const on =
         (l.which === 0 && s === 2) ||
         (l.which === 1 && s === YELLOW) ||
         (l.which === 2 && s === GREEN);
-      _col.set(l.which === 0 ? "#ff2a1a" : l.which === 1 ? "#ffb81a" : "#2aff6a");
+      _col.copy(lampCols[l.which] ?? lampCols[2]!);
       if (!on) _col.multiplyScalar(0.1);
       // blackout: dead signals
       if (power.out) _col.multiplyScalar(Math.max(0.02, powerAt(l.x, l.z)));

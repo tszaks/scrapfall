@@ -22,6 +22,7 @@ import {
   trafficStats,
   type Car,
   type SimEnemy,
+  type SimEnv,
 } from "./trafficSim";
 import { newDirector, stepDirector } from "./pursuit";
 import { setAmbienceTraffic } from "./ambience";
@@ -71,6 +72,52 @@ const _c = new THREE.Color();
 const _right = new THREE.Vector3();
 type SirenSrc = { ci: number; d: number; x: number; z: number; yaw: number; speed: number };
 const sirens: SirenSrc[] = [];
+const sirenPool: SirenSrc[] = [];
+// (this frame's lists are rebuilt from pooled slots: fresh objects per car per frame were a
+// measurable GC source — everything that reads them does so within the frame)
+type LiveSlot = {
+  i: number;
+  x: number;
+  z: number;
+  sin: number;
+  cos: number;
+  hl: number;
+  hw: number;
+  h: number;
+  base?: number;
+  bounds?: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } };
+  rayContact?: (
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+  ) => number | undefined;
+  contact?: (x: number, y: number, z: number) => boolean;
+};
+// pools are per CarBatch so the contact closures always call the live batch
+const livePools = new WeakMap<CarBatch, LiveSlot[]>();
+function liveSlot(batch: CarBatch, i: number): LiveSlot {
+  let pool = livePools.get(batch);
+  if (!pool) livePools.set(batch, (pool = []));
+  let s = pool[i];
+  if (!s) {
+    s = pool[i] = { i, x: 0, z: 0, sin: 0, cos: 0, hl: 0, hw: 0, h: 0 };
+    s.rayContact = (a, b) => batch.rayContact(s!.i, a, b);
+    s.contact = (x, y, z) => batch.pointContact(s!.i, x, y, z);
+  }
+  return s;
+}
+const pdPool: { x: number; z: number; kind: 1 | 2; i: number }[] = [];
+const _simEnemies: SimEnemy[] = [];
+const _simPlayers: { x: number; z: number }[] = [];
+const _np = { x: 0, z: 0 };
+const _tyre = { x: 0, z: 0, speed: 0 };
+const _env: SimEnv = {
+  roadX: [],
+  roadZ: [],
+  rand: Math.random,
+  players: [],
+  enemies: [],
+  onEnemyContact: undefined,
+};
 /** what each siren voice is doing (debug handle only) */
 const sirenDebug: ({
   car: number;
@@ -267,7 +314,20 @@ export function CityTraffic({
     const L = link.current;
     L.encode = () => {
       const out: number[] = [q100(trafficClock.t)];
-      const players = [{ x: L.px, z: L.pz }, ...L.others];
+      const players = _simPlayers;
+      players.length = 0;
+      {
+        const p0 = _simPlayers[0] ?? { x: 0, z: 0 };
+        p0.x = L.px;
+        p0.z = L.pz;
+        players.push(p0);
+        for (const o of L.others) {
+          const s = _simPlayers[players.length] ?? { x: 0, z: 0 };
+          s.x = o.x;
+          s.z = o.z;
+          players.push(s);
+        }
+      }
       const slice = netSlice.current++ % FAR_NET_SLICES;
       cars.forEach((c, i) => {
         // pursuit cars always go out (at most 9), so guests see chases coming on the minimap
@@ -291,14 +351,20 @@ export function CityTraffic({
         const i = a[o]!;
         if (i < 0 || i >= cars.length) continue;
         const sf = a[o + 4]!;
-        netCars.current[i] = {
-          x: a[o + 1]! / 100,
-          z: a[o + 2]! / 100,
-          yaw: a[o + 3]! / 100,
-          speed: (sf % 1000) / 10,
-          flags: Math.floor(sf / 1000),
-          at: now,
-        };
+        const nc = (netCars.current[i] ??= {
+          x: 0,
+          z: 0,
+          yaw: 0,
+          speed: 0,
+          flags: 0,
+          at: 0,
+        });
+        nc.x = a[o + 1]! / 100;
+        nc.z = a[o + 2]! / 100;
+        nc.yaw = a[o + 3]! / 100;
+        nc.speed = (sf % 1000) / 10;
+        nc.flags = Math.floor(sf / 1000);
+        nc.at = now;
       }
     };
     return () => {
@@ -355,14 +421,31 @@ export function CityTraffic({
       trafficClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
     if (!guest) {
       // fixed timestep: the same path at any frame rate
-      const enemies: SimEnemy[] = L.enemies.map((e) => ({
-        x: e.x,
-        z: e.z,
-        alive: e.alive,
-        r: L.radiusOf(e),
-        big: L.isBig(e),
-      }));
-      const players = [{ x: L.px, z: L.pz }, ...L.others];
+      const enemies = _simEnemies;
+      enemies.length = 0;
+      for (const e of L.enemies) {
+        const s = _simEnemies[enemies.length] ?? { x: 0, z: 0, alive: false, r: 0, big: false };
+        s.x = e.x;
+        s.z = e.z;
+        s.alive = e.alive;
+        s.r = L.radiusOf(e);
+        s.big = L.isBig(e);
+        enemies.push(s);
+      }
+      const players = _simPlayers;
+      players.length = 0;
+      {
+        const p0 = _simPlayers[0] ?? { x: 0, z: 0 };
+        p0.x = L.px;
+        p0.z = L.pz;
+        players.push(p0);
+        for (const o of L.others) {
+          const s = _simPlayers[players.length] ?? { x: 0, z: 0 };
+          s.x = o.x;
+          s.z = o.z;
+          players.push(s);
+        }
+      }
       const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
       // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step;
       // pursuit cars always run at the full rate
@@ -374,10 +457,15 @@ export function CityTraffic({
         steps++;
         trafficClock.t += SIM_DT;
         tick.current++;
-        const env = { roadX, roadZ, rand, players, enemies, onEnemyContact };
-        stepDirector(director, cars, env, trafficClock.t);
-        if (tick.current % 4 === 0) stepCars(cars, env, SIM_DT * 4, trafficClock.t, true);
-        for (const ci of stepCars(cars, env, SIM_DT, trafficClock.t, false)) {
+        _env.roadX = roadX;
+        _env.roadZ = roadZ;
+        _env.rand = rand;
+        _env.players = players;
+        _env.enemies = enemies;
+        _env.onEnemyContact = onEnemyContact;
+        stepDirector(director, cars, _env, trafficClock.t);
+        if (tick.current % 4 === 0) stepCars(cars, _env, SIM_DT * 4, trafficClock.t, true);
+        for (const ci of stepCars(cars, _env, SIM_DT, trafficClock.t, false)) {
           const c = cars[ci]!;
           if (L.active && c.honk <= 0 && c.speed > 2.5) {
             c.honk = 3;
@@ -402,7 +490,10 @@ export function CityTraffic({
     sirens.length = 0;
     // the car whose tyres you'd hear most (fast and close): the rain's tyre hiss follows it
     let tyreBest = 0;
-    let tyre = { x: 0, z: 0, speed: 0 };
+    const tyre = _tyre;
+    tyre.x = 0;
+    tyre.z = 0;
+    tyre.speed = 0;
 
     for (let ci = 0; ci < cars.length; ci++) {
       const c = cars[ci]!;
@@ -410,7 +501,7 @@ export function CityTraffic({
       c.honk -= dt;
 
       const half = c.v.len / 2;
-      let np: { x: number; z: number };
+      const np = _np; // shared scratch: everything below reads it synchronously
       let yaw: number;
       let flags = 0;
       if (guest) {
@@ -449,7 +540,8 @@ export function CityTraffic({
           yaw = c.yawVis;
           c.speed = 0;
         }
-        np = { x: c.gx, z: c.gz };
+        np.x = c.gx;
+        np.z = c.gz;
         let dy = yaw - c.yawVis;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         c.yawVis += dy * (1 - Math.exp(-dt * 9)); // same easing at any frame rate
@@ -458,7 +550,8 @@ export function CityTraffic({
         const a = c.far
           ? Math.min(1, ((tick.current % 4) + acc.current / SIM_DT) / 4)
           : acc.current / SIM_DT;
-        np = { x: c.px + (c.x - c.px) * a, z: c.pz + (c.z - c.pz) * a };
+        np.x = c.px + (c.x - c.px) * a;
+        np.z = c.pz + (c.z - c.pz) * a;
         let dy = c.yaw - c.pyaw;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         c.yawVis = c.pyaw + dy * a;
@@ -478,18 +571,19 @@ export function CityTraffic({
       batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: true, bar, roll: moved < 3 ? moved : 0 });
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
-      liveCars.push({
-        x: np.x,
-        z: np.z,
-        sin,
-        cos,
-        hl: half,
-        hw: c.v.wid / 2,
-        h: c.h,
-        bounds: batch.contactBounds(ci),
-        rayContact: (a, b) => batch.rayContact(ci, a, b),
-        contact: (x, y, z) => batch.pointContact(ci, x, y, z),
-      });
+      {
+        const slot = liveSlot(batch, ci);
+        slot.i = ci;
+        slot.x = np.x;
+        slot.z = np.z;
+        slot.sin = sin;
+        slot.cos = cos;
+        slot.hl = half;
+        slot.hw = c.v.wid / 2;
+        slot.h = c.h;
+        slot.bounds = batch.contactBounds(ci);
+        liveCars.push(slot);
+      }
       if (coneRef.current && poolRef.current) {
         _car.compose(
           _p.set(np.x + sin * half, 0.62, np.z + cos * half),
@@ -536,15 +630,32 @@ export function CityTraffic({
         const w = c.speed / (1 + (td / 12) * (td / 12));
         if (w > tyreBest) {
           tyreBest = w;
-          tyre = { x: np.x, z: np.z, speed: c.speed };
+          tyre.x = np.x;
+          tyre.z = np.z;
+          tyre.speed = c.speed;
         }
       }
-      if (siren || flags & F_SUSPECT)
-        pursuitDots.push({ x: np.x, z: np.z, kind: siren ? 1 : 2, i: ci });
+      if (siren || flags & F_SUSPECT) {
+        const d = pdPool[pursuitDots.length] ?? { x: 0, z: 0, kind: 1 as const, i: 0 };
+        d.x = np.x;
+        d.z = np.z;
+        d.kind = siren ? 1 : 2;
+        d.i = ci;
+        pursuitDots.push(d);
+      }
       if (siren) {
         const d = Math.hypot(np.x - cam.position.x, np.z - cam.position.z);
-        if (d < SIREN_RANGE)
-          sirens.push({ ci, d, x: np.x, z: np.z, yaw: c.yawVis, speed: c.speed });
+        if (d < SIREN_RANGE) {
+          const s =
+            sirenPool[sirens.length] ?? { ci: 0, d: 0, x: 0, z: 0, yaw: 0, speed: 0 };
+          s.ci = ci;
+          s.d = d;
+          s.x = np.x;
+          s.z = np.z;
+          s.yaw = c.yawVis;
+          s.speed = c.speed;
+          sirens.push(s);
+        }
       }
 
       // ---- bumping into the player ----
@@ -599,14 +710,20 @@ export function CityTraffic({
       const pan = Math.max(-0.85, Math.min(0.85, (-lx * _right.x - lz * _right.z) / dd));
       const base = sirenPitch(t, s.ci, s.d < 50);
       setSiren(k, base * dop, 0.2 * near * fade, pan, near);
-      sirenDebug[k] = {
-        car: s.ci,
-        d: s.d,
-        gain: 0.2 * near * fade,
-        doppler: dop,
-        pan,
-        yelp: s.d < 50,
-      };
+      const sd = (sirenDebug[k] ??= {
+        car: 0,
+        d: 0,
+        gain: 0,
+        doppler: 0,
+        pan: 0,
+        yelp: false,
+      });
+      sd.car = s.ci;
+      sd.d = s.d;
+      sd.gain = 0.2 * near * fade;
+      sd.doppler = dop;
+      sd.pan = pan;
+      sd.yelp = s.d < 50;
     }
     batch.commit(cam);
     for (const m of [coneRef.current, poolRef.current, spillRef.current, haloRef.current]) {

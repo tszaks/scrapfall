@@ -29,7 +29,7 @@ export type TerrainChunk = {
 };
 
 /** the playable terrain, from the layout's heightfield (the same surface players walk on) */
-export function playTerrain(a: AlpineData): TerrainChunk[] {
+export function* playTerrain(a: AlpineData): Generator<void, TerrainChunk[], void> {
   const t = a.terrain;
   const n = t.n;
   const s = n + 1;
@@ -40,7 +40,8 @@ export function playTerrain(a: AlpineData): TerrainChunk[] {
   };
   const per = TCHUNK / t.cell;
   const out: TerrainChunk[] = [];
-  for (let ci = 0; ci < n / per; ci++)
+  for (let ci = 0; ci < n / per; ci++) {
+    yield;
     for (let cj = 0; cj < n / per; cj++) {
       const i0 = ci * per;
       const j0 = cj * per;
@@ -92,6 +93,7 @@ export function playTerrain(a: AlpineData): TerrainChunk[] {
         geo,
       });
     }
+  }
   return out;
 }
 
@@ -99,7 +101,7 @@ export function playTerrain(a: AlpineData): TerrainChunk[] {
  * The land beyond the play area: square rings (400-800 m, 800-1600, ... 12.8 km), each a
  * 100 x 100 grid with the inner quarter left out, plus a skirt hiding the seams.
  */
-export function outerTerrain(half: number) {
+export function* outerTerrain(half: number): Generator<void, THREE.BufferGeometry, void> {
   const pos: number[] = [];
   const nor: number[] = [];
   const idx: number[] = [];
@@ -107,6 +109,7 @@ export function outerTerrain(half: number) {
   const N = 100;
   let inner = half;
   for (let ring = 0; ring < 5; ring++) {
+    yield;
     const outer = inner * 2;
     const step = (outer * 2) / N;
     const H = new Float32Array((N + 3) * (N + 3));
@@ -176,10 +179,11 @@ export function outerTerrain(half: number) {
 }
 
 /** surface classes per 2 m cell as RGBA: packed snow, piste, ice, forest floor */
-export function surfTexture(a: AlpineData) {
+export function* surfTexture(a: AlpineData): Generator<void, THREE.DataTexture, void> {
   const n = Math.round((a.terrain.half * 2) / 2);
   const data = new Uint8Array(n * n * 4);
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const k = a.surf[i * n + j]!;
       const o = (j * n + i) * 4; // texture x = world x, texture y = world z
@@ -190,6 +194,7 @@ export function surfTexture(a: AlpineData) {
       data[o + 2] = k === S_ICE ? 255 : 0;
       data[o + 3] = k === S_FOREST ? 255 : k === S_BLOCKADE ? 160 : 0;
     }
+  }
   const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearFilter;
@@ -210,11 +215,12 @@ export function forestDensity(x: number, z: number, h: number, slope: number) {
   return Math.max(0, Math.min(1, d));
 }
 
-export function forestTexture() {
+export function* forestTexture(): Generator<void, THREE.DataTexture, void> {
   const n = 256;
   const data = new Uint8Array(n * n * 4);
   const step = (FOREST_EXTENT * 2) / n;
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const x = -FOREST_EXTENT + (i + 0.5) * step;
       const z = -FOREST_EXTENT + (j + 0.5) * step;
@@ -227,6 +233,7 @@ export function forestTexture() {
       data[o] = Math.round(forestDensity(x, z, h, s) * 255);
       data[o + 3] = 255;
     }
+  }
   const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearFilter;
@@ -235,10 +242,11 @@ export function forestTexture() {
 }
 
 /** far-LOD trees on the land just beyond the play area (visual only) */
-export function farTrees(half: number, reach: number) {
+export function* farTrees(half: number, reach: number): Generator<void, number[], void> {
   const out: number[] = []; // x, y, z, h, rot
   const G = 7.5;
-  for (let x = -reach; x < reach; x += G)
+  for (let x = -reach; x < reach; x += G) {
+    yield;
     for (let z = -reach; z < reach; z += G) {
       if (Math.abs(x) < half + 2 && Math.abs(z) < half + 2) continue;
       const jx = x + (hash2(Math.round(x), Math.round(z), 5) - 0.5) * G * 0.9;
@@ -269,18 +277,21 @@ export function farTrees(half: number, reach: number) {
         hash2(Math.round(jx), Math.round(jz), 12) * 6.28,
       );
     }
+  }
   return out;
 }
 
 /** soft darkening of the snow at the feet of walls, blockades and big trunks */
-export function aoTexture(a: AlpineData) {
+export function* aoTexture(a: AlpineData): Generator<void, THREE.DataTexture, void> {
   const n = Math.round((a.terrain.half * 2) / 2);
   const src = new Float32Array(n * n);
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const k = a.surf[i * n + j]!;
       src[i * n + j] = k === S_BLD || k === S_BLOCKADE ? 1 : 0;
     }
+  }
   for (const t of a.trees) {
     const i = Math.floor((t.x + a.terrain.half) / 2);
     const j = Math.floor((t.z + a.terrain.half) / 2);
@@ -290,7 +301,8 @@ export function aoTexture(a: AlpineData) {
   let cur = src;
   for (let pass = 0; pass < 2; pass++) {
     const out = new Float32Array(n * n);
-    for (let i = 0; i < n; i++)
+    for (let i = 0; i < n; i++) {
+      yield;
       for (let j = 0; j < n; j++) {
         let s2 = 0;
         for (let di = -1; di <= 1; di++)
@@ -301,15 +313,18 @@ export function aoTexture(a: AlpineData) {
           }
         out[i * n + j] = s2 / 9;
       }
+    }
     cur = out;
   }
   const data = new Uint8Array(n * n * 4);
-  for (let i = 0; i < n; i++)
+  for (let i = 0; i < n; i++) {
+    yield;
     for (let j = 0; j < n; j++) {
       const o = (j * n + i) * 4;
       data[o] = Math.round(Math.min(1, cur[i * n + j]! * 1.6) * 255);
       data[o + 3] = 255;
     }
+  }
   const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearFilter;

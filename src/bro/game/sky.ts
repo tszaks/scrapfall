@@ -5,6 +5,7 @@
 // catch a properly hot sun instead of a clipped white blob.
 import * as THREE from "three";
 import type { TimeOfDay } from "./lighting";
+import { drain, runSliced } from "./slice";
 
 type RGB = [number, number, number];
 
@@ -350,20 +351,37 @@ for (let i = 0; i <= 4096; i++) SRGB_LUT[i] = toSrgb8Exact(i / 4096);
 const toSrgb8 = (v: number) => SRGB_LUT[Math.max(0, Math.min(4096, Math.round(v * 4096)))]!;
 
 /** display copy of a sunset: sRGB canvas texture (background) */
-export function sunsetBackground(key: string, P: SunsetPalette, W: number, H: number) {
-  const f = paintSunset(key, P, W, H, false);
+function* bakeSunsetBackground(
+  key: string,
+  P: SunsetPalette,
+  W: number,
+  H: number,
+): Generator<void, THREE.CanvasTexture, void> {
+  // paint incrementally instead of force-draining paintSunset's remaining rows
+  const j = job(key, P, W, H, false);
+  while (j.row < j.H) {
+    yield;
+    const n = Math.min(j.H, j.row + 48);
+    paintRows(j.P, j.W, j.H, j.hdr, j.out, j.row, n);
+    j.row = n;
+  }
+  const f = j.out;
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
   const g = c.getContext("2d")!;
   const img = g.createImageData(W, H);
-  for (let i = 0; i < W * H; i++) {
-    // a hair of dither so the long gradients don't band
-    const d = (hash2(i, 7) - 0.5) * 0.9;
-    img.data[i * 4] = toSrgb8(f[i * 4]!) + d;
-    img.data[i * 4 + 1] = toSrgb8(f[i * 4 + 1]!) + d;
-    img.data[i * 4 + 2] = toSrgb8(f[i * 4 + 2]!) + d;
-    img.data[i * 4 + 3] = 255;
+  const ROWS = 64;
+  for (let y0 = 0; y0 < H; y0 += ROWS) {
+    yield;
+    for (let i = y0 * W; i < Math.min(H, y0 + ROWS) * W; i++) {
+      // a hair of dither so the long gradients don't band
+      const d = (hash2(i, 7) - 0.5) * 0.9;
+      img.data[i * 4] = toSrgb8(f[i * 4]!) + d;
+      img.data[i * 4 + 1] = toSrgb8(f[i * 4 + 1]!) + d;
+      img.data[i * 4 + 2] = toSrgb8(f[i * 4 + 2]!) + d;
+      img.data[i * 4 + 3] = 255;
+    }
   }
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
@@ -372,18 +390,54 @@ export function sunsetBackground(key: string, P: SunsetPalette, W: number, H: nu
   t.needsUpdate = true;
   return t;
 }
+const sunsetBgCache = new Map<string, THREE.CanvasTexture>();
+export function sunsetBackground(key: string, P: SunsetPalette, W: number, H: number) {
+  let t = sunsetBgCache.get(key);
+  if (!t) sunsetBgCache.set(key, (t = drain(bakeSunsetBackground(key, P, W, H))));
+  return t;
+}
+/** the world build bakes the sky across tasks; the scene's call is then a cache hit */
+export async function prepareSunsetBackground(
+  key: string,
+  P: SunsetPalette,
+  W: number,
+  H: number,
+): Promise<void> {
+  if (!sunsetBgCache.has(key))
+    sunsetBgCache.set(key, await runSliced(bakeSunsetBackground(key, P, W, H)));
+}
 
-/** HDR copy of a sunset for PMREM (reflections) */
-function sunsetEnv(key: string, P: SunsetPalette, W: number, H: number) {
-  const f = paintSunset(key, P, W, H, true);
+const sunsetEnvCache = new Map<string, THREE.DataTexture>();
+/** HDR copy of a sunset for PMREM (reflections); the world build bakes it across tasks */
+function* bakeSunsetEnv(
+  key: string,
+  P: SunsetPalette,
+  W: number,
+  H: number,
+): Generator<void, THREE.DataTexture, void> {
+  const j = job(key, P, W, H, true);
+  while (j.row < j.H) {
+    yield;
+    const n = Math.min(j.H, j.row + 48);
+    paintRows(j.P, j.W, j.H, j.hdr, j.out, j.row, n);
+    j.row = n;
+  }
+  const f = j.out;
   // DataTexture rows run bottom-up
   const flipped = new Float32Array(f.length);
-  for (let y = 0; y < H; y++)
-    flipped.set(f.subarray(y * W * 4, (y + 1) * W * 4), (H - 1 - y) * W * 4);
+  for (let y0 = 0; y0 < H; y0 += 64) {
+    yield;
+    for (let y = y0; y < Math.min(H, y0 + 64); y++)
+      flipped.set(f.subarray(y * W * 4, (y + 1) * W * 4), (H - 1 - y) * W * 4);
+  }
   // half floats: linear filtering of full floats is not universal (older iOS)
   const half = new Uint16Array(flipped.length);
-  for (let i = 0; i < flipped.length; i++)
-    half[i] = THREE.DataUtils.toHalfFloat(Math.min(flipped[i]!, 60000));
+  const CHUNK = 1 << 17;
+  for (let i0 = 0; i0 < flipped.length; i0 += CHUNK) {
+    yield;
+    for (let i = i0; i < Math.min(flipped.length, i0 + CHUNK); i++)
+      half[i] = THREE.DataUtils.toHalfFloat(Math.min(flipped[i]!, 60000));
+  }
   const t = new THREE.DataTexture(half, W, H, THREE.RGBAFormat, THREE.HalfFloatType);
   t.colorSpace = THREE.LinearSRGBColorSpace;
   t.mapping = THREE.EquirectangularReflectionMapping;
@@ -391,6 +445,21 @@ function sunsetEnv(key: string, P: SunsetPalette, W: number, H: number) {
   t.minFilter = THREE.LinearFilter;
   t.needsUpdate = true;
   return t;
+}
+function sunsetEnv(key: string, P: SunsetPalette, W: number, H: number) {
+  let t = sunsetEnvCache.get(key);
+  if (!t) sunsetEnvCache.set(key, (t = drain(bakeSunsetEnv(key, P, W, H))));
+  return t;
+}
+/** the world build bakes the env source across tasks; scene calls then hit the cache */
+export async function prepareSunsetEnv(
+  key: string,
+  P: SunsetPalette,
+  W: number,
+  H: number,
+): Promise<void> {
+  if (!sunsetEnvCache.has(key))
+    sunsetEnvCache.set(key, await runSliced(bakeSunsetEnv(key, P, W, H)));
 }
 
 // ---- the city's night sky (gradient, sodium glow on the horizon, a faint moon) ----
