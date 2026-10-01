@@ -137,27 +137,27 @@ export function MobileControls({
         <div className="flex flex-col items-center gap-3">
           <Btn
             label="JUMP"
-            size={60}
+            size={76}
             onDown={() => (touchInput.jump = true)}
             onUp={() => (touchInput.jump = false)}
           />
           <Btn
             label={abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : abilityName.slice(0, 5).toUpperCase()}
             sub="ABILITY"
-            size={66}
+            size={84}
             dim={abilityLeft > 0}
             onTap={() => (touchInput.ability = true)}
           />
         </div>
         <Btn
           label="RUN"
-          size={60}
+          size={76}
           onDown={() => (touchInput.run = true)}
           onUp={() => (touchInput.run = false)}
         />
         <Btn
           label="FIRE"
-          size={86}
+          size={108}
           onDown={() => (touchInput.fire = true)}
           onUp={() => (touchInput.fire = false)}
         />
