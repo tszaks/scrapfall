@@ -93,3 +93,7 @@
 - [ ] P5 Ping, synced teammate turrets/mines, ambience + music voices, controller + aim assist, STUN/TURN + clear join errors
 - [x] P5 STUN/TURN relays (clear join errors still open)
 - [x] P3 Map events can send enemies (Dry Gulch robbery gang)
+- [x] Loadout: his painted map postcard + blurb (loadout already matched his layout)
+- [ ] New enemies exactly like his: port his EnemyModels + per-kind AI (sniper laser, grenades, shield, charge, heal beam, homing rockets, cloak)
+- [ ] Settings: his Controls remap + Controller tab (needs his gamepad/remap input wired into our controls)
+- [ ] Realism like his: PostFx (bloom/grading), his atmosphere/lighting on our arenas
