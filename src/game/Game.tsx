@@ -36,7 +36,7 @@ import { type GunId } from "@/bro/game/art/guns";
 import { gunKick, gunReload } from "@/bro/game/art/gunFx";
 import { readGunMuzzle } from "@/bro/game/art/muzzle";
 import { CombatFx } from "@/bro/game/CombatFx";
-import { fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxReset, fxShot, fxStyle, setLocalMuzzle, visOf } from "@/bro/game/projectiles";
+import { fxDie, fxEnv, fxFired, fxFrame, fxGuns, fxHit, fxRemoteFire, fxReset, fxShot, fxStyle, setLocalMuzzle, visOf } from "@/bro/game/projectiles";
 import { VF } from "@/bro/game/impacts";
 import { setAutoTier } from "@/bro/game/quality";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
@@ -1850,6 +1850,8 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      // teammates' shots: his visual-only replay of their rounds, muzzle flash and sound
+      if (m.type === "fire") { fxRemoteFire(m, remotes.current as never); return; }
       if (m.type === "cars") { if (Array.isArray(m.c)) bigSetCars(m.c as number[]); return; }
       if (m.type === "ping") {
         const col = remotes.current.get(String(m.from))?.color ?? "#4fe3ff";
@@ -2057,7 +2059,7 @@ function World({
       if (slot >= 0) fxShot(slot, bullets.current[slot]!, kind, vf | (crit ? VF.CRIT : 0));
       onStat("shot", 1);
     }
-    fxFired(kind, vf, pos, FORWARD, Math.floor(Math.random() * 1e9), g.speed, null);
+    fxFired(kind, vf, pos, FORWARD, Math.floor(Math.random() * 1e9), g.speed, netRef.current as never);
     playGun(w, w === "pistol" && s2.suppr);
     gunKick();
     recoil.current = w === "pistol" && s2.comp ? 0 : g.damage > 3 ? 1 : 0.5;
