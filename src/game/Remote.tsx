@@ -1,5 +1,6 @@
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { newPlayerRig } from "@/bro/game/art/player";
 import * as THREE from "three";
 
 import type { RemoteState } from "./net";
@@ -12,8 +13,11 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
   const groups = useRef<(THREE.Group | null)[]>([]);
   const visors = useRef<(THREE.Mesh | null)[]>([]);
   const pips = useRef<(THREE.Mesh | null)[][]>([]);
+  // his scavenger character: skinned, with walk, idle, airborne and aim animations
+  const rigs = useMemo(() => Array.from({ length: MAX_REMOTE }, newPlayerRig), []);
+  useEffect(() => () => rigs.forEach((r) => r.dispose()), [rigs]);
 
-  useFrame((_, rawDelta) => {
+  useFrame((state, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05);
     const list = [...remotes.current.values()].slice(0, MAX_REMOTE);
     for (let i = 0; i < MAX_REMOTE; i++) {
@@ -34,6 +38,10 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       g.position.set(p.rx, 0, p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
+      const rig = rigs[i]!;
+      rig.pose.airborne = false;
+      rig.pose.seated = false;
+      rig.update(state.clock.elapsedTime, delta, p.rx, p.rz, 0, 0, 0);
       const visor = visors.current[i];
       if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
       const row = pips.current[i];
@@ -54,32 +62,14 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
     <>
       {Array.from({ length: MAX_REMOTE }, (_, i) => (
         <group key={i} ref={(g) => { groups.current[i] = g; }} visible={false}>
-          <mesh position-y={0.95} castShadow>
-            <boxGeometry args={[0.8, 1.2, 0.5]} />
-            <meshLambertMaterial color="#5c6270" flatShading />
-          </mesh>
-          <mesh position-y={1.85} castShadow>
-            <boxGeometry args={[0.6, 0.55, 0.55]} />
-            <meshLambertMaterial color="#8a919e" flatShading />
-          </mesh>
-          <mesh ref={(m) => { visors.current[i] = m; }} position={[0, 1.88, 0.29]}>
-            <boxGeometry args={[0.44, 0.16, 0.04]} />
-            <meshBasicMaterial color="#ffffff" fog={false} />
-          </mesh>
-          <mesh position={[0.3, 0.3, 0]} castShadow>
-            <boxGeometry args={[0.22, 0.9, 0.22]} />
-            <meshLambertMaterial color="#454a55" flatShading />
-          </mesh>
-          <mesh position={[-0.3, 0.3, 0]} castShadow>
-            <boxGeometry args={[0.22, 0.9, 0.22]} />
-            <meshLambertMaterial color="#454a55" flatShading />
-          </mesh>
-          <mesh position={[0.45, 1.1, 0.3]} rotation-x={Math.PI / 2}>
-            <boxGeometry args={[0.14, 0.6, 0.14]} />
-            <meshLambertMaterial color="#2f2f33" flatShading />
+          <primitive object={rigs[i]!.mesh} dispose={null} />
+          {/* teammate colour tag above the head */}
+          <mesh ref={(m) => { visors.current[i] = m; }} position={[0, 2.25, 0]} rotation-z={Math.PI / 4}>
+            <planeGeometry args={[0.12, 0.12]} />
+            <meshBasicMaterial color="#ffffff" fog={false} side={THREE.DoubleSide} />
           </mesh>
           {/* black diamond health pips floating over the head */}
-          <group position-y={2.45}>
+          <group position-y={2.05}>
             {Array.from({ length: PIPS }, (_, j) => (
               <mesh
                 key={j}
