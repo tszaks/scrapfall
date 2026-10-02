@@ -811,19 +811,19 @@ export function clearLine(
 }
 
 // Only authored world limits retain a grid. Props use their visible surfaces.
-const limits = new WeakMap<Block[], Map<string, Block>>();
+const limits = new WeakMap<Block[], Map<number, Block>>();
 export function boundaryBlocked(blocks: Block[], x: number, z: number, r: number) {
   if (Math.abs(x) + r > PLAY_HALF - 1 || Math.abs(z) + r > PLAY_HALF - 1) return true;
   let grid = limits.get(blocks);
   if (!grid) {
     grid = new Map();
     for (const b of blocks)
-      if (b.boundary) grid.set(`${Math.floor(b.x / 2)},${Math.floor(b.z / 2)}`, b);
+      if (b.boundary) grid.set(Math.floor(b.x / 2) * 4096 + Math.floor(b.z / 2), b);
     limits.set(blocks, grid);
   }
   for (let i = Math.floor((x - r - 1) / 2); i <= Math.floor((x + r + 1) / 2); i++)
     for (let j = Math.floor((z - r - 1) / 2); j <= Math.floor((z + r + 1) / 2); j++) {
-      const b = grid.get(`${i},${j}`);
+      const b = grid.get(i * 4096 + j);
       if (!b) continue;
       const dx = Math.max(0, Math.abs(x - b.x) - 1),
         dz = Math.max(0, Math.abs(z - b.z) - 1);

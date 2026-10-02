@@ -9,9 +9,10 @@ type Shape = { tree: MeshBVH; box: Box3 };
 type Surface = Shape & Flags & { matrix?: Matrix4; inverse?: Matrix4; normal?: Matrix3 };
 const groups = new Map<string, Surface[]>();
 const cache = new WeakMap<BufferGeometry, Shape>();
-const buckets = new Map<string, Surface[]>();
+const buckets = new Map<number, Surface[]>();
 const large: Surface[] = [];
 const CELL = 16;
+const bkey = (i: number, j: number) => i * 1024 + j;
 let shotExempt: ((x: number, y: number, z: number) => boolean) | null = null;
 export function setStaticShotExemption(fn: typeof shotExempt) {
   shotExempt = fn;
@@ -120,7 +121,7 @@ function rebuild() {
       }
       for (let i = Math.floor(s.box.min.x / CELL); i <= Math.floor(s.box.max.x / CELL); i++)
         for (let j = Math.floor(s.box.min.z / CELL); j <= Math.floor(s.box.max.z / CELL); j++) {
-          const k = `${i},${j}`;
+          const k = bkey(i, j);
           let bin = buckets.get(k);
           if (!bin) buckets.set(k, (bin = []));
           bin.push(s);
@@ -135,8 +136,42 @@ function candidates(b: Box3) {
   const result = new Set<Surface>(large);
   for (let i = Math.floor(b.min.x / CELL); i <= Math.floor(b.max.x / CELL); i++)
     for (let j = Math.floor(b.min.z / CELL); j <= Math.floor(b.max.z / CELL); j++)
-      for (const s of buckets.get(`${i},${j}`) ?? []) result.add(s);
+      for (const s of buckets.get(bkey(i, j)) ?? []) result.add(s);
   return result;
+}
+/**
+ * Broad-phase only: could any solid surface's box touch this capsule? Hot callers
+ * (every enemy step) skip the shapecast outright when nothing is near.
+ */
+export function staticNear(x: number, z: number, r: number, feet: number, height: number) {
+  for (const s of large)
+    if (
+      s.body &&
+      x + r >= s.box.min.x &&
+      x - r <= s.box.max.x &&
+      z + r >= s.box.min.z &&
+      z - r <= s.box.max.z &&
+      feet + height >= s.box.min.y &&
+      feet <= s.box.max.y
+    )
+      return true;
+  for (let i = Math.floor((x - r) / CELL); i <= Math.floor((x + r) / CELL); i++)
+    for (let j = Math.floor((z - r) / CELL); j <= Math.floor((z + r) / CELL); j++) {
+      const bin = buckets.get(bkey(i, j));
+      if (!bin) continue;
+      for (const s of bin)
+        if (
+          s.body &&
+          x + r >= s.box.min.x &&
+          x - r <= s.box.max.x &&
+          z + r >= s.box.min.z &&
+          z - r <= s.box.max.z &&
+          feet + height >= s.box.min.y &&
+          feet <= s.box.max.y
+        )
+          return true;
+    }
+  return false;
 }
 const segment = new Line3(),
   box = new Box3(),
