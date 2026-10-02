@@ -17,13 +17,11 @@ export function ThirdPersonCam({
   eye,
   weapon,
   look,
-  color,
 }: {
   active: boolean;
   eye: number;
   weapon: string;
   look: { color: string; body: string };
-  color: string;
 }) {
   const { scene, camera } = useThree();
   const rig = useMemo(newPlayerRig, []);
@@ -73,9 +71,6 @@ export function ThirdPersonCam({
   return (
     <>
       <primitive object={root} dispose={null} />
-      <mesh position={[0, 2.25, 0]} visible={false}>
-        <meshBasicMaterial color={color} />
-      </mesh>
       {hands &&
         createPortal(
           <group position={[0.06, 0.02, 0.12]} rotation-y={Math.PI} scale={0.9}>

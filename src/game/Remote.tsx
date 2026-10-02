@@ -1,15 +1,37 @@
-import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { createPortal, useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { GunView } from "@/bro/game/art/GunView";
+import type { GunId } from "@/bro/game/art/guns";
 import { newPlayerRig } from "@/bro/game/art/player";
 import * as THREE from "three";
 
-import type { RemoteState } from "./net";
+import { colorFor, type RemoteState } from "./net";
+
+type Look = (w: string) => { color: string; body: string } | null;
+
+/** the teammate's current weapon, drawn in their hands with his gun models */
+function HeldGun({ bone, slot, remotes, look }: { bone: THREE.Bone; slot: number; remotes: React.MutableRefObject<Map<string, RemoteState>>; look: Look }) {
+  const [w, setW] = useState("pistol");
+  useFrame(() => {
+    const p = [...remotes.current.values()][slot];
+    const next = p?.weapon ?? "pistol";
+    if (next !== w) setW(next);
+  });
+  const l = look(w);
+  if (!l) return null;
+  return createPortal(
+    <group position={[0.06, 0.02, 0.12]} rotation-y={Math.PI} scale={0.9}>
+      <GunView w={w as GunId} color={l.color} body={l.body} animate={false} />
+    </group>,
+    bone,
+  );
+}
 
 const MAX_REMOTE = 3;
 const PIPS = 10;
 
 /** Low-poly teammate avatars, driven imperatively from the shared map. */
-export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map<string, RemoteState>> }) {
+export function RemotePlayers({ remotes, look }: { remotes: React.MutableRefObject<Map<string, RemoteState>>; look: Look }) {
   const groups = useRef<(THREE.Group | null)[]>([]);
   const visors = useRef<(THREE.Mesh | null)[]>([]);
   const pips = useRef<(THREE.Mesh | null)[][]>([]);
@@ -45,7 +67,7 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       rig.pose.seated = !!p.seat;
       rig.update(state.clock.elapsedTime, delta, p.rx, p.rz, p.kick ?? 0, p.pitch ?? 0, 0);
       const visor = visors.current[i];
-      if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
+      if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(colorFor(p.num));
       const row = pips.current[i];
       if (row) {
         for (let j = 0; j < PIPS; j++) {
@@ -65,6 +87,7 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       {Array.from({ length: MAX_REMOTE }, (_, i) => (
         <group key={i} ref={(g) => { groups.current[i] = g; }} visible={false}>
           <primitive object={rigs[i]!.mesh} dispose={null} />
+          {rigs[i]!.bones[7] && <HeldGun bone={rigs[i]!.bones[7]!} slot={i} remotes={remotes} look={look} />}
           {/* teammate colour tag above the head */}
           <mesh ref={(m) => { visors.current[i] = m; }} position={[0, 2.25, 0]} rotation-z={Math.PI / 4}>
             <planeGeometry args={[0.12, 0.12]} />

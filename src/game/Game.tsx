@@ -3714,7 +3714,7 @@ function World({
         <GunModel w={held} mods={stats.current} />
       </group>
       <RemotePlayers remotes={remotes} look={(w) => { const g = GUNS[w as Weapon]; return g ? { color: g.color, body: g.body } : null; }} />
-      <ThirdPersonCam active={!menu && !deadRef.current} eye={EYE} weapon={held} look={{ color: GUNS[held].color, body: GUNS[held].body }} color={colorFor(myNum)} />
+      <ThirdPersonCam active={!menu && !deadRef.current} eye={EYE} weapon={held} look={{ color: GUNS[held].color, body: GUNS[held].body }} />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} taken={takenShards} onTake={(id) => netRef.current?.broadcast({ type: "shard", id })} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
