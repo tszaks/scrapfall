@@ -305,6 +305,7 @@ import { SettingsScreen, type SettingsTab } from "./ui/SettingsScreen";
 import { ShopBar } from "./ui/ShopBar";
 import { RemotePlayers } from "./Remote";
 import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { joinFailureMessage } from "./joinErrors";
 import { Shards } from "./Shards";
 import { CombatFx } from "./CombatFx";
 import {
@@ -8019,8 +8020,8 @@ export function Game() {
       netHolder.current = h;
       setNet(h);
       setPeerCount(Math.max(1, Object.keys(slots.current).length));
-    } catch {
-      setNetError("No arena found with that code.");
+    } catch (e) {
+      setNetError(joinFailureMessage(e));
     }
     setJoining(false);
   };

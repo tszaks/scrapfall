@@ -1,5 +1,7 @@
 import Peer, { type DataConnection } from "peerjs";
 import { connectionTimedOut } from "./netHeartbeat";
+import { loadIceServers } from "./iceServers";
+import { CONNECT_TIMEOUT, joinFailure } from "./joinErrors";
 
 // loose on purpose: messages are tiny ad-hoc payloads
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,7 +92,9 @@ type Opts = {
 
 export async function hostRoom(opts: Opts): Promise<NetHandle> {
   const code = makeCode();
-  const peer = new Peer(PREFIX + code, { debug: 0 });
+  // host and guest both need the relay: either side's NAT can be the one that blocks
+  const iceServers = await loadIceServers();
+  const peer = new Peer(PREFIX + code, { debug: 0, config: { iceServers } });
   await new Promise<void>((resolve, reject) => {
     peer.on("open", () => resolve());
     peer.on("error", (e) => reject(e));
@@ -178,23 +182,38 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
 }
 
 export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
-  const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), { debug: 0 });
-  await new Promise<void>((resolve, reject) => {
-    peer.on("open", () => resolve());
-    peer.on("error", (e) => reject(e));
+  const iceServers = await loadIceServers();
+  const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), {
+    debug: 0,
+    config: { iceServers },
   });
-  const conn = peer.connect(PREFIX + code, { reliable: false });
-  await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error("No arena with that code")), 12000);
-    conn.on("open", () => {
-      clearTimeout(t);
-      resolve();
+  let conn: DataConnection;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      peer.on("open", () => resolve());
+      peer.on("error", (e) => reject(e));
     });
-    peer.on("error", (e) => {
-      clearTimeout(t);
-      reject(e);
+    conn = peer.connect(PREFIX + code, { reliable: false });
+    await new Promise<void>((resolve, reject) => {
+      // a missing room fails fast with "peer-unavailable"; a timeout means the room
+      // answered nothing usable in time, usually no direct or relayed path (joinErrors.ts)
+      const t = setTimeout(
+        () => reject(joinFailure(CONNECT_TIMEOUT, "Found the arena but couldn't connect")),
+        12000,
+      );
+      conn.on("open", () => {
+        clearTimeout(t);
+        resolve();
+      });
+      peer.on("error", (e) => {
+        clearTimeout(t);
+        reject(e);
+      });
     });
-  });
+  } catch (e) {
+    peer.destroy(); // don't leave a half-open peer holding a signalling socket
+    throw e;
+  }
 
   // heartbeat: the host streams snapshots many times a second; 8 s of silence = it's gone
   const openedAt = performance.now();
