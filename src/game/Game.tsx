@@ -168,6 +168,16 @@ import { PostFx, renderWithPost } from "@/bro/game/PostFx";
 import { QualityGovernor } from "@/bro/game/QualityGovernor";
 import { AmbienceListener } from "@/bro/game/AmbienceListener";
 /** His single render per frame with the bloom/grade pass layered on top. */
+/** Name each co-op failure in plain words. */
+function netWhy(e: unknown, fallback: string) {
+  const t = String((e as { type?: string })?.type ?? (e as Error)?.message ?? "");
+  if (/peer-unavailable/.test(t)) return "No arena found with that code. Check the 4 letters and that the host's tab is open.";
+  if (/network|server-error|socket/.test(t)) return "Can't reach the co-op server. Turn off ad-blockers or Brave Shields, or try other Wi-Fi.";
+  if (/browser-incompatible|webrtc/i.test(t)) return "This browser blocks co-op connections. Try Chrome or Safari with WebRTC allowed.";
+  if (/timeout|timed out/i.test(t)) return "The host didn't answer. Mobile data or school Wi-Fi may block co-op — try another network.";
+  if (/unavailable-id/.test(t)) return "That room code is busy. Try hosting again.";
+  return fallback + (t ? ` (${t})` : "");
+}
 function PostRender() {
   useFrame(({ gl, scene, camera }) => { renderWithPost(gl, scene, camera); }, 1);
   return null;
@@ -3824,8 +3834,8 @@ export function Game() {
       });
       netHolder.current = h;
       setNet(h);
-    } catch {
-      setNetError("Couldn't open a room. Check your connection and try again.");
+    } catch (e) {
+      setNetError(netWhy(e, "Couldn't open a room."));
     }
     setJoining(false);
   };
@@ -3844,8 +3854,8 @@ export function Game() {
       netHolder.current = h;
       setNet(h);
       setPeerCount(1);
-    } catch {
-      setNetError("No arena found with that code.");
+    } catch (e) {
+      setNetError(netWhy(e, "No arena found with that code."));
     }
     setJoining(false);
   };
