@@ -87,7 +87,7 @@
 - [x] P2 Faster burst spawns around players on big maps
 - [ ] P2 Sniper rifle + scope
 - [x] P2 More ammo crates everywhere
-- [ ] P2 Self-revive token (no token = dead until next wave)
+- [x] P2 Self-revive token (no token = dead until next wave)
 - [ ] P3 Chairlift, Ferris wheel, elevators, traffic hits, boss train + robbery gang, ambient crowds
 - [ ] P4 10x detail on our arenas, window interiors, soft bloom, vaulting/roof leaps, arena invisible wall
 - [ ] P5 Ping, synced teammate turrets/mines, ambience + music voices, controller + aim assist, STUN/TURN + clear join errors
