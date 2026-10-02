@@ -29,7 +29,7 @@ import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } fr
 import { Ground, MapDressing } from "./art/MapDressing";
 import { MapEvents } from "@/bro/game/events/EventsLayer";
 import { onMapEventMsg } from "@/bro/game/events/mapEvents";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, bigLink, stepBigRides, bigPressUse, bigInCar, bigStepFloor, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, bigLink, stepBigRides, bigPressUse, bigInCar, bigStepFloor, bigBossTrain, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
@@ -2891,7 +2891,7 @@ function World({
           e.x = pd.x;
           e.z = pd.z;
           e.alive = true;
-          if (e.kind === "boss") onBoss(BOSS_HP);
+          if (e.kind === "boss") { onBoss(BOSS_HP); if (alpine) bigBossTrain(alpine); }
           pending.current[i] = null;
         }
       });
