@@ -177,7 +177,7 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
       blocks.every((b) => Math.abs(b.x - x) > 1.25 || Math.abs(b.z - z) > 1.25);
     const a: Parameters<typeof Instanced>[0]["items"] = [];
     const b: Parameters<typeof Instanced>[0]["items"] = [];
-    const n = Math.round(half * half * 0.55);
+    const n = Math.round(half * half * 1.6);
     for (let i = 0; i < n; i++) {
       const x = (r() - 0.5) * (half * 2 - 2);
       const z = (r() - 0.5) * (half * 2 - 2);
@@ -206,7 +206,32 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
         ry: r() * 6.28,
       });
     }
-    return { a, b, ring, ring2, sky };
+    // scattered stones and debris across the floor
+    const rocks: typeof a = [];
+    for (let i = 0; i < Math.round(half * 4); i++) {
+      const x = (r() - 0.5) * (half * 2 - 3), z = (r() - 0.5) * (half * 2 - 3);
+      if (!clear(x, z)) continue;
+      rocks.push({ x, y: 0, z, s: 0.15 + r() * 0.35, ry: r() * 6.28, tilt: (r() - 0.5) * 0.6 });
+    }
+    // rubble piled at the foot of every piece of cover and along the walls
+    const base: typeof a = [];
+    for (const bl of blocks) for (let k = 0; k < 5; k++) {
+      const ang = r() * 6.28, d = 1.15 + r() * 0.4;
+      base.push({ x: bl.x + Math.cos(ang) * d, y: 0.03, z: bl.z + Math.sin(ang) * d, s: 0.7 + r() * 1.1, ry: r() * 6.28, tilt: r() * 0.5 });
+    }
+    for (let i = 0; i < Math.round(half * 8); i++) {
+      const t = (r() - 0.5) * (half * 2 - 2), side = Math.floor(r() * 4), e = half - 1.2 - r() * 0.8;
+      const [x, z] = side === 0 ? [t, e] : side === 1 ? [t, -e] : side === 2 ? [e, t] : [-e, t];
+      base.push({ x, y: 0.03, z, s: 0.8 + r() * 1.4, ry: r() * 6.28, tilt: r() * 0.5 });
+    }
+    // two more skyline layers for depth
+    const far: typeof a = [];
+    for (let i = 0; i < 70; i++) {
+      const ang = (i / 70) * Math.PI * 2 + r() * 0.08, d = half + 22 + r() * 30;
+      const h = sky.h[0]! + r() * (sky.h[1]! - sky.h[0]!) * 1.4, sc = 2 + r() * 3;
+      far.push({ x: Math.cos(ang) * d, y: 0, z: Math.sin(ang) * d, s: sc, sy: sky.geo === GEO.tower || sky.geo === GEO.mesa || sky.geo === GEO.tank ? (h * 1.3) / sc : h / 1.2, ry: r() * 6.28 });
+    }
+    return { a, b, ring, ring2, sky, rocks, base, far };
   }, [theme, blocks, half]);
 
   const cov = coverFor(theme);
@@ -222,6 +247,9 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
       <Instanced geo={cov.geo} color={cov.alt} emissive={cov.glow ? cov.alt : undefined} items={data.b} />
       <Instanced geo={data.sky.geo} color={theme.blocks[2]} items={data.ring} />
       <Instanced geo={data.sky.geo} color={theme.wall} items={data.ring2} />
+      <Instanced geo={GEO.rock} color={theme.blocks[2]} items={data.rocks} />
+      <Instanced geo={GEO.pebble} color={theme.wall} items={data.base} />
+      <Instanced geo={data.sky.geo} color={theme.grid[1] ?? theme.wall} items={data.far} />
     </group>
   );
 }

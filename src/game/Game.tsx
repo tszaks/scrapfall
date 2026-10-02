@@ -29,7 +29,7 @@ import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } fr
 import { Ground, MapDressing } from "./art/MapDressing";
 import { MapEvents } from "@/bro/game/events/EventsLayer";
 import { onMapEventMsg } from "@/bro/game/events/mapEvents";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, bigLink, stepBigRides, bigPressUse, bigInCar, bigStepFloor, bigBossTrain, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
@@ -160,9 +160,28 @@ const WAVES: WaveSpec[] = [
 ];
 const MAX_ENEMIES = 110;
 import { NEW_KINDS, NEW_STATS, ENEMY_INFO as BRO_INFO, type NewKind } from "@/bro/game/enemyKinds";
-import { stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
+import { shieldBlocks, drainShield, damageMul, stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
 import { solidGrid as broSolidGrid, closeRaised as broCloseRaised, flowField as broFlow, navTarget as broNavTarget } from "@/bro/game/level";
 import { NewEnemyModel, OrdnancePool } from "@/bro/game/EnemyModels";
+import { arenaBlocked, arenaFloor } from "./level";
+import { PostFx, renderWithPost } from "@/bro/game/PostFx";
+import { QualityGovernor } from "@/bro/game/QualityGovernor";
+import { AmbienceListener } from "@/bro/game/AmbienceListener";
+/** His single render per frame with the bloom/grade pass layered on top. */
+/** Name each co-op failure in plain words. */
+function netWhy(e: unknown, fallback: string) {
+  const t = String((e as { type?: string })?.type ?? (e as Error)?.message ?? "");
+  if (/peer-unavailable/.test(t)) return "No arena found with that code. Check the 4 letters and that the host's tab is open.";
+  if (/network|server-error|socket/.test(t)) return "Can't reach the co-op server. Turn off ad-blockers or Brave Shields, or try other Wi-Fi.";
+  if (/browser-incompatible|webrtc/i.test(t)) return "This browser blocks co-op connections. Try Chrome or Safari with WebRTC allowed.";
+  if (/timeout|timed out/i.test(t)) return "The host didn't answer. Mobile data or school Wi-Fi may block co-op — try another network.";
+  if (/unavailable-id/.test(t)) return "That room code is busy. Try hosting again.";
+  return fallback + (t ? ` (${t})` : "");
+}
+function PostRender() {
+  useFrame(({ gl, scene, camera }) => { renderWithPost(gl, scene, camera); }, 1);
+  return null;
+}
 const freshBot = (): Bot => ({ kind: "drifter", x: 0, z: 0, hp: 1, alive: false, cooldown: 0, slow: 0, flash: 0 });
 const NO_GUEST = { current: false };
 const NO_TX = new Float32Array(MAX_ORD * 8);
@@ -214,6 +233,26 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const color = b.tone > 0.6 ? theme.blocks[0] : b.tone > 0.3 ? theme.blocks[1] : theme.blocks[2];
   const shape = theme.blockShape;
   const glow = theme.enemyBullet;
+
+  // low cover you can climb: always a solid crate/boulder whose top is exactly where you stand
+  if (b.h < 1.5) {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={Math.round(b.tone * 4) * (Math.PI / 2)}>
+        <mesh position-y={b.h / 2} castShadow receiveShadow>
+          <boxGeometry args={[1.9, b.h, 1.9]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h + 0.02} receiveShadow>
+          <boxGeometry args={[1.7, 0.05, 1.7]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
+        </mesh>
+        <mesh position={[0, b.h * 0.5, 0.96]}>
+          <boxGeometry args={[1.5, 0.1, 0.04]} />
+          <meshLambertMaterial color={theme.wall} />
+        </mesh>
+      </group>
+    );
+  }
 
   if (shape === "tree") {
     // trunk stays slim, canopy sits directly on top of it and tapers upward so
@@ -1638,6 +1677,7 @@ function World({
   const bobAmt = useRef(0);
   const jumpY = useRef(0);
   const feetY = useRef(0);
+  const jumpEdge = useRef(false);
   const hurtRef = useRef<((e: Enemy, dmg: number, idx: number, slow?: number, burn?: number, kb?: number, kx?: number, kz?: number) => void) | null>(null);
   const aliveRef = useRef(true);
   const jumpV = useRef(0);
@@ -1725,6 +1765,27 @@ function World({
       if (!e.alive || !alive) { e.x = t.x; e.z = t.z; }
       e.alive = alive;
     }
+    const nvArr = (m.v as number[]) ?? [];
+    const nvSeen = new Set<number>();
+    for (let k = 0; k + 6 < nvArr.length; k += 7) {
+      const i = nvArr[k]!;
+      const e = enemies[i];
+      const bb = bots.current[i];
+      if (!e || !bb) continue;
+      nvSeen.add(i);
+      const nk = NEW_KINDS[nvArr[k + 1]!];
+      e.nv = nk;
+      bb.kind = nk as Bot["kind"];
+      bb.alive = e.alive;
+      bb.x = guestTarget.current[i]?.x ?? e.x;
+      bb.z = guestTarget.current[i]?.z ?? e.z;
+      bb.yaw = nvArr[k + 2]!;
+      bb.st = nvArr[k + 3]!;
+      bb.t1 = nvArr[k + 4]!;
+      bb.shield = nvArr[k + 5]!;
+      bb.vis = nvArr[k + 6]!;
+    }
+    enemies.forEach((e, i) => { if (e.nv && !nvSeen.has(i)) e.nv = undefined; });
     const eb = (m.b as number[]) ?? [];
     enemyBullets.current.forEach((b) => (b.active = false));
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
@@ -2031,6 +2092,7 @@ function World({
         if (w) equip(w);
       }
       if (e.code === "KeyF") abilFire.current = true;
+      if (e.code === "KeyE" && bigInCar()) { bigPressUse(); return; }
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -2350,7 +2412,7 @@ function World({
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current, jumpY.current > 0) : (x: number, z: number) => blocked(blocks, x, z, 0.4);
+      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current + jumpY.current, jumpY.current > 0) : (x: number, z: number) => arenaBlocked(blocks, x, z, 0.4, feetY.current + jumpY.current);
       if (!hit(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
       if (!hit(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
@@ -2365,8 +2427,24 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    const floorY = alpine ? bigFloorY(cam.position.x, cam.position.z, feetY.current) : groundY(cam.position.x, cam.position.z);
+    const riding = alpine ? stepBigRides(alpine, cam, delta, look.current, spectating, !n || isH ? 1 : 2, !!n, () => {}) : false;
+    if (riding) { slide.current.x = 0; slide.current.z = 0; jumpY.current = 0; jumpV.current = 0; }
+    if (alpine && touchInput.jump && !jumpEdge.current && bigInCar()) bigPressUse();
+    jumpEdge.current = touchInput.jump;
+    const prevFeet = feetY.current;
+    const floorY = riding ? cam.position.y - EYE : alpine ? bigStepFloor(blocks, cam.position, slide.current.x, slide.current.z, prevFeet + jumpY.current, delta) : arenaFloor(blocks, cam.position.x, cam.position.z, prevFeet + jumpY.current);
+    // walked off a roof, ledge or crate: fall instead of snapping down
+    if (!riding && floorY < prevFeet - 0.3) { jumpY.current += prevFeet - floorY; }
+    // landed on something while airborne: stand on it
+    else if (!riding && floorY > prevFeet && jumpY.current > 0) { jumpY.current = Math.max(0, jumpY.current - (floorY - prevFeet)); if (jumpY.current === 0) jumpV.current = 0; }
     feetY.current = floorY;
+    if (alpine) {
+      const L = bigLink.current;
+      L.active = !spectating; L.px = cam.position.x; L.pz = cam.position.z; L.py = floorY; L.isHost = !n || isH; L.role = !n ? "solo" : isH ? "host" : "guest";
+      L.enemies = enemies; L.radiusOf = (e) => STATS[e.kind as Kind]?.radius ?? 0.6; L.isBig = (e) => e.kind === "boss" || e.kind === "brute";
+      L.hitPlayer = (dmg, kx, kz) => { takeHit(dmg); slide.current.x += kx; slide.current.z += kz; };
+      L.hurtEnemy = isH || !n ? (i, dmg, kx, kz) => { const e = enemies[i]; try { if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, Math.hypot(kx, kz) * 0.2, kx, kz); } catch { /* frame ended early */ } } : null;
+    }
     cam.position.y = EYE + jumpY.current + floorY;
     if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; bigFeed.current.x = cam.position.x; bigFeed.current.z = cam.position.z; bigFeed.current.yaw = look.current.yaw; }
 
@@ -2552,6 +2630,14 @@ function World({
     };
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
+      if (e.nv) {
+        const bb = bots.current[idx];
+        if (bb) {
+          const up = (bb.shield ?? 0) > 0 && (bb.shieldT ?? 0) <= 0;
+          if (shieldBlocks(bb, e.x - cam.position.x, e.z - cam.position.z, up)) { drainShield(bb, dmg); e.flash = 0.05; return; }
+          dmg *= damageMul(bb);
+        }
+      }
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
       const mid = mutator.current?.id;
       if (mid === "cryo" && slow < 1.2) slow = 1.2; // CRYO SURGE: every shot chills
@@ -2843,7 +2929,7 @@ function World({
           e.x = pd.x;
           e.z = pd.z;
           e.alive = true;
-          if (e.kind === "boss") onBoss(BOSS_HP);
+          if (e.kind === "boss") { onBoss(BOSS_HP); if (alpine) bigBossTrain(alpine); }
           pending.current[i] = null;
         }
       });
@@ -3287,6 +3373,12 @@ function World({
           for (const en of enemies) {
             e.push(en.alive ? 1 : 0, KINDS.indexOf(en.kind), Math.round(en.x * 100) / 100, Math.round(en.z * 100) / 100, en.swing);
           }
+          const v: number[] = [];
+          enemies.forEach((en, i) => {
+            if (!en.alive || !en.nv) return;
+            const bb = bots.current[i]!;
+            v.push(i, NEW_KINDS.indexOf(en.nv as NewKind), Math.round((bb.yaw ?? 0) * 100) / 100, bb.st ?? 0, Math.round((bb.t1 ?? 0) * 100) / 100, Math.round(bb.shield ?? 0), Math.round((bb.vis ?? 1) * 100) / 100);
+          });
           const b: number[] = [];
           for (const bu of enemyBullets.current) {
             if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
@@ -3296,7 +3388,7 @@ function World({
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
           n.broadcast({
-            type: "snap", e, b, mk,
+            type: "snap", e, b, mk, v,
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
@@ -3742,8 +3834,8 @@ export function Game() {
       });
       netHolder.current = h;
       setNet(h);
-    } catch {
-      setNetError("Couldn't open a room. Check your connection and try again.");
+    } catch (e) {
+      setNetError(netWhy(e, "Couldn't open a room."));
     }
     setJoining(false);
   };
@@ -3762,8 +3854,8 @@ export function Game() {
       netHolder.current = h;
       setNet(h);
       setPeerCount(1);
-    } catch {
-      setNetError("No arena found with that code.");
+    } catch (e) {
+      setNetError(netWhy(e, "No arena found with that code."));
     }
     setJoining(false);
   };
@@ -4258,7 +4350,10 @@ export function Game() {
         gl={{ powerPreference: "high-performance", antialias: true }}
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? (touchUi ? 700 : 1200) : 220 }}
       >
-
+        <QualityGovernor />
+        <PostFx />
+        <PostRender />
+        {alpine && <AmbienceListener />}
         <World
           alpine={alpine}
           blocks={blocks}
