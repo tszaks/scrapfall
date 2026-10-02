@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { touchInput } from "./touch";
 
 const RADIUS = 52;
