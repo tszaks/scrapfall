@@ -101,3 +101,4 @@
 - [x] Realism like his: PostFx bloom/grading on every map
 
 - [x] Teammates use his new scavenger character with walk/idle animations (v1.1)
+- [x] Teammate animations synced in co-op (jump, ride seat, aim pitch, recoil, height)
