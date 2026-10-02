@@ -18,7 +18,7 @@ import { hasArtBoss } from "./art/robots/bosses";
 import { hasArtSpecial } from "./art/robots/specials";
 import { classicRobot, swingInputs, shooterInputs, bomberInputs, specterInputs } from "./art/robots/classic";
 import { RemotePlayers } from "./Remote";
-import { colorFor, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
+import { colorFor, customColors, COLOR_PALETTE, hostRoom, joinRoom, type NetHandle, type NetMsg, type RemoteState } from "./net";
 import { Shards } from "./Shards";
 import { hookAudioUnlock, initAudio, playGun, playSfx, setMusicIntensity, setMusicMenu, setMusicTheme, setVolumes, startMusic, stopMusic } from "./audio";
 import { ABILITIES, ABILITY_IDS, type AbilityId } from "./abilities";
@@ -48,9 +48,12 @@ import { aimState, stepAim } from "@/bro/game/input/aim";
 import { ScopeOverlay } from "@/bro/game/ScopeOverlay";
 import { bigNet, bigMe, bigCars, bigSetCars } from "@/bro/game/BigMaps";
 import { TitleScreen } from "./ui/TitleScreen";
+import { setVolumes as broSetVolumes } from "@/bro/game/audio";
+import { loadProfile, recordRun, saveColor, type Profile } from "./account";
+import { ThirdPersonCam } from "./ThirdPerson";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 import { spawnFocus } from "./level";
 import { Minimap, radarFeed } from "./Minimap";
 import "./r3fDevFix";
@@ -3553,7 +3556,7 @@ function World({
     });
     const v = viewModel.current;
     if (!v) return;
-    v.visible = !deadRef.current && !menu; // spectators carry no weapon; title screen shows the map
+    v.visible = !deadRef.current && !menu && !padOpts.third; // spectators carry no weapon; title screen shows the map
 
     v.position.copy(cam.position);
     v.quaternion.copy(cam.quaternion);
@@ -3710,7 +3713,8 @@ function World({
       <group ref={viewModel} scale={0.7}>
         <GunModel w={held} mods={stats.current} />
       </group>
-      <RemotePlayers remotes={remotes} />
+      <RemotePlayers remotes={remotes} look={(w) => { const g = GUNS[w as Weapon]; return g ? { color: g.color, body: g.body } : null; }} />
+      <ThirdPersonCam active={!menu && !deadRef.current} eye={EYE} weapon={held} look={{ color: GUNS[held].color, body: GUNS[held].body }} color={colorFor(myNum)} />
       <Shards enemies={enemies} active={shardActive} magnet={magnetRef} onCollect={onShard} taken={takenShards} onTake={(id) => netRef.current?.broadcast({ type: "shard", id })} />
       <BulletPool meshes={bulletMeshes} color="#ff8a1f" size={0.14} />
 
@@ -3782,6 +3786,19 @@ export function Game() {
   const [picking, setPicking] = useState(false);
   /** what every squad member has chosen, keyed by player number */
   const [picks, setPicks] = useState<Record<number, AbilityId>>({});
+  const [colors, setColors] = useState<Record<number, string>>({});
+  const [myColor, setMyColorState] = useState(COLOR_PALETTE[0]!);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [ambVol, setAmbVol] = useState(0.6);
+  const setMyColor = (c: string) => {
+    setMyColorState(c);
+    try { localStorage.setItem("scrapfall-color", c); } catch { /* ignore */ }
+    if (profile) { void saveColor(profile, c); setProfile({ ...profile, color: c }); }
+  };
+  useEffect(() => {
+    try { const c = localStorage.getItem("scrapfall-color"); if (c && COLOR_PALETTE.includes(c)) setMyColorState(c); } catch { /* ignore */ }
+    void loadProfile().then((p) => { if (p) { setProfile(p); if (COLOR_PALETTE.includes(p.color)) setMyColorState(p.color); } }).catch(() => {});
+  }, []);
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const picksRef = useRef(picks);
   picksRef.current = picks;
@@ -3917,6 +3934,8 @@ export function Game() {
       const c = String(m.cls) as ClassId;
       if (num >= 1 && ABILITIES[id]) setPicks((p) => (p[num] === id ? p : { ...p, [num]: id }));
       if (num >= 1 && CLASSES[c]) setClsPicks((p) => (p[num] === c ? p : { ...p, [num]: c }));
+      const col = String(m.col ?? "");
+      if (num >= 1 && COLOR_PALETTE.includes(col)) { customColors[num] = col; setColors((p) => (p[num] === col ? p : { ...p, [num]: col })); }
       return;
     }
 
@@ -3949,7 +3968,7 @@ export function Game() {
         netHolder.current?.sendTo(id, { type: "seed", seed: seedRef.current });
         netHolder.current?.sendTo(id, { type: "roster", slots: { ...slots.current } });
         Object.entries(picksRef.current).forEach(([num, ab]) => {
-          netHolder.current?.sendTo(id, { type: "pick", num: Number(num), ability: ab, cls: clsPicksRef.current[Number(num)] });
+          netHolder.current?.sendTo(id, { type: "pick", num: Number(num), ability: ab, cls: clsPicksRef.current[Number(num)], col: customColors[Number(num)] });
         });
       };
       catchUp();
@@ -4060,11 +4079,12 @@ export function Game() {
       else if (typeof v.sens === "number") setSensY(v.sens);
       if (typeof v.musicVol === "number") setMusicVol(v.musicVol);
       if (typeof v.sfxVol === "number") setSfxVol(v.sfxVol);
+      if (typeof v.ambVol === "number") setAmbVol(v.ambVol);
     } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol }));
-  }, [fov, sensX, sensY, musicVol, sfxVol]);
+    localStorage.setItem("scrapfall-settings", JSON.stringify({ fov, sensX, sensY, musicVol, sfxVol, ambVol }));
+  }, [fov, sensX, sensY, musicVol, sfxVol, ambVol]);
   useEffect(() => {
     if (!healMsg) return;
     const t = window.setTimeout(() => setHealMsg(0), 1500);
@@ -4269,8 +4289,18 @@ export function Game() {
   useEffect(() => {
     setPicks((p) => (p[myNum] === ability ? p : { ...p, [myNum]: ability }));
     setClsPicks((p) => (p[myNum] === cls ? p : { ...p, [myNum]: cls }));
-    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls });
-  }, [ability, cls, myNum, roster.length, picking]);
+    customColors[myNum] = myColor;
+    setColors((p) => (p[myNum] === myColor ? p : { ...p, [myNum]: myColor }));
+    netHolder.current?.broadcast({ type: "pick", num: myNum, ability, cls, col: myColor });
+  }, [ability, cls, myNum, roster.length, picking, myColor]);
+  // signed-in players: add each finished run to their account
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (!ended) { recorded.current = false; return; }
+    if (recorded.current || !profile) return;
+    recorded.current = true;
+    void recordRun(profile, score, status.wave).then(setProfile).catch(() => {});
+  }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // teammate health lives in a ref: nudge the HUD so it stays current
   const [, setTick] = useState(0);
@@ -4488,7 +4518,7 @@ export function Game() {
 
   useEffect(() => setMusicIntensity(status.wave === WAVES.length && !status.won), [status.wave, status.won]);
   useEffect(() => setMusicTheme(theme.name), [theme.name]);
-  useEffect(() => setVolumes(musicVol, sfxVol), [musicVol, sfxVol]);
+  useEffect(() => { setVolumes(musicVol, sfxVol); broSetVolumes(musicVol, sfxVol, ambVol); }, [musicVol, sfxVol, ambVol]);
   useEffect(() => () => stopMusic(), []);
   phase.current = { started, ended };
 
@@ -4990,6 +5020,11 @@ export function Game() {
                 color: colorFor(p.num),
                 me: p.num === myNum,
               }))}
+              myColor={myColor}
+              setMyColor={setMyColor}
+              takenColors={Object.entries(colors).filter(([n]) => Number(n) !== myNum && connected.some((p) => p.num === Number(n))).map(([, c]) => c)}
+              profile={profile}
+              setProfile={setProfile}
               mapPicker={
                 net ? (
                   <div>
@@ -5118,6 +5153,8 @@ export function Game() {
               setMusicVol={setMusicVol}
               sfxVol={sfxVol}
               setSfxVol={setSfxVol}
+              ambVol={ambVol}
+              setAmbVol={setAmbVol}
               touchUi={touchUi}
               version={VERSION}
               onClose={() => setShowSettings(false)}
