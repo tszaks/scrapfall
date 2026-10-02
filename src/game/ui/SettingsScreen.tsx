@@ -50,45 +50,87 @@ function Slider({
 }
 
 function Remap() {
+  // his CONTROLS bench: pick an action, press a key or mouse button; clashes are cleared
   const [, bump] = useState(0);
   const [wait, setWait] = useState<Action | null>(null);
+  const [msg, setMsg] = useState("");
+  const btn = (on = false) =>
+    `pointer-events-auto rounded border px-3 py-2 text-[11px] font-bold tracking-wide ${on ? "border-[#b4653f] bg-[#b4653f]/30" : "border-white/20 bg-white/5"}`;
   useEffect(() => {
     loadBinds();
     bump((n) => n + 1);
   }, []);
   useEffect(() => {
     if (!wait) return;
-    const on = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.code !== "Escape") { binds[wait] = e.code; saveBinds(); }
+    const assign = (code: string) => {
+      const clash = (Object.keys(binds) as Action[]).filter((a) => a !== wait && binds[a] === code);
+      for (const a of clash) binds[a] = "";
+      binds[wait] = code;
+      saveBinds();
+      setMsg(`${ACTION_LABEL[wait]}: ${keyName(code)}${clash.length ? ` · CLEARED FROM ${clash.map((a) => ACTION_LABEL[a]).join(", ")}` : ""}`);
       setWait(null);
     };
-    window.addEventListener("keydown", on, true);
-    return () => window.removeEventListener("keydown", on, true);
+    const key = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.code === "Escape") setWait(null);
+      else if (e.code === "KeyP") setMsg("P IS RESERVED FOR PAUSE");
+      else assign(e.code);
+    };
+    const mouse = (e: MouseEvent) => {
+      if ((e.target as HTMLElement)?.closest("[data-capture-choice]")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      assign(`Mouse${e.button}`);
+    };
+    const menu = (e: MouseEvent) => e.preventDefault();
+    const t = window.setTimeout(() => window.addEventListener("mousedown", mouse, true), 0);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("contextmenu", menu, true);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("mousedown", mouse, true);
+      window.setTimeout(() => window.removeEventListener("contextmenu", menu, true), 50);
+    };
   }, [wait]);
   return (
-    <div className="space-y-1.5 pt-1">
-      <div className="text-[11px] font-bold tracking-[0.25em] opacity-70">KEY BINDINGS · CLICK TO CHANGE</div>
-      <div className="grid grid-cols-2 gap-1.5">
+    <section className="space-y-3 border-t border-white/10 pt-4" aria-label="Custom controls">
+      <h3 className="text-[11px] font-bold tracking-[.3em]">CONTROLS</h3>
+      <p className="text-[11px] opacity-70">
+        Choose an action, then press its new key or mouse button. Changes save automatically.
+      </p>
+      <div className="max-h-64 overflow-y-auto rounded border border-white/15">
         {(Object.keys(ACTION_LABEL) as Action[]).map((a) => (
-          <button
-            key={a}
-            onClick={() => setWait(a)}
-            className={`pointer-events-auto flex justify-between rounded border px-2 py-1 text-[11px] font-bold tracking-[0.12em] ${wait === a ? "border-[#e7b25c] bg-[#b4653f]/40" : "border-[#f3e6cf]/20 bg-white/5"}`}
-          >
-            <span>{ACTION_LABEL[a]}</span>
-            <span className="text-[#e7b25c]">{wait === a ? "PRESS A KEY" : keyName(binds[a])}</span>
-          </button>
+          <div key={a} className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 last:border-0">
+            <span className="text-[11px]">{ACTION_LABEL[a]}</span>
+            <button aria-label={`Bind ${ACTION_LABEL[a]}`} className={`${btn()} max-w-[55%] break-words`} onClick={() => { setMsg(""); setWait(a); }}>
+              {keyName(binds[a])}
+            </button>
+          </div>
         ))}
       </div>
-      <div className="flex gap-1.5 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/70">
-        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">WASD · MOVE</span>
-        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">MOUSE · LOOK · LEFT/RIGHT CLICK FIRE</span>
-        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">P · PAUSE</span>
-        <button onClick={() => { resetBinds(); bump((n) => n + 1); }} className="pointer-events-auto ml-auto rounded border border-[#f3e6cf]/30 px-2 py-1">RESET</button>
-      </div>
-    </div>
+      <button className={btn()} onClick={() => { resetBinds(); setMsg("Default bindings restored."); bump((n) => n + 1); }}>
+        RESTORE KEYBOARD / MOUSE DEFAULTS
+      </button>
+      <p className="text-[11px] opacity-70">
+        WASD moves, the mouse looks, P pauses. Left and right click shoot unless you bind them to something else.
+      </p>
+      <p role="status" className="text-[11px]">{msg}</p>
+      {wait && (
+        <div data-binding-capture role="dialog" aria-modal="true" aria-label="Assign control" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md space-y-4 rounded-xl border border-white/25 bg-[#2b2118] p-5 text-[#f7eeda]">
+            <h4 className="text-lg font-bold">{ACTION_LABEL[wait]}</h4>
+            <p>Press a key or mouse button.</p>
+            {msg && <p>{msg}</p>}
+            <div data-capture-choice className="flex flex-wrap gap-2">
+              <button className={btn()} onClick={() => { binds[wait] = ""; saveBinds(); setMsg(`${ACTION_LABEL[wait]} is unbound.`); setWait(null); }}>UNBIND</button>
+              <button className={btn()} onClick={() => setWait(null)}>CANCEL</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
