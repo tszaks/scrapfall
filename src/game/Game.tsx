@@ -160,7 +160,7 @@ const WAVES: WaveSpec[] = [
 ];
 const MAX_ENEMIES = 110;
 import { NEW_KINDS, NEW_STATS, ENEMY_INFO as BRO_INFO, type NewKind } from "@/bro/game/enemyKinds";
-import { stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
+import { shieldBlocks, drainShield, damageMul, stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
 import { solidGrid as broSolidGrid, closeRaised as broCloseRaised, flowField as broFlow, navTarget as broNavTarget } from "@/bro/game/level";
 import { NewEnemyModel, OrdnancePool } from "@/bro/game/EnemyModels";
 const freshBot = (): Bot => ({ kind: "drifter", x: 0, z: 0, hp: 1, alive: false, cooldown: 0, slow: 0, flash: 0 });
@@ -2552,6 +2552,14 @@ function World({
     };
     const hurtEnemy = (e: Enemy, dmg: number, idx: number, slow = 0, burn = 0, kb = 0, kx = 0, kz = 0) => {
       if ((e.shredUntil ?? 0) > performance.now()) dmg *= 1.3;
+      if (e.nv) {
+        const bb = bots.current[idx];
+        if (bb) {
+          const up = (bb.shield ?? 0) > 0 && (bb.shieldT ?? 0) <= 0;
+          if (shieldBlocks(bb, e.x - cam.position.x, e.z - cam.position.z, up)) { drainShield(bb, dmg); e.flash = 0.05; return; }
+          dmg *= damageMul(bb);
+        }
+      }
       if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
       const mid = mutator.current?.id;
       if (mid === "cryo" && slow < 1.2) slow = 1.2; // CRYO SURGE: every shot chills
