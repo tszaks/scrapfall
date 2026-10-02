@@ -6,6 +6,7 @@
   "outputDirectory": "dist/site",
   "redirects": [{ "source": "/", "destination": "/game/", "permanent": false }],
   "rewrites": [
+    { "source": "/game/api/turn", "destination": "/api/turn" },
     { "source": "/game", "destination": "/game/index.html" },
     { "source": "/game/:path*", "destination": "/game/index.html" }
   ],

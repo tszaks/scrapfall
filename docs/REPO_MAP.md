@@ -7,6 +7,7 @@ Where things live, and where to go to change them. Every folder under `src/` mus
 | Path | What's there |
 | --- | --- |
 | `src/` | The game (everything that ships) |
+| `api/` | Vercel Functions. `turn.ts` mints Cloudflare TURN relay credentials for co-op, served at `/game/api/turn` (needs `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN`) |
 | `scripts/` | Tests, the smoke test, the static-build staging step and one-off map audit scripts |
 | `docs/` | This map and the upstream sync record (`UPSTREAM.md`) |
 | `public/` | Favicon and robots.txt |
@@ -39,7 +40,7 @@ Where things live, and where to go to change them. Every folder under `src/` mus
 | Weapons and shots | `projectiles.ts`, `ballistics.ts` (bullet drop), `projectileContact.ts`, `impacts.ts`, `CombatFx.tsx`, `fxCore.ts` |
 | Enemies | `enemyKinds.ts`, `enemyAI.ts`, `steerCache.ts` (a short-lived route-pick cache), `EnemyModels.tsx`, `enemyProjectiles.ts`, `enemySync.ts` (the compact host→guest snapshot) |
 | Run rules | `difficulty.ts` (five levels and the wave curve), `classes.ts`, `abilities.ts`, `perks.ts`, `Shards.tsx` (currency drops), `revive.ts`, `soloRevive.ts`, `SelfReviveView.tsx` |
-| Co-op | `net.ts` (PeerJS rooms; the `PREFIX` version is bumped whenever the shared world or messages change), `netHeartbeat.ts`, `Remote.tsx`, `RemoteDeployables.tsx`, `Squad.tsx`, `squadState.ts`, `ping.ts` |
+| Co-op | `net.ts` (PeerJS rooms; the `PREFIX` version is bumped whenever the shared world or messages change), `netHeartbeat.ts`, `iceServers.ts` (fetches TURN relay servers, falls back to STUN), `joinErrors.ts` (join failure messages), `Remote.tsx`, `RemoteDeployables.tsx`, `Squad.tsx`, `squadState.ts`, `ping.ts` |
 | Vice Heights (the city) | `cityLayout.ts` (the generator), `City.tsx`, `cityMesh.ts`, `cityGeo.ts`, `cityTextures.ts`, `cityMinimap.ts`, `cityBlockades.tsx`, `cityWeather.ts`, `CityRain.tsx` (rain and the wet-street mirror pass), `interiors.ts` (fake rooms behind windows), `Palms.tsx`, `Fountains.tsx` |
 | Traffic and police | `trafficCore.ts`, `trafficSim.ts`, `Traffic.tsx`, `vehicles.ts`, `pursuit.ts` |
 | Look: sky, light, time | `sky.ts`, `skyFog.ts`, `Atmosphere.tsx`, `lighting.ts`, `timeOfDay.ts`, `TimeScene.tsx`, `lookBlend.ts`, `MatchRain.tsx` |
