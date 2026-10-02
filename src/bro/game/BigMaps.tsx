@@ -19,7 +19,7 @@ import { mapPosts } from "./posts";
 import { setPosts } from "./level";
 import { ALPINE_SIZE, type AlpineLayout } from "./alpine/layout";
 import { resetAlpine } from "./alpine/weather";
-import { resetRide } from "./alpine/ride";
+import { resetRide, ride, stepRide, leaveRide } from "./alpine/ride";
 import { NUKE_SIZE, NUKE_SPAWN, nuketownMinimap } from "./nuketown/layout";
 import { alpineMinimap, cityMinimap } from "./cityMinimap";
 import { westernMinimap } from "./western/minimap";
@@ -39,13 +39,14 @@ import { Structures } from "./structures/Structures";
 import { beachRooms, alpineRooms, cityRooms, cityOpenStructures } from "./structures/adapters";
 import { installStructures, structureList, structureBody, structureFloor } from "./structures/world";
 import { AlpineLife } from "./life/AlpineLife";
-import { resetWheel } from "./beach/wheelRide";
+import { resetWheel, wheelRide, stepWheel, leaveWheel } from "./beach/wheelRide";
 import { cityAccess } from "./access/cityAccess";
 import { beachAccess } from "./access/beachAccess";
 import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
-import { installAccess, playerBlocked } from "./access/world";
+import { installAccess, playerBlocked, accessActive, stepPlayer, stepCars, stepDoors, pressCarButton, player as accPlayer } from "./access/world";
+import { callBossTrain, trainClock } from "./western/trainSim";
 import { westernBelfry } from "./western/belfry";
 import { snugPlazaProps, movePropsFromDoors } from "./posts";
 import { blocked, boundaryBlocked, setNavWalls, BLOCK } from "./level";
@@ -208,6 +209,65 @@ const newLink = (): TrafficLink => ({
   enemies: [], radiusOf: () => 0.6, isBig: () => false, hurtEnemy: null, hitPlayer: () => {},
 });
 
+/** Shared traffic/train/rider link: our Game fills it in every frame. */
+export const bigLink: { current: TrafficLink } = { current: newLink() };
+
+/** Chairlift, Ferris wheel, elevator cars and doors: returns true while a ride carries you. */
+export function stepBigRides(
+  map: BigMap,
+  cam: { position: THREE.Vector3 },
+  delta: number,
+  look: { yaw: number; pitch: number },
+  dead: boolean,
+  playerNumber: number,
+  coop: boolean,
+  toast: (s: string) => void,
+): boolean {
+  if (accessActive()) {
+    const people = [{ x: cam.position.x, z: cam.position.z, az: 0, y: cam.position.y - 1.6, id: "me", press: accPlayer.press }];
+    stepCars(delta, people, true);
+    stepDoors(delta, people);
+  }
+  if (map.alpine) {
+    const a = map.alpine.alpine;
+    if (dead && ride.chair >= 0) leaveRide(cam, a);
+    const was = ride.chair >= 0;
+    if (!dead && stepRide(cam as never, a, delta, look)) {
+      if (!was) toast("CHAIRLIFT · ENJOY THE RIDE");
+      return true;
+    }
+  }
+  if (map.city && isBeach(map.city)) {
+    const w = map.city.beach.wheel;
+    const was = wheelRide.cabin >= 0;
+    if (dead && was) leaveWheel(cam.position, w);
+    else if (!dead && stepWheel(cam.position, w, delta, playerNumber, coop)) {
+      if (!was) toast("FERRIS WHEEL · ENJOY THE FULL CIRCUIT");
+      return true;
+    }
+  }
+  return false;
+}
+
+/** E in an elevator car: press the other floor's button. */
+export const bigPressUse = () => accessActive() && pressCarButton();
+export const bigInCar = () => accessActive() && accPlayer.inCar;
+
+/** Boss wave on Dry Gulch: the Iron Marshal's train rolls in. */
+export const bigBossTrain = (map: BigMap) => (map.western ? callBossTrain(trainClock.t) : 0);
+
+/** His floor rule with lifts, stairwells and roofs (stepPlayer can move you through doors). */
+export function bigStepFloor(blocks: Block[], pos: { x: number; z: number }, vx: number, vz: number, prevFeet: number, dt: number): number {
+  const room = structureFloor(pos.x, pos.z, prevFeet);
+  if (room) return room.y;
+  let gy = accessActive() ? stepPlayer(pos, vx, vz, (x, z, r) => blocked(blocks, x, z, r), dt) : groundY(pos.x, pos.z);
+  if (staticCollisionReady() && !accPlayer.inCar && accPlayer.zone !== 1 && ride.chair < 0 && wheelRide.cabin < 0) {
+    const bound = gy <= prevFeet + 0.24 ? gy : Math.min(gy, prevFeet);
+    gy = staticSupport(pos.x, pos.z, prevFeet, bound, 0.22) ?? gy;
+  }
+  return gy;
+}
+
 /** His match lighting, sky, fog, rooms and lifts around the map, as his Game.tsx mounts them. */
 export const BigMapScene = memo(function BigMapScene({ map, playing, isHost = true }: { map: BigMap; playing: boolean; isHost?: boolean }) {
   const big = map.id === "city" || map.id === "western" || map.id === "alpine" || map.id === "beach";
@@ -229,7 +289,7 @@ export const BigMapScene = memo(function BigMapScene({ map, playing, isHost = tr
 });
 
 function MapBody({ map, playing, isHost, time }: { map: BigMap; playing: boolean; isHost: boolean; time: ReturnType<typeof useTodNearest> }) {
-  const link = useRef<TrafficLink>(newLink());
+  const link = bigLink;
   link.current.isHost = isHost;
   const { seed, gaps } = map;
   switch (map.id) {

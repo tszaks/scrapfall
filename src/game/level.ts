@@ -229,3 +229,18 @@ export function clearLine(blocks: Block[], ax: number, az: number, bx: number, b
   }
   return true;
 }
+
+/** Our arenas: low cover you stand on (its top), else the ground. */
+export function arenaFloor(blocks: Block[], x: number, z: number, feet: number) {
+  let y = 0;
+  const half = BLOCK / 2 + 0.2;
+  for (const b of blocks) if (b.h < 1.5 && b.h <= feet + 0.35 && Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) y = Math.max(y, b.h);
+  return y;
+}
+/** Our arenas: walls you can't pass at this foot height (the outer wall is always solid). */
+export function arenaBlocked(blocks: Block[], x: number, z: number, r: number, feet: number) {
+  if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
+  const half = BLOCK / 2 + r;
+  for (const b of blocks) if (b.h > feet + 0.3 && Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
+  return false;
+}
