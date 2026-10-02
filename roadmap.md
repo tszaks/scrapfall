@@ -103,3 +103,10 @@
 - [x] Teammates use his new scavenger character with walk/idle animations (v1.1)
 - [x] Teammate animations synced in co-op (jump, ride seat, aim pitch, recoil, height)
 
+
+## v1.1.1
+- [x] Home menu: control hint chips removed
+- [x] Co-op: pick one of 12 colours in the lobby (synced, taken colours greyed)
+- [x] Accounts: username + password, saves colour, kills, best wave, runs
+- [x] Teammates hold his 3D gun models; ground pickups already use them
+- [x] Settings: ambience volume, first/third-person camera

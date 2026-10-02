@@ -44,7 +44,11 @@ export type RemoteState = {
 
 /** player 1 (host) white, player 2 purple, player 3 orange, player 4 pink */
 export const PLAYER_COLORS = ["#ffffff", "#a855f7", "#f97316", "#ec4899"];
-export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
+/** the 12 colours a player can pick for themselves in the lobby */
+export const COLOR_PALETTE = ["#ffaa00", "#00e5ff", "#76ff03", "#ff1744", "#d500f9", "#2979ff", "#ff4081", "#00e676", "#ffd600", "#ff6d00", "#00b0ff", "#f5f5f5"];
+/** picked colours by player number (set from the lobby "pick" messages) */
+export const customColors: Record<number, string> = {};
+export const colorFor = (num: number) => customColors[num] ?? PLAYER_COLORS[Math.max(0, Math.min(3, num - 1))]!;
 
 const PREFIX = "scrapfall-arena-v1-";
 /** ms of silence before the host lets a guest's slot go */
