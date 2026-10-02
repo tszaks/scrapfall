@@ -27,5 +27,6 @@ export function resetBinds() { Object.assign(binds, DEFAULTS); saveBinds(); }
 const ALT: Partial<Record<string, string>> = { ShiftLeft: "ShiftRight", Enter: "NumpadEnter" };
 export const is = (a: Action, code: string) => binds[a] === code || ALT[binds[a]] === code;
 export const held = (a: Action, keys: Set<string>) => keys.has(binds[a]) || (!!ALT[binds[a]] && keys.has(ALT[binds[a]]!));
+const MOUSE: Record<string, string> = { Mouse0: "LEFT CLICK", Mouse1: "MIDDLE CLICK", Mouse2: "RIGHT CLICK", Mouse3: "MOUSE 4", Mouse4: "MOUSE 5" };
 export const keyName = (code: string) =>
-  code.replace(/^Key/, "").replace(/^Digit/, "").replace("ShiftLeft", "SHIFT").replace("ShiftRight", "R-SHIFT").replace("ControlLeft", "CTRL").toUpperCase();
+  !code ? "UNBOUND" : MOUSE[code] ?? code.replace(/^Key/, "").replace(/^Digit/, "").replace("ShiftLeft", "SHIFT").replace("ShiftRight", "R-SHIFT").replace("ControlLeft", "CTRL").toUpperCase();
