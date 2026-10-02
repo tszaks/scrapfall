@@ -78,3 +78,16 @@
 - [ ] Preload/warm the big maps before the match starts (4-player co-op)
 - [x] Mobile: jump moved to the right side, stacked above the ability button
 - [x] Co-op: all four players can join (stale slots pruned, keep-alive heartbeat, full-room notice, lobby catch-up)
+
+## v1.1 master plan (agreed)
+- [ ] P1 Sharper big maps (full pixel ratio on desktop, longer view)
+- [ ] P1 Brother's quality governor
+- [ ] P1 Fix broken trees/props on our 10 arenas
+- [ ] P2 Brother's 10 new enemies (big maps only)
+- [ ] P2 Faster burst spawns around players on big maps
+- [ ] P2 Sniper rifle + scope
+- [ ] P2 More ammo crates everywhere
+- [ ] P2 Self-revive token (no token = dead until next wave)
+- [ ] P3 Chairlift, Ferris wheel, elevators, traffic hits, boss train + robbery gang, ambient crowds
+- [ ] P4 10x detail on our arenas, window interiors, soft bloom, vaulting/roof leaps, arena invisible wall
+- [ ] P5 Ping, synced teammate turrets/mines, ambience + music voices, controller + aim assist, STUN/TURN + clear join errors
