@@ -3560,6 +3560,7 @@ export function Game() {
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
+      setReviveTokens(1);
       setStatus({ wave: 1, remaining: 0, won: false });
       setWeapon("pistol");
       setBossHp(0);
@@ -3853,13 +3854,31 @@ export function Game() {
   const multiplayer = !!net;
   const dead = health <= 0;
   const [deathMsg, setDeathMsg] = useState(false);
+  // self-revive: one token per run, +1 every 4th wave cleared (max 2). Dying with a token
+  // opens a short window to get back up; without one you stay down (solo: run over, co-op: next wave).
+  const [reviveTokens, setReviveTokens] = useState(1);
+  const [reviveWindow, setReviveWindow] = useState(false);
+  const reviveRef = useRef(() => {});
+  reviveRef.current = () => {
+    if (health > 0 || reviveTokens <= 0 || !reviveWindow) return;
+    setReviveTokens((t) => t - 1);
+    setReviveWindow(false);
+    setHealth(Math.max(1, Math.ceil(maxHp / 2)));
+  };
+  useEffect(() => {
+    if (!dead) { setReviveWindow(false); return; }
+    if (reviveTokens <= 0) return;
+    setReviveWindow(true);
+    const t = window.setTimeout(() => setReviveWindow(false), 8000);
+    return () => window.clearTimeout(t);
+  }, [dead]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!dead) { setDeathMsg(false); return; }
     setDeathMsg(true);
     const t = window.setTimeout(() => setDeathMsg(false), 5000);
     return () => window.clearTimeout(t);
   }, [dead]);
-  const gameOver = multiplayer ? allDown : dead;
+  const gameOver = multiplayer ? allDown && !reviveWindow : dead && !reviveWindow;
   const ended = gameOver || status.won;
   // keep the deepest wave ever reached, overtime included
   useEffect(() => {
@@ -4060,7 +4079,7 @@ export function Game() {
     const onKey = (e: KeyboardEvent) => {
       const i = SHOP_KEYS.indexOf(e.code);
       if (i >= 0) buyRef.current(i);
-      else if (e.code === "KeyR") rerollRef.current();
+      else if (e.code === "KeyR") { reviveRef.current(); rerollRef.current(); }
       else if (e.code === "KeyV") patchRef.current();
     };
     window.addEventListener("keydown", onKey);
@@ -4159,6 +4178,7 @@ export function Game() {
               setBanner(true);
               if (perksRef.current.mend > 0 && wave > 1) setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
               if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
+              if (wave > 1 && (wave - 1) % 4 === 0) setReviveTokens((t) => Math.min(2, t + 1));
             }
           }}
           onBoss={(hp) => {
@@ -4503,7 +4523,20 @@ export function Game() {
           +3 HEALTH
         </div>
       )}
-      {multiplayer && dead && deathMsg && !ended && locked && (
+      {dead && reviveWindow && reviveTokens > 0 && !status.won && (
+        <div className="fixed left-1/2 top-[38%] z-30 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/90 px-8 py-5 text-center font-mono text-[#f3e6cf]">
+          <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU'RE DOWN</div>
+          <button
+            type="button"
+            onPointerDown={(e) => { e.stopPropagation(); reviveRef.current(); }}
+            className="mt-3 rounded-md bg-[#c8551f] px-6 py-3 text-sm font-bold tracking-[0.25em] text-[#f3e6cf]"
+          >
+            SELF REVIVE{!touchUi && " [R]"}
+          </button>
+          <div className="mt-2 text-[11px] tracking-[0.2em] opacity-70">{reviveTokens} TOKEN{reviveTokens > 1 ? "S" : ""} LEFT · 8 SECONDS</div>
+        </div>
+      )}
+      {multiplayer && dead && deathMsg && !reviveWindow && !ended && locked && (
         <div className="pointer-events-none fixed left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-[#2b2118]/85 px-8 py-5 text-center font-mono text-[#f3e6cf]">
           <div className="text-2xl font-bold tracking-[0.3em] text-[#e8322a]">YOU DIED</div>
           <div className="mt-2 text-xs tracking-[0.25em] opacity-80">SPECTATING · YOU RESPAWN NEXT WAVE</div>
