@@ -2,6 +2,8 @@
 // game needs to know about them that is not AI (enemyAI.ts) or models (EnemyModels.tsx):
 // stats, the in-game reference text, the co-op visual-state encoding and hit boxes.
 
+import { chase } from "./input/movement";
+
 export const NEW_KINDS = [
   "sniper", "flanker", "grenadier", "bulwark", "charger",
   "medic", "hornet", "gatling", "rocketeer", "cloaker",
@@ -11,18 +13,19 @@ export type NewKind = (typeof NEW_KINDS)[number];
 const NEW_SET = new Set<string>(NEW_KINDS);
 export const isNewKind = (k: string): k is NewKind => NEW_SET.has(k);
 
-/** hp / speed (m/s) / body radius (m) / damage per hit. Same meaning as the old STATS table. */
+/** hp / speed (m/s) / body radius (m) / damage per hit. Same meaning as the old STATS table.
+ * chase() preserves the slower enemy balance independently of player comfort speed. */
 export const NEW_STATS: Record<NewKind, { hp: number; speed: number; radius: number; dmg: number }> = {
-  sniper: { hp: 3, speed: 2.2, radius: 0.55, dmg: 3 },
-  flanker: { hp: 3, speed: 3.4, radius: 0.55, dmg: 1 },
-  grenadier: { hp: 4, speed: 1.9, radius: 0.65, dmg: 2 },
-  bulwark: { hp: 6, speed: 1.7, radius: 0.85, dmg: 2 },
-  charger: { hp: 7, speed: 1.7, radius: 1.0, dmg: 3 },
-  medic: { hp: 3, speed: 3, radius: 0.5, dmg: 1 },
-  hornet: { hp: 1, speed: 5, radius: 0.35, dmg: 1 },
-  gatling: { hp: 12, speed: 1.1, radius: 0.95, dmg: 1 },
-  rocketeer: { hp: 5, speed: 1.3, radius: 0.65, dmg: 3 },
-  cloaker: { hp: 4, speed: 3.4, radius: 0.6, dmg: 2 },
+  sniper: { hp: 3, speed: chase(2.2), radius: 0.55, dmg: 3 },
+  flanker: { hp: 3, speed: chase(3.4), radius: 0.55, dmg: 1 },
+  grenadier: { hp: 4, speed: chase(1.9), radius: 0.65, dmg: 2 },
+  bulwark: { hp: 6, speed: chase(1.7), radius: 0.85, dmg: 2 },
+  charger: { hp: 7, speed: chase(1.7), radius: 1.0, dmg: 3 },
+  medic: { hp: 3, speed: chase(3), radius: 0.5, dmg: 1 },
+  hornet: { hp: 1, speed: chase(5), radius: 0.35, dmg: 1 },
+  gatling: { hp: 12, speed: chase(1.1), radius: 0.95, dmg: 1 },
+  rocketeer: { hp: 5, speed: chase(1.3), radius: 0.65, dmg: 3 },
+  cloaker: { hp: 4, speed: chase(3.4), radius: 0.6, dmg: 2 },
 };
 
 /** fliers hover over traffic and crowds; bullets must be aimed up at them */
