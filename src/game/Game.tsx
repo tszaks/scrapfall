@@ -29,7 +29,7 @@ import { mutatorById, rollMutator, readHighWave, saveHighWave, type Mutator } fr
 import { Ground, MapDressing } from "./art/MapDressing";
 import { MapEvents } from "@/bro/game/events/EventsLayer";
 import { onMapEventMsg } from "@/bro/game/events/mapEvents";
-import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
+import { BIG_MAPS, BigMapScene, bigMinimap, setupBigMap, bigPlayerBlocked, bigFloorY, bigFeed, bigLink, stepBigRides, bigPressUse, bigInCar, bigStepFloor, BigMinimap, type BigMap, type BigMapId } from "@/bro/game/BigMaps";
 import { setBigGround, groundY } from "./terrain";
 import { GunView } from "@/bro/game/art/GunView";
 import { type GunId } from "@/bro/game/art/guns";
@@ -163,6 +163,7 @@ import { NEW_KINDS, NEW_STATS, ENEMY_INFO as BRO_INFO, type NewKind } from "@/br
 import { shieldBlocks, drainShield, damageMul, stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
 import { solidGrid as broSolidGrid, closeRaised as broCloseRaised, flowField as broFlow, navTarget as broNavTarget } from "@/bro/game/level";
 import { NewEnemyModel, OrdnancePool } from "@/bro/game/EnemyModels";
+import { arenaBlocked, arenaFloor } from "./level";
 const freshBot = (): Bot => ({ kind: "drifter", x: 0, z: 0, hp: 1, alive: false, cooldown: 0, slow: 0, flash: 0 });
 const NO_GUEST = { current: false };
 const NO_TX = new Float32Array(MAX_ORD * 8);
@@ -1638,6 +1639,7 @@ function World({
   const bobAmt = useRef(0);
   const jumpY = useRef(0);
   const feetY = useRef(0);
+  const jumpEdge = useRef(false);
   const hurtRef = useRef<((e: Enemy, dmg: number, idx: number, slow?: number, burn?: number, kb?: number, kx?: number, kz?: number) => void) | null>(null);
   const aliveRef = useRef(true);
   const jumpV = useRef(0);
@@ -2052,6 +2054,7 @@ function World({
         if (w) equip(w);
       }
       if (e.code === "KeyF") abilFire.current = true;
+      if (e.code === "KeyE" && bigInCar()) { bigPressUse(); return; }
       if (e.code === "KeyQ" || e.code === "KeyE") {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
@@ -2371,7 +2374,7 @@ function World({
     if (Math.abs(slide.current.x) > 0.001 || Math.abs(slide.current.z) > 0.001) {
       const nx = cam.position.x + slide.current.x * delta;
       const nz = cam.position.z + slide.current.z * delta;
-      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current, jumpY.current > 0) : (x: number, z: number) => blocked(blocks, x, z, 0.4);
+      const hit = alpine ? (x: number, z: number) => bigPlayerBlocked(blocks, x, z, 0.4, feetY.current + jumpY.current, jumpY.current > 0) : (x: number, z: number) => arenaBlocked(blocks, x, z, 0.4, feetY.current + jumpY.current);
       if (!hit(nx, cam.position.z)) cam.position.x = nx; else slide.current.x = 0;
       if (!hit(cam.position.x, nz)) cam.position.z = nz; else slide.current.z = 0;
     }
@@ -2386,8 +2389,24 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    const floorY = alpine ? bigFloorY(cam.position.x, cam.position.z, feetY.current) : groundY(cam.position.x, cam.position.z);
+    const riding = alpine ? stepBigRides(alpine, cam, delta, look.current, spectating, (myNumRef.current ?? 1), !!n, (t) => onToastRef.current?.(t)) : false;
+    if (riding) { slide.current.x = 0; slide.current.z = 0; jumpY.current = 0; jumpV.current = 0; }
+    if (alpine && touchInput.jump && !jumpEdge.current && bigInCar()) bigPressUse();
+    jumpEdge.current = touchInput.jump;
+    const prevFeet = feetY.current;
+    const floorY = riding ? cam.position.y - EYE : alpine ? bigStepFloor(blocks, cam.position, slide.current.x, slide.current.z, prevFeet + jumpY.current, delta) : arenaFloor(blocks, cam.position.x, cam.position.z, prevFeet + jumpY.current);
+    // walked off a roof, ledge or crate: fall instead of snapping down
+    if (!riding && floorY < prevFeet - 0.3) { jumpY.current += prevFeet - floorY; }
+    // landed on something while airborne: stand on it
+    else if (!riding && floorY > prevFeet && jumpY.current > 0) { jumpY.current = Math.max(0, jumpY.current - (floorY - prevFeet)); if (jumpY.current === 0) jumpV.current = 0; }
     feetY.current = floorY;
+    if (alpine) {
+      const L = bigLink.current;
+      L.active = !spectating; L.px = cam.position.x; L.pz = cam.position.z; L.py = floorY; L.isHost = !n || isH; L.role = !n ? "solo" : isH ? "host" : "guest";
+      L.enemies = enemies; L.radiusOf = (e) => STATS[e.kind as Kind]?.radius ?? 0.6; L.isBig = (e) => e.kind === "boss" || e.kind === "brute";
+      L.hitPlayer = (dmg, kx, kz) => { takeHit(dmg); slide.current.x += kx; slide.current.z += kz; };
+      L.hurtEnemy = isH || !n ? (i, dmg, kx, kz) => { const e = enemies[i]; if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, Math.hypot(kx, kz) * 0.2, kx, kz); } : null;
+    }
     cam.position.y = EYE + jumpY.current + floorY;
     if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; bigFeed.current.x = cam.position.x; bigFeed.current.z = cam.position.z; bigFeed.current.yaw = look.current.yaw; }
 
