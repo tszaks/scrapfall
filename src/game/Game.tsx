@@ -3284,7 +3284,22 @@ function World({
             const e = enemies[i];
             if (e?.alive && hurtRef.current) hurtRef.current(e, dmg, i, 0, 0, 3, kx, kz);
           }}
-          spawnEnemies={() => 0}
+          spawnEnemies={(kind, n, x, z) => {
+            // map events (e.g. Dry Gulch train robbery gang) send extra enemies through the wave machinery
+            const k: Kind = (KINDS as readonly string[]).includes(kind) && kind !== "boss" ? (kind as Kind) : "drifter";
+            const hpMul = 1 + 0.09 * Math.max(0, wave.current - 1);
+            let made = 0;
+            for (let i = 0; i < enemies.length && made < n; i++) {
+              const e = enemies[i]!;
+              if (e.alive || pending.current[i]) continue;
+              const p = pushOut(blocks, x + (Math.random() - 0.5) * 6, z + (Math.random() - 0.5) * 6, 0.8);
+              const hp = Math.max(1, Math.round(STATS[k].hp * hpMul));
+              Object.assign(e, { kind: k, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false, cooldown: 1 + Math.random() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0, elite: 0 });
+              pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + made * 0.2 };
+              made++;
+            }
+            return made;
+          }}
         />
       )}
       {enemies.map((e, i) => (
