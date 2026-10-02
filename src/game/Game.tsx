@@ -164,6 +164,14 @@ import { shieldBlocks, drainShield, damageMul, stepNewKind, stepOrds, newOrd, MA
 import { solidGrid as broSolidGrid, closeRaised as broCloseRaised, flowField as broFlow, navTarget as broNavTarget } from "@/bro/game/level";
 import { NewEnemyModel, OrdnancePool } from "@/bro/game/EnemyModels";
 import { arenaBlocked, arenaFloor } from "./level";
+import { PostFx, renderWithPost } from "@/bro/game/PostFx";
+import { QualityGovernor } from "@/bro/game/QualityGovernor";
+import { AmbienceListener } from "@/bro/game/AmbienceListener";
+/** His single render per frame with the bloom/grade pass layered on top. */
+function PostRender() {
+  useFrame(({ gl, scene, camera }) => { renderWithPost(gl, scene, camera); }, 1);
+  return null;
+}
 const freshBot = (): Bot => ({ kind: "drifter", x: 0, z: 0, hp: 1, alive: false, cooldown: 0, slow: 0, flash: 0 });
 const NO_GUEST = { current: false };
 const NO_TX = new Float32Array(MAX_ORD * 8);
@@ -4312,7 +4320,10 @@ export function Game() {
         gl={{ powerPreference: "high-performance", antialias: true }}
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? (touchUi ? 700 : 1200) : 220 }}
       >
-
+        <QualityGovernor />
+        <PostFx />
+        <PostRender />
+        {alpine && <AmbienceListener />}
         <World
           alpine={alpine}
           blocks={blocks}
