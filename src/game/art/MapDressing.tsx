@@ -141,6 +141,11 @@ const GEO = {
   tower: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
   mesa: new THREE.CylinderGeometry(0.9, 1.1, 1, 7).translate(0, 0.5, 0),
   tank: new THREE.CylinderGeometry(0.8, 0.8, 1, 10).translate(0, 0.5, 0),
+  shrub: new THREE.IcosahedronGeometry(0.32, 0).scale(1, 0.7, 1).translate(0, 0.18, 0),
+  log: new THREE.CylinderGeometry(0.09, 0.11, 1.3, 6).rotateZ(Math.PI / 2).translate(0, 0.09, 0),
+  bloom: new THREE.OctahedronGeometry(0.06, 0).translate(0, 0.22, 0),
+  stem: new THREE.CylinderGeometry(0.012, 0.012, 0.22, 3).translate(0, 0.11, 0),
+  slab: new THREE.BoxGeometry(0.7, 0.04, 0.5).translate(0, 0.02, 0),
 };
 
 function coverFor(theme: Theme) {
@@ -231,7 +236,18 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
       const h = sky.h[0]! + r() * (sky.h[1]! - sky.h[0]!) * 1.4, sc = 2 + r() * 3;
       far.push({ x: Math.cos(ang) * d, y: 0, z: Math.sin(ang) * d, s: sc, sy: sky.geo === GEO.tower || sky.geo === GEO.mesa || sky.geo === GEO.tank ? (h * 1.3) / sc : h / 1.2, ry: r() * 6.28 });
     }
-    return { a, b, ring, ring2, sky, rocks, base, far };
+    // ankle-height detail you walk through: shrub clumps, fallen logs, little flowers, flat slabs
+    const shrubs: typeof a = [], logs: typeof a = [], blooms: typeof a = [], slabs: typeof a = [];
+    for (let i = 0; i < Math.round(half * 6); i++) {
+      const x = (r() - 0.5) * (half * 2 - 3), z = (r() - 0.5) * (half * 2 - 3);
+      if (!clear(x, z)) continue;
+      const c = r();
+      if (c < 0.45) for (let k = 0; k < 3; k++) shrubs.push({ x: x + (r() - 0.5) * 0.7, y: 0, z: z + (r() - 0.5) * 0.7, s: 0.6 + r() * 0.6, ry: r() * 6.28 });
+      else if (c < 0.6) logs.push({ x, y: 0, z, s: 0.7 + r() * 0.6, ry: r() * 6.28 });
+      else if (c < 0.85) for (let k = 0; k < 6; k++) blooms.push({ x: x + (r() - 0.5) * 1.2, y: 0, z: z + (r() - 0.5) * 1.2, s: 0.8 + r() * 0.6, ry: r() * 6.28 });
+      else slabs.push({ x, y: 0.01, z, s: 0.8 + r() * 0.9, ry: r() * 6.28, tilt: (r() - 0.5) * 0.08 });
+    }
+    return { a, b, ring, ring2, sky, rocks, base, far, shrubs, logs, blooms, slabs };
   }, [theme, blocks, half]);
 
   const cov = coverFor(theme);
@@ -250,6 +266,11 @@ export function MapDressing({ theme, blocks, half }: { theme: Theme; blocks: B[]
       <Instanced geo={GEO.rock} color={theme.blocks[2]} items={data.rocks} />
       <Instanced geo={GEO.pebble} color={theme.wall} items={data.base} />
       <Instanced geo={data.sky.geo} color={theme.grid[1] ?? theme.wall} items={data.far} />
+      <Instanced geo={GEO.shrub} color={cov.alt} emissive={cov.glow ? cov.alt : undefined} items={data.shrubs} />
+      <Instanced geo={GEO.log} color={theme.blocks[2]} items={data.logs} />
+      <Instanced geo={GEO.stem} color={cov.color} items={data.blooms} />
+      <Instanced geo={GEO.bloom} color={theme.enemyBullet} emissive={theme.enemyBullet} items={data.blooms} />
+      <Instanced geo={GEO.slab} color={theme.wall} items={data.slabs} />
     </group>
   );
 }
