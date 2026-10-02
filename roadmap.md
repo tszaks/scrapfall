@@ -92,3 +92,4 @@
 - [ ] P4 10x detail on our arenas, window interiors, soft bloom, vaulting/roof leaps, arena invisible wall
 - [ ] P5 Ping, synced teammate turrets/mines, ambience + music voices, controller + aim assist, STUN/TURN + clear join errors
 - [x] P5 STUN/TURN relays (clear join errors still open)
+- [x] P3 Map events can send enemies (Dry Gulch robbery gang)
