@@ -224,6 +224,26 @@ function Obstacle({ b, theme }: { b: Block; theme: Theme }) {
   const shape = theme.blockShape;
   const glow = theme.enemyBullet;
 
+  // low cover you can climb: always a solid crate/boulder whose top is exactly where you stand
+  if (b.h < 1.5) {
+    return (
+      <group position={[b.x, 0, b.z]} rotation-y={Math.round(b.tone * 4) * (Math.PI / 2)}>
+        <mesh position-y={b.h / 2} castShadow receiveShadow>
+          <boxGeometry args={[1.9, b.h, 1.9]} />
+          <meshLambertMaterial color={color} flatShading />
+        </mesh>
+        <mesh position-y={b.h + 0.02} receiveShadow>
+          <boxGeometry args={[1.7, 0.05, 1.7]} />
+          <meshLambertMaterial color={theme.blocks[0]} flatShading />
+        </mesh>
+        <mesh position={[0, b.h * 0.5, 0.96]}>
+          <boxGeometry args={[1.5, 0.1, 0.04]} />
+          <meshLambertMaterial color={theme.wall} />
+        </mesh>
+      </group>
+    );
+  }
+
   if (shape === "tree") {
     // trunk stays slim, canopy sits directly on top of it and tapers upward so
     // the tiers never float apart or read as hollow cones
