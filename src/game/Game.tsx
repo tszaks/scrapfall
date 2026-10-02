@@ -2346,13 +2346,15 @@ function World({
     if (pad.use && bigInCar()) bigPressUse();
     if (pad.ping) pingReq.current = true;
     // LONGSHOT scope: his aim blend drives the zoom and the lens overlay
-    const scoping = weapon.current === "sniper" && !deadRef.current && (scopeKey.current || scopeMouse.current || pad.scope);
+    // aim down sights on every gun (right-click / X / LT / phone AIM toggle); LONGSHOT zooms into the scope
+    const sniperOn = weapon.current === "sniper";
+    const scoping = !deadRef.current && (scopeKey.current || scopeMouse.current || pad.scope || touchInput.aim);
     aimState.on = scoping;
-    aimState.scoped = aimState.blend > 0.9;
-    stepAim(delta, weapon.current !== "sniper" || deadRef.current);
+    aimState.scoped = sniperOn && aimState.blend > 0.9;
+    stepAim(delta, deadRef.current);
     {
       const pc = cam as THREE.PerspectiveCamera;
-      const want = fov + (20 - fov) * aimState.blend;
+      const want = fov + ((sniperOn ? 20 : fov * 0.72) - fov) * aimState.blend;
       if (Math.abs(pc.fov - want) > 0.05) { pc.fov = want; pc.updateProjectionMatrix(); }
     }
     // controller aim assist: a gentle pull toward the enemy nearest the crosshair
@@ -4594,7 +4596,7 @@ export function Game() {
 
         />
       </Canvas>
-      {!touchUi && <ScopeOverlay weapon={weapon} active={started && !paused && !ended} />}
+      <ScopeOverlay weapon={weapon} active={started && !paused && !ended} />
 
       {hurtFlash > 0 && (
         <div
@@ -4627,11 +4629,6 @@ export function Game() {
             <div className="rounded-md bg-[#f3e6cf]/80 px-3 py-1.5 text-sm tracking-widest">
               <span className="text-[#1aa6b8]">◆</span> {shards}
             </div>
-            {alpineMap && locked && !touchUi && (
-              <div data-minimap className="fixed bottom-5 right-5">
-                <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
-              </div>
-            )}
         {multiplayer && locked && !ended && (
           <div className={`space-y-1 text-right font-mono tracking-widest text-[#2b2118] ${touchUi ? "text-[10px]" : "text-xs"}`}>
             <div className="rounded bg-[#f3e6cf]/80 px-2 py-1">ROOM {net?.code} · {peerCount + 1} PLAYERS</div>
@@ -4651,11 +4648,11 @@ export function Game() {
             ))}
           </div>
         )}
-            {alpineMap && locked && touchUi && (
-              // phones: the radar sits last in the stack, under the teammate health rows,
-              // so it never covers them or the action buttons
-              <div data-minimap className="pointer-events-none mt-1 h-[82px] w-[82px]">
-                <div className="origin-top-right scale-[0.45]">
+            {alpineMap && locked && (
+              // the radar sits last in the right-hand stack, under health and teammate rows,
+              // so it never covers them, the gun bar or the action buttons
+              <div data-minimap className={`pointer-events-none mt-1 ${touchUi ? "h-[82px] w-[82px]" : "h-[150px] w-[150px]"}`}>
+                <div className={`origin-top-right ${touchUi ? "scale-[0.45]" : "scale-[0.82]"}`}>
                   <BigMinimap src={alpineMap} feed={bigFeed} enemies={enemies} remotes={remotes as never} myColor={colorFor(myNum)} />
                 </div>
               </div>
