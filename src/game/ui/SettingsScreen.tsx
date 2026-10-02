@@ -1,11 +1,14 @@
 // Tabbed settings in his menu look — Graphics / Controls / Audio — wired to our own options.
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ACTION_LABEL, binds, keyName, loadBinds, padOpts, resetBinds, saveBinds, type Action } from "../binds";
+import { pad } from "../gamepad";
 import { Hazard, MenuButton, Panel, Scrim, SectionLabel } from "@/bro/game/ui/kit";
 
-export type SettingsTab = "graphics" | "controls" | "audio";
+export type SettingsTab = "graphics" | "controls" | "controller" | "audio";
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "graphics", label: "Graphics" },
   { id: "controls", label: "Controls" },
+  { id: "controller", label: "Controller" },
   { id: "audio", label: "Audio" },
 ];
 
@@ -42,6 +45,80 @@ function Slider({
         className="pointer-events-auto mt-1.5 w-full accent-[#b4653f]"
       />
     </label>
+  );
+}
+
+function Remap() {
+  const [, bump] = useState(0);
+  const [wait, setWait] = useState<Action | null>(null);
+  useEffect(() => {
+    loadBinds();
+    bump((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    if (!wait) return;
+    const on = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.code !== "Escape") { binds[wait] = e.code; saveBinds(); }
+      setWait(null);
+    };
+    window.addEventListener("keydown", on, true);
+    return () => window.removeEventListener("keydown", on, true);
+  }, [wait]);
+  return (
+    <div className="space-y-1.5 pt-1">
+      <div className="text-[11px] font-bold tracking-[0.25em] opacity-70">KEY BINDINGS · CLICK TO CHANGE</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {(Object.keys(ACTION_LABEL) as Action[]).map((a) => (
+          <button
+            key={a}
+            onClick={() => setWait(a)}
+            className={`pointer-events-auto flex justify-between rounded border px-2 py-1 text-[11px] font-bold tracking-[0.12em] ${wait === a ? "border-[#e7b25c] bg-[#b4653f]/40" : "border-[#f3e6cf]/20 bg-white/5"}`}
+          >
+            <span>{ACTION_LABEL[a]}</span>
+            <span className="text-[#e7b25c]">{wait === a ? "PRESS A KEY" : keyName(binds[a])}</span>
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/70">
+        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">WASD · MOVE</span>
+        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">MOUSE · AIM · CLICK FIRE</span>
+        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">P · PAUSE</span>
+        <button onClick={() => { resetBinds(); bump((n) => n + 1); }} className="pointer-events-auto ml-auto rounded border border-[#f3e6cf]/30 px-2 py-1">RESET</button>
+      </div>
+    </div>
+  );
+}
+
+function PadTab() {
+  const [, bump] = useState(0);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    loadBinds();
+    const id = window.setInterval(() => setOn(pad.active || [...(navigator.getGamepads?.() ?? [])].some((g) => g?.connected)), 500);
+    return () => window.clearInterval(id);
+  }, []);
+  const set = (f: () => void) => { f(); saveBinds(); bump((n) => n + 1); };
+  return (
+    <>
+      <div className={`rounded border px-3 py-2 text-[11px] font-bold tracking-[0.2em] ${on ? "border-[#7cff4f]/50 text-[#9dff7a]" : "border-[#f3e6cf]/20 opacity-70"}`}>
+        {on ? "CONTROLLER CONNECTED" : "NO CONTROLLER · PLUG IN OR PAIR ONE AND PRESS A BUTTON"}
+      </div>
+      <Slider label="STICK LOOK SPEED" value={padOpts.sens} min={0.3} max={2.5} step={0.1} format={(v) => `${v.toFixed(1)}x`} onChange={(v) => set(() => (padOpts.sens = v))} />
+      <button
+        onClick={() => set(() => (padOpts.assist = !padOpts.assist))}
+        className="pointer-events-auto flex w-full justify-between rounded border border-[#f3e6cf]/20 bg-white/5 px-3 py-2 text-[11px] font-bold tracking-[0.2em]"
+      >
+        <span>AIM ASSIST</span>
+        <span className="text-[#e7b25c]">{padOpts.assist ? "ON" : "OFF"}</span>
+      </button>
+      <div className="grid grid-cols-2 gap-1.5">
+        {["L STICK · MOVE", "R STICK · AIM", "RT · FIRE", "LT · SCOPE", "A / ✕ · JUMP", "B / ○ · RUN", "Y / △ · ABILITY", "X / □ · USE", "LB / RB · WEAPON", "D-PAD UP · PING", "START · PAUSE"].map((s) => (
+          <span key={s} className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/80">{s}</span>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -154,28 +231,18 @@ export function SettingsScreen({
                 format={(v) => `${v.toFixed(1)}x`}
                 onChange={setSensY}
               />
-              <div className="grid grid-cols-2 gap-1.5 pt-1">
-                {(touchUi
-                  ? ["LEFT THUMB · MOVE", "RIGHT THUMB · AIM", "FIRE · SHOOT", "JUMP · RUN · ABILITY"]
-                  : [
-                      "WASD · MOVE",
-                      "MOUSE · AIM",
-                      "CLICK / ENTER · FIRE",
-                      "SPACE · JUMP",
-                      "SHIFT · RUN",
-                      "P · PAUSE",
-                    ]
-                ).map((s) => (
-                  <span
-                    key={s}
-                    className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/80"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
+              {touchUi ? (
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  {["LEFT THUMB · MOVE", "RIGHT THUMB · AIM", "FIRE · SHOOT", "JUMP · RUN · ABILITY"].map((s) => (
+                    <span key={s} className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/80">{s}</span>
+                  ))}
+                </div>
+              ) : (
+                <Remap />
+              )}
             </>
           )}
+          {tab === "controller" && <PadTab />}
           {tab === "audio" && (
             <>
               <Slider
