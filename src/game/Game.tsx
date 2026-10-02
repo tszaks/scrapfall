@@ -2389,7 +2389,7 @@ function World({
       jumpY.current += jumpV.current * dt;
       if (jumpY.current <= 0) { jumpY.current = 0; jumpV.current = 0; }
     }
-    const riding = alpine ? stepBigRides(alpine, cam, delta, look.current, spectating, (myNumRef.current ?? 1), !!n, (t) => onToastRef.current?.(t)) : false;
+    const riding = alpine ? stepBigRides(alpine, cam, delta, look.current, spectating, !n || isH ? 1 : 2, !!n, () => {}) : false;
     if (riding) { slide.current.x = 0; slide.current.z = 0; jumpY.current = 0; jumpV.current = 0; }
     if (alpine && touchInput.jump && !jumpEdge.current && bigInCar()) bigPressUse();
     jumpEdge.current = touchInput.jump;
