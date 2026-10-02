@@ -241,6 +241,7 @@ export function arenaFloor(blocks: Block[], x: number, z: number, feet: number) 
 export function arenaBlocked(blocks: Block[], x: number, z: number, r: number, feet: number) {
   if (Math.abs(x) > HALF - 1 || Math.abs(z) > HALF - 1) return true;
   const half = BLOCK_HALF + r;
-  for (const b of blocks) if (b.h > feet + 0.3 && Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
+  // tall scenery (trees, pillars, rocks) is solid at every height: no hopping off a crate into it
+  for (const b of blocks) if ((b.h >= 1.5 || b.h > feet + 0.3) && Math.abs(x - b.x) < half && Math.abs(z - b.z) < half) return true;
   return false;
 }
