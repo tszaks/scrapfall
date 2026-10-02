@@ -2116,13 +2116,24 @@ function World({
 
 
   useEffect(() => {
+    // mouse: while the pointer is locked the click target is the locked wrapper, not the canvas,
+    // so accept either; a click on the canvas re-locks the cursor to the crosshair if it slipped
     const onDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.tagName !== "CANVAS") return;
-      if (e.button === 2) scopeMouse.current = true;
-      else if (e.button === 1) pingReq.current = true;
-      else trigger.current = true;
+      const t = e.target as HTMLElement | null;
+      const locked = !!document.pointerLockElement;
+      if (!locked && t?.tagName !== "CANVAS") return;
+      if (!locked && !touchUi) {
+        try {
+          const r = (t?.closest("div[class*='cursor-crosshair']") as HTMLElement | null ?? t)?.requestPointerLock() as unknown as Promise<void> | undefined;
+          r?.catch?.(() => {});
+        } catch { /* pointer lock unavailable */ }
+      }
+      if (e.button === 1) pingReq.current = true;
+      else trigger.current = true; // right click and left click both shoot
     };
-    const onUp = (e: MouseEvent) => { if (e.button === 2) scopeMouse.current = false; else trigger.current = false; };
+    const onUp = (e: MouseEvent) => { if (e.button !== 1) trigger.current = false; };
+    const noMenu = (e: MouseEvent) => { if (document.pointerLockElement || (e.target as HTMLElement)?.tagName === "CANVAS") e.preventDefault(); };
+    window.addEventListener("contextmenu", noMenu);
     loadBinds();
     const isFire = (e: KeyboardEvent) => bindIs("fire", e.code);
     const onKey = (e: KeyboardEvent) => {
