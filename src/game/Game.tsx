@@ -111,7 +111,7 @@ type Enemy = {
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
-  nv?: string; // big maps: one of the brother's newer enemy types riding this base kind
+  nv?: string | undefined; // big maps: one of the brother's newer enemy types riding this base kind
   elite?: number; // 1 = event champion (gold, tougher, big shard payout)
 };
 type Bullet = {
@@ -159,7 +159,7 @@ const WAVES: WaveSpec[] = [
   { boss: 1, drifter: 10, brute: 6, shooter: 6, runner: 6, specter: 4, bomber: 3, vanguard: 3, special: 3 },
 ];
 const MAX_ENEMIES = 110;
-import { NEW_KINDS, NEW_STATS, ENEMY_INFO, type NewKind } from "@/bro/game/enemyKinds";
+import { NEW_KINDS, NEW_STATS, ENEMY_INFO as BRO_INFO, type NewKind } from "@/bro/game/enemyKinds";
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
@@ -992,7 +992,7 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     if (aura.current) {
       aura.current.visible = !!data.elite || !!nvk;
       if (nvk) {
-        const col = ENEMY_INFO[nvk]?.accent ?? "#ffd24a";
+        const col = BRO_INFO[nvk]?.accent ?? "#ffd24a";
         aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(col));
       } else if (data.elite) {
         aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set("#ffd24a"));
@@ -2132,7 +2132,7 @@ function World({
       e.nv = undefined;
       // big maps: about 40% of non-boss arrivals become one of the newer types unlocked by this wave
       if (alpine && kind !== "boss" && rand() < 0.4) {
-        const open = NEW_KINDS.filter((nk) => (ENEMY_INFO[nk]?.wave ?? 99) <= Math.max(2, n));
+        const open = NEW_KINDS.filter((nk) => (BRO_INFO[nk]?.wave ?? 99) <= Math.max(2, n));
         const nk = open[Math.floor(rand() * open.length)];
         if (nk) {
           const st = NEW_STATS[nk];
