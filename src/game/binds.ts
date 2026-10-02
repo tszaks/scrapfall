@@ -9,7 +9,7 @@ const DEFAULTS: Record<Action, string> = {
   ping: "KeyZ", scope: "KeyX", prev: "KeyQ", next: "KeyE",
 };
 export const binds: Record<Action, string> = { ...DEFAULTS };
-export const padOpts = { assist: true, sens: 1 };
+export const padOpts = { assist: true, sens: 1, third: false };
 let loaded = false;
 export function loadBinds() {
   if (loaded || typeof window === "undefined") return;

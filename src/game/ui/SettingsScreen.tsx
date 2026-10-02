@@ -176,6 +176,8 @@ export function SettingsScreen({
   setMusicVol,
   sfxVol,
   setSfxVol,
+  ambVol,
+  setAmbVol,
   touchUi,
   version,
   onClose,
@@ -190,11 +192,15 @@ export function SettingsScreen({
   setMusicVol: (v: number) => void;
   sfxVol: number;
   setSfxVol: (v: number) => void;
+  ambVol: number;
+  setAmbVol: (v: number) => void;
   touchUi: boolean;
   version: string;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("graphics");
+  const [, setViewTick] = useState(0);
+  useEffect(() => loadBinds(), []);
   return (
     <Scrim
       strong
@@ -271,6 +277,25 @@ export function SettingsScreen({
                 format={(v) => `${v.toFixed(1)}x`}
                 onChange={setSensY}
               />
+              <div className="flex items-center justify-between gap-3 py-1">
+                <span className="text-[11px] font-bold tracking-[0.2em]">CAMERA VIEW</span>
+                <div className="flex gap-1.5">
+                  {(["FIRST PERSON", "THIRD PERSON"] as const).map((l, i) => (
+                    <MenuButton
+                      key={l}
+                      size="sm"
+                      variant={(padOpts.third ? 1 : 0) === i ? "primary" : "line"}
+                      onClick={() => {
+                        padOpts.third = i === 1;
+                        saveBinds();
+                        setViewTick((n) => n + 1);
+                      }}
+                    >
+                      {l}
+                    </MenuButton>
+                  ))}
+                </div>
+              </div>
               {touchUi ? (
                 <div className="grid grid-cols-2 gap-1.5 pt-1">
                   {["LEFT THUMB · MOVE", "RIGHT THUMB · AIM", "FIRE · SHOOT", "JUMP · RUN · ABILITY"].map((s) => (
@@ -302,6 +327,15 @@ export function SettingsScreen({
                 step={0.05}
                 format={(v) => `${Math.round(v * 100)}%`}
                 onChange={setSfxVol}
+              />
+              <Slider
+                label="AMBIENCE VOLUME"
+                value={ambVol}
+                min={0}
+                max={1}
+                step={0.05}
+                format={(v) => `${Math.round(v * 100)}%`}
+                onChange={setAmbVol}
               />
               <p className="pt-1 text-xs leading-relaxed opacity-70">
                 THE MENU MARCH PLAYS ON THE SCREENS; EACH MAP&apos;S TRACK OPENS UP IN COMBAT.
