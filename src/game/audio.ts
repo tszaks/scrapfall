@@ -1,3 +1,4 @@
+import { makeReverb, playVoice, type MusicOut, type Voice } from "@/bro/game/musicVoices";
 // Procedural Web Audio: per-gun shot sounds, little UI blips and a synthwave loop.
 let ctx: AudioContext | null = null;
 let musicGain: GainNode | null = null;
@@ -194,8 +195,18 @@ const MAP_STYLE: Record<string, string> = {
   "Whiteout Pass": "ice",
 };
 let style: Style = STYLES['desert']!;
+// his biome instruments (musicVoices.ts) layered over each map's track
+const VOICE_OF: Record<string, Voice[]> = {
+  "Dry Gulch": ["twang", "harmonica"], "Pacific Pier": ["surf", "glock"], "Whiteout Pass": ["bell", "glock"],
+  "Vice Heights": ["organ", "glock"], Nuketown: ["whistle", "twang"],
+  desert: ["twang", "whistle"], ice: ["bell"], forest: ["harp"], magma: ["organ"], blossom: ["harp", "glock"],
+  abyss: ["bell"], cyber: ["glock"], toxic: ["organ"],
+};
+let voices: Voice[] = [];
+let musicOut: MusicOut | null = null;
 export function setMusicTheme(mapName: string) {
   style = STYLES[MAP_STYLE[mapName] ?? "desert"]!;
+  voices = VOICE_OF[mapName] ?? VOICE_OF[MAP_STYLE[mapName] ?? "desert"] ?? [];
 }
 
 const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
@@ -276,6 +287,20 @@ function scheduleStep(s: number, t0: number, stepDur: number) {
     const g = S.lead === "sine" ? 0.14 : 0.1;
     tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g, noise: 0, cut: S.leadCut }, musicGain, t);
     if (S.echo) tone({ wave: S.lead, f0: midi(n), f1: midi(n), dur, gain: g * 0.35, noise: 0, cut: S.leadCut * 0.6 }, musicGain, t + stepDur * 3);
+  }
+  // biome instrument phrase: a melody note every half bar, alternating voices per bar
+  if (voices.length && ctx && (i === 0 || i === 6 || i === 8 || (i === 12 && bar % 2 === 1))) {
+    if (!musicOut) {
+      const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noise.getChannelData(0);
+      for (let q = 0; q < d.length; q++) d[q] = Math.random() * 2 - 1;
+      const verb = makeReverb(ctx);
+      verb.connect(musicGain);
+      musicOut = { ctx, out: musicGain, verb, noise };
+    }
+    const v = voices[bar % voices.length]!;
+    const n = root + 24 + S.arp[(s >> 1) % S.arp.length]!;
+    try { playVoice(musicOut, v, midi(n), t, stepDur * (i === 0 ? 5 : 2.5), 0.1); } catch { /* voice unavailable */ }
   }
 }
 
