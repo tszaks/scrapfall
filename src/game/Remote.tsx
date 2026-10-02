@@ -35,13 +35,15 @@ export function RemotePlayers({ remotes }: { remotes: React.MutableRefObject<Map
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       p.ry += dy * k;
-      g.position.set(p.rx, 0, p.rz);
+      g.position.set(p.rx, g.position.y, p.rz);
       // camera yaw 0 looks down -Z, so spin the avatar to face the way they're looking
       g.rotation.set(0, p.ry + Math.PI, 0);
       const rig = rigs[i]!;
-      rig.pose.airborne = false;
-      rig.pose.seated = false;
-      rig.update(state.clock.elapsedTime, delta, p.rx, p.rz, 0, 0, 0);
+      p.ry2 = (p.ry2 ?? 0) + ((p.y ?? 0) - (p.ry2 ?? 0)) * k;
+      g.position.y = p.ry2;
+      rig.pose.airborne = !!p.air;
+      rig.pose.seated = !!p.seat;
+      rig.update(state.clock.elapsedTime, delta, p.rx, p.rz, p.kick ?? 0, p.pitch ?? 0, 0);
       const visor = visors.current[i];
       if (visor) (visor.material as THREE.MeshBasicMaterial).color.set(p.color);
       const row = pips.current[i];

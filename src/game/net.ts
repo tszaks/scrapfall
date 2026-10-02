@@ -23,6 +23,13 @@ export type RemoteState = {
   yaw: number;
   hp: number;
   weapon: string;
+  /** feet height, airborne, seated on a ride, aim pitch, recoil — drive the character animations */
+  y?: number;
+  air?: boolean;
+  seat?: boolean;
+  pitch?: number;
+  kick?: number;
+  ry2?: number;
   color: string;
   /** 1 = host, 2-4 = guests */
   num: number;

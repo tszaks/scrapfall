@@ -1751,6 +1751,11 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.hp = Number(m.hp ?? MAX_HP);
     r.weapon = String(m.w ?? "pistol");
+    r.y = Number(m.y ?? 0);
+    r.air = !!m.a;
+    r.seat = !!m.s;
+    r.pitch = Number(m.p ?? 0);
+    r.kick = Number(m.k ?? 0);
     r.last = performance.now();
   };
 
@@ -2461,6 +2466,8 @@ function World({
         n.broadcast({
           type: "t", x: cam.position.x, z: cam.position.z, yaw: look.current.yaw,
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
+          y: Math.round((cam.position.y - EYE) * 100) / 100, a: jumpY.current > 0.05 ? 1 : 0,
+          s: riding ? 1 : 0, p: Math.round(look.current.pitch * 100) / 100, k: Math.round(recoil.current * 10) / 10,
         });
       }
     }
