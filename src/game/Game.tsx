@@ -4594,6 +4594,7 @@ export function Game() {
 
         />
       </Canvas>
+      {!touchUi && <ScopeOverlay weapon={weapon} active={started && !paused && !ended} />}
 
       {hurtFlash > 0 && (
         <div
