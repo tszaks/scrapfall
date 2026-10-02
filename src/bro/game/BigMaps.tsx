@@ -45,7 +45,12 @@ import { beachAccess } from "./access/beachAccess";
 import { alpineAccessFull } from "./access/alpineAccess";
 import { westernMarkers } from "./access/westernMarkers";
 import { AccessScene } from "./access/AccessScene";
-import { installAccess, playerBlocked, accessActive, stepPlayer, stepCars, stepDoors, pressCarButton, player as accPlayer } from "./access/world";
+import { installAccess, playerBlocked, accessActive, stepPlayer, stepCars, stepDoors, pressCarButton, player as accPlayer, playerAz, encodeCars, decodeCars } from "./access/world";
+/** co-op elevator sync: the host runs the cars for everyone; guests apply its snapshots */
+export const bigNet = { host: true, people: [] as { x: number; z: number; az: number; y: number; id: string; press: number }[] };
+export const bigMe = () => ({ az: accessActive() ? playerAz() : 0, pr: accPlayer.press });
+export const bigCars = () => (accessActive() ? encodeCars() : null);
+export const bigSetCars = (c: number[]) => { if (accessActive()) decodeCars(c); };
 import { callBossTrain, trainClock } from "./western/trainSim";
 import { westernBelfry } from "./western/belfry";
 import { snugPlazaProps, movePropsFromDoors } from "./posts";
@@ -224,8 +229,8 @@ export function stepBigRides(
   toast: (s: string) => void,
 ): boolean {
   if (accessActive()) {
-    const people = [{ x: cam.position.x, z: cam.position.z, az: 0, y: cam.position.y - 1.6, id: "me", press: accPlayer.press }];
-    stepCars(delta, people, true);
+    const people = [{ x: cam.position.x, z: cam.position.z, az: playerAz(), y: cam.position.y - 1.6, id: "me", press: accPlayer.press }, ...bigNet.people];
+    stepCars(delta, people, bigNet.host);
     stepDoors(delta, people);
   }
   if (map.alpine) {
