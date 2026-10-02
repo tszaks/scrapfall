@@ -99,3 +99,5 @@
 - [x] New enemies exactly like his (shield blocks, charger bonus, guests see models)
 - [ ] Settings: his Controls remap + Controller tab (needs his gamepad/remap input wired into our controls)
 - [x] Realism like his: PostFx bloom/grading on every map
+
+- [x] Teammates use his new scavenger character with walk/idle animations (v1.1)
