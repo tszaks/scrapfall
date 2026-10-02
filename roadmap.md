@@ -74,26 +74,28 @@
 - [x] Mobile: map guide moved under the health/shard readout, never over the buttons
 - [x] Mobile: lower render resolution, no sun shadows, lightest scenery budget on the big maps
 - [x] Mobile: movement stick drawn without re-rendering the HUD each finger move
-- [ ] Add his 10 new enemy types to the big maps only
+- [x] Add his 10 new enemy types to the big maps only
 - [ ] Preload/warm the big maps before the match starts (4-player co-op)
 - [x] Mobile: jump moved to the right side, stacked above the ability button
 - [x] Co-op: all four players can join (stale slots pruned, keep-alive heartbeat, full-room notice, lobby catch-up)
 
 ## v1.1 master plan (agreed)
 - [x] P1 Sharper big maps (full pixel ratio on desktop, longer view)
-- [ ] P1 Brother's quality governor
-- [ ] P1 Fix broken trees/props on our 10 arenas
-- [~] P2 Brother's 10 new enemies (big maps only) — in with his stats + colours on base behaviours; his own models/AI still to port
+- [x] P1 Brother's quality governor
+- [x] P1 Fix broken trees/props on our 10 arenas (low cover = solid crates)
+- [x] P2 Brother's 10 new enemies (big maps only)
 - [x] P2 Faster burst spawns around players on big maps
 - [ ] P2 Sniper rifle + scope
 - [x] P2 More ammo crates everywhere
 - [x] P2 Self-revive token (no token = dead until next wave)
-- [ ] P3 Chairlift, Ferris wheel, elevators, traffic hits, boss train + robbery gang, ambient crowds
-- [ ] P4 10x detail on our arenas, window interiors, soft bloom, vaulting/roof leaps, arena invisible wall
-- [ ] P5 Ping, synced teammate turrets/mines, ambience + music voices, controller + aim assist, STUN/TURN + clear join errors
+- [x] P3 Chairlift, Ferris wheel, elevators (E / JUMP in car), traffic hits, boss train, crowds (elevator cars simulated per player, not synced)
+- [x] P4 arena detail, bloom, vaulting/roof leaps, arena wall
+- [ ] P4 window interiors on our arenas
+- [x] P5 ambience, STUN/TURN + clear join errors
+- [ ] P5 Ping, synced teammate turrets/mines, music voices, controller + aim assist
 - [x] P5 STUN/TURN relays (clear join errors still open)
 - [x] P3 Map events can send enemies (Dry Gulch robbery gang)
 - [x] Loadout: his painted map postcard + blurb (loadout already matched his layout)
-- [~] New enemies exactly like his: his models + brains + grenades/rockets wired on big maps (host). Left: bulwark shield blocking + charger damage bonus on our hits, co-op guests seeing them
+- [x] New enemies exactly like his (shield blocks, charger bonus, guests see models)
 - [ ] Settings: his Controls remap + Controller tab (needs his gamepad/remap input wired into our controls)
-- [ ] Realism like his: PostFx (bloom/grading), his atmosphere/lighting on our arenas
+- [x] Realism like his: PostFx bloom/grading on every map
