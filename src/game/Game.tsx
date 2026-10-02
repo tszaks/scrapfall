@@ -2346,10 +2346,10 @@ function World({
     if (pad.use && bigInCar()) bigPressUse();
     if (pad.ping) pingReq.current = true;
     // LONGSHOT scope: his aim blend drives the zoom and the lens overlay
-    const scoping = weapon.current === "sniper" && !spectating && (scopeKey.current || scopeMouse.current || pad.scope);
+    const scoping = weapon.current === "sniper" && !deadRef.current && (scopeKey.current || scopeMouse.current || pad.scope);
     aimState.on = scoping;
     aimState.scoped = aimState.blend > 0.9;
-    stepAim(delta, weapon.current !== "sniper" || spectating);
+    stepAim(delta, weapon.current !== "sniper" || deadRef.current);
     {
       const pc = cam as THREE.PerspectiveCamera;
       const want = fov + (20 - fov) * aimState.blend;
