@@ -57,9 +57,19 @@ type Opts = {
   onClose?: () => void;
 };
 
+// several public STUN servers so players behind strict routers or mobile data can still find each other
+const ICE = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "stun:global.stun.twilio.com:3478" },
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+];
+
 export async function hostRoom(opts: Opts): Promise<NetHandle> {
   const code = makeCode();
-  const peer = new Peer(PREFIX + code, { debug: 0 });
+  const peer = new Peer(PREFIX + code, { debug: 0, config: { iceServers: ICE } });
   await new Promise<void>((resolve, reject) => {
     peer.on("open", () => resolve());
     peer.on("error", (e) => reject(e));
@@ -139,7 +149,7 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
 
 
 export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
-  const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), { debug: 0 });
+  const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), { debug: 0, config: { iceServers: ICE } });
   await new Promise<void>((resolve, reject) => {
     peer.on("open", () => resolve());
     peer.on("error", (e) => reject(e));
