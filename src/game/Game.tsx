@@ -160,6 +160,12 @@ const WAVES: WaveSpec[] = [
 ];
 const MAX_ENEMIES = 110;
 import { NEW_KINDS, NEW_STATS, ENEMY_INFO as BRO_INFO, type NewKind } from "@/bro/game/enemyKinds";
+import { stepNewKind, stepOrds, newOrd, MAX_ORD, type Bot, type AICtx, type Ord } from "@/bro/game/enemyAI";
+import { solidGrid as broSolidGrid, closeRaised as broCloseRaised, flowField as broFlow, navTarget as broNavTarget } from "@/bro/game/level";
+import { NewEnemyModel, OrdnancePool } from "@/bro/game/EnemyModels";
+const freshBot = (): Bot => ({ kind: "drifter", x: 0, z: 0, hp: 1, alive: false, cooldown: 0, slow: 0, flash: 0 });
+const NO_GUEST = { current: false };
+const NO_TX = new Float32Array(MAX_ORD * 8);
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
@@ -957,9 +963,10 @@ function SpecialModel({ theme, data }: { theme: Theme; data: Enemy }) {
   );
 }
 
-const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme: Theme }) {
+const EnemyMesh = memo(function EnemyMesh({ data, theme, bot, bots }: { data: Enemy; theme: Theme; bot?: Bot | undefined; bots?: Bot[] | undefined }) {
   const c = theme.enemy;
   const [kind, setKind] = useState(data.kind);
+  const [nv, setNv] = useState<string | undefined>(data.nv);
   const ref = useRef<THREE.Group>(null);
   const drifter = useRef<THREE.Group>(null);
   const brute = useRef<THREE.Group>(null);
@@ -979,28 +986,27 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     g.visible = data.alive;
     if (!data.alive) return;
     if (data.kind !== kind) setKind(data.kind);
+    if (data.nv !== nv) setNv(data.nv);
     const t = state.clock.elapsedTime;
     const k = data.kind;
     const heavy = k === "brute" || k === "boss" || k === "vanguard";
     // robots walk on the ground; only specials/boss keep the old hover bob
     const bob = k === "special" ? Math.sin(t * 4 + data.x) * 0.08 : 0;
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
-    g.lookAt(state.camera.position.x, 0, state.camera.position.z);
+    if (data.nv && bot) g.rotation.set(0, bot.yaw ?? 0, 0);
+    else g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
     const nvk = data.nv as NewKind | undefined;
-    g.scale.setScalar((nvk ? NEW_SCALE[nvk] : base) * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
+    g.scale.setScalar((nvk ? 1 : base) * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
-      aura.current.visible = !!data.elite || !!nvk;
+      aura.current.visible = !!data.elite;
       if (nvk) {
         const col = BRO_INFO[nvk]?.accent ?? "#ffd24a";
         aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(col));
       } else if (data.elite) {
         aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set("#ffd24a"));
       }
-      // cloakers fade out until close
-      if (nvk === "cloaker") g.visible = Math.hypot(state.camera.position.x - data.x, state.camera.position.z - data.z) < 6 || data.flash > 0;
-      // fliers hover
-      if (nvk === "hornet" || nvk === "medic") g.position.y += nvk === "hornet" ? 1.4 : 2;
+
       aura.current.rotation.y = t * 1.2;
     }
     if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0;
@@ -1064,13 +1070,14 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
 
       {/* DRIFTER / RUNNER: floating core inside a caged shell */}
       {/* detailed skinned robots (ported art kit) — one draw call each */}
-      {kind === "drifter" && <RobotModel kind={classicRobot("drifter", theme)} data={data} />}
-      {kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
-      {kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
-      {kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
-      {kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
-      {kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
-      {kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
+      {nv && bot && <NewEnemyModel kind={nv as NewKind} data={bot} all={bots ?? []} />}
+      {!nv && kind === "drifter" && <RobotModel kind={classicRobot("drifter", theme)} data={data} />}
+      {!nv && kind === "runner" && <RobotModel kind={classicRobot("runner", theme)} data={data} gait={0.6} />}
+      {!nv && kind === "brute" && <RobotModel kind={classicRobot("brute", theme)} data={data} inputs={swingInputs} />}
+      {!nv && kind === "shooter" && <RobotModel kind={classicRobot("shooter", theme)} data={data} inputs={shooterInputs} />}
+      {!nv && kind === "bomber" && <RobotModel kind={classicRobot("bomber", theme)} data={data} inputs={bomberInputs} />}
+      {!nv && kind === "specter" && <RobotModel kind={classicRobot("specter", theme)} data={data} inputs={specterInputs} />}
+      {!nv && kind === "vanguard" && <RobotModel kind={classicRobot("vanguard", theme)} data={data} inputs={swingInputs} />}
       {false && (kind==="drifter"||kind==="runner") && (<group ref={drifter} position-y={0.9}>
         <mesh>
           <octahedronGeometry args={[0.8, 0]} />
@@ -1672,6 +1679,12 @@ function World({
   const snapTimer = useRef(0);
   const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
+  // big maps: his brains for the 10 newer enemy types (one Bot per enemy slot) and their grenades/rockets
+  const bots = useRef<Bot[]>(Array.from({ length: MAX_ENEMIES }, freshBot));
+  const ords = useRef<Ord[]>(Array.from({ length: MAX_ORD }, newOrd));
+  const hornetCd = useRef({ v: 0 });
+  const broFields = useRef(new Map<number, Float32Array>());
+  const broSolid = useMemo(() => (alpine ? broCloseRaised(broSolidGrid(blocks)) : null), [alpine, blocks]);
   const dropGunRef = useRef<Weapon>("scatter");
 
   const upsertRemote = (m: NetMsg) => {
@@ -2139,6 +2152,8 @@ function World({
           e.kind = NEW_ON_BASE[nk];
           e.nv = nk;
           e.hp = e.max = Math.max(1, Math.round(st.hp * hpMul));
+          const sh = nk === "bulwark" ? Math.round(8 * hpMul) : 0;
+          bots.current[i] = { ...freshBot(), kind: nk, x: p.x, z: p.z, hp: e.hp, max: e.hp, cooldown: 1 + rand() * 2, yaw: 0, vis: 0, st: 0, t1: 0, plan: 0, shots: 0, stuck: 0, gd0: 99, detour: 0, shield: sh, shieldMax: sh, shieldT: 0, blockT: 0, hitT: 0, tgt: -1 };
         }
       }
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
@@ -2889,8 +2904,46 @@ function World({
       }
 
       meleeCooldown.current -= delta;
+      // big maps: run his brains for the newer enemy types
+      let aiCtx: AICtx | null = null;
+      if (alpine && broSolid) {
+        const fx = -Math.sin(look.current.yaw), fz = -Math.cos(look.current.yaw);
+        const aiTargets = targets.map((t) => ({ id: t.id, x: t.x, z: t.z, y: t.y, fx: t.id === null ? fx : 0, fz: t.id === null ? fz : 0 }));
+        const sol = broSolid;
+        const keyOf = (t: { x: number; z: number }) => { const [i, j] = broNavTarget(sol, t.x, t.z, blocks); return i * 1000 + j; };
+        for (const t of aiTargets) {
+          const k = keyOf(t);
+          if (!broFields.current.has(k)) { const [i, j] = broNavTarget(sol, t.x, t.z, blocks); broFields.current.set(k, broFlow(sol, i, j, 70)); }
+        }
+        if (broFields.current.size > 16) broFields.current.clear();
+        enemies.forEach((e, i) => {
+          const b = bots.current[i]!;
+          b.x = e.x; b.z = e.z; b.alive = e.alive; b.flash = e.flash; b.slow = e.slow;
+          if (!e.nv) { b.kind = e.kind; b.hp = e.hp; b.max = e.max ?? e.hp; } else b.hp = e.hp;
+        });
+        aiCtx = {
+          delta, time: state.clock.elapsedTime, blocks, solid: sol, targets: aiTargets, enemies: bots.current, rand: Math.random,
+          fieldFor: (t) => broFields.current.get(keyOf(t)),
+          hurtTarget: (t, dmg) => hurtTarget(t as Target, dmg),
+          shoot: (x, y, z, vx, vy, vz, life, dmg, size) => fireInto(enemyBullets.current, new THREE.Vector3(x, y, z), new THREE.Vector3(vx, vy, vz), life, dmg, "", size),
+          ords: ords.current, hornetCd: hornetCd.current,
+          navOpen: (x, z) => !blocked(blocks, x, z, 0.55),
+        };
+        hornetCd.current.v -= delta;
+      }
       for (const e of enemies) {
         if (!e.alive) continue;
+        if (e.nv && aiCtx && (e.frozen ?? 0) <= 0) {
+          const idx = enemies.indexOf(e);
+          const b = bots.current[idx]!;
+          e.flash -= delta;
+          if (e.slow > 0) e.slow -= delta;
+          let tg = aiCtx.targets[0]!, dd = Math.hypot(tg.x - e.x, tg.z - e.z) || 1;
+          for (const t of aiCtx.targets) { const q = Math.hypot(t.x - e.x, t.z - e.z) || 1; if (q < dd) { dd = q; tg = t; } }
+          stepNewKind(b, idx, tg, dd, aiCtx);
+          e.x = b.x; e.z = b.z; e.hp = Math.min(e.max ?? b.hp, b.hp);
+          continue;
+        }
         e.flash -= delta;
         e.cooldown -= delta;
         if (e.slow > 0) e.slow -= delta;
@@ -3327,7 +3380,7 @@ function World({
               if (e.alive || pending.current[i]) continue;
               const p = pushOut(blocks, x + (Math.random() - 0.5) * 6, z + (Math.random() - 0.5) * 6, 0.8);
               const hp = Math.max(1, Math.round(STATS[k].hp * hpMul));
-              Object.assign(e, { kind: k, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false, cooldown: 1 + Math.random() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0, elite: 0 });
+              Object.assign(e, { kind: k, x: p.x, z: p.z, hp, max: hp, shredUntil: 0, aux: 0, alive: false, cooldown: 1 + Math.random() * 2, swing: 0, flash: 0, shot: 2, slow: 0, burn: 0, burnTick: 0, elite: 0, nv: undefined });
               pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + made * 0.2 };
               made++;
             }
