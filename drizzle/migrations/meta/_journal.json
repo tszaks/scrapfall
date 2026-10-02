@@ -8,6 +8,13 @@
       "when": 1790964352195,
       "tag": "0000_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790964366720,
+      "tag": "0001_drop_auth_trigger",
+      "breakpoints": true
     }
   ]
 }
