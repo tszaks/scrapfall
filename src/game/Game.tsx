@@ -1725,6 +1725,27 @@ function World({
       if (!e.alive || !alive) { e.x = t.x; e.z = t.z; }
       e.alive = alive;
     }
+    const nvArr = (m.v as number[]) ?? [];
+    const nvSeen = new Set<number>();
+    for (let k = 0; k + 6 < nvArr.length; k += 7) {
+      const i = nvArr[k]!;
+      const e = enemies[i];
+      const bb = bots.current[i];
+      if (!e || !bb) continue;
+      nvSeen.add(i);
+      const nk = NEW_KINDS[nvArr[k + 1]!];
+      e.nv = nk;
+      bb.kind = nk as Bot["kind"];
+      bb.alive = e.alive;
+      bb.x = guestTarget.current[i]?.x ?? e.x;
+      bb.z = guestTarget.current[i]?.z ?? e.z;
+      bb.yaw = nvArr[k + 2]!;
+      bb.st = nvArr[k + 3]!;
+      bb.t1 = nvArr[k + 4]!;
+      bb.shield = nvArr[k + 5]!;
+      bb.vis = nvArr[k + 6]!;
+    }
+    enemies.forEach((e, i) => { if (e.nv && !nvSeen.has(i)) e.nv = undefined; });
     const eb = (m.b as number[]) ?? [];
     enemyBullets.current.forEach((b) => (b.active = false));
     for (let i = 0; i * 3 + 2 < eb.length; i++) {
@@ -3295,6 +3316,12 @@ function World({
           for (const en of enemies) {
             e.push(en.alive ? 1 : 0, KINDS.indexOf(en.kind), Math.round(en.x * 100) / 100, Math.round(en.z * 100) / 100, en.swing);
           }
+          const v: number[] = [];
+          enemies.forEach((en, i) => {
+            if (!en.alive || !en.nv) return;
+            const bb = bots.current[i]!;
+            v.push(i, NEW_KINDS.indexOf(en.nv as NewKind), Math.round((bb.yaw ?? 0) * 100) / 100, bb.st ?? 0, Math.round((bb.t1 ?? 0) * 100) / 100, Math.round(bb.shield ?? 0), Math.round((bb.vis ?? 1) * 100) / 100);
+          });
           const b: number[] = [];
           for (const bu of enemyBullets.current) {
             if (bu.active) b.push(Math.round(bu.pos.x * 100) / 100, Math.round(bu.pos.y * 100) / 100, Math.round(bu.pos.z * 100) / 100);
@@ -3304,7 +3331,7 @@ function World({
             if (pd && pd.t <= MARK_TIME) mk.push(i, Math.round(pd.x * 100) / 100, Math.round(pd.z * 100) / 100, Math.round(pd.t * 100) / 100);
           });
           n.broadcast({
-            type: "snap", e, b, mk,
+            type: "snap", e, b, mk, v,
             p: [pickup.current.x, pickup.current.z, pickup.current.active ? 1 : 0, ORDER.indexOf(pickup.current.gun)],
             h: [heal.current.x, heal.current.z, heal.current.active ? 1 : 0],
             c: [crate.current.x, crate.current.z, crate.current.active ? 1 : 0, CRATE_KINDS.indexOf(crate.current.kind)],
