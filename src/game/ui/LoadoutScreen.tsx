@@ -4,6 +4,8 @@ import { CLASSES, CLASS_IDS, type ClassId } from "../classes";
 import { C, Hazard, MenuButton, OptionChip, Panel, Scrim, SectionLabel, useViewport } from "@/bro/game/ui/kit";
 import type { LobbyPlayer } from "./TitleScreen";
 import type { ReactNode } from "react";
+import { THEMES as BRO_THEMES } from "@/bro/game/themes";
+import { MAP_BLURB, MapThumb } from "@/bro/game/ui/mapArt";
 
 function ClassCard({ id, on, onPick }: { id: ClassId; on: boolean; onPick: () => void }) {
   const k = CLASSES[id];
@@ -133,7 +135,23 @@ export function LoadoutScreen({
             </span>
           </div>
           <div className="mt-1.5 rounded-md border-2 border-[#2b2118]/25 bg-[#2b2118]/6 px-2.5 py-2">
-            <div className="text-[11px] font-bold tracking-[0.14em]">{mapName.toUpperCase()}</div>
+            {(() => {
+              const th = BRO_THEMES.find((t) => t.name.toUpperCase() === mapName.toUpperCase());
+              const info = MAP_BLURB[th?.name ?? ""];
+              return (
+                <div className="flex items-center gap-2.5">
+                  {th && (
+                    <div className="w-40 shrink-0 overflow-hidden rounded border-2 border-[#2b2118]">
+                      <MapThumb theme={th} />
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[11px] font-bold tracking-[0.14em]">{mapName.toUpperCase()}</div>
+                    <div className="text-[11px] leading-tight opacity-70">{info ? info.blurb : "Procedurally stacked arena."}</div>
+                  </div>
+                </div>
+              );
+            })()}
             {mapPicker ? <div className="mt-2">{mapPicker}</div> : null}
           </div>
         </div>
