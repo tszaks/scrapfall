@@ -2140,7 +2140,7 @@ function World({
     }
 
     // supply crate: turret kit, barrier, cryo mine or ammo cache
-    if (!crate.current.active || crate.current.kind !== "ammo") { // one supply drop per wave (an unclaimed ammo cache stays)
+    if (!crate.current.active) { // exactly one supply drop per wave
       const c = randomSpawn(blocks, rand);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
