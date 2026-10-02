@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          best_wave: number
+          color: string
+          created_at: string
+          id: string
+          kills: number
+          matches: number
+          username: string
+        }
+        Insert: {
+          best_wave?: number
+          color?: string
+          created_at?: string
+          id: string
+          kills?: number
+          matches?: number
+          username: string
+        }
+        Update: {
+          best_wave?: number
+          color?: string
+          created_at?: string
+          id?: string
+          kills?: number
+          matches?: number
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
