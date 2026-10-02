@@ -75,7 +75,7 @@
 - [x] Mobile: lower render resolution, no sun shadows, lightest scenery budget on the big maps
 - [x] Mobile: movement stick drawn without re-rendering the HUD each finger move
 - [x] Add his 10 new enemy types to the big maps only
-- [ ] Preload/warm the big maps before the match starts (4-player co-op)
+- [x] Preload/warm the big maps before the match starts (progress bar + warm-up)
 - [x] Mobile: jump moved to the right side, stacked above the ability button
 - [x] Co-op: all four players can join (stale slots pruned, keep-alive heartbeat, full-room notice, lobby catch-up)
 

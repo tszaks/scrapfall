@@ -178,6 +178,11 @@ function netWhy(e: unknown, fallback: string) {
   if (/unavailable-id/.test(t)) return "That room code is busy. Try hosting again.";
   return fallback + (t ? ` (${t})` : "");
 }
+function Precompile({ k }: { k: unknown }) {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => { if (k) { try { gl.compile(scene, camera); } catch { /* best effort */ } } }, [k, gl, scene, camera]);
+  return null;
+}
 function PostRender() {
   useFrame(({ gl, scene, camera }) => { renderWithPost(gl, scene, camera); }, 1);
   return null;
@@ -3961,7 +3966,35 @@ export function Game() {
       cancelled = true;
     };
   }, [bigId, seed, coop]);
-  const bigLoading = !!bigId && (!bigMap || bigMap.seed !== seed);
+  // preload: after the map is built, its 3D scene renders behind the veil for a few
+  // seconds (shaders compiled, textures uploaded) so nobody stutters on the first steps
+  const [bigWarm, setBigWarm] = useState<number>(-1);
+  const [loadPct, setLoadPct] = useState(0);
+  const built = !!bigId && !!bigMap && bigMap.seed === seed;
+  useEffect(() => {
+    if (!bigId) return;
+    setLoadPct(0);
+    setBigWarm(-1);
+  }, [bigId, seed]);
+  useEffect(() => {
+    if (!bigId || bigWarm === seed) return;
+    const t0 = performance.now();
+    const warmMs = (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches ? 4500 : 2800) + (coop ? 1200 : 0);
+    let warmStart = 0;
+    const id = window.setInterval(() => {
+      if (!built) {
+        const sec = (performance.now() - t0) / 1000;
+        setLoadPct(0.8 * (1 - Math.exp(-sec / 2.2)));
+        return;
+      }
+      if (!warmStart) warmStart = performance.now();
+      const w = Math.min(1, (performance.now() - warmStart) / warmMs);
+      setLoadPct((p) => Math.max(p, 0.8 + 0.2 * w));
+      if (w >= 1) { setBigWarm(seed); window.clearInterval(id); }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [bigId, seed, built, bigWarm, coop]);
+  const bigLoading = !!bigId && (!built || bigWarm !== seed);
   const pendingStart = useRef<boolean | null>(null);
   const [waitingStart, setWaitingStart] = useState(false);
   const { blocks, enemies, rand, theme, alpine } = useMemo(() => {
@@ -4353,6 +4386,7 @@ export function Game() {
         <QualityGovernor />
         <PostFx />
         <PostRender />
+        <Precompile k={alpine} />
         {alpine && <AmbienceListener />}
         <World
           alpine={alpine}
@@ -4775,11 +4809,12 @@ export function Game() {
           <div>
             <div className="text-2xl tracking-[0.3em] text-[#f3ead9]">BUILDING ARENA</div>
             <div className="mt-3 text-xs tracking-[0.25em] text-[#f3ead9]/60">
-              {bigId ? BIG_MAPS[bigId].name : ""} · DOWNLOADING THE WHOLE MAP
+              {bigId ? BIG_MAPS[bigId].name : ""} · {loadPct < 0.8 ? "DOWNLOADING THE WHOLE MAP" : "WARMING UP THE SCENERY"}
             </div>
-            <div className="mx-auto mt-6 h-1 w-56 overflow-hidden rounded bg-[#f3ead9]/15">
-              <div className="h-full w-1/3 animate-[sfbar_1.1s_ease-in-out_infinite] bg-[#c2703d]" />
+            <div className="mx-auto mt-6 h-1.5 w-72 overflow-hidden rounded bg-[#f3ead9]/15">
+              <div className="h-full bg-[#c2703d] transition-[width] duration-100" style={{ width: `${Math.round(loadPct * 100)}%` }} />
             </div>
+            <div className="mt-2 text-xs tracking-[0.25em] text-[#f3ead9]/70">{Math.round(loadPct * 100)}%</div>
           </div>
           <style>{`@keyframes sfbar{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}`}</style>
         </div>
