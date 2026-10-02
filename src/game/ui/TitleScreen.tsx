@@ -2,6 +2,54 @@
 import { useState, type ReactNode } from "react";
 import { Hazard, MenuButton, Scrim, SectionLabel, useViewport } from "@/bro/game/ui/kit";
 import { BrandLogo } from "./BrandLogo";
+import { COLOR_PALETTE } from "../net";
+import { signIn, signOut, signUp, type Profile } from "../account";
+
+function AccountBox({ profile, setProfile, onClose }: { profile: Profile | null; setProfile: (p: Profile | null) => void; onClose: () => void }) {
+  const [mode, setMode] = useState<"in" | "up">("in");
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true); setErr("");
+    try { setProfile(await (mode === "in" ? signIn : signUp)(user, pass)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong"); }
+    setBusy(false);
+  };
+  const field = "pointer-events-auto w-full rounded-md border-2 border-[#f3e6cf]/35 bg-[#161009]/60 px-3 py-2 text-sm font-bold tracking-[0.15em] text-[#f3e6cf] placeholder:text-[#f3e6cf]/50 focus:border-[#e7b25c] focus:outline-none";
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-[#0b0a09]/80 p-4" onClick={onClose}>
+      <div className="w-full max-w-xs rounded-lg border-2 border-[#f3e6cf]/30 bg-[#1d150d] p-4 text-[#f3e6cf]" onClick={(e) => e.stopPropagation()}>
+        <SectionLabel className="text-[#e7b25c]">ACCOUNT</SectionLabel>
+        {profile ? (
+          <div className="mt-2 space-y-1 text-[12px] font-bold tracking-[0.15em]">
+            <div className="text-lg tracking-[0.2em]">{profile.username.toUpperCase()}</div>
+            <div>TOTAL KILLS · {profile.kills}</div>
+            <div>BEST WAVE · {profile.best_wave}</div>
+            <div>RUNS PLAYED · {profile.matches}</div>
+            <div className="flex gap-2 pt-3">
+              <MenuButton variant="ghost" size="sm" className="flex-1" onClick={async () => { await signOut(); setProfile(null); }}>Log out</MenuButton>
+              <MenuButton variant="primary" size="sm" className="flex-1" onClick={onClose}>Done</MenuButton>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <input className={field} placeholder="USERNAME" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" />
+            <input className={field} placeholder="PASSWORD" type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} autoComplete={mode === "in" ? "current-password" : "new-password"} />
+            {err && <div className="text-[11px] font-bold tracking-widest text-[#ffb4a8]">{err.toUpperCase()}</div>}
+            <MenuButton variant="primary" size="md" className="w-full" onClick={go} disabled={busy || !user || !pass}>
+              {busy ? "…" : mode === "in" ? "Log in" : "Create account"}
+            </MenuButton>
+            <button className="pointer-events-auto w-full text-center text-[11px] font-bold tracking-[0.2em] text-[#e7b25c]" onClick={() => { setMode(mode === "in" ? "up" : "in"); setErr(""); }}>
+              {mode === "in" ? "NEW HERE? CREATE AN ACCOUNT" : "HAVE AN ACCOUNT? LOG IN"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export type LobbyPlayer = {
   num: number;
@@ -18,25 +66,6 @@ function MenuGroup({ label, children }: { label: string; children: ReactNode }) 
     <div className="rounded-lg border-2 border-[#f3e6cf]/25 bg-[#161009]/45 p-2.5 backdrop-blur-[2px]">
       <div className="mb-2 text-[11px] font-bold tracking-[0.3em] text-[#f3e6cf]/70">{label}</div>
       <div className="flex items-stretch gap-1.5">{children}</div>
-    </div>
-  );
-}
-
-/** key chips describing the controls for this device */
-function ControlsHint({ touch }: { touch: boolean }) {
-  const items = touch
-    ? ["LEFT THUMB · MOVE", "RIGHT THUMB · AIM", "FIRE · SHOOT", "BUTTONS UP TOP"]
-    : ["WASD · MOVE", "MOUSE · AIM", "CLICK · FIRE", "P · PAUSE"];
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {items.map((s) => (
-        <span
-          key={s}
-          className="rounded border border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1 text-[11px] font-bold tracking-[0.18em] text-[#f3e6cf]/85"
-        >
-          {s}
-        </span>
-      ))}
     </div>
   );
 }
@@ -80,6 +109,11 @@ export function TitleScreen({
   leaveRoom,
   players,
   mapPicker,
+  myColor,
+  setMyColor,
+  takenColors,
+  profile,
+  setProfile,
 }: {
   themeName: string;
   weather: string;
@@ -100,7 +134,13 @@ export function TitleScreen({
   leaveRoom: () => void;
   players: LobbyPlayer[];
   mapPicker?: ReactNode | undefined;
+  myColor: string;
+  setMyColor: (c: string) => void;
+  takenColors: string[];
+  profile: Profile | null;
+  setProfile: (p: Profile | null) => void;
 }) {
+  const [showAccount, setShowAccount] = useState(false);
   const { short, narrow } = useViewport();
   const compact = short || touchUi;
   const [copied, setCopied] = useState(false);
@@ -125,6 +165,9 @@ export function TitleScreen({
         style={{ textShadow: "0 1px 0 #2b2118" }}
       >
         <span>SZAKACS MEDIA</span>
+        <button className="pointer-events-auto rounded border border-[#f3e6cf]/35 bg-[#161009]/45 px-2 py-1 tracking-[0.2em] text-[#f3e6cf]" onClick={() => setShowAccount(true)}>
+          {profile ? profile.username.toUpperCase() : "LOG IN"}
+        </button>
         <span className="hidden sm:inline">SCRAPFALL · v{version}</span>
         <span>{themeName.toUpperCase()} · LIVE MAP</span>
       </div>
@@ -189,9 +232,6 @@ export function TitleScreen({
                   {netError}
                 </div>
               )}
-              <div className={`ui-rise-2 ${compact ? "mt-3" : "mt-4"}`}>
-                <ControlsHint touch={touchUi} />
-              </div>
             </>
           ) : (
             /* ---------- co-op lobby ---------- */
@@ -235,6 +275,24 @@ export function TitleScreen({
                       OPEN SLOT
                     </div>
                   ))}
+                </div>
+                <div className="mt-3">
+                  <SectionLabel className="text-[#f3e6cf]">YOUR COLOUR</SectionLabel>
+                  <div className="mt-1.5 grid grid-cols-6 gap-1.5">
+                    {COLOR_PALETTE.map((c) => {
+                      const taken = takenColors.includes(c);
+                      return (
+                        <button
+                          key={c}
+                          aria-label={`Colour ${c}`}
+                          disabled={taken}
+                          onClick={() => setMyColor(c)}
+                          className={`pointer-events-auto h-7 rounded-md border-2 ${myColor === c ? "border-[#f7eeda] ring-2 ring-[#e7b25c]" : "border-[#2b2118]"} ${taken ? "opacity-25" : ""}`}
+                          style={{ background: c }}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
                 {mapPicker && <div className="mt-3">{mapPicker}</div>}
                 <div className="mt-3.5 flex gap-2">
@@ -284,6 +342,7 @@ export function TitleScreen({
         <span>TYLER &amp; TOBY SZAKACS · SZAKACS MEDIA</span>
       </div>
       {!touchUi && <Hazard className="mx-5 mb-2 hidden" />}
+      {showAccount && <AccountBox profile={profile} setProfile={setProfile} onClose={() => setShowAccount(false)} />}
     </Scrim>
   );
 }
