@@ -90,7 +90,7 @@
 - [x] P2 Self-revive token (no token = dead until next wave)
 - [x] P3 Chairlift, Ferris wheel, elevators (E / JUMP in car), traffic hits, boss train, crowds (elevator cars simulated per player, not synced)
 - [x] P4 arena detail, bloom, vaulting/roof leaps, arena wall
-- [ ] P4 window interiors on our arenas
+- [ ] P4 window interiors on our arenas — skipped: the 10 arenas have no buildings with windows
 - [x] P5 ambience, STUN/TURN + clear join errors
 - [x] P5 Ping, synced teammate turrets/mines, music voices, controller + aim assist
 - [x] P5 STUN/TURN relays (clear join errors still open)
@@ -103,4 +103,3 @@
 - [x] Teammates use his new scavenger character with walk/idle animations (v1.1)
 - [x] Teammate animations synced in co-op (jump, ride seat, aim pitch, recoil, height)
 
-- [ ] Window interiors: skipped — the 10 arenas have no buildings with windows (his interiors already run on the big maps)
