@@ -83,7 +83,7 @@
 - [x] P1 Sharper big maps (full pixel ratio on desktop, longer view)
 - [ ] P1 Brother's quality governor
 - [ ] P1 Fix broken trees/props on our 10 arenas
-- [ ] P2 Brother's 10 new enemies (big maps only)
+- [~] P2 Brother's 10 new enemies (big maps only) — in with his stats + colours on base behaviours; his own models/AI still to port
 - [x] P2 Faster burst spawns around players on big maps
 - [ ] P2 Sniper rifle + scope
 - [x] P2 More ammo crates everywhere
