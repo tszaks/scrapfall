@@ -2930,6 +2930,7 @@ function World({
           navOpen: (x, z) => !blocked(blocks, x, z, 0.55),
         };
         hornetCd.current.v -= delta;
+        stepOrds(aiCtx);
       }
       for (const e of enemies) {
         if (!e.alive) continue;
@@ -3389,7 +3390,7 @@ function World({
         />
       )}
       {enemies.map((e, i) => (
-        <EnemyMesh key={i} data={e} theme={theme} />
+        <EnemyMesh key={i} data={e} theme={theme} bot={bots.current[i]} bots={bots.current} />
       ))}
       {enemies.map((_, i) => (
         <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
