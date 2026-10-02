@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { touchInput } from "./touch";
 
 const RADIUS = 52;
@@ -58,6 +58,7 @@ export function MobileControls({
   const moveId = useRef<number | null>(null);
   const lookId = useRef<number | null>(null);
   const last = useRef({ x: 0, y: 0 });
+  const [aimOn, setAimOn] = useState(false);
 
   const endMove = () => {
     moveId.current = null;
@@ -155,12 +156,19 @@ export function MobileControls({
           onDown={() => (touchInput.run = true)}
           onUp={() => (touchInput.run = false)}
         />
-        <Btn
-          label="FIRE"
-          size={108}
-          onDown={() => (touchInput.fire = true)}
-          onUp={() => (touchInput.fire = false)}
-        />
+        <div className="flex flex-col items-center gap-3">
+          <Btn
+            label={aimOn ? "AIM ●" : "AIM"}
+            size={72}
+            onTap={() => { touchInput.aim = !touchInput.aim; setAimOn(touchInput.aim); }}
+          />
+          <Btn
+            label="FIRE"
+            size={108}
+            onDown={() => (touchInput.fire = true)}
+            onUp={() => (touchInput.fire = false)}
+          />
+        </div>
       </div>
 
 

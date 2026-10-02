@@ -8,6 +8,7 @@ export const touchInput = {
   fire: false,
   jump: false,
   run: false,
+  aim: false, // toggled by the AIM button
   ability: false, // one-shot
   swap: 0, // one-shot: -1 previous weapon, 1 next weapon
   pick: null as string | null, // one-shot: equip this weapon directly (tapped HUD chip)
