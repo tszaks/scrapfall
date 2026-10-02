@@ -84,7 +84,7 @@ const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound"
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
-const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo"];
+const CRATE_KINDS: CrateKind[] = ["turret", "mine", "ammo", "ammo"];
 const CRATE_INFO: Record<CrateKind, { name: string; color: string }> = {
   turret: { name: "SENTRY TURRET", color: "#4fe3ff" },
   shield: { name: "NANO BARRIER", color: "#7cc6ff" },
@@ -2109,7 +2109,8 @@ function World({
       });
       e.elite = 0;
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
-      delay += i < 2 ? 0.4 : 0.5 + rand() * 1.6;
+      // big maps: tight bursts of 4-6 in quick succession instead of a slow trickle
+      delay += alpine ? (i % 5 === 4 ? 2.2 + rand() * 1.2 : 0.15 + rand() * 0.25) : i < 2 ? 0.4 : 0.5 + rand() * 1.6;
 
     });
     // the champion: a gold, far tougher version of one of the wave's heavies
@@ -2139,7 +2140,7 @@ function World({
     }
 
     // supply crate: turret kit, barrier, cryo mine or ammo cache
-    if (!crate.current.active) { // exactly one supply drop per wave
+    if (!crate.current.active || crate.current.kind !== "ammo") { // one supply drop per wave (an unclaimed ammo cache stays)
       const c = randomSpawn(blocks, rand);
       const kind = CRATE_KINDS[Math.floor(rand() * CRATE_KINDS.length)] ?? "ammo";
       crate.current = { x: c.x, z: c.z, active: true, kind };
@@ -2782,6 +2783,12 @@ function World({
       // staggered spawns: red X flashes for MARK_TIME, then the enemy appears
       pending.current.forEach((pd, i) => {
         if (!pd) return;
+        // big maps: pick the arrival spot around the player right before the marker shows
+        if (alpine && pd.t > MARK_TIME && pd.t - delta <= MARK_TIME) {
+          const np = randomSpawn(blocks, Math.random);
+          pd.x = np.x;
+          pd.z = np.z;
+        }
         pd.t -= delta;
         if (pd.t <= 0) {
           const e = enemies[i]!;
@@ -3765,6 +3772,7 @@ export function Game() {
     const alpine = bigId && bigMap && bigMap.seed === seed ? bigMap : null;
     setBigGround(!!alpine);
     spawnFocus.on = !!alpine && alpine.size > 200;
+    spawnFocus.r = 30;
     if (alpine) { spawnFocus.x = alpine.spawn.x; spawnFocus.z = alpine.spawn.z; }
     setArenaSize(alpine ? alpine.size : coop ? COOP_ARENA : SOLO_ARENA); // co-op gets a bigger field
     const level = alpine ? { blocks: alpine.blocks, seed, rand: generateLevel(seed).rand } : generateLevel(seed);
@@ -4124,7 +4132,7 @@ export function Game() {
           and a 3x phone screen is what makes them stutter */}
       <Canvas
         shadows={!touchUi}
-        dpr={touchUi ? [0.6, 1] : [1, 1.6]}
+        dpr={touchUi ? [0.75, 1.25] : [1, 2]}
         gl={{ powerPreference: "high-performance", antialias: true }}
         camera={{ position: [0, EYE, 0], fov: 75, near: 0.1, far: alpine ? (touchUi ? 700 : 1200) : 220 }}
       >
