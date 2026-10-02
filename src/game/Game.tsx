@@ -111,6 +111,7 @@ type Enemy = {
   max?: number; // spawn health, for the executioner hammer
   shredUntil?: number; // shredder rounds: takes extra damage until this time
   aux?: number; // special-enemy state (leap / beam timer)
+  nv?: string; // big maps: one of the brother's newer enemy types riding this base kind
   elite?: number; // 1 = event champion (gold, tougher, big shard payout)
 };
 type Bullet = {
@@ -120,6 +121,14 @@ type Bullet = {
 const M_SHRED = 1, M_EXEC = 2, M_BOUNTY = 4;
 
 
+// big maps only: the brother's 10 newer enemy types, each driven by the closest base behaviour
+const NEW_ON_BASE: Record<NewKind, Kind> = {
+  sniper: "shooter", flanker: "runner", grenadier: "bomber", bulwark: "vanguard", charger: "brute",
+  medic: "specter", hornet: "runner", gatling: "shooter", rocketeer: "bomber", cloaker: "specter",
+};
+const NEW_SCALE: Record<NewKind, number> = {
+  sniper: 1.05, flanker: 0.85, grenadier: 1, bulwark: 1.15, charger: 1.3, medic: 0.8, hornet: 0.45, gatling: 1.3, rocketeer: 1.05, cloaker: 1,
+};
 const BOSS_HP = 450; // 1.5x tougher arena boss
 const STATS: Record<Kind, { hp: number; speed: number; radius: number; dmg: number }> = {
   drifter: { hp: 2, speed: 2.6, radius: 0.6, dmg: 1 },
@@ -150,6 +159,7 @@ const WAVES: WaveSpec[] = [
   { boss: 1, drifter: 10, brute: 6, shooter: 6, runner: 6, specter: 4, bomber: 3, vanguard: 3, special: 3 },
 ];
 const MAX_ENEMIES = 110;
+import { NEW_KINDS, NEW_STATS, ENEMY_INFO, type NewKind } from "@/bro/game/enemyKinds";
 const MARK_TIME = 2; // seconds a red X flashes before an enemy appears
 const MAX_HP = 10;
 const SHOP_KEYS = ["KeyZ", "KeyX", "KeyC"];
@@ -977,9 +987,20 @@ const EnemyMesh = memo(function EnemyMesh({ data, theme }: { data: Enemy; theme:
     g.position.set(data.x, bob + groundY(data.x, data.z), data.z);
     g.lookAt(state.camera.position.x, 0, state.camera.position.z);
     const base = k === "special" ? 1 : k === "boss" ? 1.6 : k === "runner" ? 0.6 : k === "vanguard" ? 1.05 : 1;
-    g.scale.setScalar(base * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
+    const nvk = data.nv as NewKind | undefined;
+    g.scale.setScalar((nvk ? NEW_SCALE[nvk] : base) * (data.elite ? 1.6 : 1) * (data.flash > 0 ? 1.15 : 1));
     if (aura.current) {
-      aura.current.visible = !!data.elite;
+      aura.current.visible = !!data.elite || !!nvk;
+      if (nvk) {
+        const col = ENEMY_INFO[nvk]?.accent ?? "#ffd24a";
+        aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(col));
+      } else if (data.elite) {
+        aura.current.children.forEach((m) => ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set("#ffd24a"));
+      }
+      // cloakers fade out until close
+      if (nvk === "cloaker") g.visible = Math.hypot(state.camera.position.x - data.x, state.camera.position.z - data.z) < 6 || data.flash > 0;
+      // fliers hover
+      if (nvk === "hornet" || nvk === "medic") g.position.y += nvk === "hornet" ? 1.4 : 2;
       aura.current.rotation.y = t * 1.2;
     }
     if (ice.current) ice.current.visible = (data.frozen ?? 0) > 0;
@@ -2108,6 +2129,18 @@ function World({
         burnTick: 0,
       });
       e.elite = 0;
+      e.nv = undefined;
+      // big maps: about 40% of non-boss arrivals become one of the newer types unlocked by this wave
+      if (alpine && kind !== "boss" && rand() < 0.4) {
+        const open = NEW_KINDS.filter((nk) => (ENEMY_INFO[nk]?.wave ?? 99) <= Math.max(2, n));
+        const nk = open[Math.floor(rand() * open.length)];
+        if (nk) {
+          const st = NEW_STATS[nk];
+          e.kind = NEW_ON_BASE[nk];
+          e.nv = nk;
+          e.hp = e.max = Math.max(1, Math.round(st.hp * hpMul));
+        }
+      }
       pending.current[i] = { x: p.x, z: p.z, t: MARK_TIME + delay };
       // big maps: tight bursts of 4-6 in quick succession instead of a slow trickle
       delay += alpine ? (i % 5 === 4 ? 2.2 + rand() * 1.2 : 0.15 + rand() * 0.25) : i < 2 ? 0.4 : 0.5 + rand() * 1.6;
