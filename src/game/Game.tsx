@@ -2122,7 +2122,7 @@ function World({
       const t = e.target as HTMLElement | null;
       const locked = !!document.pointerLockElement;
       if (!locked && t?.tagName !== "CANVAS") return;
-      if (!locked && !touchUi) {
+      if (!locked && !isTouchDevice()) {
         try {
           const r = (t?.closest("div[class*='cursor-crosshair']") as HTMLElement | null ?? t)?.requestPointerLock() as unknown as Promise<void> | undefined;
           r?.catch?.(() => {});
@@ -2159,8 +2159,6 @@ function World({
       if (isFire(e)) trigger.current = false;
       if (bindIs("scope", e.code)) scopeKey.current = false;
     };
-    const noMenu = (e: MouseEvent) => { if ((e.target as HTMLElement)?.tagName === "CANVAS") e.preventDefault(); };
-    window.addEventListener("contextmenu", noMenu);
     window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     window.addEventListener("keydown", onKey);
