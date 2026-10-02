@@ -42,6 +42,11 @@ import { setAutoTier } from "@/bro/game/quality";
 import { Hazard, MenuButton, SectionLabel, UiStyles } from "@/bro/game/ui/kit";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { SettingsScreen } from "./ui/SettingsScreen";
+import { binds, held as bindHeld, is as bindIs, loadBinds, padOpts } from "./binds";
+import { pad, pollPad } from "./gamepad";
+import { aimState, stepAim } from "@/bro/game/input/aim";
+import { ScopeOverlay } from "@/bro/game/ScopeOverlay";
+import { bigNet, bigMe, bigCars, bigSetCars } from "@/bro/game/BigMaps";
 import { TitleScreen } from "./ui/TitleScreen";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
@@ -56,7 +61,7 @@ type Kind = "drifter" | "brute" | "shooter" | "runner" | "boss" | "specter" | "b
 type Weapon =
   | "pistol" | "scatter" | "smg" | "rail" | "cannon"
   | "rebound" | "harpoon" | "cryo" | "flak" | "tesla"
-  | "revolver" | "minigun" | "crossbow" | "plasma" | "voidorb" | "shatter";
+  | "revolver" | "minigun" | "crossbow" | "plasma" | "voidorb" | "shatter" | "sniper";
 type Gun = {
   name: string; wave: number; cooldown: number; count: number; spread: number;
   speed: number; life: number; damage: number; size: number; color: string; body: string; ammo: number;
@@ -66,6 +71,7 @@ const GUNS: Record<Weapon, Gun> = {
   pistol: { name: "PISTOL", wave: 0, cooldown: 0.28, count: 1, spread: 0, speed: 22, life: 2, damage: 1, size: 0.14, color: "#ff8a1f", body: "#3a2f26", ammo: 140 },
   scatter: { name: "SCATTER", wave: 3, cooldown: 0.7, count: 5, spread: 0.07, speed: 22, life: 0.8, damage: 1, size: 0.12, color: "#ffd23f", body: "#6b4a2c", ammo: 16 },
   smg: { name: "BUZZER", wave: 5, cooldown: 0.08, count: 1, spread: 0.03, speed: 26, life: 1.4, damage: 1, size: 0.09, color: "#4fe3ff", body: "#2c4a5c", ammo: 120 },
+  sniper: { name: "LONGSHOT", wave: 6, cooldown: 1.25, count: 1, spread: 0, speed: 95, life: 1.3, damage: 9, size: 0.08, color: "#ffe6a0", body: "#2d3134", ammo: 10, pierce: 3 },
   rail: { name: "LANCE", wave: 7, cooldown: 0.9, count: 1, spread: 0, speed: 48, life: 1.5, damage: 5, size: 0.1, color: "#e04bff", body: "#e8e2d4", ammo: 10 },
   cannon: { name: "BOOMER", wave: 9, cooldown: 1.1, count: 1, spread: 0, speed: 13, life: 3, damage: 8, size: 0.38, color: "#ff3b2a", body: "#1e1e1e", ammo: 6 },
   rebound: { name: "REBOUNDER", wave: 4, cooldown: 0.5, count: 1, spread: 0, speed: 20, life: 3, damage: 2, size: 0.17, color: "#7cff4f", body: "#2f4a22", ammo: 20, bounce: 3 },
@@ -80,7 +86,7 @@ const GUNS: Record<Weapon, Gun> = {
   voidorb: { name: "VOID ORB", wave: 8, cooldown: 1.1, count: 1, spread: 0, speed: 8, life: 4, damage: 3, size: 0.36, color: "#b06bff", body: "#1c1030", ammo: 10, chain: 4, pierce: 4 },
   shatter: { name: "SHATTERGUN", wave: 9, cooldown: 0.9, count: 1, spread: 0, speed: 18, life: 1.8, damage: 3, size: 0.25, color: "#b8f4ff", body: "#2a4a5a", ammo: 12, cluster: 5, slow: 2 },
 };
-const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter"];
+const ORDER: Weapon[] = ["pistol", "scatter", "smg", "rail", "cannon", "rebound", "harpoon", "cryo", "flak", "tesla", "revolver", "minigun", "crossbow", "plasma", "voidorb", "shatter", "sniper"];
 const DROPPABLE: Weapon[] = ORDER.filter((w) => w !== "pistol");
 const KINDS: Kind[] = ["drifter", "brute", "shooter", "runner", "boss", "specter", "bomber", "vanguard", "special"];
 type CrateKind = "turret" | "shield" | "mine" | "ammo";
@@ -1616,11 +1622,11 @@ function World({
   const crateMesh = useRef<THREE.Group>(null);
   const [crateKind, setCrateKind] = useState<CrateKind>("turret");
   const crateKindRef = useRef<CrateKind>("turret");
-  const turrets = useRef<{ x: number; z: number; t: number; cd: number }[]>([]);
+  const turrets = useRef<{ x: number; z: number; t: number; cd: number; remote?: boolean }[]>([]);
   const deployTick = useRef(0);
   const lastDeploys = useRef({ turret: -1, mines: -1 });
 
-  const mines = useRef<{ x: number; z: number; armed: number }[]>([]);
+  const mines = useRef<{ x: number; z: number; armed: number; remote?: boolean }[]>([]);
   const turretMeshes = useRef<(THREE.Group | null)[]>([]);
   const mineMeshes = useRef<(THREE.Group | null)[]>([]);
   /** active overtime condition, null during the normal 12 waves */
@@ -1721,6 +1727,12 @@ function World({
   coopRef.current = !!net;
 
   const tTimer = useRef(0);
+  const pingReq = useRef(false);
+  const scopeKey = useRef(false);
+  const scopeMouse = useRef(false);
+  const carTimer = useRef(0);
+  const pings = useRef<{ x: number; y: number; z: number; t: number; c: string }[]>([]);
+  const pingMeshes = useRef<(THREE.Mesh | null)[]>([]);
   const snapTimer = useRef(0);
   const guestTarget = useRef<{ x: number; z: number }[]>(enemies.map(() => ({ x: 0, z: 0 })));
   const fields = useRef(new Map<number, Float32Array>());
@@ -1756,6 +1768,8 @@ function World({
     r.seat = !!m.s;
     r.pitch = Number(m.p ?? 0);
     r.kick = Number(m.k ?? 0);
+    r.az = Number(m.az ?? 0);
+    r.pr = Number(m.pr ?? 0);
     r.last = performance.now();
   };
 
@@ -1836,6 +1850,20 @@ function World({
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
       if (m.type === "t") { upsertRemote(m); return; }
+      if (m.type === "cars") { if (Array.isArray(m.c)) bigSetCars(m.c as number[]); return; }
+      if (m.type === "ping") {
+        const col = remotes.current.get(String(m.from))?.color ?? "#4fe3ff";
+        pings.current.push({ x: Number(m.x), y: Number(m.y ?? 0), z: Number(m.z), t: 7, c: col });
+        if (pings.current.length > 8) pings.current.shift();
+        playSfx("pickup");
+        return;
+      }
+      if (m.type === "dep") {
+        const x = Number(m.x), z = Number(m.z);
+        if (m.k === "turret" && turrets.current.length < 12) turrets.current.push({ x, z, t: TURRET_LIFE, cd: 0, remote: true });
+        if (m.k === "mine" && mines.current.length < 12) mines.current.push({ x, z, armed: 1, remote: true });
+        return;
+      }
       if (m.type === "shard") { takenShards.current.add(String(m.id)); return; }
       if (m.type === "left") { remotes.current.delete(String(m.from)); return; }
       if (onMapEventMsg(m as never)) return;
@@ -2089,10 +2117,14 @@ function World({
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "CANVAS") trigger.current = true;
+      if ((e.target as HTMLElement)?.tagName !== "CANVAS") return;
+      if (e.button === 2) scopeMouse.current = true;
+      else if (e.button === 1) pingReq.current = true;
+      else trigger.current = true;
     };
-    const onUp = () => (trigger.current = false);
-    const isFire = (e: KeyboardEvent) => e.code === "Enter" || e.code === "NumpadEnter";
+    const onUp = (e: MouseEvent) => { if (e.button === 2) scopeMouse.current = false; else trigger.current = false; };
+    loadBinds();
+    const isFire = (e: KeyboardEvent) => bindIs("fire", e.code);
     const onKey = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = true;
       if (/^[0-9]$/.test(e.key)) {
@@ -2101,18 +2133,23 @@ function World({
         const w = [...owned.current][slot - 1];
         if (w) equip(w);
       }
-      if (e.code === "KeyF") abilFire.current = true;
-      if (e.code === "KeyE" && bigInCar()) { bigPressUse(); return; }
-      if (e.code === "KeyQ" || e.code === "KeyE") {
+      if (bindIs("ability", e.code)) abilFire.current = true;
+      if (bindIs("use", e.code) && bigInCar()) { bigPressUse(); return; }
+      if (bindIs("ping", e.code)) pingReq.current = true;
+      if (bindIs("scope", e.code)) scopeKey.current = true;
+      if (bindIs("prev", e.code) || bindIs("next", e.code)) {
         const list = [...owned.current];
         const i = list.indexOf(weapon.current);
-        const next = list[(i + (e.code === "KeyE" ? 1 : list.length - 1)) % list.length];
+        const next = list[(i + (bindIs("next", e.code) ? 1 : list.length - 1)) % list.length];
         if (next) equip(next);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (isFire(e)) trigger.current = false;
+      if (bindIs("scope", e.code)) scopeKey.current = false;
     };
+    const noMenu = (e: MouseEvent) => { if ((e.target as HTMLElement)?.tagName === "CANVAS") e.preventDefault(); };
+    window.addEventListener("contextmenu", noMenu);
     window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     window.addEventListener("keydown", onKey);
@@ -2122,6 +2159,7 @@ function World({
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("contextmenu", noMenu);
     };
   }, [camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2304,6 +2342,62 @@ function World({
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const k = keys.current;
+    pollPad(delta);
+    if (pad.use && bigInCar()) bigPressUse();
+    if (pad.ping) pingReq.current = true;
+    // LONGSHOT scope: his aim blend drives the zoom and the lens overlay
+    const scoping = weapon.current === "sniper" && !spectating && (scopeKey.current || scopeMouse.current || pad.scope);
+    aimState.on = scoping;
+    aimState.scoped = aimState.blend > 0.9;
+    stepAim(delta, weapon.current !== "sniper" || spectating);
+    {
+      const pc = cam as THREE.PerspectiveCamera;
+      const want = fov + (20 - fov) * aimState.blend;
+      if (Math.abs(pc.fov - want) > 0.05) { pc.fov = want; pc.updateProjectionMatrix(); }
+    }
+    // controller aim assist: a gentle pull toward the enemy nearest the crosshair
+    if (pad.active && padOpts.assist && !gameOver) {
+      let best = 0.14, pull = 0;
+      for (const e of enemies) {
+        if (!e.alive) continue;
+        const dx = e.x - cam.position.x, dz = e.z - cam.position.z, d = Math.hypot(dx, dz);
+        if (d > 45 || d < 0.5) continue;
+        let a = Math.atan2(-dx, -dz) - look.current.yaw;
+        while (a > Math.PI) a -= Math.PI * 2;
+        while (a < -Math.PI) a += Math.PI * 2;
+        if (Math.abs(a) < best) { best = Math.abs(a); pull = a; }
+      }
+      look.current.yaw += pull * Math.min(1, delta * 2.5);
+    }
+    // ping: mark where the crosshair points for the whole squad
+    if (pingReq.current) {
+      pingReq.current = false;
+      const dir = new THREE.Vector3();
+      cam.getWorldDirection(dir);
+      const feet = cam.position.y - EYE;
+      let dist = 40;
+      if (dir.y < -0.02) dist = Math.min(60, (cam.position.y - feet) / -dir.y);
+      for (let q = 1; q < dist; q += 0.5) {
+        if (!alpine && blocked(blocks, cam.position.x + dir.x * q, cam.position.z + dir.z * q, 0.2)) { dist = q; break; }
+      }
+      const px = cam.position.x + dir.x * dist, pz = cam.position.z + dir.z * dist;
+      pings.current.push({ x: px, y: feet, z: pz, t: 7, c: "#e7b25c" });
+      if (pings.current.length > 8) pings.current.shift();
+      playSfx("pickup");
+      netRef.current?.broadcast({ type: "ping", x: px, y: feet, z: pz });
+    }
+    for (let pi = 0; pi < 8; pi++) {
+      const pg = pings.current[pi], pm = pingMeshes.current[pi];
+      if (pg) pg.t -= delta;
+      if (!pm) continue;
+      pm.visible = !!pg && pg.t > 0;
+      if (pg && pg.t > 0) {
+        pm.position.set(pg.x, pg.y + 6, pg.z);
+        (pm.material as THREE.MeshBasicMaterial).color.set(pg.c);
+        (pm.material as THREE.MeshBasicMaterial).opacity = Math.min(0.55, pg.t * 0.3) * (0.75 + 0.25 * Math.sin(state.clock.elapsedTime * 6));
+      }
+    }
+    pings.current = pings.current.filter((pg) => pg.t > 0);
 
     if (!gameOver && locked) {
       look.current.yaw += ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) * TURN_SPEED * sensX * delta;
@@ -2403,7 +2497,7 @@ function World({
     const slip = wave.current === WAVES.length ? theme.hazard.slip : 0;
     const resp = slip > 0 ? Math.min(1, delta * (1.5 + (1 - slip) * 22)) : 1;
     const mut = mutator.current?.id;
-    const running = k.has("ShiftLeft") || k.has("ShiftRight") || touchInput.run;
+    const running = bindHeld("run", k) || touchInput.run;
     const spd = SPEED * stats.current.speed
       * (running ? RUN_MUL : 1)
       * (stats.current.holster && weapon.current === "pistol" ? 1.15 : 1)
@@ -2429,7 +2523,7 @@ function World({
 
     bobAmt.current += ((moving ? 1 : 0) - bobAmt.current) * Math.min(1, delta * 8);
     // jump: Space on desktop, JUMP button on touch
-    const wantJump = k.has("Space") || touchInput.jump;
+    const wantJump = bindHeld("jump", k) || touchInput.jump;
     if (wantJump && jumpY.current <= 0 && jumpV.current <= 0 && !spectating) jumpV.current = JUMP_V;
     if (jumpY.current > 0 || jumpV.current > 0) {
       const dt = Math.min(delta, 0.05);
@@ -2468,7 +2562,18 @@ function World({
           hp: spectating ? 0 : Math.max(1, healthRef.current), w: weapon.current,
           y: Math.round((cam.position.y - EYE) * 100) / 100, a: jumpY.current > 0.05 ? 1 : 0,
           s: riding ? 1 : 0, p: Math.round(look.current.pitch * 100) / 100, k: Math.round(recoil.current * 10) / 10,
+          ...(alpine ? { az: bigMe().az, pr: bigMe().pr } : {}),
         });
+      }
+      if (alpine) {
+        bigNet.host = isH;
+        bigNet.people = [...remotes.current.values()].filter((r) => r.hp > 0).map((r) => ({ x: r.x, z: r.z, az: r.az ?? 0, y: r.y ?? 0, id: r.id, press: r.pr ?? 0 }));
+        carTimer.current -= delta;
+        if (isH && carTimer.current <= 0) {
+          carTimer.current = 0.2;
+          const c = bigCars();
+          if (c) n.broadcast({ type: "cars", c });
+        }
       }
     }
 
@@ -2537,8 +2642,9 @@ function World({
     }
     if (ck.active && !spectating && Math.hypot(cam.position.x - ck.x, cam.position.z - ck.z) < 1.4) {
       ck.active = false;
-      if (ck.kind === "turret" && turrets.current.length < 6) turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
-      if (ck.kind === "mine" && mines.current.length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "turret" && turrets.current.filter((t) => !t.remote).length < 6) turrets.current.push({ x: cam.position.x, z: cam.position.z, t: TURRET_LIFE, cd: 0 });
+      if (ck.kind === "mine" && mines.current.filter((t) => !t.remote).length < 6) mines.current.push({ x: cam.position.x, z: cam.position.z, armed: 1 });
+      if (ck.kind === "turret" || ck.kind === "mine") netRef.current?.broadcast({ type: "dep", k: ck.kind, x: cam.position.x, z: cam.position.z });
       if (ck.kind === "ammo") {
         owned.current.forEach((w) => {
           const cap = Math.round((w === "pistol" && stats.current.extmag ? 220 : GUNS[w].ammo) * stats.current.ammoMul);
@@ -2569,6 +2675,7 @@ function World({
         const d2 = Math.hypot(e.x - t.x, e.z - t.z);
         if (d2 < bd) { bd = d2; best = e; }
       }
+      if (best && t.remote) { if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z); continue; }
       if (best && t.cd <= 0) {
         t.cd = 0.3;
         playSfx("turret");
@@ -2577,8 +2684,8 @@ function World({
         if (mesh) mesh.rotation.y = Math.atan2(best.x - t.x, best.z - t.z);
       }
     }
-    for (let i = turrets.current.length; i < 6; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
-    for (let i = mines.current.length; i < 6; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
+    for (let i = turrets.current.length; i < 12; i++) { const m2 = turretMeshes.current[i]; if (m2) m2.visible = false; }
+    for (let i = mines.current.length; i < 12; i++) { const m2 = mineMeshes.current[i]; if (m2) m2.visible = false; }
 
     // keep the HUD status panel in sync with what's deployed
     deployTick.current -= delta;
@@ -2916,7 +3023,7 @@ function World({
       for (let ei = 0; ei < enemies.length; ei++) {
         const e = enemies[ei]!;
         if (!e.alive) continue;
-        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) { hurtEnemy(e, 2, ei, 4); hit = true; }
+        if (Math.hypot(e.x - mn.x, e.z - mn.z) < 3) { if (!mn.remote) hurtEnemy(e, 2, ei, 4); hit = true; }
       }
       if (hit) {
         mines.current.splice(mi, 1);
@@ -3550,14 +3657,20 @@ function World({
         <mesh scale={1.02}><boxGeometry args={[0.82, 0.3, 0.82]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
         <mesh position-y={-0.6} rotation-x={-Math.PI / 2}><ringGeometry args={[0.6, 0.78, 20]} /><meshBasicMaterial color={CRATE_INFO[crateKind].color} fog={false} /></mesh>
       </group>
-      {Array.from({ length: 6 }, (_, i) => (
+      {Array.from({ length: 8 }, (_, i) => (
+        <mesh key={`ping${i}`} ref={(m) => { pingMeshes.current[i] = m; }} visible={false}>
+          <cylinderGeometry args={[0.18, 0.5, 12, 10, 1, true]} />
+          <meshBasicMaterial color="#e7b25c" transparent opacity={0.5} fog={false} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {Array.from({ length: 12 }, (_, i) => (
         <group key={`turret${i}`} ref={(g) => { turretMeshes.current[i] = g; }} visible={false}>
           <mesh position-y={0.35}><cylinderGeometry args={[0.28, 0.36, 0.7, 8]} /><meshStandardMaterial color="#39424d" /></mesh>
           <mesh position-y={0.85}><sphereGeometry args={[0.28, 10, 8]} /><meshStandardMaterial color="#1f2731" /></mesh>
           <mesh position={[0, 0.9, 0.45]} rotation-x={Math.PI / 2}><cylinderGeometry args={[0.07, 0.07, 0.8, 8]} /><meshBasicMaterial color="#4fe3ff" fog={false} /></mesh>
         </group>
       ))}
-      {Array.from({ length: 6 }, (_, i) => (
+      {Array.from({ length: 12 }, (_, i) => (
         <group key={`mine${i}`} ref={(g) => { mineMeshes.current[i] = g; }} visible={false}>
           <mesh rotation-x={-Math.PI / 2}><cylinderGeometry args={[0.35, 0.35, 0.12, 10]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
           <mesh rotation-x={-Math.PI / 2}><ringGeometry args={[0.5, 0.6, 18]} /><meshBasicMaterial color="#9fe8ff" fog={false} /></mesh>
@@ -5000,6 +5113,7 @@ export function Game() {
 }
 
 const GUN_INFO: Record<Weapon, string> = {
+  sniper: "His LONGSHOT rifle. Hold right-click (X, or LT on a controller) to look down the scope. 9 damage, punches through 3 enemies, slow to cycle.",
   pistol: "Your trusty sidearm. 140 rounds, refilled at the start of every wave.",
   scatter: "Blasts five pellets in a wide spread. Brutal up close, weak at range.",
   smg: "Hold to spray a fast stream of small rounds. Big magazine, low damage per hit.",

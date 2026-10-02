@@ -30,6 +30,8 @@ export type RemoteState = {
   pitch?: number;
   kick?: number;
   ry2?: number;
+  az?: number;
+  pr?: number;
   color: string;
   /** 1 = host, 2-4 = guests */
   num: number;
@@ -132,7 +134,7 @@ export async function hostRoom(opts: Opts): Promise<NetHandle> {
       if ((raw as NetMsg)?.type === "hb") return;
       const m = { ...(raw as NetMsg), from: conn.peer };
       // relay player-to-player chatter to the other guests
-      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume" || m.type === "pick" || m.type === "shard" || m.type === "haz") {
+      if (m.type === "t" || m.type === "fire" || m.type === "pause" || m.type === "resume" || m.type === "pick" || m.type === "shard" || m.type === "haz" || m.type === "ping" || m.type === "dep") {
         conns.forEach((c, id) => { if (id !== conn.peer && c.open) c.send(m); });
       }
       opts.onMsg(m);
