@@ -3392,6 +3392,7 @@ function World({
       {enemies.map((e, i) => (
         <EnemyMesh key={i} data={e} theme={theme} bot={bots.current[i]} bots={bots.current} />
       ))}
+      {alpine && <OrdnancePool ords={ords.current} guestTx={NO_TX} guest={NO_GUEST} />}
       {enemies.map((_, i) => (
         <group key={`x${i}`} ref={(g) => { markMeshes.current[i] = g; }} visible={false}>
           <mesh position-y={0.04} rotation-x={-Math.PI / 2} rotation-z={Math.PI / 4}>
