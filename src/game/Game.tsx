@@ -2405,7 +2405,7 @@ function World({
       L.active = !spectating; L.px = cam.position.x; L.pz = cam.position.z; L.py = floorY; L.isHost = !n || isH; L.role = !n ? "solo" : isH ? "host" : "guest";
       L.enemies = enemies; L.radiusOf = (e) => STATS[e.kind as Kind]?.radius ?? 0.6; L.isBig = (e) => e.kind === "boss" || e.kind === "brute";
       L.hitPlayer = (dmg, kx, kz) => { takeHit(dmg); slide.current.x += kx; slide.current.z += kz; };
-      L.hurtEnemy = isH || !n ? (i, dmg, kx, kz) => { const e = enemies[i]; if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, Math.hypot(kx, kz) * 0.2, kx, kz); } : null;
+      L.hurtEnemy = isH || !n ? (i, dmg, kx, kz) => { const e = enemies[i]; try { if (e?.alive) hurtEnemy(e, dmg, i, 0, 0, Math.hypot(kx, kz) * 0.2, kx, kz); } catch { /* frame ended early */ } } : null;
     }
     cam.position.y = EYE + jumpY.current + floorY;
     if (alpine) { spawnFocus.x = cam.position.x; spawnFocus.z = cam.position.z; radarFeed.x = cam.position.x; radarFeed.z = cam.position.z; radarFeed.yaw = look.current.yaw; bigFeed.current.x = cam.position.x; bigFeed.current.z = cam.position.z; bigFeed.current.yaw = look.current.yaw; }
