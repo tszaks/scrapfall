@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { ACTION_LABEL, binds, keyName, loadBinds, padOpts, resetBinds, saveBinds, type Action } from "../binds";
 import { pad } from "../gamepad";
+import { QualitySettings } from "@/bro/game/QualitySettings";
 import { Hazard, MenuButton, Panel, Scrim, SectionLabel } from "@/bro/game/ui/kit";
 
 export type SettingsTab = "graphics" | "controls" | "controller" | "audio";
@@ -83,7 +84,7 @@ function Remap() {
       </div>
       <div className="flex gap-1.5 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/70">
         <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">WASD · MOVE</span>
-        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">MOUSE · AIM · CLICK FIRE</span>
+        <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">MOUSE · LOOK · LEFT/RIGHT CLICK FIRE</span>
         <span className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1">P · PAUSE</span>
         <button onClick={() => { resetBinds(); bump((n) => n + 1); }} className="pointer-events-auto ml-auto rounded border border-[#f3e6cf]/30 px-2 py-1">RESET</button>
       </div>
@@ -114,7 +115,7 @@ function PadTab() {
         <span className="text-[#e7b25c]">{padOpts.assist ? "ON" : "OFF"}</span>
       </button>
       <div className="grid grid-cols-2 gap-1.5">
-        {["L STICK · MOVE", "R STICK · AIM", "RT · FIRE", "LT · SCOPE", "A / ✕ · JUMP", "B / ○ · RUN", "Y / △ · ABILITY", "X / □ · USE", "LB / RB · WEAPON", "D-PAD UP · PING", "START · PAUSE"].map((s) => (
+        {["L STICK · MOVE", "R STICK · AIM", "RT · FIRE", "LT · AIM", "A / ✕ · JUMP", "B / ○ · RUN", "Y / △ · ABILITY", "X / □ · USE", "LB / RB · WEAPON", "D-PAD UP · PING", "START · PAUSE"].map((s) => (
           <span key={s} className="rounded border border-[#f3e6cf]/20 bg-white/5 px-2 py-1 text-[11px] font-bold tracking-[0.15em] text-[#f3e6cf]/80">{s}</span>
         ))}
       </div>
@@ -205,10 +206,7 @@ export function SettingsScreen({
                 format={(v) => `${v}°`}
                 onChange={setFov}
               />
-              <p className="pt-1 text-xs leading-relaxed opacity-70">
-                A WIDER VIEW SHOWS MORE OF THE ARENA; A NARROWER ONE MAKES DISTANT ENEMIES EASIER
-                TO HIT.
-              </p>
+              <QualitySettings />
             </>
           )}
           {tab === "controls" && (
@@ -275,7 +273,10 @@ export function SettingsScreen({
             Done
           </MenuButton>
           <div className="mt-3 text-center text-[11px] tracking-[0.3em] opacity-70 [@media(max-height:480px)]:hidden">
-            SCRAPFALL · v{version}
+            SCRAPFALL · v{version} · TS BUILD
+            <div className="mt-0.5 tracking-[0.2em]">
+              BASED ON TOBY&apos;S 1.0.6 · BIG MAPS BY TYLER
+            </div>
           </div>
         </div>
       </Panel>

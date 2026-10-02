@@ -2,7 +2,7 @@
 export type Action = "jump" | "run" | "fire" | "ability" | "use" | "ping" | "scope" | "prev" | "next";
 export const ACTION_LABEL: Record<Action, string> = {
   jump: "JUMP", run: "RUN", fire: "FIRE", ability: "ABILITY", use: "USE / ELEVATOR",
-  ping: "PING", scope: "SCOPE (SNIPER)", prev: "PREV WEAPON", next: "NEXT WEAPON",
+  ping: "PING", scope: "AIM / SCOPE", prev: "PREV WEAPON", next: "NEXT WEAPON",
 };
 const DEFAULTS: Record<Action, string> = {
   jump: "Space", run: "ShiftLeft", fire: "Enter", ability: "KeyF", use: "KeyE",
