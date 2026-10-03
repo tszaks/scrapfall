@@ -16,25 +16,44 @@ const server = spawn(
     stdio: ["ignore", "pipe", "pipe"],
   },
 );
-await new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error("account test server did not start")), 30000);
-  server.stdout.on("data", (chunk) => {
-    if (String(chunk).includes("Local:")) {
-      clearTimeout(timer);
-      resolve();
-    }
-  });
-  server.on("exit", (code) => {
-    clearTimeout(timer);
-    reject(new Error(`account test server exited ${code}`));
-  });
-});
 let browser;
+let serverOutput = "";
+let serverExit;
+for (const stream of [server.stdout, server.stderr]) {
+  stream.on("data", (chunk) => {
+    serverOutput = (serverOutput + String(chunk)).slice(-4000);
+  });
+}
+server.on("exit", (code) => {
+  serverExit = code;
+});
 try {
+  // CI may suppress or color/split Vite's "Local:" log. Check the serving endpoint.
+  const deadline = Date.now() + 60000;
+  let ready = false;
+  while (Date.now() < deadline && serverExit === undefined) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/game/@vite/client`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (response.ok) {
+        ready = true;
+        break;
+      }
+    } catch {
+      /* Server has not bound its port yet. */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (!ready)
+    throw new Error(
+      `account test server unavailable (exit ${serverExit ?? "pending"}): ${serverOutput}`,
+    );
   browser = await chromium.launch({
     args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
   const page = await browser.newPage();
+  page.setDefaultTimeout(90000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (message) => {
@@ -82,6 +101,14 @@ try {
   await page.getByRole("button", { name: "LOG IN", exact: true }).click();
   await page.getByRole("textbox", { name: "Username", exact: true }).fill("player");
   await page.getByLabel("Password", { exact: true }).fill("mock-password");
+  assert.equal(
+    await page.getByLabel("Username", { exact: true }).getAttribute("data-pad-focus"),
+    "true",
+  );
+  assert.equal(
+    await page.getByLabel("Password", { exact: true }).getAttribute("data-pad-focus"),
+    "true",
+  );
   await page.getByRole("dialog").getByRole("button", { name: "Log in", exact: true }).click();
   await page.getByText("TOTAL KILLS · 17", { exact: true }).waitFor();
   assert.equal(reads, 1, "one profile load on sign-in");

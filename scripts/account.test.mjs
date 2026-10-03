@@ -45,47 +45,69 @@ test("sign-up without a session explains that login is incomplete", async () => 
   await assert.rejects(account.signUp("player", "password"), /sign-in is incomplete/);
 });
 
-test("recordRun retains earned totals and returns the saved row", async () => {
-  let written;
-  client = {
-    from(table) {
-      assert.equal(table, "profiles");
-      return {
-        update(value) {
-          written = value;
-          return {
-            eq(key, id) {
-              assert.equal(key, "id");
-              assert.equal(id, p.id);
-              return {
-                select: () => ({ single: async () => ({ data: { ...p, ...value }, error: null }) }),
-              };
-            },
-          };
-        },
-      };
-    },
+function profileBackend(initial, failure = null) {
+  let row = { ...initial };
+  return {
+    from: () => ({
+      select: () => ({ eq: () => ({ single: async () => ({ data: { ...row }, error: null }) }) }),
+      update: (next) => {
+        const conditions = [];
+        const query = {
+          eq(key, value) {
+            conditions.push([key, value]);
+            return query;
+          },
+          select() {
+            return query;
+          },
+          async maybeSingle() {
+            if (failure) return { data: null, error: failure };
+            if (!conditions.every(([key, value]) => row[key] === value))
+              return { data: null, error: null };
+            row = { ...row, ...next };
+            return { data: { ...row }, error: null };
+          },
+        };
+        return query;
+      },
+    }),
   };
+}
+test("recordRun uses fresh totals and overtime preserves the match count", async () => {
+  client = profileBackend(p);
   assert.deepEqual(await account.recordRun(p, 8, 4), { ...p, kills: 25, matches: 3 });
-  assert.deepEqual(written, { kills: 25, matches: 3, best_wave: 6 });
-  assert.deepEqual(await account.recordRun({ ...p, kills: 25, matches: 3 }, 2, 14, 0), {
+  assert.deepEqual(await account.recordRun(p, 2, 14, 0), {
     ...p,
     kills: 27,
     matches: 3,
     best_wave: 14,
   });
 });
-
-test("a failed run write is reported, never counted as saved", async () => {
-  const error = new Error("offline");
-  client = {
-    from: () => ({
-      update: () => ({
-        eq: () => ({ select: () => ({ single: async () => ({ data: null, error }) }) }),
-      }),
-    }),
-  };
+test("concurrent remembered tabs cannot lose either run's increments", async () => {
+  client = profileBackend(p);
+  await Promise.all([account.recordRun(p, 8, 9), account.recordRun(p, 3, 7)]);
+  const { data } = await client.from().select().eq().single();
+  assert.deepEqual(data, { ...p, kills: 28, matches: 4, best_wave: 9 });
+});
+test("transport failures are surfaced without replaying an uncertain write", async () => {
+  client = profileBackend(p, new Error("offline"));
   await assert.rejects(account.recordRun(p, 8, 7), /offline/);
+});
+test("sign-in preserves service errors and normalizes only invalid credentials", async () => {
+  for (const [code, message, expected] of [
+    ["invalid_credentials", "bad credentials", "Wrong username or password"],
+    ["over_request_rate_limit", "Try later", "Try later"],
+    ["unexpected_failure", "Server unavailable", "Server unavailable"],
+  ]) {
+    client = { auth: { signInWithPassword: async () => ({ error: { code, message } }) } };
+    await assert.rejects(account.signIn("player", "password"), { message: expected });
+  }
+});
+test("completed waves include a cleared shopping break but not an opening banner", () => {
+  assert.equal(account.completedWave(4, true), 4);
+  assert.equal(account.completedWave(4, false), 3);
+  assert.equal(account.completedWave(1, false), 0);
+  assert.equal(account.completedWave(12, true), 12);
 });
 
 test("overtime credits only new kills and one match; new arenas/accounts start fresh", () => {

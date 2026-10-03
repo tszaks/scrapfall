@@ -24,30 +24,40 @@ export function useAccount(ended: boolean, kills: number, wavesSurvived: number,
   }, []);
   const recorded = useRef(false);
   const saved = useRef<SavedRun | null>(null);
+  const writes = useRef(Promise.resolve());
+  const uncertainRun = useRef<number | null>(null);
   useEffect(() => {
     if (!ended) {
       recorded.current = false;
       return;
     }
     if (recorded.current) return;
-    recorded.current = true;
     const { profile: p, revision } = current.current;
-    if (!p) return;
+    if (!p || loading) return;
+    recorded.current = true;
     const nextRun = { runId, userId: p.id, kills };
-    const credit = runCredit(saved.current, nextRun);
-    void recordRun(p, credit.kills, wavesSurvived, credit.matches)
-      .then((next) => {
+    writes.current = writes.current.then(async () => {
+      if (current.current.revision !== revision) return;
+      if (uncertainRun.current === runId) {
+        setError("This run's save is uncertain. Start a new arena before saving another run.");
+        return;
+      }
+      const credit = runCredit(saved.current, nextRun);
+      try {
+        const next = await recordRun(p, credit.kills, wavesSurvived, credit.matches);
+        saved.current = nextRun;
         if (current.current.revision === revision && current.current.profile?.id === p.id) {
-          saved.current = nextRun;
           current.current.profile = next;
           setProfile(next);
         }
-      })
-      .catch(() => {
+      } catch {
+        uncertainRun.current = runId;
         if (current.current.revision === revision)
-          setError("Could not save your run. Check your connection.");
-      });
-  }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
+          setError("Run save failed or is uncertain. Start a new arena before saving another run.");
+      }
+    });
+  }, [ended, profile?.id, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return { profile, loading, error, configured: accountsConfigured };
 }
 export type AccountState = ReturnType<typeof useAccount>;

@@ -39,7 +39,11 @@ profile-loading path. The account dialog surfaces auth/restoration/save errors.
 
 Completed runs save personal kills, matches played and deepest completed wave.
 Overtime retains the same run: later completion adds only additional kills and
-updates the deepest wave without counting another match. Guests
+updates the deepest wave without counting another match. Saves are serialized in
+each client and use atomic conditional updates against freshly read totals;
+competing tabs retry only when no row was updated. A failed or uncertain response
+blocks further saves for that arena to avoid replaying a potentially successful write.
+A run ending while restoration is pending waits for the profile before saving. Guests
 keep the existing host-authoritative per-player kill credits. No network message or
 room-version changes are made. Account state never enters the frame loop.
 

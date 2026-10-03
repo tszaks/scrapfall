@@ -82,7 +82,10 @@ export async function signUp(username: string, password: string) {
 
 export async function signIn(username: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email: addr(username), password });
-  if (error) throw new Error("Wrong username or password");
+  if (error)
+    throw new Error(
+      error.code === "invalid_credentials" ? "Wrong username or password" : error.message,
+    );
 }
 
 export async function signOut() {
@@ -96,19 +99,34 @@ export async function recordRun(
   wave: number,
   matches = 1,
 ): Promise<Profile> {
-  const next = {
-    kills: p.kills + kills,
-    matches: p.matches + matches,
-    best_wave: Math.max(p.best_wave, wave),
-  };
-  const { data, error } = await supabase
-    .from("profiles")
-    .update(next)
-    .eq("id", p.id)
-    .select("*")
-    .single();
-  if (error) throw error;
-  return data as Profile;
+  // Compare-and-swap is one atomic UPDATE. A competing tab cannot replace totals
+  // computed from the same old row; re-read and retry only when no row was changed.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: base, error: readError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", p.id)
+      .single();
+    if (readError) throw readError;
+    const next = {
+      kills: base.kills + kills,
+      matches: base.matches + matches,
+      best_wave: Math.max(base.best_wave, wave),
+    };
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(next)
+      .eq("id", p.id)
+      .eq("kills", base.kills)
+      .eq("matches", base.matches)
+      .eq("best_wave", base.best_wave)
+      .select("*")
+      .maybeSingle();
+    // A transport error may follow a successful write. Never blindly retry it.
+    if (error) throw error;
+    if (data) return data as Profile;
+  }
+  throw new Error("Your account changed repeatedly. This run could not be saved.");
 }
 
 export type SavedRun = { runId: number; userId: string; kills: number };
@@ -120,4 +138,8 @@ export function runCredit(previous: SavedRun | null, next: SavedRun) {
     kills: continuing ? Math.max(0, next.kills - previous.kills) : next.kills,
     matches: continuing ? 0 : 1,
   };
+}
+
+export function completedWave(wave: number, cleared: boolean) {
+  return cleared ? wave : Math.max(0, wave - 1);
 }

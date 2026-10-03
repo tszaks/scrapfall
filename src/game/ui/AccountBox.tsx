@@ -90,6 +90,7 @@ export function AccountBox({ account, onClose }: { account: AccountState; onClos
             <input
               className={field}
               placeholder="USERNAME"
+              data-pad-focus
               aria-label="Username"
               value={user}
               onChange={(e) => setUser(e.target.value)}
@@ -98,6 +99,7 @@ export function AccountBox({ account, onClose }: { account: AccountState; onClos
             <input
               className={field}
               placeholder="PASSWORD"
+              data-pad-focus
               aria-label="Password"
               type="password"
               value={pass}
