@@ -7832,6 +7832,27 @@ export function Game() {
   // lets network messages kick off / resume the match, and keeps pause state handy
   const startRef = useRef<(fromNet?: boolean) => void>(() => {});
   const phase = useRef({ started: false, ended: false });
+  // the browser only locks the mouse inside a click, so a round that starts
+  // without one (a queued Enter Arena, a squad start) leaves mouse-look dead:
+  // any click in the arena takes the mouse back
+  const relockRef = useRef(false);
+  relockRef.current = locked && !touchUi && dev.kind !== "pad";
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onDown = () => {
+      if (document.pointerLockElement || !relockRef.current) return;
+      if (!phase.current.started || phase.current.ended) return;
+      try {
+        const r = el.requestPointerLock() as unknown as Promise<void> | undefined;
+        r?.catch?.(() => {});
+      } catch {
+        /* pointer lock unavailable — arrow keys still work */
+      }
+    };
+    el.addEventListener("mousedown", onDown);
+    return () => el.removeEventListener("mousedown", onDown);
+  }, []);
   // endless overtime (Toby 1.0.4): the host's OVERTIME button or the "ot" message flips this
   const endlessRef = useRef(false);
   const goingOvertime = useRef(false);
