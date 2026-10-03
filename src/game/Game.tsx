@@ -8116,6 +8116,7 @@ export function Game() {
           .sort((a, b) => a.num - b.num),
       );
       remotes.current.forEach((r) => {
+        if(r.id!=="host" && !slots.current[r.id]){remotes.current.delete(r.id);return;}
         r.num = r.id === "host" ? 1 : (slots.current[r.id] ?? r.num);
         r.color = colorFor(r.num);
       });
