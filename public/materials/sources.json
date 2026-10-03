@@ -1,0 +1,38 @@
+[
+  {
+    "asset": "concrete_floor_02",
+    "source": "https://polyhaven.com/a/concrete_floor_02",
+    "file": "concrete_floor_02.jpg",
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_diff_1k.jpg",
+    "md5": "1cfee53d2f82fa59726ab7ae6a2e8c09",
+    "license": "CC0-1.0",
+    "bytes": 776097
+  },
+  {
+    "asset": "wood_planks",
+    "source": "https://polyhaven.com/a/wood_planks",
+    "file": "wood_planks.jpg",
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_planks/wood_planks_diff_1k.jpg",
+    "md5": "922505c35c2d0dc6a44da7ac77757134",
+    "license": "CC0-1.0",
+    "bytes": 609525
+  },
+  {
+    "asset": "sand_01",
+    "source": "https://polyhaven.com/a/sand_01",
+    "file": "sand_01.jpg",
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/sand_01/sand_01_diff_1k.jpg",
+    "md5": "c914c8edb419f040e04224081a3f79a5",
+    "license": "CC0-1.0",
+    "bytes": 485088
+  },
+  {
+    "asset": "snow_02",
+    "source": "https://polyhaven.com/a/snow_02",
+    "file": "snow_02.jpg",
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/snow_02/snow_02_diff_1k.jpg",
+    "md5": "fc54766c6b36ff298699115a619d440b",
+    "license": "CC0-1.0",
+    "bytes": 325497
+  }
+]
