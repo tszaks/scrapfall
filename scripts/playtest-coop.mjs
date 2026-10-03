@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import fs from "node:fs";
 const base = process.env.BASE ?? "http://127.0.0.1:4173";
@@ -37,6 +38,14 @@ try {
     ),
   );
   console.log("both in game");
+  await h.evaluate(() => {
+    __rs.invuln.current = 1e6;
+    __rs.enemies.forEach((e) => (e.alive = false));
+    __rs.pending.current.fill(null);
+    __rs.wave.current = 5;
+    __rs.spawnWave(5);
+  });
+  await g.waitForFunction(() => __rs.wave.current === 5, null, { timeout: 30000 });
   await Promise.all(
     [h, g].map((p) =>
       p.waitForFunction(() => __rs.enemies.filter((e) => e.alive).length >= 3, null, {
@@ -50,6 +59,7 @@ try {
         wave: __rs.wave.current,
         role: __rs.net.current.role,
         alive: __rs.enemies.filter((e) => e.alive).length,
+        hp: __rs.enemies.filter((e) => e.alive).map((e) => e.hp),
       })),
     ),
   );
@@ -75,6 +85,10 @@ try {
     wave: __rs.wave.current,
     role: __rs.net.current.role,
   }));
+  assert.equal(after.wave, 5);
+  assert.ok(after.alive >= 3);
+  assert.equal(joined.wave, 5);
+  assert.deepEqual(errors, []);
   fs.writeFileSync(out, JSON.stringify({ before, after, joined, errors }, null, 2));
   console.log("host transferred");
 } catch (e) {
