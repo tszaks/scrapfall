@@ -127,25 +127,31 @@ export function stepRide(
     const dd = Math.hypot(cam.position.x - dx, cam.position.z - dz);
     if (du > 2.2 && dd > 2.2) return false;
     for (let i = 0; i < n; i++) {
-      if (taken?.has(i * 2 + seat)) continue;
+      const freeSeat=!taken?.has(i*2+seat)?seat:!taken?.has(i*2+1-seat)?1-seat:-1;
+      if(freeSeat<0)continue;
       const s = chairS(lift, i);
       const c = p.at(s);
       if (Math.hypot(c.x - cam.position.x, c.z - cam.position.z) > 1.6) continue;
       // only a chair heading away from this terminal: up from the base, down from the top
       if (du <= 2.2 && s < 8) {
         ride.chair = i;
+        ride.seat = freeSeat;
         ride.dir = 1;
         break;
       }
       if (dd <= 2.2 && s > p.run + p.bull && s < p.run + p.bull + 8) {
         ride.chair = i;
+        ride.seat = freeSeat;
         ride.dir = -1;
         break;
       }
     }
     if (ride.chair < 0) return false;
-    ride.seat = seat;
     ride.t = 0;
+  }
+  if(taken?.has(ride.chair*2+ride.seat)) {
+    if(!taken.has(ride.chair*2+1-ride.seat))ride.seat=1-ride.seat;
+    else {leaveRide(cam,a);return false;}
   }
   ride.t += delta;
   const s = chairS(lift, ride.chair);

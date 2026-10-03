@@ -3788,7 +3788,11 @@ function World({
     const out = new Set<number>();
     const now = performance.now();
     remotes.current.forEach((r) => {
-      if (now - r.last < 4000 && (r.rc ?? -1) >= 0) out.add(r.rc! * 2 + (r.rs ?? 0));
+      if (now - r.last < 4000 && (r.rc ?? -1) >= 0) {
+        // Simultaneous seat claims settle once, by player number.
+        if(ride.chair===r.rc && ride.seat===(r.rs??0) && spawnNum()<r.num)return;
+        out.add(r.rc! * 2 + (r.rs ?? 0));
+      }
     });
     return out;
   };
