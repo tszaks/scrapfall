@@ -31,8 +31,8 @@ export type Theme = {
     | "western"
     | "nuketown";
   /** big real-scale maps: which generator builds the world (default: scatter, or city for blockShape "city") */
-  layout?: "scatter" | "city" | "alpine" | "beach" | "western" | "nuketown" | "nuketown";
-  /** Work in progress: kept out of the map picker and the random roll; still reachable with ?map= */
+  layout?: "scatter" | "city" | "alpine" | "beach" | "western" | "nuketown";
+  /** Work in progress: kept out of the map picker and the random roll; reachable only in development with ?map= */
   wip?: boolean;
   boss: {
     name: string;
@@ -685,4 +685,18 @@ export function layoutOf(
  * maps are never offered). */
 export function offered(t: Theme): boolean {
   return !t.wip && layoutOf(t) !== "scatter";
+}
+
+/** A saved seed or direct URL must not expose work-in-progress maps in a public build.
+ * Keep array positions stable: peers encode the map in the shared seed. */
+export function playableTheme(
+  seed: number,
+  coop: boolean,
+  choice: number | null,
+  allowWip = import.meta.env?.DEV === true,
+): Theme {
+  const index = !coop && choice !== null ? choice : seed % THEMES.length;
+  const candidate = THEMES[index];
+  if (candidate && (!candidate.wip || allowWip)) return candidate;
+  return THEMES.find((t) => t.blockShape === "city")!;
 }

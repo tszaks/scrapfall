@@ -31,7 +31,7 @@ import { resetAlpine } from "./alpine/weather";
 import { resetRide } from "./alpine/ride";
 import { resetWheel } from "./beach/wheelRide";
 import { yieldControl } from "./slice";
-import { THEMES, layoutOf, type Theme } from "./themes";
+import { playableTheme, layoutOf, type Theme } from "./themes";
 import type { CityLayout } from "./cityLayout";
 import type { BeachLayout } from "./beach/beachLayout";
 import type { WesternLayout } from "./western/layout";
@@ -65,8 +65,7 @@ export async function buildWorld(
   mark("start");
   if (cancelled()) return null;
   // the map decides the layout, so pick the theme first (still purely from the shared seed)
-  const forced = !coop && mapChoice !== null ? THEMES[mapChoice] : undefined;
-  const theme = forced ?? THEMES[seed % THEMES.length]!;
+  const theme = playableTheme(seed, coop, mapChoice);
   // co-op gets a bigger field. The big real-scale maps always build the full co-op map and
   // route on 4 m nav cells; solo fences the city and Dry Gulch into the middle 70% with
   // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
@@ -77,7 +76,7 @@ export async function buildWorld(
   if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));
   else if (mode === "alpine") setArenaSize((await import("./alpine/layout")).ALPINE_SIZE, 2);
   else if (mode === "beach") setArenaSize(BEACH_SIZE, 2);
-  else if (mode === "nuketown") setArenaSize((await import("./nuketown/layout")).NUKE_SIZE, 1);
+  else if (import.meta.env.DEV && mode === "nuketown") setArenaSize((await import("./nuketown/layout")).NUKE_SIZE, 1);
   else setArenaSize(coop ? COOP_ARENA : SOLO_ARENA);
   resetStaticCollision();
   await yieldControl();
@@ -117,7 +116,7 @@ export async function buildWorld(
   installAccess(null); // (the adapters read the new map's ground, not the last map's roofs)
   // thin props (lamp posts, sign poles, benches, hydrants) block bodies on every big map;
   // the access adapters keep their doors clear of them
-  if (mode === "nuketown")
+  if (import.meta.env.DEV && mode === "nuketown")
     installStructures((await import("./nuketown/layout")).nuketownStructures());
   await yieldControl();
   const posts0 = mapPosts(level.city, level.western ?? null);
