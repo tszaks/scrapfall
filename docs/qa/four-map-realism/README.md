@@ -9,7 +9,7 @@ The target is more lifelike places: natural foliage, textured building surfaces,
 - Dry Gulch: scanned timber and sand detail, fainter ground impressions, rooted shrubs with softer shading, and balanced desert light.
 - Whiteout: open spruce boughs with snow on each branch, scanned snow and timber, stone church supports, sills, and gutters.
 - Usable buildings: wall grain, small edge bevels, service grilles, and less self-light. Static room geometry reuses identical vertices. No door or window openings are filled.
-- Nuketown: production builds reject its name, index, and shared room seed. The production bundle excludes the Nuketown scene. Development rooms have a separate connection namespace; development access remains. Map indices are unchanged. Room protocol advances to v18 so builds with different world rules cannot join each other.
+- Nuketown: production builds reject its name, index, and shared room seed. The production bundle excludes the Nuketown scene. Development rooms have a separate connection namespace; development access remains. Map indices are unchanged. Development/public room isolation uses v18; the art pass advances to v19 so builds with different world geometry cannot join each other.
 
 ## Assets and rendering
 
