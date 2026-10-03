@@ -11,11 +11,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve:static": "node scripts/serve-static.mjs",
-    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs",
+    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/profile-session.test.mjs scripts/account.test.mjs scripts/use-account.test.mjs",
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "npm test && npm run typecheck && npm run build && npm run smoke",
-    "benchmark": "node scripts/benchmark-game.mjs"
+    "check": "npm test && npm run typecheck && npm run build && npm run smoke && npm run smoke:account",
+    "benchmark": "node scripts/benchmark-game.mjs",
+    "smoke:account": "node scripts/account-smoke.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -50,6 +51,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
+    "@supabase/supabase-js": "2.117.2",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.101.1",
     "@tanstack/react-router": "1.170.41",

@@ -124,3 +124,12 @@ Pushed upstream 2026-09-29; deliberately left out of this sync — the next one 
   notice, lobby catch-up (`net.ts`, ~+84).
 - Version bumps to `1.0.8`; roadmap gains "his 10 new enemy types on big maps" and
   "preload/warm big maps" items.
+
+## Selective account port — Toby upstream v1.1.1
+
+Account auth/profile persistence from Toby at `ffca74d`, with login fixes at
+`c3be04b`, adapted into the shared game. Modules: `account.ts`, `accountClient.ts`,
+`accountTypes.ts`, `profileSession.ts`, `useAccount.ts`, `ui/AccountBox.tsx`.
+This does not advance the general upstream-sync baseline above: the maps,
+engine, routing and co-op scaffold from `toby-main` were not copied.
+Backend setup and verification limits are recorded in `docs/ACCOUNTS.md`.

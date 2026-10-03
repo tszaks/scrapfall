@@ -298,6 +298,8 @@ import { SprintMeter } from "./input/SprintMeter";
 import { HudChip, UiStyles } from "./ui/kit";
 import { LoadingVeil } from "./LoadingVeil";
 import { titleShot } from "./titleCam";
+import { useAccount } from "./useAccount";
+import { completedWave } from "./account";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
@@ -7715,7 +7717,7 @@ export function Game() {
   const pausedRef = useRef(false);
   pausedRef.current = !locked;
   const [started, setStarted] = useState(false);
-  const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
+  const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false, cleared: false });
   const [banner, setBanner] = useState(false);
   const [hurtFlash, setHurtFlash] = useState(0);
   const [weapon, setWeapon] = useState<Weapon>("pistol");
@@ -7878,7 +7880,7 @@ export function Game() {
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
-      setStatus({ wave: 1, remaining: 0, won: false });
+      setStatus({ wave: 1, remaining: 0, won: false, cleared: false });
       setWeapon("pistol");
       setBossHp(0);
       endlessRef.current = false;
@@ -8052,7 +8054,7 @@ export function Game() {
     setPerks(NO_PERKS);
     setShards(0);
     setBossHp(0);
-    setStatus({ wave: 1, remaining: 0, won: false });
+    setStatus({ wave: 1, remaining: 0, won: false, cleared: false });
     setWeapon("pistol");
     setSeed((p) => newSeed(mapChoiceRef.current, p));
     if (document.pointerLockElement) document.exitPointerLock();
@@ -8316,6 +8318,12 @@ export function Game() {
   };
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
+  const account = useAccount(
+    ended,
+    score,
+    completedWave(status.wave, status.cleared),
+    seed,
+  );
   // keep the deepest wave ever reached, overtime included
   useEffect(() => {
     if (!ended) return;
@@ -8433,7 +8441,7 @@ export function Game() {
       setPerks(NO_PERKS);
       setShards(0);
       setAllDown(false);
-      setStatus({ wave: 1, remaining: 0, won: false });
+      setStatus({ wave: 1, remaining: 0, won: false, cleared: false });
       setWeapon("pistol");
       setBossHp(0);
       endlessRef.current = false;
@@ -8746,7 +8754,7 @@ export function Game() {
           }}
 
           onStatus={(wave, remaining, won, showBanner) => {
-            setStatus({ wave, remaining, won });
+            setStatus({ wave, remaining, won, cleared: remaining === 0 && !showBanner });
             if (showBanner) {
               setBanner(true);
               if (perksRef.current.mend > 0 && wave > 1)
@@ -9251,6 +9259,7 @@ export function Game() {
 
       {(!locked || ended) && !picking && !started && !ended && !paused && (
         <TitleScreen
+          account={account}
           themeName={theme.name}
           weather={
             started
