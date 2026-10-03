@@ -6,7 +6,7 @@ State: Local implementation and verification complete. Draft PR prepared for own
 ## Verified evidence
 - Draft PR: https://github.com/tszaks/scrapfall/pull/36
 - Branch: codex/oct3-playtest-fixes, based on origin/main ae2f7c5. Existing checkouts preserved.
-- npm run check passed: 50 tests, typecheck, static build, all five maps at night/sunset with zero console errors. Repository-map validation passed.
+- npm run check passed: 51 tests, typecheck, static build, all five maps at night/sunset with zero console errors. Repository-map validation passed.
 - npm run test:playtest passed against the local static build: both rink gates, seven tower stair laps up/down, recovery, retained/refilled weapons, both ski routes, shared lift seats, reload, ammo purchase, melee, city driving/destruction, subway destination, and overtime shop.
 - npm run test:coop passed with actual browser clients: close the host tab at wave 5; survivor retains three live enemies and HP [2,2,1]; a new guest rejoins the same room at wave 5. Zero page errors.
 - Money-coordinate regression failed before the fix and passed after it. Shared loot claims are deduplicated on the host.

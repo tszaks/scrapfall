@@ -102,3 +102,23 @@ test("ammo purchases preserve upgraded or above-capacity reserves", () => {
   assert.equal(ammo.refillAmmo(180, 140), 180);
   assert.equal(ammo.refillAmmo(0, 120), 60);
 });
+
+const controls = await pure("../src/game/input/remap.ts");
+test("an old empty Field Dressing binding gets a free key without stealing a custom key", () => {
+  const oldWindow = globalThis.window,
+    oldStorage = globalThis.localStorage;
+  try {
+    globalThis.window = {};
+    globalThis.localStorage = {
+      getItem: () => JSON.stringify({ keys: { shopHeal: [], forward: ["KeyH"] } }),
+    };
+    controls.loadControls();
+    assert.deepEqual(controls.controlSettings.keys.forward, ["KeyH"]);
+    assert.deepEqual(controls.controlSettings.keys.shopHeal, ["KeyI"]);
+  } finally {
+    if (oldWindow === undefined) delete globalThis.window;
+    else globalThis.window = oldWindow;
+    if (oldStorage === undefined) delete globalThis.localStorage;
+    else globalThis.localStorage = oldStorage;
+  }
+});

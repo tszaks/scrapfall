@@ -160,6 +160,12 @@ export function loadControls() {
       if (ids.some((a) => a !== "aim" && controlSettings.keys[a].includes("Mouse2")))
         controlSettings.keys.aim = [];
     }
+    // Older saved maps can contain an empty patch-kit binding. Keep custom
+    // controls intact and choose a free key rather than showing UNBOUND.
+    if(controlSettings.keys.shopHeal.length===0){
+      const key=["KeyH","KeyI","KeyU","KeyL"].find(k=>!ids.some(a=>a!=="shopHeal"&&controlSettings.keys[a].includes(k)));
+      if(key)controlSettings.keys.shopHeal=[key];
+    }
   } catch {
     /* defaults survive blocked or corrupt storage */
   }
