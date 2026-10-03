@@ -1,3 +1,5 @@
+import { scannedSurface } from "../environment/scannedSurface";
+import { surfaceRelief } from "../environment/surfaceRelief";
 import { matchEnvironment, rainyMatch } from "../matchEnvironment";
 import { registerStaticGeometry } from "../staticCollision";
 import { MarineLife } from "../life/MarineLife";
@@ -115,13 +117,16 @@ function groundMaterial() {
     sh.vertexShader = sh.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;",
+        "#include <common>\nattribute vec2 aUv2;\nattribute vec3 aFac;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying vec3 vScanWorld;",
       )
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;");
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvFuv = aUv2;\nvFac = aFac;\nvScanWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;",
+      );
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uDay;\nvarying vec2 vFuv;\nvarying vec3 vFac;",
+        "#include <common>\nprecision highp sampler2DArray;\nuniform sampler2DArray uDay;\nvarying vec2 vFuv;\nvarying vec3 vFac;\nvarying vec3 vScanWorld;",
       )
       .replace(
         "#include <map_fragment>",
@@ -134,7 +139,15 @@ diffuseColor.rgb *= mix(vec3(1.0), grT.rgb, 0.85);`,
       );
   };
   mat.customProgramCacheKey = () => "beach-ground-v1";
-  return mat;
+  scannedSurface(mat, "wood_planks", "vScanWorld", "float(vFac.z == 2.0)", 2.0, 0.55);
+  return scannedSurface(
+    surfaceRelief(mat, "grT.rgb", "1.0", 0.012),
+    "sand_01",
+    "vScanWorld",
+    "float(vFac.z == 1.0)",
+    4.0,
+    0.8,
+  );
 }
 
 /**

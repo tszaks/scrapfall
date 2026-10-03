@@ -1,3 +1,4 @@
+import { broadleafCrown } from "../environment/foliage";
 import { wheelRails, wheelGround } from "./wheelRide";
 import { beachDoorApproach, swimLineBuoys, SWIM_LINE_SPACING } from "./doorways";
 import { beachPropBounds, overlaps } from "./beachActivity";
@@ -162,6 +163,7 @@ type TKey =
   | "bike"
   | "cooler"
   | "tree"
+  | "treeFar"
   | "shrub"
   | "rock"
   | "aframe"
@@ -543,6 +545,13 @@ function templates(): Tmpls {
       g.col("#5a4632");
       g.cyl(0, 0, 0, 0.2, 3.2, 6, false, 0.14);
       const softStart = g.n;
+      broadleafCrown(g, [0, 4.6, 0], [2.6, 2, 2.6], "#647c52", 72);
+      g.excludeSince(softStart);
+    }),
+    treeFar: t((g) => {
+      g.col("#5a4632");
+      g.cyl(0, 0, 0, 0.2, 3.2, 6, false, 0.14);
+      const softStart = g.n;
       const ico = new THREE.IcosahedronGeometry(1, 0);
       g.col("#4f7a34");
       g.add(
@@ -566,7 +575,7 @@ function templates(): Tmpls {
       g.excludeSince(softStart);
     }),
     shrub: t((g) => {
-      const ico = new THREE.IcosahedronGeometry(1, 0);
+      const ico = new THREE.IcosahedronGeometry(1, 1);
       g.col("#3f5a2c");
       g.add(
         ico,
@@ -1272,7 +1281,7 @@ export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshe
       const [x, z] = pts[k]!;
       const [c, rough] = cs[k]!;
       G.colLinear(c.r, c.g, c.b);
-      G.mat(L.ground, rough, 0);
+      G.mat(L.ground, rough, 1);
       // normal from the neighbouring heights
       const e = 1;
       const nx = gv(x - e, z) - gv(x + e, z);
@@ -1383,7 +1392,7 @@ export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshe
       const z1 = cx(j1) - 1;
       const kz = s.pave ?? 3;
       const kx = s.paveX ?? kz;
-      ch.ground.mat(s.layer, s.rough, 0).col(s.c);
+      ch.ground.mat(s.layer, s.rough, k === K_PROM ? 2 : 0).col(s.c);
       ch.ground.flat(x0, z0c, x0 + 2, z1, baseY + s.h, [
         x0 / kx,
         -z1 / kz,
@@ -2921,7 +2930,7 @@ function backdrop(
         M.box(hx + off, hy + 6.5, zm, 15, 1.2, 13);
         const tr = farAt(hx, zm).main;
         tr.stamp(
-          templates().tree,
+          templates().treeFar,
           hx + off - 12,
           hy - 0.5,
           zm + (r() - 0.5) * 16,
@@ -2976,7 +2985,7 @@ function backdrop(
         M.box(hx, hy - 1.2, hz, w, 7.4, d);
         M.mat(L.plain, 0.5, 0).col(R() < 0.8 ? "#b8583a" : "#8a6a5a");
         M.box(hx, hy + 6.2, hz, w + 1, 1.3, d + 1);
-        const T2 = templates().tree;
+        const T2 = templates().treeFar;
         for (let k = 0; k < 2; k++) {
           const tx = hx + (R() - 0.5) * 22;
           const tz = hz + (R() - 0.5) * 18;
@@ -3026,7 +3035,7 @@ function backdrop(
       if (k >= 3 && k < 6 && lx < 1100) {
         const tr = farAt(lx, z).main;
         tr.stamp(
-          templates().tree,
+          templates().treeFar,
           lx,
           (lx < 700 ? BLUFF_H + ((lx - half) / (700 - half)) * 30 : BLUFF_H + 30) - 0.5,
           z + r() * 40,

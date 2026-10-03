@@ -79,3 +79,5 @@ Where things live, and where to go to change them. Every folder under `src/` mus
 | Change the page title or credits | `src/routes/__root.tsx` |
 | Change what counts as "slow" | `quality.ts`, `QualityGovernor.tsx` |
 | Add a stair, lift or roof | `access/` |
+
+- `src/game/environment/`: shared scanned surface detail, material relief, and branch-and-leaf foliage. Asset licenses: `docs/art/material-sources.md`.

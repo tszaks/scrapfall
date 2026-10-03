@@ -138,7 +138,7 @@ import {
   clearShot,
 } from "./level";
 
-import { THEMES, layoutOf, offered, type Theme } from "./themes";
+import { THEMES, layoutOf, offered, playableTheme, type Theme } from "./themes";
 import { buildWorld, type BuiltWorld } from "./worldBuild";
 
 // Each map's scene (meshes, textures, weather, life) loads as its own chunk — a session
@@ -147,7 +147,9 @@ const CityMap = lazy(() => import("./scenes/CityMap"));
 const WesternMap = lazy(() => import("./scenes/WesternMap"));
 const AlpineMap = lazy(() => import("./scenes/AlpineMap"));
 const BeachMap = lazy(() => import("./scenes/BeachMap"));
-const NuketownMap = lazy(() => import("./scenes/NuketownMap"));
+const NuketownMap = import.meta.env.DEV
+  ? lazy(() => import("./scenes/NuketownMap"))
+  : (_props: { seed: number }) => null;
 import { isBeach } from "./beach/beachLayout";
 import type { CityLayout } from "./cityLayout";
 import { CURB } from "./cityLayout";
@@ -3675,7 +3677,7 @@ function World({
     Object.assign(structurePlayer, {id:"",floor:0,y:0});
     slide.current.x = slide.current.z = 0;
     const sx = big ? big.spawn.x : 0;
-    const sz = big ? big.spawn.z : layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
+    const sz = big ? big.spawn.z : import.meta.env.DEV && layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
     const num = spawnNum();
     let x = sx;
     let z = sz;
@@ -7396,7 +7398,7 @@ function World({
         onDone={() => onWarm(buildN)}
       />
       <WarmKinds enemies={enemies} theme={theme} />
-      <Structures seed={seed} />
+      <Structures seed={seed} realism={layoutOf(theme) !== "nuketown"} />
       {/* Fixed match lighting (timeOfDay.ts / TimeScene.tsx). */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />
@@ -7459,7 +7461,7 @@ function World({
           </Suspense>
           <MatchRain key={seed} western={western} />
         </>
-      ) : layoutOf(theme) === "nuketown" ? (
+      ) : import.meta.env.DEV && layoutOf(theme) === "nuketown" ? (
         <Suspense fallback={null}>
           <NuketownMap seed={seed} />
         </Suspense>
@@ -7848,10 +7850,11 @@ function forcedMapIndex(): number | null {
   const raw = new URLSearchParams(window.location.search).get("map");
   if (!raw) return null;
   const n = Number(raw);
-  if (Number.isInteger(n) && n >= 0 && n < THEMES.length) return n;
+  if (Number.isInteger(n) && n >= 0 && n < THEMES.length)
+    return THEMES[n]!.wip && !import.meta.env.DEV ? null : n;
   const q = raw.toLowerCase();
   const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
-  return i >= 0 ? i : null;
+  return i >= 0 && (!THEMES[i]!.wip || import.meta.env.DEV) ? i : null;
 }
 /** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
 function seedParam(): number | null {
@@ -8424,9 +8427,7 @@ export function Game() {
   /** buildN of the world whose shader warm finished — the veil lifts on it */
   const [warmDone, setWarmDone] = useState(0);
   /** the map the pending inputs land on — what the veil names while it builds */
-  const wantedTheme =
-    (!coop && mapChoice !== null ? THEMES[mapChoice] : undefined) ??
-    THEMES[seed % THEMES.length]!;
+  const wantedTheme = playableTheme(seed, coop, mapChoice);
   // The world build is a staged async pipeline (worldBuild.ts): generation runs as a
   // coroutine that hands the event loop a turn between chunks, so the menu stays
   // clickable while it works. `applied` is the last finished build.
@@ -8483,7 +8484,7 @@ export function Game() {
           ? cityMinimap(city, blocks, PLAY_HALF)
           : western
             ? westernMinimap(western, blocks, PLAY_HALF)
-            : layoutOf(theme) === "nuketown"
+            : import.meta.env.DEV && layoutOf(theme) === "nuketown"
               ? nuketownMinimap()
               : null,
     [city, western, blocks, theme],

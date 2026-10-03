@@ -1,0 +1,12 @@
+[
+  {
+    "query": "map=nuketown&seed=14",
+    "heading": "ENTERING\nVICE HEIGHTS\nN · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nWAVE 1\n1 OF 12\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+    "errors": []
+  },
+  {
+    "query": "map=14&seed=14",
+    "heading": "ENTERING\nPACIFIC PIER\nW · 282°\nPACIFIC PIER · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+    "errors": []
+  }
+]

@@ -1,3 +1,4 @@
+import { quality } from "../quality";
 // Snow-laden spruce for Whiteout Pass: one near model (jagged drooping tiers, snow on
 // every tier, a visible trunk) and one far model (two cones), both unit-height, drawn as
 // instanced meshes per chunk so the whole forest costs a couple of dozen draw calls.
@@ -88,7 +89,7 @@ function toGeo(b: Build) {
   return g;
 }
 
-const NEEDLE = "#48705a";
+const NEEDLE = "#3e5947";
 const SNOWC = "#eef3fa";
 const RIM = "#b4c4c0";
 const RIM2 = "#8ea49c";
@@ -110,15 +111,55 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
     tri(b, p1, q0, q1, "#4a3526");
   }
   if (trunkOnly) return toGeo(b);
-  // branches right down to the snow (as real spruce grow): from below you see needles,
-  // never a dark ceiling of undersides
-  const n = narrow ? 8 : 7;
+  // Open, irregular branch whorls. Snow rests on individual boughs, not solid cones.
+  // Stay inside the old crown bounds so ski routes and trunk collision do not change.
+  const low = quality().tier === "low";
+  const n = low ? 6 : narrow ? 9 : 8;
   const rBase = narrow ? 0.14 : 0.18;
-  for (let i = 0; i < n; i++) {
-    const t = i / n;
-    const y = 0.1 + t * 0.76;
-    const r = rBase * (1 - t * 0.82);
-    tier(b, y, r, 6, i * 0.9, i < 2, 0.9);
+  for (let level = 0; level < n; level++) {
+    const t = level / n;
+    const y = 0.11 + t * 0.76;
+    for (let arm = 0; arm < 7; arm++) {
+      const a = (arm * Math.PI * 2) / 7 + level * 1.73;
+      const r = rBase * (1 - t * 0.82) * (0.86 + 0.14 * Math.sin(arm * 7 + level * 3));
+      const dx = Math.cos(a),
+        dz = Math.sin(a);
+      for (let twig = 0; twig < (low ? 2 : 3); twig++) {
+        const f = 0.15 + twig * (low ? 0.44 : 0.28);
+        const width = r * (1 - f) * 0.62;
+        const cy = y + Math.sin(f * Math.PI) * r * 0.2 - f * r * 0.18;
+        const root = [dx * r * f, cy, dz * r * f];
+        const tip = [dx * r * (f + 0.28), cy - r * 0.12, dz * r * (f + 0.28)];
+        const left = [root[0]! - dz * width, cy - r * 0.07, root[2]! + dx * width];
+        const right = [root[0]! + dz * width, cy - r * 0.07, root[2]! - dx * width];
+        tri(b, root, left, tip, NEEDLE, 0.85 + f * 0.15);
+        tri(b, root, tip, right, NEEDLE);
+        const hanging = [root[0]!, cy - r * 0.28, root[2]!];
+        tri(b, left, hanging, tip, NEEDLE, 0.8);
+        tri(b, tip, hanging, right, NEEDLE, 0.85);
+        // A narrow snow ridge leaves needles visible along each edge.
+        const ridge = [root[0]!, cy + r * 0.04, root[2]!];
+        const snowTip = [tip[0]! * 0.91, tip[1]! + r * 0.035, tip[2]! * 0.91];
+        triC(
+          b,
+          ridge,
+          [root[0]! - dz * width * 0.55, cy, root[2]! + dx * width * 0.55],
+          snowTip,
+          SNOWC,
+          RIM,
+          RIM2,
+        );
+        triC(
+          b,
+          ridge,
+          snowTip,
+          [root[0]! + dz * width * 0.55, cy, root[2]! - dx * width * 0.55],
+          SNOWC,
+          RIM2,
+          RIM,
+        );
+      }
+    }
   }
   // snowy leader at the top
   tier(b, 0.9, rBase * 0.12, 4, 0.3, false, 0.9);
