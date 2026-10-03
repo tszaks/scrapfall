@@ -16,14 +16,14 @@ export function ControlsHelp({ touch }: { touch: boolean }) {
     const g = (a: Action) => padLabel(a, d.padType);
     return (
       <>
-        {`${g("move")} to move · ${g("look")} to look · ${g("fire")} to shoot · ${g("aim")} sights · ${g("jump")} to jump · click ${g("sprint")} to sprint (twice for a tactical sprint) · ${g("ability")} for your ability · ${g("prevGun")} ${g("nextGun")} swap guns · ${g("use")} in an elevator car for the floor button · ${g("ping")} to ping · ${g("revive")} to revive / self-revive · ${g("shopPick")} in the shop · ${g("map")} big map · ${g("pause")} to pause · ${g("camera")} camera`}
+        {`${g("move")} to move · ${g("look")} to look · ${g("fire")} to shoot · ${g("aim")} sights · ${g("jump")} to jump · click ${g("sprint")} to sprint (twice for a tactical sprint) · ${g("ability")} for your ability · ${g("prevGun")} ${g("nextGun")} swap guns · ${g("reload")} reload / interact · ${g("melee")} melee (hold near a teammate to revive) · ${g("use")} in an elevator car for the floor button · ${g("ping")} to ping · ${g("revive")} to revive / self-revive · ${g("shopPick")} in the shop · ${g("map")} big map · ${g("pause")} to pause · ${g("camera")} camera`}
       </>
     );
   }
   if (touch) {
     return (
       <>
-        Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · AIM for sights ·
+        Left thumb: drag to move · right thumb: drag to aim · hold FIRE to shoot · AIM for sights · reload and melee buttons ·
         JUMP · SPRINT (tap twice for a tactical sprint) · ABILITY button · USE for elevators · PING
         · hold REVIVE to revive yourself or a downed teammate · tap a gun to swap · pause button up
         top · Camera in Settings
@@ -32,6 +32,6 @@ export function ControlsHelp({ touch }: { touch: boolean }) {
   }
   const g = (a: Action) => KEY_LABEL[a];
   return (
-    <>{`${g("move")} to move · mouse or ${g("lookLeft")} ${g("lookRight")} ${g("lookUp")} ${g("lookDown")} to look · ${g("fire")} to shoot · ${g("aim")} sights · ${g("jump")} to jump · ${g("sprint")} to sprint (double-tap tactical) · ${g("ability")} ability · ${g("prevGun")} / ${g("nextGun")} swap guns · ${g("use")} elevator · ${g("ping")} ping · hold ${g("revive")} revive · ${g("camera")} camera · ${g("shopHeal")} shop dressing · ${g("map")} map · ${g("pause")} pause. Remap in Settings.`}</>
+    <>{`${g("move")} to move · mouse or ${g("lookLeft")} ${g("lookRight")} ${g("lookUp")} ${g("lookDown")} to look · ${g("fire")} to shoot · ${g("aim")} sights · ${g("jump")} to jump · ${g("sprint")} to sprint (double-tap tactical) · ${g("ability")} ability · ${g("prevGun")} / ${g("nextGun")} swap guns · ${g("reload")} reload · ${g("melee")} melee · ${g("shopAmmo")} buy ammo · ${g("use")} interact · ${g("ping")} ping · hold ${g("revive")} revive · ${g("camera")} camera · ${g("shopHeal")} shop dressing · ${g("map")} map · ${g("pause")} pause. Remap in Settings.`}</>
   );
 }

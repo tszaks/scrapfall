@@ -24,7 +24,7 @@ const TAU = Math.PI * 2;
 
 export function packEnemy(e: Packable, kinds: readonly string[], visFrom = 9): [number, number, number, number] {
   const kind = Math.max(0, kinds.indexOf(e.kind));
-  if (!e.alive) return [kind, 0, 0, 0];
+  if (!e.alive) return [kind, Math.round(e.x * 100), Math.round(e.z * 100), 0];
   const leaping = (e.aux ?? 0) > 0 && e.kind === "special";
   const flags = 1 | (e.flash > 0 ? 2 : 0) | (e.elite ? 4 : 0) | (leaping ? 8 : 0);
   const yaw = (((e.yaw ?? 0) % TAU) + TAU) % TAU;

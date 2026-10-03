@@ -1,14 +1,14 @@
 // Co-op downed / revive. A co-op player who runs out of health goes DOWN instead of
 // straight to spectating: they lie on the ground, can only crawl, and bleed out over 30 s.
-// A teammate who holds R next to them for 3 s brings them back at 40% health (damage to
-// the reviver interrupts it). If the bleed-out runs out they are dead as before: every gun
+// A teammate who holds R next to them for 2 s brings them back at 40% health. Damage alone
+// does not interrupt it; letting go or moving out of range does. If the bleed-out runs out they are dead as before: every gun
 // but the pistol is lost and they respawn at the next wave. If the whole squad is down or
 // dead at once, the run ends.
 //
 // The host owns the table (who is up / down / dead, bleed timers, revive progress) and
 // broadcasts it; guests only say "I'm holding R on X" and render what the host sends.
 export const BLEED_TIME = 30;
-export const REVIVE_TIME = 3;
+export const REVIVE_TIME = 2;
 export const REVIVE_RANGE = 2.6;
 export const REVIVE_HP = 0.4;
 
@@ -39,8 +39,8 @@ export function stateOf(id: string) {
 /** a hit on this player: a revive in progress stops and R must be pressed again */
 export function reviveInterrupted() {
   if (!myRevive.target) return false;
-  myRevive.mustRelease = true;
-  return true;
+  // Incoming damage does not erase a held revive. Moving away or releasing still cancels.
+  return false;
 }
 
 export type Player = { id: string; x: number; y?: number; z: number; hp: number; bledOut: boolean };

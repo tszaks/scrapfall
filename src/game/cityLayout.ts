@@ -1254,6 +1254,20 @@ export function* generateCity(
       }
     }
   }
+  // A subway route needs two stops. The three preferred corners can all be
+  // occupied in some seeds, so reserve nearby open sidewalk pairs as fallbacks.
+  const subwayStops=props.filter(p=>p.k==="subway");
+  const subwayI=Math.floor(toI(spawnGuess.x)),subwayJ=Math.floor(toI(spawnGuess.z));
+  for(let radius=8;radius<100&&subwayStops.length<2;radius++){
+    for(let di=-radius;di<=radius&&subwayStops.length<2;di++)for(const sign of [-1,1]){
+      const i=subwayI+di,j=subwayJ+radius*sign;
+      if(i<1||j<1||i+2>=cells||j+1>=cells)continue;
+      if(!isK(i,j,K_WALK)||!isK(i+1,j,K_WALK)||solid[idx(i,j)]||solid[idx(i+1,j)])continue;
+      const x=cc(i)+1,z=cc(j);
+      if(subwayStops.some(p=>Math.hypot(p.x-x,p.z-z)<45))continue;
+      const stop={x,z,rot:0,k:"subway" as const};props.push(stop);subwayStops.push(stop);markSolid(i,j,i+2,j+1,1.1);
+    }
+  }
   // perimeter: jersey barriers where a street or path runs into the arena wall
   for (let i = 0; i < cells; i++) {
     for (const [ci, cj, rot] of [

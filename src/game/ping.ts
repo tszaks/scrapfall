@@ -19,6 +19,7 @@ export type Ping = {
   label: string;
   born: number;
   life: number;
+  removed?: boolean;
 };
 
 export const PING_LIFE: Record<PingKind, number> = {
@@ -56,6 +57,7 @@ export type PingWorld = {
   items: { x: number; z: number; active: boolean; kind: "gun" | "heal" | "crate"; label: string }[];
   /** true where a wall / building stands */
   solid: (x: number, z: number) => boolean;
+  surface?: (origin: THREE.Vector3, direction: THREE.Vector3, range: number) => { x: number; y: number; z: number } | null;
   ground: (x: number, z: number) => number;
   /** nothing solid between the two points (2D) */
   los: (ax: number, az: number, bx: number, bz: number) => boolean;
@@ -68,7 +70,7 @@ export type PingWorld = {
 const _f = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _p = new THREE.Vector3();
-let lastMine = 0;
+let lastMine = -Infinity;
 
 /** what's under the crosshair, or null (a ray into the sky) */
 export function aimPing(cam: THREE.Camera, w: PingWorld, owner: string, num: number): Ping | null {
@@ -76,6 +78,21 @@ export function aimPing(cam: THREE.Camera, w: PingWorld, owner: string, num: num
   if (now - lastMine < COOLDOWN) return null;
   cam.getWorldDirection(_f);
   const o = cam.position;
+  // A second ping aimed at your marker clears it for the whole squad.
+  for (let i = pings.length - 1; i >= 0; i--) {
+    const p = pings[i]!;
+    if (p.owner !== owner) continue;
+    _v.set(p.x, p.y, p.z).sub(o);
+    const along = _v.dot(_f);
+    const perp = _p.copy(_f).multiplyScalar(-along).add(_v).length();
+    if (along > 0 && perp < Math.max(0.7, along * 0.025)) {
+      pings.splice(i, 1);
+      lastMine = now;
+      return { ...p, removed: true };
+    }
+  }
+  const surface = w.surface?.(o, _f, 600);
+  const limit = surface ? o.distanceTo(surface as THREE.Vector3) + 1 : 600;
   let best: Ping | null = null;
   let bestScore = Infinity;
   // enemies: the one nearest the crosshair inside a small cone, with a clear line
@@ -85,7 +102,7 @@ export function aimPing(cam: THREE.Camera, w: PingWorld, owner: string, num: num
     const gy = w.ground(e.x, e.z);
     _v.set(e.x, gy + (lo + hi) / 2, e.z).sub(o);
     const along = _v.dot(_f);
-    if (along <= 0.5 || along > 110) return;
+    if (along <= 0.5 || along > limit) return;
     const perp = _p.copy(_f).multiplyScalar(-along).add(_v).length();
     const r = w.radius(e.kind) * (e.elite ? 1.6 : 1);
     const allow = Math.max(r * 1.4 + (hi - lo) * 0.3, along * Math.tan((3.2 * Math.PI) / 180));
@@ -100,11 +117,11 @@ export function aimPing(cam: THREE.Camera, w: PingWorld, owner: string, num: num
   if (best) return commitMine(best, now);
   // pickups
   for (const it of w.items) {
-    if (!it.active) continue;
+    if (!it.active || !w.los(o.x, o.z, it.x, it.z)) continue;
     const gy = w.ground(it.x, it.z);
     _v.set(it.x, gy + 0.8, it.z).sub(o);
     const along = _v.dot(_f);
-    if (along <= 0.5 || along > 120) continue;
+    if (along <= 0.5 || along > limit) continue;
     const perp = _p.copy(_f).multiplyScalar(-along).add(_v).length();
     if (perp > Math.max(1.2, along * Math.tan((4 * Math.PI) / 180))) continue;
     const score = perp / along;
@@ -117,13 +134,14 @@ export function aimPing(cam: THREE.Camera, w: PingWorld, owner: string, num: num
   // anything registered (elevators ...)
   let bd = Infinity;
   providers.forEach((p) => {
-    const t = p(o, _f, 120);
+    const t = p(o, _f, limit);
     if (t && t.dist < bd) {
       bd = t.dist;
       best = mk(owner, num, t.kind, t.x, t.y, t.z, -1, t.label, now);
     }
   });
   if (best) return commitMine(best, now);
+  if (w.surface) return surface ? commitMine(mk(owner, num, "loc", surface.x, surface.y, surface.z, -1, "HERE", now), now) : null;
   // a spot: march the ray until it meets the ground or a wall
   const step = 0.5;
   let px = o.x;
@@ -166,13 +184,18 @@ export function addPing(p: Ping) {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 export function pingMsg(p: Ping) {
-  return { type: "ping", k: PING_KINDS.indexOf(p.kind), x: r1(p.x), y: r1(p.y), z: r1(p.z), i: p.ei, l: p.label.slice(0, 24) };
+  return { type: "ping", clear: p.removed ? 1 : 0, k: PING_KINDS.indexOf(p.kind), x: r1(p.x), y: r1(p.y), z: r1(p.z), i: p.ei, l: p.label.slice(0, 24) };
 }
 /** a teammate's ping arrived */
-export function pingFromMsg(m: { k?: unknown; x?: unknown; y?: unknown; z?: unknown; i?: unknown; l?: unknown; from?: unknown }, num: number) {
+export function pingFromMsg(m: { clear?: unknown; k?: unknown; x?: unknown; y?: unknown; z?: unknown; i?: unknown; l?: unknown; from?: unknown }, num: number) {
   const kind = PING_KINDS[Number(m.k)] ?? "loc";
   const p = mk(String(m.from ?? "host"), num, kind, Number(m.x) || 0, Number(m.y) || 0, Number(m.z) || 0, Number.isInteger(m.i) ? Number(m.i) : -1, String(m.l ?? "").slice(0, 24) || kind.toUpperCase(), performance.now());
-  addPing(p);
+  if (m.clear === 1) {
+    for (let i = pings.length - 1; i >= 0; i--) {
+      const q = pings[i]!;
+      if (q.owner === p.owner && q.ei === p.ei && (p.ei >= 0 || Math.hypot(q.x - p.x, q.z - p.z) < 0.3)) pings.splice(i, 1);
+    }
+  } else addPing(p);
   return p;
 }
 
@@ -199,4 +222,5 @@ export function tickPings(enemies: PingEnemy[], ground: (x: number, z: number) =
 }
 export function clearPings() {
   pings.length = 0;
+  lastMine = -Infinity;
 }

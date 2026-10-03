@@ -1525,8 +1525,8 @@ function rink(k: Kit, a: AlpineData) {
     tbox(g, (x0 + x1) / 2, y + 1.05, (z0 + z1) / 2, len, 0.1, 0.22, rot);
   };
   for (const z of [rk.z0 - 0.8, rk.z1 + 0.8]) {
-    seg(rk.x0 - 0.8, z, cx - 2.6, z);
-    seg(cx + 2.6, z, rk.x1 + 0.8, z);
+    seg(rk.x0 - 0.8, z, cx - 4.6, z);
+    seg(cx + 4.6, z, rk.x1 + 0.8, z);
   }
   seg(rk.x0 - 0.8, rk.z0 - 0.8, rk.x0 - 0.8, rk.z1 + 0.8);
   seg(rk.x1 + 0.8, rk.z0 - 0.8, rk.x1 + 0.8, rk.z1 + 0.8);
@@ -2560,7 +2560,14 @@ export function* buildInto(
   const kIsl = kitAt(40, isl.z0);
   fence(kIsl, isl.x0 - 1, isl.z0 - 1, isl.x0 - 1, a.lodgeDeck.z0);
   fence(kIsl, isl.x1 + 1, isl.z0 - 1, isl.x1 + 1, a.deck.z0);
-  fence(kIsl, a.lodgeDeck.x1 + 2, isl.z1 + 1, a.deck.x0 - 1, isl.z1 + 1);
+  // Signed ski gates leave a visible opening at both marked run starts.
+  let gateStart=a.lodgeDeck.x1+2;
+  const gateEnd=a.deck.x0-1;
+  for(const [lo,hi] of [[14,26],[60,72]] as const) {
+    if(lo>gateStart && lo<gateEnd)fence(kIsl,gateStart,isl.z1+1,lo,isl.z1+1);
+    if(hi>gateStart && lo<gateEnd)gateStart=Math.min(gateEnd,hi);
+  }
+  if(gateStart<gateEnd)fence(kIsl,gateStart,isl.z1+1,gateEnd,isl.z1+1);
   rink(kitAt(a.rink.x0, a.rink.z0), a);
   skiJump(kitAt(a.jump.x, a.jump.z1), a);
   deck(kitAt(a.deck.x0, a.deck.z0), a);

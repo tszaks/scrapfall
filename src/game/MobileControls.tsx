@@ -1,3 +1,4 @@
+import { emitControl } from "./input/remap";
 import { aimInput } from "./input/aim";
 import { useEffect, useRef, useState } from "react";
 import { touchInput } from "./touch";
@@ -193,8 +194,10 @@ export function MobileControls({
           bottom: "calc(max(1.25rem, env(safe-area-inset-bottom)) + 96px)",
         }}
       >
-        <div className="hidden [.rs-incar_&]:block">
-          <Btn label="USE" sub="FLOOR" size={56} onTap={() => (touchInput.use = true)} />
+        <div className="flex gap-2">
+          <Btn label="RELOAD" size={48} onTap={()=>emitControl("reload",true,false)} />
+          <Btn label="MELEE" size={48} onTap={()=>emitControl("melee",true,false)} />
+          <Btn label="USE" size={48} onTap={() => (touchInput.use = true)} />
         </div>
         <div className="flex items-end gap-2">
           <Btn

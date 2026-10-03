@@ -447,7 +447,7 @@ export function spawnNear(
         blocked(blocks, x, z, radius)
       )
         continue;
-      if (pass === 0 && (!ok(x, z) || Math.hypot(x - p.x, z - p.z) < rMin * 0.5)) continue;
+      if (!ok(x, z) || players.some(q=>Math.hypot(x-q.x,z-q.z)<Math.min(rMin,30))) continue;
       return { x, z };
     }
   return randomSpawn(blocks, rand);

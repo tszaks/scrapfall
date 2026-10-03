@@ -1464,6 +1464,10 @@ export class CarBatch {
     sl.bar = o.bar ?? 0;
   }
 
+  setWreck(i:number) {
+    const s=this.slots[i];if(!s)return;
+    s.rgb[0]=.05;s.rgb[1]=.045;s.rgb[2]=.04;s.lit=false;s.bar=0;
+  }
   /** Detailed collision remains stable across render LOD changes. */
   private contact(
     i: number,

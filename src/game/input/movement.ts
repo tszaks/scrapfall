@@ -62,7 +62,7 @@ export const TACTICAL_MPS = SPEED.run * SPEED.tacMul;
 export const chase = (mps: number) => Math.round(((mps * BALANCE_RUN) / 7) * 100) / 100;
 
 export const MOVE = {
-  tacDur: 3,
+  tacDur: 3.6,
   tacRecharge: 6,
   /** double-tap window (s) */
   doubleTap: 0.32,

@@ -1,3 +1,5 @@
+import { skierTargets } from "../skierTargets";
+import { registerDriveCar, driveCars, driving } from "../driving";
 import {
   geometryBounds,
   geometryBody,
@@ -16,6 +18,8 @@ import type { AlpineLayout } from "../alpine/layout";
 import { terrainY, groundY } from "../terrain";
 import { liveCars, type TrafficLink, type CarBox } from "../trafficCore";
 import { showToast } from "../squadState";
+const wreckColor=new THREE.Color("#333333");
+const snowWhite=new THREE.Color("#ffffff");
 const pos: RoutePose = { x: 0, z: 0, yaw: 0 },
   ahead: RoutePose = { x: 0, z: 0, yaw: 0 };
 const lampMatrix = new THREE.Matrix4(),
@@ -42,6 +46,7 @@ export function AlpineLife({
       mesh.frustumCulled = false;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.setColorAt(0,snowWhite);mesh.setColorAt(1,snowWhite);
       return mesh;
     });
     const road = snowRoad();
@@ -61,6 +66,7 @@ export function AlpineLife({
         geometry,
         matrix,
         bounds,
+        wreckPainted:false,
         distance: starts[i]!,
         speed: 0,
         hit: 0,
@@ -83,6 +89,8 @@ export function AlpineLife({
       };
     });
     const paths = skiRoutes(layout, terrainY);
+    skierTargets.length=0;
+    for(let i=0;i<paths.length*5;i++)skierTargets.push({x:0,y:0,z:0,active:false,downUntil:0});
     const skiers = new THREE.InstancedMesh(skiModel(), mat, paths.length * 5);
     skiers.name = "whiteout-skiers";
     skiers.frustumCulled = false;
@@ -101,6 +109,10 @@ export function AlpineLife({
     for (let i = 0; i < 4; i++) lamps.setColorAt(i, new THREE.Color(i % 2 ? 0x3984ff : 0xff3833));
     return { mat, vehicles, road, cars, paths, skiers, lamps, lastChase: -1 };
   }, [layout]);
+  useEffect(()=>{
+    built.cars.forEach((c,i)=>{if(i>=2)registerDriveCar(`snow-${i}`,c.box.hl,c.box.hw,1.3,16,60)});
+    return ()=>{built.cars.forEach((_,i)=>driveCars.delete(`snow-${i}`));};
+  },[built]);
   useEffect(() => {
     const encode = () =>
       built.cars.flatMap((c) => [Math.round(c.distance * 100), Math.round(c.speed * 100)]);
@@ -189,6 +201,9 @@ export function AlpineLife({
       car.distance = (car.distance + car.speed * dt) % built.road.length;
       routePose(built.road, car.distance, pos);
       routePose(built.road, car.distance + 1, ahead);
+      const drive=driveCars.get(`snow-${i}`);
+      if(drive?.claimed){pos.x=drive.x;pos.z=drive.z;pos.yaw=drive.yaw;car.speed=0;ahead.x=pos.x+Math.sin(pos.yaw);ahead.z=pos.z+Math.cos(pos.yaw);}
+      else if(drive){drive.x=pos.x;drive.z=pos.z;drive.yaw=pos.yaw;}
       const floor = groundY(pos.x, pos.z),
         pitch = -Math.atan2(groundY(ahead.x, ahead.z) - floor, 1);
       e.set(pitch, pos.yaw, 0, "YXZ");
@@ -197,6 +212,7 @@ export function AlpineLife({
       scale.set(1, 1, 1);
       m.compose(v, q, scale);
       built.vehicles[Math.floor(i / 2)]!.setMatrixAt(i % 2, m);
+      if(drive?.hp===0 && !car.wreckPainted){car.wreckPainted=true;const mesh=built.vehicles[Math.floor(i/2)]!;mesh.setColorAt(i%2,wreckColor);mesh.instanceColor!.needsUpdate=true;}
       car.matrix.copy(m);
       geometryBounds(car.geometry, car.matrix, car.bounds);
       if (patrol)
@@ -214,13 +230,14 @@ export function AlpineLife({
         h: floor + (cat ? 2.9 : 2.25),
         base: floor,
       });
+      if(drive){car.box.driveId=drive.id;drive.box=car.box;}
       liveCars.push(car.box);
       car.hit = Math.max(0, car.hit - dt);
       const feet = ctx.feet ?? (ctx.py ?? floor + 1.6) - 1.6;
       const height = ctx.bodyHeight ?? 1.8;
       if (
         ctx.active &&
-        car.hit <= 0 &&
+        car.hit <= 0 && drive?.owner !== driving.self &&
         boundsMayTouchBody(car.bounds, ctx.px, ctx.pz, 0.4, feet, height)
       ) {
         const dx = ctx.px - pos.x,
@@ -262,7 +279,10 @@ export function AlpineLife({
         );
         q.setFromEuler(e);
         v.set(x, floor + 0.04, z);
-        const fade = on ? Math.min(1, local / 0.8, (duration - local) / 0.8) : 0;
+        const target=skierTargets[idx]!;
+        Object.assign(target,{x,y:floor,z,active:on});
+        const fallen=target.downUntil>performance.now();
+        const fade = on && !fallen ? Math.min(1, local / 0.8, (duration - local) / 0.8) : 0;
         scale.setScalar(Math.max(0, fade));
         m.compose(v, q, scale);
         built.skiers.setMatrixAt(idx++, m);

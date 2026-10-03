@@ -1129,7 +1129,7 @@ export function* generateAlpine(
   // (shots fly over them: their top is the drawn boards' red cap, ~1.2 m over the ice)
   const boards = rinkY + 1.2;
   for (let x = RINK.x0; x < RINK.x1; x += 2) {
-    const gate = Math.abs(x + 1 - (RINK.x0 + RINK.x1) / 2) < 3;
+    const gate = Math.abs(x + 1 - (RINK.x0 + RINK.x1) / 2) < 5;
     if (!gate) {
       block(x, RINK.z0 - 2, x + 2, RINK.z0, -1, boards);
       block(x, RINK.z1, x + 2, RINK.z1 + 2, -1, boards);
@@ -1261,8 +1261,8 @@ export function* generateAlpine(
     }
   }
   // the square: fountain, a big lit Christmas tree, benches and café tables
-  prop("xmas", 2, 43.5, 0, 1);
-  block(0, 42, 4, 46, -1);
+  prop("xmas", -18, 43.5, 0, 1);
+  block(-20, 42, -16, 46, -1);
   prop("fountain", -8, 78, 0, 1);
   block(-10, 76, -6, 80, -1);
   for (let k = 0; k < 5; k++) {
@@ -1495,7 +1495,7 @@ export function* generateAlpine(
   // the island's own edge: a solid ring (railings, fences) so nobody steps off
   for (let x = SUMMIT.x0 - 2; x <= SUMMIT.x1; x += 2) {
     block(x, SUMMIT.z0 - 2, x + 2, SUMMIT.z0, -1, plateauY + 1.3);
-    block(x, SUMMIT.z1, x + 2, SUMMIT.z1 + 2, -1, plateauY + 1.3);
+    if (!(x>=14 && x<26) && !(x>=60 && x<72)) block(x, SUMMIT.z1, x + 2, SUMMIT.z1 + 2, -1, plateauY + 1.3);
   }
   for (let z = SUMMIT.z0 - 2; z <= SUMMIT.z1; z += 2) {
     block(SUMMIT.x0 - 2, z, SUMMIT.x0, z + 2, -1, plateauY + 1.3);
@@ -1575,6 +1575,12 @@ export function* generateAlpine(
     }
   }
 
+  // Keep the visible rink gates open in both the fine and coarse route grids.
+  for(const gateZ of [RINK.z0,RINK.z1])
+    for(let i=ci(-2);i<=ci(5.99);i++)
+      for(let j=ci(gateZ-4);j<=ci(gateZ+3.99);j++) {
+        solid[S(i,j)]=0; tops[S(i,j)]=-1e9; clear[S(i,j)]=1;
+      }
   // ---- 9. every open cell must be reachable: flood the nav grid and the fine grid ----
   const spawnI = ci(SPAWN.x);
   const spawnJ = ci(SPAWN.z);
@@ -1691,6 +1697,7 @@ export function* generateAlpine(
     h: H,
     triangular: true,
     platforms: [
+      { ...RINK, y: rinkY + 0.04 },
       {
         x0: BRIDGE.x0 - 1,
         z0: BRIDGE.z - BRIDGE.w / 2 - 0.5,

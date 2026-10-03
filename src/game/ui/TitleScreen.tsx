@@ -187,7 +187,7 @@ export function TitleScreen({
                   <div className="flex min-w-0 flex-1 items-stretch gap-1.5">
                     <input
                       value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 8))}
                       onKeyDown={(e) => e.key === "Enter" && startJoin()}
                       placeholder="CODE"
                       aria-label="Room code"
@@ -197,7 +197,7 @@ export function TitleScreen({
                       variant="ink"
                       size="sm"
                       onClick={startJoin}
-                      disabled={joining || joinCode.trim().length < 4}
+                      disabled={joining || joinCode.trim().length !== 4}
                     >
                       JOIN
                     </MenuButton>

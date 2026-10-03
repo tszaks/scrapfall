@@ -31,6 +31,7 @@ export const trafficClock = { t: 0 };
 
 /** Moving cars publish their boxes here each frame so bullets can stop on them. */
 export type CarBox = {
+  driveId?: string;
   x: number;
   z: number;
   sin: number;

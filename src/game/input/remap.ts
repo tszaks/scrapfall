@@ -19,6 +19,9 @@ export const ACTIONS = {
   nextGun: ["Next weapon", "KeyE"],
   ping: ["Ping", "KeyG"],
   revive: ["Hold to revive", "KeyR"],
+  reload: ["Reload", "KeyR"],
+  melee: ["Melee strike", "KeyB"],
+  shopAmmo: ["Buy ammo", "KeyK"],
   camera: ["First / third person", "KeyV"],
   map: ["Big map", "KeyM"],
   time: ["Match weather (fixed)", ""],
@@ -61,6 +64,8 @@ export const PAD_DEFAULTS_MAP: Partial<Record<ControlAction, number>> = {
   nextGun: 5,
   ping: 3,
   revive: 11,
+  reload: 2,
+  melee: 11,
   map: 8,
   pause: 9,
   aim: 6,
@@ -154,6 +159,12 @@ export function loadControls() {
     if (!d.keys || !("aim" in d.keys)) {
       if (ids.some((a) => a !== "aim" && controlSettings.keys[a].includes("Mouse2")))
         controlSettings.keys.aim = [];
+    }
+    // Older saved maps can contain an empty patch-kit binding. Keep custom
+    // controls intact and choose a free key rather than showing UNBOUND.
+    if(controlSettings.keys.shopHeal.length===0){
+      const key=["KeyH","KeyI","KeyU","KeyL"].find(k=>!ids.some(a=>a!=="shopHeal"&&controlSettings.keys[a].includes(k)));
+      if(key)controlSettings.keys.shopHeal=[key];
     }
   } catch {
     /* defaults survive blocked or corrupt storage */

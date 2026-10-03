@@ -1,3 +1,4 @@
+import { shardLedger } from "./shardLedger";
 import { useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
 import { useEffect, useRef } from "react";
@@ -5,7 +6,7 @@ import * as THREE from "three";
 
 import { NEW_VALUE } from "./enemyKinds";
 
-type E = { kind: string; x: number; z: number; alive: boolean };
+type E = { kind: string; generation?: number; x: number; z: number; alive: boolean };
 const VALUE: Record<string, number> = { drifter: 1, runner: 1, shooter: 2, specter: 2, bomber: 3, brute: 3, vanguard: 4, special: 4, boss: 25, ...NEW_VALUE };
 const N = 90;
 
@@ -24,10 +25,10 @@ export function Shards({
   onCollect: (v: number) => void;
   /** shard ids picked up by teammates (co-op): vanish here too */
   taken?: React.MutableRefObject<Set<string>>;
-  onTake?: (id: string) => void;
+  onTake?: (id: string) => boolean;
 }) {
   const meshes = useRef<(THREE.Mesh | null)[]>([]);
-  const pool = useRef(Array.from({ length: N }, () => ({ x: 0, z: 0, v: 0, on: false, vx: 0, vz: 0, id: "" })));
+  const pool = useRef(Array.from({ length: N }, () => ({ x: 0, z: 0, v: 0, on: false, vx: 0, vz: 0, id: "", claimAt: -Infinity })));
   const deaths = useRef<number[]>([]);
   const was = useRef(new WeakMap<E, boolean>());
 
@@ -36,6 +37,7 @@ export function Shards({
     was.current = new WeakMap();
     deaths.current = [];
     taken?.current.clear();
+    shardLedger.clear();
   }, [enemies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tick = useRef(0);
@@ -56,7 +58,8 @@ export function Shards({
     for (let ei = 0; ei < enemies.length; ei++) {
       const e = enemies[ei]!;
       if (was.current.get(e) && !e.alive) {
-        const dn = (deaths.current[ei] = (deaths.current[ei] ?? 0) + 1);
+        const dn = e.generation ?? (deaths.current[ei] ?? 0) + 1;
+        deaths.current[ei] = dn;
         const total = VALUE[e.kind] ?? 1;
         const count = Math.min(5, Math.max(1, Math.ceil(total / 5)), total);
         for (let c = 0; c < count; c++) {
@@ -69,7 +72,9 @@ export function Shards({
           const r = h - Math.floor(h);
           const a = r * Math.PI * 2;
           const s = count > 1 ? 2 + r * 2 : 0.5;
-          Object.assign(slot, { id, x: e.x, z: e.z, v: Math.round(total / count), on: true, vx: Math.cos(a) * s, vz: Math.sin(a) * s });
+          const value=Math.floor(total/count)+(c<total%count?1:0);
+          shardLedger.set(id,{value,x:e.x,z:e.z});
+          Object.assign(slot, { claimAt: -Infinity, id, x: e.x, z: e.z, v: Math.floor(total / count) + (c < total % count ? 1 : 0), on: true, vx: Math.cos(a) * s, vz: Math.sin(a) * s });
         }
       }
       was.current.set(e, e.alive);
@@ -89,9 +94,9 @@ export function Shards({
       const dist = Math.hypot(dx, dz);
       if (active.current && Math.abs(cam.position.y - 1.6 - groundY(p.x,p.z)) < 1.5) {
         if (dist < 0.9) {
-          p.on = false;
-          onTake?.(p.id);
-          onCollect(p.v);
+          if(performance.now()-p.claimAt<1000)return;
+          p.claimAt=performance.now();
+          if(onTake?.(p.id)!==false){p.on=false;onCollect(p.v);}
           return;
         }
         if (dist < magnet.current) {

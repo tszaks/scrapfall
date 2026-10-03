@@ -11,11 +11,13 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve:static": "node scripts/serve-static.mjs",
-    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs",
+    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/playtest-feedback.test.mjs scripts/room-recovery.test.mjs",
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm test && npm run typecheck && npm run build && npm run smoke",
-    "benchmark": "node scripts/benchmark-game.mjs"
+    "benchmark": "node scripts/benchmark-game.mjs",
+    "test:playtest": "node scripts/playtest-ui.mjs && node scripts/playtest-combat-ui.mjs",
+    "test:coop": "node scripts/playtest-coop.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"

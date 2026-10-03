@@ -16,6 +16,10 @@ export function PauseScreen({
   bought,
   multiplayer,
   onResume,
+  onRecover,
+  ammoCost,
+  canBuyAmmo,
+  onBuyAmmo,
   onSettings,
   onLeave,
 }: {
@@ -29,6 +33,10 @@ export function PauseScreen({
   bought: { id: string; name: string; lvl: number; color: string; mod: boolean; effects: { text: string; tone?: "good" | "bad" | "flat" }[] }[];
   multiplayer: boolean;
   onResume: () => void;
+  onRecover: () => void;
+  ammoCost: number;
+  canBuyAmmo: boolean;
+  onBuyAmmo: () => void;
   onSettings: () => void;
   onLeave: () => void;
 }) {
@@ -50,6 +58,9 @@ export function PauseScreen({
           <MenuButton data-pad-start variant="primary" size="md" onClick={onResume}>
             Resume
           </MenuButton>
+          <MenuButton variant="line" size="sm" disabled={!canBuyAmmo} onClick={onBuyAmmo}>Buy ammo +50% · ◆ {ammoCost}</MenuButton>
+          <MenuButton variant="line" size="sm" onClick={onRecover}>Return to safe spawn</MenuButton>
+          <p className="text-xs opacity-70">Stuck? Return without losing health or gear. Available every 30 seconds.</p>
           <div className="flex gap-2">
             <MenuButton variant="line" size="sm" className="flex-1" onClick={onSettings}>
               Settings
