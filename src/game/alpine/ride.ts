@@ -73,11 +73,11 @@ export function chairAt(lift: Lift, i: number) {
   return pathOf(lift).at(chairS(lift, i));
 }
 /** eye position of someone sitting on chair i (used for teammates too) */
-export function riderEye(lift: Lift, i: number) {
+export function riderEye(lift: Lift, i: number, seat = 0) {
   const p = chairAt(lift, i);
   // sat on the left-hand seat, clear of the hanger bar in the middle of the chair
-  const sx = Math.cos(p.yaw) * -0.6;
-  const sz = -Math.sin(p.yaw) * -0.6;
+  const sx = Math.cos(p.yaw) * (seat ? 0.6 : -0.6);
+  const sz = -Math.sin(p.yaw) * (seat ? 0.6 : -0.6);
   return {
     x: p.x + sx + Math.sin(p.yaw) * 0.12,
     y: p.y + SEAT_EYE,
@@ -87,7 +87,7 @@ export function riderEye(lift: Lift, i: number) {
 }
 
 /** this client's ride: chair index (-1 on foot) and direction (1 up, -1 down) */
-export const ride = { chair: -1, dir: 0, t: 0 };
+export const ride = { chair: -1, seat: 0, dir: 0, t: 0 };
 export const riding = () => ride.chair >= 0;
 export function resetRide() {
   ride.chair = -1;
@@ -112,10 +112,12 @@ export function stepRide(
   a: AlpineData,
   delta: number,
   look: { yaw: number; pitch: number },
-  /** chairs a teammate is already riding (one rider per chair) */
+  /** occupied seat keys (chair * 2 + seat) */
   taken?: Set<number>,
+  playerNum = 1,
 ): boolean {
   const lift = a.lift;
+  const seat = (playerNum - 1) % 2;
   const p = pathOf(lift);
   const n = chairCount(lift);
   if (ride.chair < 0) {
@@ -125,7 +127,7 @@ export function stepRide(
     const dd = Math.hypot(cam.position.x - dx, cam.position.z - dz);
     if (du > 2.2 && dd > 2.2) return false;
     for (let i = 0; i < n; i++) {
-      if (taken?.has(i)) continue;
+      if (taken?.has(i * 2 + seat)) continue;
       const s = chairS(lift, i);
       const c = p.at(s);
       if (Math.hypot(c.x - cam.position.x, c.z - cam.position.z) > 1.6) continue;
@@ -142,6 +144,7 @@ export function stepRide(
       }
     }
     if (ride.chair < 0) return false;
+    ride.seat = seat;
     ride.t = 0;
   }
   ride.t += delta;
@@ -157,7 +160,7 @@ export function stepRide(
     resetRide();
     return false;
   }
-  const e = riderEye(lift, ride.chair);
+  const e = riderEye(lift, ride.chair, ride.seat);
   // a gentle sway on the hanger
   const sway = Math.sin(alpine.t * 1.3 + ride.chair) * 0.05;
   cam.position.set(

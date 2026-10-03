@@ -71,7 +71,7 @@ export function RemotePlayers({
         p.rz = e.z;
         g.position.set(e.x, e.y - 1.6, e.z);
       } else if (lift && (p.rc ?? -1) >= 0 && !down) {
-        const e = riderEye(lift, p.rc!);
+        const e = riderEye(lift, p.rc!, p.rs);
         p.rx = e.x;
         p.rz = e.z;
         g.position.set(e.x, e.y - 1.6, e.z);

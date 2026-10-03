@@ -159,6 +159,14 @@ export function snowVehicle(kind: "cat" | "mobile" | "patrol") {
     }
     m.box(0.55, 0.16, 0.08, [0, 0.86, 1.22], "#fff0c8", S.glowSoft);
     m.box(0.8, 0.06, 0.08, [0, 1.24, 0.35], "#373f45", S.steel);
+    // Upturned skis, suspension links, grips, dash and rear lamp read at riding distance.
+    for(const x of [-0.57,0.57]) {
+      m.box(.17,.07,.4,[x,.18,1.8],"#292f35",S.rubber,{rot:[-.45,0,0]});
+      m.box(.045,.4,.045,[x*.7,.43,.85],"#d2d6d8",S.steel,{rot:[0,0,x>0?.4:-.4]});
+      m.box(.2,.085,.1,[x*.7,1.24,.35],"#171c20",S.rubber,{bevel:.025});
+    }
+    m.box(.32,.12,.25,[0,1.02,.34],"#172b35",S.glass,{rot:[-.25,0,0]});
+    m.box(.25,.1,.04,[0,.76,-1.2],"#d93232",S.glowSoft);
     m.push([0, 0.77, -0.45], [0, 0, 0], 0.85);
     sportingPerson(m, "seat", patrol);
     m.pop();

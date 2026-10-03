@@ -58,6 +58,7 @@ type Arc = {
 };
 
 export type Car = {
+  driven?: boolean;
   v: Vehicle;
   h: number;
   axis: 0 | 1;
@@ -796,6 +797,7 @@ export function stepCars(
   }
   for (let ci = 0; ci < cars.length; ci++) {
     const c = cars[ci]!;
+    if (c.driven) continue;
     if (only !== null && !!c.far !== only) continue;
     // Deadlock breaker: cars stuck for seconds, each waiting for the next in a loop (e.g. a
     // cruiser and a car meeting nose to nose in a junction). The lowest index in the loop

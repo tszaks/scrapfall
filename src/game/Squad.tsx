@@ -1,3 +1,4 @@
+import { avState, AV_WARN, runAt } from "./events/avalanche";
 import { actionLabel } from "./input/labels";
 import { subscribeActions, subscribeInputReset } from "./input/remap";
 import { presentationCamera } from "./PlayerView";
@@ -238,6 +239,9 @@ export function HudOverlay({
   coop: boolean;
   numOf: (id: string) => number;
 }) {
+  const teamEls = useRef<(HTMLDivElement | null)[]>([]);
+  const compassEl = useRef<HTMLDivElement>(null);
+  const hazardEl = useRef<HTMLDivElement>(null);
   const pingEls = useRef<(HTMLDivElement | null)[]>([]);
   const boxEls = useRef<(HTMLDivElement | null)[]>([]);
   const downEls = useRef<(HTMLDivElement | null)[]>([]);
@@ -260,6 +264,44 @@ export function HudOverlay({
       const H = window.innerHeight;
       const { active: on, coop: co, numOf: num } = state.current;
       const now = performance.now();
+      const compass = compassEl.current;
+      if (compass) {
+        compass.style.display = on && cam ? "block" : "none";
+        if (cam && on) {
+          cam.getWorldDirection(_q);
+          const bearing = (Math.atan2(_q.x, -_q.z) * 180 / Math.PI + 360) % 360;
+          const label = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(bearing / 45) % 8];
+          const text = `${label} · ${Math.round(bearing)}°`;
+          if (compass.textContent !== text) compass.textContent = text;
+        }
+      }
+      let teamCount = 0;
+      if (on && co && cam) remotes.current.forEach(r => {
+        if (now - r.last > 5000 || r.hp <= 0 || teamCount >= MAX_DOWN) return;
+        const el = teamEls.current[teamCount++];
+        if (!el) return;
+        project(cam, r.x, (r.sy ?? r.ay ?? groundY(r.x, r.z)) + 2.5 + (r.jy ?? 0), r.z, W, H, P);
+        el.style.display = "block";
+        el.style.transform = `translate(${Math.max(90, Math.min(W-90, P.x))}px, ${Math.max(110, Math.min(H-80, P.y))}px) translate(-50%,-100%)`;
+        el.style.setProperty("--pc", colorFor(num(r.id)));
+        const text = `${P.on ? "◆" : "➤"} P${num(r.id)} · ${Math.round(P.dist)}m`;
+        if (el.textContent !== text) el.textContent = text;
+      });
+      for (let i=teamCount;i<MAX_DOWN;i++) if(teamEls.current[i]) teamEls.current[i]!.style.display="none";
+      const hazard = hazardEl.current;
+      const plan = avState.plan;
+      if (hazard) {
+        hazard.style.display = on && cam && plan ? "block" : "none";
+        if (on && cam && plan) {
+          const front = runAt(plan, Math.max(0,avState.front));
+          project(cam, front.x, groundY(front.x,front.z)+4, front.z, W,H,P);
+          hazard.style.transform = `translate(${Math.max(130,Math.min(W-130,P.x))}px, ${Math.max(140,Math.min(H-100,P.y))}px) translate(-50%,-50%)`;
+          const bearing=(Math.atan2(front.x-cam.position.x,cam.position.z-front.z)*180/Math.PI+360)%360;
+          const dir=["N","NE","E","SE","S","SW","W","NW"][Math.round(bearing/45)%8];
+          const text=avState.t<AV_WARN ? `⚠ AVALANCHE ${dir} · ${Math.ceil(AV_WARN-avState.t)}s · LEAVE ${plan.name}` : avState.front<plan.total ? `⚠ SNOW FRONT ${dir} · ${Math.round(P.dist)}m` : "SNOW SETTLING · KEEP CLEAR";
+          if(hazard.textContent!==text) hazard.textContent=text;
+        }
+      }
       // ---- pings ----
       for (let i = 0; i < MAX_PINGS; i++) {
         const el = pingEls.current[i];
@@ -274,6 +316,7 @@ export function HudOverlay({
           continue;
         }
         project(cam, p.x, p.y + (p.kind === "enemy" ? 0.35 : 0.6), p.z, W, H, P);
+        P.dist=cam.position.distanceTo(_v.set(p.x,p.y,p.z));
         const col = colorFor(p.num);
         const age = (now - p.born) / 1000;
         const fade = Math.min(1, (p.life - age) / 0.8);
@@ -285,7 +328,7 @@ export function HudOverlay({
         el.style.setProperty("--pc", col);
         const label = p.kind === "loc" ? "" : p.label;
         el.dataset["kind"] = p.kind;
-        const txt = `${KIND_ICON[p.kind] ?? "◆"} ${label}${label ? " · " : ""}${Math.round(P.dist)}m`;
+        const txt = `${KIND_ICON[p.kind] ?? "◆"} ${label}${label ? " · " : ""}${Math.round(P.dist)}m · ${Math.max(0, Math.ceil(p.life-age))}s`;
         if (el.textContent !== txt) el.textContent = txt;
         // enemy: corner brackets round the body
         if (p.kind === "enemy" && P.on) {
@@ -403,6 +446,9 @@ export function HudOverlay({
 
   return (
     <div className="pointer-events-none fixed inset-0 z-10 overflow-hidden font-mono">
+      <div ref={compassEl} data-compass className="absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white" />
+      <div ref={hazardEl} className="hud-down" style={{display:"none",borderColor:"#ffcf6b"}} />
+      {Array.from({length:MAX_DOWN},(_,i)=><div key={`team${i}`} ref={el=>{teamEls.current[i]=el}} className="hud-ping" data-teammate style={{display:"none"}} />)}
       <style>{`
         .hud-ping { position:absolute; left:0; top:0; white-space:nowrap; font-size:12px; font-weight:700;
           letter-spacing:0.12em; color:#f7eeda; padding:2px 7px; border-radius:4px;

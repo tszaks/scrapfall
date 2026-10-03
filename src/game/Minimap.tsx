@@ -216,16 +216,30 @@ export function Minimap({
       const now2 = performance.now();
       remotes.current.forEach((r) => {
         if (now2 - r.last > 4000) return;
-        const [x, z] = rim(wx(r.x), wz(r.z), 8);
+        const [x, z] = rim(wx(r.x), wz(r.z), 12);
         // a downed teammate flashes red until someone revives them
         const down = r.hp <= 0 && r.id !== undefined && squad.get(r.id)?.st === DOWN;
         g.fillStyle = r.hp > 0 ? r.color : down ? (blink ? "#ff2a1a" : r.color) : "#8a8680";
         g.strokeStyle = "#2b2118";
         g.lineWidth = 1.5 * dpr;
         g.beginPath();
-        g.arc(x!, z!, 5 * dpr, 0, Math.PI * 2);
+        g.arc(x!, z!, 8 * dpr, 0, Math.PI * 2);
         g.fill();
         g.stroke();
+      });
+      // Player numbers stay upright after the rotating map is restored.
+      g.restore();
+      g.save();
+      g.font = `bold ${11*dpr}px monospace`;
+      g.textAlign = "center"; g.textBaseline = "middle";
+      remotes.current.forEach(r=>{
+        if(now2-r.last>4000) return;
+        const [mx,mz]=rim(wx(r.x),wz(r.z),12);
+        const dx=mx!,dz=mz!;
+        const x=R+dx*Math.cos(f.yaw)-dz*Math.sin(f.yaw), y=R+dx*Math.sin(f.yaw)+dz*Math.cos(f.yaw);
+        g.strokeStyle="#17131c";g.lineWidth=3*dpr;g.fillStyle="#fff";
+        const label=String((r as MapRemote & {num?:number}).num ?? "◆");
+        g.strokeText(label,x,y);g.fillText(label,x,y);
       });
       g.restore();
       // me: an arrow pointing where I look (always up), then the rim and a north marker

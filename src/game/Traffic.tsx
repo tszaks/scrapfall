@@ -1,3 +1,4 @@
+import { registerDriveCar, driveCars, driving } from "./driving";
 import { registerStaticInstances } from "./staticCollision";
 // Moving traffic for the city map, and the map's parked cars. Every vehicle draws through one
 // CarBatch (art/cars.ts): an InstancedMesh per vehicle type and LOD, plus shared wheel, glass
@@ -76,6 +77,7 @@ const sirenPool: SirenSrc[] = [];
 // (this frame's lists are rebuilt from pooled slots: fresh objects per car per frame were a
 // measurable GC source — everything that reads them does so within the frame)
 type LiveSlot = {
+  driveId?: string;
   i: number;
   x: number;
   z: number;
@@ -176,6 +178,10 @@ export function CityTraffic({
     [seed, roadX, roadZ, city.spawn, carCount, coastal],
   );
 
+  useEffect(()=>{
+    cars.forEach((c,i)=>{const d=registerDriveCar(`city-${i}`,c.v.len/2,c.v.wid/2,c.h,c.v.type==="sports"?32:c.v.type==="bus"?14:c.v.type==="van"?17:22,c.v.type==="bus"?240:100);d.x=c.x;d.z=c.z;d.yaw=c.yaw;});
+    return ()=>{cars.forEach((_,i)=>driveCars.delete(`city-${i}`));};
+  },[cars]);
   // ---- one batch for every vehicle: the moving cars first, then the parked ones ----
   const parked = city.parked;
   const parkedCount = cars.length; // index of the first parked car in the batch
@@ -560,7 +566,13 @@ export function CityTraffic({
           (c.role === ROLE_SUSPECT ? F_SUSPECT : 0) |
           (c.park ? F_PARKED : 0);
       }
-      const siren = (flags & F_SIREN) !== 0;
+      const drive=driveCars.get(`city-${ci}`);
+      if(drive?.claimed) {
+        c.driven=true;c.x=np.x=drive.x;c.z=np.z=drive.z;c.yaw=c.yawVis=drive.yaw;c.speed=drive.speed;
+      } else if(drive) {drive.x=np.x;drive.z=np.z;drive.yaw=c.yawVis;}
+      const wreck=!!drive && drive.hp<=0;
+      if(wreck)batch.setWreck(ci);
+      const siren = !wreck && (flags & F_SIREN) !== 0;
       const bar: Bar = siren ? barAt(t, ci) : 0;
       // ---- draw ----
       // wheel roll: metres moved since the last frame (a snap / respawn is not a roll)
@@ -568,12 +580,13 @@ export function CityTraffic({
       const moved = Math.hypot(np.x - lp[ci * 2]!, np.z - lp[ci * 2 + 1]!);
       lp[ci * 2] = np.x;
       lp[ci * 2 + 1] = np.z;
-      batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: true, bar, roll: moved < 3 ? moved : 0 });
+      batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: !wreck, bar, roll: moved < 3 ? moved : 0 });
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       {
         const slot = liveSlot(batch, ci);
         slot.i = ci;
+        if(drive){slot.driveId=drive.id;drive.box=slot;}
         slot.x = np.x;
         slot.z = np.z;
         slot.sin = sin;
@@ -665,7 +678,7 @@ export function CityTraffic({
       const lat = dx * cos - dz * sin;
       if (
         L.active &&
-        c.hitCd <= 0 &&
+        c.hitCd <= 0 && drive?.owner !== driving.self &&
         batch.bodyContact(ci, L.px, L.pz, 0.4, L.feet ?? (L.py ?? 1.6) - 1.6, L.bodyHeight ?? 1.8)
       ) {
         const side = lat >= 0 ? 1 : -1;

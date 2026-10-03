@@ -1,3 +1,4 @@
+import { withWarmInstances } from "./warmInstances";
 // Shader pre-warm: draws the whole scene once, everything visible and nothing culled, a few
 // frames after a map is built, so every material's GPU program (and, on Safari/Metal, its
 // pipeline) exists before the player walks into it.
@@ -181,6 +182,7 @@ export function Prewarm({
               shown.push(a);
             }
         }
+        withWarmInstances(batch as THREE.InstancedMesh[], () => {
         gl.render(scene, cam);
         if (p.rt) {
           gl.setRenderTarget(p.rt);
@@ -197,6 +199,7 @@ export function Prewarm({
           }
           scene.remove(p.spot);
         }
+        });
       }
     } finally {
       gl.setRenderTarget(prevRT);

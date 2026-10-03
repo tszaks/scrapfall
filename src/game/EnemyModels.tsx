@@ -322,7 +322,7 @@ export function NewEnemyModel({ kind, data, all }: { kind: NewKind; data: Data; 
             <mesh
               ref={a}
               geometry={G.hex}
-              material={mat(accent, 0.32)}
+              material={mat("#55ddff", 0.68)}
               position={[0, 1.25, 0.95]}
               rotation={[Math.PI / 2, Math.PI / 6, 0]}
               scale={[1.05, 0.05, 1.12]}

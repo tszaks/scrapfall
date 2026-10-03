@@ -1,3 +1,4 @@
+import { perkExplanation } from "../perkLanguage";
 // The between-waves shop: a bottom-anchored strip over the live game. pointer-events stay off
 // except on the buttons themselves (touch + gamepad buyers; kbm buys with Z X C / R / H).
 import { PERK_INFO, PISTOL_MODS, perkCost, type PerkId, type Perks } from "../perks";
@@ -18,9 +19,10 @@ function PistolBadge() {
 }
 
 function KeyPip({ action }: { action: ControlAction }) {
+  const dev = useInputDevice();
   return (
     <span className="flex min-h-4 min-w-4 items-center justify-center rounded-sm border border-[#f3e6cf]/25 bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]">
-      <KeyHint action={action} />
+      <KeyHint action={dev.kind === "pad" && (action === "shopHeal" || action === "shopRevive") ? "shopBuy" : action} />
     </span>
   );
 }
@@ -43,6 +45,8 @@ export function ShopBar({
   onBuy,
   onReroll,
   onPatch,
+  onAmmo,
+  ammoCost,
   onKit,
 }: {
   offers: PerkId[];
@@ -62,6 +66,8 @@ export function ShopBar({
   onBuy: (i: number) => void;
   onReroll: () => void;
   onPatch: () => void;
+  onAmmo: () => void;
+  ammoCost: number;
   onKit: () => void;
 }) {
   const dev = useInputDevice();
@@ -76,7 +82,7 @@ export function ShopBar({
       <div className="mx-auto w-fit max-w-full rounded-lg border-2 border-[#2b2118] bg-[#f3e6cf]/95 px-3 pt-1.5 pb-2 shadow-[3px_3px_0_0_rgba(43,33,24,0.6)]">
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-0.5 text-[11px] font-bold tracking-[0.22em]">
           <span style={{ color: C.rust }}>SCRAP SHOP</span>
-          <span className="opacity-70">NEXT WAVE IN {shopLeft}s</span>
+          <span className="opacity-70">NEXT WAVE IN {shopLeft}s · PISTOL FULL · OTHER AMMO +35%</span>
           <span>
             <span className="text-[#1aa6b8]">◆</span> {shards}
           </span>
@@ -87,6 +93,7 @@ export function ShopBar({
             </span>
           )}
         </div>
+        <button onClick={onAmmo} disabled={shards<ammoCost} className="pointer-events-auto mt-2 rounded border border-[#2b2118] px-3 py-1 text-xs disabled:opacity-40">AMMO +50% · ◆ {ammoCost}</button>
         <div
           className={`mt-1.5 flex items-stretch gap-1.5 ${
             touchUi
@@ -158,22 +165,23 @@ export function ShopBar({
                 <KeyHint action={`shop${i + 1}` as ControlAction} />
               </span>
               {isMod && <PistolBadge />}
+              <div className="mb-1 text-[10px] opacity-65">{isMod ? "PISTOL MOD · USES A SLOT" : "PLAYER UPGRADE"}</div>
               <div className="text-xs font-bold tracking-widest">{info.name}</div>
               {info.pros ? (
                 <div className="mt-1 space-y-0.5 text-[11px] leading-snug">
                   {info.pros.map((t) => (
                     <div key={t} className="font-bold text-[#1d7a37]">
-                      ▲ {t}
+                      ▲ {perkExplanation(t)}
                     </div>
                   ))}
                   {info.cons?.map((t) => (
                     <div key={t} className="font-bold text-[#b3261e]">
-                      ▼ {t}
+                      ▼ {perkExplanation(t)}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="mt-1 text-[11px] leading-snug opacity-80">{info.desc}</div>
+                <div className="mt-1 text-[11px] leading-snug opacity-80">{perkExplanation(info.desc)}</div>
               )}
               {id !== "heal" && <div className="mt-1 text-[11px] opacity-70">LEVEL {perks[id]}</div>}
               <div className={`mt-2 text-sm font-bold ${afford ? "" : "text-[#b3261e]"}`}>

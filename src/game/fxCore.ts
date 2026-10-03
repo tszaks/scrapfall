@@ -475,6 +475,9 @@ export class MeshPool {
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.mesh.visible = false;
+    // Allocate tint attributes before prewarm, not on the first casing or impact.
+    this.c.set(0xffffff);
+    for(let i=0;i<cap;i++)this.mesh.setColorAt(i,this.c);
   }
   begin() { this.n = 0; }
   add(p: THREE.Vector3, q: THREE.Quaternion, scale: number, tint?: number) {

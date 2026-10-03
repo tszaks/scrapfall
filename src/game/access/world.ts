@@ -651,6 +651,10 @@ export function playerBlocked(
         const half = b.ladder ? 0.5 : q.half - r - 0.02;
         if (Math.abs(offset.lat) < half && offset.out > -0.25 && offset.out < 1.25) return false;
       }
+    // An enclosed lookout has a floor only inside its authored room. Open arches
+    // must not let a walking player leave that floor and fall into the solid tower.
+    const room=p.zone===2 ? w.list[p.b] : undefined;
+    if(room?.room && roofBlocked(room,x,z,r))return true;
     return undefined;
   }
   const b = w.list[p.b]!;
@@ -794,7 +798,7 @@ export function stepPlayer(
           }
         }
       }
-      if (best && bd < 1.5) {
+      if (best) {
         [a, d] = best;
         [pos.x, pos.z] = toWorld(b, a, d);
       }

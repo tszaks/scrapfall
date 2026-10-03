@@ -41,6 +41,8 @@ export type RemoteState = {
   jy?: number;
   /** alpine: the chairlift chair this player is riding, -1 on foot */
   rc?: number;
+  rs?: number;
+  ski?: boolean;
   /** Pacific Pier Ferris cabin, -1 on foot. */
   wr?: number;
   last: number;
@@ -71,7 +73,8 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v14 adds effective shot spread and retunes player projectile speed and lifetime.
 // v15 ground enemies collide with traffic and rendered map geometry.
 // v16 raises player movement to a middle pace while retaining enemy chase speeds.
-const PREFIX = "scrapfall-ts-arena-v16-";
+// v17 preserves corpse positions and adds playtest recovery, shared rides and ping removal.
+const PREFIX = "scrapfall-ts-arena-v17-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
@@ -90,169 +93,148 @@ type Opts = {
   onClose?: () => void;
 };
 
-export async function hostRoom(opts: Opts): Promise<NetHandle> {
-  const code = makeCode();
-  // host and guest both need the relay: either side's NAT can be the one that blocks
+/** A room retains its code when authority moves to a surviving guest. The public
+ * PeerJS id is a single-writer lease: only one survivor can claim it. */
+async function room(code: string, initialHost: boolean, opts: Opts): Promise<NetHandle> {
   const iceServers = await loadIceServers();
-  const peer = new Peer(PREFIX + code, { debug: 0, config: { iceServers } });
-  await new Promise<void>((resolve, reject) => {
-    peer.on("open", () => resolve());
-    peer.on("error", (e) => reject(e));
-  });
-
+  const roomId = PREFIX + code;
+  const guestId = roomId + "-" + Math.random().toString(36).slice(2, 10);
+  let peer: Peer;
+  let upstream: DataConnection | null = null;
+  let stopped = false;
+  let recovering = false;
+  let recoveryFailed = false;
+  let members: string[] = [];
+  let heardAt = performance.now();
+  let openedAt = heardAt;
+  let retry: ReturnType<typeof setTimeout> | undefined;
   const conns = new Map<string, DataConnection>();
-  const list = () => [...conns.keys()];
-  // After the initial world-loading grace, a guest silent for5s is gone.
-  // A closed tab often never sends PeerJS "close"; guests normally send at20Hz.
-  const heard = new Map<string, { at: number; opened: number }>();
-  const drop = new Map<string, () => void>();
-  const beat = setInterval(() => {
-    const now = performance.now();
-    heard.forEach((t, id) => {
-      if (connectionTimedOut(now, t.at, t.opened, HEARTBEAT)) drop.get(id)?.();
-    });
-    // keep-alive both ways, also while menus / pause stop the game's own traffic
-    conns.forEach((c) => {
-      if (c.open) c.send({ type: "hb", from: "host" });
-    });
-  }, 1000);
-
+  const heard = new Map<string, number>();
+  const send = (c: DataConnection | null, m: NetMsg) => { if (c?.open) c.send(m); };
   const handle: NetHandle = {
-    role: "host",
-    code,
-    self: "host",
-    broadcast: (m) => {
-      const payload = { ...m, from: m.from ?? "host" };
-      conns.forEach((c) => {
-        if (c.open) c.send(payload);
-      });
+    role: initialHost ? "host" : "guest", code, self: initialHost ? "host" : guestId,
+    broadcast: m => {
+      const payload = {...m, from: handle.self};
+      if (handle.role === "host") conns.forEach(c => send(c,payload));
+      else send(upstream,payload);
     },
-    sendTo: (id, m) => {
-      const c = conns.get(id);
-      if (c?.open) c.send({ ...m, from: "host" });
-    },
-    peers: list,
+    sendTo: (id,m) => handle.role === "host" ? send(conns.get(id) ?? null,{...m,from:"host"}) : send(upstream,{...m,from:handle.self}),
+    peers: () => handle.role === "host" ? [...conns.keys()] : ["host"],
     close: () => {
-      clearInterval(beat);
-      conns.forEach((c) => c.close());
-      peer.destroy();
+      if(stopped) return;
+      stopped=true; clearInterval(beat); clearTimeout(retry);
+      // Graceful exit gives peers the same immediate signal as a lost connection.
+      if(handle.role === "host") conns.forEach(c=>send(c,{type:"handoff",from:"host",members:[...conns.keys()].sort()}));
+      setTimeout(()=>{upstream?.close();conns.forEach(c=>c.close());peer?.destroy()},100);
     },
   };
-
-  peer.on("connection", (conn) => {
-    conn.on("open", () => {
-      conns.set(conn.peer, conn);
-      const now = performance.now();
-      heard.set(conn.peer, { at: now, opened: now });
-      opts.onPeers(list());
-      opts.onMsg({ type: "joined", from: conn.peer });
+  const publish = () => {
+    members=[...conns.keys()].sort();
+    conns.forEach(c=>send(c,{type:"members",members,from:"host"}));
+    opts.onPeers(members);
+  };
+  const accept = (conn: DataConnection) => {
+    conn.on("open",()=>{
+      if(stopped || conns.size>=3) { conn.close(); return; }
+      conns.set(conn.peer,conn); heard.set(conn.peer,performance.now()); publish();
+      opts.onMsg({type:"joined",from:conn.peer,recovering:conn.metadata?.recovering===true});
     });
-    conn.on("data", (raw) => {
-      if (!conns.has(conn.peer)) return; // timed out already
-      heard.get(conn.peer)!.at = performance.now();
-      if ((raw as NetMsg)?.type === "hb") return;
-      const m = { ...(raw as NetMsg), from: conn.peer };
-      // relay player-to-player chatter to the other guests
-      if (RELAYED.has(m.type)) {
-        conns.forEach((c, id) => {
-          if (id !== conn.peer && c.open) c.send(m);
-        });
-      }
+    conn.on("data",raw=>{
+      if(conns.get(conn.peer)!==conn) return;
+      heard.set(conn.peer,performance.now());
+      const m={...(raw as NetMsg),from:conn.peer};
+      if(m.type==="hb") return;
+      if(RELAYED.has(m.type)) conns.forEach((c,id)=>{if(id!==conn.peer)send(c,m)});
       opts.onMsg(m);
     });
-    const gone = () => {
-      if (conns.get(conn.peer) !== conn) return; // already dropped (or replaced)
-      conns.delete(conn.peer);
-      heard.delete(conn.peer);
-      drop.delete(conn.peer);
-      opts.onPeers(list());
-      opts.onMsg({ type: "left", from: conn.peer });
-      try {
-        conn.close();
-      } catch {
-        /* already closed */
-      }
+    const gone=()=>{
+      if(conns.get(conn.peer)!==conn)return;
+      conns.delete(conn.peer);heard.delete(conn.peer);publish();opts.onMsg({type:"left",from:conn.peer});conn.close();
     };
-    drop.set(conn.peer, gone);
-    conn.on("close", gone);
-    conn.on("error", gone);
+    conn.on("close",gone);conn.on("error",gone);
+  };
+  const openPeer = (id: string) => new Promise<Peer>((resolve,reject)=>{
+    const p=new Peer(id,{debug:0,config:{iceServers}});
+    const timeout=setTimeout(()=>{p.destroy();reject(new Error("Signalling timeout"))},12000);
+    p.on("open",()=>{clearTimeout(timeout);resolve(p)});
+    p.on("connection",accept);
+    p.on("error",err=>{clearTimeout(timeout); if(!p.open){p.destroy();reject(err)}});
+    p.on("disconnected",()=>{if(!stopped && !p.destroyed) p.reconnect()});
   });
-
-  return handle;
-}
-
-export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
-  const iceServers = await loadIceServers();
-  const peer = new Peer(PREFIX + code + "-" + Math.random().toString(36).slice(2, 8), {
-    debug: 0,
-    config: { iceServers },
+  const connect = (resume: boolean) => new Promise<void>((resolve,reject)=>{
+    const c=peer.connect(roomId,{reliable:true,metadata:{recovering:resume}});
+    let settled=false;
+    const timeout=setTimeout(()=>{c.close();reject(joinFailure(CONNECT_TIMEOUT,"Connection timed out"))},12000);
+    c.on("open",()=>{
+      if(stopped){c.close();return;}
+      settled=true;clearTimeout(timeout);upstream=c;heardAt=openedAt=performance.now();
+      if(recovering){recovering=false;opts.onMsg({type:"reconnected"});send(c,{type:"world-ready"})}
+      resolve();
+    });
+    c.on("data",raw=>{
+      heardAt=performance.now(); const m=raw as NetMsg;
+      if(m.type==="members"){members=Array.isArray(m.members)?m.members.filter((x:unknown)=>typeof x==="string"):[];return;}
+      if(m.type==="handoff"){members=m.members??members;lost();return;}
+      if(m.type!=="hb") opts.onMsg(m);
+    });
+    c.on("error",err=>{clearTimeout(timeout);if(!settled)reject(err);else lost()});
+    c.on("close",()=>{clearTimeout(timeout);if(!settled)reject(new Error("Room closed"));else lost()});
+    // peer-unavailable is emitted on Peer, not DataConnection.
+    const failed=(err: unknown)=>{if(!settled){clearTimeout(timeout);reject(err)}};
+    peer.once("error",failed);
+    c.on("open",()=>peer.off("error",failed));
   });
-  let conn: DataConnection;
+  let attempt=0;
+  const recover = async () => {
+    if(stopped || !recovering)return;
+    attempt++;
+    const rank=Math.max(0,members.indexOf(guestId));
+    try {
+      // First attempt reconnects a transiently lost guest to the existing host.
+      if(attempt===1 || attempt%2===1) await connect(true);
+      else {
+        // Stagger the claim. If the first candidate also left, the next one takes over.
+        await new Promise(r=>setTimeout(r,rank*1200));
+        if(stopped || !recovering)return;
+        const replacement=await openPeer(roomId);
+        if(stopped){replacement.destroy();return;}
+        peer.destroy();peer=replacement;upstream=null;
+        const oldSelf=handle.self;handle.role="host";handle.self="host";recovering=false;
+        opts.onMsg({type:"authority",oldSelf});
+        publish();
+      }
+    } catch {
+      if(stopped)return;
+      if(attempt>=8){recovering=false;recoveryFailed=true;opts.onClose?.();return;}
+      retry=setTimeout(()=>void recover(),1000);
+    }
+  };
+  const lost=()=>{
+    if(stopped || recovering || recoveryFailed || handle.role==="host")return;
+    recovering=true;attempt=0;upstream=null;
+    opts.onMsg({type:"reconnecting"});
+    retry=setTimeout(()=>void recover(),300);
+  };
+  const beat=setInterval(()=>{
+    if(stopped)return;
+    const now=performance.now();
+    if(handle.role==="host") conns.forEach((c,id)=>{
+      if(now-(heard.get(id)??now)>15000)c.close();else send(c,{type:"hb",from:"host"});
+    });
+    else if(!recovering && !recoveryFailed){
+      if(connectionTimedOut(now,heardAt,openedAt,HEARTBEAT+3000))lost();
+      else send(upstream,{type:"hb"});
+    }
+  },1000);
   try {
-    await new Promise<void>((resolve, reject) => {
-      peer.on("open", () => resolve());
-      peer.on("error", (e) => reject(e));
-    });
-    conn = peer.connect(PREFIX + code, { reliable: false });
-    await new Promise<void>((resolve, reject) => {
-      // a missing room fails fast with "peer-unavailable"; a timeout means the room
-      // answered nothing usable in time, usually no direct or relayed path (joinErrors.ts)
-      const t = setTimeout(
-        () => reject(joinFailure(CONNECT_TIMEOUT, "Found the arena but couldn't connect")),
-        12000,
-      );
-      conn.on("open", () => {
-        clearTimeout(t);
-        resolve();
-      });
-      peer.on("error", (e) => {
-        clearTimeout(t);
-        reject(e);
-      });
-    });
-  } catch (e) {
-    peer.destroy(); // don't leave a half-open peer holding a signalling socket
-    throw e;
-  }
-
-  // heartbeat: the host streams snapshots many times a second; 8 s of silence = it's gone
-  const openedAt = performance.now();
-  let heardAt = openedAt;
-  let closed = false;
-  const lost = () => {
-    if (closed) return;
-    closed = true;
-    clearInterval(beat);
-    opts.onClose?.();
-  };
-  const beat = setInterval(() => {
-    if (connectionTimedOut(performance.now(), heardAt, openedAt, HEARTBEAT + 3000)) lost();
-    else if (conn.open) conn.send({ type: "hb" });
-  }, 1000);
-  conn.on("data", (raw) => {
-    heardAt = performance.now();
-    if ((raw as NetMsg)?.type === "hb") return;
-    opts.onMsg(raw as NetMsg);
-  });
-  conn.on("close", lost);
-
-  const self = peer.id;
-  return {
-    role: "guest",
-    code,
-    self,
-    broadcast: (m) => {
-      if (conn.open) conn.send({ ...m, from: self });
-    },
-    sendTo: (_id, m) => {
-      if (conn.open) conn.send({ ...m, from: self });
-    },
-    peers: () => ["host"],
-    close: () => {
-      closed = true;
-      clearInterval(beat);
-      conn.close();
-      peer.destroy();
-    },
-  };
+    peer=await openPeer(initialHost?roomId:guestId);
+    if(!initialHost)await connect(false);
+    return handle;
+  }catch(err){stopped=true;clearInterval(beat);peer!?.destroy();throw err;}
+}
+export async function hostRoom(opts: Opts): Promise<NetHandle> { return room(makeCode(),true,opts); }
+export async function joinRoom(code: string, opts: Opts): Promise<NetHandle> {
+  const normalized=code.trim().toUpperCase();
+  if(!/^[A-HJ-NP-Z2-9]{4}$/.test(normalized))throw new Error("Enter the exact four-character room code.");
+  return room(normalized,false,opts);
 }
