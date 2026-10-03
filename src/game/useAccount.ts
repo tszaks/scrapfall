@@ -10,9 +10,9 @@ export function useAccount(ended: boolean, kills: number, wavesSurvived: number,
   const current = useRef({ profile, revision: 0 });
   current.current.profile = profile;
   const identity = useRef<string | null | undefined>(undefined);
-  const pending = useRef<Array<{ runId: number; kills: number; waves: number; userId: string | undefined }>>(
-    [],
-  );
+  const pending = useRef<
+    Array<{ runId: number; kills: number; waves: number; userId: string | undefined }>
+  >([]);
   useEffect(() => {
     if (!accountsConfigured) return;
     return watchProfile(
@@ -44,7 +44,7 @@ export function useAccount(ended: boolean, kills: number, wavesSurvived: number,
     if (!ended) captured.current = false;
     else if (!captured.current) {
       captured.current = true;
-      if (p || loading)
+      if (p || loading || identity.current)
         pending.current.push({
           runId,
           kills,

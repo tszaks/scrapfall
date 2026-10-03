@@ -34,6 +34,7 @@ function setup(save) {
   let effects = [];
   let restore;
   let signOut;
+  let failRestore;
   harness = {
     useState(initial) {
       const i = cursor++;
@@ -63,6 +64,11 @@ function setup(save) {
         update(p);
         loading(false);
       };
+      failRestore = () => {
+        identity(p.id);
+        report(new Error("offline"));
+        loading(false);
+      };
       signOut = () => {
         identity(null);
         update(null);
@@ -80,7 +86,12 @@ function setup(save) {
     return result;
   };
   render(false);
-  return { render, restore: () => restore(), signOut: () => signOut() };
+  return {
+    render,
+    restore: () => restore(),
+    signOut: () => signOut(),
+    failRestore: () => failRestore(),
+  };
 }
 test("a run ending during remembered-profile loading is saved after restoration exactly once", async () => {
   const calls = [];
@@ -199,4 +210,21 @@ test("multiple completed arenas during restoration retain separate ending snapsh
       [2, 1],
     ],
   );
+});
+
+test("known authenticated endings survive a failed profile load until retry succeeds", async () => {
+  const calls = [];
+  const h = setup(async (...args) => {
+    calls.push(args);
+    return p;
+  });
+  h.failRestore();
+  h.render(false);
+  h.render(true, 8, 7);
+  h.render(false, 0, 8);
+  h.restore();
+  h.render(false, 0, 8);
+  await tick();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 8);
 });

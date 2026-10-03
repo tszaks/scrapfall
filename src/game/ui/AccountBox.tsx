@@ -16,6 +16,8 @@ export function AccountBox({ account, onClose }: { account: AccountState; onClos
     setErr("");
     try {
       await (mode === "in" ? signIn : signUp)(user, pass);
+      setUser("");
+      setPass("");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Something went wrong");
     }
@@ -65,8 +67,10 @@ export function AccountBox({ account, onClose }: { account: AccountState; onClos
                 size="sm"
                 className="flex-1"
                 onClick={async () => {
+                  setErr("");
                   try {
                     await signOut();
+                    setErr("");
                   } catch {
                     setErr("Could not log out. Try again.");
                   }

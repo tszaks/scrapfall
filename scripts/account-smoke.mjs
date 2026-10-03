@@ -59,6 +59,27 @@ try {
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
+  // The installed SDK clears local sessions even on backend logout errors. Inject
+  // a rejected service call to exercise retry while the profile is still visible.
+  await page.route("**/src/game/account.ts*", async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    const signature = "async function signOut() {";
+    assert.ok(body.includes(signature), "logout service boundary exists");
+    await route.fulfill({
+      response,
+      body: body.replace(
+        signature,
+        signature +
+          `
+      if (globalThis.__rejectLogoutOnce) {
+        globalThis.__rejectLogoutOnce = false;
+        throw new Error("mock preflight logout failure");
+      }
+    `,
+      ),
+    });
+  });
   const user = {
     id: "11111111-1111-4111-8111-111111111111",
     email: "player@scrapfall.local",
@@ -112,10 +133,29 @@ try {
   await page.getByRole("dialog").getByRole("button", { name: "Log in", exact: true }).click();
   await page.getByText("TOTAL KILLS · 17", { exact: true }).waitFor();
   assert.equal(reads, 1, "one profile load on sign-in");
+  await page.evaluate(() => {
+    globalThis.__rejectLogoutOnce = true;
+  });
+  await page.getByRole("button", { name: "Log out", exact: true }).click();
+  await page.getByText("Could not log out. Try again.", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Log out", exact: true }).click();
+  await page.getByLabel("Username", { exact: true }).waitFor();
+  assert.equal(await page.getByLabel("Username", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByLabel("Password", { exact: true }).inputValue(), "");
+  assert.equal(
+    await page.getByRole("alert").count(),
+    0,
+    "successful retry clears prior logout error",
+  );
+  await page.getByLabel("Username", { exact: true }).fill("player");
+  await page.getByLabel("Password", { exact: true }).fill("mock-password");
+  await page.getByRole("dialog").getByRole("button", { name: "Log in", exact: true }).click();
+  await page.getByText("TOTAL KILLS · 17", { exact: true }).waitFor();
+  assert.equal(reads, 2, "one new profile read after logout/login");
   await page.reload();
   await page.getByRole("button", { name: "PLAYER", exact: true }).click();
   await page.getByText("TOTAL KILLS · 17", { exact: true }).waitFor();
-  assert.equal(reads, 2, "one restoration load on refresh");
+  assert.equal(reads, 3, "one restoration load on refresh");
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await page.getByLabel("Username", { exact: true }).waitFor();
   await page.reload();
