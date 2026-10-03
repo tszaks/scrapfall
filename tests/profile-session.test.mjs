@@ -25,7 +25,7 @@ test('restores a remembered session and queries outside the auth callback', asyn
   assert.equal(calls, 0);
   assert.deepEqual(s.loading, [true]);
   await flush();
-  assert.deepEqual(s.updates, [{ id: 'remembered' }]);
+  assert.deepEqual(s.updates.filter(Boolean), [{ id: 'remembered' }]);
   assert.equal(s.loading.at(-1), false);
   s.stop();
 });
@@ -38,7 +38,7 @@ test('clears a signed-out session and prevents late restoration after logout', a
   s.emit(null);
   resolve({ id: 'old' });
   await flush();
-  assert.deepEqual(s.updates, [null]);
+  assert.deepEqual(s.updates, [null, null]);
   assert.equal(s.loading.at(-1), false);
   s.stop();
 });
@@ -52,7 +52,7 @@ test('a newer account wins over an older in-flight profile', async () => {
   await flush();
   resolveOld({ id: 'old' });
   await flush();
-  assert.deepEqual(s.updates, [{ id: 'new' }]);
+  assert.deepEqual(s.updates.filter(Boolean), [{ id: 'new' }]);
   s.stop();
 });
 
@@ -62,12 +62,12 @@ test('reports restoration errors and recovers on the next auth event', async () 
   s.emit({ id: 'remembered' });
   await flush();
   assert.equal(s.errors[0].message, 'offline');
-  assert.deepEqual(s.updates, []);
+  assert.deepEqual(s.updates.filter(Boolean), []);
   assert.equal(s.loading.at(-1), false);
   fail = false;
   s.emit({ id: 'remembered' });
   await flush();
-  assert.deepEqual(s.updates, [{ id: 'remembered' }]);
+  assert.deepEqual(s.updates.filter(Boolean), [{ id: 'remembered' }]);
   s.stop();
 });
 
@@ -80,5 +80,34 @@ test('unmount unsubscribes and ignores outstanding profile requests', async () =
   resolve({ id: 'old' });
   await flush();
   assert.equal(s.unsubscribed(), true);
-  assert.deepEqual(s.updates, []);
+  assert.deepEqual(s.updates.filter(Boolean), []);
+});
+
+
+test('same-account refresh and repeated sign-in cannot overwrite newer run stats', async () => {
+  let calls = 0;
+  const s = setup(async (user) => { calls++; return { id: user.id, kills: 17 }; });
+  s.emit({ id: 'remembered' });
+  s.emit({ id: 'remembered' }); // INITIAL_SESSION / SIGNED_IN overlap
+  await flush();
+  assert.equal(calls, 1);
+  s.updates.push({ id: 'remembered', kills: 25 }); // recordRun completed
+  s.emit({ id: 'remembered' }); // TOKEN_REFRESHED / focus SIGNED_IN
+  await flush();
+  assert.equal(calls, 1);
+  assert.equal(s.updates.at(-1).kills, 25);
+  s.stop();
+});
+
+test('logout then login to the same account loads a fresh profile', async () => {
+  let calls = 0;
+  const s = setup(async (user) => { calls++; return user; });
+  s.emit({ id: 'remembered' });
+  await flush();
+  s.emit(null);
+  s.emit({ id: 'remembered' });
+  await flush();
+  assert.equal(calls, 2);
+  assert.deepEqual(s.updates.at(-1), { id: 'remembered' });
+  s.stop();
 });

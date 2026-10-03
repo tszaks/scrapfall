@@ -24,12 +24,6 @@ async function profileForUser(user: User): Promise<Profile> {
   return made as Profile;
 }
 
-export async function loadProfile(): Promise<Profile | null> {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data.session ? profileForUser(data.session.user) : null;
-}
-
 export function watchProfile(update: (p: Profile | null) => void, report: (error: unknown) => void, loading: (value: boolean) => void) {
   return followProfileSession<User, Profile>((callback) => {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
@@ -41,15 +35,14 @@ export async function signUp(username: string, password: string) {
   const name = clean(username);
   if (name.length < 3) throw new Error("Username needs 3+ letters or numbers");
   if (password.length < 6) throw new Error("Password needs 6+ characters");
-  const { error } = await supabase.auth.signUp({ email: addr(name), password, options: { data: { username: name } } });
+  const { data, error } = await supabase.auth.signUp({ email: addr(name), password, options: { data: { username: name } } });
   if (error) throw new Error(/registered|exists/i.test(error.message) ? "That username is taken" : error.message);
-  return loadProfile();
+  if (!data.session) throw new Error("Account created, but sign-in is incomplete. Try logging in.");
 }
 
 export async function signIn(username: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email: addr(username), password });
   if (error) throw new Error("Wrong username or password");
-  return loadProfile();
 }
 
 export async function signOut() {
