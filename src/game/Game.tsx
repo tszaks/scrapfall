@@ -7468,7 +7468,7 @@ function World({
       )}
       {big && <AccessScene time={time} cityKey={big} />}
       <TravelView alpine={alpineMap?.alpine ?? null} remotes={remotes} />
-      <MeleeView spawn={big?.spawn ?? {x:0,z:0}} active={shardActive} />
+      <MeleeView key={seed} spawn={big?.spawn ?? {x:0,z:0}} active={shardActive} />
       </group>
       <MapEvents
         theme={theme}
