@@ -5,15 +5,16 @@ import { BrandLogo } from "./BrandLogo";
 import { COLOR_PALETTE } from "../net";
 import { signIn, signOut, signUp, type Profile } from "../account";
 
-function AccountBox({ profile, setProfile, onClose }: { profile: Profile | null; setProfile: (p: Profile | null) => void; onClose: () => void }) {
+function AccountBox({ profile, onClose, accountLoading, accountError }: { accountLoading: boolean; accountError: string; profile: Profile | null; onClose: () => void }) {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const go = async () => {
+    if (busy || accountLoading) return;
     setBusy(true); setErr("");
-    try { setProfile(await (mode === "in" ? signIn : signUp)(user, pass)); }
+    try { await (mode === "in" ? signIn : signUp)(user, pass); }
     catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong"); }
     setBusy(false);
   };
@@ -22,14 +23,15 @@ function AccountBox({ profile, setProfile, onClose }: { profile: Profile | null;
     <div className="fixed inset-0 z-[80] grid place-items-center bg-[#0b0a09]/80 p-4" onClick={onClose}>
       <div className="w-full max-w-xs rounded-lg border-2 border-[#f3e6cf]/30 bg-[#1d150d] p-4 text-[#f3e6cf]" onClick={(e) => e.stopPropagation()}>
         <SectionLabel className="text-[#e7b25c]">ACCOUNT</SectionLabel>
-        {profile ? (
+        {err && profile && <div role="alert">{err}</div>}
+        {accountLoading ? <div className="mt-2 text-sm">Restoring account…</div> : profile ? (
           <div className="mt-2 space-y-1 text-[12px] font-bold tracking-[0.15em]">
             <div className="text-lg tracking-[0.2em]">{profile.username.toUpperCase()}</div>
             <div>TOTAL KILLS · {profile.kills}</div>
             <div>BEST WAVE · {profile.best_wave}</div>
             <div>RUNS PLAYED · {profile.matches}</div>
             <div className="flex gap-2 pt-3">
-              <MenuButton variant="ghost" size="sm" className="flex-1" onClick={async () => { await signOut(); setProfile(null); }}>Log out</MenuButton>
+              <MenuButton variant="ghost" size="sm" className="flex-1" onClick={async () => { try { await signOut(); } catch { setErr("Could not log out. Try again."); } }}>Log out</MenuButton>
               <MenuButton variant="primary" size="sm" className="flex-1" onClick={onClose}>Done</MenuButton>
             </div>
           </div>
@@ -37,7 +39,7 @@ function AccountBox({ profile, setProfile, onClose }: { profile: Profile | null;
           <div className="mt-2 space-y-2">
             <input className={field} placeholder="USERNAME" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" />
             <input className={field} placeholder="PASSWORD" type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} autoComplete={mode === "in" ? "current-password" : "new-password"} />
-            {err && <div className="text-[11px] font-bold tracking-widest text-[#ffb4a8]">{err.toUpperCase()}</div>}
+            {(err || accountError) && <div role="alert" className="text-[11px] font-bold tracking-widest text-[#ffb4a8]">{(err || accountError).toUpperCase()}</div>}
             <MenuButton variant="primary" size="md" className="w-full" onClick={go} disabled={busy || !user || !pass}>
               {busy ? "…" : mode === "in" ? "Log in" : "Create account"}
             </MenuButton>
@@ -113,7 +115,8 @@ export function TitleScreen({
   setMyColor,
   takenColors,
   profile,
-  setProfile,
+  accountLoading,
+  accountError,
 }: {
   themeName: string;
   weather: string;
@@ -138,7 +141,9 @@ export function TitleScreen({
   setMyColor: (c: string) => void;
   takenColors: string[];
   profile: Profile | null;
-  setProfile: (p: Profile | null) => void;
+  accountLoading: boolean;
+  accountError: string;
+
 }) {
   const [showAccount, setShowAccount] = useState(false);
   const { short, narrow } = useViewport();
@@ -342,7 +347,7 @@ export function TitleScreen({
         <span>TYLER &amp; TOBY SZAKACS · SZAKACS MEDIA</span>
       </div>
       {!touchUi && <Hazard className="mx-5 mb-2 hidden" />}
-      {showAccount && <AccountBox profile={profile} setProfile={setProfile} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountBox accountLoading={accountLoading} accountError={accountError} profile={profile} onClose={() => setShowAccount(false)} />}
     </Scrim>
   );
 }

@@ -49,7 +49,7 @@ import { ScopeOverlay } from "@/bro/game/ScopeOverlay";
 import { bigNet, bigMe, bigCars, bigSetCars } from "@/bro/game/BigMaps";
 import { TitleScreen } from "./ui/TitleScreen";
 import { setVolumes as broSetVolumes } from "@/bro/game/audio";
-import { loadProfile, recordRun, saveColor, type Profile } from "./account";
+import { watchProfile, recordRun, saveColor, type Profile } from "./account";
 import { ThirdPersonCam } from "./ThirdPerson";
 import { PauseScreen, EndScreen } from "./ui/RunScreens";
 
@@ -3789,6 +3789,8 @@ export function Game() {
   const [colors, setColors] = useState<Record<number, string>>({});
   const [myColor, setMyColorState] = useState(COLOR_PALETTE[0]!);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [accountError, setAccountError] = useState("");
   const [ambVol, setAmbVol] = useState(0.6);
   const setMyColor = (c: string) => {
     setMyColorState(c);
@@ -3797,7 +3799,10 @@ export function Game() {
   };
   useEffect(() => {
     try { const c = localStorage.getItem("scrapfall-color"); if (c && COLOR_PALETTE.includes(c)) setMyColorState(c); } catch { /* ignore */ }
-    void loadProfile().then((p) => { if (p) { setProfile(p); if (COLOR_PALETTE.includes(p.color)) setMyColorState(p.color); } }).catch(() => {});
+    return watchProfile((p) => {
+      setProfile(p); setAccountError("");
+      if (p && COLOR_PALETTE.includes(p.color)) setMyColorState(p.color);
+    }, () => setAccountError("Could not restore your account. Check your connection and log in again."), setAccountLoading);
   }, []);
   const [clsPicks, setClsPicks] = useState<Record<number, ClassId>>({});
   const picksRef = useRef(picks);
@@ -5023,8 +5028,9 @@ export function Game() {
               myColor={myColor}
               setMyColor={setMyColor}
               takenColors={Object.entries(colors).filter(([n]) => Number(n) !== myNum && connected.some((p) => p.num === Number(n))).map(([, c]) => c)}
+              accountLoading={accountLoading}
+              accountError={accountError}
               profile={profile}
-              setProfile={setProfile}
               mapPicker={
                 net ? (
                   <div>

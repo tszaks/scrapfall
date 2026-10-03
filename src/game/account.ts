@@ -1,4 +1,6 @@
 // Username + password accounts (no email): the username maps to an internal sign-in address.
+import type { User } from "@supabase/supabase-js";
+import { followProfileSession } from "./profileSession";
 import { supabase } from "@/integrations/supabase/client";
 
 export type Profile = { id: string; username: string; color: string; kills: number; best_wave: number; matches: number };
@@ -6,33 +8,46 @@ export type Profile = { id: string; username: string; color: string; kills: numb
 const clean = (u: string) => u.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
 const addr = (u: string) => `${clean(u)}@scrapfall.local`;
 
-export async function loadProfile(): Promise<Profile | null> {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return null;
-  const { data } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle();
+async function profileForUser(user: User): Promise<Profile> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  if (error) throw error;
   if (data) return data as Profile;
-  const username = String(u.user.user_metadata?.["username"] ?? u.user.email?.split("@")[0] ?? "player");
-  const { data: made } = await supabase.from("profiles").insert({ id: u.user.id, username }).select("*").single();
-  return (made as Profile) ?? null;
+  const username = String(user.user_metadata?.["username"] ?? user.email?.split("@")[0] ?? "player");
+  // Initial session and sign-in can both request the missing profile. Never reset
+  // an existing row's stats/color when the requests race.
+  const { error: createError } = await supabase.from("profiles").upsert(
+    { id: user.id, username }, { onConflict: "id", ignoreDuplicates: true },
+  );
+  if (createError) throw createError;
+  const { data: made, error: readError } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  if (readError) throw readError;
+  return made as Profile;
+}
+
+export function watchProfile(update: (p: Profile | null) => void, report: (error: unknown) => void, loading: (value: boolean) => void) {
+  return followProfileSession<User, Profile>((callback) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
+    return () => data.subscription.unsubscribe();
+  }, profileForUser, update, report, loading);
 }
 
 export async function signUp(username: string, password: string) {
   const name = clean(username);
   if (name.length < 3) throw new Error("Username needs 3+ letters or numbers");
   if (password.length < 6) throw new Error("Password needs 6+ characters");
-  const { error } = await supabase.auth.signUp({ email: addr(name), password, options: { data: { username: name } } });
+  const { data, error } = await supabase.auth.signUp({ email: addr(name), password, options: { data: { username: name } } });
   if (error) throw new Error(/registered|exists/i.test(error.message) ? "That username is taken" : error.message);
-  return loadProfile();
+  if (!data.session) throw new Error("Account created, but sign-in is incomplete. Try logging in.");
 }
 
 export async function signIn(username: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email: addr(username), password });
   if (error) throw new Error("Wrong username or password");
-  return loadProfile();
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
 export async function saveColor(p: Profile, color: string) {
