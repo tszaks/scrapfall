@@ -693,10 +693,26 @@ export function playableTheme(
   seed: number,
   coop: boolean,
   choice: number | null,
-  allowWip = import.meta.env?.DEV === true,
+  allowWip = import.meta.env?.MODE === "development",
 ): Theme {
   const index = !coop && choice !== null ? choice : seed % THEMES.length;
   const candidate = THEMES[index];
   if (candidate && (!candidate.wip || allowWip)) return candidate;
   return THEMES.find((t) => t.blockShape === "city")!;
+}
+
+/** Resolve explicit map URLs before the initial random roll; blocked maps use Vice Heights. */
+export function forcedThemeIndex(
+  raw: string | null,
+  allowWip = import.meta.env?.MODE === "development",
+): number | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  const q = raw.toLowerCase();
+  const index =
+    Number.isInteger(n) && n >= 0 && n < THEMES.length
+      ? n
+      : THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
+  if (index < 0) return null;
+  return THEMES.indexOf(playableTheme(0, false, index, allowWip));
 }

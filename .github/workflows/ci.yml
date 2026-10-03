@@ -35,3 +35,9 @@ jobs:
         run: npm run smoke
         env:
           SMOKE_TIMES: night
+      - name: Development build
+        run: npm run build:dev
+      - name: Development smoke test (Nuketown, 0 errors)
+        run: npm run smoke:dev
+        env:
+          SMOKE_TIMES: night

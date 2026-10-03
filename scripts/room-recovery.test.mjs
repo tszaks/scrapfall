@@ -26,7 +26,10 @@ async function buildNet(development) {
         name: "local-peer-test",
         transform(code, id) {
           if (id.endsWith("/net.ts"))
-            return code.replaceAll("import.meta.env?.DEV", String(development));
+            return code.replaceAll(
+              "import.meta.env?.MODE",
+              JSON.stringify(development ? "development" : "production"),
+            );
         },
         resolveId(id) {
           if (id === "peerjs") return "\0peer";
