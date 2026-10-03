@@ -5,7 +5,7 @@ import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 const fake = `import {EventEmitter} from 'node:events';
-const peers=new Map();
+const peers=globalThis.__scrapfallRoomTestPeers??=new Map();
 class Conn extends EventEmitter {
  constructor(peer,metadata){super();this.peer=peer;this.metadata=metadata;this.open=false;}
  send(m){const other=this.other;if(this.open&&other?.open)queueMicrotask(()=>other.emit('data',structuredClone(m)));}
@@ -17,28 +17,36 @@ export default class Peer extends EventEmitter {
  destroy(){this.destroyed=true;this.open=false;if(peers.get(this.id)===this)peers.delete(this.id);this.connections.forEach(c=>c.close());}
  reconnect(){}
 }`;
-const bundle = await rolldown({
-  input: "src/game/net.ts",
-  platform: "node",
-  plugins: [
-    {
-      name: "local-peer-test",
-      resolveId(id) {
-        if (id === "peerjs") return "\0peer";
-        if (id === "./iceServers") return "\0ice";
+async function buildNet(development) {
+  const bundle = await rolldown({
+    input: "src/game/net.ts",
+    platform: "node",
+    plugins: [
+      {
+        name: "local-peer-test",
+        transform(code, id) {
+          if (id.endsWith("/net.ts"))
+            return code.replaceAll("import.meta.env?.DEV", String(development));
+        },
+        resolveId(id) {
+          if (id === "peerjs") return "\0peer";
+          if (id === "./iceServers") return "\0ice";
+        },
+        load(id) {
+          if (id === "\0peer") return fake;
+          if (id === "\0ice") return "export async function loadIceServers(){return []}";
+        },
       },
-      load(id) {
-        if (id === "\0peer") return fake;
-        if (id === "\0ice") return "export async function loadIceServers(){return []}";
-      },
-    },
-  ],
-});
-const { output } = await bundle.generate({ format: "esm" });
-await bundle.close();
-const dir = await mkdtemp(`${tmpdir()}/scrapfall-room-test-`);
-await writeFile(`${dir}/net.mjs`, output[0].code);
-const net = await import(pathToFileURL(`${dir}/net.mjs`));
+    ],
+  });
+  const { output } = await bundle.generate({ format: "esm" });
+  await bundle.close();
+  const dir = await mkdtemp(`${tmpdir()}/scrapfall-room-test-`);
+  await writeFile(`${dir}/net.mjs`, output[0].code);
+  return import(pathToFileURL(`${dir}/net.mjs`));
+}
+const net = await buildNet(false);
+const devNet = await buildNet(true);
 const wait = async (fn, ms = 12000) => {
   const start = Date.now();
   while (!fn()) {
@@ -89,4 +97,19 @@ test("exact code validation rejects transcribed five-character codes", async () 
     () => net.joinRoom("FZM4M", { onMsg: () => {}, onPeers: () => {} }),
     /four-character/,
   );
+});
+
+test("a public client cannot join a development room by its code", async () => {
+  const opts = { onMsg: () => {}, onPeers: () => {} };
+  const host = await devNet.hostRoom(opts);
+  let guest;
+  try {
+    await assert.rejects(() => net.joinRoom(host.code, opts));
+    guest = await devNet.joinRoom(host.code, opts);
+    await wait(() => host.peers().length === 1);
+    assert.equal(guest.role, "guest");
+  } finally {
+    guest?.close();
+    host.close();
+  }
 });

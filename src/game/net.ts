@@ -74,7 +74,10 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v15 ground enemies collide with traffic and rendered map geometry.
 // v16 raises player movement to a middle pace while retaining enemy chase speeds.
 // v17 preserves corpse positions and adds playtest recovery, shared rides and ping removal.
-const PREFIX = "scrapfall-ts-arena-v17-";
+// v18 isolates development maps and rooms from the public build.
+// Development rooms use a separate namespace: a public peer must never join a
+// developer's Nuketown room and build a different map from the same seed.
+const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v18-" : "scrapfall-ts-arena-v18-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

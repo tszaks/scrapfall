@@ -3,9 +3,18 @@
 // Needs Playwright's Chromium: npx playwright install chromium
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
+import { readdir } from "node:fs/promises";
+import assert from "node:assert/strict";
+
+const assets = await readdir("dist/site/game/assets");
+assert.equal(
+  assets.some((name) => name.startsWith("NuketownMap-")),
+  false,
+  "development scene must not ship in the public build",
+);
 
 const PORT = 4173;
-const MAPS = ["vice", "gulch", "pier", "whiteout", "nuketown"];
+const MAPS = ["vice", "gulch", "pier", "whiteout"];
 // SMOKE_TIMES=night,sunset (default); CI runs night only to stay quick on software WebGL
 const TIMES = (process.env.SMOKE_TIMES ?? "night,sunset").split(",");
 const server = spawn(process.execPath, ["scripts/serve-static.mjs"], {
@@ -31,9 +40,17 @@ try {
       const url = `http://localhost:${PORT}/game/?map=${map}&time=${time}&seed=7&debug=1`;
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90_000 });
-        await page.locator("button:visible", { hasText: /^start$/i }).first().click({ timeout: 90_000 });
-        await page.locator("button:visible", { hasText: /enter arena/i }).first().click({ timeout: 30_000 });
-        await page.waitForFunction(() => window.__rs && window.__rs.camera, null, { timeout: 120_000 });
+        await page
+          .locator("button:visible", { hasText: /^start$/i })
+          .first()
+          .click({ timeout: 90_000 });
+        await page
+          .locator("button:visible", { hasText: /enter arena/i })
+          .first()
+          .click({ timeout: 30_000 });
+        await page.waitForFunction(() => window.__rs && window.__rs.camera, null, {
+          timeout: 120_000,
+        });
         await sleep(5000); // let the first wave spawn and a few hundred frames run
       } catch (e) {
         errors.push(`could not enter the arena: ${e.message.split("\n")[0]}`);
