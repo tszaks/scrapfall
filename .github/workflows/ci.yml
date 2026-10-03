@@ -35,3 +35,5 @@ jobs:
         run: npm run smoke
         env:
           SMOKE_TIMES: night
+      - name: Account session smoke (mock backend)
+        run: npm run smoke:account

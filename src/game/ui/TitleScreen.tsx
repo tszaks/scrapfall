@@ -1,6 +1,8 @@
 // The home screen: SCRAPFALL over the live map, the main menu, and — once a room is open —
 // the co-op lobby (room code, the squad's classes and ready states).
 import { useState, type ReactNode } from "react";
+import { AccountBox } from "./AccountBox";
+import type { AccountState } from "../useAccount";
 import { ABILITIES, type AbilityId } from "../abilities";
 import { CLASSES, type ClassId } from "../classes";
 import { colorFor } from "../net";
@@ -104,6 +106,7 @@ export function TitleScreen({
   ready,
   onReady,
   version,
+  account,
 }: {
   themeName: string;
   weather: string;
@@ -125,7 +128,9 @@ export function TitleScreen({
   ready: boolean;
   onReady: (v: boolean) => void;
   version: string;
+  account: AccountState;
 }) {
+  const [showAccount, setShowAccount] = useState(false);
   const { short, narrow } = useViewport();
   const compact = short || touchUi;
   const [copied, setCopied] = useState(false);
@@ -151,6 +156,12 @@ export function TitleScreen({
         style={{ textShadow: "0 1px 0 #2b2118" }}
       >
         <span>SZAKACS MEDIA</span>
+        <button
+          className="pointer-events-auto rounded border border-[#f3e6cf]/35 px-2 py-1 text-[#f3e6cf]"
+          onClick={() => setShowAccount(true)}
+        >
+          {account.profile?.username.toUpperCase() ?? "LOG IN"}
+        </button>
         <span className="hidden sm:inline">SCRAPFALL · v{version}</span>
         <span>{themeName.toUpperCase()} · LIVE MAP</span>
       </div>
@@ -321,6 +332,7 @@ export function TitleScreen({
         <span className="hidden md:inline">{weather.toUpperCase()}</span>
         <span>TYLER &amp; TOBY SZAKACS · SZAKACS MEDIA</span>
       </div>
+      {showAccount && <AccountBox account={account} onClose={() => setShowAccount(false)} />}
     </Scrim>
   );
 }

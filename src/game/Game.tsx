@@ -298,6 +298,7 @@ import { SprintMeter } from "./input/SprintMeter";
 import { HudChip, UiStyles } from "./ui/kit";
 import { LoadingVeil } from "./LoadingVeil";
 import { titleShot } from "./titleCam";
+import { useAccount } from "./useAccount";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
 import { LoadoutScreen } from "./ui/LoadoutScreen";
 import { PauseScreen, EndScreen, type RecapRow } from "./ui/PauseEndScreens";
@@ -8316,6 +8317,12 @@ export function Game() {
   };
   const gameOver = multiplayer ? allDown : dead && !downed;
   const ended = gameOver || status.won;
+  const account = useAccount(
+    ended,
+    score,
+    status.won && !endlessRef.current ? WAVES.length : Math.max(0, status.wave - 1),
+    seed,
+  );
   // keep the deepest wave ever reached, overtime included
   useEffect(() => {
     if (!ended) return;
@@ -9251,6 +9258,7 @@ export function Game() {
 
       {(!locked || ended) && !picking && !started && !ended && !paused && (
         <TitleScreen
+          account={account}
           themeName={theme.name}
           weather={
             started
