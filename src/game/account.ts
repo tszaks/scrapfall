@@ -49,12 +49,14 @@ export function watchProfile(
   update: (p: Profile | null) => void,
   report: (error: unknown) => void,
   loading: (value: boolean) => void,
+  identity?: (userId: string | null) => void,
 ) {
   return followProfileSession<User, Profile>(
     (callback) => {
-      const { data } = supabase.auth.onAuthStateChange((_event, session) =>
-        callback(session?.user ?? null),
-      );
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        identity?.(session?.user.id ?? null);
+        callback(session?.user ?? null);
+      });
       return () => data.subscription.unsubscribe();
     },
     profileForUser,

@@ -33,6 +33,7 @@ function setup(save) {
   let cursor = 0;
   let effects = [];
   let restore;
+  let signOut;
   harness = {
     useState(initial) {
       const i = cursor++;
@@ -56,9 +57,15 @@ function setup(save) {
         effects.push(fn);
       }
     },
-    watchProfile(update, report, loading) {
+    watchProfile(update, report, loading, identity) {
       restore = () => {
+        identity(p.id);
         update(p);
+        loading(false);
+      };
+      signOut = () => {
+        identity(null);
+        update(null);
         loading(false);
       };
       return () => {};
@@ -73,7 +80,7 @@ function setup(save) {
     return result;
   };
   render(false);
-  return { render, restore: () => restore() };
+  return { render, restore: () => restore(), signOut: () => signOut() };
 }
 test("a run ending during remembered-profile loading is saved after restoration exactly once", async () => {
   const calls = [];
@@ -136,4 +143,60 @@ test("an uncertain save is not replayed in overtime; a fresh arena can save agai
   await tick();
   assert.equal(calls.length, 2);
   assert.equal(calls[1][1], 2);
+  assert.equal(h.render(true, 2, 8).error, "");
+});
+
+test("a pending ending survives a new arena and saves its original score and wave", async () => {
+  const calls = [];
+  const h = setup(async (...args) => {
+    calls.push(args);
+    return p;
+  });
+  h.render(true, 8, 7);
+  h.render(false, 0, 8);
+  h.restore();
+  h.render(false, 0, 8);
+  await tick();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 8);
+  assert.equal(calls[0][2], 4);
+  h.render(true, 2, 8);
+  await tick();
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1][1], 2);
+});
+test("signed-out initial restoration drops pending endings rather than assigning them on later login", async () => {
+  const calls = [];
+  const h = setup(async (...args) => {
+    calls.push(args);
+    return p;
+  });
+  h.render(true, 8, 7);
+  h.signOut();
+  h.render(true, 8, 7);
+  h.restore();
+  h.render(true, 8, 7);
+  await tick();
+  assert.equal(calls.length, 0);
+});
+
+test("multiple completed arenas during restoration retain separate ending snapshots", async () => {
+  const calls = [];
+  const h = setup(async (...args) => {
+    calls.push(args);
+    return p;
+  });
+  h.render(true, 8, 7);
+  h.render(false, 0, 8);
+  h.render(true, 2, 8);
+  h.restore();
+  h.render(true, 2, 8);
+  await tick();
+  assert.deepEqual(
+    calls.map((args) => [args[1], args[3]]),
+    [
+      [8, 1],
+      [2, 1],
+    ],
+  );
 });

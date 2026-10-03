@@ -41,9 +41,13 @@ Completed runs save personal kills, matches played and deepest completed wave.
 Overtime retains the same run: later completion adds only additional kills and
 updates the deepest wave without counting another match. Saves are serialized in
 each client and use atomic conditional updates against freshly read totals;
-competing tabs retry only when no row was updated. A failed or uncertain response
+competing tabs retry only when no row was updated. The predicate uses PostgreSQL
+[concurrent-update rechecking](https://www.postgresql.org/docs/current/transaction-iso.html),
+with Supabase [filtered updates](https://supabase.com/docs/reference/javascript/update). A failed or uncertain response
 blocks further saves for that arena to avoid replaying a potentially successful write.
-A run ending while restoration is pending waits for the profile before saving. Guests
+A run ending while restoration is pending keeps its original score/wave snapshot
+across arena transitions and waits for the same authenticated account before saving.
+Logout/account switches discard pending endings; a successful new save clears earlier errors. Guests
 keep the existing host-authoritative per-player kill credits. No network message or
 room-version changes are made. Account state never enters the frame loop.
 
