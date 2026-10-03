@@ -66,3 +66,8 @@ export function tickReload(dt: number, w: string, total: number) {
       : `${magazine(w, total)} / ${Math.max(0, total - magazine(w, total))} · RELOAD`;
 }
 export const AMMO_COST = 8;
+
+/** Refills never remove ammunition, including an upgraded sidearm reserve. */
+export function refillAmmo(current: number, capacity: number, fraction = 0.5) {
+  return Math.max(current, Math.min(capacity, current + Math.ceil(capacity * fraction)));
+}

@@ -41,6 +41,16 @@ try {
   await p.keyboard.press("KeyK");
   await p.waitForFunction(() => __rs.ammo.current.smg === 60, { timeout: 10000 });
   results.push({ test: "buy ammo during combat", passed: true });
+  await p.evaluate(() => {
+    __rs.stats.current.extmag = true;
+    __rs.ammo.current.pistol = 200;
+  });
+  await p.keyboard.press("KeyK");
+  await p.waitForFunction(() => __rs.ammo.current.pistol === 220, null, { timeout: 10000 });
+  results.push({ test: "ammo purchase preserves extended pistol capacity", passed: true });
+  await p.evaluate(() => {
+    __rs.stats.current.extmag = false;
+  });
   const travel = await p.evaluate(() => {
     const r = __rs,
       t = r.playtest,

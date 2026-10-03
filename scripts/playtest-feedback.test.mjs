@@ -96,3 +96,9 @@ test("empty combat pools participate in warm-up and retain their hidden state", 
   );
   assert.equal(empty.count, 0);
 });
+
+test("ammo purchases preserve upgraded or above-capacity reserves", () => {
+  assert.equal(ammo.refillAmmo(200, 220), 220);
+  assert.equal(ammo.refillAmmo(180, 140), 180);
+  assert.equal(ammo.refillAmmo(0, 120), 60);
+});

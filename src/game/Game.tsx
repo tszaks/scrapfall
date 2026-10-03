@@ -1,7 +1,7 @@
 import { MeleeView } from "./MeleeView";
 import { meleeGear, subwayNear, subwayExit, trafficRoof, carryOnCar } from "./travelExtras";
 import { claimShard } from "./shardLedger";
-import { supply, magazine, beginReload, tickReload, resetSupply, AMMO_COST } from "./weaponSupply";
+import { supply, magazine, beginReload, tickReload, resetSupply, refillAmmo, AMMO_COST } from "./weaponSupply";
 import { hitSkier, downSkier, encodeSkiers, decodeSkiers } from "./skierTargets";
 import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehicle, releaseVehicle, driveInput, stepDriving, vehicleExit, encodeDriving, decodeDriving } from "./driving";
 import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
@@ -5592,7 +5592,7 @@ function World({
     poseWeapons(state, delta);
 
     tickReload(delta,weapon.current,ammo.current[weapon.current]);
-    if(supply.buy){const buys=supply.buy;supply.buy=0;for(const w of owned.current){const cap=Math.round(GUNS[w].ammo*stats.current.ammoMul);ammo.current[w]=Math.min(cap,ammo.current[w]+Math.ceil(cap*.5)*buys);}onAmmo(ammo.current[weapon.current]);syncInv();}
+    if(supply.buy){const buys=supply.buy;supply.buy=0;for(const w of owned.current){const cap=Math.round((w==="pistol" && stats.current.extmag ? 220 : GUNS[w].ammo)*stats.current.ammoMul);ammo.current[w]=refillAmmo(ammo.current[w],cap,.5*buys);}onAmmo(ammo.current[weapon.current]);syncInv();}
     playerMeleeCooldown.current=Math.max(0,playerMeleeCooldown.current-delta);
     if(supply.melee){
       supply.melee=false;
