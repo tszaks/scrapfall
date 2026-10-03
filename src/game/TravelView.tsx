@@ -1,6 +1,6 @@
 import { supply } from "./weaponSupply";
-import { useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { AlpineData } from "./alpine/layout";
@@ -18,6 +18,32 @@ export function TravelView({
 }) {
   const mesh = useRef<THREE.InstancedMesh>(null),
     hint = useRef<HTMLDivElement>(null);
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    // This label is updated by the frame loop, so it needs no nested React root.
+    // Drei Html synchronously unmounts that root during scene changes.
+    const label = document.createElement("div");
+    Object.assign(label.style, {
+      position: "absolute",
+      bottom: "125px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "#171717dd",
+      color: "white",
+      padding: "8px 12px",
+      borderRadius: "6px",
+      fontFamily: "monospace",
+      whiteSpace: "nowrap",
+      pointerEvents: "none",
+      display: "none",
+    });
+    gl.domElement.parentElement?.appendChild(label);
+    hint.current = label;
+    return () => {
+      hint.current = null;
+      label.remove();
+    };
+  }, [gl]);
   const scratch = useMemo(
     () => ({
       m: new THREE.Matrix4(),
@@ -62,23 +88,6 @@ export function TravelView({
         <boxGeometry />
         <meshStandardMaterial color="#de633d" roughness={0.35} />
       </instancedMesh>
-      <Html fullscreen style={{ pointerEvents: "none" }}>
-        <div
-          ref={hint}
-          style={{
-            position: "absolute",
-            bottom: 125,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#171717dd",
-            color: "white",
-            padding: "8px 12px",
-            borderRadius: 6,
-            fontFamily: "monospace",
-            whiteSpace: "nowrap",
-          }}
-        />
-      </Html>
       {alpine?.paths
         .filter((p) => p.kind === "piste" && (p.name === "blue" || p.name === "red"))
         .map((p) => {

@@ -138,7 +138,7 @@ import {
   clearShot,
 } from "./level";
 
-import { THEMES, layoutOf, offered, playableTheme, type Theme } from "./themes";
+import { THEMES, layoutOf, offered, playableTheme, forcedThemeIndex, type Theme } from "./themes";
 import { buildWorld, type BuiltWorld } from "./worldBuild";
 
 // Each map's scene (meshes, textures, weather, life) loads as its own chunk — a session
@@ -147,9 +147,10 @@ const CityMap = lazy(() => import("./scenes/CityMap"));
 const WesternMap = lazy(() => import("./scenes/WesternMap"));
 const AlpineMap = lazy(() => import("./scenes/AlpineMap"));
 const BeachMap = lazy(() => import("./scenes/BeachMap"));
-const NuketownMap = import.meta.env.DEV
-  ? lazy(() => import("./scenes/NuketownMap"))
-  : (_props: { seed: number }) => null;
+const NuketownMap =
+  import.meta.env.MODE === "development"
+    ? lazy(() => import("./scenes/NuketownMap"))
+    : (_props: { seed: number }) => null;
 import { isBeach } from "./beach/beachLayout";
 import type { CityLayout } from "./cityLayout";
 import { CURB } from "./cityLayout";
@@ -2868,6 +2869,7 @@ function World({
         gl,
         scene,
         camera,
+        theme,
         look,
         liveCars,
         knock,
@@ -3677,7 +3679,11 @@ function World({
     Object.assign(structurePlayer, {id:"",floor:0,y:0});
     slide.current.x = slide.current.z = 0;
     const sx = big ? big.spawn.x : 0;
-    const sz = big ? big.spawn.z : import.meta.env.DEV && layoutOf(theme) === "nuketown" ? NUKE_SPAWN.z : 0;
+    const sz = big
+      ? big.spawn.z
+      : import.meta.env.MODE === "development" && layoutOf(theme) === "nuketown"
+        ? NUKE_SPAWN.z
+        : 0;
     const num = spawnNum();
     let x = sx;
     let z = sz;
@@ -7461,7 +7467,7 @@ function World({
           </Suspense>
           <MatchRain key={seed} western={western} />
         </>
-      ) : import.meta.env.DEV && layoutOf(theme) === "nuketown" ? (
+      ) : import.meta.env.MODE === "development" && layoutOf(theme) === "nuketown" ? (
         <Suspense fallback={null}>
           <NuketownMap seed={seed} />
         </Suspense>
@@ -7847,14 +7853,7 @@ function debugHandles() {
 /** `?map=vice` (case-insensitive name substring), `?map=city` (layout type) or `?map=3` (index) forces the solo map for testing. */
 function forcedMapIndex(): number | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("map");
-  if (!raw) return null;
-  const n = Number(raw);
-  if (Number.isInteger(n) && n >= 0 && n < THEMES.length)
-    return THEMES[n]!.wip && !import.meta.env.DEV ? null : n;
-  const q = raw.toLowerCase();
-  const i = THEMES.findIndex((t) => t.name.toLowerCase().includes(q) || t.blockShape === q);
-  return i >= 0 && (!THEMES[i]!.wip || import.meta.env.DEV) ? i : null;
+  return forcedThemeIndex(new URLSearchParams(window.location.search).get("map"));
 }
 /** `?seed=N` pins the first arena's layout (testing: the same city on every load) */
 function seedParam(): number | null {
@@ -8484,7 +8483,7 @@ export function Game() {
           ? cityMinimap(city, blocks, PLAY_HALF)
           : western
             ? westernMinimap(western, blocks, PLAY_HALF)
-            : import.meta.env.DEV && layoutOf(theme) === "nuketown"
+            : import.meta.env.MODE === "development" && layoutOf(theme) === "nuketown"
               ? nuketownMinimap()
               : null,
     [city, western, blocks, theme],

@@ -3,18 +3,45 @@
 // Needs Playwright's Chromium: npx playwright install chromium
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 
+const development = process.argv.includes("--development");
 const assets = await readdir("dist/site/game/assets");
 assert.equal(
   assets.some((name) => name.startsWith("NuketownMap-")),
-  false,
-  "development scene must not ship in the public build",
+  development,
+  "Nuketown scene must ship only in the development build",
 );
 
-const PORT = 4173;
-const MAPS = ["vice", "gulch", "pier", "whiteout"];
+const code = (
+  await Promise.all(
+    assets
+      .filter((name) => name.endsWith(".js"))
+      .map((name) => readFile(`dist/site/game/assets/${name}`, "utf8")),
+  )
+).join("\n");
+for (const [prefix, expected] of [
+  ["scrapfall-dev-arena-v18-", development],
+  ["scrapfall-ts-arena-v18-", !development],
+]) {
+  assert.equal(code.includes(prefix), expected, `room namespace ${prefix}`);
+}
+const PORT = Number(process.env.PORT ?? 4173);
+// Numeric URLs are part of the public API; Nuketown retains index 14 for room seeds.
+const MAPS = development
+  ? [
+      ["nuketown", "Nuketown"],
+      ["14", "Nuketown"],
+    ]
+  : [
+      ["vice", "Vice Heights"],
+      ["gulch", "Dry Gulch"],
+      ["pier", "Pacific Pier"],
+      ["whiteout", "Whiteout Pass"],
+      ["nuketown", "Vice Heights"],
+      ["14", "Vice Heights"],
+    ];
 // SMOKE_TIMES=night,sunset (default); CI runs night only to stay quick on software WebGL
 const TIMES = (process.env.SMOKE_TIMES ?? "night,sunset").split(",");
 const server = spawn(process.execPath, ["scripts/serve-static.mjs"], {
@@ -29,7 +56,7 @@ const browser = await chromium.launch({
 });
 try {
   await sleep(1000);
-  for (const map of MAPS) {
+  for (const [map, expectedTheme] of MAPS) {
     for (const time of TIMES) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
       const errors = [];
@@ -51,6 +78,11 @@ try {
         await page.waitForFunction(() => window.__rs && window.__rs.camera, null, {
           timeout: 120_000,
         });
+        assert.equal(
+          await page.evaluate(() => window.__rs.theme.name),
+          expectedTheme,
+          `?map=${map} selected the wrong arena`,
+        );
         await sleep(5000); // let the first wave spawn and a few hundred frames run
       } catch (e) {
         errors.push(`could not enter the arena: ${e.message.split("\n")[0]}`);

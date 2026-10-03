@@ -7,14 +7,15 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build && node scripts/stage-static.mjs",
-    "build:dev": "vite build --mode development",
+    "build:dev": "vite build --mode development && node scripts/stage-static.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve:static": "node scripts/serve-static.mjs",
     "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/playtest-feedback.test.mjs scripts/room-recovery.test.mjs scripts/map-availability.test.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:dev": "node scripts/smoke.mjs --development",
     "typecheck": "tsc --noEmit",
-    "check": "npm test && npm run typecheck && npm run build && npm run smoke",
+    "check": "npm test && npm run typecheck && npm run build && npm run smoke && npm run build:dev && npm run smoke:dev",
     "benchmark": "node scripts/benchmark-game.mjs",
     "test:playtest": "node scripts/playtest-ui.mjs && node scripts/playtest-combat-ui.mjs",
     "test:coop": "node scripts/playtest-coop.mjs"

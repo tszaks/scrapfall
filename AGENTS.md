@@ -26,7 +26,9 @@ npm test                # unit tests (scripts/game-physics.test.mjs)
 npm run typecheck       # tsc --noEmit
 npm run build           # static build into dist/site/game
 npm run smoke           # enters every map in headless Chromium and fails on any console error
-npm run check           # all of the above, in order: run this before you push
+npm run build:dev       # staged development build, including Nuketown and isolated rooms
+npm run smoke:dev       # enters Nuketown by name and index in the development build
+npm run check           # unit/type checks, then public and development build + smoke
 ```
 
 The first time, `npm run smoke` needs `npx playwright install chromium`. To serve a production build locally, run `npm run serve:static` (port 4173, same `/game/` routing as Vercel).
