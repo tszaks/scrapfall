@@ -1,28 +1,31 @@
 # Project Status
 
-Outcome: Implement both October 3 Scrapfall feedback transcripts. Vero is explicitly excluded.
-State: In progress. Implementation is present; final verification and review remain.
+Outcome: Implement both October 3 Scrapfall playtest feedback lists. Vero is excluded.
+State: Local implementation and verification complete. Draft PR prepared for owner review.
 
 ## Verified evidence
-- Isolated worktree from origin/main ae2f7c5, branch codex/oct3-playtest-fixes.
-- Money-drop regression failed before and passed after retaining corpse coordinates.
-- Focused tests pass for magazines/reload, shared money deduplication, uninterrupted two-second revive, and host recovery.
-- scripts/playtest-ui.mjs passes: both rink gates; seven tower laps up/down, max floor step 0.011m; recovery; retained weapon and 42-round refill; both ski routes without body collisions; shared lift seats.
-- /tmp/scrapfall-features-check.json verifies ping removal and snowmobile entry/24m driving/exit.
-- /tmp/scrapfall-coop-check.json verifies two real browser clients, host transfer with three live enemies and their health and wave retained. Abrupt close plus a new join is the next check.
-- Earlier npm run check passed all maps at night/sunset. Final source changed since, so rerun before push.
+- Draft PR: https://github.com/tszaks/scrapfall/pull/36
+- Branch: codex/oct3-playtest-fixes, based on origin/main ae2f7c5. Existing checkouts preserved.
+- npm run check passed: 49 tests, typecheck, static build, all five maps at night/sunset with zero console errors. Repository-map validation passed.
+- npm run test:playtest passed against the local static build: both rink gates, seven tower stair laps up/down, recovery, retained/refilled weapons, both ski routes, shared lift seats, reload, ammo purchase, melee, city driving/destruction, subway destination, and overtime shop.
+- npm run test:coop passed with actual browser clients: close the host tab at wave 5; survivor retains three live enemies and HP [2,2,1]; a new guest rejoins the same room at wave 5. Zero page errors.
+- Money-coordinate regression failed before the fix and passed after it. Shared loot claims are deduplicated on the host.
+- Controlled Chromium/Metal Whiteout combat with 12 robots and 54 shots: programs compiled during play 1 -> 0; longest frame 122 ms -> 37 ms; frames over 50 ms 1 -> 0. Typical timing varies; this proves the first-shot improvement, not all-device FPS.
+- Current GitHub CI and preview status: use the PR checks, not this snapshot.
 
 ## Decisions and boundaries
-- Preserve current basic player/enemy speed, Whiteout atmosphere, and weapon identity.
-- Full Scrapfall scope authorized. Main is production; prepare a draft PR, no merge/deploy.
-- Spawn target 400m on large maps, scaled on compact maps and summit. A visible/near enemy must not be recycled.
-- Reload R, melee B, ammo purchase K; controller actions contextual. Touch actions added.
-- Combat ammo: retained guns, 35% wave supply, 50% purchasable supply, matching pickups. Death still resets guns.
-- Shop breaks 30s, including overtime; tactical sprint 3.6s; boss base HP 900; reduced pistol upgrade scaling.
-- Subway entrances transfer to the next station; no full underground train scene.
-- Work is in broad gameplay areas. Login PR #34 and Nuketown PR #23 are untouched.
+- Production is unchanged. Main deploys automatically; no merge or production deployment was authorized.
+- Preserve basic player/enemy speed, Whiteout atmosphere, weapon identity, and shared rewards.
+- Collected guns remain when empty; death still resets them. Magazines reload with R. Wave supplies refill the pistol and add 35% to other guns. Ammo purchases cost 8 scrap for 50% supply. B uses unlimited melee; K buys ammo. Touch and contextual controller controls are present.
+- Large maps target 400-600m spawn distance where possible. Compact arenas and the summit use shorter ranges. Nearby or visible enemies are not recycled.
+- Shop breaks are 30s and continue in overtime. Tactical sprint lasts 3.6s. Revive takes 2s and ordinary damage does not reset it. Pistol damage-upgrade growth is reduced; boss base health is 900 and grows in overtime.
+- Subway entrances transfer to the next station. There is no underground train scene. Moving traffic and snowmobiles can be driven; parked scenery cars are not converted into drivable vehicles.
+- No physical PS4 controller, physical phone, separate-home TURN test, or full manual playthrough is claimed.
+- Login PR #34 and Nuketown PR #23 are untouched. This change spans combat/HUD, co-op, Whiteout/access, city traffic, and prewarm.
 
-## Remaining work
-- Complete abrupt-host-close/rejoin, city vehicles, combat/overtime, and performance checks; fix failures.
-- Review changes, run final npm run check and repository-map validation; prepare draft PR.
-- Live page: http://127.0.0.1:18963/ . Detailed local evidence and task state under /tmp/scrapfall-*.
+## Handoff
+- Review PR #36 and its current checks before deciding to merge.
+- Local results: http://127.0.0.1:18963/
+- Local playable build: http://127.0.0.1:5185/game/?map=whiteout
+- Worktree: /Users/tyler/Projects/Worktrees/Scrapfall/oct3-playtest
+- Detailed local evidence and task tracker: /tmp/scrapfall-*.
