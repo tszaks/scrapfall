@@ -129,7 +129,10 @@ function readPads(): (Gamepad | null)[] {
 const btnVal = (gp: Gamepad, i: number) => {
   const b = gp.buttons[i];
   if (!b) return 0;
-  return typeof b === "number" ? (b as number) : b.pressed ? Math.max(b.value, 0.9) : b.value;
+  // `pressed` is a browser-defined digital threshold, not the trigger's travel.
+  // Keep the analog value intact for driving, including while pressed is true.
+  const value = typeof b === "number" ? b : b.value;
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 };
 
 /** read one pad into [buttons 0..16 as 0..1, lx, ly, rx, ry] with a fallback for pads the
