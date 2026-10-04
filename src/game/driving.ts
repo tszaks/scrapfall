@@ -143,7 +143,7 @@ export function stepDriving(dt: number, blocks: Block[]) {
   for (const c of driveCars.values()) {
     if (!c.claimed || c.hp <= 0) continue;
     const live = !!c.owner && performance.now() - c.inputAt < 500;
-    c.speed = vehicleSpeed(c.speed, live ? c.gas : 0, live ? c.brake : 1, c.topSpeed, dt);
+    c.speed = vehicleSpeed(c.speed, live ? c.gas : 0, live ? c.brake : 1, c.topSpeed, dt, !live);
     const count = Math.max(1, Math.ceil((Math.abs(c.speed) * dt) / 0.2));
     for (let i = 0; i < count; i++) {
       const yaw = vehicleTurn(c.yaw, live ? c.steer : 0, c.speed, dt / count);

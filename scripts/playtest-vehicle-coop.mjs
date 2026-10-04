@@ -102,9 +102,14 @@ try {
   });
   await wait(800);
   s = await snapshot("guest-brake-host-authoritative");
-  assert.equal(s[0].car.speed, 0);
+  assert.ok(s[0].car.speed < 0, "held L2 reverses after host brakes through zero");
   assert.equal(s[0].car.brake, 1);
   assert.ok(s[0].car.yaw < -Math.PI / 2);
+  await g.evaluate(() => __pad.down(7));
+  await wait(350);
+  await g.evaluate(() => { __pad.up(7); __pad.up(6); });
+  await wait(150);
+  assert.equal((await snapshot("both-pedals-stop-before-hull-probe"))[0].car.speed, 0);
   const hullBefore = await h.evaluate(() => __rs.playtest.driveCars.get("city-0").hp);
   await h.evaluate(() => {
     const r = __rs,
