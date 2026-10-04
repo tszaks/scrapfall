@@ -125,43 +125,23 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
       const r = rBase * (1 - t * 0.82) * (0.86 + 0.14 * Math.sin(arm * 7 + level * 3));
       const dx = Math.cos(a),
         dz = Math.sin(a);
-      for (let twig = 0; twig < 3; twig++) {
+      // Smaller overlapping sprays follow a continuous drooping bough. Snow is
+      // a soft ridge on the spray, not a separate oversized triangular shelf.
+      for (let twig = 0; twig < 4; twig++) {
         const twigStart = b.pos.length / 3;
-        const f = 0.15 + twig * 0.28;
-        const width = r * (1 - f) * 0.78;
-        // Lift the inner bough and droop its tips: adjacent whorls overlap in
-        // silhouette instead of reading as flat shelves on a bare pole.
-        const cy = y + (1 - f) * 0.055 - f * r * 0.18;
+        const f = 0.06 + twig * 0.23;
+        const width = r * (1 - f) * 0.4;
+        const cy = y + (1 - f) * 0.055 - f * r * 0.22 + Math.sin(arm * 3.1 + level) * 0.009;
         const root = [dx * r * f, cy, dz * r * f];
-        const tip = [dx * r * (f + 0.28), cy - r * 0.12, dz * r * (f + 0.28)];
-        const left = [root[0]! - dz * width, cy - r * 0.07, root[2]! + dx * width];
-        const right = [root[0]! + dz * width, cy - r * 0.07, root[2]! - dx * width];
-        tri(b, root, left, tip, NEEDLE, 0.85 + f * 0.15);
-        tri(b, root, tip, right, NEEDLE);
-        const hanging = [root[0]!, cy - Math.max(r * 0.34, 0.04), root[2]!];
-        tri(b, left, hanging, tip, NEEDLE, 0.8);
-        tri(b, tip, hanging, right, NEEDLE, 0.85);
-        // A narrow snow ridge leaves needles visible along each edge.
-        const ridge = [root[0]!, cy + r * 0.12, root[2]!];
-        const snowTip = [tip[0]! * 0.91, tip[1]! + r * 0.035, tip[2]! * 0.91];
-        triC(
-          b,
-          ridge,
-          [root[0]! - dz * width * 0.72, cy, root[2]! + dx * width * 0.72],
-          snowTip,
-          SNOWC,
-          RIM,
-          RIM2,
-        );
-        triC(
-          b,
-          ridge,
-          snowTip,
-          [root[0]! + dz * width * 0.72, cy, root[2]! - dx * width * 0.72],
-          SNOWC,
-          RIM2,
-          RIM,
-        );
+        const tip = [dx * r * (f + 0.25), cy - r * 0.08, dz * r * (f + 0.25)];
+        const mid = r * (f + 0.1);
+        const left = [dx * mid - dz * width, cy - r * 0.065, dz * mid + dx * width];
+        const right = [dx * mid + dz * width, cy - r * 0.065, dz * mid - dx * width];
+        const snow = (arm + level + twig) % 4 !== 0;
+        triC(b, root, left, tip, snow ? SNOWC : NEEDLE, NEEDLE, snow ? RIM : NEEDLE);
+        triC(b, root, tip, right, snow ? SNOWC : NEEDLE, snow ? RIM : NEEDLE, NEEDLE);
+        tri(b, root, tip, left, NEEDLE, 0.78);
+        tri(b, root, right, tip, NEEDLE, 0.83);
         if (twig === 1) highDetail.push([twigStart, b.pos.length / 3 - twigStart]);
       }
     }

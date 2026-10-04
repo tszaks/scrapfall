@@ -83,8 +83,10 @@ export function facadeDepth(
         for (const span of spans) {
           const a = span.t0 * length,
             b = span.t1 * length;
-          box(a, b, lo - 0.075, lo, ribbon ? 0.18 : 0.09, ribbon ? st.tint : "#687378");
-          box(a, b, hi, hi + 0.055, 0.1, ribbon ? st.tint : "#687378");
+          if (lo - 0.075 >= span.y0 && lo <= span.y1)
+            box(a, b, lo - 0.075, lo, ribbon ? 0.18 : 0.09, ribbon ? st.tint : "#687378");
+          if (hi >= span.y0 && hi + 0.055 <= span.y1)
+            box(a, b, hi, hi + 0.055, 0.1, ribbon ? st.tint : "#687378");
         }
         for (let m = 0; m < modules; m++) {
           const a = m * mw;

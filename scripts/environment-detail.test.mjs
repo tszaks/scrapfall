@@ -177,6 +177,15 @@ test("facade relief is bounded, optional, non-solid and leaves real room cutouts
     assert.ok(!(x > 3.001 && x < 8.999 && z < 0 && y < 11.999), "trim covers a real opening");
     assert.ok(x >= -0.19 && x <= 18.19 && z >= -0.19 && z <= 18.19, "relief projects too far");
   }
+  const triangles = new Set();
+  for (let i = 0; i < p.count; i += 3) {
+    const key = [0, 1, 2]
+      .map((j) => [p.getX(i + j), p.getY(i + j), p.getZ(i + j)].map((v) => v.toFixed(5)).join(","))
+      .sort()
+      .join("|");
+    assert.ok(!triangles.has(key), "room cutout emitted a duplicate trim triangle");
+    triangles.add(key);
+  }
   transitions(geometry);
   env.setGeometryDetail(geometry, true);
   assert.equal(geometry.drawRange.count, 0);

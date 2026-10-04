@@ -13,7 +13,7 @@ assert.equal(
   "development scene must not ship in the public build",
 );
 
-const PORT = 4173;
+const PORT = Number(process.env.PORT ?? 4173);
 const MAPS = ["vice", "gulch", "pier", "whiteout"];
 // SMOKE_TIMES=night,sunset (default); CI runs night only to stay quick on software WebGL
 const TIMES = (process.env.SMOKE_TIMES ?? "night,sunset").split(",");
@@ -25,7 +25,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let failed = 0;
 const browser = await chromium.launch({
-  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  args:
+    process.env.SMOKE_GPU === "metal"
+      ? ["--use-angle=metal", "--ignore-gpu-blocklist"]
+      : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 try {
   await sleep(1000);
