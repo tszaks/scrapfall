@@ -1,0 +1,39 @@
+{
+  "before": [
+    {
+      "wave": 5,
+      "role": "host",
+      "alive": 3,
+      "hp": [
+        5,
+        8,
+        5
+      ]
+    },
+    {
+      "wave": 5,
+      "role": "guest",
+      "alive": 3,
+      "hp": [
+        5,
+        8,
+        5
+      ]
+    }
+  ],
+  "after": {
+    "wave": 5,
+    "role": "host",
+    "alive": 3,
+    "hp": [
+      5,
+      8,
+      5
+    ]
+  },
+  "joined": {
+    "wave": 5,
+    "role": "guest"
+  },
+  "errors": []
+}

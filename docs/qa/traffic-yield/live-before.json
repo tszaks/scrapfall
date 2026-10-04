@@ -1,0 +1,595 @@
+{
+  "url": "https://szakacsmedia.com",
+  "productionSha": "f4945961044c64d5f2ffe94f912c297d15d3f8d2",
+  "scenario": "Untouched solo Vice seed11, no shots/warps/manual spawning",
+  "errors": [],
+  "samples": [
+    {
+      "msSinceNavigation": 8450.600000023842,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 2,
+      "distances": [
+        327.9622580133,
+        318.37589186009495
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 0\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 13458,
+      "wave": 1,
+      "hp": 16,
+      "alive": 4,
+      "pending": 0,
+      "distances": [
+        321.39241272824427,
+        311.85300356900865,
+        280.37016807858225,
+        290.7409973487717
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 0\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 18681.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 3,
+      "pending": 0,
+      "distances": [
+        315.5074720937378,
+        305.9264374584024,
+        274.33265416381136
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 1\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 23687.90000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 3,
+      "pending": 0,
+      "distances": [
+        312.82808875772923,
+        301.50182550618155,
+        268.74705426042345
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 1\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 28696.5,
+      "wave": 1,
+      "hp": 16,
+      "alive": 3,
+      "pending": 0,
+      "distances": [
+        290.24150057615265,
+        296.1466578570556,
+        263.1154654597279
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 1\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 33700.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 3,
+      "pending": 0,
+      "distances": [
+        285.0725501905905,
+        292.26965575738797,
+        256.9820140703295
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 1\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 38704.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 3,
+      "pending": 0,
+      "distances": [
+        280.79064580643757,
+        288.8124852267347,
+        253.14768607845662
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 1\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 43708.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        285.51828002125694,
+        290.5697608425866
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 48717,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        282.35685213138646,
+        284.4171453150165
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 53721.90000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        278.99669803847405,
+        278.443186658625
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 58727.10000002384,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        273.37189826697846,
+        274.2011701950148
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 63730.5,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        267.0688982857893,
+        271.35681759344055
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 68735.70000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        260.80269983424114,
+        268.8529649197344
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 73739.70000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        255.50858013631287,
+        266.37332273843896
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 78745.10000002384,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        249.02156411663807,
+        263.676762548923
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 83749.5,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        242.7656886379662,
+        261.49911833338365
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 88754.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        236.5502967816444,
+        259.6307109269315
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 93760.10000002384,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        230.38793389766886,
+        258.0213457347946
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 98766.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        224.25098005139682,
+        257.3343589691109
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 103771.5,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        218.29365690152167,
+        255.7982195845298
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 108776.40000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        212.7250729116928,
+        252.1519418879425
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 113792.40000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        207.59904313624634,
+        247.5172936818512
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 118796.90000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        405.57362503226466,
+        243.38329141737944
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 123800.30000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        409.4621513480365,
+        237.93954458494315
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 128809.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        406.44189002921786,
+        231.07885858496817
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 133818.10000002384,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        401.3476387782215,
+        224.21680258495238
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 138825.30000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        396.1407301346193,
+        217.35543158497708
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 143834.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 2,
+      "pending": 0,
+      "distances": [
+        390.96653906601387,
+        210.4992665849776
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 2\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 148839.60000002384,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        385.8428730980381
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 153843.90000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        379.79425968077254
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 158850.30000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        373.0853506110309
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 163855.30000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        367.5115503817133
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 168861.40000000596,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        360.8495543054306
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 173867.30000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 1,
+      "pending": 0,
+      "distances": [
+        354.24125248461945
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 3\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 178872.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 28s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 183879.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 23s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 188885.80000001192,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 18s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 193891.5,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 13s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 198910.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 8s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 203914.20000001788,
+      "wave": 1,
+      "hp": 16,
+      "alive": 0,
+      "pending": 0,
+      "distances": [],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY\nSCRAP SHOP\nNEXT WAVE IN 3s \u00b7 PISTOL FULL \u00b7 OTHER AMMO +35%\n\u25c6 0\nAMMO +50% \u00b7 \u25c6 8\nJ\nSELF REVIVE\nKIT READY\nH\nFIELD DRESSING\n+5 HP \u00b7 16/16\n\u25c6 6\nR\nREROLL\nDOUBLES EACH USE\n\u25c6 4\nZ\nPLAYER UPGRADE\nPROSPECTOR\n+25% money earned\nLEVEL 0\n\u25c6 7\nX\nPLAYER UPGRADE\nIRON HEART\n+2 max health\nLEVEL 0\n\u25c6 10\nC\nPLAYER UPGRADE\nRUBBER BULLETS\n+25% Ricochet\nLEVEL 0\n\u25c6 8"
+    },
+    {
+      "msSinceNavigation": 208919.20000001788,
+      "wave": 2,
+      "hp": 16,
+      "alive": 2,
+      "pending": 4,
+      "distances": [
+        311.1249365496768,
+        287.8752329653137
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 213924.90000000596,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        300.43973611378874,
+        282.3274299353821,
+        317.5520167674995,
+        316.14693209325833,
+        299.2752613158698,
+        296.27706932850765
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 218928,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        290.07056852333346,
+        275.89620378927293,
+        314.78262336776265,
+        310.7726565093056,
+        292.84204767430384,
+        291.6273849388148
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 223933,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        396.89112103993216,
+        269.0678549138964,
+        308.0933025981821,
+        309.7718190522539,
+        286.6889528598943,
+        286.9860526647564
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 228941.70000001788,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        385.5380486683601,
+        262.61928225627764,
+        301.5082199923005,
+        324.7801096697037,
+        280.34847879593985,
+        282.2775641176676
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 233949.5,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        374.18885503226255,
+        256.04590511309834,
+        296.822788025911,
+        318.3430211927856,
+        273.9281855712205,
+        279.64474996276846
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 238961.5,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        362.8392450698584,
+        249.76342445388778,
+        330.15040891967294,
+        311.84045842278897,
+        267.2371156612137,
+        276.9396072376454
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    },
+    {
+      "msSinceNavigation": 243974.10000002384,
+      "wave": 2,
+      "hp": 16,
+      "alive": 6,
+      "pending": 0,
+      "distances": [
+        352.40302311400995,
+        243.0272372108649,
+        323.7873173836136,
+        305.3332845654052,
+        260.8628160937743,
+        272.55801998767
+      ],
+      "hud": "N \u00b7 0\u00b0\nVICE HEIGHTS \u00b7 OVERCLOCK\nWAVE 2/12\nKILLS 4\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY"
+    }
+  ]
+}
