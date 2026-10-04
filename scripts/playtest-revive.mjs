@@ -59,16 +59,46 @@ try {
     return null;
   });
   assert.ok(roof, "usable rooftop pair");
-  for (const [target, helper, name] of [
-    [g, h, "guest"],
-    [h, g, "host"],
-    [g, h, "guest repeated"],
+  const ground = await h.evaluate(() => {
+    const spawn = __rs.city.spawn;
+    for (let dx = 12; dx < 40; dx += 2)
+      for (let dz = -20; dz < 20; dz += 2) {
+        const x = spawn.x + dx,
+          z = spawn.z + dz,
+          y = __rs.groundAt(x, z);
+        if (!__rs.bodyAt(x, z, y) && !__rs.bodyAt(x + 1.3, z, y))
+          return { a: { x, z, y }, b: { x: x + 1.3, z, y } };
+      }
+  });
+  const stairs = await h.evaluate(() => {
+    const b = __rs.access.list().find((b) => b.stair && !b.stair.spiral && b.stair.laps > 1);
+    if (!b) return null;
+    const st = b.stair;
+    const point = (d) => ({
+      x: b.ox + b.tx * (-st.W / 4) + b.ix * d,
+      z: b.oz + b.tz * (-st.W / 4) + b.iz * d,
+      y: b.groundY + st.h + (((d - st.v0 - st.Ls) / st.Lr) * st.h) / 2,
+      access: { zone: 1, b: b.id, lap: 1, region: 1, level: 0, inCar: false },
+    });
+    return { a: point(st.v0 + st.Ls + st.Lr / 2), b: point(st.v0 + st.Ls + st.Lr / 2 + 0.9) };
+  });
+  assert.ok(ground, "usable ground pair");
+  assert.ok(stairs, "usable stair pair");
+  for (const [target, helper, name, location] of [
+    [g, h, "guest roof", roof],
+    [h, g, "host roof", roof],
+    [g, h, "guest repeated", roof],
+    [g, h, "guest ground", ground],
+    [h, g, "host stairs", stairs],
   ]) {
     for (const [p, pos] of [
-      [target, roof.a],
-      [helper, roof.b],
+      [target, location.a],
+      [helper, location.b],
     ])
-      await p.evaluate((pos) => __rs.playtest.warp(pos.x, pos.y, pos.z), pos);
+      await p.evaluate((pos) => {
+        __rs.playtest.warp(pos.x, pos.y, pos.z);
+        if (pos.access) Object.assign(__rs.access.player, pos.access, { y: pos.y });
+      }, pos);
     await target.waitForTimeout(400);
     await target.evaluate(() => {
       __rs.invuln.current = 0;
@@ -77,6 +107,14 @@ try {
     });
     await target.waitForFunction(() => __rs.downedRef.current, null, { timeout: 10000 });
     const before = await pose(target);
+    assert.ok(
+      Math.hypot(before.x - location.a.x, before.z - location.a.z) < 0.1,
+      `${name} downed position`,
+    );
+    assert.ok(
+      Math.abs(before.y - location.a.y) < (location === ground ? 1 : 0.15),
+      `${name} downed floor ${before.y} vs ${location.a.y}`,
+    );
     await helper.evaluate(() => __rs.playtest.emitControl("revive", true, false));
     await target.waitForFunction(() => __rs.healthRef.current > 0, null, { timeout: 10000 });
     await helper.evaluate(() => __rs.playtest.emitControl("revive", false, false));
@@ -90,6 +128,8 @@ try {
     await target.waitForTimeout(1600);
   }
 
+  await g.evaluate((pos) => __rs.playtest.warp(pos.x, pos.y, pos.z), roof.a);
+  await g.waitForTimeout(400);
   const spawn = await g.evaluate(() => ({ ...__rs.city.spawn }));
   await g.evaluate(() => {
     __rs.invuln.current = 0;
