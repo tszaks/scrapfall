@@ -774,7 +774,7 @@ type Enemy = {
   shot: number; // boss volley timer
   slow: number; // slowed timer
   frozen?: number; // cryo nova: fully frozen timer (host sim)
-  iceUntil?: number; // cryo nova: performance.now() until which the ice shell shows (the caster's client)
+  iceUntil?: number; // cryo nova: simulationNow() until which the ice shell shows (the caster's client)
   burn: number; // burning timer from incendiary rounds
   burnTick: number;
   max?: number; // spawn health, for the executioner hammer
@@ -2097,7 +2097,7 @@ const EnemyMesh = memo(function EnemyMesh({
       aura.current.rotation.y = t * 1.2;
     }
     if (ice.current)
-      ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > performance.now();
+      ice.current.visible = (data.frozen ?? 0) > 0 || (data.iceUntil ?? 0) > simulationNow();
     if (flame.current) {
       const burning = data.burn > 0;
       flame.current.visible = burning;
@@ -3557,7 +3557,7 @@ function World({
             w: Math.max(1, wave.current),
             rem: enemies.filter((e) => e.alive).length,
             won: false,
-            banner: true,
+            banner: !simulationPause.paused,
           });
           // a late joiner lands mid-overtime: give it the round's condition and mode
           if (mutator.current) n?.sendTo(String(m.from), { type: "mut", id: mutator.current.id });
@@ -4101,7 +4101,7 @@ function World({
       drainShield(e, dmg);
       return;
     }
-    const now = performance.now();
+    const now = simulationNow();
     if (h.exec && e.hp < (e.max ?? e.hp) * 0.5) dmg *= 2; // executioner: judged on the host's true health
     if ((e.shredUntil ?? 0) > now) dmg *= 1.3;
     if (e.kind === "special" && theme.special.type === "nautilus") dmg *= 0.5; // shell soaks half
@@ -6113,7 +6113,7 @@ function World({
         } else if (id === "nova") {
           // frozen solid on the host (guests send the freeze with the hit); the ice shows here at once
           near(8, (e, ei) => {
-            e.iceUntil = performance.now() + 3500;
+            e.iceUntil = simulationNow() + 3500;
             hurtEnemy(e, 1, ei, 3.5, 0, 0, 0, 0, { freeze: 3.5 });
           });
           playFx("#9ff4ff", 0.5, 8, 0.6, cam.position.x, cam.position.z);
@@ -8934,7 +8934,7 @@ export function Game() {
     playSfx("buy");
   };
   const buyAmmoRef = useRef<() => void>(() => {});
-  buyAmmoRef.current=()=>{if(started && !ended && health>0 && spendableShards.current>=AMMO_COST){spendableShards.current-=AMMO_COST;setShards(v=>v-AMMO_COST);supply.buy++;playSfx("buy");}};
+  buyAmmoRef.current=()=>{if(!simulationPause.paused && started && !ended && health>0 && spendableShards.current>=AMMO_COST){spendableShards.current-=AMMO_COST;setShards(v=>v-AMMO_COST);supply.buy++;playSfx("buy");}};
   const patchRef = useRef<() => void>(() => {});
   patchRef.current = () => {
     if (!shopOpen || health <= 0) return;
@@ -9190,7 +9190,11 @@ export function Game() {
           pingWorld={pingWorld}
           menuCam={!started || ended}
           buildN={built.n}
-          onWarm={setWarmDone}
+          onWarm={(n) => {
+            setWarmDone(n);
+            if (netHolder.current?.role === "guest" && roomPausedRef.current)
+              netHolder.current.broadcast({ type: "world-ready" });
+          }}
 
           onWeapon={(w, picked) => {
             setWeapon(w);

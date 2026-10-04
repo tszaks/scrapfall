@@ -1,3 +1,4 @@
+import { simulationNow } from "../simulationPause";
 import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 import {
   boundsMayTouchBody,
@@ -590,8 +591,8 @@ export function WesternRiders({
       };
       const lt = (L.px - cx) * hz - (L.pz - cz) * hx;
       const cd = bumpCd.current.get(i) ?? 0;
-      if (L.active && movingBody(i) && performance.now() > cd) {
-        bumpCd.current.set(i, performance.now() + 900);
+      if (L.active && movingBody(i) && simulationNow() > cd) {
+        bumpCd.current.set(i, simulationNow() + 900);
         const side = lt >= 0 ? 1 : -1;
         const push = 2.5 + a.speed * 0.6;
         L.hitPlayer(
