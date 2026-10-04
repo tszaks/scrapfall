@@ -435,7 +435,7 @@ export const CityScene = memo(function CityScene({
   // geometry was built across tasks while the world assembled (cityMesh.ts prepares
   // it); this useMemo is a cache lookup, not the vertex pass it used to be
   const built = useMemo(() => cityMeshes(city), [city]);
-  useGeometryDetail(built.chunks.flatMap((c) => [c.main, c.detail]));
+  useGeometryDetail(built.chunks.flatMap((c) => [c.main, c.detail, c.relief]));
   useLayoutEffect(
     () =>
       registerStaticGeometry(
@@ -569,7 +569,7 @@ export const CityScene = memo(function CityScene({
   useEffect(
     () => () => {
       for (const c of built.chunks)
-        [c.main, c.detail, c.glow, c.signs, c.pools].forEach((g) => g?.dispose());
+        [c.main, c.detail, c.relief, c.glow, c.signs, c.pools].forEach((g) => g?.dispose());
     },
     [built],
   );
@@ -577,6 +577,7 @@ export const CityScene = memo(function CityScene({
 
   // chunk refs for the distance LOD
   const detailRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const reliefRefs = useRef<(THREE.Mesh | null)[]>([]);
   const signRefs = useRef<(THREE.Mesh | null)[]>([]);
   const poolRefs = useRef<(THREE.Mesh | null)[]>([]);
 
@@ -634,6 +635,8 @@ export const CityScene = memo(function CityScene({
         const d = Math.hypot(dx, dz);
         const det = detailRefs.current[i];
         if (det) det.visible = d < DETAIL_RANGE;
+        const relief = reliefRefs.current[i];
+        if (relief) relief.visible = d < 90;
         const sg = signRefs.current[i];
         if (sg) sg.visible = d < DETAIL_RANGE * 1.4;
         const pl = poolRefs.current[i];
@@ -709,6 +712,18 @@ export const CityScene = memo(function CityScene({
                 detailRefs.current[i] = m;
               }}
               geometry={c.detail}
+              material={mats.facade}
+              customDepthMaterial={mats.depth}
+              castShadow
+              receiveShadow
+            />
+          )}
+          {c.relief && (
+            <mesh
+              ref={(m) => {
+                reliefRefs.current[i] = m;
+              }}
+              geometry={c.relief}
               material={mats.facade}
               customDepthMaterial={mats.depth}
               castShadow
