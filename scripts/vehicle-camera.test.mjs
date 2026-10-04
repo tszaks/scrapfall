@@ -64,10 +64,10 @@ test("vehicle heading follows smoothly while independent look remains usable", (
   rig.update(eye, c, 0, 1 / 60, clear);
   assert.ok(rig.camera.position.distanceTo(first) < 1);
   for (let i = 0; i < 120; i++) rig.update(eye, c, 0, 1 / 60, clear);
-  assert.ok(rig.camera.position.x < -5, "camera follows turning car behind +X heading");
+  assert.ok(rig.camera.position.x < -4, "camera follows turning car behind +X heading");
   eye.rotation.y += Math.PI / 2;
   for (let i = 0; i < 120; i++) rig.update(eye, c, 0, 1 / 60, clear);
-  assert.ok(rig.camera.position.z > 5, "look input orbits independently");
+  assert.ok(rig.camera.position.z > 4, "look input orbits independently");
 });
 test("thin walls retract the camera body immediately and clearing eases it back", () => {
   const rig = new VehicleCamera(),
@@ -109,4 +109,89 @@ test("already-wide user FOV is preserved and reset starts a fresh orbit", () => 
   rig.reset();
   eye.rotation.y = Math.PI;
   assert.ok(Math.abs(rig.update(eye, c, 0, 1 / 60, clear).position.x) < 0.001);
+});
+
+test("projection follows lens/viewport changes while unchanged frames reuse it", () => {
+  const rig = new VehicleCamera(),
+    eye = logical(),
+    c = car();
+  rig.update(eye, c, 0, 1 / 60, clear);
+  let rebuilds = 0;
+  const update = rig.camera.updateProjectionMatrix.bind(rig.camera);
+  rig.camera.updateProjectionMatrix = () => {
+    rebuilds++;
+    update();
+  };
+  rig.update(eye, c, 0, 1 / 60, clear);
+  assert.equal(rebuilds, 0);
+  eye.aspect = 9 / 16;
+  eye.near = 0.1;
+  eye.far = 300;
+  eye.updateProjectionMatrix();
+  rig.update(eye, c, 0, 1 / 60, clear);
+  assert.equal(rebuilds, 1);
+  assert.equal(rig.camera.aspect, 9 / 16);
+  assert.equal(rig.camera.near, 0.1);
+  assert.equal(rig.camera.far, 300);
+  eye.layers.set(2);
+  rig.update(eye, c, 0, 1 / 60, clear);
+  assert.equal(rig.camera.layers.mask, eye.layers.mask);
+  eye.fov = 90;
+  eye.updateProjectionMatrix();
+  rig.update(eye, c, 0, 1 / 60, clear);
+  assert.equal(rig.camera.fov, 98);
+  assert.equal(rebuilds, 2);
+  const replacement = logical(4 / 3);
+  rig.update(replacement, c, 0, 1 / 60, clear);
+  assert.equal(rig.camera.fov, 83);
+  assert.equal(rig.camera.aspect, 4 / 3);
+  assert.equal(rebuilds, 3);
+});
+
+test("later body sweeps only inspect the prefix before known cover", () => {
+  const rig = new VehicleCamera(),
+    eye = logical(),
+    c = car();
+  const lengths = [];
+  rig.update(eye, c, 0, 1 / 60, (a, b) => {
+    lengths.push(a.distanceTo(b));
+    return lengths.length === 1 ? 0.4 : lengths.length === 2 ? 0.5 : undefined;
+  });
+  assert.equal(lengths.length, 7, "all body offsets remain checked");
+  assert.ok(Math.abs(lengths[1] - lengths[0] * 0.4) < 1e-8);
+  for (const length of lengths.slice(2)) assert.ok(Math.abs(length - lengths[0] * 0.2) < 1e-8);
+  const roofAnchor = new Vector3(c.x, c.height + 0.6, c.z);
+  assert.ok(
+    Math.abs(rig.camera.position.distanceTo(roofAnchor) - (lengths[0] * 0.2 - 0.08)) < 1e-8,
+  );
+});
+
+test("shorter boom keeps every hull corner framed at pitch and orbit extremes", () => {
+  for (const [half, width, height] of [
+    [1.8, 0.825, 1.4],
+    [2.25, 0.9, 1.5],
+    [6, 1.3, 3.6],
+  ]) {
+    for (const aspect of [16 / 9, 9 / 16]) {
+      for (const pitch of [-1.2, 0, 1.2]) {
+        for (const yaw of [0, Math.PI / 4, Math.PI / 2]) {
+          const eye = logical(aspect),
+            c = car(half, width, height);
+          eye.rotation.x = pitch;
+          eye.rotation.y += yaw;
+          eye.updateMatrixWorld();
+          const cam = new VehicleCamera().update(eye, c, 0, 1 / 60, clear);
+          for (const x of [-width, width])
+            for (const y of [0, height])
+              for (const z of [-half, half]) {
+                const p = new Vector3(x, y, z).project(cam);
+                assert.ok(
+                  Math.abs(p.x) < 0.85 && Math.abs(p.y) < 0.85 && p.z < 1,
+                  `hull ${half}/${width}/${height}, aspect ${aspect}, pitch ${pitch}, yaw ${yaw}: ${p.toArray()}`,
+                );
+              }
+        }
+      }
+    }
+  }
 });
