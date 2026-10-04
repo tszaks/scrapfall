@@ -96,6 +96,41 @@ try {
   assert.equal(s.vehicle, undefined);
   assert.ok(s.shoulder);
   assert.equal(s.view.fov, before.fov);
+  await page.keyboard.press("v");
+  await page.evaluate(() => {
+    const r = __rs,
+      t = r.playtest;
+    const c = [...t.driveCars.values()].sort((a, b) => b.half - a.half)[0];
+    t.releaseVehicle(t.driving.self);
+    Object.assign(c, { claimed: true, x: -19.44, z: -6, yaw: -Math.PI / 2, speed: 0 });
+    __rsCars[Number(c.id.split("-")[1])].driven = true;
+    t.warp(c.x, r.groundAt(c.x, c.z), c.z - c.width - 1);
+    r.look.current.yaw = c.yaw + Math.PI;
+    r.look.current.pitch = 0;
+    t.claimVehicle(c.id, t.driving.self, r.camera.position.x, r.camera.position.z);
+  });
+  await page.waitForTimeout(700);
+  s = await snap("largest-vehicle-framing");
+  assert.ok(s.car.half > 3, "fixture should include a large vehicle");
+  assert.ok(
+    Math.hypot(s.view.position[0] - s.car.x, s.view.position[2] - s.car.z) > s.car.half + 2,
+  );
+  const clearCamera = await page.evaluate(() => {
+    const p = __lastView.position;
+    return !__rs.playtest.staticBody(p[0], p[2], 0.2, p[1] - 0.2, 0.4, 0);
+  });
+  assert.ok(clearCamera, "camera body must be outside static geometry");
+  await page.screenshot({ path: `${out}/chase-large.png` });
+  await page.evaluate(() => {
+    for (let i = 0; i < 40; i++) {
+      __rs.invuln.current = 0;
+      __rs.takeHit(100, "camera-test");
+    }
+  });
+  await page.waitForTimeout(700);
+  s = await snap("death-or-down-ejects-and-restores");
+  assert.equal(s.vehicle, undefined);
+  assert.equal(s.view.fov, before.fov);
   assert.deepEqual(report.errors, []);
 } catch (e) {
   report.failure = e.stack;

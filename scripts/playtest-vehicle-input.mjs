@@ -32,7 +32,7 @@ async function snap(name) {
       aim: r.aimState.on,
       rigs,
       hint: document.querySelector('[data-testid="travel-hint"]')?.innerText ?? "",
-      ammo: document.querySelector('[data-testid="ammo-hud"]')?.innerText ?? "",
+      ammo: document.querySelector('[data-ammo-hud]')?.innerText ?? "",
     };
   });
   report.checks.push({ name, ...v });
@@ -219,7 +219,7 @@ try {
   await down(2);
   await wait(200);
   s = await snap("square-reloads-away-from-car");
-  assert.match(s.hint, /RELOADING/);
+  assert.match(s.ammo, /RELOADING/);
   await up(2);
   await wait(2500);
   assert.deepEqual(report.errors, []);
