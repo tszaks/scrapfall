@@ -1,3 +1,4 @@
+import { HOST_MESSAGES, PAUSED_GUEST_MESSAGES } from "./simulationPause";
 import Peer, { type DataConnection } from "peerjs";
 import { connectionTimedOut } from "./netHeartbeat";
 import { loadIceServers } from "./iceServers";
@@ -10,6 +11,8 @@ export type NetMsg = any;
 export type NetHandle = {
   role: "host" | "guest";
   code: string;
+  paused: boolean;
+  setPaused: (paused: boolean) => void;
   self: string;
   /** host: send to every guest. guest: send to the host. */
   broadcast: (m: NetMsg) => void;
@@ -80,13 +83,14 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v21 adds lower-facade relief and denser branched crowns without changing navigation.
 // v22 replaces Whiteout spruce and adds chalet construction detail.
 // v23 appends analog vehicle braking to guest driving input.
+// v24 adds host-authoritative live pause and paused-room recovery.
 // Development rooms use a separate namespace: a public peer must never join a
 // developer's Nuketown room and build a different map from the same seed.
-const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v23-" : "scrapfall-ts-arena-v23-";
+const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v24-" : "scrapfall-ts-arena-v24-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
-const RELAYED = new Set(["t", "fire", "pause", "resume", "dep", "ping", "pick", "shard", "haz"]);
+const RELAYED = new Set(["t", "fire", "dep", "ping", "pick", "shard", "haz"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
@@ -119,11 +123,30 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
   const conns = new Map<string, DataConnection>();
   const heard = new Map<string, number>();
   const send = (c: DataConnection | null, m: NetMsg) => { if (c?.open) c.send(m); };
+  // Retain the last authoritative state for a World that mounts during a pause.
+  const snapshots = new Map<string, NetMsg>();
+  const poses = new Map<string, NetMsg>();
+  const remember = (m: NetMsg) => {
+    if (m.type === "seed") { snapshots.clear(); poses.clear(); }
+    if (["snap", "status", "hazset", "pst", "diff", "mut"].includes(m.type))
+      snapshots.set(m.type, m.type === "status" ? { ...m, banner: false } : m);
+    if (m.type === "t") poses.set(m.from, m);
+  };
+  const replay = (conn: DataConnection) => {
+    snapshots.forEach(m => send(conn, { ...m, from: "host" }));
+    poses.forEach(m => { if (m.from !== conn.peer) send(conn, m); });
+  };
   const handle: NetHandle = {
-    role: initialHost ? "host" : "guest", code, self: initialHost ? "host" : guestId,
+    role: initialHost ? "host" : "guest", code, paused: false,
+    setPaused: paused => {
+      if (handle.role !== "host" || stopped || handle.paused === paused) return;
+      handle.paused = paused;
+      handle.broadcast({ type: "pause-state", paused });
+    },
+    self: initialHost ? "host" : guestId,
     broadcast: m => {
       const payload = {...m, from: handle.self};
-      if (handle.role === "host") conns.forEach(c => send(c,payload));
+      if (handle.role === "host") { remember(payload); conns.forEach(c => send(c,payload)); }
       else send(upstream,payload);
     },
     sendTo: (id,m) => handle.role === "host" ? send(conns.get(id) ?? null,{...m,from:"host"}) : send(upstream,{...m,from:handle.self}),
@@ -144,20 +167,26 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
   const accept = (conn: DataConnection) => {
     conn.on("open",()=>{
       if(stopped || conns.size>=3) { conn.close(); return; }
-      conns.set(conn.peer,conn); heard.set(conn.peer,performance.now()); publish();
+      conns.set(conn.peer,conn); heard.set(conn.peer,performance.now());
+      send(conn,{type:"pause-state",paused:handle.paused,from:"host"});
+      publish();
       opts.onMsg({type:"joined",from:conn.peer,recovering:conn.metadata?.recovering===true});
     });
     conn.on("data",raw=>{
       if(conns.get(conn.peer)!==conn) return;
       heard.set(conn.peer,performance.now());
       const m={...(raw as NetMsg),from:conn.peer};
-      if(m.type==="hb") return;
+      opts.onMsg({type:"peer-heartbeat",from:conn.peer});
+      if(m.type==="hb" || HOST_MESSAGES.has(m.type)) return;
+      if(handle.paused && !PAUSED_GUEST_MESSAGES.has(m.type)) return;
+      if(m.type==="t") remember(m);
+      if(m.type==="world-ready") replay(conn);
       if(RELAYED.has(m.type)) conns.forEach((c,id)=>{if(id!==conn.peer)send(c,m)});
       opts.onMsg(m);
     });
     const gone=()=>{
       if(conns.get(conn.peer)!==conn)return;
-      conns.delete(conn.peer);heard.delete(conn.peer);publish();opts.onMsg({type:"left",from:conn.peer});conn.close();
+      conns.delete(conn.peer);heard.delete(conn.peer);poses.delete(conn.peer);publish();opts.onMsg({type:"left",from:conn.peer});conn.close();
     };
     conn.on("close",gone);conn.on("error",gone);
   };
@@ -180,7 +209,17 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
       resolve();
     });
     c.on("data",raw=>{
+      if(c !== upstream || recovering || stopped) return;
       heardAt=performance.now(); const m=raw as NetMsg;
+      if(m.type==="pause-state") {
+        if(m.from!=="host" || typeof m.paused!=="boolean")return;
+        handle.paused=m.paused;
+      }
+      // Only the authenticated upstream can author host state; guest relays keep
+      // their actual sender, assigned by accept(), and cannot claim authority.
+      if(HOST_MESSAGES.has(m.type) && m.from!=="host")return;
+      remember(m);
+      opts.onMsg({type:"peer-heartbeat",from:"host"});
       if(m.type==="members"){members=Array.isArray(m.members)?m.members.filter((x:unknown)=>typeof x==="string"):[];return;}
       if(m.type==="handoff"){members=m.members??members;lost();return;}
       if(m.type!=="hb") opts.onMsg(m);
@@ -208,6 +247,9 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
         if(stopped){replacement.destroy();return;}
         peer.destroy();peer=replacement;upstream=null;
         const oldSelf=handle.self;handle.role="host";handle.self="host";recovering=false;
+        poses.delete("host");
+        const ownPose=poses.get(oldSelf);poses.delete(oldSelf);
+        if(ownPose)poses.set("host",{...ownPose,from:"host"});
         opts.onMsg({type:"authority",oldSelf});
         publish();
       }

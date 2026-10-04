@@ -1,3 +1,5 @@
+import { simulationPause, setSimulationPaused, simulationNow } from "./simulationPause";
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { vehicleEntry, resetVehicleEntry } from "./vehicleControls";
 import { MeleeView } from "./MeleeView";
 import { meleeGear, subwayNear, subwayExit, trafficRoof, carryOnCar } from "./travelExtras";
@@ -95,7 +97,7 @@ import {
 } from "./PlayerView";
 import { getViewMode } from "./viewMode";
 import { setLocalMuzzle } from "./projectiles";
-import { Canvas, useFrame, useThree, type RootState } from "@react-three/fiber";
+import { Canvas, useThree, type RootState } from "@react-three/fiber";
 import {
   memo,
   startTransition,
@@ -2567,6 +2569,7 @@ function World({
   rand,
   theme,
   locked,
+  inputActive,
   gameOver,
   onScore,
   onHurt,
@@ -2617,6 +2620,7 @@ function World({
   rand: () => number;
   theme: Theme;
   locked: boolean;
+  inputActive: boolean;
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
@@ -2688,10 +2692,12 @@ function World({
   const shot = useMemo(() => titleShot(theme, city, western), [theme, city, western]);
   const meleeCooldown = useRef(0);
   const camera = useThree((s) => s.camera);
+  const inputRef = useRef(inputActive);
+  inputRef.current = inputActive;
   const lockedRef = useRef(locked);
   lockedRef.current = locked;
   const shardActive = useRef(false);
-  shardActive.current = locked && !gameOver && !dead;
+  shardActive.current = inputActive && !gameOver && !dead;
   const magnetRef = useRef(2);
   magnetRef.current = renderStats.magnet;
   const weapon = useRef<Weapon>("pistol");
@@ -2823,6 +2829,7 @@ function World({
   diffRef.current = difficultyOf(difficulty);
   const shownWave = useRef(1); // guests don't run the wave director: the host's status tells them
   const takeHit = (dmg: number, src = "") => {
+    if (simulationPause.paused) return;
     if (hitLog.current.length >= 400) hitLog.current.shift();
     hitLog.current.push({ dmg, t: performance.now(), src: src || hitSrc.v });
     if (invuln.current > 0) return; // dash i-frames / kinetic barrier
@@ -2922,6 +2929,7 @@ function World({
         pending,
         wave,
         nextWaveTimer,
+        simulationPause,
         hurtEnemy,
         blastAt,
       });
@@ -3392,6 +3400,7 @@ function World({
   useEffect(() => {
     msgSink.current = (m: NetMsg) => {
       const n = netRef.current;
+      if (simulationPause.paused && !["snap", "status", "boss", "hazset", "mut", "t", "left", "joined", "world-ready"].includes(m.type)) return;
       if (onMapEventMsg(m)) return;
       if(m.type==="vehicle-hit" && isHostRef.current && Array.isArray(m.a) && Array.isArray(m.b) && [...m.a,...m.b].every(Number.isFinite)) {
         const c=damageVehicle({x:m.a[0],y:m.a[1],z:m.a[2]},{x:m.b[0],y:m.b[1],z:m.b[2]},Number(m.d)||0);
@@ -4568,6 +4577,7 @@ function World({
   useEffect(
     () =>
       subscribeActions((action, down, repeat, source) => {
+        if (down && (!inputRef.current || simulationPause.paused)) return;
         if (action === "fire") trigger.current = down;
         if (!down || repeat) return;
         if (action.startsWith("slot")) {
@@ -4999,7 +5009,7 @@ function World({
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const sg = sightOf(weapon.current, stats.current);
-    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current || !!myVehicle(), 4 / sg.adsIn);
+    stepAim(delta, gameOver || !inputActive || deadRef.current || downedRef.current || !!myVehicle(), 4 / sg.adsIn);
     aimState.scoped = sg.type === "scope" && aimState.blend > 0.1;
     const lens = cam as THREE.PerspectiveCamera;
     const wantedFov = fov + ((sg.fovAbs ?? fov * sg.fovMul) - fov) * aimState.blend;
@@ -5043,7 +5053,7 @@ function World({
       traffic.current.others = oth;
     } else if (traffic.current.others.length) traffic.current.others = [];
 
-    if (!gameOver && locked) {
+    if (!gameOver && inputActive) {
       look.current.yaw +=
         ((k.has("ArrowLeft") ? 1 : 0) - (k.has("ArrowRight") ? 1 : 0)) *
         TURN_SPEED *
@@ -5145,7 +5155,7 @@ function World({
     const isH = isHostRef.current;
     const spectating = deadRef.current;
     driving.self = n?.self ?? "host";
-    stepPadActions({ inCar: accessActive() && accPlayer.inCar, driving: !!myVehicle(),
+    if (inputActive) stepPadActions({ inCar: accessActive() && accPlayer.inCar, driving: !!myVehicle(),
       nearbyCar: !spectating && !downedRef.current && !ski.active ? nearbyVehicle(cam.position.x,cam.position.z,moveState.feet)?.id ?? "" : "", dt: delta });
     if (driving.use) {
       driving.use=false;
@@ -5177,9 +5187,9 @@ function World({
     }
     if (playerRecovery.requested) {
       playerRecovery.requested = false;
-      if (!spectating && !downedRef.current && performance.now() - playerRecovery.last > 30000) {
+      if (!spectating && !downedRef.current && simulationNow() - playerRecovery.last > 30000) {
         placeAtSpawn();
-        playerRecovery.last = performance.now();
+        playerRecovery.last = simulationNow();
         showToast("RETURNED TO SAFE SPAWN · HEALTH AND GEAR KEPT");
       } else showToast("SAFE RETURN AVAILABLE WHEN ALIVE · 30s COOLDOWN");
     }
@@ -5222,9 +5232,9 @@ function World({
         accPlayer.zone !== 0 ||
         climbable(cam.position.x, cam.position.z, x, z));
     // player movement — the boss round makes the ground treacherous, so you slide
-    const fwd = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ;
+    const fwd = inputActive ? (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.moveZ : 0;
     const strafe =
-      (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX;
+      inputActive ? (k.has("KeyD") ? 1 : 0) - (k.has("KeyA") ? 1 : 0) + touchInput.moveX + padOut.moveX : 0;
     // sprint / tactical sprint (input/movement.ts): not while down, seated on the lift, in an
     // elevator car, spectating or holding revive
     const runMul = stepMove(
@@ -5252,7 +5262,7 @@ function World({
     MOVE.set(0, 0, 0)
       .addScaledVector(FORWARD, fwd < 0 ? fwd * SPEED.backpedal : fwd)
       .addScaledVector(RIGHT, strafe * SPEED.strafe);
-    const driveGas = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.gas;
+    const driveGas = inputActive ? (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.gas : 0;
     driving.inputGas=driveGas;driving.inputSteer=strafe;driving.inputBrake=padOut.brake;
     if(isH){driveInput(driving.self,driveGas,strafe,padOut.brake);stepDriving(delta,blocks);}
     if (wheelRide.cabin >= 0 || myVehicle() || ski.active) {MOVE.set(0, 0, 0);slide.current.x=slide.current.z=0;}
@@ -5652,7 +5662,7 @@ function World({
         }
       }
     } else if (
-      (trigger.current || touchInput.fire || padOut.fire) && !myVehicle() &&
+      inputActive && (trigger.current || touchInput.fire || padOut.fire) && !myVehicle() &&
       canFire() &&
       held === weapon.current &&
       !spectating &&
@@ -7943,6 +7953,7 @@ function newSeed(choice: number | null, prev?: number) {
 }
 
 export function Game() {
+  useEffect(() => () => setSimulationPaused(false), []);
   const [mapChoice, setMapChoice] = useState(initialMapChoice);
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
@@ -7963,8 +7974,13 @@ export function Game() {
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(MAX_HP);
   const [locked, setLocked] = useState(false);
-  const pausedRef = useRef(false);
-  pausedRef.current = !locked;
+  const [roomPaused, setRoomPaused] = useState(false);
+  const roomPausedRef = useRef(false);
+  const [recoveringRoom, setRecoveringRoom] = useState(false);
+  const recoveringRoomRef = useRef(false);
+  const returnToPlay = useRef(false);
+  const lockedState = useRef(locked);
+  lockedState.current = locked;
   const [started, setStarted] = useState(false);
   const [status, setStatus] = useState({ wave: 1, remaining: 0, won: false });
   const [banner, setBanner] = useState(false);
@@ -8126,9 +8142,59 @@ export function Game() {
     netHolder.current?.broadcast({ type: "roster", slots: { ...slots.current } });
   };
 
+  const applyRoomPause = (paused: boolean) => {
+    const wasPaused = roomPausedRef.current;
+    roomPausedRef.current = paused;
+    setRoomPaused(paused);
+    setSimulationPaused(paused || recoveringRoomRef.current);
+    if (paused) {
+      if (!wasPaused) returnToPlay.current = lockedState.current;
+      setLocked(false);
+      clearControls();
+      resetTouchInput();
+      if (document.pointerLockElement) document.exitPointerLock();
+    } else if (wasPaused) {
+      // A long hold must not make a living teammate look disconnected.
+      const now = performance.now();
+      remotes.current.forEach(r => { r.last = now; });
+      clearControls();
+      if (returnToPlay.current && !showSettings) setLocked(true);
+    }
+  };
+  const pauseLocal = (explicit = true) => {
+    if (!phase.current.started || phase.current.ended) return;
+    const n = netHolder.current;
+    if (!n || (explicit && n.role === "host")) {
+      applyRoomPause(true);
+      n?.setPaused(true);
+    }
+    setLocked(false);
+    clearControls();
+    resetTouchInput();
+    if (document.pointerLockElement) document.exitPointerLock();
+  };
+  const pauseLocalRef = useRef(pauseLocal);
+  pauseLocalRef.current = pauseLocal;
+
   const handleMsg = (m: NetMsg) => {
+    if (m.type === "peer-heartbeat") {
+      // The transport authenticates this sender; health remains live while poses stop.
+      const r = remotes.current.get(String(m.from));
+      if (r) r.last = performance.now();
+      return;
+    }
+    if (m.type === "pause-state") {
+      if (m.from !== "host" || netHolder.current?.role === "host" || typeof m.paused !== "boolean") return;
+      recoveringRoomRef.current = false;
+      setRecoveringRoom(false);
+      applyRoomPause(m.paused);
+      return;
+    }
     if (m.type === "reconnecting") {
       setNetError("Connection lost. Recovering this room…");
+      recoveringRoomRef.current = true;
+      setRecoveringRoom(true);
+      setSimulationPaused(true);
       setLocked(false);
       return;
     }
@@ -8144,6 +8210,9 @@ export function Game() {
       delete slots.current[m.oldSelf]; delete slots.current["host"];
       setPicks(p=>({...p,1:p[previousNum] ?? ability}));
       setClsPicks(p=>({...p,1:p[previousNum] ?? cls}));
+      recoveringRoomRef.current = false;
+      setRecoveringRoom(false);
+      applyRoomPause(h.paused);
       setNet({...h}); publishRoster(); setNetError("");
       showToast("HOST TRANSFERRED · SAME ROOM AND WAVE");
       startRef.current(true);
@@ -8152,6 +8221,7 @@ export function Game() {
     if (m.type === "reconnected") {
       setNetError(""); showToast("RECONNECTED TO YOUR ROOM"); startRef.current(true); return;
     }
+    if (simulationPause.paused && ["hurt", "kill", "rv", "revived", "bleed", "haz", "shard-award"].includes(m.type)) return;
     // pings and revives (Squad.tsx)
     if (handleSquadMsg(m, squadCb)) return;
     if (m.type === "roster") {
@@ -8228,20 +8298,12 @@ export function Game() {
       }));
       return;
     }
-    if (m.type === "pause") {
-      setLocked(false);
-      if (document.pointerLockElement) document.exitPointerLock();
-      return;
-    }
+    if (m.type === "pause" || m.type === "resume") return; // obsolete, never authoritative
     if (m.type === "diff") {
       if (netHolder.current?.role === "guest" && m.from === "host")
         setDifficulty(difficultyOf(String(m.d)).id);
       return;
     } // the host's pick
-    if (m.type === "resume") {
-      startRef.current(true);
-      return;
-    }
     if (m.type === "begin") {
       startRef.current(true);
       return;
@@ -8333,6 +8395,9 @@ export function Game() {
   const leaveRoom = () => {
     netHolder.current?.close();
     netHolder.current = null;
+    recoveringRoomRef.current = false;
+    setRecoveringRoom(false);
+    applyRoomPause(false);
     remotes.current.clear();
     slots.current = {};
     setRoster([]);
@@ -8371,6 +8436,7 @@ export function Game() {
       if (
         phase.current.started &&
         !phase.current.ended &&
+        !simulationPause.paused &&
         healthRef.current <= 0 &&
         list.every((r) => r.hp <= 0)
       ) {
@@ -8531,48 +8597,29 @@ export function Game() {
   );
 
   useEffect(() => {
-    // pausing puts the whole squad on hold
-    // closing the tab releases the pointer lock too: that must not pause everyone else
-    let unloading = false;
-    const onUnload = () => (unloading = true);
-    window.addEventListener("beforeunload", onUnload);
-    window.addEventListener("pagehide", onUnload);
-    const pauseAll = () => {
-      if (unloading || document.visibilityState === "hidden") return;
-      if (phase.current.started && !phase.current.ended)
-        netHolder.current?.broadcast({ type: "pause" });
-    };
     const wasLocked = { v: false };
     const onChange = () => {
       if (document.pointerLockElement) wasLocked.v = true;
       else if (wasLocked.v) {
         wasLocked.v = false;
-        setLocked(false);
-        pauseAll();
+        // Focus/tab changes only open this player's menu. P / Escape / Start
+        // and touch pause explicitly ask the host to hold the room.
+        pauseLocalRef.current(false);
       }
     };
-    const pauseNow = () => {
-      setLocked(false);
-      if (document.pointerLockElement) document.exitPointerLock();
-      pauseAll();
-    };
+    const pauseNow = () => pauseLocalRef.current(true);
     const onKey = (e: KeyboardEvent) => {
-      // P is the pause key on desktop; Escape still works since the browser
-      // drops pointer lock on it anyway
-      if (e.code === "Escape" && !controlState.capturing) pauseNow();
+      if (e.code === "Escape" && !e.repeat && !controlState.capturing) pauseNow();
     };
-    const offPause = subscribeActions((a, down) => {
-      if (a === "pause" && down) pauseNow();
+    const offPause = subscribeActions((a, down, repeat) => {
+      if (a === "pause" && down && !repeat) pauseNow();
     });
-    padHooks.pause = pauseNow; // Start / Options / + on a controller
-
+    padHooks.pause = pauseNow;
     document.addEventListener("pointerlockchange", onChange);
     window.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("pointerlockchange", onChange);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("beforeunload", onUnload);
-      window.removeEventListener("pagehide", onUnload);
       padHooks.pause = null;
       offPause();
     };
@@ -8711,6 +8758,11 @@ export function Game() {
 
   const start = (fromNet = false) => {
     initAudio();
+    if (!fromNet && netHolder.current?.role === "guest" && (roomPausedRef.current || recoveringRoomRef.current)) return;
+    if (!fromNet && (!netHolder.current || netHolder.current.role === "host")) {
+      applyRoomPause(false);
+      netHolder.current?.setPaused(false);
+    }
     if (!fromNet && ended && !isHost) return; // only the host starts a new arena
     // going into overtime keeps the current run, build and map intact
     const overtime = goingOvertime.current;
@@ -8743,11 +8795,12 @@ export function Game() {
     }
     // fresh run: start at the class's full max HP (e.g. Vanguard 16)
     if (!resuming) setHealth(derive(perksRef.current, clsRef.current).maxHp);
-    setLocked(true);
+    setLocked(!roomPausedRef.current && !recoveringRoomRef.current);
+    if (roomPausedRef.current) returnToPlay.current = true;
     clearControls(); // no jump / sprint press queued from the menus
     // the whole squad starts and resumes together
-    if (!fromNet && net && (resuming || isHost))
-      net.broadcast({ type: resuming ? "resume" : "begin" });
+    if (!fromNet && net && !resuming && isHost) net.broadcast({ type: "begin" });
+    if (roomPausedRef.current || recoveringRoomRef.current) return;
     if (touchUi) {
       resetTouchInput();
       try {
@@ -8806,7 +8859,7 @@ export function Game() {
     status.remaining === 0 &&
     fought === status.wave &&
     (status.wave < WAVES.length || endlessRef.current);
-  const shopOpen = shopBreak && locked;
+  const shopOpen = shopBreak && locked && !roomPaused && !recoveringRoom;
   const [offers, setOffers] = useState<PerkId[]>([]);
   const [bought, setBought] = useState<number[]>([]);
   const [shopLeft, setShopLeft] = useState(30);
@@ -8838,10 +8891,12 @@ export function Game() {
     setBought([]);
     setShopLeft(30);
     setRerolls(0);
-    // the countdown holds while the game is paused
+    let last = simulationNow();
     const id = setInterval(() => {
-      if (!pausedRef.current) setShopLeft((s) => Math.max(0, s - 1));
-    }, 1000);
+      const now = simulationNow();
+      const seconds = Math.floor((now - last) / 1000);
+      if (seconds > 0) { last += seconds * 1000; setShopLeft(s => Math.max(0, s - seconds)); }
+    }, 100);
     return () => clearInterval(id);
   }, [shopBreak, status.wave]);
   const rerollRef = useRef<() => void>(() => {});
@@ -8916,7 +8971,7 @@ export function Game() {
   useEffect(
     () =>
       subscribeActions((a, down, repeat, source) => {
-        if (!down || repeat) return;
+        if (!down || repeat || simulationPause.paused) return;
         if (/^shop[123]$/.test(a)) buyRef.current(Number(a.slice(4)) - 1);
         else if (
           a === "shopReroll" &&
@@ -8933,13 +8988,16 @@ export function Game() {
   // regen perk
   const regenRate = statsRef.current.regen;
   useEffect(() => {
-    if (!regenRate || !started || !locked || ended || dead) return;
-    const id = window.setInterval(
-      () => setHealth((h) => (h > 0 ? Math.min(maxHp, h + 1) : h)),
-      14000 / regenRate,
-    );
+    if (!regenRate || !started || ended || dead) return;
+    let last = simulationNow();
+    const period = 14000 / regenRate;
+    const id = window.setInterval(() => {
+      const now = simulationNow();
+      const ticks = Math.floor((now - last) / period);
+      if (ticks > 0) { last += ticks * period; setHealth(h => h > 0 ? Math.min(maxHp, h + ticks) : h); }
+    }, 250);
     return () => window.clearInterval(id);
-  }, [regenRate, started, locked, ended, dead, maxHp]);
+  }, [regenRate, started, ended, dead, maxHp]);
 
   // soundtrack: Toby's menu march plays on the menus (muffled); the map's track opens up in
   // combat, and the background soundscape plays (and pauses) with the match
@@ -9040,11 +9098,12 @@ export function Game() {
           enemies={enemies}
           rand={rand}
           theme={theme}
-          locked={locked}
+          locked={started && !ended}
+          inputActive={locked && !roomPaused && !recoveringRoom}
           gameOver={ended}
           onScore={() => setScore((s) => s + 1)}
           onHurt={(dmg = 1) => {
-            if (!multiplayer && soloRevive.grace > 0) return;
+            if (simulationPause.paused || (!multiplayer && soloRevive.grace > 0)) return;
             setHealth((h) => Math.max(0, h - dmg));
             setHurtFlash((n) => n + 1);
             playSfx("hurt");
@@ -9467,11 +9526,7 @@ export function Game() {
 
       {touchUi && locked && !ended && (
         <MobileControls
-          onPause={() => {
-            setLocked(false);
-            if (phase.current.started && !phase.current.ended)
-              netHolder.current?.broadcast({ type: "pause" });
-          }}
+          onPause={() => pauseLocalRef.current()}
           abilityName={ABILITIES[ability].name}
           abilityLeft={abilCd.left}
           coop={multiplayer}
@@ -9482,9 +9537,7 @@ export function Game() {
           aria-label="Pause"
           onPointerDown={(e) => {
             e.preventDefault();
-            setLocked(false);
-            if (phase.current.started && !phase.current.ended)
-              netHolder.current?.broadcast({ type: "pause" });
+            pauseLocalRef.current();
           }}
           style={{
             left: "max(0.75rem, env(safe-area-inset-left))",
@@ -9594,14 +9647,18 @@ export function Game() {
           totalWaves={WAVES.length}
           score={score}
           difficultyName={DIFFICULTIES[difficulty].name}
+          roomPaused={roomPaused}
+          recovering={recoveringRoom}
+          isHost={isHost}
+          onPause={() => pauseLocalRef.current()}
           stats={statsRef.current}
           cls={cls}
           bought={boughtCards}
           multiplayer={multiplayer}
           ammoCost={AMMO_COST}
-          canBuyAmmo={shards>=AMMO_COST && health>0}
+          canBuyAmmo={!roomPaused && !recoveringRoom && shards>=AMMO_COST && health>0}
           onBuyAmmo={()=>buyAmmoRef.current()}
-          onRecover={() => { requestRecovery(); start(); }}
+          onRecover={() => { if (!simulationPause.paused) { requestRecovery(); start(); } }}
           onResume={() => start()}
           onSettings={() => openSettings()}
           onLeave={leaveGame}

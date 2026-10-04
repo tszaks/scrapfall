@@ -1,5 +1,6 @@
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { useFrame } from "@react-three/fiber";
+
 import * as THREE from "three";
 import { inputHeld } from "./input/remap";
 import { KeyHint } from "./input/Glyph";

@@ -1,3 +1,4 @@
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
 import { surfaceRelief } from "../environment/surfaceRelief";
@@ -8,7 +9,7 @@ import { shelterUniforms, SHELTER_GLSL } from "../structures/weather";
 // chunks of chalets and props (one texture-array material), the instanced spruce forest,
 // the running chairlift, a painted sky with alpenglow / stars / aurora, falling snow,
 // chimney smoke and lamp halos, and the blizzard that closes it all down to ~20 m.
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSunShadow } from "../quality";
 import * as THREE from "three";

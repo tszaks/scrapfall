@@ -1,5 +1,6 @@
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { shardLedger } from "./shardLedger";
-import { useFrame } from "@react-three/fiber";
+
 import { groundY } from "./terrain";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";

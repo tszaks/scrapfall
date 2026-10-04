@@ -1,7 +1,8 @@
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 // Runs the map events inside the scene: the host's scheduling, every client's timeline,
 // and the pieces they need on screen (the flashlight and glowing robot eyes for the
 // blackout, the snow front for the avalanche).
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 

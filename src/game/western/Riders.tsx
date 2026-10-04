@@ -1,3 +1,4 @@
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 import {
   boundsMayTouchBody,
   geometryBody,
@@ -11,7 +12,7 @@ import {
 // wagon bodies), stepped on the host with the train's clock discipline and synced in its
 // snapshot. They bump you like cars, stop bullets like cars, and the posse's chase shows on
 // the minimap with Vice Heights' pursuit dots.
-import { useFrame } from "@react-three/fiber";
+
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
