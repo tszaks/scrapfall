@@ -195,3 +195,17 @@ test("shorter boom keeps every hull corner framed at pitch and orbit extremes", 
     }
   }
 });
+
+test("shared presentation camera restores the chase lens after on-foot reset", () => {
+  const shared = new PerspectiveCamera(),
+    rig = new VehicleCamera(shared),
+    eye = logical(),
+    c = car();
+  assert.equal(rig.update(eye, c, 0, 1 / 60, clear), shared);
+  assert.equal(shared.fov, 83);
+  rig.reset();
+  shared.copy(eye, false);
+  assert.equal(shared.fov, 75);
+  rig.update(eye, c, 0, 1 / 60, clear);
+  assert.equal(shared.fov, 83);
+});

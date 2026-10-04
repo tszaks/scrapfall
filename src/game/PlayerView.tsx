@@ -155,7 +155,7 @@ export function PlayerView({
   prepare: MutableRefObject<PreparePlayer | null>;
 }) {
   const rig = useMemo(newPlayerRig, []);
-  const chase = useMemo(() => new VehicleCamera(), []);
+  const chase = useMemo(() => new VehicleCamera(viewCamera), []);
   const sweep = useMemo(() => {
     const pointStop = (p: { x: number; y: number; z: number }) => stop(test.set(p.x, p.y, p.z));
     return (from: THREE.Vector3, to: THREE.Vector3) => firstWorldHit(from, to, pointStop);
@@ -214,10 +214,7 @@ export function PlayerView({
       ((!hidden.current || downed.current) && getViewMode() === "third" && !aimState.scoped);
     shoulderView.active = on;
     if (vehicle) {
-      viewCamera.copy(
-        chase.update(camera, vehicle, baseGroundY(vehicle.x, vehicle.z), dt, sweep),
-        false,
-      );
+      chase.update(camera, vehicle, baseGroundY(vehicle.x, vehicle.z), dt, sweep);
       shoulderView.origin.copy(viewCamera.position);
       viewCamera.getWorldDirection(shoulderView.direction);
       shoulderView.distance = viewCamera.position.distanceTo(camera.position);

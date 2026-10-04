@@ -15,7 +15,7 @@ const RADIUS = 0.24;
 
 /** Presentation only: the logical eye, saved view mode and controller look remain untouched. */
 export class VehicleCamera {
-  readonly camera = new PerspectiveCamera();
+  constructor(readonly camera = new PerspectiveCamera()) {}
   private vehicle = "";
   private sourceCamera: Camera | undefined;
   private sourceFov = NaN;
@@ -34,6 +34,7 @@ export class VehicleCamera {
 
   reset() {
     this.vehicle = "";
+    this.sourceCamera = undefined;
   }
 
   update(logical: Camera, car: Car, ground: number, dt: number, sweep: Sweep) {
