@@ -57,6 +57,53 @@ test("two squad members cannot award the same shared money twice", () => {
   assert.equal(ledger.claimShard("unknown", taken), 0);
 });
 const revive = await pure("../src/game/revive.ts");
+test("recovery distinguishes downed revives from fully dead wave respawns", () => {
+  const { UP, DOWN, DEAD, playerLifeState } = revive;
+  assert.equal(playerLifeState(false, false), UP);
+  assert.equal(playerLifeState(true, true), DOWN);
+  assert.equal(playerLifeState(true, false), DEAD);
+  // Health can arrive before a stale downed flag clears; health wins.
+  assert.equal(playerLifeState(false, true), UP);
+});
+
+test("host and guest revives use the current floor and survive repeated downs", () => {
+  for (const target of ["host", "guest"]) {
+    revive.resetRevive();
+    const helper = target === "host" ? "guest" : "host";
+    const players = [
+      { id: target, x: 52, y: 12.4, z: -18, hp: 0, bledOut: false },
+      { id: helper, x: 53, y: 12.4, z: -18, hp: 10, bledOut: false },
+    ];
+    const wants = new Map([[helper, target]]);
+    for (let cycle = 0; cycle < 2; cycle++) {
+      players[0].hp = 0;
+      revive.hostReviveStep(0, players, wants);
+      assert.equal(revive.squad.get(target).st, revive.DOWN);
+      const before = players.map((p) => ({ ...p }));
+      assert.deepEqual(revive.hostReviveStep(2, players, wants).revived, [target]);
+      assert.equal(revive.squad.get(target).st, revive.UP);
+      assert.deepEqual(players, before, "revive authority does not replace the current pose");
+      players[0].hp = 6;
+      revive.hostReviveStep(2, players, new Map());
+    }
+  }
+});
+
+test("bleed-out stays dead until wave health returns, including mirrored squad state", () => {
+  revive.resetRevive();
+  const players = [{ id: "guest", x: 52, y: 12.4, z: -18, hp: 0, bledOut: false }];
+  assert.deepEqual(revive.hostReviveStep(revive.BLEED_TIME, players, new Map()).bled, ["guest"]);
+  const snapshot = revive.squadMsg();
+  revive.resetRevive();
+  revive.applySquadMsg(snapshot);
+  assert.equal(revive.squad.get("guest").st, revive.DEAD);
+  assert.deepEqual(revive.hostReviveStep(2, players, new Map()).revived, []);
+  assert.equal(revive.squad.get("guest").st, revive.DEAD);
+  players[0].hp = 16;
+  revive.hostReviveStep(0, players, new Map());
+  assert.equal(revive.squad.get("guest").st, revive.UP);
+});
+
 test("a held revive survives damage and finishes in two seconds", () => {
   revive.resetRevive();
   revive.myRevive.target = "guest";
