@@ -10,4 +10,4 @@ Boundaries: preserve PR50 recovery ledger/status handling; no pause-authored rev
 
 Design: local menus and pointer-lock/focus loss do not pause a co-op room. Explicit host keyboard/controller/touch pause does. Solo menu retains pause behavior. Authority transfer retains pause; new host resumes. Reconnection waits for host state. Discard in-flight guest gameplay during pause; retain heartbeats and initial world replay. Frame callbacks drop resume delta.
 
-Remaining: final integrated-head two-page repeat after parent’s CPU measurement window; required remote CI; parent release slot after PR50; normal merge, exact production SHA and live verification. Earlier ten-checkpoint real PeerJS run passed. All test browsers are closed; no heavy local jobs remain.
+Final integrated-head co-op repeat passed all ten checkpoints with zero page errors; browsers closed. Required remote CI passed on a226519. Remaining: required checks on the evidence-only follow-up; parent release slot after PR50; normal merge, exact production SHA and live verification. No heavy local jobs remain.
