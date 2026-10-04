@@ -209,3 +209,32 @@ test("shared presentation camera restores the chase lens after on-foot reset", (
   rig.update(eye, c, 0, 1 / 60, clear);
   assert.equal(shared.fov, 83);
 });
+
+test("whole hull stays in view during forward and reverse turns", () => {
+  for (const speed of [-8, 22]) {
+    for (const aspect of [16 / 9, 9 / 16]) {
+      const rig = new VehicleCamera(),
+        eye = logical(aspect),
+        c = car();
+      for (let frame = 0; frame < 180; frame++) {
+        c.yaw += 0.6 / 60;
+        c.x += (Math.sin(c.yaw) * speed) / 60;
+        c.z += (Math.cos(c.yaw) * speed) / 60;
+        const cam = rig.update(eye, c, 0, 1 / 60, clear);
+        for (const lateral of [-c.width, c.width])
+          for (const along of [-c.half, c.half])
+            for (const y of [0, c.height]) {
+              const p = new Vector3(
+                c.x + Math.sin(c.yaw) * along + Math.cos(c.yaw) * lateral,
+                y,
+                c.z + Math.cos(c.yaw) * along - Math.sin(c.yaw) * lateral,
+              ).project(cam);
+              assert.ok(
+                Math.abs(p.x) < 0.95 && Math.abs(p.y) < 0.95 && p.z < 1,
+                `speed ${speed} frame ${frame} aspect ${aspect}: ${p.toArray()}`,
+              );
+            }
+      }
+    }
+  }
+});
