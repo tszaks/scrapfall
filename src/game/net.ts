@@ -79,9 +79,10 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v20 updates public-map vegetation and construction detail geometry.
 // v21 adds lower-facade relief and denser branched crowns without changing navigation.
 // v22 replaces Whiteout spruce and adds chalet construction detail.
+// v23 appends analog vehicle braking to guest driving input.
 // Development rooms use a separate namespace: a public peer must never join a
 // developer's Nuketown room and build a different map from the same seed.
-const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v22-" : "scrapfall-ts-arena-v22-";
+const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v23-" : "scrapfall-ts-arena-v23-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
