@@ -49,6 +49,7 @@ test("shared driver geometry stays bounded and below every cabin roof", () => {
     const md = api.vehicleModel(type),
       s = api.SPECS[type];
     const b = g.boundingBox.clone().applyMatrix4(md.driverSeat);
+    assert.equal(md.driverSeat.elements[5], 1, `${type} keeps natural head/body proportions`);
     assert.ok(b.min.x > 0, `${type} stays in the driver's seat`);
     assert.ok(b.max.x < s.wid / 2 - 0.05, `${type} stays inside side glass`);
     assert.ok(b.min.z > -s.len / 2 && b.max.z < s.len / 2, `${type} stays inside cabin length`);

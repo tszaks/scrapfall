@@ -1099,9 +1099,9 @@ function stdLamps(
   };
 }
 
-/** Fit the seated upper body beneath the roof while keeping it in the existing seat. */
+/** Lower the concealed torso in low cabins; never squash the head to fit a roof. */
 function driverSeat(x: number, y: number, z: number, height: number) {
-  return new THREE.Matrix4().makeScale(1, height / 0.8, 1).setPosition(x, y, z);
+  return new THREE.Matrix4().makeTranslation(x, y - Math.max(0, 0.8 - height), z);
 }
 
 /** the model for a vehicle type (built once, on first use) */

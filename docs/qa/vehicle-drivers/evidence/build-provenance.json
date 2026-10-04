@@ -1,0 +1,16 @@
+[
+  {
+    "port": 5298,
+    "source": "/tmp/scrapfall-drivers-baseline",
+    "asset": "cars-Dpp6W8GO.js",
+    "sha256": "fabeb81c72a882aa73c91dfad6956b7fa456aeaaecdb9074534eb841cf382768",
+    "matchesLocal": true
+  },
+  {
+    "port": 5294,
+    "source": "/Users/tyler/Projects/scrapfall-realism-oct4",
+    "asset": "cars-BnhIPaJE.js",
+    "sha256": "5050147e1b2a3680dcc0c7083a023e3e4492e45deb8f3fb6eb22f4326f8aeb51",
+    "matchesLocal": true
+  }
+]
