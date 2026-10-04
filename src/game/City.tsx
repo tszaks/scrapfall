@@ -301,7 +301,7 @@ if (uWet > 0.0) cityWet(diffuseColor, roughnessFactor, totalEmissiveRadiance, no
   };
   mat.customProgramCacheKey = () => "city-facade-v8";
   return scannedSurface(
-    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - foliageK)", 0.045),
+    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - foliageK)", 0.012),
     "concrete_floor_02",
     "vWPos",
     "(1.0 - glassK) * step(0.5, vFac.z)",

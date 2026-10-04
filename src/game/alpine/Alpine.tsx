@@ -311,7 +311,7 @@ if (aLayer == ${T.snow}.0) {
     2.0,
   );
   return scannedSurface(
-    surfaceRelief(mat, "aTex.rgb", "aWin ? 1.0 - aMask : 1.0", 0.045),
+    surfaceRelief(mat, "aTex.rgb", "aWin ? 1.0 - aMask : 1.0", 0.012),
     "concrete_floor_02",
     "vAWorld",
     "float(aLayer == 3.0 || aLayer == 4.0 || aLayer == 8.0)",

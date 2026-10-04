@@ -83,18 +83,19 @@ export function scannedSurface<M extends THREE.MeshStandardMaterial>(
   // Retain each map's palette while adding the scan's knots, pores and wear.
   diffuseColor.rgb *= mix(vec3(1.0), clamp(scanColor * 1.7 + 0.36, 0.45, 1.3), scanMask * ${strength.toFixed(2)});
   roughnessFactor = clamp(roughnessFactor + (0.45 - scanLuma) * 0.2 * scanMask, 0.05, 1.0);
+  // Albedo grain is only a weak height proxy: millimetres, not carved centimetres.
   if (uScanRelief) {
   vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
   float sf = 1.0 - smoothstep(0.025, 0.16, max(length(sx), length(sy)));
   vec3 sr1 = cross(sy, normal), sr2 = cross(normal, sx);
   float sd = dot(sx, sr1);
   vec3 sg = sign(sd) * (dFdx(scanLuma) * sr1 + dFdy(scanLuma) * sr2);
-  normal = normalize(abs(sd) * normal - sg * 0.028 * sf * scanMask + normal * 1e-10);
+  normal = normalize(abs(sd) * normal - sg * 0.006 * sf * scanMask + normal * 1e-10);
   }
   }
 }`,
     );
   };
-  material.customProgramCacheKey = () => key() + `-scan-${name}-live-relief-${mask}`;
+  material.customProgramCacheKey = () => key() + `-scan-${name}-fine-relief-${mask}`;
   return material;
 }
