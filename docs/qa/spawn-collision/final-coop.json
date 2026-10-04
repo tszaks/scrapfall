@@ -1,0 +1,419 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "name": "guest-entered-hidden",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.44,
+            "z": -6,
+            "yaw": -1.5707963267948966
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.44,
+            "z": -6,
+            "yaw": -1.5707963267948966
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-brake-host-authoritative",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 1,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-exit-restores-body",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+          "role": "guest",
+          "vehicle": null,
+          "car": {
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reentered-before-transfer",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v24-27SS-vkxxosxf",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "host-transfer-keeps-driver",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "host",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "new-host-exit",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wreck-ejects",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -20.001001212946452,
+            "z": -6.080510049535046,
+            "yaw": -1.8233406168160566
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "scrapfall-ts-arena-v24-27SS-pkhm2ksf",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "enemyHullDamage": 90,
+  "hullProbe": {
+    "car": {
+      "isBox3": true,
+      "min": {
+        "x": -21.98217719028267,
+        "y": -0.09374648257419588,
+        "z": -7.42912156215678
+      },
+      "max": {
+        "x": -18.024417555728043,
+        "y": 1.3700000047683716,
+        "z": -4.733083602870753
+      }
+    },
+    "ray": 0.27774708905452844,
+    "damaged": [
+      {
+        "id": "city-0",
+        "hp": 90
+      }
+    ],
+    "bullets": [
+      {
+        "active": false,
+        "pos": [
+          -21.131001214138546,
+          0.6,
+          -6.080510049535046
+        ],
+        "life": 0.971300000011921
+      }
+    ]
+  },
+  "rejoin": {
+    "role": "guest",
+    "vehicle": null
+  }
+}
