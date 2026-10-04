@@ -3379,30 +3379,43 @@ function templates() {
     boxC(d, WL.PAINT, 0, 0.65, 0, 0.18, 0.06, 0.18);
   });
   make("bush", (d) => {
-    // Sagebrush: soft normals and crowns rooted into the soil, not faceted floating rocks.
+    // Rooted sagebrush: five woody stems and opaque folded leaf sprays. The same
+    // 100 triangles as the old five icosahedra, still excluded from collision.
+    const leafRandom = mulberry(173);
     for (let i = 0; i < 5; i++) {
-      d.col(pick(["#8a8a62", "#7a8058", "#9a9468", "#6e7650"], r));
-      const x = (r() - 0.5) * 0.9;
-      const z = (r() - 0.5) * 0.9;
-      const rad = 0.25 + r() * 0.3;
-      const ico = new THREE.IcosahedronGeometry(rad, 0);
-      const normals = ico.getAttribute("normal");
-      const positions = ico.getAttribute("position");
-      for (let v = 0; v < positions.count; v++) {
-        const x = positions.getX(v),
-          y = positions.getY(v),
-          z = positions.getZ(v);
-        const length = Math.hypot(x, y, z);
-        normals.setXYZ(v, x / length, y / length, z / length);
+      const angle = i * 2.39996 + (r() - 0.5) * 0.2;
+      const reach = 0.35 + r() * 0.3;
+      const height = 0.35 + r() * 0.28;
+      const shade = r(); // Keep the template random stream at four draws per stem.
+      const dx = Math.cos(angle),
+        dz = Math.sin(angle);
+      d.col("#65533e");
+      beam(d, dx * 0.055, -0.025, dz * 0.055, dx * reach, height, dz * reach, 0.024);
+      for (let leaf = 0; leaf < 3; leaf++) {
+        const start = d.n;
+        const t = 0.48 + leaf * 0.23;
+        const x = dx * reach * t,
+          y = height * t,
+          z = dz * reach * t;
+        const yaw = angle + (leaf % 2 ? -0.8 : 0.8);
+        const ux = Math.cos(yaw),
+          uz = Math.sin(yaw);
+        const length = 0.25 + leafRandom() * 0.1,
+          width = 0.13 + leafRandom() * 0.05;
+        d.mat(WL.PAINT).col(["#7b8260", "#8c906a", "#6a7759", "#999b77"][Math.floor(shade * 4)]!);
+        const root = [x - ux * length * 0.35, y - 0.025, z - uz * length * 0.35];
+        const tip = [x + ux * length, y + 0.07, z + uz * length];
+        const left = [x - uz * width, y - 0.035, z + ux * width];
+        const right = [x + uz * width, y - 0.035, z - ux * width];
+        for (const [a, b, c] of [
+          [root, left, tip],
+          [root, tip, right],
+        ] as const) {
+          d.tri(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!);
+          d.tri(c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!, a[0]!, a[1]!, a[2]!);
+        }
+        if (leaf === 0) d.highDetailSince(start);
       }
-      d.mat(WL.PAINT);
-      d.add(
-        ico,
-        new THREE.Matrix4()
-          .makeTranslation(x, rad * 0.64, z)
-          .multiply(new THREE.Matrix4().makeScale(1, 0.75, 1)),
-      );
-      ico.dispose();
     }
   });
   make("boulder", (d) => {

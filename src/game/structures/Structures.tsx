@@ -1,4 +1,6 @@
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { constructionDetail } from "./constructionDetail";
+import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
@@ -10,7 +12,9 @@ import type { Volume } from "./plan";
 export function Structures({ seed, realism = true }: { seed: number; realism?: boolean }) {
   const built = useMemo(() => {
     const m = new Model(),
-      g = new Model();
+      g = new Model(),
+      detail = new Model();
+    let detailCount = 0;
     const draw = (v: Volume) => {
       if (v.hidden) return;
       const w = v.x1 - v.x0,
@@ -37,6 +41,7 @@ export function Structures({ seed, realism = true }: { seed: number; realism?: b
     for (const p of structureList()) {
       for (const v of p.solids) draw(v);
       for (const v of p.decor) draw(v);
+      if (realism) detailCount += constructionDetail(detail, p);
       // Exterior service grilles break up blank wall bays. They sit on solid wall pieces,
       // never across an opening, and project only 4 cm beyond the physical wall.
       if (realism)
@@ -114,7 +119,22 @@ export function Structures({ seed, realism = true }: { seed: number; realism?: b
     const rawSolid = m.build();
     // Reuse identical corners in these static rooms instead of submitting them once
     // per triangle. Collision uses the room plan, so indexing cannot change walkability.
-    const solid = realism ? mergeVertices(rawSolid) : rawSolid;
+    let solid = realism ? mergeVertices(rawSolid) : rawSolid;
+    if (realism && detailCount) {
+      const rawDetail = detail.build();
+      const indexedDetail = mergeVertices(rawDetail);
+      const baseVertices = solid.getAttribute("position").count;
+      const baseIndices = solid.index!.count;
+      const combined = mergeGeometries([solid, indexedDetail]);
+      combined.userData["nonSolid"] = [
+        [baseVertices, indexedDetail.getAttribute("position").count],
+      ];
+      combined.userData["detailCounts"] = { low: baseIndices, high: combined.index!.count };
+      rawDetail.dispose();
+      indexedDetail.dispose();
+      solid.dispose();
+      solid = combined;
+    }
     if (realism) rawSolid.dispose();
     return {
       solid,
@@ -139,6 +159,7 @@ export function Structures({ seed, realism = true }: { seed: number; realism?: b
       }),
     };
   }, [seed, realism]);
+  useGeometryDetail([built.solid]);
   useEffect(
     () => () => {
       built.solid.dispose();

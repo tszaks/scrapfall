@@ -1,0 +1,68 @@
+[
+  {
+    "map": "pier",
+    "id": "pier-arcade-150-16",
+    "pose": [
+      143,
+      1.6,
+      33
+    ],
+    "counts": {
+      "low": 57204,
+      "high": 74340
+    },
+    "drawCalls": 1,
+    "vertices": 48504,
+    "nonSolid": [
+      [
+        37080,
+        11424
+      ]
+    ],
+    "errors": []
+  },
+  {
+    "map": "vice",
+    "id": "vice-grand-west-lobby",
+    "pose": [
+      -75,
+      1.6,
+      -53
+    ],
+    "counts": {
+      "low": 76908,
+      "high": 84936
+    },
+    "drawCalls": 1,
+    "vertices": 54132,
+    "nonSolid": [
+      [
+        48780,
+        5352
+      ]
+    ],
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "id": "alpine-cafe-22-40",
+    "pose": [
+      15,
+      1.8994903111457826,
+      51
+    ],
+    "counts": {
+      "low": 30384,
+      "high": 40464
+    },
+    "drawCalls": 1,
+    "vertices": 26592,
+    "nonSolid": [
+      [
+        19872,
+        6720
+      ]
+    ],
+    "errors": []
+  }
+]

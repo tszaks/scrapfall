@@ -112,10 +112,10 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
   }
   if (trunkOnly) return toGeo(b);
   // Open, irregular branch whorls. Snow rests on individual boughs, not solid cones.
-  // Stay inside the old crown bounds so ski routes and trunk collision do not change.
+  // Match the existing far-crown envelope; ski routes and trunk collision do not change.
   const n = narrow ? 9 : 8;
   const highDetail: [number, number][] = [];
-  const rBase = narrow ? 0.14 : 0.18;
+  const rBase = narrow ? 0.17 : 0.225;
   for (let level = 0; level < n; level++) {
     const detailStart = b.pos.length / 3;
     const t = level / n;
@@ -128,24 +128,26 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
       for (let twig = 0; twig < 3; twig++) {
         const twigStart = b.pos.length / 3;
         const f = 0.15 + twig * 0.28;
-        const width = r * (1 - f) * 0.62;
-        const cy = y + Math.sin(f * Math.PI) * r * 0.2 - f * r * 0.18;
+        const width = r * (1 - f) * 0.78;
+        // Lift the inner bough and droop its tips: adjacent whorls overlap in
+        // silhouette instead of reading as flat shelves on a bare pole.
+        const cy = y + (1 - f) * 0.055 - f * r * 0.18;
         const root = [dx * r * f, cy, dz * r * f];
         const tip = [dx * r * (f + 0.28), cy - r * 0.12, dz * r * (f + 0.28)];
         const left = [root[0]! - dz * width, cy - r * 0.07, root[2]! + dx * width];
         const right = [root[0]! + dz * width, cy - r * 0.07, root[2]! - dx * width];
         tri(b, root, left, tip, NEEDLE, 0.85 + f * 0.15);
         tri(b, root, tip, right, NEEDLE);
-        const hanging = [root[0]!, cy - r * 0.28, root[2]!];
+        const hanging = [root[0]!, cy - Math.max(r * 0.34, 0.04), root[2]!];
         tri(b, left, hanging, tip, NEEDLE, 0.8);
         tri(b, tip, hanging, right, NEEDLE, 0.85);
         // A narrow snow ridge leaves needles visible along each edge.
-        const ridge = [root[0]!, cy + r * 0.04, root[2]!];
+        const ridge = [root[0]!, cy + r * 0.12, root[2]!];
         const snowTip = [tip[0]! * 0.91, tip[1]! + r * 0.035, tip[2]! * 0.91];
         triC(
           b,
           ridge,
-          [root[0]! - dz * width * 0.55, cy, root[2]! + dx * width * 0.55],
+          [root[0]! - dz * width * 0.72, cy, root[2]! + dx * width * 0.72],
           snowTip,
           SNOWC,
           RIM,
@@ -155,7 +157,7 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
           b,
           ridge,
           snowTip,
-          [root[0]! + dz * width * 0.55, cy, root[2]! - dx * width * 0.55],
+          [root[0]! + dz * width * 0.72, cy, root[2]! - dx * width * 0.72],
           SNOWC,
           RIM2,
           RIM,
@@ -225,9 +227,9 @@ export function farSpruceGeo() {
       "#4a3526",
     );
   }
-  shelf(0.16, 0.24, 0);
-  shelf(0.4, 0.19, 0.6);
-  shelf(0.62, 0.13, 1.2);
+  shelf(0.16, 0.225, 0);
+  shelf(0.4, 0.175, 0.6);
+  shelf(0.62, 0.12, 1.2);
   shelf(0.82, 0.07, 1.8);
   return toGeo(b);
 }

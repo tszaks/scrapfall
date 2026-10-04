@@ -31,6 +31,7 @@ import { WESTERN_LOOK, type WesternLook } from "./look";
 import { facadeMaterial, facadeTime, westernBackground, westernEnv } from "./materials";
 import { WESTERN_SUNSET } from "./look";
 import { westernMeshes, DETAIL_RANGE } from "./mesh";
+import { useGeometryDetail } from "../environment/detailQuality";
 import {
   SKY_DIR,
   TILE_M,
@@ -420,6 +421,7 @@ export const WesternScene = memo(function WesternScene({
   // geometry was built across tasks while the world assembled (mesh.ts prepares it);
   // this useMemo is a cache lookup, not the multi-second vertex pass it used to be
   const built = useMemo(() => westernMeshes(layout), [layout]);
+  useGeometryDetail(built.details.map((d) => d.geometry));
   useLayoutEffect(
     () =>
       registerStaticGeometry(
