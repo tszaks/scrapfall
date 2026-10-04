@@ -1,3 +1,4 @@
+import { resetVehicleEntry, stepVehicleEntry, vehicleEntry } from "../vehicleControls";
 import { aimInput, clearAim, aimSensitivity } from "./aim";
 import {
   subscribeInputReset,
@@ -39,7 +40,9 @@ export const padHooks: { pause: (() => void) | null } = { pause: null };
 const kb = { shift: false, sprintPress: false, jump: false };
 const pad = { jump: false, sprintPress: false, reviveHeld: false };
 /** controller movement and trigger for this frame */
-export const padOut = { moveX: 0, moveZ: 0, fire: false };
+export const padOut = { moveX: 0, moveZ: 0, fire: false, gas: 0, brake: 0 };
+let wasDriving = false,
+  driveReady = false;
 
 let installed = false;
 /** keyboard listeners for sprint / jump / map, plus the device watch (once per page) */
@@ -117,7 +120,12 @@ function shopActivate() {
  * X press its floor button; there is no jumping in a car).
  */
 let padWasConnected = false;
-export function stepPadActions(env: { inCar: boolean }) {
+export function stepPadActions(env: {
+  inCar: boolean;
+  driving: boolean;
+  nearbyCar: string;
+  dt: number;
+}) {
   const p = pollPad();
   if (padWasConnected && !p.connected) {
     clearAim();
@@ -135,12 +143,22 @@ export function stepPadActions(env: { inCar: boolean }) {
     padOut.fire = false;
     aimInput("pad", false);
     if (pad.reviveHeld) touchInput.revive = pad.reviveHeld = false;
+    padOut.gas = padOut.brake = 0;
+    driveReady = false;
+    resetVehicleEntry();
     return;
+  }
+  if (wasDriving !== env.driving) {
+    driveReady = false;
+    if (wasDriving) controlState.padNeutral = false;
+    wasDriving = env.driving;
   }
   if (!controlState.padNeutral) {
     controlState.padNeutral = !p.down.some(Boolean) && Math.hypot(p.lx, p.ly, p.rx, p.ry) < 0.2;
     padOut.moveX = padOut.moveZ = 0;
     padOut.fire = false;
+    padOut.gas = padOut.brake = 0;
+    resetVehicleEntry();
     aimInput("pad", false);
     for (let i = 0; i < p.pressed.length; i++) if (p.pressed[i]) consumePress(i);
     return;
@@ -165,17 +183,35 @@ export function stepPadActions(env: { inCar: boolean }) {
     consumePress(b);
     return true;
   };
-  padOut.fire = held("fire");
-  aimInput("pad", held("aim"));
+  padOut.fire = !env.driving && held("fire");
+  aimInput("pad", !env.driving && held("aim"));
+  if (env.driving && p.rt < 0.05 && p.lt < 0.05) driveReady = true;
+  padOut.gas = env.driving && driveReady ? p.rt : 0;
+  padOut.brake = env.driving && driveReady ? p.lt : 0;
   if (hit("jump")) {
     if (env.inCar) touchInput.use = true;
     else pad.jump = true;
   }
   if (hit("ability")) touchInput.ability = true;
-  if (hit("use")) {
-    if (env.inCar) touchInput.use = true;
-    else shopActivate();
+  const usePressed = hit("use");
+  const entryBlocked = vehicleEntry.blocked;
+  const entered = stepVehicleEntry(
+    env.dt,
+    env.driving ? "" : env.nearbyCar,
+    held("use"),
+    usePressed,
+  );
+  if (entered) emitControl("use", true, false, index("use"));
+  else if (usePressed && !entryBlocked) {
+    if (env.driving || env.inCar) emitControl("use", true, false, index("use"));
+    else if (!env.nearbyCar && !shopActivate()) {
+      emitControl("use", true, false, index("use"));
+      if (index("reload") === index("use")) emitControl("reload", true, false, index("reload"));
+    }
   }
+  if (index("reload") !== index("use") && hit("reload"))
+    emitControl("reload", true, false, index("reload"));
+  if (hit("melee")) emitControl("melee", true, false, index("melee"));
   if (hit("ping")) touchInput.ping = true;
   if (hit("prevGun") && !shopFocus(-1)) touchInput.swap = -1;
   if (hit("nextGun") && !shopFocus(1)) touchInput.swap = 1;
@@ -209,6 +245,9 @@ export function takeJump() {
 
 /** Drop pending presses (entering a match, respawning): nothing queued fires later. */
 export function clearControls() {
+  resetVehicleEntry();
+  driveReady = false;
+  padOut.gas = padOut.brake = 0;
   kb.shift = kb.jump = kb.sprintPress = false;
   pad.jump = pad.sprintPress = false;
   touchInput.jump = touchInput.sprint = false;

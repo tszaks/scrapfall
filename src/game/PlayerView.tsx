@@ -1,3 +1,4 @@
+import { myVehicle } from "./driving";
 import { aimState } from "./input/aim";
 import { firstWorldHit } from "./enemyProjectiles";
 import { KeyHint } from "./input/Glyph";
@@ -176,7 +177,7 @@ export function PlayerView({
       if (on) {
         updateViewCamera(camera, stop);
         const distance = shoulderView.distance;
-        rig.mesh.visible = distance > 0.85;
+        rig.mesh.visible = distance > 0.85 && !myVehicle();
         rig.mesh.position.set(eye.x, eye.y - (downed.current ? 0.15 : 1.6), eye.z);
         rig.mesh.rotation.set(downed.current ? -Math.PI / 2 : 0, look.current.yaw + Math.PI, 0);
         rig.pose.seated = seated();

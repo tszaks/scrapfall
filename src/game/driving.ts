@@ -1,7 +1,8 @@
+import { vehicleSpeed, vehicleTurn } from "./vehicleControls";
 import { boundaryBlocked, type Block } from "./level";
 import { staticBody } from "./staticCollision";
 import { baseGroundY as groundY, terrainStep } from "./terrain";
-import { liveCars, type CarBox } from "./trafficCore";
+import { liveCars, trafficDepth, type CarBox } from "./trafficCore";
 export type DriveCar = {
   box?: CarBox;
   id: string;
@@ -18,11 +19,19 @@ export type DriveCar = {
   claimed: boolean;
   speed: number;
   gas: number;
+  brake: number;
   steer: number;
   inputAt: number;
 };
 export const driveCars = new Map<string, DriveCar>();
-export const driving = { self: "host", use: false, hint: "", inputGas: 0, inputSteer: 0 };
+export const driving = {
+  self: "host",
+  use: false,
+  hint: "",
+  inputGas: 0,
+  inputSteer: 0,
+  inputBrake: 0,
+};
 export function registerDriveCar(
   id: string,
   half: number,
@@ -46,6 +55,7 @@ export function registerDriveCar(
     claimed: false,
     speed: 0,
     gas: 0,
+    brake: 0,
     steer: 0,
     inputAt: 0,
   };
@@ -81,7 +91,7 @@ export function claimVehicle(id: string, owner: string, x: number, z: number) {
   c.claimed = true;
   c.owner = owner;
   c.speed = 0;
-  c.gas = 0;
+  c.gas = c.brake = 0;
   c.steer = 0;
   c.inputAt = performance.now();
   return true;
@@ -91,14 +101,15 @@ export function releaseVehicle(owner: string) {
   if (c) {
     c.owner = "";
     c.speed = 0;
-    c.gas = 0;
+    c.gas = c.brake = 0;
     c.steer = 0;
   }
 }
-export function driveInput(owner: string, gas: number, steer: number) {
+export function driveInput(owner: string, gas: number, steer: number, brake = 0) {
   const c = myVehicle(owner);
   if (!c) return;
   c.gas = Number.isFinite(gas) ? Math.max(-1, Math.min(1, gas)) : 0;
+  c.brake = Number.isFinite(brake) ? Math.max(0, Math.min(1, brake)) : 0;
   c.steer = Number.isFinite(steer) ? Math.max(-1, Math.min(1, steer)) : 0;
   c.inputAt = performance.now();
 }
@@ -132,16 +143,10 @@ export function stepDriving(dt: number, blocks: Block[]) {
   for (const c of driveCars.values()) {
     if (!c.claimed || c.hp <= 0) continue;
     const live = !!c.owner && performance.now() - c.inputAt < 500;
-    const target = live ? c.gas * c.topSpeed : 0;
-    c.speed += (target - c.speed) * Math.min(1, dt * 3);
+    c.speed = vehicleSpeed(c.speed, live ? c.gas : 0, live ? c.brake : 1, c.topSpeed, dt);
     const count = Math.max(1, Math.ceil((Math.abs(c.speed) * dt) / 0.2));
     for (let i = 0; i < count; i++) {
-      const yaw =
-        c.yaw +
-        (((live ? c.steer : 0) * dt) / count) *
-          1.5 *
-          Math.min(1, Math.abs(c.speed) / 3) *
-          Math.sign(c.speed);
+      const yaw = vehicleTurn(c.yaw, live ? c.steer : 0, c.speed, dt / count);
       const x = c.x + (Math.sin(yaw) * c.speed * dt) / count,
         z = c.z + (Math.cos(yaw) * c.speed * dt) / count;
       if (clear(c, x, z, yaw, blocks)) {
@@ -161,7 +166,11 @@ export function vehicleExit(c: DriveCar, blocks: Block[]) {
       const x = c.x + Math.cos(c.yaw) * (c.width + 1) * side + Math.sin(c.yaw) * along;
       const z = c.z - Math.sin(c.yaw) * (c.width + 1) * side + Math.cos(c.yaw) * along;
       const y = groundY(x, z);
-      if (!boundaryBlocked(blocks, x, z, 0.4) && !staticBody(x, z, 0.4, y, 1.8, 0.2))
+      if (
+        !boundaryBlocked(blocks, x, z, 0.4) &&
+        !staticBody(x, z, 0.4, y, 1.8, 0.2) &&
+        trafficDepth(x, z, 0.4, y, 1.8) === 0
+      )
         return { x, y, z };
     }
   return null;

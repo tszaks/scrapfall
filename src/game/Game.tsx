@@ -1,3 +1,4 @@
+import { vehicleEntry, resetVehicleEntry } from "./vehicleControls";
 import { MeleeView } from "./MeleeView";
 import { meleeGear, subwayNear, subwayExit, trafficRoof, carryOnCar } from "./travelExtras";
 import { claimShard } from "./shardLedger";
@@ -6,6 +7,7 @@ import { hitSkier, downSkier, encodeSkiers, decodeSkiers } from "./skierTargets"
 import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehicle, releaseVehicle, driveInput, stepDriving, vehicleExit, encodeDriving, decodeDriving } from "./driving";
 import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
 import { TravelView } from "./TravelView";
+import { AmmoHud } from "./ui/AmmoHud";
 import { playerRecovery, requestRecovery } from "./playerRecovery";
 import { pingSurface } from "./playtestSurface";
 import { FLIGHT } from "./weaponFlight";
@@ -16,7 +18,7 @@ import { bodyContacts, worldContact, type Body } from "./projectileContact";
 import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { matchEnvironment } from "./matchEnvironment";
-import { aimInput, aimState, stepAim, aimSensitivity } from "./input/aim";
+import { aimInput, aimState, clearAim, stepAim, aimSensitivity } from "./input/aim";
 import { sightOf, viewModelPos } from "./art/sights";
 import {
   accReset,
@@ -160,7 +162,7 @@ import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
 import { alpineMinimap, cityMinimap } from "./cityMinimap";
-import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
+import { hitsTraffic, liveCars, trafficStepFree, type TrafficLink } from "./trafficCore";
 import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
@@ -3270,6 +3272,7 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.pitch = Math.max(-1.2, Math.min(1.2, Number(m.pt ?? 0)));
     r.hp = Number(m.hp ?? MAX_HP);
+    if (r.hp <= 0) releaseVehicle(id);
     r.weapon = String(m.w ?? "pistol");
     r.az = Number(m.az ?? 0);
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
@@ -3409,7 +3412,7 @@ function World({
       if(m.type==="vehicle-explosion" && m.from==="host" && !isHostRef.current){playFx("#ff9a3a",1,4,1,Number(m.x),Number(m.z));return;}
       if(m.type==="flare-fx" && m.from==="host" && !isHostRef.current){playFx("#ff9a3a",.8,3.2,.65,Number(m.x),Number(m.z));return;}
       if (m.type === "t") {
-        if(isHostRef.current && Array.isArray(m.drive))driveInput(String(m.from),Number(m.drive[0]),Number(m.drive[1]));
+        if(isHostRef.current && Array.isArray(m.drive))driveInput(String(m.from),Number(m.drive[0]),Number(m.drive[1]),Number(m.drive[2]) || 0);
         upsertRemote(m);
         return;
       }
@@ -3886,11 +3889,11 @@ function World({
     already = false,
     bodyR = 0.55,
   ) => {
-    // Enemy arrivals use the requested long approach on large maps. Small arenas
+    // Halve the large-map street approach; initial arrivals and recoveries share this ring. Small arenas
     // and the isolated summit scale the ring to their reachable footprint.
     if (rMin >= 25) {
       const summit = alpineMap && (zone === 1 || (zone === undefined && alpineZone(camera.position.x,camera.position.z) === 1));
-      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF);
+      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF) / 2;
       rMin = minimum; rMax = minimum * 1.5;
     }
     // arenas have no traffic, but props still occupy real space the cells miss
@@ -4557,6 +4560,8 @@ function World({
     () =>
       subscribeInputReset(() => {
         trigger.current = false;
+        resetVehicleEntry();
+        driving.use = false;
         abilFire.current = false;
         burstQueue.current = 0;
       }),
@@ -4897,7 +4902,7 @@ function World({
     dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
-  const outOfBounds = (p: { x: number; y: number; z: number }) =>
+  const outOfBounds = (p: { x: number; y: number; z: number }, preciseTraffic = false) =>
     wheelSolid(p) ||
     ((staticCollisionReady() && accPlayer.zone !== 1 ? undefined : bulletBlocked(p.x, p.y, p.z)) ??
       // the beach's ground decides shots itself (they fly over railings, stop on decks and the
@@ -4907,7 +4912,9 @@ function World({
       (shotStop(blocks, p.x, p.y, p.z) ||
         Math.abs(p.x) > HALF ||
         Math.abs(p.z) > HALF ||
-        (big !== null && hitsTraffic(p.x, p.y, p.z))));
+        (!preciseTraffic && big !== null && hitsTraffic(p.x, p.y, p.z))));
+  // Swept enemy shots already query the rendered hull ray; the padded point probe must not stop them early.
+  const enemyWorldStop = (p: { x: number; y: number; z: number }) => outOfBounds(p, true);
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) => {
     const feet = moveState.feet;
@@ -4952,6 +4959,7 @@ function World({
     v.visible =
       !menuCam &&
       !deadRef.current &&
+      !myVehicle() &&
       (getViewMode() === "first" || aimState.scoped) &&
       !(sg.type === "scope" && aimState.blend > 0.96); // spectators carry no weapon
 
@@ -4993,7 +5001,7 @@ function World({
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const sg = sightOf(weapon.current, stats.current);
-    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current, 4 / sg.adsIn);
+    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current || !!myVehicle(), 4 / sg.adsIn);
     aimState.scoped = sg.type === "scope" && aimState.blend > 0.1;
     const lens = cam as THREE.PerspectiveCamera;
     const wantedFov = fov + ((sg.fovAbs ?? fov * sg.fovMul) - fov) * aimState.blend;
@@ -5121,15 +5129,30 @@ function World({
       roll,
     );
 
+    if (gameOver || deadRef.current || downedRef.current) {
+      const owner = netRef.current?.self ?? "host";
+      const car = myVehicle(owner);
+      if (car) {
+        const exit = vehicleExit(car, blocks);
+        releaseVehicle(owner);
+        if (exit) {cam.position.set(exit.x,exit.y+EYE,exit.z);camGround.current=exit.y;cancelJump(exit.y);}
+        else placeAtSpawn();
+      }
+      if(ski.active){resetSki();}
+    }
+
     if (gameOver || !locked) return;
 
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
     driving.self = n?.self ?? "host";
-    if (spectating || downedRef.current) {releaseVehicle(driving.self); if(ski.active){resetSki();}}
+    stepPadActions({ inCar: accessActive() && accPlayer.inCar, driving: !!myVehicle(),
+      nearbyCar: !spectating && !downedRef.current && !ski.active ? nearbyVehicle(cam.position.x,cam.position.z,moveState.feet)?.id ?? "" : "", dt: delta });
     if (driving.use) {
       driving.use=false;
+      const requestedCar = vehicleEntry.requested;
+      vehicleEntry.requested = "";
       const vehicle=myVehicle();
       if(vehicle) {
         const exit=vehicleExit(vehicle,blocks);
@@ -5141,11 +5164,12 @@ function World({
         if(alpineMap && startSki(alpineMap.alpine,cam.position.x,cam.position.z)) {look.current.yaw=Math.PI+ski.yaw;showToast("SKIS ON · MOVE TO STEER · BACK TO BRAKE");}
         else {
           const c=nearbyVehicle(cam.position.x,cam.position.z,moveState.feet);
-          if(c){
+          if(c && (!requestedCar || c.id === requestedCar)){
             if(isH)claimVehicle(c.id,driving.self,cam.position.x,cam.position.z);
             else n?.broadcast({type:"vehicle-use",id:c.id});
             look.current.yaw=Math.PI+c.yaw;
-            showToast("DRIVE · FORWARD / BACK · LEFT / RIGHT · INTERACT TO EXIT");
+            clearAim();
+            showToast("VEHICLE ENTERED");
           }else if(city && subwayNear(city,cam.position.x,cam.position.z)){
             const exit=subwayExit(city,cam.position.x,cam.position.z,blocks);
             if(exit){resetAccessPlayer();cam.position.set(exit.x,exit.y+EYE,exit.z);camGround.current=exit.y;cancelJump(exit.y);showToast("SUBWAY · ARRIVED AT NEXT STATION");}
@@ -5162,9 +5186,6 @@ function World({
       } else showToast("SAFE RETURN AVAILABLE WHEN ALIVE · 30s COOLDOWN");
     }
 
-    // controller buttons: one-shots go through touchInput below; A / X press the floor button
-    // in an elevator car
-    stepPadActions({ inCar: accessActive() && accPlayer.inCar });
     // on-screen controls
     if (touchInput.ability) {
       touchInput.ability = false;
@@ -5197,6 +5218,7 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !ski.active && !myVehicle() && !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
+      trafficStepFree(cam.position.x, cam.position.z, x, z, 0.4, moveState.feet) &&
       (accPlayer.zone === 1 || terrainStep(cam.position.x, cam.position.z, x, z, moveState.feet)) &&
       (staticCollisionReady() ||
         structureFloor(x, z, camGround.current) !== undefined ||
@@ -5233,8 +5255,9 @@ function World({
     MOVE.set(0, 0, 0)
       .addScaledVector(FORWARD, fwd < 0 ? fwd * SPEED.backpedal : fwd)
       .addScaledVector(RIGHT, strafe * SPEED.strafe);
-    driving.inputGas=fwd;driving.inputSteer=strafe;
-    if(isH){driveInput(driving.self,fwd,strafe);stepDriving(delta,blocks);}
+    const driveGas = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.gas;
+    driving.inputGas=driveGas;driving.inputSteer=strafe;driving.inputBrake=padOut.brake;
+    if(isH){driveInput(driving.self,driveGas,strafe,padOut.brake);stepDriving(delta,blocks);}
     if (wheelRide.cabin >= 0 || myVehicle() || ski.active) {MOVE.set(0, 0, 0);slide.current.x=slide.current.z=0;}
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
@@ -5355,8 +5378,10 @@ function World({
           const push = r - dist;
           const tx = cam.position.x + nx * push;
           const tz = cam.position.z + nz * push;
-          if (!pBlocked(tx, cam.position.z, 0.4)) cam.position.x = tx;
-          if (!pBlocked(cam.position.x, tz, 0.4)) cam.position.z = tz;
+          if (!pBlocked(tx, cam.position.z, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, tx, cam.position.z, 0.4, moveState.feet)) cam.position.x = tx;
+          if (!pBlocked(cam.position.x, tz, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, cam.position.x, tz, 0.4, moveState.feet)) cam.position.z = tz;
           // drop the velocity into the body so walking into it slides instead of bouncing
           const vn = slide.current.x * nx + slide.current.z * nz;
           if (vn < 0) {
@@ -5606,7 +5631,7 @@ function World({
     playerMeleeCooldown.current=Math.max(0,playerMeleeCooldown.current-delta);
     if(supply.melee){
       supply.melee=false;
-      if(playerMeleeCooldown.current<=0 && !spectating && !downedRef.current && !myRevive.target){
+      if(playerMeleeCooldown.current<=0 && !myVehicle() && !spectating && !downedRef.current && !myRevive.target){
         playerMeleeCooldown.current=.7;meleeGear.swing=.35;gunKick();playSfx("thud");
         cam.getWorldDirection(FORWARD);
         let target=-1,best=2.6;
@@ -5616,6 +5641,7 @@ function World({
       }
     }
     fireCd.current -= delta;
+    if (myVehicle()) burstQueue.current = 0;
     if (burstQueue.current > 0 && !spectating && held === weapon.current) {
       burstTimer.current -= delta;
       if (burstTimer.current <= 0) {
@@ -5631,7 +5657,7 @@ function World({
         }
       }
     } else if (
-      (trigger.current || touchInput.fire || padOut.fire) &&
+      (trigger.current || touchInput.fire || padOut.fire) && !myVehicle() &&
       canFire() &&
       held === weapon.current &&
       !spectating &&
@@ -5676,7 +5702,7 @@ function World({
         tTimer.current = 0.05;
         n.broadcast({
           type: "t",
-          drive: [driving.inputGas,driving.inputSteer],
+          drive: [driving.inputGas,driving.inputSteer,driving.inputBrake],
           ski: ski.active ? 1 : 0,
           travelY: ski.active || myVehicle() || Number.isFinite(trafficRoof(cam.position.x,cam.position.z,moveState.feet)) ? camGround.current : undefined,
           x: cam.position.x,
@@ -6274,7 +6300,7 @@ function World({
         t.id = null;
         t.x = cam.position.x;
         t.z = cam.position.z;
-        t.y = cam.position.y;
+        t.y = vehicle ? groundY(vehicle.x, vehicle.z) + Math.min(0.9, vehicle.height * 0.5) : cam.position.y;
         t.fx = lf.fx;
         t.fz = lf.fz;
         t.zn = myZone();
@@ -6300,7 +6326,9 @@ function World({
           t.id = r.id;
           t.x = r.x;
           t.z = r.z;
-          t.y = ry;
+          const car = myVehicle(r.id);
+          t.x = car?.x ?? t.x; t.z = car?.z ?? t.z;
+          t.y = car ? groundY(car.x, car.z) + Math.min(0.9, car.height * 0.5) : ry;
           t.fx = -Math.sin(r.yaw);
           t.fz = -Math.cos(r.yaw);
           t.zn = remoteZone(r);
@@ -7291,9 +7319,18 @@ function World({
               enemyShotFrom,
               b.pos,
               enemyShotTargets.current,
-              outOfBounds,
+              enemyWorldStop,
             );
             if (hit !== undefined) b.active = false;
+            if (hit === null) {
+              // The hull protects a seated occupant, but takes the intercepted shot.
+              const limit = firstWorldHit(enemyShotFrom, b.pos, enemyWorldStop) ?? 0;
+              const car = damageVehicle(enemyShotFrom, b.pos, b.damage, Math.min(1, limit + 0.0001));
+              if (car && car.hp <= 0) {
+                playFx("#ff9a3a",1,4,1,car.x,car.z);
+                n?.broadcast({type:"vehicle-explosion",x:car.x,z:car.z});
+              }
+            }
             if (hit) {
               if (hit.id === null) takeHit(b.damage, b.src || "shot");
               else n?.sendTo(hit.id, { type: "hurt", dmg: b.damage, src: b.src || "shot" });
@@ -9148,7 +9185,7 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
+      <div data-combat-hud data-touch={touchUi} className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
             {started && !ended && (
@@ -9260,6 +9297,9 @@ export function Game() {
           })}
         </div>
 
+        {started && locked && !ended && !downed && health > 0 && !showSettings && (
+          <AmmoHud weapon={weapon} name={GUNS[weapon].name} total={ammoLeft} touch={touchUi} />
+        )}
         <ScopeOverlay weapon={weapon} active={started && !ended && !paused} />
         {/* in an elevator car: how to ride (world.ts pressCarButton) */}
         <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
@@ -9346,28 +9386,30 @@ export function Game() {
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
           </HudChip>
         )}
-        {locked && !ended && (
-          <SprintMeter
-            className={
-              touchUi
-                ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
-                : "absolute bottom-[3.9rem] left-5"
-            }
-          />
-        )}
-        {locked && !ended && !touchUi && (
-          <div className="absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
-            <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
-              <KeyHint action="ability" />
-            </span>{" "}
-            {ABILITIES[ability].name} ·{" "}
-            {abilCd.left > 0 ? (
-              <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
-            ) : (
-              <b className="text-[#1d7a37]">READY</b>
-            )}
-          </div>
-        )}
+        <div className="hud-player-status">
+          {locked && !ended && (
+            <SprintMeter
+              className={
+                touchUi
+                  ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
+                  : "absolute bottom-[3.9rem] left-5"
+              }
+            />
+          )}
+          {locked && !ended && !touchUi && (
+            <div className="hud-ability absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
+              <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
+                <KeyHint action="ability" />
+              </span>{" "}
+              {ABILITIES[ability].name} ·{" "}
+              {abilCd.left > 0 ? (
+                <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
+              ) : (
+                <b className="text-[#1d7a37]">READY</b>
+              )}
+            </div>
+          )}
+        </div>
 
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-md border-2 border-[#f3e6cf]/50 bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]">

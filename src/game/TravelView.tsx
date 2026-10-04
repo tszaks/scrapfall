@@ -1,4 +1,6 @@
-import { supply } from "./weaponSupply";
+import { glyph, padLabel } from "./input/bindings";
+import { vehicleEntry } from "./vehicleControls";
+import { inputDevice } from "./input/gamepad";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
@@ -9,6 +11,13 @@ import { ski } from "./alpine/ski";
 import { driving } from "./driving";
 import { terrainY } from "./terrain";
 import { actionLabel } from "./input/labels";
+// Screen HUD: its visibility and position must not depend on the world origin.
+const keepHudVisible = () => {};
+const screenCenter = (
+  _object: THREE.Object3D,
+  _camera: THREE.Camera,
+  size: { width: number; height: number },
+) => [size.width / 2, size.height / 2];
 export function TravelView({
   alpine,
   remotes,
@@ -31,10 +40,20 @@ export function TravelView({
   useFrame(() => {
     const text = ski.active
       ? "SKIING · BACK TO BRAKE"
-      : ski.hint || driving.hint || supply.text.replace("RELOAD", actionLabel("reload"));
+      : ski.hint || driving.hint;
     if (hint.current) {
       hint.current.style.display = text ? "block" : "none";
-      const label = text.replace("INTERACT", actionLabel("use"));
+      const carHint =
+        inputDevice.kind === "pad" && text === "INTERACT TO DRIVE"
+          ? `HOLD ${actionLabel("use")} TO ENTER${vehicleEntry.progress > 0 ? ` · ${Math.round(vehicleEntry.progress * 100)}%` : ""}`
+          : inputDevice.kind === "pad" && text.startsWith("DRIVING")
+            ? `${glyph("RT", inputDevice.padType)} ACCELERATE · ${glyph("LT", inputDevice.padType)} BRAKE · ${padLabel("move", inputDevice.padType)} STEER · ${actionLabel("use")} EXIT`
+            : text.replace("INTERACT", actionLabel("use"));
+      hint.current.style.backgroundImage =
+        vehicleEntry.progress > 0
+          ? `linear-gradient(to right, #637449 0%, #637449 ${vehicleEntry.progress * 100}%, transparent ${vehicleEntry.progress * 100}%)`
+          : "none";
+      const label = carHint;
       if (hint.current.textContent !== label) hint.current.textContent = label;
     }
     const m = mesh.current;
@@ -62,9 +81,16 @@ export function TravelView({
         <boxGeometry />
         <meshStandardMaterial color="#de633d" roughness={0.35} />
       </instancedMesh>
-      <Html fullscreen style={{ pointerEvents: "none" }}>
+      <Html
+        fullscreen
+        calculatePosition={screenCenter}
+        onOcclude={keepHudVisible}
+        zIndexRange={[40, 40]}
+        style={{ pointerEvents: "none" }}
+      >
         <div
           ref={hint}
+          data-testid="travel-hint"
           style={{
             position: "absolute",
             bottom: 125,
@@ -75,7 +101,8 @@ export function TravelView({
             padding: "8px 12px",
             borderRadius: 6,
             fontFamily: "monospace",
-            whiteSpace: "nowrap",
+            maxWidth: "calc(100vw - 32px)",
+            textAlign: "center",
           }}
         />
       </Html>
@@ -96,7 +123,8 @@ export function TravelView({
                     color: "#171717",
                     border: "2px solid #333",
                     padding: 8,
-                    whiteSpace: "nowrap",
+                    maxWidth: "calc(100vw - 32px)",
+                    textAlign: "center",
                     fontFamily: "monospace",
                   }}
                 >
