@@ -5348,8 +5348,10 @@ function World({
           const push = r - dist;
           const tx = cam.position.x + nx * push;
           const tz = cam.position.z + nz * push;
-          if (!pBlocked(tx, cam.position.z, 0.4)) cam.position.x = tx;
-          if (!pBlocked(cam.position.x, tz, 0.4)) cam.position.z = tz;
+          if (!pBlocked(tx, cam.position.z, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, tx, cam.position.z, 0.4, moveState.feet)) cam.position.x = tx;
+          if (!pBlocked(cam.position.x, tz, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, cam.position.x, tz, 0.4, moveState.feet)) cam.position.z = tz;
           // drop the velocity into the body so walking into it slides instead of bouncing
           const vn = slide.current.x * nx + slide.current.z * nz;
           if (vn < 0) {

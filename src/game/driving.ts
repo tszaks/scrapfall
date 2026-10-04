@@ -161,8 +161,11 @@ export function vehicleExit(c: DriveCar, blocks: Block[]) {
       const x = c.x + Math.cos(c.yaw) * (c.width + 1) * side + Math.sin(c.yaw) * along;
       const z = c.z - Math.sin(c.yaw) * (c.width + 1) * side + Math.cos(c.yaw) * along;
       const y = groundY(x, z);
-      if (!boundaryBlocked(blocks, x, z, 0.4) && !staticBody(x, z, 0.4, y, 1.8, 0.2) &&
-          trafficDepth(x, z, 0.4, y, 1.8) === 0)
+      if (
+        !boundaryBlocked(blocks, x, z, 0.4) &&
+        !staticBody(x, z, 0.4, y, 1.8, 0.2) &&
+        trafficDepth(x, z, 0.4, y, 1.8) === 0
+      )
         return { x, y, z };
     }
   return null;

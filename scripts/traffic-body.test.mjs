@@ -69,7 +69,7 @@ test("car arriving around a player allows outward escape but not deeper penetrat
   assert.equal(trafficStepFree(0.5, 0, 0.7, 0, 0.4, 0), true);
   assert.equal(trafficStepFree(0.5, 0, 0.3, 0, 0.4, 0), false);
   assert.equal(trafficStepFree(0, 0, 0.1, 0, 0.4, 0), true);
-  assert.equal(trafficStepFree(0, 0, 0, 0, 0.4, 0), false);
+  assert.equal(trafficStepFree(0, 0, 0, 0, 0.4, 0), true);
   assert.equal(trafficStepFree(-5, 0, 5, 0, 0.4, 0), false, "long step cannot tunnel");
 });
 test("live car position moves the obstacle and exit query sees adjacent vehicles", () => {
@@ -78,4 +78,22 @@ test("live car position moves the obstacle and exit query sees adjacent vehicles
   assert.equal(trafficBodyBlocked(0, 0, 0.4, 0), false);
   assert.equal(trafficBodyBlocked(10, 0, 0.4, 0), true);
   assert.equal(trafficStepFree(8.5, 0, 8.7, 0, 0.4, 0), false);
+});
+
+test("player squeezed between two arriving cars can escape along the gap", () => {
+  const left = car(0, -1.25);
+  const right = { ...left, x: 1.25 };
+  liveCars.push(right);
+  assert.ok(trafficDepth(0, 0, 0.4, 0, 1.8) > 0);
+  for (const sign of [-1, 1]) {
+    for (let z = 0; z < 3; z += 0.1)
+      assert.equal(trafficStepFree(0, z * sign, 0, (z + 0.1) * sign, 0.4, 0), true);
+  }
+  assert.equal(trafficStepFree(0, 0, 0.1, 0, 0.4, 0), false, "cannot deepen right overlap");
+  assert.equal(trafficStepFree(0, 0, -0.1, 0, 0.4, 0), false, "cannot deepen left overlap");
+});
+test("escaping one car cannot enter a shallower overlap with another car", () => {
+  const first = car(0, 0);
+  liveCars.push({ ...first, x: 2.6 });
+  assert.equal(trafficStepFree(1.1, 0, 1.3, 0, 0.4, 0), false);
 });
