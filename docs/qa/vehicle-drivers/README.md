@@ -48,7 +48,7 @@ The gameplay owner approved and released the Traffic hook: unclaimed ambient car
 
 `activation.json` verifies the actual Traffic caller with no occupant override on Metal M4 Max: keyboard entry hides the driver, keyboard exit keeps the claimed car empty, an explicit parked fixture is empty, remote ownership shows the driver and remote exit removes it. A real ray-based `damageVehicle` call reduces the car to zero health and suppresses its driver. Browser errors are empty. Remote ownership is a direct state fixture here, not a two-peer co-op acceptance test.
 
-The reviewed art/API commit `ce869ed` passed required CI, including 69 tests, typecheck, build, repository map and smoke. Eight additional local map/time smoke cases passed. The later Traffic hook passed typecheck, build, three focused tests and independent static review. Final integration-head checks and actual two-peer body cooperation remain pending. The first rendering comparison and its limitations are documented below. This document does not establish a production release or sustained frame rate.
+The reviewed art/API commit `ce869ed` passed required CI, including 69 tests, typecheck, build, repository map and smoke. Eight additional local map/time smoke cases passed. The later Traffic hook passed typecheck, build, three focused tests and independent static review. Actual two-peer body cooperation passed as documented below. Final integration-head checks remain pending. The first rendering comparison and its limitations are documented below. This document does not establish a production release or sustained frame rate.
 
 
 ## Controlled rendering comparison
@@ -97,4 +97,11 @@ Released controller main `01f723e` and driver candidate `0b0dd35` use the same r
 | Triangles | 2,275,320 → 2,275,668 | 2,275,320 → 2,275,668 |
 | Navigation through menu to scene | 3.20 → 3.30 s | 12.10 → 12.71 s |
 
-The candidate is slower in these samples. Native p99 still has headroom against 16.7 ms, but the throttled tail is worse and the evidence does not establish a no-regression result. Source inspection found redundant matrix/color uploads on every frame; a bounded update-only-when-changed optimization is now under review and requires its own measurement before activation. No sustained 60 fps or scalability claim is made.
+The candidate is slower in these samples. Native p99 still has headroom against 16.7 ms, but the throttled tail is worse and the evidence does not establish a no-regression result. Source inspection found redundant matrix/color uploads on every frame; a bounded update-only-when-changed optimization passed independent static review, focused tests, typecheck and build, but requires its own measurement before activation. No sustained 60 fps or scalability claim is made.
+
+
+## Current integration checkpoint
+
+Head `386ad89fb16693ece0315d8f8d40f0fd418bfd77` integrates actual PR49 main `a6e920ff83cb69f1ff0367e2601afd79958c7a2c`. Independent static review found no collision/exit interaction blocker: failed exits retain ownership and the seated occupant; successful exits leave the claimed car empty. The additive test-list conflict preserves the traffic-body, vehicle-controls and vehicle-occupant suites. No browser or performance result from the earlier build is presented as validation of this newer integration.
+
+The buffer optimization compares packed Float32 matrix/color values before writing and marking an instance buffer dirty. It preserves the existing buffers and adds no per-frame allocations. Focused checks cover unchanged stationary data, rotation without color changes, occupant removal/repacking, quality transitions and wrecks. Moving vehicles still update matrices, so any benefit measured in the stationary fixture must not be generalized to driving performance.
