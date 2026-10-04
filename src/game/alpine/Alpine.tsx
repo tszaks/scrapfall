@@ -1,3 +1,4 @@
+import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
 import { surfaceRelief } from "../environment/surfaceRelief";
 import { matchEnvironment } from "../matchEnvironment";
@@ -1093,6 +1094,7 @@ export const AlpineScene = memo(function AlpineScene({
     };
   }, [built]);
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
+  useGeometryDetail([geos.spruce]);
 
   // instanced forest per chunk (near + far LOD) and the far ring
   // The near / mid forest meshes are built here, each with its own instance-colour buffer,

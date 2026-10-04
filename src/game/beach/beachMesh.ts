@@ -1267,6 +1267,7 @@ export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshe
     x1: number,
     z1: number,
     colorAt: (x: number, z: number, h: number) => [THREE.Color, number],
+    sand = false,
   ) => {
     const pts: [number, number][] = [
       [x0, z1],
@@ -1281,7 +1282,7 @@ export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshe
       const [x, z] = pts[k]!;
       const [c, rough] = cs[k]!;
       G.colLinear(c.r, c.g, c.b);
-      G.mat(L.ground, rough, 1);
+      G.mat(L.ground, rough, sand ? 1 : 0);
       // normal from the neighbouring heights
       const e = 1;
       const nx = gv(x - e, z) - gv(x + e, z);
@@ -1337,7 +1338,7 @@ export function* buildBeachMeshes(city: BeachLayout): Generator<void, BeachMeshe
         gridCell(G, x, z, x + 2, z + 2, skateAt);
       else if (x >= lot.x0 && x < lot.x1 && z >= lot.z0 && z < lot.z1)
         gridCell(G, x, z, x + 2, z + 2, lotAt);
-      else if (x < X.strip) gridCell(G, x, z, x + 2, z + 2, beachAt);
+      else if (x < X.strip) gridCell(G, x, z, x + 2, z + 2, beachAt, true);
       else if (x >= X.bluff && x < X.top) gridCell(G, x, z, x + 2, z + 2, bluffAt);
     }
   }
