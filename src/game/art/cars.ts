@@ -36,6 +36,8 @@ import { toCreasedNormals } from "three/examples/jsm/utils/BufferGeometryUtils.j
 import type { Geo } from "../cityGeo";
 import { EXTRA_LADDER, EXTRA_ROOF_RACK, EXTRA_SPOILER, SPECS, type Vehicle } from "../vehicles";
 import { Model, SURF, artFrame, artMaterial, type Surf } from "./kit";
+import { driverGeometry } from "./vehicleOccupants";
+import { quality } from "../quality";
 
 const PI = Math.PI;
 const PAINT = "#ffffff"; // paint parts: white x the car's instance colour
@@ -74,6 +76,8 @@ export type VehicleModel = {
   far: THREE.BufferGeometry;
   /** the length / width the geometry was built at (cars are scaled from these) */
   spec: { len: number; wid: number };
+  /** Ambient upper-body placement; omitted for custom vehicles without a driver seat. */
+  driverSeat?: THREE.Matrix4;
   wheels: (v: Vehicle) => WheelSpot[];
   lamps: (v: Vehicle) => Lamp[];
 };
@@ -1095,6 +1099,11 @@ function stdLamps(
   };
 }
 
+/** Fit the seated upper body beneath the roof while keeping it in the existing seat. */
+function driverSeat(x: number, y: number, z: number, height: number) {
+  return new THREE.Matrix4().makeScale(1, height / 0.8, 1).setPosition(x, y, z);
+}
+
 /** the model for a vehicle type (built once, on first use) */
 export const vehicleModelKey = (v: Vehicle) => v.variant ?? v.type;
 export function vehicleModel(type: string): VehicleModel {
@@ -1108,6 +1117,12 @@ export function vehicleModel(type: string): VehicleModel {
       near: n.m.build(),
       far: fr.m.build({ lod: 1 }),
       glass: n.glass,
+      driverSeat: driverSeat(
+        (n.f.W * 0.9 - 0.12) * 0.25,
+        n.f.yb + 0.055,
+        n.f.F - n.f.L * 0.34 + 0.45,
+        n.cabTop - n.f.yb - 0.11,
+      ),
       spec: { len: n.f.L, wid: n.f.W },
       wheels: stdWheels(n.f, 0.34),
       lamps: stdLamps(n.f, n.headY, n.tailY),
@@ -1119,6 +1134,7 @@ export function vehicleModel(type: string): VehicleModel {
       near: n.m.build(),
       far: fr.m.build({ lod: 1 }),
       glass: n.glass,
+      driverSeat: driverSeat(n.f.W * 0.25, n.f.y0 + 0.92, n.f.F - 1.15, 0.8),
       spec: { len: n.f.L, wid: n.f.W },
       wheels: stdWheels(n.f, 0.34),
       lamps: stdLamps(n.f, n.headY, n.tailY, (v, kz) => [
@@ -1202,6 +1218,7 @@ export function vehicleModel(type: string): VehicleModel {
       near: n.m.build(),
       far: fr.m.build({ lod: 1 }),
       glass: glassShell(f),
+      driverSeat: driverSeat((f.Wg - 0.12) * 0.24, f.yb + 0.055, f.zWs - 0.95, f.yr - f.yb - 0.11),
       spec: { len: f.L, wid: f.W },
       wheels: stdWheels(f, 0.26),
       lamps: stdLamps(f, n.headY, n.tailY, (_v, kz) =>
@@ -1325,6 +1342,9 @@ type Slot = {
   group?: Group;
   rgb: [number, number, number];
   lit: boolean;
+  driver: boolean;
+  wrecked: boolean;
+  driverRgb: [number, number, number];
   bar: 0 | 1 | 2;
   /** bounding radius (m) for frustum culling */
   rad: number;
@@ -1344,6 +1364,7 @@ export class CarBatch {
   private slots: Slot[] = [];
   private groups = new Map<string, Group>();
   private wheel: THREE.InstancedMesh;
+  private driver: THREE.InstancedMesh;
   private lamp: THREE.InstancedMesh | null = null;
   private extras = new Map<ExtraKey, THREE.InstancedMesh>();
   private ln = 0;
@@ -1380,6 +1401,11 @@ export class CarBatch {
         bounds: new THREE.Box3(),
         boundsDirty: true,
         lit: false,
+        driver: false,
+        wrecked: false,
+        driverRgb: _c
+          .set([0x8c9a94, 0xa18c70, 0x718497, 0x9a7771][this.slots.length % 4]!)
+          .toArray() as [number, number, number],
         bar: 0,
         rad: Math.hypot(v.len, v.wid) / 2 + 0.6,
         rgb: _c.set(v.color).toArray() as [number, number, number],
@@ -1417,6 +1443,9 @@ export class CarBatch {
       sl.group = this.groups.get(sl.type)!;
     }
     this.wheel = inst(wheelGeometry(), M.plain, vehicles.length * 4, false);
+    this.driver = inst(driverGeometry(), M.body, vehicles.length, true);
+    this.driver.name = "ambient-drivers";
+    this.driver.receiveShadow = true;
     for (const [k, n] of exCounts) this.extras.set(k, inst(extraOf(k), M.plain, n, false));
     if (lamps > 0) {
       const box = new THREE.BoxGeometry(1, 1, 1);
@@ -1436,7 +1465,7 @@ export class CarBatch {
   /**
    * Put vehicle `i` at (x, y, z) facing `yaw`. `lit`: headlights and tail lights on;
    * `bar`: police lightbar (0 off, 1 red, 2 blue); `roll`: metres rolled since the last
-   * call (spins the wheels).
+   * call (spins the wheels). `driver`: ambient occupant present (default false).
    */
   place(
     i: number,
@@ -1444,7 +1473,7 @@ export class CarBatch {
     y: number,
     z: number,
     yaw: number,
-    o: { lit?: boolean; bar?: 0 | 1 | 2; roll?: number } = {},
+    o: { lit?: boolean; bar?: 0 | 1 | 2; roll?: number; driver?: boolean } = {},
   ) {
     const sl = this.slots[i];
     if (!sl) return;
@@ -1461,12 +1490,20 @@ export class CarBatch {
       .multiply(_m.makeScale(sl.v.wid / md.spec.wid, 1, sl.v.len / md.spec.len));
     if (o.roll) sl.spin += o.roll / Math.max(0.2, sl.wheels[0]?.r ?? 0.33);
     sl.lit = !!o.lit;
+    sl.driver = !!o.driver && !sl.wrecked;
     sl.bar = o.bar ?? 0;
   }
 
-  setWreck(i:number) {
-    const s=this.slots[i];if(!s)return;
-    s.rgb[0]=.05;s.rgb[1]=.045;s.rgb[2]=.04;s.lit=false;s.bar=0;
+  setWreck(i: number) {
+    const s = this.slots[i];
+    if (!s) return;
+    s.rgb[0] = 0.05;
+    s.rgb[1] = 0.045;
+    s.rgb[2] = 0.04;
+    s.lit = false;
+    s.bar = 0;
+    s.wrecked = true;
+    s.driver = false;
   }
   /** Detailed collision remains stable across render LOD changes. */
   private contact(
@@ -1537,6 +1574,9 @@ export class CarBatch {
     for (const ex of this.extras.values()) ex.count = 0;
     const near2 = CAR_NEAR * CAR_NEAR;
     const far2 = CAR_FAR * CAR_FAR;
+    const tier = quality().tier;
+    const driver2 = (tier === "low" ? 22 : tier === "medium" ? 32 : CAR_NEAR) ** 2;
+    this.driver.count = 0;
     this.ln = 0;
     this.wn = 0;
     const visit = (sl: Slot) => {
@@ -1572,6 +1612,11 @@ export class CarBatch {
         }
       if (d2 < near2) {
         put(g.near, sl);
+        if (sl.driver && sl.model.driverSeat && d2 < driver2) {
+          const i = this.driver.count++;
+          this.driver.setMatrixAt(i, _m2.multiplyMatrices(sl.body, sl.model.driverSeat));
+          this.driver.setColorAt(i, _c.fromArray(sl.driverRgb));
+        }
         for (const w of sl.wheels) {
           _m.compose(
             _p.set(w.x, w.y, w.z),
@@ -1600,6 +1645,11 @@ export class CarBatch {
     }
     const ln = this.ln;
     const wn = this.wn;
+    this.driver.visible = this.driver.count > 0;
+    if (this.driver.visible) {
+      this.driver.instanceMatrix.needsUpdate = true;
+      this.driver.instanceColor!.needsUpdate = true;
+    }
     this.wheel.count = wn;
     this.wheel.visible = wn > 0;
     this.wheel.instanceMatrix.needsUpdate = true;
