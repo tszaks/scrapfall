@@ -139,3 +139,89 @@ export type TrafficLink = {
   isBig: (e: { kind: string; elite?: number }) => boolean;
   hurtEnemy: ((idx: number, dmg: number, kx: number, kz: number) => void) | null;
 };
+
+/**
+ * Deepest penetration of a standing capsule into any liveCar's box; 0 when clear.
+ * The published oriented box decides — the rendered-mesh `contact` narrow phase
+ * is for bullets: it only reports surface hits, so a body inside the hollow
+ * shell or standing in rim air (wheel wells, bumper gaps) reads "free" and the
+ * old walk-through comes straight back. A car's box IS its body for movement.
+ */
+export function trafficDepth(
+  x: number,
+  z: number,
+  r: number,
+  feet: number,
+  height: number,
+): number {
+  let worst = 0;
+  for (const c of liveCars) worst = Math.max(worst, carDepth(c, x, z, r, feet, height));
+  return worst;
+}
+function carDepth(c: CarBox, x: number, z: number, r: number, feet: number, height: number) {
+  const base = c.base ?? 0;
+  if (feet >= c.h || feet + height <= base) return 0;
+  const dx = x - c.x,
+    dz = z - c.z;
+  // Rotation can project a corner beyond the unrotated half-length.
+  const extentX = Math.abs(c.sin) * c.hl + Math.abs(c.cos) * c.hw;
+  const extentZ = Math.abs(c.cos) * c.hl + Math.abs(c.sin) * c.hw;
+  if (Math.abs(dx) > extentX + r || Math.abs(dz) > extentZ + r) return 0;
+  const along = dx * c.sin + dz * c.cos;
+  const lat = dx * c.cos - dz * c.sin;
+  const inL = c.hl - Math.abs(along),
+    inW = c.hw - Math.abs(lat);
+  let d: number;
+  if (inL >= 0 && inW >= 0) d = r + Math.min(inL, inW);
+  else {
+    const gap = Math.hypot(Math.max(-inL, 0), Math.max(-inW, 0));
+    if (gap >= r) return 0;
+    d = r - gap;
+  }
+  const b = c.bounds;
+  if (
+    b &&
+    (x + r <= b.min.x ||
+      x - r >= b.max.x ||
+      z + r <= b.min.z ||
+      z - r >= b.max.z ||
+      feet >= b.max.y ||
+      feet + height <= b.min.y)
+  )
+    return 0;
+  return d;
+}
+
+/** A car arriving around a player must let them walk out, never trap them inside.
+ * Sweep long movement too, so frame hitches cannot skip a stopped car. */
+export function trafficStepFree(
+  fromX: number,
+  fromZ: number,
+  x: number,
+  z: number,
+  radius: number,
+  feet: number,
+  height = 1.8,
+) {
+  const dx = x - fromX,
+    dz = z - fromZ;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / Math.min(0.2, radius * 0.5)));
+  for (const car of liveCars) {
+    let depth = carDepth(car, fromX, fromZ, radius, feet, height);
+    for (let i = 1; i <= steps; i++) {
+      const next = carDepth(
+        car,
+        fromX + (dx * i) / steps,
+        fromZ + (dz * i) / steps,
+        radius,
+        feet,
+        height,
+      );
+      // Existing overlaps may slide tangentially along a hull toward an open end.
+      // Check each hull separately: escape from one cannot enter another.
+      if (depth > 0 ? next > depth + 1e-8 : next > 0) return false;
+      depth = next;
+    }
+  }
+  return true;
+}

@@ -161,7 +161,7 @@ import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
 import { alpineMinimap, cityMinimap } from "./cityMinimap";
-import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
+import { hitsTraffic, liveCars, trafficStepFree, type TrafficLink } from "./trafficCore";
 import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
@@ -3887,11 +3887,11 @@ function World({
     already = false,
     bodyR = 0.55,
   ) => {
-    // Enemy arrivals use the requested long approach on large maps. Small arenas
+    // Halve the large-map street approach; initial arrivals and recoveries share this ring. Small arenas
     // and the isolated summit scale the ring to their reachable footprint.
     if (rMin >= 25) {
       const summit = alpineMap && (zone === 1 || (zone === undefined && alpineZone(camera.position.x,camera.position.z) === 1));
-      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF);
+      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF) / 2;
       rMin = minimum; rMax = minimum * 1.5;
     }
     // arenas have no traffic, but props still occupy real space the cells miss
@@ -5216,6 +5216,7 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !ski.active && !myVehicle() && !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
+      trafficStepFree(cam.position.x, cam.position.z, x, z, 0.4, moveState.feet) &&
       (accPlayer.zone === 1 || terrainStep(cam.position.x, cam.position.z, x, z, moveState.feet)) &&
       (staticCollisionReady() ||
         structureFloor(x, z, camGround.current) !== undefined ||
@@ -5375,8 +5376,10 @@ function World({
           const push = r - dist;
           const tx = cam.position.x + nx * push;
           const tz = cam.position.z + nz * push;
-          if (!pBlocked(tx, cam.position.z, 0.4)) cam.position.x = tx;
-          if (!pBlocked(cam.position.x, tz, 0.4)) cam.position.z = tz;
+          if (!pBlocked(tx, cam.position.z, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, tx, cam.position.z, 0.4, moveState.feet)) cam.position.x = tx;
+          if (!pBlocked(cam.position.x, tz, 0.4) &&
+              trafficStepFree(cam.position.x, cam.position.z, cam.position.x, tz, 0.4, moveState.feet)) cam.position.z = tz;
           // drop the velocity into the body so walking into it slides instead of bouncing
           const vn = slide.current.x * nx + slide.current.z * nz;
           if (vn < 0) {
