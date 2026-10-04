@@ -38,6 +38,28 @@ try {
   for (const p of [h, g])
     await p.waitForFunction(() => window.__rs?.wave.current >= 1, null, { timeout: 45000 });
   console.log("both in room");
+  let syncRequest = 0;
+  if (process.env.RECOVERY_SYNC)
+    await h.evaluate(() => {
+      const net = __rs.net.current,
+        send = net.sendTo;
+      net.sendTo = (id, message) => {
+        send(id, message);
+        if (message.type === "status" && window.__syncReceipt) {
+          send(id, { type: "event", name: window.__syncReceipt });
+          window.__syncReceipt = "";
+        }
+      };
+    });
+  const requestRecoverySync = async (target) => {
+    const receipt = `RECOVERY SYNC ${++syncRequest}`;
+    await h.evaluate((receipt) => {
+      window.__syncReceipt = receipt;
+    }, receipt);
+    await target.evaluate(() => __rs.net.current.broadcast({ type: "world-ready" }));
+    await target.getByText(receipt, { exact: true }).waitFor({ timeout: 10000 });
+  };
+
   for (const p of [h, g])
     await p.evaluate(() => {
       __rs.invuln.current = 1e6;
@@ -107,6 +129,13 @@ try {
     });
     await target.waitForFunction(() => __rs.downedRef.current, null, { timeout: 10000 });
     const before = await pose(target);
+    if (process.env.RECOVERY_SYNC && name === "guest roof") {
+      await requestRecoverySync(target);
+      const synced = await pose(target);
+      assert.equal(synced.hp, 0, "same-wave reconnect must not revive a downed guest");
+      assert.equal(synced.down, true);
+      results.push({ name: "downed same-wave recovery sync", synced });
+    }
     assert.ok(
       Math.hypot(before.x - location.a.x, before.z - location.a.z) < 0.1,
       `${name} downed position`,
@@ -147,6 +176,13 @@ try {
     timeout: 10000,
   });
   const dead = await pose(g);
+  if (process.env.RECOVERY_SYNC) {
+    await requestRecoverySync(g);
+    const synced = await pose(g);
+    assert.equal(synced.hp, 0, "same-wave reconnect must not respawn a dead guest");
+    assert.equal(synced.down, false);
+    results.push({ name: "dead same-wave recovery sync", synced });
+  }
   await g.waitForTimeout(500);
   assert.equal((await pose(g)).hp, 0, "bleed-out stays dead before next wave");
   await h.evaluate(() => {
