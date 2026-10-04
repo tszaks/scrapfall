@@ -46,7 +46,7 @@ export function facadeDepth(
       depth: number,
       color: number | string,
     ) => {
-      if (lo < Math.max(3.05, y0) || hi > top || b <= a) return;
+      if (lo < Math.max(3.05, y0) || hi > top || b <= a || hi <= lo) return;
       if (
         !spans.some(
           (s) =>
@@ -74,6 +74,24 @@ export function facadeDepth(
       floor++
     ) {
       const y = base + floor * st.fh;
+      // Office podiums read as structural bays: the slab and piers sit ahead of
+      // the existing glazing. Keep the structural face above player clearance.
+      if (st.layer === L.ribbon || st.layer === L.office || st.layer === L.panel) {
+        const lo = Math.max(3.05, y0, y),
+          hi = Math.min(top, y + st.fh);
+        for (const span of spans) {
+          const a = span.t0 * length,
+            b = span.t1 * length;
+          const bandLo = Math.max(lo, span.y0),
+            bandHi = Math.min(hi, span.y1, y + 0.34);
+          if (bandHi > bandLo) box(a, b, bandLo, bandHi, 0.25, st.tint);
+        }
+        for (let m = 0; m <= modules; m += 3) {
+          const a = Math.max(0, m * mw - 0.2),
+            b = Math.min(length, m * mw + 0.2);
+          box(a, b, Math.max(lo, y + 0.38), hi, 0.25, st.tint);
+        }
+      }
       // Ribbon windows get continuous sill/drip edges and real vertical mullions.
       if (st.layer === L.ribbon || st.layer === L.glass || st.layer === L.dark) {
         const ribbon = st.layer === L.ribbon;

@@ -175,7 +175,7 @@ test("facade relief is bounded, optional, non-solid and leaves real room cutouts
     assert.ok(Number.isFinite(x + y + z));
     assert.ok(y >= 3.05 - 1e-5 && y <= 26 + 1e-5, `unsafe facade height ${y}`);
     assert.ok(!(x > 3.001 && x < 8.999 && z < 0 && y < 11.999), "trim covers a real opening");
-    assert.ok(x >= -0.19 && x <= 18.19 && z >= -0.19 && z <= 18.19, "relief projects too far");
+    assert.ok(x >= -0.25 && x <= 18.25 && z >= -0.25 && z <= 18.25, "relief projects too far");
   }
   const triangles = new Set();
   for (let i = 0; i < p.count; i += 3) {

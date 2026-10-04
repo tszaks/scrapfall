@@ -1,3 +1,4 @@
+import { foliageDepthMaterial } from "./environment/foliageDepth";
 import { useGeometryDetail } from "./environment/detailQuality";
 import { scannedSurface } from "./environment/scannedSurface";
 import { surfaceRelief } from "./environment/surfaceRelief";
@@ -191,7 +192,9 @@ ${INTERIOR_GLSL}`,
         `vec2 tileUv = vFuv / vec2(${TILE_COLS.toFixed(1)}, ${TILE_ROWS.toFixed(1)});
 vec4 facT = texture(uDay, vec3(tileUv, vFac.x));
 diffuseColor.rgb *= facT.rgb;
-float glassK = facT.a;
+float foliageK = step(abs(vFac.x - ${L.foliage}.0), 0.1);
+if (foliageK > 0.5 && facT.a < 0.42) discard;
+float glassK = facT.a * (1.0 - foliageK);
 float aoK = step(0.5, vFac.z);
 diffuseColor.rgb *= mix(1.0, mix(0.55, 1.0, smoothstep(0.0, 16.0, vWy)), aoK);
 // derivatives for the rooms, taken here in uniform control flow
@@ -276,9 +279,10 @@ vec2 irDu2 = dFdy(vFuv);`,
     // glass on top: reflective at grazing angles, clear looking straight in
     float tower = step(abs(vFac.x - ${L.glass}.0), 0.1) + step(abs(vFac.x - ${L.dark}.0), 0.1);
     float ndv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
-    float f0 = mix(0.04, 0.16, tower);
+    float commercial = max(tower, step(abs(vFac.x - ${L.ribbon}.0), 0.1));
+    float f0 = mix(0.08, 0.24, commercial);
     float fr = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
-    room *= (1.0 - fr) * mix(0.95, 0.8, tower) * mix(0.32, 0.72, uNightK);
+    room *= (1.0 - fr) * mix(0.95, 0.8, tower) * mix(0.18, 0.64, uEnvMix);
     float k = roomK * winM;
     em = mix(em, room * winM, roomK);
     // clear glass: little diffuse, a dielectric-ish reflection instead of the painted pane
@@ -291,9 +295,9 @@ vec2 irDu2 = dFdy(vFuv);`,
 if (uWet > 0.0) cityWet(diffuseColor, roughnessFactor, totalEmissiveRadiance, normal);`,
       );
   };
-  mat.customProgramCacheKey = () => "city-facade-v5";
+  mat.customProgramCacheKey = () => "city-facade-v7";
   return scannedSurface(
-    surfaceRelief(mat, "facT.rgb", "1.0 - glassK", 0.045),
+    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - foliageK)", 0.045),
     "concrete_floor_02",
     "vWPos",
     "(1.0 - glassK) * step(0.5, vFac.z)",
@@ -446,6 +450,7 @@ export const CityScene = memo(function CityScene({
   const mats = useMemo(
     () => ({
       facade: facadeMaterial(nightK, darkK, lightH),
+      depth: foliageDepthMaterial(),
       glow: poweredBasic(
         new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
         "city-glow-pw",
@@ -685,7 +690,15 @@ export const CityScene = memo(function CityScene({
       </mesh>
       {built.chunks.map((c, i) => (
         <group key={i}>
-          {c.main && <mesh geometry={c.main} material={mats.facade} castShadow receiveShadow />}
+          {c.main && (
+            <mesh
+              geometry={c.main}
+              material={mats.facade}
+              customDepthMaterial={mats.depth}
+              castShadow
+              receiveShadow
+            />
+          )}
           {c.detail && (
             <mesh
               ref={(m) => {
@@ -693,6 +706,7 @@ export const CityScene = memo(function CityScene({
               }}
               geometry={c.detail}
               material={mats.facade}
+              customDepthMaterial={mats.depth}
               castShadow
               receiveShadow
             />

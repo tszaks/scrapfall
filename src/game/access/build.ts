@@ -220,26 +220,34 @@ function entrance(E: IGeo, GL: IGeo, SG: IGeo, PL: IGeo, b: AccessBuilding, pre:
   GL.box(hw + 0.03, hw + 0.07, y0 + 0.25, y0 + hh, -pd - 0.018, -pd, "b+d");
   if (elev) {
     // a canopy over the door, lit from below, carrying the ELEVATOR sign
-    const cw = hw + pw + 0.5;
+    const frontage = localRect(b, b.spec.footprint);
+    const cw = Math.max(hw + pw + 0.5, Math.min(4.8, -frontage.a0 - 0.3, frontage.a1 - 0.3));
     const cy0 = y0 + hh + 0.55;
-    const cd = 1.25;
+    const cd = 1.8;
     E.color("#1d1e22");
-    E.box(-cw, cw, cy0, cy0 + 0.42, -cd, -pd, "+d");
+    E.box(-cw, cw, cy0, cy0 + 0.22, -cd, -pd, "+d");
+    E.color("#535a5a");
+    E.box(-cw - 0.06, cw + 0.06, cy0 + 0.22, cy0 + 0.28, -cd - 0.06, -pd, "+d");
+    E.color("#928672");
+    for (let a = -cw + 0.12; a < cw - 0.12; a += 0.24)
+      E.box(a, Math.min(a + 0.18, cw - 0.08), cy0 - 0.022, cy0, -cd + 0.1, -pd, "t+d");
     GL.color("#fff0d0");
     for (const a of [-cw + 0.35, cw - 0.35]) GL.box(a - 0.12, a + 0.12, cy0 - 0.012, cy0, -cd + 0.25, -cd + 0.5, "t");
     GL.box(-cw + 0.15, cw - 0.15, cy0 - 0.012, cy0, -cd + 0.06, -cd + 0.12, "t");
     SG.color("#ffffff");
-    signD(SG, SIGN.ELEVATOR, 0, cy0 + 0.05, cy0 + 0.37, -cd - 0.018, Math.min(2 * cw - 0.2, 2.6), -1);
+    signD(SG, SIGN.ELEVATOR, 0, cy0 + 0.025, cy0 + 0.195, -cd - 0.018, Math.min(2 * cw - 0.2, 2.6), -1);
     // and on the canopy's ends
     SG.color("#ffffff");
     // a light pool on the sidewalk under the canopy
     PL.color("#ffc98a", 0.9);
     PL.quad([-2.6, y0 + 0.166, -0.1], [2.6, y0 + 0.166, -0.1], [2.6, y0 + 0.166, -3.6], [-2.6, y0 + 0.166, -3.6], 1, 1, [0, 0, 1, 1]);
   } else {
-    // stairs: a small hood and a backlit STAIRS sign on a backing plate
-    const cy0 = y0 + hh + 0.28;
+    // A cantilevered hood marks the usable stair entrance; no new sidewalk posts.
+    const cy0 = y0 + Math.max(3.1, hh + 0.28);
     E.color("#2b3036");
-    E.box(-hw - 0.45, hw + 0.45, cy0, cy0 + 0.14, -0.6, -pd, "+d");
+    E.box(-hw - 0.7, hw + 0.7, cy0, cy0 + 0.16, -1.1, -pd, "+d");
+    E.color("#747c7e");
+    E.box(-hw - 0.76, hw + 0.76, cy0 + 0.16, cy0 + 0.21, -1.16, -pd, "+d");
     GL.color("#e6fff0");
     GL.box(-hw, hw, cy0 - 0.02, cy0, -0.45, -0.3, "t");
     E.color("#16241c");
