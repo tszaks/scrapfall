@@ -17,7 +17,7 @@ page.on("console", (m) => {
 });
 try {
   await page.goto(
-    `${process.env.BASE || "http://127.0.0.1:5294"}/game/?map=vice&seed=11&time=sunset&weather=sunny&debug=1&quality=high`,
+    `${process.env.BASE || "http://127.0.0.1:5294"}/game/?map=vice&seed=11&time=${process.env.TIME || "sunset"}&weather=${process.env.WEATHER || "sunny"}&debug=1&quality=high`,
   );
   await page.getByRole("button", { name: /^start$/i }).click({ timeout: 90000 });
   await page.getByRole("button", { name: /enter arena/i }).click();

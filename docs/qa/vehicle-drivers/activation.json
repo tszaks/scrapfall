@@ -1,0 +1,137 @@
+{
+  "method": "Real Traffic caller; no driver override. Keyboard local entry/exit, then parked/remote ownership fixtures and actual vehicle damage path for wreck. Full co-op acceptance follows controller integration.",
+  "errors": [],
+  "checks": [
+    {
+      "name": "ambient",
+      "id": "city-3",
+      "owner": "",
+      "claimed": false,
+      "hp": 100,
+      "self": "host",
+      "driver": true,
+      "count": 3,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.71675881820147,
+        1.6,
+        -137.84778504118788
+      ]
+    },
+    {
+      "name": "local-entry",
+      "id": "city-3",
+      "owner": "host",
+      "claimed": true,
+      "hp": 100,
+      "self": "host",
+      "driver": false,
+      "count": 2,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.92918325928642,
+        1.9500000000000002,
+        -136
+      ]
+    },
+    {
+      "name": "local-exit",
+      "id": "city-3",
+      "owner": "",
+      "claimed": true,
+      "hp": 100,
+      "self": "host",
+      "driver": false,
+      "count": 2,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.67918325928642,
+        1.6,
+        -134.48891037517072
+      ]
+    },
+    {
+      "name": "remote-owner-fixture",
+      "id": "city-3",
+      "owner": "driver-fixture-remote",
+      "claimed": true,
+      "hp": 100,
+      "self": "host",
+      "driver": true,
+      "count": 3,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.67918325928642,
+        1.6,
+        -134.56124995510152
+      ]
+    },
+    {
+      "name": "remote-exit-fixture",
+      "id": "city-3",
+      "owner": "",
+      "claimed": true,
+      "hp": 100,
+      "self": "host",
+      "driver": false,
+      "count": 2,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.67918325928642,
+        1.6,
+        -134.57645857975476
+      ]
+    },
+    {
+      "name": "wreck",
+      "id": "city-3",
+      "owner": "",
+      "claimed": true,
+      "hp": 0,
+      "self": "host",
+      "driver": false,
+      "count": 2,
+      "parked": [
+        {
+          "parked": true,
+          "driver": false
+        }
+      ],
+      "camera": [
+        184.67918325928642,
+        1.6,
+        -134.57798781777845
+      ]
+    }
+  ],
+  "setup": {
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+    "car": "city-3"
+  },
+  "remoteClaim": true
+}
