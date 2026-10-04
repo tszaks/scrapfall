@@ -16,5 +16,4 @@ L2 or S first brakes forward movement to zero, then a continued hold eases into 
 
 ## Performance and remaining validation
 
-No performance improvement is claimed. The wider FOV and longer boom can expose more scene content, and seven world sweeps have a cost. Paired route sampling awaits the parent's quiet window. Existing driving physics performs nine static-body probes per 0.2 m movement substep, and guest snapshots update vehicle positions discretely; these are hypotheses, not measured causes. Physical-controller mapping belongs to the separate controller fix.
-
+No performance improvement is claimed. [Paired Metal route measurements](performance.md) show added CPU and rendering work under desktop contention. All six driving routes sustained motion; three early walking fixtures were blocked and are excluded. A corrected baseline walking comparison and direct CPU attribution remain outstanding. Independent review found no blocking correctness issue at `b038d4d`; CI and preview checks pass. Physical-controller mapping belongs to the separate controller fix.
