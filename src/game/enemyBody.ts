@@ -23,7 +23,8 @@
 // water edges and steep slopes remain climbable()'s job for both sides.
 import { blocked, boundaryBlocked, type Block } from "./level";
 import { groundY } from "./terrain";
-import { liveCars } from "./trafficCore";
+import { trafficDepth } from "./trafficCore";
+export { trafficDepth } from "./trafficCore";
 import { staticBody, staticCollisionReady, staticNear } from "./staticCollision";
 import { wheelSolid } from "./beach/wheelRide";
 import { FLYERS } from "./enemyKinds";
@@ -32,58 +33,6 @@ import { FLYERS } from "./enemyKinds";
 export type BodyRule = "walk" | "fly" | "ghost";
 export const bodyRule = (kind: string): BodyRule =>
   kind === "specter" ? "ghost" : FLYERS.has(kind) ? "fly" : "walk";
-
-/**
- * Deepest penetration of a standing capsule into any liveCar's box; 0 when clear.
- * The published oriented box decides — the rendered-mesh `contact` narrow phase
- * is for bullets: it only reports surface hits, so a body inside the hollow
- * shell or standing in rim air (wheel wells, bumper gaps) reads "free" and the
- * old walk-through comes straight back. A car's box IS its body for movement.
- */
-export function trafficDepth(
-  x: number,
-  z: number,
-  r: number,
-  feet: number,
-  height: number,
-): number {
-  let worst = 0;
-  for (let i = 0; i < liveCars.length; i++) {
-    const c = liveCars[i]!;
-    const base = c.base ?? 0;
-    if (feet >= c.h || feet + height <= base) continue;
-    const dx = x - c.x,
-      dz = z - c.z;
-    // Rotation can project a corner beyond the unrotated half-length.
-    const extentX = Math.abs(c.sin) * c.hl + Math.abs(c.cos) * c.hw;
-    const extentZ = Math.abs(c.cos) * c.hl + Math.abs(c.sin) * c.hw;
-    if (Math.abs(dx) > extentX + r || Math.abs(dz) > extentZ + r) continue;
-    const along = dx * c.sin + dz * c.cos;
-    const lat = dx * c.cos - dz * c.sin;
-    const inL = c.hl - Math.abs(along),
-      inW = c.hw - Math.abs(lat);
-    let d: number;
-    if (inL >= 0 && inW >= 0) d = r + Math.min(inL, inW);
-    else {
-      const gap = Math.hypot(Math.max(-inL, 0), Math.max(-inW, 0));
-      if (gap >= r) continue;
-      d = r - gap;
-    }
-    const b = c.bounds;
-    if (
-      b &&
-      (x + r <= b.min.x ||
-        x - r >= b.max.x ||
-        z + r <= b.min.z ||
-        z - r >= b.max.z ||
-        feet >= b.max.y ||
-        feet + height <= b.min.y)
-    )
-      continue;
-    if (d > worst) worst = d;
-  }
-  return worst;
-}
 
 /**
  * The escape budget for a body already overlapped by a car (a bad spawn, a
