@@ -1,4 +1,4 @@
-import { quality } from "../quality";
+import { prepareDetailGeometry } from "../environment/detailQuality";
 // Snow-laden spruce for Whiteout Pass: one near model (jagged drooping tiers, snow on
 // every tier, a visible trunk) and one far model (two cones), both unit-height, drawn as
 // instanced meshes per chunk so the whole forest costs a couple of dozen draw calls.
@@ -113,10 +113,11 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
   if (trunkOnly) return toGeo(b);
   // Open, irregular branch whorls. Snow rests on individual boughs, not solid cones.
   // Stay inside the old crown bounds so ski routes and trunk collision do not change.
-  const low = quality().tier === "low";
-  const n = low ? 6 : narrow ? 9 : 8;
+  const n = narrow ? 9 : 8;
+  const highDetail: [number, number][] = [];
   const rBase = narrow ? 0.14 : 0.18;
   for (let level = 0; level < n; level++) {
+    const detailStart = b.pos.length / 3;
     const t = level / n;
     const y = 0.11 + t * 0.76;
     for (let arm = 0; arm < 7; arm++) {
@@ -124,8 +125,9 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
       const r = rBase * (1 - t * 0.82) * (0.86 + 0.14 * Math.sin(arm * 7 + level * 3));
       const dx = Math.cos(a),
         dz = Math.sin(a);
-      for (let twig = 0; twig < (low ? 2 : 3); twig++) {
-        const f = 0.15 + twig * (low ? 0.44 : 0.28);
+      for (let twig = 0; twig < 3; twig++) {
+        const twigStart = b.pos.length / 3;
+        const f = 0.15 + twig * 0.28;
         const width = r * (1 - f) * 0.62;
         const cy = y + Math.sin(f * Math.PI) * r * 0.2 - f * r * 0.18;
         const root = [dx * r * f, cy, dz * r * f];
@@ -158,8 +160,11 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
           RIM2,
           RIM,
         );
+        if (twig === 1) highDetail.push([twigStart, b.pos.length / 3 - twigStart]);
       }
     }
+    if (narrow ? level % 3 === 1 : level === 1 || level === 5)
+      highDetail.push([detailStart, b.pos.length / 3 - detailStart]);
   }
   // snowy leader at the top
   tier(b, 0.9, rBase * 0.12, 4, 0.3, false, 0.9);
@@ -176,7 +181,9 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
       SNOWC,
     );
   }
-  return toGeo(b);
+  const geometry = toGeo(b);
+  prepareDetailGeometry(geometry, highDetail);
+  return geometry;
 }
 
 /** far spruce: three snow shelves over short dark fringes, a fraction of the near cost */
