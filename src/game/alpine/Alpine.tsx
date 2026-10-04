@@ -1,3 +1,5 @@
+import { scannedSurface } from "../environment/scannedSurface";
+import { surfaceRelief } from "../environment/surfaceRelief";
 import { matchEnvironment } from "../matchEnvironment";
 import { registerStaticGeometry, registerStaticInstances } from "../staticCollision";
 import { shelterUniforms, SHELTER_GLSL } from "../structures/weather";
@@ -36,7 +38,7 @@ import { alpine, tickAlpine } from "./weather";
 
 const CHUNK = 200;
 const DETAIL_RANGE = 280;
-const TREE_NEAR = 105;
+const TREE_NEAR = 80;
 const MAX_NEAR = 2200;
 
 // ---------------------------------------------------------------------------------------
@@ -300,7 +302,21 @@ if (aLayer == ${T.snow}.0) {
       );
   };
   mat.customProgramCacheKey = () => "alpine-facade-v1";
-  return mat;
+  scannedSurface(
+    mat,
+    "wood_planks",
+    "vAWorld",
+    "float(aLayer == 1.0 || aLayer == 2.0 || aLayer == 9.0)",
+    2.0,
+  );
+  return scannedSurface(
+    surfaceRelief(mat, "aTex.rgb", "aWin ? 1.0 - aMask : 1.0", 0.045),
+    "concrete_floor_02",
+    "vAWorld",
+    "float(aLayer == 3.0 || aLayer == 4.0 || aLayer == 8.0)",
+    3.0,
+    0.45,
+  );
 }
 
 /** the snow itself: packed paths, groomed pistes, ice, rock, forest floor, far forest */
@@ -428,7 +444,7 @@ normal = normalize(normal - (viewMatrix * vec4(aBump.x, 0.0, aBump.y, 0.0)).xyz 
     withFog(sh as unknown as Shader);
   };
   mat.customProgramCacheKey = () => "alpine-terrain-v3";
-  return mat;
+  return scannedSurface(mat, "snow_02", "vAWorld", "(1.0 - aIce) * (1.0 - rock)", 5.0, 0.7);
 }
 
 function treeMaterial() {

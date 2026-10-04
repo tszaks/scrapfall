@@ -1139,6 +1139,21 @@ function church(k: Kit, b: ABld) {
       lface(g, F, lx, a, lx, bb, y + 2.4, y + 6.8, [0, 0, 1, 1]);
     }
   }
+  // Stone pilasters divide the nave into structural bays. All sit against the existing
+  // wall; keep their bases above ankle height and out of door approaches.
+  g.mat(T.stone, 0, 0).col("#b9b3a5");
+  for (const side of [-1, 1]) {
+    const x = side < 0 ? -0.08 : W + 0.08;
+    for (let z = 0.5; z < D; z += 4.2) {
+      lbox(g, F, x, z, y + 1, 0.22, wallH - 1, 0.48, false);
+      lbox(g, F, x, z, y + wallH - 0.3, 0.32, 0.25, 0.66, false);
+    }
+    // Window sills cast a thin, real shadow below each arched pane.
+    for (let z = 3; z < D - 2; z += 4.2) lbox(g, F, x, z, y + 2.24, 0.32, 0.16, 1.85, false);
+    g.mat(T.metal, 0, 0).col("#737b7c");
+    lbox(g, F, x, D / 2, y + wallH - 0.15, 0.16, 0.13, D, false);
+    g.mat(T.stone, 0, 0).col("#b9b3a5");
+  }
   const tanP = Math.tan(0.9);
   const wallTop = y + wallH;
   const ridge = wallTop + (W / 2) * tanP;

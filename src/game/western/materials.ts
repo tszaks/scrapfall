@@ -1,3 +1,5 @@
+import { scannedSurface } from "../environment/scannedSurface";
+import { surfaceRelief } from "../environment/surfaceRelief";
 // Shared materials and skies for Dry Gulch: the facade material every building, prop,
 // rock face, train car and barricade draws with, and the sky behind the town.
 import * as THREE from "three";
@@ -200,7 +202,15 @@ totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.66, 0.95) * 0.3 * rockF
       );
   };
   mat.customProgramCacheKey = () => "western-facade-v7";
-  return mat;
+  scannedSurface(mat, "sand_01", "vWp", "float(vFac.x == 22.0 || vFac.x == 23.0)", 4.0, 0.65);
+  return scannedSurface(
+    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - rockFill)", 0.065),
+    "wood_planks",
+    "vWp",
+    "(1.0 - glassK) * (1.0 - step(2.0, vFac.x) + float(vFac.x == 8.0 || vFac.x == 9.0 || vFac.x == 16.0 || vFac.x == 18.0))",
+    2.0,
+    0.75,
+  );
 }
 
 /** the sky behind Dry Gulch: the painted sunset (sun low in the west) or the starry night */

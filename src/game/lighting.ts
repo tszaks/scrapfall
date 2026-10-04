@@ -129,7 +129,7 @@ export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
         sky: "#161a2a",
         fog: [120, 1650],
         ...haze("#1c1f30", "#2a2640", 0.5),
-        hemi: ["#7088d0", "#3a3040", 0.75],
+        hemi: ["#8295ac", "#373d43", 0.65],
         sun: { color: "#a8bcff", intensity: 0.5, pos: [-45, 85, -30] },
         ambient: 0.22,
         ambientColor: "#9fb0e0",
@@ -142,10 +142,10 @@ export function worldLook(theme: Theme, time: TimeOfDay, arena: number): Look {
       sky: away,
       fog: [60, 1450],
       ...haze(away, horizonHex(CITY_SUNSET, true), 0.95),
-      hemi: ["#8a86d8", "#7a4c44", 0.95],
-      sun: { color: "#ffa257", intensity: 3.4, pos: [0, 0, 0] },
+      hemi: ["#b6c4d0", "#746c60", 0.78],
+      sun: { color: "#ffcf9c", intensity: 3.1, pos: [0, 0, 0] },
       ambient: 0.1,
-      ambientColor: "#c8a0c8",
+      ambientColor: "#b6bec8",
       camFar: 1600,
     };
   }

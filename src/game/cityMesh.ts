@@ -1,3 +1,4 @@
+import { broadleafCrown } from "./environment/foliage";
 import { facadePieces } from "./structures/facade";
 import type { Structure } from "./structures/plan";
 // Turns the pure city layout into merged geometry, one set of meshes per 150 m chunk:
@@ -162,7 +163,7 @@ const AWNING = [
   "#8a3a6a",
 ];
 const NEON = ["#ff4fa0", "#3affd8", "#ffe14a", "#9a6aff", "#ff7a3a", "#4fd0ff"];
-const TREE_T = ["#4f7a34", "#5a8a3a", "#3f6a2c", "#6a9044", "#48763a", "#5f7f30"];
+const TREE_T = ["#566b48", "#647951", "#405d42", "#73835c", "#4b6850", "#607148"];
 
 const _tint = new THREE.Color();
 const hex = (c: string, k = 1) => _tint.set(c).multiplyScalar(k).getHex();
@@ -2002,35 +2003,7 @@ function templates(): Tmpls {
       g.cyl(0, 0, 0, 0.17, 3.4, 6, false, 0.12);
     }),
     canopy: t((g) => {
-      const ico = new THREE.IcosahedronGeometry(1, 0);
-      g.col("#ffffff");
-      g.add(
-        ico,
-        new THREE.Matrix4().compose(
-          new THREE.Vector3(0, 5, 0),
-          new THREE.Quaternion(),
-          new THREE.Vector3(2.3, 1.9, 2.3),
-        ),
-      );
-      g.col("#e8e8e8");
-      g.add(
-        ico,
-        new THREE.Matrix4().compose(
-          new THREE.Vector3(0.9, 4.2, 0.5),
-          new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 0.7, 0)),
-          new THREE.Vector3(1.6, 1.4, 1.6),
-        ),
-      );
-      g.col("#d8d8d8");
-      g.add(
-        ico,
-        new THREE.Matrix4().compose(
-          new THREE.Vector3(-0.8, 4.4, -0.6),
-          new THREE.Quaternion().setFromEuler(new THREE.Euler(0.2, 1.7, 0.3)),
-          new THREE.Vector3(1.7, 1.5, 1.7),
-        ),
-      );
-      ico.dispose();
+      broadleafCrown(g, [0, 4.7, 0], [2.5, 2, 2.5], "#d8dfce");
     }),
     bench: t((g) => {
       g.col("#7a5234");

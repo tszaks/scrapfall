@@ -3379,18 +3379,27 @@ function templates() {
     boxC(d, WL.PAINT, 0, 0.65, 0, 0.18, 0.06, 0.18);
   });
   make("bush", (d) => {
-    // sagebrush / creosote: a clump of grey-green blobs
+    // Sagebrush: soft normals and crowns rooted into the soil, not faceted floating rocks.
     for (let i = 0; i < 5; i++) {
       d.col(pick(["#8a8a62", "#7a8058", "#9a9468", "#6e7650"], r));
       const x = (r() - 0.5) * 0.9;
       const z = (r() - 0.5) * 0.9;
       const rad = 0.25 + r() * 0.3;
       const ico = new THREE.IcosahedronGeometry(rad, 0);
+      const normals = ico.getAttribute("normal");
+      const positions = ico.getAttribute("position");
+      for (let v = 0; v < positions.count; v++) {
+        const x = positions.getX(v),
+          y = positions.getY(v),
+          z = positions.getZ(v);
+        const length = Math.hypot(x, y, z);
+        normals.setXYZ(v, x / length, y / length, z / length);
+      }
       d.mat(WL.PAINT);
       d.add(
         ico,
         new THREE.Matrix4()
-          .makeTranslation(x, rad * 0.8, z)
+          .makeTranslation(x, rad * 0.64, z)
           .multiply(new THREE.Matrix4().makeScale(1, 0.75, 1)),
       );
       ico.dispose();

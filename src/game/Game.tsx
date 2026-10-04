@@ -7398,7 +7398,7 @@ function World({
         onDone={() => onWarm(buildN)}
       />
       <WarmKinds enemies={enemies} theme={theme} />
-      <Structures seed={seed} />
+      <Structures seed={seed} realism={layoutOf(theme) !== "nuketown"} />
       {/* Fixed match lighting (timeOfDay.ts / TimeScene.tsx). */}
       <TimeDriver theme={theme} arena={ARENA} />
       <TimeLights ownSun={!!big} ownFog={!!alpineMap || isBeach(city)} />

@@ -1,3 +1,4 @@
+import { prepareScans } from "./environment/scannedSurface";
 // The world build, staged: the same steps the Game memo used to run synchronously,
 // now an async pipeline that returns control to the event loop between phases and
 // pumps the map generators as coroutines (they `yield` at safe points — see
@@ -71,6 +72,8 @@ export async function buildWorld(
   // in-world blockades (soloBounds.ts) and the rest stays on screen as backdrop. The alpine
   // and beach maps seal their own solo squares inside their generators.
   const mode = layoutOf(theme);
+  await prepareScans(mode);
+  if (cancelled()) return null;
   configureEnvironment(seed, !coop);
   const sealed = mode === "city" || mode === "western";
   if (sealed) setArenaSize(CITY_COOP, 2, coop ? CITY_COOP / 2 : soloHalf(CITY_COOP / 2));

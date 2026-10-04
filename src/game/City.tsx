@@ -1,3 +1,5 @@
+import { scannedSurface } from "./environment/scannedSurface";
+import { surfaceRelief } from "./environment/surfaceRelief";
 import { Fountains } from "./Fountains";
 import { registerStaticGeometry } from "./staticCollision";
 // Renders the "city" map from the merged chunk geometry built in cityMesh.ts.
@@ -289,7 +291,14 @@ if (uWet > 0.0) cityWet(diffuseColor, roughnessFactor, totalEmissiveRadiance, no
       );
   };
   mat.customProgramCacheKey = () => "city-facade-v4";
-  return mat;
+  return scannedSurface(
+    surfaceRelief(mat, "facT.rgb", "1.0 - glassK", 0.045),
+    "concrete_floor_02",
+    "vWPos",
+    "(1.0 - glassK) * step(0.5, vFac.z)",
+    3.0,
+    0.42,
+  );
 }
 
 /** a tileable ripple normal map (value-noise height field, several octaves) */

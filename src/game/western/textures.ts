@@ -1048,9 +1048,9 @@ const PAINT: Record<number, (P: Painter) => void> = {
       g.addColorStop(1, "rgba(70,45,25,0)");
       rect(d, g, 0, y * TEX - 10, TEX, 20);
     }
-    // hoof prints and boot prints
-    for (let i = 0; i < 220; i++) {
-      d.fillStyle = "rgba(60,38,20,0.35)";
+    // Faint, sparse impressions in packed soil; dense dark dots looked painted on.
+    for (let i = 0; i < 85; i++) {
+      d.fillStyle = "rgba(60,38,20,0.14)";
       d.beginPath();
       d.ellipse(r() * TEX, r() * TEX, 3 + r() * 2, 2.5 + r() * 2, r() * 3, 0, Math.PI * 2);
       d.fill();

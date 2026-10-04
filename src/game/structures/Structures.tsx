@@ -1,3 +1,5 @@
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { scannedSurface } from "../environment/scannedSurface";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Model, artMaterial, SURF } from "../art/kit";
@@ -5,7 +7,7 @@ import { structureList } from "./world";
 import type { Volume } from "./plan";
 
 /** Two static batches per map: detailed opaque rooms and their real glass panes. */
-export function Structures({ seed }: { seed: number }) {
+export function Structures({ seed, realism = true }: { seed: number; realism?: boolean }) {
   const built = useMemo(() => {
     const m = new Model(),
       g = new Model();
@@ -21,13 +23,61 @@ export function Structures({ seed }: { seed: number }) {
         d,
         [(v.x0 + v.x1) / 2, (v.y0 + v.y1) / 2, (v.z0 + v.z1) / 2],
         v.color,
-        v.glow ? SURF.glow : [0.8, 0, 0.15],
-        { bevel: 0 },
+        v.glow
+          ? SURF.glow
+          : [0.8, 0, realism ? 0.02 : 0.15, realism && h > 1.5 && Math.max(w, d) > 2 ? 1 : 0],
+        {
+          bevel:
+            realism && !v.glass && h > 1.5 && Math.max(w, d) > 2
+              ? Math.min(0.015, w * 0.05, d * 0.05)
+              : 0,
+        },
       );
     };
     for (const p of structureList()) {
       for (const v of p.solids) draw(v);
       for (const v of p.decor) draw(v);
+      // Exterior service grilles break up blank wall bays. They sit on solid wall pieces,
+      // never across an opening, and project only 4 cm beyond the physical wall.
+      if (realism)
+        for (const v of p.solids) {
+          if (v.hidden || v.glass || v.glow || v.y1 - v.y0 < 3) continue;
+          const alongX = v.x1 - v.x0 > v.z1 - v.z0;
+          if (Math.max(v.x1 - v.x0, v.z1 - v.z0) < 6) continue;
+          const edge = alongX
+            ? Math.abs(v.z0 - p.bounds.z0) < 0.3
+              ? v.z0 - 0.025
+              : Math.abs(v.z1 - p.bounds.z1) < 0.3
+                ? v.z1 + 0.025
+                : null
+            : Math.abs(v.x0 - p.bounds.x0) < 0.3
+              ? v.x0 - 0.025
+              : Math.abs(v.x1 - p.bounds.x1) < 0.3
+                ? v.x1 + 0.025
+                : null;
+          if (edge === null) continue;
+          const x = alongX ? (v.x0 + v.x1) / 2 : edge;
+          const z = alongX ? edge : (v.z0 + v.z1) / 2;
+          const y = v.y0 + 2.5;
+          m.box(
+            alongX ? 0.8 : 0.055,
+            0.55,
+            alongX ? 0.055 : 0.8,
+            [x, y, z],
+            "#343a3b",
+            SURF.darkSteel,
+            { bevel: 0.015 },
+          );
+          for (let i = 0; i < 5; i++)
+            m.box(
+              alongX ? 0.72 : 0.065,
+              0.035,
+              alongX ? 0.065 : 0.72,
+              [x, y - 0.2 + i * 0.1, z],
+              "#7b8382",
+              SURF.steel,
+            );
+        }
       for (const rail of p.rails ?? []) {
         const a = new THREE.Vector3(...rail.a),
           b = new THREE.Vector3(...rail.b),
@@ -61,10 +111,24 @@ export function Structures({ seed }: { seed: number }) {
         }
       }
     }
+    const rawSolid = m.build();
+    // Reuse identical corners in these static rooms instead of submitting them once
+    // per triangle. Collision uses the room plan, so indexing cannot change walkability.
+    const solid = realism ? mergeVertices(rawSolid) : rawSolid;
+    if (realism) rawSolid.dispose();
     return {
-      solid: m.build(),
+      solid,
       glass: g.build(),
-      mat: artMaterial({ wear: 0.08 }),
+      mat: realism
+        ? scannedSurface(
+            artMaterial({ wear: 0.35 }),
+            "concrete_floor_02",
+            "vArtPos",
+            "vSurf.w",
+            3.0,
+            0.45,
+          )
+        : artMaterial({ wear: 0.08 }),
       glassMat: new THREE.MeshStandardMaterial({
         vertexColors: true,
         transparent: true,
@@ -74,7 +138,7 @@ export function Structures({ seed }: { seed: number }) {
         depthWrite: false,
       }),
     };
-  }, [seed]);
+  }, [seed, realism]);
   useEffect(
     () => () => {
       built.solid.dispose();
