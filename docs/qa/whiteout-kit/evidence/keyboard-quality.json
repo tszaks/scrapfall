@@ -1,0 +1,168 @@
+{
+  "errors": [],
+  "controls": [
+    {
+      "key": "w",
+      "before": {
+        "p": [
+          10,
+          1.8594903111457826,
+          79
+        ],
+        "shots": 0
+      },
+      "after": {
+        "p": [
+          5.897074418334239,
+          1.856947450012917,
+          72.304703047632
+        ],
+        "shots": 8
+      },
+      "travel": 7.8524518215061665
+    },
+    {
+      "key": "a",
+      "before": {
+        "p": [
+          5.897074418334239,
+          1.856947450012917,
+          72.304703047632
+        ],
+        "shots": 8
+      },
+      "after": {
+        "p": [
+          -0.795364497342031,
+          1.8821513482351584,
+          76.40705435932601
+        ],
+        "shots": 12
+      },
+      "travel": 7.849714958176234
+    },
+    {
+      "key": "s",
+      "before": {
+        "p": [
+          -0.795364497342031,
+          1.8821513482351584,
+          76.40705435932601
+        ],
+        "shots": 12
+      },
+      "after": {
+        "p": [
+          3.2930215954061657,
+          2.530081022984252,
+          82.35138829486178
+        ],
+        "shots": 18
+      },
+      "travel": 7.214569064091007
+    },
+    {
+      "key": "d",
+      "before": {
+        "p": [
+          3.2930215954061657,
+          2.530081022984252,
+          82.35138829486178
+        ],
+        "shots": 18
+      },
+      "after": {
+        "p": [
+          9.984817715648498,
+          1.889466431385497,
+          78.24873792599828
+        ],
+        "shots": 24
+      },
+      "travel": 7.849323242421991
+    }
+  ],
+  "quality": [
+    {
+      "tier": "LOW",
+      "quality": {
+        "dpr": 1,
+        "tier": "low",
+        "vsync": 11.05,
+        "miss": 0,
+        "cpu": 1,
+        "targetFps": 60,
+        "targetMet": true,
+        "recovery": "idle",
+        "log": []
+      },
+      "n": 13,
+      "full": 724335,
+      "drawn": 358587,
+      "changed": 0,
+      "wrongRange": 0,
+      "sameScene": true
+    },
+    {
+      "tier": "HIGH",
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 10.11,
+        "miss": 0.018,
+        "cpu": 0.9,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      },
+      "n": 13,
+      "full": 724335,
+      "drawn": 724335,
+      "changed": 0,
+      "wrongRange": 0,
+      "sameScene": true
+    },
+    {
+      "tier": "LOW",
+      "quality": {
+        "dpr": 1,
+        "tier": "low",
+        "vsync": 10.11,
+        "miss": 0.018,
+        "cpu": 0.9,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      },
+      "n": 13,
+      "full": 724335,
+      "drawn": 358587,
+      "changed": 0,
+      "wrongRange": 0,
+      "sameScene": true
+    },
+    {
+      "tier": "HIGH",
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 10.11,
+        "miss": 0.018,
+        "cpu": 0.9,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      },
+      "n": 13,
+      "full": 724335,
+      "drawn": 724335,
+      "changed": 0,
+      "wrongRange": 0,
+      "sameScene": true
+    }
+  ],
+  "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)"
+}

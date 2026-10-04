@@ -1,0 +1,28 @@
+[
+  {
+    "role": "baseline",
+    "source": "/tmp/scrapfall-whiteout-main43",
+    "productionSourceCommit": "c5972c4e33af1023348275e947c1af60fb1c483e",
+    "port": 5296,
+    "alpineAssets": [
+      {
+        "name": "AlpineMap-CYBL882a.js",
+        "localSHA256": "1cf9b934ae97f64548e6dd009664b4dbc0cdf88845f98837b5e1f621e72a3d0e",
+        "servedSHA256": "1cf9b934ae97f64548e6dd009664b4dbc0cdf88845f98837b5e1f621e72a3d0e"
+      }
+    ]
+  },
+  {
+    "role": "candidate",
+    "source": "/Users/tyler/Projects/scrapfall-realism-oct4",
+    "productionSourceCommit": "2279a5d6ebd0fba89780b9795b34b4542267f6e1",
+    "port": 5294,
+    "alpineAssets": [
+      {
+        "name": "AlpineMap-4U-FWTFf.js",
+        "localSHA256": "7437d4269712b36ed6da3bc08d99f7eb0fca8fc50ab4473cd5b17fc8176e0de0",
+        "servedSHA256": "7437d4269712b36ed6da3bc08d99f7eb0fca8fc50ab4473cd5b17fc8176e0de0"
+      }
+    ]
+  }
+]
