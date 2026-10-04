@@ -1,3 +1,4 @@
+import { foliageDepthMaterial } from "../environment/foliageDepth";
 import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
 import { surfaceRelief } from "../environment/surfaceRelief";
@@ -400,6 +401,7 @@ const BeachScene = memo(function BeachScene({
   const mats = useMemo(
     () => ({
       facade: facadeMaterial(nightK, darkK),
+      depth: foliageDepthMaterial(),
       ground: withEnvMix(groundMaterial()),
       glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
       signs: new THREE.MeshBasicMaterial({
@@ -620,7 +622,13 @@ const BeachScene = memo(function BeachScene({
         <group key={i}>
           {c.ground && <mesh geometry={c.ground} material={mats.ground} receiveShadow />}
           {c.main && (
-            <mesh geometry={c.main} material={mats.facade} castShadow={!c.far} receiveShadow />
+            <mesh
+              geometry={c.main}
+              material={mats.facade}
+              customDepthMaterial={mats.depth}
+              castShadow={!c.far}
+              receiveShadow
+            />
           )}
           {c.detail && (
             <mesh
@@ -629,6 +637,7 @@ const BeachScene = memo(function BeachScene({
               }}
               geometry={c.detail}
               material={mats.facade}
+              customDepthMaterial={mats.depth}
               castShadow
               receiveShadow
             />

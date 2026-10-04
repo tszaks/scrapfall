@@ -33,3 +33,7 @@ dist-ssr
 .vercel
 
 /artifacts/
+
+# Local visual and performance verification
+/output/
+/.playwright-cli/

@@ -1,3 +1,4 @@
+import { concreteFinish } from "./concreteFinish";
 import { registerStaticGeometry, registerStaticInstances } from "../staticCollision";
 // Draws the access buildings: the merged exterior (entrances, penthouses, rooftop props),
 // and per building the interiors (lobby, vestibule, stairwell), the elevator car and every
@@ -93,7 +94,7 @@ function makeMats() {
     base: new THREE.MeshBasicMaterial({ vertexColors: true }),
     steel: new THREE.MeshBasicMaterial({ vertexColors: true, map: steelTexture() }),
     wood: new THREE.MeshBasicMaterial({ vertexColors: true, map: woodTexture() }),
-    conc: new THREE.MeshBasicMaterial({ vertexColors: true, map: concreteTexture() }),
+    conc: concreteFinish(new THREE.MeshBasicMaterial({ vertexColors: true, map: concreteTexture() })),
     iglow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
     isign: new THREE.MeshBasicMaterial({
       vertexColors: true,

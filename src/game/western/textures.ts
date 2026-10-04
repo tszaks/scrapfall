@@ -136,14 +136,15 @@ function grain(P: Painter, amt: number, blot = 0) {
   }
 }
 
-/** paint gone: ragged patches where the whitewash has flaked off the bare grey boards,
+/** Paint wear is centimetre scale within a facade atlas spanning 12+ metres.
+ * Paint gone: ragged patches where the whitewash has flaked off the bare grey boards,
  * a lighter lip of lifting paint round each, and rust-brown drips below nail heads */
 function peel(c: Ctx, x: number, y: number, w: number, h: number, r: () => number, n: number) {
   for (let i = 0; i < n; i++) {
     const cx = x + r() * w;
     const cy = y + r() * h;
-    const rw = 6 + r() * 26;
-    const rh = 3 + r() * 10;
+    const rw = 2 + r() * 10;
+    const rh = 1 + r() * 3;
     c.beginPath();
     const pts = 9;
     for (let k = 0; k <= pts; k++) {
@@ -155,14 +156,14 @@ function peel(c: Ctx, x: number, y: number, w: number, h: number, r: () => numbe
       else c.lineTo(px, py);
     }
     c.closePath();
-    c.fillStyle = rgba(128 + r() * 20, 116 + r() * 16, 100 + r() * 12, 0.85);
+    c.fillStyle = rgba(128 + r() * 20, 116 + r() * 16, 100 + r() * 12, 0.55);
     c.fill();
-    c.strokeStyle = rgba(255, 250, 240, 0.35);
+    c.strokeStyle = rgba(255, 250, 240, 0.18);
     c.lineWidth = 1;
     c.stroke();
     // bare wood grain inside
     for (let g = 0; g < 3; g++)
-      rect(c, rgba(90, 78, 64, 0.35), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
+      rect(c, rgba(90, 78, 64, 0.22), cx - rw * 0.8, cy - rh * 0.5 + r() * rh, rw * 1.6, 1);
   }
   // rust drips from nail heads
   for (let i = 0; i < n * 1.5; i++) {
@@ -199,11 +200,11 @@ function clapboard(
   for (let i = 0; i < (w * h) / 5000; i++)
     rect(
       c,
-      rgba(140, 125, 105, 0.35 + r() * 0.3),
+      rgba(140, 125, 105, 0.14 + r() * 0.14),
       x + r() * w,
       y + r() * h,
-      4 + r() * 16,
-      2 + r() * 4,
+      1 + r() * 5,
+      0.5 + r() * 1.5,
     );
 }
 

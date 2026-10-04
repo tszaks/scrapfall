@@ -38,8 +38,11 @@ const report = {
   dpr: 2,
   quality: process.env.QUALITY || "high",
   extra: process.env.EXTRA || "",
+  foliage: process.env.FOLIAGE === "1",
+  weather: process.env.WEATHER || "rain",
   wave: Number(process.env.WAVE || 1),
   seconds,
+  cpuThrottle: Number(process.env.CPU_THROTTLE || 1),
   repeats,
   soak: process.env.SOAK === "1",
   method: `Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
@@ -52,7 +55,15 @@ save();
 const browserType = engine === "webkit" ? webkit : chromium;
 const b = await browserType.launch({
   headless: true,
-  ...(engine === "chromium" ? { args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"] } : {}),
+  ...(engine === "chromium"
+    ? {
+        args: [
+          "--disable-gpu-vsync",
+          "--disable-frame-rate-limit",
+          ...(process.platform === "darwin" ? ["--use-angle=metal", "--ignore-gpu-blocklist"] : []),
+        ],
+      }
+    : {}),
   ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}),
 });
 report.browserVersion = b.version();
@@ -65,6 +76,12 @@ try {
         deviceScaleFactor: 2,
       });
       const p = await context.newPage();
+      if (process.env.CPU_THROTTLE && engine === "chromium") {
+        const session = await context.newCDPSession(p);
+        await session.send("Emulation.setCPUThrottlingRate", {
+          rate: Number(process.env.CPU_THROTTLE),
+        });
+      }
       let row = { map, repeat, errors: [], consoleErrors: [] };
       await p.exposeFunction("__benchProgress", (progress) => {
         row.progress = progress;
@@ -105,11 +122,33 @@ try {
       try {
         const t0 = Date.now();
         await p.goto(
-          `${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=${map}&seed=11&weather=rain&quality=${report.quality}${process.env.EXTRA || ""}`,
+          `${process.env.BASE || "http://127.0.0.1:4173"}/game/?debug=1&map=${map}&seed=11&weather=${report.weather}&quality=${report.quality}${process.env.EXTRA || ""}`,
         );
         await startGame(p);
         await p.waitForFunction(() => window.__rs?.camera, null, { timeout: 120000 });
         row.navThroughMenuToSceneMs = Date.now() - t0;
+        if (report.foliage)
+          row.foliage = await p.evaluate(() => {
+            const r = __rs;
+            const trees = r.city.props
+              .filter((p) => p.k === "tree")
+              .sort(
+                (a, b) =>
+                  Math.hypot(a.x - r.camera.position.x, a.z - r.camera.position.z) -
+                  Math.hypot(b.x - r.camera.position.x, b.z - r.camera.position.z),
+              );
+            for (const tree of trees)
+              for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+                const x = tree.x + Math.cos(a) * 4,
+                  z = tree.z + Math.sin(a) * 4;
+                const y = r.groundAt(x, z);
+                if (!Number.isFinite(y) || r.bodyAt(x, z, y)) continue;
+                r.playtest.warp(x, y, z);
+                window.__foliageTarget = { x: tree.x, z: tree.z, y: y + 4.7 * (tree.s ?? 1) };
+                return { tree, start: [x, y, z] };
+              }
+            throw new Error("No walkable close-tree benchmark start");
+          });
         await p.waitForTimeout(10000);
         if (process.env.WAVE)
           await p.evaluate((n) => {
@@ -128,7 +167,13 @@ try {
             hud: document.body.innerText.slice(0, 500),
             camera: r.camera.position.toArray(),
             keys: r.keys.current,
-            renderer: r.gl.getContext().getParameter(r.gl.getContext().RENDERER),
+            renderer: (() => {
+              const gl = r.gl.getContext();
+              const ext = gl.getExtension("WEBGL_debug_renderer_info");
+              return ext
+                ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+                : gl.getParameter(gl.RENDERER);
+            })(),
             quality: window.__rsQuality,
             warm: window.__rsWarm,
             startupLong: window.__bm.startupLong,
@@ -147,10 +192,13 @@ try {
           await cdp.send("Profiler.start");
         }
         row.metrics = await p.evaluate(
-          async ({ secs, soak }) => {
+          async ({ secs, soak, foliage }) => {
             const r = __rs,
               bm = __bm;
             const ms = [],
+              warmMs = [],
+              shaderEvents = [],
+              frameHitches = [],
               renders = [],
               calls = [],
               triangles = [],
@@ -194,6 +242,7 @@ try {
             r.trigger.current = true;
             const startMemory = { ...r.gl.info.memory };
             const programsStart = r.gl.info.programs.length;
+            let previousPrograms = programsStart;
             await new Promise((resolve) => {
               function step(now) {
                 const elapsed = (now - start) / 1000;
@@ -210,7 +259,21 @@ try {
                       context.deleteQuery(q);
                     }
                 }
-                if (last) ms.push(now - last);
+                if (last) {
+                  ms.push(now - last);
+                  if (now - last > 50) frameHitches.push({ elapsed, ms: now - last });
+                  if (elapsed >= 10) warmMs.push(now - last);
+                }
+                const programs = r.gl.info.programs.length;
+                if (programs !== previousPrograms) {
+                  shaderEvents.push({
+                    elapsed,
+                    programs,
+                    delta: programs - previousPrograms,
+                    frameMs: last ? now - last : 0,
+                  });
+                  previousPrograms = programs;
+                }
                 last = now;
                 renders.push(renderTotal);
                 renderTotal = 0;
@@ -242,16 +305,26 @@ try {
                     Math.hypot(a.x - r.camera.position.x, a.z - r.camera.position.z) -
                     Math.hypot(b.x - r.camera.position.x, b.z - r.camera.position.z),
                 )[0];
+                if (foliage) target = window.__foliageTarget;
                 if (target) {
                   r.look.current.yaw = Math.atan2(
                     -(target.x - r.camera.position.x),
                     -(target.z - r.camera.position.z),
                   );
-                  r.look.current.pitch = 0;
+                  r.look.current.pitch = foliage
+                    ? Math.atan2(
+                        target.y - r.camera.position.y,
+                        Math.hypot(target.x - r.camera.position.x, target.z - r.camera.position.z),
+                      )
+                    : 0;
                 } else r.look.current.yaw += 0.02;
                 const phase = Math.floor(elapsed / 5) % 4;
                 for (const key of ["KeyW", "KeyA", "KeyS", "KeyD"]) r.keys.current.delete(key);
-                r.keys.current.add(["KeyW", "KeyA", "KeyS", "KeyD"][phase]);
+                r.keys.current.add(
+                  foliage
+                    ? ["KeyA", "KeyD"][Math.floor(elapsed / 3) % 2]
+                    : ["KeyW", "KeyA", "KeyS", "KeyD"][phase],
+                );
                 r.trigger.current = true;
                 r.ammo.current.pistol = 999;
                 r.invuln.current = 1e6;
@@ -279,7 +352,17 @@ try {
             const pct = (a, q) =>
               [...a].sort((a, b) => a - b)[Math.min(a.length - 1, Math.floor(a.length * q))];
             return {
+              measurementStart: start,
               programsStart,
+              shaderEvents,
+              frameHitches,
+              warmAfter10s: {
+                p95: pct(warmMs, 0.95),
+                p99: pct(warmMs, 0.99),
+                worst: Math.max(...warmMs),
+                over16_7: warmMs.filter((x) => x > 1000 / 60).length,
+                frames: warmMs.length,
+              },
               programsEnd: r.gl.info.programs.length,
               gpuTimerAvailable: !!timer,
               gpuRenderPassSamples: gpuMs.length,
@@ -290,6 +373,7 @@ try {
               p95: pct(ms, 0.95),
               p99: pct(ms, 0.99),
               worst: ms.reduce((a, b) => Math.max(a, b), 0),
+              over16_7: ms.filter((x) => x > 1000 / 60).length,
               over50: ms.filter((x) => x > 50).length,
               over25: ms.filter((x) => x > 25).length,
               frames: ms.length,
@@ -311,7 +395,7 @@ try {
               warm: window.__rsWarm,
             };
           },
-          { secs: seconds, soak: report.soak },
+          { secs: seconds, soak: report.soak, foliage: report.foliage },
         );
         if (cdp) {
           const prof = await cdp.send("Profiler.stop");

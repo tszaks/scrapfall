@@ -1,3 +1,4 @@
+import { facadeDepth } from "./environment/facadeDepth";
 import { broadleafCrown } from "./environment/foliage";
 import { facadePieces } from "./structures/facade";
 import type { Structure } from "./structures/plan";
@@ -59,6 +60,7 @@ type ChunkGeo = {
   z1: number;
   main: Geo;
   detail: Geo;
+  relief: Geo;
   glow: Geo;
   signs: Geo;
   pools: Geo;
@@ -70,6 +72,7 @@ export type ChunkMesh = {
   z1: number;
   main: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
+  relief: THREE.BufferGeometry | null;
   glow: THREE.BufferGeometry | null;
   signs: THREE.BufferGeometry | null;
   pools: THREE.BufferGeometry | null;
@@ -347,6 +350,7 @@ function outline(p: Part): P2[] {
 type Ctx = {
   main: Geo;
   detail: Geo;
+  relief: Geo;
   glow: Geo;
   signs: Geo;
   beacons: [number, number, number][];
@@ -1223,6 +1227,8 @@ function building(b: Bld, C: Ctx) {
           }
         : st;
     const top = massPart(C, p, pst, b, store);
+    if ((p.shape ?? "box") === "box")
+      facadeDepth(C.relief, outline(p), p.y0, p.y0 + p.h, pst, b.street, store, b.grandWing ? [b.grandWing] : []);
     tops.push({ ...top, p, i: pi });
     if (store && p.shape !== "cyl" && !b.access) shopfronts(C, outline(p), st, b, vols, pi);
     if (b.access) continue; // the access system dresses the entrance and the roof
@@ -2229,6 +2235,7 @@ export function* buildCityMeshes(city: CityLayout): Generator<void, CityMeshes, 
           z1: -E + (b + 1) * size,
           main: new Geo(),
           detail: new Geo(),
+          relief: new Geo(),
           glow: new Geo(),
           signs: new Geo(),
           pools: new Geo(),
@@ -2251,6 +2258,7 @@ export function* buildCityMeshes(city: CityLayout): Generator<void, CityMeshes, 
     return {
       main: ch.main,
       detail: ch.detail,
+      relief: ch.relief,
       glow: ch.glow,
       signs: ch.signs,
       beacons,
@@ -2386,7 +2394,7 @@ export function* buildCityMeshes(city: CityLayout): Generator<void, CityMeshes, 
   const out: ChunkMesh[] = [];
   for (const c of chunks) {
     yield;
-    verts += c.main.n + c.detail.n + c.glow.n + c.signs.n + c.pools.n;
+    verts += c.main.n + c.detail.n + c.relief.n + c.glow.n + c.signs.n + c.pools.n;
     out.push({
       x0: c.x0,
       z0: c.z0,
@@ -2394,13 +2402,14 @@ export function* buildCityMeshes(city: CityLayout): Generator<void, CityMeshes, 
       z1: c.z1,
       main: c.main.n ? c.main.build() : null,
       detail: c.detail.n ? c.detail.build() : null,
+      relief: c.relief.n ? c.relief.build() : null,
       glow: c.glow.n ? c.glow.build() : null,
       signs: c.signs.n ? c.signs.build("uv") : null,
       pools: c.pools.n ? c.pools.build("uv") : null,
     });
   }
   return {
-    chunks: out.filter((c) => c.main || c.detail || c.glow || c.signs || c.pools),
+    chunks: out.filter((c) => c.main || c.detail || c.relief || c.glow || c.signs || c.pools),
     beacons,
     lamps,
     drips,

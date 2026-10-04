@@ -204,7 +204,7 @@ totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.66, 0.95) * 0.3 * rockF
   mat.customProgramCacheKey = () => "western-facade-v7";
   scannedSurface(mat, "sand_01", "vWp", "float(vFac.x == 22.0 || vFac.x == 23.0)", 4.0, 0.65);
   return scannedSurface(
-    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - rockFill)", 0.065),
+    surfaceRelief(mat, "facT.rgb", "(1.0 - glassK) * (1.0 - rockFill)", 0.012),
     "wood_planks",
     "vWp",
     "(1.0 - glassK) * (1.0 - step(2.0, vFac.x) + float(vFac.x == 8.0 || vFac.x == 9.0 || vFac.x == 16.0 || vFac.x == 18.0))",

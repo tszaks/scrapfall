@@ -6,6 +6,7 @@
 // tall; geometry UVs count modules and storeys, so windows always land on real floors.
 //   day   RGB = albedo (walls near white, vertex colours tint them), A = glass (reflectivity)
 //   night RGB = lit-window colour,                                  A = window mask
+import { paintLeafSpray } from "./environment/leafSpray";
 import * as THREE from "three";
 import { drain, runSliced } from "./slice";
 
@@ -33,9 +34,10 @@ export const L = {
   panel: 12,
   ground: 13,
   paving: 14,
+  foliage: 15,
 } as const;
 export type Layer = (typeof L)[keyof typeof L];
-const LAYERS = 15;
+const LAYERS = 16;
 export const FACADE_LAYERS = LAYERS;
 /** rooms behind the windows (interiors.ts), per layer: -1 none, 0 offices, 1 homes, 2 shops */
 const ROOM_CATS: Record<number, number> = {
@@ -555,6 +557,7 @@ function* bakeFacadeArrays(): Generator<
     rect(n, "#000", 0, 0, TW, TH);
     rect(m, "#000", 0, 0, TW, TH);
     PAINT[layer]?.({ d, g, n, m, r: rng(101 + layer * 7919) });
+    if (layer === L.foliage) paintLeafSpray(d, g, TW, TH);
     const D = d.getImageData(0, 0, TW, TH).data;
     const G = g.getImageData(0, 0, TW, TH).data;
     const Nn = n.getImageData(0, 0, TW, TH).data;
