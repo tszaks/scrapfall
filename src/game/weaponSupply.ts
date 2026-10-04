@@ -44,8 +44,11 @@ export function beginReload(w: string, total: number) {
   const loaded = magazine(w, total);
   if (supply.remaining > 0 || loaded >= Math.min(MAGAZINE[w] ?? 12, total)) return false;
   supply.reloading = w;
-  supply.remaining = w === "minigun" ? 2.4 : w === "pistol" ? 1.1 : 1.6;
+  supply.remaining = reloadDuration(w);
   return true;
+}
+export function reloadDuration(w: string) {
+  return w === "minigun" ? 2.4 : w === "pistol" ? 1.1 : 1.6;
 }
 export function tickReload(dt: number, w: string, total: number) {
   if (supply.reloading && supply.reloading !== w) {

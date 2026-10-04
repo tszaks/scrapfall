@@ -1,0 +1,14 @@
+
+> scrapfall@1.0.6 smoke
+> node scripts/smoke.mjs
+
+PASS vice night
+PASS vice sunset
+PASS gulch night
+PASS gulch sunset
+PASS pier night
+PASS pier sunset
+PASS whiteout night
+PASS whiteout sunset
+
+all maps entered with 0 errors
