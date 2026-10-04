@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { readFile } from "node:fs/promises";
 import { rolldown } from "rolldown";
 
-// Synthetic API contract tests, not physical DualSense mapping evidence.
+// The first three tests use synthetic API contracts; the final test uses the
+// separately identified player capture and its confirmed label correction.
 const bundle = await rolldown({
   input: fileURLToPath(new URL("../src/game/input/gamepad.ts", import.meta.url)),
 });
@@ -91,4 +93,35 @@ test("invalid button values cannot poison throttle and disconnect clears held st
   assert.equal(f.rt, 0);
   assert.equal(f.down.some(Boolean), false);
   assert.equal(f.released[7], true);
+});
+
+test("captured Safari DualSense Edge values preserve the standard browser indices", async () => {
+  const fixture = JSON.parse(
+    await readFile(
+      new URL("./fixtures/dualsense-edge-safari26.5-bluetooth.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const p = pad(fixture.id);
+  p.mapping = fixture.mapping;
+  connected = [p];
+  for (const sample of fixture.samples) {
+    p.buttons = sample.buttons.map((value, i) => ({ value, pressed: sample.pressed[i] }));
+    p.axes = sample.axes;
+    const f = read();
+    assert.equal(f.type, "ps");
+    assert.equal(f.standard, true);
+    assert.deepEqual(
+      f.down,
+      sample.buttons.map((value, i) => value > (i === 6 || i === 7 ? 0.35 : 0.5)),
+      sample.label,
+    );
+    assert.deepEqual([f.lx, f.ly, f.rx, f.ry], sample.axes, sample.label);
+    assert.equal(f.lt, sample.buttons[6]);
+    assert.equal(f.rt, sample.buttons[7]);
+  }
+  // The player confirmed these two guided steps were mixed up in the original
+  // report; the fixture retains reportedLabel alongside the corrected label.
+  assert.equal(fixture.samples.find((s) => s.label === "Options").buttons[9], 1);
+  assert.equal(fixture.samples.find((s) => s.label === "Create").buttons[8], 1);
 });

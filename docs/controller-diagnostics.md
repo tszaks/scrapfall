@@ -8,7 +8,9 @@ Run `node scripts/controller-diagnostic.mjs` and open its loopback URL in the sa
 
 The report contains browser version, connection selected by the player, gamepad identifier/mapping, neutral values, and labeled raw button/axis samples. It does not read the game's saved bindings, inspect OS controller settings, or prove that the game's action routing is correct. Do not commit personal reports automatically. Use a reviewed, minimal fixture if a report establishes a mapping defect.
 
-The `scripts/gamepad.test.mjs` fixtures are synthetic API-contract tests, **not physical DualSense captures**. The trigger regression reproduces main `01f723efd9a18272e3a657869fe3ef54a34f395e`: `{ value: 0.2, pressed: true }` became `0.9`. The fix preserves the reported analog value. A browser's `pressed` threshold does not describe analog travel.
+The trigger fixtures in `scripts/gamepad.test.mjs` are synthetic API-contract tests, **not physical DualSense captures**. The trigger regression reproduces main `01f723efd9a18272e3a657869fe3ef54a34f395e`: `{ value: 0.2, pressed: true }` became `0.9`. The fix preserves the reported analog value. A browser's `pressed` threshold does not describe analog travel.
+
+The separately labeled `scripts/fixtures/dualsense-edge-safari26.5-bluetooth.json` is a minimal reduction of the player's October 4 physical capture: DualSense Edge Wireless Controller Extended Gamepad, Bluetooth, Safari 26.5, standard mapping, 17 buttons and four axes. Face buttons, shoulders, triggers, stick clicks, D-pad and axes match standard indices. The player confirmed mixing up the Options/Create guided steps; the fixture corrects those two labels and preserves their original `reportedLabel`. No center-button swap is applied. All captured trigger values are 1, which does not demonstrate partial analog travel or the inflation bug on this hardware. The original capture predates the diagnostic's low-travel and release improvements. This fixture protects observed values without implying that all gameplay actions or saved bindings were verified.
 
 Before changing raw indices, distinguish these cases:
 
