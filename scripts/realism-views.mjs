@@ -25,51 +25,75 @@ try {
     await page.getByRole("button", { name: /enter arena/i }).click();
     await page.waitForFunction(() => window.__rs?.camera, null, { timeout: 120000 });
     await page.waitForTimeout(3500);
-    const poses = await page.evaluate((map) => {
-      const r = __rs,
-        p = r.camera.position;
-      const poses = [
-        { name: "street", x: p.x, z: p.z, y: r.groundAt(p.x, p.z), yaw: 0, pitch: 0 },
-        {
-          name: "street-side",
-          x: p.x,
-          z: p.z,
-          y: r.groundAt(p.x, p.z),
-          yaw: Math.PI / 2,
-          pitch: 0,
-        },
-      ];
-      // Deterministic random walkable views, kept even when unflattering.
-      let seed = 841;
-      const rand = () => ((seed = Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
-      for (let i = 0; i < 3; i++)
-        for (let trial = 0; trial < 100; trial++) {
-          const x = p.x + (rand() - 0.5) * 80,
-            z = p.z + (rand() - 0.5) * 80,
-            y = r.groundAt(x, z);
-          if (Number.isFinite(y) && !r.bodyAt(x, z, y)) {
-            poses.push({ name: `random-${i}`, x, z, y, yaw: rand() * Math.PI * 2, pitch: 0 });
-            break;
+    const poses = await page.evaluate(
+      ({ map, foliageView }) => {
+        const r = __rs,
+          p = r.camera.position;
+        const poses = [
+          { name: "street", x: p.x, z: p.z, y: r.groundAt(p.x, p.z), yaw: 0, pitch: 0 },
+          {
+            name: "street-side",
+            x: p.x,
+            z: p.z,
+            y: r.groundAt(p.x, p.z),
+            yaw: Math.PI / 2,
+            pitch: 0,
+          },
+        ];
+        // Deterministic random walkable views, kept even when unflattering.
+        let seed = 841;
+        const rand = () => ((seed = Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+        for (let i = 0; i < 3; i++)
+          for (let trial = 0; trial < 100; trial++) {
+            const x = p.x + (rand() - 0.5) * 80,
+              z = p.z + (rand() - 0.5) * 80,
+              y = r.groundAt(x, z);
+            if (Number.isFinite(y) && !r.bodyAt(x, z, y)) {
+              poses.push({ name: `random-${i}`, x, z, y, yaw: rand() * Math.PI * 2, pitch: 0 });
+              break;
+            }
+          }
+        if (map === "vice" && foliageView) {
+          const trees = r.city.props
+            .filter((p) => p.k === "tree")
+            .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+          outer: for (const tree of trees)
+            for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+              const x = tree.x + Math.cos(a) * 4,
+                z = tree.z + Math.sin(a) * 4,
+                y = r.groundAt(x, z);
+              if (!Number.isFinite(y) || r.bodyAt(x, z, y)) continue;
+              poses.push({
+                name: "close-tree",
+                x,
+                z,
+                y,
+                yaw: Math.atan2(x - tree.x, z - tree.z),
+                pitch: Math.atan2(4.7 * (tree.s ?? 1) - 1.6, 4),
+              });
+              break outer;
+            }
+        }
+        if (map === "vice") {
+          const b = r.access.list().find((b) => b.stair && !b.stair.spiral);
+          if (b) {
+            const a = -(b.stair.W / 2 + 0.1) / 2,
+              d = b.stair.v0 + b.stair.Ls * 0.5;
+            poses.push({
+              name: "stairwell",
+              x: b.ox + b.tx * a + b.ix * d,
+              z: b.oz + b.tz * a + b.iz * d,
+              y: b.groundY,
+              yaw: Math.atan2(-b.ix, -b.iz),
+              pitch: 0.03,
+              building: b.id,
+            });
           }
         }
-      if (map === "vice") {
-        const b = r.access.list().find((b) => b.stair && !b.stair.spiral);
-        if (b) {
-          const a = -(b.stair.W / 2 + 0.1) / 2,
-            d = b.stair.v0 + b.stair.Ls * 0.5;
-          poses.push({
-            name: "stairwell",
-            x: b.ox + b.tx * a + b.ix * d,
-            z: b.oz + b.tz * a + b.iz * d,
-            y: b.groundY,
-            yaw: Math.atan2(-b.ix, -b.iz),
-            pitch: 0.03,
-            building: b.id,
-          });
-        }
-      }
-      return poses;
-    }, map);
+        return poses;
+      },
+      { map, foliageView: process.env.FOLIAGE_VIEW === "1" },
+    );
     const posePath = `${out}/${map}-poses.json`;
     const matched = tag === "before" ? poses : JSON.parse(await readFile(posePath, "utf8"));
     if (tag === "before") await writeFile(posePath, JSON.stringify(poses, null, 2));

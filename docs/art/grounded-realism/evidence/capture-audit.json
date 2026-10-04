@@ -1,0 +1,8 @@
+{
+  "count": 64,
+  "maxPositionDeltaMetres": 0,
+  "errors": 0,
+  "baseline": "5bc373dd147a6b4401c1131d77e9d5190621a770",
+  "candidate": "f9584d7af039ee84145cca5e196a9ba4f628e307",
+  "method": "Saved poses identical; 1280x800 DPR1 HIGH; static final snapshot served on5290. Traffic and idle weapon animation not frozen."
+}

@@ -1,0 +1,62 @@
+import { mkdir, copyFile, writeFile } from "node:fs/promises";
+const out = "docs/art/grounded-realism";
+await mkdir(`${out}/images`, { recursive: true });
+const pairs = [
+  [
+    "views",
+    "vice-street",
+    "Vice Heights · sunny plaza",
+    "Structural bays and a wider canopy give the office front depth. Interior windows are less exposed; tree leaves are smaller.",
+  ],
+  [
+    "views",
+    "vice-random-1",
+    "Vice Heights · random street view",
+    "Leaf sprays replace oversized knife-like leaves. The unflattering view is retained: flat repeating walls and simple props remain visible.",
+  ],
+  [
+    "views",
+    "vice-close-tree",
+    "Vice Heights · matched close foliage",
+    "Small cutout leaves and attached twig sprays replace the oversized polygon leaves; exterior rooms no longer dominate the glass.",
+  ],
+  [
+    "views",
+    "vice-stairwell",
+    "Vice Heights · stairwell",
+    "Round rails, subdued nosings, poured floor finish and masonry walls replace the single coarse surface treatment.",
+  ],
+  [
+    "sunset",
+    "pier-random-0",
+    "Pacific Pier · sunset random view",
+    "Reusable construction and entrance details; overall pier silhouette and composition remain familiar.",
+  ],
+  [
+    "sunset",
+    "whiteout-random-1",
+    "Whiteout Pass · sunset random view",
+    "Timber courses and construction detail. The existing spruce silhouette is preserved after rejecting a worse experiment.",
+  ],
+  [
+    "night",
+    "gulch-random-2",
+    "Dry Gulch · night random view",
+    "Smaller timber paint wear and construction detail; no claim of a major composition change in this map.",
+  ],
+];
+const cards = [];
+for (const [folder, name, title, note] of pairs) {
+  for (const tag of ["before", "after"])
+    await copyFile(
+      `output/playwright/${folder}/${tag}-${name}.png`,
+      `${out}/images/${tag}-${name}.png`,
+    );
+  cards.push(
+    `<section><h2>${title}</h2><p>${note}</p><div class="pair" style="--split:50%"><img alt="Production baseline" src="images/before-${name}.png"><img class="after" alt="Candidate" src="images/after-${name}.png"><span class="before-label">BEFORE</span><span class="after-label">AFTER</span><div class="line"></div></div><label>Compare <input aria-label="Reveal candidate for ${title}" type="range" min="0" max="100" value="50" oninput="this.closest('section').querySelector('.pair').style.setProperty('--split',this.value+'%')"></label></section>`,
+  );
+}
+await writeFile(
+  `${out}/index.html`,
+  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scrapfall · grounded environment comparison</title><style>body{margin:0;background:#171b20;color:#e4e8ee;font:16px/1.5 system-ui}main{max-width:1280px;margin:auto;padding:32px 20px}h1{font-size:28px}h2{font-size:20px;margin-bottom:4px}p{max-width:900px;color:#bcc5ce}section{margin:44px 0}.pair{position:relative;aspect-ratio:8/5;overflow:hidden;border:1px solid #59636d}.pair img{position:absolute;width:100%;height:100%;object-fit:contain}.after{clip-path:inset(0 0 0 var(--split))}.line{position:absolute;left:var(--split);top:0;bottom:0;border-left:2px solid white;pointer-events:none}.before-label,.after-label{position:absolute;top:10px;background:#111b;padding:4px 10px;font-size:12px;letter-spacing:2px}.before-label{left:10px}.after-label{right:10px}label{display:flex;align-items:center;gap:20px;margin-top:10px}input{flex:1;accent-color:#aecbbc}a{color:#b5d6ed}</style><main><h1>Scrapfall · grounded environment comparison</h1><p>Production 5bc373d versus the draft realism candidate. Matched seed 7, saved camera coordinates and angles,1280×800, DPR 1, HIGH. Screenshots are unedited. Traffic, weapon idle motion and particles can differ between captures. Move each divider to inspect the same viewpoint.</p><p>This is visual review evidence, not an objective realism score or a performance result. See <a href="README.md">the evidence report</a> for measurements and limitations.</p>${cards.join("")}<p>All four production maps remain. DraftPR42 is held from merge and deployment.</p></main></html>`,
+);

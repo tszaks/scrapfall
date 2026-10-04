@@ -198,6 +198,7 @@ try {
             const ms = [],
               warmMs = [],
               shaderEvents = [],
+              frameHitches = [],
               renders = [],
               calls = [],
               triangles = [],
@@ -260,6 +261,7 @@ try {
                 }
                 if (last) {
                   ms.push(now - last);
+                  if (now - last > 50) frameHitches.push({ elapsed, ms: now - last });
                   if (elapsed >= 10) warmMs.push(now - last);
                 }
                 const programs = r.gl.info.programs.length;
@@ -350,8 +352,10 @@ try {
             const pct = (a, q) =>
               [...a].sort((a, b) => a - b)[Math.min(a.length - 1, Math.floor(a.length * q))];
             return {
+              measurementStart: start,
               programsStart,
               shaderEvents,
+              frameHitches,
               warmAfter10s: {
                 p95: pct(warmMs, 0.95),
                 p99: pct(warmMs, 0.99),
