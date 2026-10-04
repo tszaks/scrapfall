@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "map": "vice",
+      "traffic": 60,
+      "passed": true
+    },
+    {
+      "map": "gulch",
+      "traffic": 7,
+      "passed": true
+    },
+    {
+      "map": "pier",
+      "traffic": 44,
+      "passed": true
+    },
+    {
+      "map": "whiteout",
+      "traffic": 6,
+      "passed": true
+    }
+  ],
+  "errors": []
+}
