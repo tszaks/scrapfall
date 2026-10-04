@@ -498,10 +498,7 @@ export const WesternScene = memo(function WesternScene({
   // PMREM renders are synchronous GL work: keep them out of the mount commit — they run
   // as their own task a frame later (materials render without an envmap until it lands,
   // behind the loading veil)
-  const [env, setEnv] = useState<{
-    sunset: THREE.WebGLRenderTarget;
-    night: THREE.WebGLRenderTarget;
-  } | null>(null);
+  const [env, setEnv] = useState<{ sunset: THREE.WebGLRenderTarget; night: THREE.WebGLRenderTarget } | null>(null);
   useEffect(() => {
     let dead = false;
     void (async () => {
@@ -511,11 +508,7 @@ export const WesternScene = memo(function WesternScene({
       const sunsetSrc = westernBackground("sunset");
       const sunset = pm.fromEquirectangular(sunsetSrc);
       await yieldControl();
-      if (dead) {
-        sunset.dispose();
-        pm.dispose();
-        return;
-      }
+      if (dead) { sunset.dispose(); pm.dispose(); return; }
       // same width as the sunset so both PMREMs share one size (no shader change at the swap)
       const nightSrc = resized(
         westernSky("night"),
@@ -525,11 +518,7 @@ export const WesternScene = memo(function WesternScene({
       const nightRT = pm.fromEquirectangular(nightSrc);
       nightSrc.dispose();
       pm.dispose();
-      if (dead) {
-        sunset.dispose();
-        nightRT.dispose();
-        return;
-      }
+      if (dead) { sunset.dispose(); nightRT.dispose(); return; }
       setEnv({ sunset, night: nightRT });
     })();
     return () => {
