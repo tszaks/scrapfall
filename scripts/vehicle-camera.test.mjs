@@ -86,11 +86,18 @@ test("ground intersections retract, reset/reentry does not retain an old follow 
     eye = logical(),
     c = car();
   let probes = 0;
-  rig.update(eye, c, 0, 1 / 60, () => {
+  rig.update(eye, c, 0, 1 / 60, (a, b) => {
     probes++;
-    return 0.3;
+    // A fixed rising plane under the boom; fractions change as later rays shorten.
+    const start = a.y + a.z * 0.9,
+      end = b.y + b.z * 0.9;
+    return end < 0 ? start / (start - end) : undefined;
   });
   assert.equal(probes, 7, "bounded sweep count");
+  assert.ok(
+    rig.camera.position.y - 0.24 > -rig.camera.position.z * 0.9,
+    "camera body remains above the rising ground plane",
+  );
   rig.reset();
   c.x = 80;
   const cam = rig.update(eye, c, 4, 1 / 60, clear);

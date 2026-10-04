@@ -1,0 +1,298 @@
+{
+  "kind": "Functional headless scripted fixture, not a performance benchmark or physical controller test",
+  "base": "http://127.0.0.1:5307",
+  "checks": [
+    {
+      "name": "on-foot-before",
+      "position": [
+        -19.44,
+        1.6,
+        -7.91
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -19.44,
+          1.6,
+          -7.91
+        ],
+        "fov": 75,
+        "logical": true,
+        "hullBounds": null
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "entered-chase",
+      "vehicle": "city-0",
+      "position": [
+        -19.69,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -14.247596181976132,
+          2.9829474532138245,
+          -5.9858804681255
+        ],
+        "fov": 83,
+        "logical": false,
+        "hullBounds": {
+          "minX": -0.2007455469109805,
+          "maxX": 0.2032435049712789,
+          "minY": -0.4817850873797283,
+          "maxY": 0.207122107815836
+        }
+      },
+      "shoulder": true,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "forward",
+      "vehicle": "city-0",
+      "position": [
+        -20.845402034809688,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -15.102397191901296,
+          2.9829474532138245,
+          -5.999992764428425
+        ],
+        "fov": 83,
+        "logical": false,
+        "hullBounds": {
+          "minX": -0.1863839253316152,
+          "maxX": 0.18638494579711098,
+          "minY": -0.41672959179381563,
+          "maxY": 0.21639621194346967
+        }
+      },
+      "shoulder": true,
+      "car": {
+        "x": -20.595402034809688,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "exit-restores",
+      "position": [
+        -20.63381124640054,
+        1.6,
+        -8.264225450291297
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -20.63381124640054,
+          1.6,
+          -8.264225450291297
+        ],
+        "fov": 75,
+        "logical": true,
+        "hullBounds": null
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "saved-third-person-entry",
+      "vehicle": "city-0",
+      "position": [
+        -20.88381124640054,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -15.43945838384196,
+          2.9829474532138245,
+          -6
+        ],
+        "fov": 83,
+        "logical": false,
+        "hullBounds": {
+          "minX": -0.20189127568380508,
+          "maxX": 0.20189127568380508,
+          "minY": -0.4809481567669782,
+          "maxY": 0.20694935994472513
+        }
+      },
+      "shoulder": true,
+      "car": {
+        "x": -20.63381124640054,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "ownership-loss-restores-third-person",
+      "position": [
+        -20.88381124640054,
+        1.6,
+        -6.430087138242891
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -20.076576319239962,
+          1.5810053050786508,
+          -6.59860565676141
+        ],
+        "fov": 75,
+        "logical": false,
+        "hullBounds": null
+      },
+      "shoulder": true,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "largest-vehicle-framing",
+      "vehicle": "city-23",
+      "position": [
+        -19.69,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -11.118171921280963,
+          6.107765657385038,
+          -5.999999999999999
+        ],
+        "fov": 83,
+        "logical": false,
+        "hullBounds": {
+          "minX": -0.17469452654163325,
+          "maxX": 0.1746945265416327,
+          "minY": -0.6295941192411978,
+          "maxY": 0.2690940068027197
+        }
+      },
+      "shoulder": true,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "half": 4.4,
+        "width": 1.2,
+        "height": 2.75
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "death-or-down-ejects-and-restores",
+      "position": [
+        -19.44,
+        0.45,
+        -8.2
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -19.44,
+          0.45,
+          -8.2
+        ],
+        "fov": 75,
+        "logical": true,
+        "hullBounds": null
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "leave-game-and-new-match-restores-foot-camera",
+      "position": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -57,
+          1.7500000059604646,
+          -28
+        ],
+        "fov": 75,
+        "logical": true,
+        "hullBounds": null
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "errors": []
+}

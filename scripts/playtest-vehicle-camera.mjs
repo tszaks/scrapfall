@@ -169,6 +169,34 @@ try {
   s = await snap("death-or-down-ejects-and-restores");
   assert.equal(s.vehicle, undefined);
   assert.equal(s.view.fov, before.fov);
+  await page.evaluate(() => {
+    window.__oldCameraWorld = __rs;
+  });
+  await page.getByRole("button", { name: /^leave game$/i }).click();
+  await page.getByRole("button", { name: /^start$/i }).click({ timeout: 120000 });
+  await page.getByRole("button", { name: /enter arena/i }).click({ timeout: 120000 });
+  await page.waitForFunction(
+    () => window.__rs !== window.__oldCameraWorld && window.__rs?.playtest?.driveCars.size,
+  );
+  await page.evaluate(() => {
+    const r = __rs,
+      original = r.gl.render;
+    window.__lastView = null;
+    r.gl.render = function (scene, camera) {
+      if (scene === r.scene)
+        window.__lastView = {
+          position: camera.position.toArray(),
+          fov: camera.fov,
+          logical: camera === r.camera,
+        };
+      return original.call(this, scene, camera);
+    };
+  });
+  await page.waitForFunction(() => window.__lastView);
+  s = await snap("leave-game-and-new-match-restores-foot-camera");
+  assert.equal(s.vehicle, undefined);
+  assert.equal(s.view.fov, before.fov);
+  assert.equal(s.view.logical, before.view.logical);
   assert.deepEqual(report.errors, []);
 } catch (e) {
   report.failure = e.stack;
