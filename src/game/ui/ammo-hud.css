@@ -1,5 +1,6 @@
 .ammo-hud {
   position: fixed;
+  z-index: 20;
   left: max(20px, env(safe-area-inset-left));
   bottom: calc(max(20px, env(safe-area-inset-bottom)) + 92px);
   width: 168px;
@@ -24,8 +25,30 @@ html.rs-incar .ammo-hud { display: none; }
 .ammo-hud[data-touch="true"] {
   bottom: calc(max(20px, env(safe-area-inset-bottom)) + 232px);
 }
+.hud-player-status { display: contents; }
 /* On landscape phones use the gap between the movement thumb and minimap. */
 @media (orientation: landscape) and (max-height: 540px) {
+  .ammo-hud[data-touch="false"] {
+    bottom: max(20px, env(safe-area-inset-bottom));
+  }
+  [data-combat-hud][data-touch="false"] .hud-player-status {
+    position: absolute;
+    left: calc(max(20px, env(safe-area-inset-left)) + 176px);
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  [data-combat-hud][data-touch="false"] .hud-player-status > * {
+    position: static;
+    width: 100%;
+  }
+  [data-combat-hud][data-touch="false"] .hud-ability {
+    padding: 6px 8px;
+    font-size: 10px;
+    letter-spacing: .04em;
+  }
   .ammo-hud[data-touch="true"] {
     left: calc(max(20px, env(safe-area-inset-left)) + 76px);
     bottom: max(20px, env(safe-area-inset-bottom));

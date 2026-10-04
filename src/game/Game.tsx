@@ -9179,7 +9179,7 @@ export function Game() {
       )}
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
-      <div className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
+      <div data-combat-hud data-touch={touchUi} className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
         <div className="flex items-start justify-between p-5 text-[#2b2118]">
           <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
             {started && !ended && (
@@ -9380,28 +9380,30 @@ export function Game() {
             SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
           </HudChip>
         )}
-        {locked && !ended && (
-          <SprintMeter
-            className={
-              touchUi
-                ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
-                : "absolute bottom-[3.9rem] left-5"
-            }
-          />
-        )}
-        {locked && !ended && !touchUi && (
-          <div className="absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
-            <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
-              <KeyHint action="ability" />
-            </span>{" "}
-            {ABILITIES[ability].name} ·{" "}
-            {abilCd.left > 0 ? (
-              <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
-            ) : (
-              <b className="text-[#1d7a37]">READY</b>
-            )}
-          </div>
-        )}
+        <div className="hud-player-status">
+          {locked && !ended && (
+            <SprintMeter
+              className={
+                touchUi
+                  ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
+                  : "absolute bottom-[3.9rem] left-5"
+              }
+            />
+          )}
+          {locked && !ended && !touchUi && (
+            <div className="hud-ability absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
+              <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">
+                <KeyHint action="ability" />
+              </span>{" "}
+              {ABILITIES[ability].name} ·{" "}
+              {abilCd.left > 0 ? (
+                <span className="opacity-50">{Math.ceil(abilCd.left)}s</span>
+              ) : (
+                <b className="text-[#1d7a37]">READY</b>
+              )}
+            </div>
+          )}
+        </div>
 
         {eventMsg && locked && !ended && (
           <div className="absolute left-1/2 top-[22%] -translate-x-1/2 rounded-md border-2 border-[#f3e6cf]/50 bg-[#b3261e]/90 px-6 py-2 text-center text-lg font-bold tracking-[0.3em] text-[#f7eeda] shadow-[3px_3px_0_0_rgba(43,33,24,0.55)]">

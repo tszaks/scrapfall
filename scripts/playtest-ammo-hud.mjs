@@ -9,6 +9,7 @@ const errors = [], results = [];
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, hasTouch: true });
 page.on('pageerror', e => errors.push(e.message));
 const hud = page.locator('[data-ammo-hud]');
+await page.addInitScript(() => localStorage.setItem('scrapfall-ability', 'barrier'));
 async function capture(name) { await page.screenshot({ path: `${out}/${name}.png` }); }
 async function noOverlap(selector) {
   const a = await hud.boundingBox();
@@ -59,6 +60,17 @@ try {
   await page.evaluate(() => __rs.playtest.releaseVehicle(__rs.playtest.driving.self));
   await hud.waitFor();
   results.push('Driving hides ammo; exit restores it');
+  await page.evaluate(() => { __rs.equip('sniper'); __rs.aimInput('hud-test', true); });
+  await page.waitForFunction(() => document.documentElement.classList.contains('rs-scoped'));
+  const scopeStack = await hud.evaluate(el => {
+    const scope = el.parentElement.querySelector('[aria-hidden="true"].fixed.inset-0');
+    return [Number(getComputedStyle(el).zIndex), Number(getComputedStyle(scope).zIndex)];
+  });
+  assert.ok(scopeStack[0] > scopeStack[1], 'Ammo must render above the opaque scope mask');
+  assert.deepEqual(await hud.boundingBox(), before);
+  await capture('desktop-ads');
+  await page.evaluate(() => { __rs.aimInput('hud-test', false); __rs.equip('smg'); });
+  results.push('Longshot ADS preserves the fixed ammo box above the scope mask');
   for (const [id, glyph] of [['Xbox Wireless Controller', 'X'], ['DualSense Wireless Controller', '□'], ['Nintendo Switch Pro Controller', 'Y']]) {
     await page.evaluate(id => {
       window.testPad = { id, index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0.7, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
@@ -68,7 +80,23 @@ try {
     results.push(`${id} reload glyph`);
   }
   await capture('controller');
+  for (const [width, height] of [[844, 390], [568, 320]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(150);
+    await noOverlap('[data-minimap], .hud-player-status > *, :text-matches("SELF REVIVE ·")');
+    const statuses = await page.locator('.hud-player-status > *').all();
+    const sprint = await statuses[0].boundingBox(), ability = await statuses[1].boundingBox();
+    assert.ok(sprint.y + sprint.height <= ability.y, 'Sprint clears wrapped ability label');
+    assert.match(await statuses[1].textContent(), /KINETIC BARRIER/);
+    await capture(`controller-${width}`);
+    results.push(`${width}px controller HUD clears self-revive, wrapped ability, sprint and minimap`);
+  }
   await page.evaluate(() => { window.testPad = null; });
+  await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(() => document.querySelector('.ammo-hud-hint')?.textContent === 'R · RELOAD');
+  await noOverlap('[data-minimap], .hud-player-status > *, :text-matches("SELF REVIVE ·")');
+  await capture('keyboard-568');
+  results.push('568px keyboard layout preserves compact indicator spacing');
   await page.setViewportSize({ width: 844, height: 390 });
   await page.dispatchEvent('canvas', 'pointerdown', { pointerType: 'touch', pointerId: 7 });
   await page.waitForFunction(() => document.querySelector('[data-ammo-hud]')?.dataset.touch === 'true');
