@@ -8,6 +8,7 @@ import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehic
 import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
 import { TravelView } from "./TravelView";
 import { AmmoHud } from "./ui/AmmoHud";
+import { HudTop } from "./ui/HudLayout";
 import { playerRecovery, requestRecovery } from "./playerRecovery";
 import { pingSurface } from "./playtestSurface";
 import { FLIGHT } from "./weaponFlight";
@@ -311,7 +312,7 @@ import { PadLayer } from "./input/PadLayer";
 import { useInputDevice } from "./input/useInputDevice";
 import { KeyHint } from "./input/Glyph";
 import { SprintMeter } from "./input/SprintMeter";
-import { HudChip, UiStyles } from "./ui/kit";
+import { UiStyles } from "./ui/kit";
 import { LoadingVeil } from "./LoadingVeil";
 import { titleShot } from "./titleCam";
 import { TitleScreen, type LobbyPlayer } from "./ui/TitleScreen";
@@ -9183,116 +9184,129 @@ export function Game() {
       <style>{`@keyframes hurt { from { opacity: 1 } to { opacity: 0 } }`}</style>
 
       <div data-combat-hud data-touch={touchUi} className={`pointer-events-none fixed inset-0 font-mono ${touchUi ? "z-[25]" : "z-10"}`}>
-        <div className="flex items-start justify-between p-5 text-[#2b2118]">
-          <div className={`flex flex-col items-start gap-1.5 ${touchUi ? "mt-10 text-[11px]" : "text-xs"}`}>
-            {started && !ended && (
+        {started && !ended && (
+          <HudTop
+            activeWeapon={weapon}
+            match={
               <>
-                <HudChip className="font-bold">
-                  {theme.name.toUpperCase()} · {DIFFICULTIES[difficulty].name}
-                </HudChip>
-                <HudChip>
-                  {status.wave > WAVES.length
-                    ? `WAVE ${status.wave} · OVERTIME +${status.wave - WAVES.length}`
-                    : `WAVE ${status.wave}/${WAVES.length}`}
-                </HudChip>
-                <HudChip>
-                  KILLS <b>{score}</b>
-                </HudChip>
-              </>
-            )}
-          </div>
-          <div className={`flex flex-col items-end gap-1.5`}>
-            {started && !ended && (
-              <>
-                <HudChip className="text-sm tracking-[0.12em] text-[#b3261e]">
-                  {"♦".repeat(Math.max(0, health))}
-                  <span className="opacity-30">{"♦".repeat(Math.max(0, maxHp - health))}</span>
-                </HudChip>
-                <HudChip>
-                  <span className="text-[#1aa6b8]">◆</span> <b aria-label="Scrap balance">{shards}</b>
-                </HudChip>
-              </>
-            )}
-            {multiplayer && locked && !ended && (
-              <div
-                className="space-y-1 text-right font-mono text-[11px] tracking-widest text-[#2b2118]"
-              >
-                <div className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-2 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
-                  ROOM {net?.code} · {peerCount + 1} {peerCount === 0 ? "PLAYER" : "PLAYERS"}
+                <div className="hud-match-heading">
+                  <b>{theme.name.toUpperCase()}</b>
+                  <span>{DIFFICULTIES[difficulty].name}</span>
                 </div>
-                {[...remotes.current.values()].map((r) => (
+                <div className="hud-match-score">
+                  <span>
+                    {status.wave > WAVES.length
+                      ? `WAVE ${status.wave} · OVERTIME +${status.wave - WAVES.length}`
+                      : `WAVE ${status.wave}/${WAVES.length}`}
+                  </span>
+                  <span>
+                    KILLS <b>{score}</b>
+                  </span>
+                </div>
+                {!multiplayer && locked && !ended && !downed && (
                   <div
-                    key={r.id}
-                    className="flex items-center justify-end gap-2 rounded-md border border-[#2b2118]/50 bg-[#f3e6cf]/85 px-2 py-1 shadow-[2px_2px_0_0_rgba(43,33,24,0.25)]"
+                    className="hud-kit"
+                    title={
+                      soloKit.kit
+                        ? "One self-revive kit ready"
+                        : "Find a rare kit or buy one in the shop"
+                    }
                   >
-                    <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>
-                    <span className="opacity-70">{r.num === 1 ? "HOST" : `P${r.num}`}</span>
-                    {r.hp > 0 ? (
-                      <span className="text-[#b3261e]">
-                        {/* (a class can lift max health past 10: Vanguard has 16) */}
-                        {"♦".repeat(Math.max(0, Math.min(24, Math.round(r.hp))))}
-                        <span className="opacity-30">
-                          {"♦".repeat(Math.max(0, MAX_HP - Math.round(r.hp)))}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="font-bold text-[#b3261e]">DOWN</span>
-                    )}
+                    SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY"}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div
-          className={`absolute left-1/2 flex -translate-x-1/2 flex-nowrap overflow-x-auto items-start p-1 transition-opacity [.rs-incar_&]:opacity-0 ${touchUi ? "top-3 max-w-[calc(100vw-9rem)] gap-1.5" : "top-5 max-w-[calc(100vw-26rem)] gap-2"} ${started && !ended ? "" : "hidden"}`}
-        >
-          {inv.map((slot, i) => {
-            const g = GUNS[slot.w];
-            const active = slot.w === weapon;
-            return (
-              <div
-                key={slot.w}
-                onPointerDown={
-                  touchUi
-                    ? () => {
-                        touchInput.pick = slot.w;
-                      }
-                    : undefined
-                }
-                data-inventory-weapon={slot.w}
-                className={`relative shrink-0 whitespace-nowrap rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-1.5 py-0.5 text-[11px]" : "px-3 py-1.5 text-xs"} ${
-                  active
-                    ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
-                    : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
-                }`}
-              >
-                <span
-                  className="absolute -left-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]"
+                )}
+                {touchUi && locked && !ended && <SprintMeter className="hud-touch-sprint" />}
+              </>
+            }
+            inventory={inv.map((slot, i) => {
+              const g = GUNS[slot.w];
+              const active = slot.w === weapon;
+              return (
+                <div
+                  key={slot.w}
+                  onPointerDown={
+                    touchUi
+                      ? () => {
+                          touchInput.pick = slot.w;
+                        }
+                      : undefined
+                  }
+                  data-inventory-weapon={slot.w}
+                  data-active={active}
+                  className={`relative shrink-0 whitespace-nowrap rounded-md border tracking-widest ${touchUi ? "pointer-events-auto px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs"} ${
+                    active
+                      ? "border-[#2b2118] bg-[#f3e6cf] text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.45)]"
+                      : "border-[#2b2118]/25 bg-[#f3e6cf]/55 text-[#2b2118]/70"
+                  }`}
                 >
-                  {i < 10 ? (
-                    keyLabel(`slot${i + 1}` as ControlAction)
-                  ) : (
-                    <KeyHint action="nextGun" />
+                  {dev.kind === "kbm" && i < 10 && (
+                    <span className="absolute -left-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2b2118] px-1 text-[11px] font-bold text-[#f7eeda]">
+                      {keyLabel(`slot${i + 1}` as ControlAction)}
+                    </span>
                   )}
-                </span>
-                <span style={{ color: g.color }}>■</span> {g.name}{" "}
-                <b>{active ? ammoLeft : slot.ammo}</b>
-                {slot.w === "pistol" && (
-                  <div className="mt-0.5 flex justify-center gap-1">
-                    {Array.from({ length: MOD_SLOTS }, (_, k) => (
+                  <span style={{ color: g.color }}>■</span> {g.name}{" "}
+                  <b>{active ? ammoLeft : slot.ammo}</b>
+                  {slot.w === "pistol" && (
+                    <div className="mt-0.5 flex justify-center gap-1">
+                      {Array.from({ length: MOD_SLOTS }, (_, k) => (
+                        <span
+                          key={k}
+                          className={`h-1.5 w-1.5 rounded-full border border-[#2b2118] ${k < modsEquipped(perks) ? "bg-[#2b2118]" : ""}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            vitals={
+              <>
+                <div className="hud-health-line">
+                  <span>HEALTH</span>
+                  <b>
+                    {Math.max(0, health)} / {maxHp}
+                  </b>
+                </div>
+                <div className="hud-health-track" aria-hidden="true">
+                  <div
+                    className="hud-health-fill"
+                    style={{ width: `${(Math.max(0, health) / maxHp) * 100}%` }}
+                  />
+                </div>
+                <div className="hud-vitals-meta">
+                  <span>
+                    <span className="text-[#1aa6b8]">◆</span> <b aria-label="Scrap balance">{shards}</b>
+                  </span>
+                  {multiplayer && locked ? (
+                    <span
+                      className="hud-room"
+                      aria-label={`Room ${net?.code}, ${peerCount + 1} players`}
+                    >
+                      {net?.code} · {peerCount + 1}P
+                    </span>
+                  ) : (
+                    <span className="hud-room">SCRAP</span>
+                  )}
+                </div>
+                {multiplayer && locked && (
+                  <div className="hud-squad">
+                    {[...remotes.current.values()].map((r) => (
                       <span
-                        key={k}
-                        className={`h-1.5 w-1.5 rounded-full border border-[#2b2118] ${k < modsEquipped(perks) ? "bg-[#2b2118]" : ""}`}
-                      />
+                        key={r.id}
+                        className="hud-squad-member"
+                        aria-label={`${r.num === 1 ? "Host" : `Player ${r.num}`}: ${r.hp > 0 ? `${Math.round(r.hp)} health` : "down"}`}
+                      >
+                        <span style={{ color: r.color, WebkitTextStroke: "0.5px #2b2118" }}>■</span>{" "}
+                        {r.num === 1 ? "HOST" : `P${r.num}`}{" "}
+                        <b className="text-[#b3261e]">{r.hp > 0 ? Math.round(r.hp) : "DOWN"}</b>
+                      </span>
                     ))}
                   </div>
                 )}
-              </div>
-            );
-          })}
-        </div>
+              </>
+            }
+          />
+        )}
 
         {started && locked && !ended && !downed && health > 0 && !showSettings && (
           <AmmoHud weapon={weapon} name={GUNS[weapon].name} total={ammoLeft} touch={touchUi} />
@@ -9304,15 +9318,15 @@ export function Game() {
         </div>
 
         {bossHp > 0 && locked && !ended && (
-          <div className="absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
+          <div className="hud-boss absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]">
             <div className="mb-1 flex items-center justify-center gap-2">
-              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
-              <span className="rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
+              <span className="hud-boss-rule h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+              <span className="hud-boss-title rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1 font-bold shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
                 {theme.boss.name}
               </span>
-              <span className="h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
+              <span className="hud-boss-rule h-[3px] w-8 rounded-sm" style={{ background: "repeating-linear-gradient(-45deg,#2b2118 0 6px,#b3261e 6px 12px)" }} />
             </div>
-            <div className="h-3 overflow-hidden rounded-md border border-[#2b2118] bg-[#2b2118]/70 shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
+            <div className="hud-boss-track h-3 overflow-hidden rounded-md border border-[#2b2118] bg-[#2b2118]/70 shadow-[2px_2px_0_0_rgba(43,33,24,0.35)]">
               <div
                 className="h-full bg-gradient-to-r from-[#b3261e] to-[#e8654f]"
                 style={{
@@ -9324,20 +9338,20 @@ export function Game() {
         )}
         {banner && locked && !ended && (
           <div
-            className="absolute left-1/2 top-[30%] -translate-x-1/2 text-center"
+            className="hud-wave-banner absolute left-1/2 top-[30%] text-center"
             style={{ animation: "ui-banner 1.8s cubic-bezier(0.2,0.9,0.3,1) both" }}
           >
             <div
-              className="mb-2 h-[5px] w-56 rounded-sm sm:w-72"
+              className="hud-wave-rule mb-2 h-[5px] w-56 rounded-sm sm:w-72"
               style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
             />
-            <div className="text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
+            <div className="hud-wave-title text-3xl font-black tracking-[0.28em] text-[#f7eeda] [text-shadow:0_3px_0_#2b2118,0_0_28px_rgba(20,14,8,0.9)] sm:text-4xl">
               {status.wave === WAVES.length ||
               (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
                 ? theme.boss.name
                 : `WAVE ${status.wave}`}
             </div>
-            <div className="mt-1 text-[11px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
+            <div className="hud-wave-subtitle mt-1 text-[11px] font-bold tracking-[0.4em] text-[#e7b25c] [text-shadow:0_2px_0_#2b2118]">
               {status.wave === WAVES.length ||
               (status.wave > WAVES.length && (status.wave - WAVES.length) % 5 === 0)
                 ? theme.hazard.name
@@ -9346,7 +9360,7 @@ export function Game() {
                   : `${status.wave} OF ${WAVES.length}`}
             </div>
             <div
-              className="mt-2 h-[5px] w-56 rounded-sm sm:w-72"
+              className="hud-wave-rule mt-2 h-[5px] w-56 rounded-sm sm:w-72"
               style={{ background: "repeating-linear-gradient(-45deg,#f3e6cf 0 10px,transparent 10px 20px)" }}
             />
           </div>
@@ -9378,21 +9392,8 @@ export function Game() {
             {crateMsg} DEPLOYED
           </div>
         )}
-        {!multiplayer && locked && !ended && !downed && (
-          <HudChip className="absolute left-5 top-[10.5rem] text-[11px] tracking-wider">
-            SELF REVIVE · {soloKit.kit ? "1 KIT" : "EMPTY · SHOP / RARE FINDS"}
-          </HudChip>
-        )}
         <div className="hud-player-status">
-          {locked && !ended && (
-            <SprintMeter
-              className={
-                touchUi
-                  ? "absolute left-1/2 top-12 origin-top -translate-x-1/2 scale-75"
-                  : "absolute bottom-[3.9rem] left-5"
-              }
-            />
-          )}
+          {locked && !ended && !touchUi && <SprintMeter className="absolute bottom-[3.9rem] left-5" />}
           {locked && !ended && !touchUi && (
             <div className="hud-ability absolute bottom-6 left-5 rounded-md border border-[#2b2118]/70 bg-[#f3e6cf]/85 px-3 py-1.5 text-xs tracking-widest text-[#2b2118] shadow-[2px_2px_0_0_rgba(43,33,24,0.3)]">
               <span className="rounded-sm border border-[#2b2118]/30 bg-[#2b2118] px-1.5 py-0.5 font-bold text-[#f7eeda]">

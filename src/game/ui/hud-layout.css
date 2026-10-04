@@ -1,0 +1,239 @@
+[data-combat-hud] {
+  --hud-left: max(20px, env(safe-area-inset-left));
+  --hud-right: max(20px, env(safe-area-inset-right));
+  --hud-top: max(20px, env(safe-area-inset-top));
+}
+.hud-top {
+  position: absolute;
+  inset: var(--hud-top) var(--hud-right) auto var(--hud-left);
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) 176px;
+  align-items: start;
+  gap: 12px;
+  color: #2b2118;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.hud-match,
+.hud-vitals {
+  min-width: 0;
+  border: 1px solid #2b211899;
+  border-radius: 6px;
+  background: #f3e6cfee;
+  padding: 8px 10px;
+  box-shadow: 2px 2px 0 #2b211840;
+}
+.hud-match-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  letter-spacing: 0.05em;
+}
+.hud-match-heading > span {
+  font-size: 9px;
+  opacity: 0.7;
+}
+.hud-match-score {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 5px;
+  font-size: 10px;
+}
+.hud-kit {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid #2b211825;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+.hud-loadout {
+  min-width: 0;
+}
+.hud-inventory {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 3px 5px;
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+.hud-inventory > [data-inventory-weapon] {
+  flex-shrink: 0;
+  min-height: 34px;
+}
+html.rs-incar .hud-loadout {
+  visibility: hidden;
+}
+.hud-swap-hint {
+  margin-top: 3px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.hud-vitals {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.hud-health-line,
+.hud-vitals-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.hud-health-line {
+  color: #b3261e;
+  font-weight: 700;
+}
+.hud-health-track {
+  height: 4px;
+  background: #2b211820;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hud-health-fill {
+  height: 100%;
+  background: #b3261e;
+}
+.hud-room {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+}
+.hud-squad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  font-size: 9px;
+}
+.hud-squad-member {
+  white-space: nowrap;
+}
+/* Compass belongs to the sibling squad overlay, so use safe-area values directly. */
+[data-compass] {
+  top: calc(max(20px, env(safe-area-inset-top)) + 64px);
+  font-size: 11px;
+}
+@media (max-width: 900px) {
+  .hud-top {
+    grid-template-columns: 148px minmax(0, 1fr) 132px;
+    gap: 8px;
+  }
+  .hud-match,
+  .hud-vitals {
+    padding: 6px 8px;
+  }
+}
+[data-combat-hud][data-touch="true"] {
+  --hud-left: max(12px, env(safe-area-inset-left));
+  --hud-right: max(12px, env(safe-area-inset-right));
+  --hud-top: max(12px, env(safe-area-inset-top));
+}
+[data-combat-hud][data-touch="true"] .hud-top {
+  grid-template-columns: 44px minmax(0, 1fr) 132px;
+  gap: 6px 8px;
+}
+[data-combat-hud][data-touch="true"] .hud-loadout {
+  grid-column: 2;
+  grid-row: 1;
+}
+[data-combat-hud][data-touch="true"] .hud-vitals {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  padding: 5px 7px;
+  gap: 3px;
+  font-size: 10px;
+}
+[data-combat-hud][data-touch="true"] .hud-match {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  max-width: 220px;
+  padding: 4px 7px;
+}
+[data-combat-hud][data-touch="true"] .hud-match-heading {
+  font-size: 9px;
+}
+[data-combat-hud][data-touch="true"] .hud-match-heading > span {
+  font-size: 8px;
+}
+[data-combat-hud][data-touch="true"] .hud-match-score {
+  margin-top: 3px;
+  font-size: 9px;
+}
+[data-combat-hud][data-touch="true"] .hud-kit {
+  margin-top: 3px;
+  padding-top: 3px;
+  font-size: 8px;
+}
+.hud-match .hud-touch-sprint {
+  width: 100%;
+  margin-top: 3px;
+  padding: 0;
+  background: none;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+.hud-touch-sprint > div {
+  height: 3px;
+  margin-top: 2px;
+}
+[data-combat-hud][data-touch="true"] .hud-room {
+  font-size: 8px;
+}
+[data-combat-hud][data-touch="true"] .hud-squad {
+  gap: 2px 4px;
+  font-size: 8px;
+}
+
+.hud-boss {
+  top: calc(max(20px, env(safe-area-inset-top)) + 104px);
+}
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 900px) {
+  [data-combat-hud][data-touch="true"] [data-minimap] {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    scale: 0.48;
+  }
+  .hud-wave-banner {
+    top: 44%;
+    left: calc(50% - 48px);
+    width: 220px;
+  }
+  .hud-wave-rule {
+    display: none;
+  }
+  .hud-wave-banner .hud-wave-title {
+    font-size: 20px;
+    line-height: 1.1;
+    letter-spacing: 0.15em;
+  }
+  .hud-wave-banner .hud-wave-subtitle {
+    font-size: 9px;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+  }
+  .hud-boss {
+    left: calc(50% + 4px);
+    width: clamp(100px, calc(100vw - 468px), 200px);
+    top: calc(max(20px, env(safe-area-inset-top)) + 92px);
+  }
+  .hud-boss-rule {
+    display: none;
+  }
+  .hud-boss .hud-boss-title {
+    max-width: 100%;
+    padding: 3px 6px;
+    font-size: 8px;
+    line-height: 1.15;
+    letter-spacing: 0.04em;
+  }
+  .hud-boss .hud-boss-track {
+    height: 6px;
+  }
+  /* The boss name and match wave counter take priority over the duplicate announcement. */
+  .hud-boss ~ .hud-wave-banner {
+    display: none;
+  }
+}
