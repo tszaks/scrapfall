@@ -19,6 +19,8 @@
 .ammo-hud-hint { font-size: 10px; white-space: nowrap; }
 .ammo-hud-track { height: 3px; margin-top: 5px; background: #2b211830; }
 .ammo-hud-progress { height: 100%; background: #1d7a37; }
+/* Elevator controls own the interaction prompt; match the weapon strip's visibility. */
+html.rs-incar .ammo-hud { display: none; }
 .ammo-hud[data-touch="true"] {
   bottom: calc(max(20px, env(safe-area-inset-bottom)) + 232px);
 }

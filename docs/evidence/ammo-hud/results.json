@@ -9,6 +9,7 @@
     "Nintendo Switch Pro Controller reload glyph",
     "844x390 touch HUD clears buttons, minimap and self-revive indicator",
     "667px landscape HUD clears controls and indicators",
+    "Elevator HUD state hides ammo clear of the floor prompt at 568px",
     "568px landscape HUD clears controls and indicators",
     "390x844 retains existing rotate-device screen",
     "Downing fall removes ammo HUD"

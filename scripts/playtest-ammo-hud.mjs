@@ -86,6 +86,19 @@ try {
     await noOverlap('[data-minimap]');
     await noOverlap('text=/SELF REVIVE ·/');
     await capture(`touch-${width}`);
+    if (width === 568) {
+      const elevatorDisplay = await page.evaluate(() => {
+        // The same root state drives the existing elevator floor prompt and weapon strip.
+        const root = document.documentElement;
+        const wasInCar = root.classList.contains('rs-incar');
+        root.classList.add('rs-incar');
+        const display = getComputedStyle(document.querySelector('[data-ammo-hud]')).display;
+        root.classList.toggle('rs-incar', wasInCar);
+        return display;
+      });
+      assert.equal(elevatorDisplay, 'none');
+      results.push('Elevator HUD state hides ammo clear of the floor prompt at 568px');
+    }
     results.push(`${width}px landscape HUD clears controls and indicators`);
   }
   await page.setViewportSize({ width: 390, height: 844 });
