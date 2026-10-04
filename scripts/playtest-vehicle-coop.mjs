@@ -134,6 +134,7 @@ try {
   });
   await wait(250);
   report.enemyHullDamage = await h.evaluate(() => __rs.playtest.driveCars.get("city-0").hp);
+  report.hullProbe = await h.evaluate(() => {const r=__rs,c=r.playtest.driveCars.get("city-0"),a={x:c.x-4,y:r.groundAt(c.x,c.z)+.6,z:c.z},b={...a,x:c.x+4};return {car:c.box?.bounds, ray:c.box?.rayContact?.(a,b), damaged:[...r.playtest.driveCars.values()].filter(c=>c.hp<c.maxHp).map(c=>({id:c.id,hp:c.hp})), bullets:r.enemyBullets.current.slice(-2).map(b=>({active:b.active,pos:b.pos.toArray(),life:b.life}))};});
   assert.equal(report.enemyHullDamage, hullBefore - 10, "enemy shot must damage covering hull");
   await g.evaluate(() => {
     __pad.up(6);

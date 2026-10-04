@@ -4893,7 +4893,7 @@ function World({
     dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
-  const outOfBounds = (p: { x: number; y: number; z: number }) =>
+  const outOfBounds = (p: { x: number; y: number; z: number }, preciseTraffic = false) =>
     wheelSolid(p) ||
     ((staticCollisionReady() && accPlayer.zone !== 1 ? undefined : bulletBlocked(p.x, p.y, p.z)) ??
       // the beach's ground decides shots itself (they fly over railings, stop on decks and the
@@ -4903,7 +4903,9 @@ function World({
       (shotStop(blocks, p.x, p.y, p.z) ||
         Math.abs(p.x) > HALF ||
         Math.abs(p.z) > HALF ||
-        (big !== null && hitsTraffic(p.x, p.y, p.z))));
+        (!preciseTraffic && big !== null && hitsTraffic(p.x, p.y, p.z))));
+  // Swept enemy shots already query the rendered hull ray; the padded point probe must not stop them early.
+  const enemyWorldStop = (p: { x: number; y: number; z: number }) => outOfBounds(p, true);
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) => {
     const feet = moveState.feet;
@@ -7305,12 +7307,12 @@ function World({
               enemyShotFrom,
               b.pos,
               enemyShotTargets.current,
-              outOfBounds,
+              enemyWorldStop,
             );
             if (hit !== undefined) b.active = false;
             if (hit === null) {
               // The hull protects a seated occupant, but takes the intercepted shot.
-              const limit = firstWorldHit(enemyShotFrom, b.pos, outOfBounds) ?? 0;
+              const limit = firstWorldHit(enemyShotFrom, b.pos, enemyWorldStop) ?? 0;
               const car = damageVehicle(enemyShotFrom, b.pos, b.damage, Math.min(1, limit + 0.0001));
               if (car && car.hp <= 0) {
                 playFx("#ff9a3a",1,4,1,car.x,car.z);
