@@ -17,7 +17,7 @@ import { Geo } from "../cityGeo";
 import { terrainY } from "../terrain";
 import { buildInto, type Kit } from "./build";
 import { chairAt, chairCount, ride } from "./ride";
-import { farSpruceGeo, spruceGeo } from "./forest";
+import { farSpruceGeo, spruceGeo, spruceTexture } from "./forest";
 import type { AlpineLayout } from "./layout";
 import type { TimeOfDay } from "../lighting";
 import { alpineLookAt, type AlpineLook } from "./look";
@@ -448,8 +448,16 @@ normal = normalize(normal - (viewMatrix * vec4(aBump.x, 0.0, aBump.y, 0.0)).xyz 
   return scannedSurface(mat, "snow_02", "vAWorld", "(1.0 - aIce) * (1.0 - rock)", 5.0, 0.7);
 }
 
-function treeMaterial() {
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+function treeMaterial(needles = true) {
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.95,
+    metalness: 0,
+    map: needles ? spruceTexture() : null,
+    alphaTest: needles ? 0.3 : 0,
+    side: needles ? THREE.DoubleSide : THREE.FrontSide,
+  });
+  mat.addEventListener("dispose", () => mat.map?.dispose());
   mat.fog = false;
   mat.onBeforeCompile = (sh) => {
     withFog(sh as unknown as Shader);
@@ -463,7 +471,7 @@ function treeMaterial() {
 }`,
     );
   };
-  mat.customProgramCacheKey = () => "alpine-tree-v1";
+  mat.customProgramCacheKey = () => (needles ? "alpine-tree-needles-v2" : "alpine-tree-solid-v2");
   return mat;
 }
 
@@ -999,6 +1007,7 @@ export const AlpineScene = memo(function AlpineScene({
       }),
       terrain: terrainMaterial(built.surf, built.forest, built.ao),
       tree: treeMaterial(),
+      farTree: treeMaterial(false),
       sky: skyMaterial(),
       snow: snowMaterial(),
       streak: streakMaterial(),
@@ -1108,7 +1117,7 @@ export const AlpineScene = memo(function AlpineScene({
     near.castShadow = true;
     near.frustumCulled = false;
     near.count = 0;
-    const mid = new THREE.InstancedMesh(geos.farSpruce, mats.tree, Math.max(1, built.trees.n));
+    const mid = new THREE.InstancedMesh(geos.farSpruce, mats.farTree, Math.max(1, built.trees.n));
     mid.instanceColor = new THREE.InstancedBufferAttribute(
       new Float32Array(Math.max(1, built.trees.n) * 3),
       3,
@@ -1267,7 +1276,7 @@ export const AlpineScene = memo(function AlpineScene({
       }
     }
     sp.needsUpdate = true;
-    // forest LOD: detailed spruce near the player, simple cones beyond (re-sorted every 8 m)
+    // forest LOD: detailed spruce near the player, solid boughs beyond (re-sorted every 8 m)
     const nm = nearRef.current;
     const mm = midRef.current;
     if (nm && mm && Math.hypot(cam.x - lodAt.current.x, cam.z - lodAt.current.z) > 8) {
@@ -1347,7 +1356,7 @@ export const AlpineScene = memo(function AlpineScene({
       <primitive object={forest.near} />
       <primitive object={forest.mid} />
       {built.far.length > 0 && (
-        <instancedMesh ref={farRef} args={[geos.farSpruce, mats.tree, built.far.length]} />
+        <instancedMesh ref={farRef} args={[geos.farSpruce, mats.farTree, built.far.length]} />
       )}
       <instancedMesh
         ref={chairRef}
