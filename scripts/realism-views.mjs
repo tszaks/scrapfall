@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 const out = process.env.OUT || "output/playwright/views";
 const tag = process.env.TAG || "before";
-const base = process.env.BASE || "http://127.0.0.1:5186";
+const base = process.env.BASE || "http://127.0.0.1:5286";
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ args: ["--use-angle=metal", "--ignore-gpu-blocklist"] });
 const report = [];
@@ -19,7 +19,7 @@ try {
       if (m.type() === "error") errors.push(m.text());
     });
     await page.goto(
-      `${base}/game/?map=${map}&seed=7&time=sunset&weather=sunny&tour=1&debug=1&quality=high`,
+      `${base}/game/?map=${map}&seed=7&time=${process.env.TIME || "sunset"}&weather=${process.env.WEATHER || "sunny"}&tour=1&debug=1&quality=high`,
     );
     await page.getByRole("button", { name: /^start$/i }).click({ timeout: 90000 });
     await page.getByRole("button", { name: /enter arena/i }).click();
