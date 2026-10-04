@@ -60,14 +60,20 @@ try {
   for (const tier of ["LOW", "HIGH", "LOW", "HIGH"]) {
     await page.getByRole("button", { name: tier, exact: true }).click();
     await page.waitForTimeout(400);
-    const row = await page.evaluate(() => {
+    const row = await page.evaluate((tier) => {
       let n = 0,
         full = 0,
         drawn = 0,
-        changed = 0;
+        changed = 0,
+        wrongRange = 0;
       __rs.scene.traverse((o) => {
         if (o.geometry?.userData.detailCounts) {
           n++;
+          if (
+            o.geometry.drawRange.count !==
+            o.geometry.userData.detailCounts[tier === "LOW" ? "low" : "high"]
+          )
+            wrongRange++;
           full += o.geometry.userData.detailCounts.high;
           drawn += o.geometry.drawRange.count;
           if (whiteoutGeos.get(o.uuid) !== o.geometry) changed++;
@@ -79,9 +85,12 @@ try {
         full,
         drawn,
         changed,
+        wrongRange,
         sameScene: __rs.scene === whiteoutScene,
       };
-    });
+    }, tier);
+    assert.ok(row.n > 1, "spruce and chalet batches inspected");
+    assert.equal(row.wrongRange, 0, "every detail geometry uses the selected tier");
     assert.equal(row.changed, 0);
     assert.equal(row.sameScene, true);
     assert.ok(tier === "LOW" ? row.drawn < row.full : row.drawn === row.full);
