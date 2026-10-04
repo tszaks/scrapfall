@@ -26,15 +26,22 @@ export function constructionDetail(m: Model, p: Structure) {
     for (const { alongX, edge, sign } of faces) {
       const a = alongX ? v.x0 : v.z0,
         b = alongX ? v.x1 : v.z1;
-      const strip = (u0: number, u1: number, y0: number, y1: number, color: string) => {
+      const strip = (
+        u0: number,
+        u1: number,
+        y0: number,
+        y1: number,
+        color: string,
+        relief = 0.016,
+      ) => {
         if (u1 - u0 < 0.025 || y1 - y0 < 0.025) return;
-        // 12 mm face relief, flush footprint at jambs; no new collision or threshold.
-        const center = edge + sign * 0.004;
+        // Jambs remain flush; deeper drip edges are confined above player height.
+        const center = edge + sign * (relief / 2 - 0.004);
         count++;
         m.box(
-          alongX ? u1 - u0 : 0.016,
+          alongX ? u1 - u0 : relief,
           y1 - y0,
-          alongX ? 0.016 : u1 - u0,
+          alongX ? relief : u1 - u0,
           [alongX ? (u0 + u1) / 2 : center, (y0 + y1) / 2, alongX ? center : (u0 + u1) / 2],
           color,
           [0.83, 0, 0.015, 0],
@@ -47,8 +54,21 @@ export function constructionDetail(m: Model, p: Structure) {
         if (Math.abs(v.y0 - p.base) < 0.02)
           strip(a, b, v.y0 + 0.015, v.y0 + Math.min(0.24, h * 0.3), foot);
         // Split wall fragments naturally put caps directly below glazing and above doors.
-        strip(a, b, v.y1 - Math.min(0.09, h * 0.2), v.y1 - 0.008, trim);
+        strip(
+          a,
+          b,
+          v.y1 - Math.min(0.09, h * 0.2),
+          v.y1 - 0.008,
+          trim,
+          v.y1 > p.base + 2.8 ? 0.12 : 0.016,
+        );
         if (h > 1.2) strip(a, b, v.y0 + 0.008, v.y0 + 0.075, trim);
+        // Weatherboard courses stay within the physical wall fragments; the upper
+        // fascia has a real drip edge, while all eye-height trim remains flush.
+        if (timber && h > 1.2 && b - a > 1) {
+          for (let y = v.y0 + 0.3; y < v.y1 - 0.12; y += 0.3)
+            strip(a + 0.02, b - 0.02, y, y + 0.028, "#584c3f");
+        }
         // Bounded panel joints give blank side walls construction scale.
         if (h > 2 && b - a > 5) {
           const bays = Math.min(6, Math.ceil((b - a) / 4));

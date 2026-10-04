@@ -278,7 +278,7 @@ vec2 irDu2 = dFdy(vFuv);`,
     float ndv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
     float f0 = mix(0.04, 0.16, tower);
     float fr = f0 + (1.0 - f0) * pow(1.0 - ndv, 5.0);
-    room *= (1.0 - fr) * mix(0.95, 0.8, tower);
+    room *= (1.0 - fr) * mix(0.95, 0.8, tower) * mix(0.32, 0.72, uNightK);
     float k = roomK * winM;
     em = mix(em, room * winM, roomK);
     // clear glass: little diffuse, a dielectric-ish reflection instead of the painted pane
@@ -291,7 +291,7 @@ vec2 irDu2 = dFdy(vFuv);`,
 if (uWet > 0.0) cityWet(diffuseColor, roughnessFactor, totalEmissiveRadiance, normal);`,
       );
   };
-  mat.customProgramCacheKey = () => "city-facade-v4";
+  mat.customProgramCacheKey = () => "city-facade-v5";
   return scannedSurface(
     surfaceRelief(mat, "facT.rgb", "1.0 - glassK", 0.045),
     "concrete_floor_02",

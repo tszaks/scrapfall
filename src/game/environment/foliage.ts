@@ -17,14 +17,15 @@ export function broadleafCrown(
   const matrix = new THREE.Matrix4();
   const axis = new THREE.Vector3(0, 1, 0);
   const branch = new THREE.CylinderGeometry(0.025, 0.065, 1, 6);
+  const twig = new THREE.CylinderGeometry(0.014, 0.023, 1, 4, 1, true);
   const start = new THREE.Vector3(center[0], center[1] - radius[1] * 0.9, center[2]);
-  const count = 20;
-  for (let arm = 0; arm < 11; arm++) {
+  const count = 24;
+  for (let arm = 0; arm < 12; arm++) {
     const angle = arm * 2.39996;
-    const spread = arm < 8 ? 0.64 : 0.25;
+    const spread = arm < 9 ? 0.57 : 0.26;
     const tip = new THREE.Vector3(
       center[0] + Math.cos(angle) * radius[0] * spread,
-      center[1] + (arm < 8 ? (rand() - 0.5) * radius[1] * 0.65 : radius[1] * 0.48),
+      center[1] + (arm < 9 ? (rand() - 0.5) * radius[1] * 0.65 : radius[1] * 0.48),
       center[2] + Math.sin(angle) * radius[2] * spread,
     );
     const delta = tip.clone().sub(start);
@@ -41,10 +42,21 @@ export function broadleafCrown(
         u = rand() * 2 - 1;
       const ring = Math.sqrt(1 - u * u),
         r = Math.cbrt(rand());
-      const x = tip.x + Math.cos(a) * ring * r * radius[0] * 0.47;
+      const x = tip.x + Math.cos(a) * ring * r * radius[0] * 0.38;
       const y = tip.y + u * r * radius[1] * 0.6;
-      const z = tip.z + Math.sin(a) * ring * r * radius[2] * 0.47;
-      const length = 0.18 + rand() * 0.25,
+      const z = tip.z + Math.sin(a) * ring * r * radius[2] * 0.38;
+      if (i % 6 === 0) {
+        const twigTip = new THREE.Vector3(x, y, z);
+        const twigDelta = twigTip.clone().sub(tip);
+        matrix.compose(
+          tip.clone().add(twigTip).multiplyScalar(0.5),
+          new THREE.Quaternion().setFromUnitVectors(axis, twigDelta.clone().normalize()),
+          new THREE.Vector3(1, twigDelta.length(), 1),
+        );
+        g.col("#66594a");
+        g.add(twig, matrix);
+      }
+      const length = 0.23 + rand() * 0.27,
         width = length * (0.35 + rand() * 0.2);
       const yaw = rand() * Math.PI * 2,
         tilt = (rand() - 0.5) * 1.6;
@@ -71,8 +83,9 @@ export function broadleafCrown(
         for (const p of vertices) g.v(p.x, p.y, p.z, n.x, n.y, n.z);
         for (const p of [...vertices].reverse()) g.v(p.x, p.y, p.z, -n.x, -n.y, -n.z);
       }
-      if (i >= 12) g.highDetailSince(detailStart);
+      if (i >= 14) g.highDetailSince(detailStart);
     }
   }
   branch.dispose();
+  twig.dispose();
 }

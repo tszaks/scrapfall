@@ -194,13 +194,24 @@ export class Geo {
     if (top) this.cap(poly, y1);
   }
   /** box rotated about y by `rot` (local +z maps to (sin rot, cos rot)) */
-  obox(x: number, y0: number, z: number, w: number, h: number, d: number, rot: number, top = true) {
+  obox(
+    x: number,
+    y0: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    rot: number,
+    top = true,
+    bottom = false,
+  ) {
     const s = Math.sin(rot);
     const c = Math.cos(rot);
     const pt = (lx: number, lz: number): P2 => [x + lx * c + lz * s, z - lx * s + lz * c];
     const poly: P2[] = [pt(-w / 2, -d / 2), pt(w / 2, -d / 2), pt(w / 2, d / 2), pt(-w / 2, d / 2)];
     for (let i = 0; i < 4; i++) this.wall(poly[i]!, poly[(i + 1) % 4]!, y0, y0 + h);
     if (top) this.cap(poly, y0 + h);
+    if (bottom) this.cap(poly, y0, true);
   }
   /** vertical prism with an n-gon section (cylinder-ish), from y0 up */
   cyl(x: number, y0: number, z: number, r: number, h: number, seg = 8, top = true, r1 = r) {

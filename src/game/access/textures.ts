@@ -239,8 +239,8 @@ export function concreteTexture() {
       g.fillRect(rnd() * 512, rnd() * 512, 1 + rnd() * 1.5, 1 + rnd() * 1.5);
     }
     // block joints every quarter (blocks 0.5 m x 0.25 m at 2 m per repeat)
-    g.strokeStyle = "rgba(110,110,110,0.22)";
-    g.lineWidth = 1.5;
+    g.strokeStyle = "rgba(76,73,67,0.38)";
+    g.lineWidth = 2.2;
     for (let r = 0; r < 8; r++) {
       const y = r * 64;
       g.beginPath();
@@ -249,6 +249,8 @@ export function concreteTexture() {
       g.stroke();
       for (let k = 0; k < 4; k++) {
         const x = k * 128 + (r % 2) * 64;
+        g.fillStyle = `rgba(90,86,78,${0.015 + rnd() * 0.055})`;
+        g.fillRect(x + 2, y + 2, 124, 60);
         g.beginPath();
         g.moveTo(x, y);
         g.lineTo(x, y + 64);

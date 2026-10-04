@@ -1,3 +1,4 @@
+import { stairFinish } from "./stairFinish";
 // Geometry for the access buildings.
 //   exterior  - entrance surrounds, signs, penthouses, rooftop props (world space, merged,
 //               lit by the scene like the city)
@@ -128,14 +129,18 @@ function wallAHole(G: IGeo, d0: number, d1: number, y0: number, y1: number, a: n
   if (hy1 < y1) G.wallA(hd0, hd1, hy1, y1, a, face, tile);
   if (hy0 > y0) G.wallA(hd0, hd1, y0, hy0, a, face, tile);
 }
-/** thin square tube from p to q (local), for handrails */
-function rail(G: IGeo, a: number, y0: number, d0: number, y1: number, d1: number, r = 0.025) {
-  const P = (dy: number, da: number, t: number) => [a + da, (t ? y1 : y0) + dy, t ? d1 : d0];
-  // four long faces
-  G.quad(P(r, -r, 0), P(r, r, 0), P(r, r, 1), P(r, -r, 1)); // top
-  G.quad(P(-r, r, 0), P(-r, -r, 0), P(-r, -r, 1), P(-r, r, 1)); // bottom
-  G.quad(P(-r, r, 0), P(-r, r, 1), P(r, r, 1), P(r, r, 0)); // +a
-  G.quad(P(-r, -r, 1), P(-r, -r, 0), P(r, -r, 0), P(r, -r, 1)); // -a
+/** Round steel handrail with capped ends, merged into the baked interior batch. */
+function rail(G: IGeo, a: number, y0: number, d0: number, y1: number, d1: number, r = 0.027) {
+  const length = Math.hypot(y1-y0,d1-d0);
+  const ny = (d1-d0)/length, nd = -(y1-y0)/length;
+  const point = (angle: number, end: number) => [a+Math.cos(angle)*r,
+    (end ? y1 : y0)+Math.sin(angle)*r*ny, (end ? d1 : d0)+Math.sin(angle)*r*nd];
+  for(let i=0;i<8;i++) {
+    const t=i*Math.PI/4, u=(i+1)*Math.PI/4;
+    G.quad(point(t,0),point(u,0),point(u,1),point(t,1));
+    G.tri([a,y0,d0],point(u,0),point(t,0));
+    G.tri([a,y1,d1],point(t,1),point(u,1));
+  }
 }
 
 // ------------------------------------------------------------------ exterior
@@ -783,7 +788,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   // none of the office signage: no extinguishers, floor plates or EXIT signs
   const rustic = b.spec.doorStyle === "wood";
   const wallC = rustic ? "#b9ab93" : "#bdb9b1";
-  const bandC = rustic ? "#5e4630" : "#3f7f5a";
+  const bandC = rustic ? "#5e4630" : "#596b60";
   // uneven light: every lamp its own strength and tint (tired fluorescents among the warm
   // bulkheads), and now and then a dead one
   const rng = (() => {
@@ -856,7 +861,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       G.flat(-W2, W2, s.v0, dS1, yl - slab, false, 0.7);
       G.wallD(-W2, W2, yl - slab, yl + 0.03, dS1, true);
       // yellow nosing strip on the landing edge
-      G.color(rustic ? "#6a4a30" : "#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#b4a36b");
       G.flat(-W2, W2, dS1 - 0.06, dS1, yl + 0.03, true);
     }
     // the half landing
@@ -935,7 +940,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       const dA1 = dS1 + (k + 1) * (s.Lr / s.steps);
       G.color("#aaa69e");
       G.flat(a0, a1, dA0 + 0.05, dA1, ya, true);
-      G.color(rustic ? "#6a4a30" : "#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#b4a36b");
       G.flat(a0, a1, dA0, dA0 + 0.05, ya, true);
       G.color("#9d9991");
       G.wallD(a0, a1, ya - rise - 0.14, ya, dA0, false);
@@ -950,7 +955,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       const dB0 = dN0 - (k + 1) * (s.Lr / s.steps);
       G.color("#aaa69e");
       G.flat(b0, b1, dB0, dB1 - 0.05, yb, true);
-      G.color(rustic ? "#6a4a30" : "#d8b02a");
+      G.color(rustic ? "#6a4a30" : "#b4a36b");
       G.flat(b0, b1, dB1 - 0.05, dB1, yb, true);
       G.color("#9d9991");
       G.wallD(b0, b1, yb - rise - 0.14, yb, dB1, true);
@@ -959,7 +964,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
       G.wallD(b0, b1, yb - rise - 0.14, yb - rise, dB0, false);
     }
     // handrails on the outer walls and both faces of the spine
-    P.color(rustic ? "#4a3020" : "#c23a2a");
+    P.color(rustic ? "#4a3020" : "#595c54");
     rail(P, -W2 + 0.06, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
     rail(P, -g - 0.05, base + 0.9, dS1, base + s.h / 2 + 0.9, dN0);
     rail(P, W2 - 0.06, base + s.h / 2 + 0.9, dN0, base + s.h + 0.9, dS1);
@@ -969,14 +974,14 @@ function buildStairs(b: AccessBuilding, S: Set4) {
   G.color(wallC);
   G.wallD(g, W2, y0, gy + s.h - rise - 0.14, dS1, false);
   // top: guard rail across the pit of the last flight up, bulkhead ceiling and lamp
-  P.color(rustic ? "#4a3020" : "#c23a2a");
+  P.color(rustic ? "#4a3020" : "#595c54");
   P.quad([-W2, topY + 1.02, dS1 + 0.03], [-g, topY + 1.02, dS1 + 0.03], [-g, topY + 1.08, dS1 + 0.03], [-W2, topY + 1.08, dS1 + 0.03]);
   for (const a of [-W2 + 0.1, (-W2 - g) / 2, -g - 0.05]) P.box(a - 0.02, a + 0.02, topY + 0.03, topY + 1.05, dS1, dS1 + 0.06);
   if (b.room) {
     // the stairwell opens into the lookout room: a railing round the opening, open on the
     // top landing's +a side (where you step off)
     const rt = topY + 1.05;
-    P.color(rustic ? "#4a3020" : "#c23a2a");
+    P.color(rustic ? "#4a3020" : "#595c54");
     const posts = new Set<string>(); // a corner post is shared by two runs: draw it once
     const railRun = (a0: number, d0: number, a1: number, d1: number) => {
       const len = Math.hypot(a1 - a0, d1 - d0);
@@ -1026,6 +1031,7 @@ function buildStairs(b: AccessBuilding, S: Set4) {
     P.box(-0.34, 0.34, gy + hh + 0.05, gy + hh + 0.29, 0.25, 0.285, "b-d");
     signD(S.sign, SIGN.EXIT, 0, gy + hh + 0.07, gy + hh + 0.27, 0.3, 0.64, 1);
   }
+  stairFinish(P, b);
   G.bake(lights, 0.13);
   P.bake(lights, 0.16);
 }

@@ -40,6 +40,7 @@ const report = {
   extra: process.env.EXTRA || "",
   wave: Number(process.env.WAVE || 1),
   seconds,
+  cpuThrottle: Number(process.env.CPU_THROTTLE || 1),
   repeats,
   soak: process.env.SOAK === "1",
   method: `Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
@@ -52,7 +53,15 @@ save();
 const browserType = engine === "webkit" ? webkit : chromium;
 const b = await browserType.launch({
   headless: true,
-  ...(engine === "chromium" ? { args: ["--disable-gpu-vsync", "--disable-frame-rate-limit"] } : {}),
+  ...(engine === "chromium"
+    ? {
+        args: [
+          "--disable-gpu-vsync",
+          "--disable-frame-rate-limit",
+          ...(process.platform === "darwin" ? ["--use-angle=metal", "--ignore-gpu-blocklist"] : []),
+        ],
+      }
+    : {}),
   ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}),
 });
 report.browserVersion = b.version();
@@ -65,6 +74,12 @@ try {
         deviceScaleFactor: 2,
       });
       const p = await context.newPage();
+      if (process.env.CPU_THROTTLE && engine === "chromium") {
+        const session = await context.newCDPSession(p);
+        await session.send("Emulation.setCPUThrottlingRate", {
+          rate: Number(process.env.CPU_THROTTLE),
+        });
+      }
       let row = { map, repeat, errors: [], consoleErrors: [] };
       await p.exposeFunction("__benchProgress", (progress) => {
         row.progress = progress;
@@ -128,7 +143,13 @@ try {
             hud: document.body.innerText.slice(0, 500),
             camera: r.camera.position.toArray(),
             keys: r.keys.current,
-            renderer: r.gl.getContext().getParameter(r.gl.getContext().RENDERER),
+            renderer: (() => {
+              const gl = r.gl.getContext();
+              const ext = gl.getExtension("WEBGL_debug_renderer_info");
+              return ext
+                ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+                : gl.getParameter(gl.RENDERER);
+            })(),
             quality: window.__rsQuality,
             warm: window.__rsWarm,
             startupLong: window.__bm.startupLong,
@@ -151,6 +172,8 @@ try {
             const r = __rs,
               bm = __bm;
             const ms = [],
+              warmMs = [],
+              shaderEvents = [],
               renders = [],
               calls = [],
               triangles = [],
@@ -194,6 +217,7 @@ try {
             r.trigger.current = true;
             const startMemory = { ...r.gl.info.memory };
             const programsStart = r.gl.info.programs.length;
+            let previousPrograms = programsStart;
             await new Promise((resolve) => {
               function step(now) {
                 const elapsed = (now - start) / 1000;
@@ -210,7 +234,20 @@ try {
                       context.deleteQuery(q);
                     }
                 }
-                if (last) ms.push(now - last);
+                if (last) {
+                  ms.push(now - last);
+                  if (elapsed >= 10) warmMs.push(now - last);
+                }
+                const programs = r.gl.info.programs.length;
+                if (programs !== previousPrograms) {
+                  shaderEvents.push({
+                    elapsed,
+                    programs,
+                    delta: programs - previousPrograms,
+                    frameMs: last ? now - last : 0,
+                  });
+                  previousPrograms = programs;
+                }
                 last = now;
                 renders.push(renderTotal);
                 renderTotal = 0;
@@ -280,6 +317,14 @@ try {
               [...a].sort((a, b) => a - b)[Math.min(a.length - 1, Math.floor(a.length * q))];
             return {
               programsStart,
+              shaderEvents,
+              warmAfter10s: {
+                p95: pct(warmMs, 0.95),
+                p99: pct(warmMs, 0.99),
+                worst: Math.max(...warmMs),
+                over16_7: warmMs.filter((x) => x > 1000 / 60).length,
+                frames: warmMs.length,
+              },
               programsEnd: r.gl.info.programs.length,
               gpuTimerAvailable: !!timer,
               gpuRenderPassSamples: gpuMs.length,
@@ -290,6 +335,7 @@ try {
               p95: pct(ms, 0.95),
               p99: pct(ms, 0.99),
               worst: ms.reduce((a, b) => Math.max(a, b), 0),
+              over16_7: ms.filter((x) => x > 1000 / 60).length,
               over50: ms.filter((x) => x > 50).length,
               over25: ms.filter((x) => x > 25).length,
               frames: ms.length,

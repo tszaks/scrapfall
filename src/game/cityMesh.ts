@@ -1,3 +1,4 @@
+import { facadeDepth } from "./environment/facadeDepth";
 import { broadleafCrown } from "./environment/foliage";
 import { facadePieces } from "./structures/facade";
 import type { Structure } from "./structures/plan";
@@ -1223,6 +1224,8 @@ function building(b: Bld, C: Ctx) {
           }
         : st;
     const top = massPart(C, p, pst, b, store);
+    if ((p.shape ?? "box") === "box")
+      facadeDepth(C.detail, outline(p), p.y0, p.y0 + p.h, pst, b.street, store, b.grandWing ? [b.grandWing] : []);
     tops.push({ ...top, p, i: pi });
     if (store && p.shape !== "cyl" && !b.access) shopfronts(C, outline(p), st, b, vols, pi);
     if (b.access) continue; // the access system dresses the entrance and the roof

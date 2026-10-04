@@ -20,7 +20,8 @@ import { rolldown } from "rolldown";
 import { resolve } from "node:path";
 
 const entry = `
-export { Geo } from './src/game/cityGeo';
+export { Geo, L, rectPoly } from './src/game/cityGeo';
+export { facadeDepth } from './src/game/environment/facadeDepth';
 export { broadleafCrown } from './src/game/environment/foliage';
 export { spruceGeo } from './src/game/alpine/forest';
 export { surfaceDetail, setGeometryDetail } from './src/game/environment/detailQuality';
@@ -143,4 +144,50 @@ test("Pier sand scan flag excludes skate concrete, parking asphalt, and bluff te
     for (const key of ["ground", "main", "detail", "glow", "signs", "pools"]) chunk[key]?.dispose();
   }
   for (const [kind, count] of Object.entries(counts)) assert.ok(count > 0, kind);
+});
+
+test("facade relief is bounded, optional, non-solid and leaves real room cutouts empty", () => {
+  const g = new env.Geo();
+  const room = { bounds: { x0: 3, x1: 9, z0: 0, z1: 5 }, base: 0, top: 12 };
+  env.facadeDepth(
+    g,
+    env.rectPoly(0, 0, 18, 18),
+    0,
+    45,
+    { layer: env.L.ribbon, tint: 0xaaaaaa, fh: 3, seed: 0.3, uOff: 0 },
+    15,
+    false,
+    [room],
+  );
+  const geometry = g.build();
+  const p = geometry.getAttribute("position");
+  const normals = geometry.getAttribute("normal");
+  assert.ok(
+    Array.from({ length: normals.count }, (_, i) => normals.getY(i)).some((y) => y < -0.99),
+    "elevated trim needs closed undersides",
+  );
+  assert.ok(p.count > 0 && p.count / 3 < 6000);
+  assert.deepEqual(geometry.userData.nonSolid, [[0, p.count]]);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i),
+      y = p.getY(i),
+      z = p.getZ(i);
+    assert.ok(Number.isFinite(x + y + z));
+    assert.ok(y >= 3.05 - 1e-5 && y <= 26 + 1e-5, `unsafe facade height ${y}`);
+    assert.ok(!(x > 3.001 && x < 8.999 && z < 0 && y < 11.999), "trim covers a real opening");
+    assert.ok(x >= -0.19 && x <= 18.19 && z >= -0.19 && z <= 18.19, "relief projects too far");
+  }
+  transitions(geometry);
+  env.setGeometryDetail(geometry, true);
+  assert.equal(geometry.drawRange.count, 0);
+  geometry.dispose();
+});
+
+test("branched crowns stay under 2000 triangles per tree with reduced LOW detail", () => {
+  const g = new env.Geo();
+  env.broadleafCrown(g, [0, 4, 0], [2, 2, 2], "#647c52");
+  const geometry = g.build();
+  assert.ok(g.n / 3 < 2000, `crown budget ${g.n / 3}`);
+  transitions(geometry);
+  geometry.dispose();
 });
