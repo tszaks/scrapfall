@@ -372,11 +372,14 @@ import { HudOverlay, SquadDriver } from "./Squad";
 import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, aimPing, clearPings, pingMsg, pingFromMsg, type PingWorld } from "./ping";
 import {
+  DEAD,
   DOWN,
+  UP,
   REVIVE_HP,
   REVIVE_RANGE,
   me as squadMe,
   myRevive,
+  playerLifeState,
   reviveInterrupted,
   squad,
   squad as downTable,
@@ -2912,6 +2915,7 @@ function World({
       Object.assign(handle, {
         ords,
         hitLog,
+        takeHit,
         packLead,
         blocks,
         keys,
@@ -3722,10 +3726,13 @@ function World({
     camGround.current = camera.position.y - EYE;
     cancelJump(camGround.current);
   };
-  const wasDead = useRef(dead);
+  const previousLife = useRef(playerLifeState(dead, downed));
   useEffect(() => {
-    if (wasDead.current && !dead && !downed) placeAtSpawn();
-    wasDead.current = dead;
+    const life = playerLifeState(dead, downed);
+    // A revive keeps the current feet, facing and building/stair state. Only a
+    // fully dead spectator returning at the next wave goes back to spawn.
+    if (previousLife.current === DEAD && life === UP) placeAtSpawn();
+    previousLife.current = life;
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
   // the roster (my player number) can arrive just after the new arena: re-place before the match starts
   const lastSpawnNum = useRef(0);
@@ -5120,7 +5127,7 @@ function World({
     const isH = isHostRef.current;
     const spectating = deadRef.current;
     driving.self = n?.self ?? "host";
-    if (spectating || downedRef.current) {releaseVehicle(driving.self); if(ski.active){resetSki();placeAtSpawn();}}
+    if (spectating || downedRef.current) {releaseVehicle(driving.self); if(ski.active){resetSki();}}
     if (driving.use) {
       driving.use=false;
       const vehicle=myVehicle();
