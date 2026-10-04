@@ -13,6 +13,13 @@ const report = {
   errors: [],
 };
 page.on("pageerror", (e) => report.errors.push(e.message));
+function assertFramed(s) {
+  const b = s.view.hullBounds;
+  assert.ok(
+    b && b.minX > -0.98 && b.maxX < 0.98 && b.minY > -0.98 && b.maxY < 0.98,
+    `rendered vehicle hull must fit: ${JSON.stringify(b)}`,
+  );
+}
 async function snap(name) {
   const value = await page.evaluate(() => {
     const r = __rs,
@@ -46,12 +53,41 @@ try {
     const r = __rs,
       original = r.gl.render;
     r.gl.render = function (scene, camera) {
-      if (scene === r.scene)
+      if (scene === r.scene) {
+        const c = r.playtest.myVehicle();
+        let hullBounds = null;
+        if (c) {
+          camera.updateMatrixWorld();
+          const xs = [],
+            ys = [];
+          for (const along of [-c.half, c.half])
+            for (const lateral of [-c.width, c.width])
+              for (const height of [0, c.height]) {
+                const p = r.camera.position
+                  .clone()
+                  .set(
+                    c.x + Math.sin(c.yaw) * along + Math.cos(c.yaw) * lateral,
+                    r.groundAt(c.x, c.z) + height,
+                    c.z + Math.cos(c.yaw) * along - Math.sin(c.yaw) * lateral,
+                  )
+                  .project(camera);
+                xs.push(p.x);
+                ys.push(p.y);
+              }
+          hullBounds = {
+            minX: Math.min(...xs),
+            maxX: Math.max(...xs),
+            minY: Math.min(...ys),
+            maxY: Math.max(...ys),
+          };
+        }
         window.__lastView = {
           position: camera.position.toArray(),
           fov: camera.fov,
           logical: camera === r.camera,
+          hullBounds,
         };
+      }
       return original.call(this, scene, camera);
     };
     const c = [...r.playtest.driveCars.values()][0];
@@ -71,6 +107,7 @@ try {
   assert.ok(
     Math.hypot(s.view.position[0] - s.car.x, s.view.position[2] - s.car.z) > s.car.half + 2,
   );
+  assertFramed(s);
   await page.screenshot({ path: `${out}/chase-sedan.png` });
   await page.keyboard.down("w");
   await page.waitForTimeout(600);
@@ -120,6 +157,7 @@ try {
     return !__rs.playtest.staticBody(p[0], p[2], 0.2, p[1] - 0.2, 0.4, 0);
   });
   assert.ok(clearCamera, "camera body must be outside static geometry");
+  assertFramed(s);
   await page.screenshot({ path: `${out}/chase-large.png` });
   await page.evaluate(() => {
     for (let i = 0; i < 40; i++) {
