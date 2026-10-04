@@ -136,7 +136,7 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
   };
   const replay = (conn: DataConnection) => {
     snapshots.forEach(m => send(conn, { ...m, from: "host" }));
-    poses.forEach(m => { if (m.from !== conn.peer) send(conn, m); });
+    poses.forEach(m => { if (m.from !== conn.peer && (m.from === "host" || conns.has(m.from))) send(conn, m); });
   };
   const handle: NetHandle = {
     role: initialHost ? "host" : "guest", code, paused: false,

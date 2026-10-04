@@ -3447,7 +3447,7 @@ function World({
         remoteDeps.current.set(String(m.from ?? "host"), {
           t: Array.isArray(m.t) ? (m.t as number[]) : [],
           m: Array.isArray(m.m) ? (m.m as number[]) : [],
-          at: performance.now(),
+          at: simulationNow(),
         });
         return;
       }
