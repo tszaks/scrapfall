@@ -83,10 +83,11 @@ export const colorFor = (num: number) => PLAYER_COLORS[Math.max(0, Math.min(3, n
 // v21 adds lower-facade relief and denser branched crowns without changing navigation.
 // v22 replaces Whiteout spruce and adds chalet construction detail.
 // v23 appends analog vehicle braking to guest driving input.
-// v24 adds host-authoritative live pause and paused-room recovery.
+// v24 halves street enemy approach distances and makes stopped traffic solid to players.
+// v25 adds host-authoritative live pause and paused-room recovery.
 // Development rooms use a separate namespace: a public peer must never join a
 // developer's Nuketown room and build a different map from the same seed.
-const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v24-" : "scrapfall-ts-arena-v24-";
+const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v25-" : "scrapfall-ts-arena-v25-";
 /** ms without a word from a guest before the host drops it */
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */

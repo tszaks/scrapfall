@@ -1,0 +1,57 @@
+.ammo-hud {
+  position: fixed;
+  z-index: 20;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 92px);
+  width: 168px;
+  box-sizing: border-box;
+  pointer-events: none;
+  padding: 8px 12px;
+  border: 1px solid #2b2118b3;
+  border-radius: 6px;
+  background: #f3e6cfee;
+  color: #2b2118;
+  box-shadow: 2px 2px 0 #2b21184d;
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
+.ammo-hud-name { font-size: 10px; letter-spacing: .12em; }
+.ammo-hud-count { font-size: 22px; font-weight: bold; line-height: 1.3; }
+.ammo-hud-hint { font-size: 10px; white-space: nowrap; }
+.ammo-hud-track { height: 3px; margin-top: 5px; background: #2b211830; }
+.ammo-hud-progress { height: 100%; background: #1d7a37; }
+/* Elevator controls own the interaction prompt; match the weapon strip's visibility. */
+html.rs-incar .ammo-hud { display: none; }
+.ammo-hud[data-touch="true"] {
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 232px);
+}
+.hud-player-status { display: contents; }
+/* On landscape phones use the gap between the movement thumb and minimap. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .ammo-hud[data-touch="false"] {
+    bottom: max(20px, env(safe-area-inset-bottom));
+  }
+  [data-combat-hud][data-touch="false"] .hud-player-status {
+    position: absolute;
+    left: calc(max(20px, env(safe-area-inset-left)) + 176px);
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  [data-combat-hud][data-touch="false"] .hud-player-status > * {
+    position: static;
+    width: 100%;
+  }
+  [data-combat-hud][data-touch="false"] .hud-ability {
+    padding: 6px 8px;
+    font-size: 10px;
+    letter-spacing: .04em;
+  }
+  .ammo-hud[data-touch="true"] {
+    left: calc(max(20px, env(safe-area-inset-left)) + 76px);
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: 144px;
+  }
+}

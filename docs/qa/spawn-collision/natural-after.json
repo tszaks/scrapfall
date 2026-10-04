@@ -1,0 +1,1639 @@
+{
+  "errors": [],
+  "samples": [
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -217.9513059499614,
+          "z": 43.95940983531713,
+          "hp": 2,
+          "d": 176.30507522713353,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": 21.631628941997807,
+          "z": 119.6677028162289,
+          "hp": 2,
+          "d": 167.29818745310456,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 2,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 5.007
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -213.46245661429606,
+          "z": 39.04567255274034,
+          "hp": 2,
+          "d": 170.22227391804444,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": 17.0509775426563,
+          "z": 115.29900608523785,
+          "hp": 2,
+          "d": 161.30143340975005,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 97.91325470605393,
+          "z": -162.69471251920027,
+          "hp": 2,
+          "d": 205.282201041037,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -210.17725648371538,
+          "z": 20.699275545820292,
+          "hp": 2,
+          "d": 160.73235935108295,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 10.011
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -208.86975233872315,
+          "z": 34.240644157945134,
+          "hp": 2,
+          "d": 164.1289720330358,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": 12.535681830639723,
+          "z": 111.6515011190069,
+          "hp": 2,
+          "d": 156.00561788744642,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 97.98924072667988,
+          "z": -155.84596152854598,
+          "hp": 2,
+          "d": 200.91355011594214,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -205.34968985354138,
+          "z": 16.150362404340303,
+          "hp": 2,
+          "d": 154.78011816792397,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 15.016
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -204.3048465796815,
+          "z": 29.37657986747613,
+          "hp": 2,
+          "d": 158.08475493592786,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": 8.13509280586859,
+          "z": 106.67227981774684,
+          "hp": 2,
+          "d": 149.59680232591413,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 97.99827070467327,
+          "z": -148.9781587901322,
+          "hp": 2,
+          "d": 196.62191847728883,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -200.80970209465573,
+          "z": 11.326026612118786,
+          "hp": 2,
+          "d": 149.08979437121343,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 20.078
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -200.40662962803648,
+          "z": 25.41402908925405,
+          "hp": 2,
+          "d": 153.03110770304355,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": 4.042668720428466,
+          "z": 102.58570859728451,
+          "hp": 2,
+          "d": 144.14865484758045,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 95.24123572693102,
+          "z": -145.07150044679634,
+          "hp": 2,
+          "d": 192.0498114358023,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -196.7565429972249,
+          "z": 7.240020969171613,
+          "hp": 2,
+          "d": 144.1310181343448,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 25.127
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -196.55233766760753,
+          "z": 20.66965861700249,
+          "hp": 2,
+          "d": 147.79577334413023,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -0.6645141329864692,
+          "z": 97.86979925272051,
+          "hp": 2,
+          "d": 137.90175246091923,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 90.50352477049496,
+          "z": -140.39073382149147,
+          "hp": 2,
+          "d": 185.44262419587727,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -192.26027620523482,
+          "z": 2.3886259105683436,
+          "hp": 2,
+          "d": 138.63192599054835,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 30.133
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -191.7506071945795,
+          "z": 15.776095256533518,
+          "hp": 2,
+          "d": 141.68300058658045,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -5.464804629825286,
+          "z": 93.2438163861572,
+          "hp": 2,
+          "d": 131.74194234837393,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 85.24504271009324,
+          "z": -136.37166891076598,
+          "hp": 2,
+          "d": 178.82413371270928,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -187.67858881547764,
+          "z": -2.381821549537821,
+          "hp": 2,
+          "d": 133.1660040773335,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 35.14
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -186.91219132872897,
+          "z": 10.919417353341505,
+          "hp": 2,
+          "d": 135.61673386037526,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -9.39608029624728,
+          "z": 88.69181959610319,
+          "hp": 2,
+          "d": 126.02822672643946,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -207.90073278605266,
+          "z": 33.40413760466081,
+          "hp": 2,
+          "d": 162.91562009316291,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -183.08869885730803,
+          "z": -7.098590493569493,
+          "hp": 2,
+          "d": 127.80934589803836,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 40.146
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -182.06322206433114,
+          "z": 6.065138176958736,
+          "hp": 2,
+          "d": 129.6196094428906,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -10.6260676827354,
+          "z": 84.48641744945802,
+          "hp": 2,
+          "d": 121.67060330737237,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -203.04330067716273,
+          "z": 28.907401506282767,
+          "hp": 2,
+          "d": 156.73894863395452,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 77.0162090546758,
+          "z": -122.38975142833775,
+          "hp": 2,
+          "d": 163.92000934629658,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 45.151
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -177.21221358869053,
+          "z": 1.2127028633104242,
+          "hp": 2,
+          "d": 123.71078491575834,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -14.6005163696569,
+          "z": 79.62596227283917,
+          "hp": 2,
+          "d": 115.6765489080407,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -200.36955403871687,
+          "z": 24.513802870319136,
+          "hp": 2,
+          "d": 152.6844082320238,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 72.4847415411585,
+          "z": -117.47633004725445,
+          "hp": 2,
+          "d": 157.39222322181556,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 50.16
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -172.35651364586553,
+          "z": -3.6433722408063463,
+          "hp": 2,
+          "d": 117.89983272392155,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.567173814979977,
+          "z": 73.10729860109963,
+          "hp": 2,
+          "d": 108.89214509651265,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -195.58417795484425,
+          "z": 19.611550254165095,
+          "hp": 2,
+          "d": 146.53475388802764,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 67.87018538116129,
+          "z": -112.62609324680174,
+          "hp": 2,
+          "d": 150.8447508378796,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 55.181
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -167.8442010971471,
+          "z": -7.3957501983881,
+          "hp": 2,
+          "d": 112.74294668293894,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.93693434698437,
+          "z": 66.23295304552241,
+          "hp": 2,
+          "d": 102.39579419681976,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -190.72217096294574,
+          "z": 14.729836313665714,
+          "hp": 2,
+          "d": 140.3832536965715,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 62.92199788661484,
+          "z": -108.15849106381896,
+          "hp": 2,
+          "d": 144.24517068777587,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 60.201
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -165.62163100857012,
+          "z": -11.329049232329325,
+          "hp": 2,
+          "d": 109.8934908102389,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.991263456284745,
+          "z": 59.415724170635,
+          "hp": 2,
+          "d": 96.13640222153603,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -185.9042446869514,
+          "z": 9.9063197581586,
+          "hp": 2,
+          "d": 134.3621724144158,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 58.14492063058381,
+          "z": -103.58276548732903,
+          "hp": 2,
+          "d": 137.73564239417487,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 65.218
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -159.3513846465491,
+          "z": -13.606286404551208,
+          "hp": 2,
+          "d": 103.35852616080425,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.99862697293874,
+          "z": 52.60340415380694,
+          "hp": 2,
+          "d": 89.98343517132497,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -181.08797670852812,
+          "z": 5.088505492319649,
+          "hp": 2,
+          "d": 128.42381071799528,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 53.54430659080095,
+          "z": -98.78903471390875,
+          "hp": 2,
+          "d": 131.26740324759982,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 70.227
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -152.49978622647038,
+          "z": -13.941234883380403,
+          "hp": 2,
+          "d": 96.52905285926006,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.99979997104072,
+          "z": 45.741485313589195,
+          "hp": 2,
+          "d": 83.8917317654788,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -176.23607086811788,
+          "z": 0.23619243072072518,
+          "hp": 2,
+          "d": 122.53376334321705,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 48.91732315413351,
+          "z": -93.9515536924349,
+          "hp": 2,
+          "d": 124.77213943258036,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 75.231
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -145.64445579546734,
+          "z": -13.991444347321714,
+          "hp": 2,
+          "d": 89.74452169769889,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.999971409953847,
+          "z": 38.88586831671735,
+          "hp": 2,
+          "d": 77.93408540353677,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -171.41406730108193,
+          "z": -4.532007769201767,
+          "hp": 2,
+          "d": 116.79608493319162,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 44.30369087832083,
+          "z": -89.11039440426191,
+          "hp": 2,
+          "d": 118.30857149765112,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 80.236
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -138.7944618434651,
+          "z": -13.99882891424769,
+          "hp": 2,
+          "d": 82.98413571300586,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.999996202100913,
+          "z": 32.035868316775336,
+          "hp": 2,
+          "d": 72.14087460227474,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -167.21714250447886,
+          "z": -5.27915660853862,
+          "hp": 2,
+          "d": 112.53468454779582,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 39.57302176199383,
+          "z": -84.4165291660416,
+          "hp": 2,
+          "d": 111.8444155753221,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 85.24
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -131.9332279431359,
+          "z": -13.999849527736943,
+          "hp": 2,
+          "d": 76.22986857671978,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -16.999999385131463,
+          "z": 25.17463431679275,
+          "hp": 2,
+          "d": 66.53977595329064,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": -162.07883424727223,
+          "z": -7.399843413050633,
+          "hp": 2,
+          "d": 107.07907292357618,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 34.63631155664553,
+          "z": -79.95759738371349,
+          "hp": 2,
+          "d": 105.34137611401647,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 90.244
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -125.47463694448858,
+          "z": -13.99997121778614,
+          "hp": 2,
+          "d": 69.89117763053028,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -17.185881080388402,
+          "z": 18.731916989418178,
+          "hp": 2,
+          "d": 61.392476174616434,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 61.42597220966476,
+          "z": 129.74069085565466,
+          "hp": 2,
+          "d": 197.2481595488878,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 30.28064740015236,
+          "z": -75.37435661099671,
+          "hp": 2,
+          "d": 99.30881670272589,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 95.249
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -118.61285494460459,
+          "z": -13.999995937859577,
+          "hp": 2,
+          "d": 63.18341561014911,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -19.619324388639736,
+          "z": 12.960531123131807,
+          "hp": 2,
+          "d": 55.45340403483625,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 59.87811534383264,
+          "z": 128.60060119936261,
+          "hp": 2,
+          "d": 195.4078865919389,
+          "stuck": 2,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 25.60880172774895,
+          "z": -70.53506875493343,
+          "hp": 2,
+          "d": 92.916339773376,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 100.254
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -113.42872084579099,
+          "z": -16.32000414964216,
+          "hp": 2,
+          "d": 57.62484567750775,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -24.236020911096315,
+          "z": 7.901704911423036,
+          "hp": 2,
+          "d": 48.60463703480374,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 92.48178623956176,
+          "z": -25.55980550046283,
+          "hp": 2,
+          "d": 149.50170221962563,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 20.952960415867942,
+          "z": -65.69473976568136,
+          "hp": 2,
+          "d": 86.5884371241352,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 105.258
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -107.63152552207826,
+          "z": -18.69601335521634,
+          "hp": 2,
+          "d": 51.47927295697925,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -28.86601591324183,
+          "z": 2.8283066572809092,
+          "hp": 2,
+          "d": 41.73614203480375,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 85.6291758877078,
+          "z": -25.935898907130085,
+          "hp": 2,
+          "d": 142.64411073622446,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 16.083286026695045,
+          "z": -61.10519558289834,
+          "hp": 2,
+          "d": 80.23166875393825,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 110.266
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -100.88867031677398,
+          "z": -19.9350721062806,
+          "hp": 2,
+          "d": 44.62351895699589,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -33.48742231389651,
+          "z": -2.235680486095477,
+          "hp": 2,
+          "d": 34.88038803481999,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 78.93400632577506,
+          "z": -26.14080632685903,
+          "hp": 2,
+          "d": 135.94671999312854,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 10.52588765574787,
+          "z": -58.25817956746662,
+          "hp": 2,
+          "d": 73.99528994762935,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 115.272
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -94.14056009857235,
+          "z": -21.175096512029604,
+          "hp": 2,
+          "d": 37.762421956963706,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -38.1124303861731,
+          "z": -7.303614224340269,
+          "hp": 2,
+          "d": 28.019291034786864,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 72.07434714942505,
+          "z": -26.017936449549037,
+          "hp": 2,
+          "d": 129.08956452001965,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": 4.2646558185958074,
+          "z": -55.45253740830069,
+          "hp": 2,
+          "d": 67.13419294759679,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 120.278
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -87.40322939398816,
+          "z": -22.413140087659436,
+          "hp": 2,
+          "d": 30.91228495701318,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -42.730050414110394,
+          "z": -12.363452383381933,
+          "hp": 2,
+          "d": 21.16915403483557,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 65.22423359702894,
+          "z": -26.00290258213469,
+          "hp": 2,
+          "d": 122.24054841368121,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -1.9865742504066097,
+          "z": -52.6513770161602,
+          "hp": 2,
+          "d": 60.28405594764586,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 125.28
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -80.65525391973763,
+          "z": -23.653139733026187,
+          "hp": 2,
+          "d": 24.051324957013453,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -47.35496613581064,
+          "z": -17.431284926863395,
+          "hp": 2,
+          "d": 14.308194034835578,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 58.36327433230768,
+          "z": -26.000395959700857,
+          "hp": 2,
+          "d": 115.38060270682095,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -8.247681065427896,
+          "z": -49.84579087909482,
+          "hp": 2,
+          "d": 53.423095947645905,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 130.287
+    },
+    {
+      "wave": 1,
+      "hp": 16,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -74.03959697413949,
+          "z": -24.868824688864066,
+          "hp": 2,
+          "d": 17.324898956997433,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -51.8891936139374,
+          "z": -22.399744236377305,
+          "hp": 2,
+          "d": 7.581768034819283,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 51.636848344483894,
+          "z": -26.000051013969287,
+          "hp": 2,
+          "d": 108.65525580554822,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -14.386016177342032,
+          "z": -47.09521843185096,
+          "hp": 2,
+          "d": 46.69666994762962,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 135.296
+    },
+    {
+      "wave": 1,
+      "hp": 15,
+      "shots": 0,
+      "player": [
+        -57,
+        1.7500000059604646,
+        -28
+      ],
+      "alive": [
+        {
+          "i": 0,
+          "generation": 1,
+          "x": -67.30455691616552,
+          "z": -26.106447338099613,
+          "hp": 2,
+          "d": 10.477090957030239,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 1,
+          "generation": 1,
+          "x": -56.325908368260386,
+          "z": -27.261352267979774,
+          "hp": 2,
+          "d": 0.9999999999999996,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        },
+        {
+          "i": 2,
+          "generation": 1,
+          "x": 44.789040344684985,
+          "z": -26.000007913322825,
+          "hp": 2,
+          "d": 101.80868677396188,
+          "stuck": 0,
+          "block": false,
+          "los": false
+        },
+        {
+          "i": 3,
+          "generation": 1,
+          "x": -20.635120870643348,
+          "z": -44.2950104151893,
+          "hp": 2,
+          "d": 39.84886194766228,
+          "stuck": 0,
+          "block": false,
+          "los": true
+        }
+      ],
+      "pending": 0,
+      "hud": "N · 0°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+      "seconds": 140.309
+    }
+  ],
+  "initialHp": 16,
+  "browser": "151.0.7922.34",
+  "head": "b1c24d66f48d46eb5247135034d06b74cdcbe523",
+  "firstDamageSeconds": 140.309
+}

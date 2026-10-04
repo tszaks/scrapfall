@@ -1,7 +1,6 @@
 import { glyph, padLabel } from "./input/bindings";
 import { vehicleEntry } from "./vehicleControls";
 import { inputDevice } from "./input/gamepad";
-import { supply } from "./weaponSupply";
 import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
@@ -41,9 +40,7 @@ export function TravelView({
   useFrame(() => {
     const text = ski.active
       ? "SKIING · BACK TO BRAKE"
-      : ski.hint ||
-        driving.hint ||
-        (supply.remaining > 0 ? supply.text : supply.text.replace("RELOAD", actionLabel("reload")));
+      : ski.hint || driving.hint;
     if (hint.current) {
       hint.current.style.display = text ? "block" : "none";
       const carHint =
