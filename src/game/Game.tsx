@@ -382,6 +382,7 @@ import {
   me as squadMe,
   myRevive,
   playerLifeState,
+  advanceRecoveryWave,
   reviveInterrupted,
   squad,
   squad as downTable,
@@ -2624,7 +2625,7 @@ function World({
   gameOver: boolean;
   onScore: () => void;
   onHurt: (dmg?: number) => void;
-  onStatus: (wave: number, remaining: number, won: boolean, banner: boolean) => void;
+  onStatus: (wave: number, remaining: number, won: boolean, banner: boolean, initializing?: boolean) => void;
   onBoss: (hp: number, max: number) => void;
   onWeapon: (w: Weapon, picked: boolean) => void;
   onInv: (inv: { w: Weapon; ammo: number }[]) => void;
@@ -3676,7 +3677,7 @@ function World({
     bullets.current.forEach((b) => (b.active = false));
     enemyBullets.current.forEach((b) => (b.active = false));
     ords.current.forEach((o) => (o.on = false));
-    onStatus(1, 0, false, true);
+    onStatus(1, 0, false, true, true);
     if (netRef.current?.role === "guest") netRef.current.broadcast({type:"world-ready"});
   }, [blocks, camera]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -7958,6 +7959,8 @@ export function Game() {
   const mapChoiceRef = useRef(mapChoice);
   mapChoiceRef.current = mapChoice;
   const [seed, setSeed] = useState(() => seedParam() ?? newSeed(mapChoice));
+  const recoveryWave = useRef({ seed, wave: 0 });
+  if (recoveryWave.current.seed !== seed) recoveryWave.current = { seed, wave: 0 };
   const soloKit = useSoloRevive();
   useEffect(() => {
     resetSoloRevive();
@@ -8242,6 +8245,7 @@ export function Game() {
     if (m.type === "seed") {
       run.current = { shots: 0, hits: 0, dmg: 0, taken: 0, shards: 0 };
       setSquad({});
+      recoveryWave.current = { seed: Number(m.seed), wave: 0 };
       setSeed(Number(m.seed));
       setScore(0);
       setHealth(derive(NO_PERKS, clsRef.current).maxHp);
@@ -8329,8 +8333,6 @@ export function Game() {
       delete slots.current[String(m.from)];
       publishRoster();
     }
-    if (m.type === "status" && m.banner)
-      setHealth((h) => (h <= 0 ? derive(perksRef.current, clsRef.current).maxHp : h));
     if (m.type === "hurt") setHurtFlash((x) => x + 1);
     msgSink.current(m);
   };
@@ -9109,10 +9111,11 @@ export function Game() {
             playSfx("hurt");
           }}
 
-          onStatus={(wave, remaining, won, showBanner) => {
+          onStatus={(wave, remaining, won, showBanner, initializing) => {
+            const advanced = advanceRecoveryWave(recoveryWave.current, wave, built.seed, initializing);
             setStatus({ wave, remaining, won });
-            if (showBanner) {
-              setBanner(true);
+            if (showBanner) setBanner(true);
+            if (advanced) {
               if (perksRef.current.mend > 0 && wave > 1)
                 setHealth((h) => (h > 0 ? Math.min(maxHp, h + 3 * perksRef.current.mend) : h));
               if (multiplayer) setHealth((h) => (h <= 0 ? maxHp : h));
