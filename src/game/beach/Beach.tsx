@@ -1,3 +1,4 @@
+import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
 import { surfaceRelief } from "../environment/surfaceRelief";
 import { matchEnvironment, rainyMatch } from "../matchEnvironment";
@@ -381,6 +382,7 @@ const BeachScene = memo(function BeachScene({
   const scene = useThree((s) => s.scene);
   // geometry is prepared across tasks during the world build; this memo is a cache hit
   const built = useMemo(() => beachMeshes(city), [city]);
+  useGeometryDetail(built.chunks.flatMap((c) => [c.main, c.detail]));
   useLayoutEffect(
     () =>
       registerStaticGeometry(

@@ -1,3 +1,4 @@
+import { useGeometryDetail } from "./environment/detailQuality";
 import { scannedSurface } from "./environment/scannedSurface";
 import { surfaceRelief } from "./environment/surfaceRelief";
 import { Fountains } from "./Fountains";
@@ -426,6 +427,7 @@ export const CityScene = memo(function CityScene({
   // geometry was built across tasks while the world assembled (cityMesh.ts prepares
   // it); this useMemo is a cache lookup, not the vertex pass it used to be
   const built = useMemo(() => cityMeshes(city), [city]);
+  useGeometryDetail(built.chunks.flatMap((c) => [c.main, c.detail]));
   useLayoutEffect(
     () =>
       registerStaticGeometry(

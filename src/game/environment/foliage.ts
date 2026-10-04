@@ -2,7 +2,6 @@
 // No transparent leaf cards, new draw calls, or collision faces in the crown.
 import * as THREE from "three";
 import type { Geo } from "../cityGeo";
-import { quality } from "../quality";
 
 export function broadleafCrown(
   g: Geo,
@@ -19,7 +18,7 @@ export function broadleafCrown(
   const axis = new THREE.Vector3(0, 1, 0);
   const branch = new THREE.CylinderGeometry(0.025, 0.065, 1, 6);
   const start = new THREE.Vector3(center[0], center[1] - radius[1] * 0.9, center[2]);
-  const count = quality().tier === "low" ? 12 : 20;
+  const count = 20;
   for (let arm = 0; arm < 11; arm++) {
     const angle = arm * 2.39996;
     const spread = arm < 8 ? 0.64 : 0.25;
@@ -37,6 +36,7 @@ export function broadleafCrown(
     g.col("#66594a");
     g.add(branch, matrix);
     for (let i = 0; i < count; i++) {
+      const detailStart = g.n;
       const a = rand() * Math.PI * 2,
         u = rand() * 2 - 1;
       const ring = Math.sqrt(1 - u * u),
@@ -71,6 +71,7 @@ export function broadleafCrown(
         for (const p of vertices) g.v(p.x, p.y, p.z, n.x, n.y, n.z);
         for (const p of [...vertices].reverse()) g.v(p.x, p.y, p.z, -n.x, -n.y, -n.z);
       }
+      if (i >= 12) g.highDetailSince(detailStart);
     }
   }
   branch.dispose();

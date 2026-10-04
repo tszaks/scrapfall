@@ -2,6 +2,7 @@
 // (position, normal, colour, facade uv, facade params), so a whole chunk of buildings,
 // props and ground merges into a handful of draw calls.
 import * as THREE from "three";
+import { prepareDetailGeometry } from "./environment/detailQuality";
 
 import { L, MODULE_W } from "./cityTextures";
 
@@ -12,11 +13,20 @@ const _c = new THREE.Color();
 export type P2 = [number, number];
 
 /** A frozen chunk of local-space vertices that can be stamped many times. */
-export type Tmpl = { data: Float32Array; count: number; nonSolid?: [number, number][] };
+export type Tmpl = {
+  data: Float32Array;
+  count: number;
+  nonSolid?: [number, number][];
+  highDetail?: [number, number][];
+};
 
 export class Geo {
   buf = new Float32Array(STRIDE * 2048);
   n = 0;
+  private highDetail: [number, number][] = [];
+  highDetailSince(start: number) {
+    if (this.n > start) this.highDetail.push([start, this.n - start]);
+  }
   private nonSolid: [number, number][] = [];
   decoration<T>(draw: () => T): T {
     const start = this.n;
@@ -269,6 +279,7 @@ export class Geo {
     tint?: THREE.Color,
   ) {
     this.grow(t.count);
+    for (const [start, count] of t.highDetail ?? []) this.highDetail.push([this.n + start, count]);
     for (const [start, count] of t.nonSolid ?? []) this.nonSolid.push([this.n + start, count]);
     const s = Math.sin(rot);
     const c = Math.cos(rot);
@@ -306,6 +317,7 @@ export class Geo {
       data: this.buf.slice(0, this.n * STRIDE),
       count: this.n,
       nonSolid: this.nonSolid.slice(),
+      highDetail: this.highDetail.slice(),
     };
   }
   /** append a three.js geometry through a matrix (plain layer, current colour) */
@@ -333,6 +345,7 @@ export class Geo {
     g.setAttribute(uvName, new THREE.InterleavedBufferAttribute(ib, 2, 9));
     g.setAttribute("aFac", new THREE.InterleavedBufferAttribute(ib, 3, 11));
     g.userData["nonSolid"] = this.nonSolid.slice();
+    prepareDetailGeometry(g, this.highDetail);
     g.computeBoundingSphere();
     g.computeBoundingBox();
     return g;

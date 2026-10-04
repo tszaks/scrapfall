@@ -2,7 +2,7 @@
 // mapping gives mortar, timber grain and aggregate a light response without a second
 // texture fetch or a new draw call. Filter out subpixel relief to prevent shimmer.
 import type * as THREE from "three";
-import { quality } from "../quality";
+import { surfaceDetail } from "./detailQuality";
 
 export function surfaceRelief<M extends THREE.MeshStandardMaterial>(
   material: M,
@@ -12,14 +12,17 @@ export function surfaceRelief<M extends THREE.MeshStandardMaterial>(
 ): M {
   const compile = material.onBeforeCompile.bind(material);
   const cache = material.customProgramCacheKey.bind(material);
-  const enabled = quality().tier !== "low";
   material.onBeforeCompile = (shader, renderer) => {
     compile(shader, renderer);
-    if (!enabled) return;
+    shader.uniforms["uSurfaceRelief"] = surfaceDetail;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <common>",
+      "#include <common>\nuniform bool uSurfaceRelief;",
+    );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <normal_fragment_maps>",
       `#include <normal_fragment_maps>
-{
+if (uSurfaceRelief) {
   vec3 reliefDx = dFdx(-vViewPosition), reliefDy = dFdy(-vViewPosition);
   float reliefPixel = max(length(reliefDx), length(reliefDy));
   float reliefFade = 1.0 - smoothstep(0.04, 0.22, reliefPixel);
@@ -31,6 +34,6 @@ export function surfaceRelief<M extends THREE.MeshStandardMaterial>(
 }`,
     );
   };
-  material.customProgramCacheKey = () => cache() + `-relief-${enabled}-${depth}-${mask}`;
+  material.customProgramCacheKey = () => cache() + `-relief-live-${depth}-${mask}`;
   return material;
 }
