@@ -21,6 +21,19 @@ export function playerLifeState(dead: boolean, downed: boolean) {
   return !dead ? UP : downed ? DOWN : DEAD;
 }
 
+/** Per-run progress survives same-wave status syncs and host transfers. */
+export function advanceRecoveryWave(
+  state: { seed: number; wave: number },
+  wave: number,
+  sourceSeed: number,
+  initializing = false,
+) {
+  if (state.seed !== sourceSeed || initializing || !Number.isInteger(wave) || wave <= state.wave)
+    return false;
+  state.wave = wave;
+  return true;
+}
+
 export type PState = { st: number; bleed: number; prog: number; by: string; grace?: number };
 /** everyone's state by player id ("host" for the host), mirrored from the host */
 export const squad = new Map<string, PState>();
