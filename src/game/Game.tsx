@@ -6,6 +6,7 @@ import { hitSkier, downSkier, encodeSkiers, decodeSkiers } from "./skierTargets"
 import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehicle, releaseVehicle, driveInput, stepDriving, vehicleExit, encodeDriving, decodeDriving } from "./driving";
 import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
 import { TravelView } from "./TravelView";
+import { AmmoHud } from "./ui/AmmoHud";
 import { playerRecovery, requestRecovery } from "./playerRecovery";
 import { pingSurface } from "./playtestSurface";
 import { FLIGHT } from "./weaponFlight";
@@ -9250,6 +9251,9 @@ export function Game() {
           })}
         </div>
 
+        {started && locked && !ended && !downed && health > 0 && !showSettings && (
+          <AmmoHud weapon={weapon} name={GUNS[weapon].name} total={ammoLeft} touch={touchUi} />
+        )}
         <ScopeOverlay weapon={weapon} active={started && !ended && !paused} />
         {/* in an elevator car: how to ride (world.ts pressCarButton) */}
         <div className="absolute left-1/2 bottom-24 hidden -translate-x-1/2 rounded-md bg-[#2b2118]/75 px-3 py-1 text-xs tracking-[0.3em] text-[#f3e6cf] [.rs-incar_&]:block">
