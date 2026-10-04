@@ -580,7 +580,15 @@ export function CityTraffic({
       const moved = Math.hypot(np.x - lp[ci * 2]!, np.z - lp[ci * 2 + 1]!);
       lp[ci * 2] = np.x;
       lp[ci * 2 + 1] = np.z;
-      batch.place(ci, np.x, 0, np.z, c.yawVis, { lit: !wreck, bar, roll: moved < 3 ? moved : 0 });
+      batch.place(ci, np.x, 0, np.z, c.yawVis, {
+        lit: !wreck,
+        bar,
+        roll: moved < 3 ? moved : 0,
+        driver:
+          !wreck &&
+          ((!drive?.claimed && !(flags & F_PARKED)) ||
+            (!!drive?.owner && drive.owner !== driving.self)),
+      });
       const sin = Math.sin(c.yawVis);
       const cos = Math.cos(c.yawVis);
       {

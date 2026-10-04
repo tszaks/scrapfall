@@ -1,0 +1,70 @@
+{
+  "background-before.txt": [
+    {
+      "cpuPercent": 96.8,
+      "process": "Google Drive"
+    },
+    {
+      "cpuPercent": 60.0,
+      "process": "WindowServer"
+    },
+    {
+      "cpuPercent": 36.8,
+      "process": "Codex (Renderer)"
+    },
+    {
+      "cpuPercent": 33.9,
+      "process": "Codex (Service)"
+    },
+    {
+      "cpuPercent": 31.4,
+      "process": "Slack Helper (Renderer)"
+    },
+    {
+      "cpuPercent": 25.7,
+      "process": "Python"
+    },
+    {
+      "cpuPercent": 22.9,
+      "process": "bird"
+    },
+    {
+      "cpuPercent": 21.2,
+      "process": "fileproviderd"
+    }
+  ],
+  "background-after.txt": [
+    {
+      "cpuPercent": 79.6,
+      "process": "Google Drive"
+    },
+    {
+      "cpuPercent": 74.5,
+      "process": "cloudd"
+    },
+    {
+      "cpuPercent": 73.4,
+      "process": "WindowServer"
+    },
+    {
+      "cpuPercent": 37.6,
+      "process": "Codex (Service)"
+    },
+    {
+      "cpuPercent": 32.9,
+      "process": "Slack Helper"
+    },
+    {
+      "cpuPercent": 22.5,
+      "process": "Slack Helper (Renderer)"
+    },
+    {
+      "cpuPercent": 21.7,
+      "process": "coreaudiod"
+    },
+    {
+      "cpuPercent": 21.7,
+      "process": "bird"
+    }
+  ]
+}

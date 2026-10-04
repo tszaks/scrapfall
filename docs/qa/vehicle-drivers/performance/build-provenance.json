@@ -1,0 +1,27 @@
+{
+  "builds": [
+    {
+      "tag": "baseline",
+      "source": "e39d933",
+      "root": "/tmp/scrapfall-drivers-baseline-e39d933",
+      "url": "http://127.0.0.1:5298/game/assets/cars-Dpp6W8GO.js",
+      "sha256": "fabeb81c72a882aa73c91dfad6956b7fa456aeaaecdb9074534eb841cf382768",
+      "servedMatchesLocal": true
+    },
+    {
+      "tag": "candidate",
+      "source": "82c3c66",
+      "root": "/Users/tyler/Projects/scrapfall-realism-oct4",
+      "url": "http://127.0.0.1:5294/game/assets/cars-BnhIPaJE.js",
+      "sha256": "5050147e1b2a3680dcc0c7083a023e3e4492e45deb8f3fb6eb22f4326f8aeb51",
+      "servedMatchesLocal": true
+    }
+  ],
+  "hardware": {
+    "machine_model": "Mac16,6",
+    "chip_type": "Apple M4 Max",
+    "number_processors": "proc 14:10:4:0",
+    "physical_memory": "36 GB"
+  },
+  "os": "26.5.1"
+}

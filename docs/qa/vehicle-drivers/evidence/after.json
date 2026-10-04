@@ -1,0 +1,312 @@
+{
+  "errors": [],
+  "views": [
+    {
+      "type": "taxi",
+      "side": false,
+      "x": -22.80955958949816,
+      "y": 0,
+      "z": -6,
+      "yaw": -1.5707963267948966,
+      "walkable": true,
+      "camera": [
+        -22.80955958949816,
+        1.6,
+        -6
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-taxi-front.png"
+    },
+    {
+      "type": "taxi",
+      "side": true,
+      "x": -18.00955958949816,
+      "y": 0,
+      "z": -2.8899999999999997,
+      "yaw": 0,
+      "walkable": true,
+      "camera": [
+        -18.00955958949816,
+        1.6,
+        -2.8899999999999997
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-taxi-side.png"
+    },
+    {
+      "type": "police",
+      "side": false,
+      "x": 4.000000000000001,
+      "y": 0,
+      "z": -99.96823782843019,
+      "yaw": 3.141592653589793,
+      "walkable": true,
+      "camera": [
+        4.000000000000001,
+        1.6,
+        -99.96823782843019
+      ],
+      "driverCount": 3,
+      "driverVisible": true,
+      "file": "after-police-front.png"
+    },
+    {
+      "type": "police",
+      "side": true,
+      "x": 0.875,
+      "y": 0,
+      "z": -95.1182378284302,
+      "yaw": 4.71238898038469,
+      "walkable": true,
+      "camera": [
+        0.875,
+        1.8000000029802323,
+        -95.1182378284302
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-police-side.png"
+    },
+    {
+      "type": "pickup",
+      "side": false,
+      "x": -208,
+      "y": 0,
+      "z": -92.66298788235378,
+      "yaw": 3.141592653589793,
+      "walkable": true,
+      "camera": [
+        -208,
+        1.6,
+        -92.66298788235378
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-pickup-front.png"
+    },
+    {
+      "type": "pickup",
+      "side": true,
+      "x": -211.2209820850566,
+      "y": 0,
+      "z": -87.64097179897543,
+      "yaw": 4.71238898038469,
+      "walkable": true,
+      "camera": [
+        -211.2209820850566,
+        1.6,
+        -87.64097179897543
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-pickup-side.png"
+    },
+    {
+      "type": "sedan",
+      "side": false,
+      "x": 190.31944409517678,
+      "y": 0,
+      "z": -136,
+      "yaw": 1.5707963267948966,
+      "walkable": true,
+      "camera": [
+        190.31944409517678,
+        1.6,
+        -136
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-sedan-front.png"
+    },
+    {
+      "type": "sedan",
+      "side": true,
+      "x": 185.4371099292218,
+      "y": 0,
+      "z": -139.0477850411879,
+      "yaw": 3.141592653589793,
+      "walkable": true,
+      "camera": [
+        185.4371099292218,
+        1.6,
+        -139.0477850411879
+      ],
+      "driverCount": 2,
+      "driverVisible": true,
+      "file": "after-sedan-side.png"
+    },
+    {
+      "type": "suv",
+      "side": false,
+      "x": -39.64945861095977,
+      "y": 0,
+      "z": -140,
+      "yaw": -1.5707963267948966,
+      "walkable": true,
+      "camera": [
+        -39.64945861095977,
+        1.6,
+        -140
+      ],
+      "driverCount": 2,
+      "driverVisible": true,
+      "file": "after-suv-front.png"
+    },
+    {
+      "type": "suv",
+      "side": true,
+      "x": -34.593648047246454,
+      "y": 0,
+      "z": -136.81875327950297,
+      "yaw": 0,
+      "walkable": true,
+      "camera": [
+        -34.593648047246454,
+        1.6,
+        -136.81875327950297
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-suv-side.png"
+    },
+    {
+      "type": "compact",
+      "side": false,
+      "x": -104,
+      "y": 0,
+      "z": 158.27107583589438,
+      "yaw": 3.141592653589793,
+      "walkable": true,
+      "camera": [
+        -104,
+        1.6,
+        158.27107583589438
+      ],
+      "driverCount": 2,
+      "driverVisible": true,
+      "file": "after-compact-front.png"
+    },
+    {
+      "type": "compact",
+      "side": true,
+      "x": -107.06414309964096,
+      "y": 0,
+      "z": 162.63738508563074,
+      "yaw": 4.71238898038469,
+      "walkable": true,
+      "camera": [
+        -107.06414309964096,
+        1.6,
+        162.63738508563074
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-compact-side.png"
+    },
+    {
+      "type": "sports",
+      "side": false,
+      "x": -104,
+      "y": 0,
+      "z": 204.22480241385927,
+      "yaw": 3.141592653589793,
+      "walkable": true,
+      "camera": [
+        -104,
+        1.6,
+        204.22480241385927
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-sports-front.png"
+    },
+    {
+      "type": "sports",
+      "side": true,
+      "x": -107.22360925352177,
+      "y": 0,
+      "z": 208.99021352820924,
+      "yaw": 4.71238898038469,
+      "walkable": true,
+      "camera": [
+        -107.22360925352177,
+        1.6,
+        208.99021352820924
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-sports-side.png"
+    },
+    {
+      "type": "van",
+      "side": false,
+      "x": 69.90116013829741,
+      "y": 0,
+      "z": -1.9999999999999996,
+      "yaw": -1.5707963267948966,
+      "walkable": true,
+      "camera": [
+        69.90116013829741,
+        1.6,
+        -1.9999999999999996
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-van-front.png"
+    },
+    {
+      "type": "van",
+      "side": true,
+      "x": 75.47555262056697,
+      "y": 0,
+      "z": 1.304497289365158,
+      "yaw": 0,
+      "walkable": true,
+      "camera": [
+        75.47555262056697,
+        1.6,
+        1.304497289365158
+      ],
+      "driverCount": 1,
+      "driverVisible": true,
+      "file": "after-van-side.png"
+    },
+    {
+      "type": "bus",
+      "side": false,
+      "x": 104,
+      "y": 0,
+      "z": 101.47995734300878,
+      "yaw": 0,
+      "walkable": true,
+      "camera": [
+        104,
+        1.6,
+        101.47995734300878
+      ],
+      "driverCount": 3,
+      "driverVisible": true,
+      "file": "after-bus-front.png"
+    },
+    {
+      "type": "bus",
+      "side": true,
+      "x": 107.4,
+      "y": 0,
+      "z": 94.57995734300877,
+      "yaw": 1.5707963267948966,
+      "walkable": true,
+      "camera": [
+        107.4,
+        1.6,
+        94.57995734300877
+      ],
+      "driverCount": 2,
+      "driverVisible": true,
+      "file": "after-bus-side.png"
+    }
+  ],
+  "diagnosticDriverOverride": true
+}

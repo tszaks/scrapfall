@@ -1,0 +1,588 @@
+{
+  "method": "Actual Traffic driver flag and two-peer standing-body cooperation; no occupant override.",
+  "errors": [],
+  "checks": [
+    {
+      "name": "guest-entered-hidden",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 100,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.44,
+            "z": -6,
+            "yaw": -1.5707963267948966
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": true,
+          "targetInstances": 1,
+          "driverCount": 4,
+          "cameraDistance": 6
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "hp": 100,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.44,
+            "z": -6,
+            "yaw": -1.5707963267948966
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 1,
+          "cameraDistance": 0.25
+        }
+      ]
+    },
+    {
+      "name": "guest-brake-host-authoritative",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 100,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 1,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": true,
+          "targetInstances": 1,
+          "driverCount": 4,
+          "cameraDistance": 5.954516142676799
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "hp": 100,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 0.2500000000000009
+        }
+      ]
+    },
+    {
+      "name": "guest-exit-restores-body",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 90,
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 3,
+          "cameraDistance": 5.954516142676799
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+          "role": "guest",
+          "vehicle": null,
+          "car": {
+            "hp": 90,
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 2.2017549292588687
+        }
+      ]
+    },
+    {
+      "name": "reentered-before-transfer",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 90,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": true,
+          "targetInstances": 1,
+          "driverCount": 2,
+          "cameraDistance": 5.954516142676799
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "hp": 90,
+            "owner": "scrapfall-ts-arena-v23-QJQG-6m7p83b6",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 0.2500000000000009
+        }
+      ]
+    },
+    {
+      "name": "host-transfer-keeps-driver",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": "city-0",
+          "car": {
+            "hp": 90,
+            "owner": "host",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 1,
+          "cameraDistance": 0.2500000000000009
+        }
+      ]
+    },
+    {
+      "name": "new-host-exit",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 90,
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 2.154443268865098
+        }
+      ]
+    },
+    {
+      "name": "rejoined-peer-sees-seated-driver",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": "city-0",
+          "car": {
+            "hp": 90,
+            "owner": "host",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-ygaxehns",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 0.2500000000000009
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-ygaxehns",
+          "role": "guest",
+          "vehicle": null,
+          "car": {
+            "hp": 90,
+            "owner": "host",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "host",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": true,
+          "targetInstances": 1,
+          "driverCount": 4,
+          "cameraDistance": 6
+        }
+      ]
+    },
+    {
+      "name": "wreck-ejects",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "hp": 0,
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "scrapfall-ts-arena-v23-QJQG-ygaxehns",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 0,
+          "cameraDistance": 2.1360995978022976
+        },
+        {
+          "self": "scrapfall-ts-arena-v23-QJQG-ygaxehns",
+          "role": "guest",
+          "vehicle": null,
+          "car": {
+            "hp": 0,
+            "owner": "",
+            "speed": 0,
+            "brake": 0,
+            "x": -19.956865548011763,
+            "z": -6.067958825271264,
+            "yaw": -1.8001198668050071
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": true
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ],
+          "driver": false,
+          "targetInstances": 0,
+          "driverCount": 3,
+          "cameraDistance": 6
+        }
+      ]
+    }
+  ],
+  "enemyHullDamage": 90,
+  "hullProbe": {
+    "car": {
+      "isBox3": true,
+      "min": {
+        "x": -22.155401525074282,
+        "y": -0.05690029212219799,
+        "z": -7.43946329416487
+      },
+      "max": {
+        "x": -17.76354383557961,
+        "y": 1.3700000047683716,
+        "z": -4.697671521803288
+      }
+    },
+    "ray": 0.2505104235709261,
+    "damaged": [
+      {
+        "id": "city-0",
+        "hp": 90
+      }
+    ],
+    "bullets": [
+      {
+        "active": false,
+        "pos": [
+          -21.346865551588042,
+          0.6,
+          -6.067958825271264
+        ],
+        "life": 0.9739000000357628
+      }
+    ]
+  },
+  "rejoin": {
+    "role": "guest",
+    "vehicle": null
+  }
+}
