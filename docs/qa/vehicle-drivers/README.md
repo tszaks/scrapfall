@@ -49,3 +49,24 @@ The gameplay owner approved and released the Traffic hook: unclaimed ambient car
 `activation.json` verifies the actual Traffic caller with no occupant override on Metal M4 Max: keyboard entry hides the driver, keyboard exit keeps the claimed car empty, an explicit parked fixture is empty, remote ownership shows the driver and remote exit removes it. A real ray-based `damageVehicle` call reduces the car to zero health and suppresses its driver. Browser errors are empty. Remote ownership is a direct state fixture here, not a two-peer co-op acceptance test.
 
 The reviewed art/API commit `ce869ed` passed required CI, including 69 tests, typecheck, build, repository map and smoke. Eight additional local map/time smoke cases passed. The later Traffic hook passed typecheck, build, three focused tests and independent static review. Final integration-head checks, actual two-peer body cooperation and the exclusive rendering comparison remain pending. This document does not establish a production release or sustained frame rate.
+
+
+## Controlled rendering comparison
+
+Current main `e39d933` and candidate `82c3c66` were independently built and their served car-asset bytes verified. Four sequential runs alternated baseline/candidate at native speed, then baseline/candidate at 4× CPU throttle. Chromium 151 used actual ANGLE Metal on Apple M4 Max (Mac16,6, 14 CPU cores, 36 GB RAM, macOS 26.5.1), 1280×800 viewport, DPR 2, HIGH, Vice seed 11, sunny sunset. All traffic/enemy transforms and the car-facing camera matched exactly. Four enemies were frozen; the candidate rendered one nearby occupant via the actual Traffic caller, without a driver override. Each fresh browser warmed for 10 seconds before a 20-second stationary measurement.
+
+| Metric | Native baseline → candidate | 4× CPU baseline → candidate |
+| --- | --- | --- |
+| Frame p95 | 5.8 → 6.5 ms | 32.7 → 17.1 ms |
+| Frame p99 | 6.5 → 7.3 ms | 34.7 → 32.7 ms |
+| Worst frame | 38.0 → 20.9 ms | 118.4 → 153.8 ms |
+| Frames over 25 / 50 ms | 2 / 0 → 0 / 0 | 98 / 2 → 43 / 2 |
+| Render submission mean | 2.67 → 3.17 ms | 8.49 → 7.90 ms |
+| GPU render-pass p95 | 4.50 → 6.08 ms | 3.66 → 3.53 ms |
+| Draw calls mean | 278.07 → 279.04 | 278.09 → 278.96 |
+| Triangles mean | 2,273,541 → 2,273,860 | 2,273,554 → 2,273,783 |
+| Navigation through menu to scene | 2.98 → 2.87 s | 12.20 → 12.64 s |
+
+The coordinated workers were idle, but this was not a quiet machine: Drive/iCloud/File Provider and other desktop processes were active. Their before/after CPU snapshots are summarized in `performance/background.json`. Native rendering has headroom in this view; the native candidate sample has higher submission/GPU time. The opposite direction under throttling and desktop activity prevent assigning those differences solely to the driver geometry. Both throttled builds have long stalls and p99 above the 16.7 ms target. No shader/program growth or measured shader/buffer call over 2 ms occurred during these warmed samples. First-use hitches, active combat endurance and sustained 60 fps remain unproven. Loading measurements are one sample per case, not cold OS-cache guarantees.
+
+Reports and matched scene metadata are in `performance/`. Run `benchmark.mjs` with `MAPS=vice STATIONARY=1 SECONDS=20 REPEATS=1 WEATHER=sunny EXTRA='&time=sunset' QUALITY=high`, separate `BASE` URLs, explicit `COMMIT`, a common fresh `OUT`, and unique `TAG`; add `CPU_THROTTLE=4` for the throttled pair. Do not run concurrently with other benchmarks or builds.

@@ -1,0 +1,2052 @@
+{
+  "engine": "chromium",
+  "started": "2026-10-04T19:39:15.934Z",
+  "commit": "e39d933",
+  "viewport": [
+    1280,
+    800
+  ],
+  "dpr": 2,
+  "quality": "high",
+  "extra": "&time=sunset",
+  "foliage": false,
+  "fixedRoute": false,
+  "stationary": true,
+  "actualTrafficOccupants": true,
+  "weather": "sunny",
+  "wave": 1,
+  "seconds": 20,
+  "cpuThrottle": 4,
+  "repeats": 1,
+  "soak": false,
+  "method": "Stationary driver rendering comparison using the actual Traffic caller, without an occupant override. Matched frozen traffic/enemy transforms and camera. Ten-second warm-up then measured uncapped Metal rendering. No movement/firing; separate entry/exit and co-op tests establish interaction behavior. These figures are not physical display FPS or endurance results.",
+  "dirty": true,
+  "cases": [
+    {
+      "map": "vice",
+      "repeat": 0,
+      "errors": [],
+      "consoleErrors": [],
+      "navThroughMenuToSceneMs": 12197,
+      "driverScene": {
+        "cars": [
+          {
+            "x": -17.343240145053716,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 4,
+            "z": -94.45191838398576,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -208,
+            "z": -86.97465235453099,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 184.91377659588846,
+            "z": -136,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 8,
+            "z": 86.26669573325664,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -33.92732860280201,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -104,
+            "z": 163.30370453007518,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -104,
+            "z": 209.57354686154258,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -104,
+            "z": 144.3146278328076,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -192.21746624032707,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 61.10647283036262,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -54.73448947856203,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -37.365602036081256,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -104,
+            "z": 49.24759993989021,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": 151.12347682558,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 108,
+            "z": 91.040112657547,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": -146.46683924993295,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -188.92804293202235,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 4,
+            "z": 218.64214414609802,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 155.69468289932237,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": 76.04187206501142,
+            "z": -2,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "van"
+          },
+          {
+            "x": -144.2303420136869,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 19.8750475118123,
+            "z": 2,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": 94.08863789856433,
+            "yaw": 0,
+            "park": 0,
+            "type": "bus"
+          },
+          {
+            "x": -216,
+            "z": 69.17427447337657,
+            "yaw": 0,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 88.01607159916519,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 121.15560057099908,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 208,
+            "z": -102.84015680263026,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -31.340304217375813,
+            "z": -136,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -145.96904978407753,
+            "z": 246,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -216,
+            "z": 56.605561144575475,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -108,
+            "z": -59.79802171893418,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -8,
+            "z": 67.18369225312024,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -70.17296069527045,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 216,
+            "z": -52.41719434065537,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 142.8302303235233,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 33.14494942555204,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 70.41086693985388,
+            "z": 124,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": -108,
+            "z": -124.50709257747978,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 63.836685770582406,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 104,
+            "z": 60.964826319292186,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -108,
+            "z": 31.135975452996792,
+            "yaw": 0,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 108,
+            "z": -84.26469356838614,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 70.48596258909727,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -108,
+            "z": 173.61607669282705,
+            "yaw": 0,
+            "park": 0,
+            "type": "bus"
+          },
+          {
+            "x": 180.48334849138018,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -216,
+            "z": 199.8261441619115,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -8,
+            "z": -93.17381721742451,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -204,
+            "z": 46.56408159069717,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -144.45694701287894,
+            "z": 124,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -212,
+            "z": 153.15588515616955,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 204,
+            "z": -72.5694161138518,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -4,
+            "z": -81.47612823821605,
+            "yaw": 0,
+            "park": 0,
+            "type": "van"
+          },
+          {
+            "x": 108,
+            "z": -66.24929024271667,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -118.9724614819698,
+            "z": -2,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 53.26451341861859,
+            "z": 120,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -108,
+            "z": -21.9666469572857,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 108,
+            "z": 51.192725839167835,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 212,
+            "z": -103.60647652325945,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": -82.70815828543157,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          }
+        ],
+        "camera": {
+          "x": 189.91377659588846,
+          "z": -136,
+          "y": 0,
+          "yaw": 1.5707963267948966,
+          "pitch": -0.09
+        },
+        "enemies": [
+          {
+            "i": 0,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 1,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 2,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 3,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 4,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 5,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 6,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 7,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 8,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 9,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 10,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 11,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 12,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 13,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 14,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 15,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 16,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 17,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 18,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 19,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 20,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 21,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 22,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 23,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 24,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 25,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 26,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 27,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 28,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 29,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 30,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 31,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 32,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 33,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 34,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 35,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 36,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 37,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 38,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 39,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 40,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 41,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 42,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 43,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 44,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 45,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 46,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 47,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 48,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 49,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 50,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 51,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 52,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 53,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 54,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 55,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 56,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 57,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 58,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 59,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 60,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 61,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 62,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 63,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 64,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 65,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 66,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 67,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 68,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 69,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 70,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 71,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 72,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 73,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 74,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 75,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 76,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 77,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 78,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 79,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 80,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 81,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 82,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 83,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 84,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 85,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 86,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 87,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 88,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 89,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 90,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 91,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 92,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 93,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 94,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 95,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 96,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 97,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 98,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 99,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 100,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 101,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 102,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 103,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 104,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 105,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 106,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 107,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 108,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          },
+          {
+            "i": 109,
+            "x": 0,
+            "z": 0,
+            "alive": false
+          }
+        ],
+        "actualTrafficCaller": true
+      },
+      "setup": {
+        "drivers": 0,
+        "hud": "12 / 128 · R\nW · 270°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "camera": [
+          189.91377659588846,
+          1.6,
+          -136
+        ],
+        "keys": {},
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+        "quality": {
+          "dpr": 2,
+          "tier": "high",
+          "vsync": 13.41,
+          "miss": 0.014,
+          "cpu": 12.4,
+          "targetFps": 60,
+          "targetMet": true,
+          "recovery": "idle",
+          "log": []
+        },
+        "warm": [
+          {
+            "frame": 554,
+            "ms": 240,
+            "programs": 82,
+            "before": 62
+          },
+          {
+            "frame": 565,
+            "ms": 133,
+            "programs": 100,
+            "before": 84
+          },
+          {
+            "frame": 576,
+            "ms": 976,
+            "programs": 134,
+            "before": 100
+          },
+          {
+            "frame": 587,
+            "ms": 496,
+            "programs": 219,
+            "before": 139
+          },
+          {
+            "frame": 598,
+            "ms": 69,
+            "programs": 233,
+            "before": 222
+          }
+        ],
+        "startupLong": [
+          {
+            "start": 70.29999995231628,
+            "duration": 55
+          },
+          {
+            "start": 221.29999995231628,
+            "duration": 478
+          },
+          {
+            "start": 763.5999999642372,
+            "duration": 70
+          },
+          {
+            "start": 1011.8999999761581,
+            "duration": 76
+          },
+          {
+            "start": 1120.2999999523163,
+            "duration": 87
+          },
+          {
+            "start": 1233.8999999761581,
+            "duration": 366
+          },
+          {
+            "start": 1630.8999999761581,
+            "duration": 113
+          },
+          {
+            "start": 1854.5999999642372,
+            "duration": 75
+          },
+          {
+            "start": 1931.5999999642372,
+            "duration": 51
+          },
+          {
+            "start": 2036.2999999523163,
+            "duration": 51
+          },
+          {
+            "start": 2089.2999999523163,
+            "duration": 51
+          },
+          {
+            "start": 2238.399999976158,
+            "duration": 66
+          },
+          {
+            "start": 2306.099999964237,
+            "duration": 67
+          },
+          {
+            "start": 3474.199999988079,
+            "duration": 79
+          },
+          {
+            "start": 5056.799999952316,
+            "duration": 100
+          },
+          {
+            "start": 5201.599999964237,
+            "duration": 53
+          },
+          {
+            "start": 5256.699999988079,
+            "duration": 50
+          },
+          {
+            "start": 5352.799999952316,
+            "duration": 118
+          },
+          {
+            "start": 5473.5,
+            "duration": 90
+          },
+          {
+            "start": 5565.099999964237,
+            "duration": 105
+          },
+          {
+            "start": 5672.399999976158,
+            "duration": 191
+          },
+          {
+            "start": 5866.799999952316,
+            "duration": 202
+          },
+          {
+            "start": 6072,
+            "duration": 76
+          },
+          {
+            "start": 6150.099999964237,
+            "duration": 165
+          },
+          {
+            "start": 6319,
+            "duration": 139
+          },
+          {
+            "start": 6460.599999964237,
+            "duration": 84
+          },
+          {
+            "start": 6546.5,
+            "duration": 191
+          },
+          {
+            "start": 6739.599999964237,
+            "duration": 104
+          },
+          {
+            "start": 6891.099999964237,
+            "duration": 157
+          },
+          {
+            "start": 7049.699999988079,
+            "duration": 195
+          },
+          {
+            "start": 7245.899999976158,
+            "duration": 142
+          },
+          {
+            "start": 7390,
+            "duration": 140
+          },
+          {
+            "start": 7532.5,
+            "duration": 169
+          },
+          {
+            "start": 7704.099999964237,
+            "duration": 223
+          },
+          {
+            "start": 7929.799999952316,
+            "duration": 122
+          },
+          {
+            "start": 8054.099999964237,
+            "duration": 131
+          },
+          {
+            "start": 8187.599999964237,
+            "duration": 211
+          },
+          {
+            "start": 8401.099999964237,
+            "duration": 246
+          },
+          {
+            "start": 8649.599999964237,
+            "duration": 68
+          },
+          {
+            "start": 8721,
+            "duration": 107
+          },
+          {
+            "start": 8829.399999976158,
+            "duration": 149
+          },
+          {
+            "start": 8980.599999964237,
+            "duration": 91
+          },
+          {
+            "start": 9073.399999976158,
+            "duration": 139
+          },
+          {
+            "start": 9215,
+            "duration": 128
+          },
+          {
+            "start": 9345.599999964237,
+            "duration": 50
+          },
+          {
+            "start": 9882.299999952316,
+            "duration": 771
+          },
+          {
+            "start": 10947.299999952316,
+            "duration": 801
+          },
+          {
+            "start": 11748.899999976158,
+            "duration": 142
+          },
+          {
+            "start": 11928.699999988079,
+            "duration": 282
+          },
+          {
+            "start": 12383.699999988079,
+            "duration": 181
+          },
+          {
+            "start": 12573.399999976158,
+            "duration": 115
+          },
+          {
+            "start": 12698,
+            "duration": 109
+          },
+          {
+            "start": 12807.299999952316,
+            "duration": 715
+          },
+          {
+            "start": 13568.799999952316,
+            "duration": 305
+          },
+          {
+            "start": 13875.199999988079,
+            "duration": 158
+          },
+          {
+            "start": 14056.199999988079,
+            "duration": 1081
+          },
+          {
+            "start": 15140.799999952316,
+            "duration": 529
+          },
+          {
+            "start": 15681.799999952316,
+            "duration": 104
+          },
+          {
+            "start": 15924.799999952316,
+            "duration": 153
+          },
+          {
+            "start": 19201.899999976158,
+            "duration": 110
+          }
+        ],
+        "assets": [
+          {
+            "url": "http://127.0.0.1:5298/game/assets/react-SIfiwpqq.js",
+            "bytes": 8185,
+            "duration": 7
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/terrain-IhuqYnkp.js",
+            "bytes": 5625,
+            "duration": 7.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/layout-C4JxSPAx.js",
+            "bytes": 12615,
+            "duration": 7.800000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/index-CsAfhQ55.js",
+            "bytes": 332698,
+            "duration": 8.199999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/routes-NHXa3OrQ.js",
+            "bytes": 690399,
+            "duration": 25.69999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/look-BCQEJiYe.js",
+            "bytes": 367675,
+            "duration": 24.599999964237213
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/slice-Du1KgBBX.js",
+            "bytes": 377953,
+            "duration": 24.80000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/staticCollision-DlvsqBFg.js",
+            "bytes": 45942,
+            "duration": 12.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/level-CYYW2Aa7.js",
+            "bytes": 10885,
+            "duration": 14.800000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/soloBounds-CThOlUxp.js",
+            "bytes": 967,
+            "duration": 15.199999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cityLayout-yMY0Bl5d.js",
+            "bytes": 16685,
+            "duration": 23.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/build-Blw8_zzJ.js",
+            "bytes": 41895,
+            "duration": 22.80000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/world-Ue6J6XnH.js",
+            "bytes": 24669,
+            "duration": 24.69999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/detailQuality-Brnz3_dx.js",
+            "bytes": 3125,
+            "duration": 28
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/scannedSurface-Ch8alfyF.js",
+            "bytes": 2728,
+            "duration": 28
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/lighting-BrDkxuh1.js",
+            "bytes": 16481,
+            "duration": 28.299999952316284
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/weather-DDeY1Usy.js",
+            "bytes": 1190,
+            "duration": 28.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cityTextures-DVchPMkN.js",
+            "bytes": 12033,
+            "duration": 28.19999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/events-803f4abc.esm-C4zrpfRs.js",
+            "bytes": 168130,
+            "duration": 28.900000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/movement-D9oN3f26.js",
+            "bytes": 2609,
+            "duration": 30.30000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/layout-CNfjnHkO.js",
+            "bytes": 26092,
+            "duration": 30.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/ride-78nA208y.js",
+            "bytes": 54607,
+            "duration": 30.700000047683716
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/audio-Di40Cqzw.js",
+            "bytes": 21727,
+            "duration": 31.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/sky-DDOWFxcP.js",
+            "bytes": 8196,
+            "duration": 31.5
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/timeOfDay-dU6G3_oH.js",
+            "bytes": 4311,
+            "duration": 31.5
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/trafficCore-7wOy1ts3.js",
+            "bytes": 993,
+            "duration": 32
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/beachLayout-ZAUtd5GP.js",
+            "bytes": 27290,
+            "duration": 32.60000002384186
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/kit-DCwx9avB.js",
+            "bytes": 18259,
+            "duration": 31.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/driving-Gp4G3aF-.js",
+            "bytes": 2975,
+            "duration": 34.09999996423721
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/squadState-CGl46EXN.js",
+            "bytes": 4215,
+            "duration": 34.30000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/sfx-3_lAuk6X.js",
+            "bytes": 3797,
+            "duration": 34.39999997615814
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/CityRain-BBdGwsbO.js",
+            "bytes": 35489,
+            "duration": 34.700000047683716
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/ambience-HLGQDPEU.js",
+            "bytes": 32675,
+            "duration": 34.90000003576279
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/TimeScene-yzu_YOd3.js",
+            "bytes": 7704,
+            "duration": 35.40000003576279
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/mapHooks-CqRBYVQH.js",
+            "bytes": 938,
+            "duration": 36.200000047683716
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/layout-Cg-ChHag.js",
+            "bytes": 70187,
+            "duration": 37.19999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/trainSim-DWPzEbxX.js",
+            "bytes": 2696,
+            "duration": 35.799999952316284
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/storm-DrUEAM-j.js",
+            "bytes": 9680,
+            "duration": 36.19999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/plan-C4CZDolg.js",
+            "bytes": 5480,
+            "duration": 2.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/textures-C2v_zRUz.js",
+            "bytes": 25489,
+            "duration": 1
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/vehicles-Vxzeo2YT.js",
+            "bytes": 1939,
+            "duration": 1.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/spiral-ByI9YBCd.js",
+            "bytes": 742,
+            "duration": 1.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/facade-BN3FyA_r.js",
+            "bytes": 714,
+            "duration": 1.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/belfry-D0kS2bw7.js",
+            "bytes": 801,
+            "duration": 1.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/adapters-GeDMp5db.js",
+            "bytes": 5836,
+            "duration": 2.699999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cityAccess-D3M4Jwqc.js",
+            "bytes": 3335,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cityMesh-BuFt-GQ5.js",
+            "bytes": 39838,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cityGeo-bzBFe3ex.js",
+            "bytes": 5327,
+            "duration": 1.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/foliage-CmLoGn2P.js",
+            "bytes": 1514,
+            "duration": 0.7999999523162842
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/cars-Dpp6W8GO.js",
+            "bytes": 23302,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/CityMap-Cm-EJAO9.js",
+            "bytes": 6321,
+            "duration": 3.099999964237213
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/Traffic-CkHwsAiP.js",
+            "bytes": 64354,
+            "duration": 2.699999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5298/game/assets/surfaceRelief-CjMvhpSF.js",
+            "bytes": 1127,
+            "duration": 2.400000035762787
+          }
+        ],
+        "enemies": 4,
+        "aimStats": {
+          "shot": 0,
+          "hit": 0
+        }
+      },
+      "metrics": {
+        "measurementStart": 24123.19999998808,
+        "programsStart": 253,
+        "shaderEvents": [],
+        "shaderCalls": [],
+        "frameHitches": [
+          {
+            "elapsed": 5.375300000011921,
+            "ms": 118.40000000000146,
+            "renderSubmitMs": 7.800000011920929,
+            "rafCallbackMs": 0.699999988079071,
+            "programs": 253
+          },
+          {
+            "elapsed": 11.534300000011921,
+            "ms": 53.30000000000291,
+            "renderSubmitMs": 10.600000023841858,
+            "rafCallbackMs": 0.09999996423721313,
+            "programs": 253
+          }
+        ],
+        "warmAfter10s": {
+          "p95": 32.89999999999418,
+          "p99": 34.69999999999709,
+          "worst": 53.30000000000291,
+          "over16_7": 137,
+          "frames": 655
+        },
+        "driversEnd": 0,
+        "programsEnd": 253,
+        "gpuTimerAvailable": true,
+        "gpuRenderPassSamples": 70,
+        "gpuRenderPassP95": 3.657958,
+        "shots": 0,
+        "fps": 65.14560342114335,
+        "p50": 14.599999999998545,
+        "p95": 32.70000000000073,
+        "p99": 34.69999999999709,
+        "worst": 118.40000000000146,
+        "over16_7": 256,
+        "over50": 2,
+        "over25": 98,
+        "frames": 1304,
+        "renderSubmitMean": 8.491417625032621,
+        "renderSubmitP95": 10.800000071525574,
+        "callbackMean": 1.9779091406012077,
+        "callbackP95": 13.600000023841858,
+        "callsMean": 278.0888888888889,
+        "callsMax": 282,
+        "trianglesMean": 2273554.1333333333,
+        "enemiesMax": 4,
+        "enemiesMean": 4,
+        "poses": [
+          {
+            "t": -0.015999999988078342,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 0.9720000000119217,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 1.8299000000119194,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 2.6387000000119225,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 3.51510000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 4.539300000011921,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 5.540900000011919,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 6.408900000011919,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 7.362400000011919,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 8.29910000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 9.25930000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 10.17490000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 11.271200000011923,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 12.427200000011922,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 13.325100000011924,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 14.287500000011917,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 15.269700000011923,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 16.179500000011917,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 17.059100000011924,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 17.83680000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 18.62940000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 19.39950000001192,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          }
+        ],
+        "longTasks": [
+          {
+            "start": 29394.099999964237,
+            "duration": 116
+          }
+        ],
+        "memoryStart": {
+          "geometries": 745,
+          "textures": 164
+        },
+        "memoryEnd": {
+          "geometries": 746,
+          "textures": 164
+        },
+        "hud": "12 / 987 · R\nW · 270°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "quality": {
+          "dpr": 2,
+          "tier": "high",
+          "vsync": 12.86,
+          "miss": 0.013,
+          "cpu": 11.5,
+          "targetFps": 60,
+          "targetMet": true,
+          "recovery": "idle",
+          "log": []
+        },
+        "warm": [
+          {
+            "frame": 554,
+            "ms": 240,
+            "programs": 82,
+            "before": 62
+          },
+          {
+            "frame": 565,
+            "ms": 133,
+            "programs": 100,
+            "before": 84
+          },
+          {
+            "frame": 576,
+            "ms": 976,
+            "programs": 134,
+            "before": 100
+          },
+          {
+            "frame": 587,
+            "ms": 496,
+            "programs": 219,
+            "before": 139
+          },
+          {
+            "frame": 598,
+            "ms": 69,
+            "programs": 233,
+            "before": 222
+          }
+        ]
+      }
+    }
+  ],
+  "browserVersion": "151.0.7922.34",
+  "ended": "2026-10-04T19:40:01.170Z"
+}
