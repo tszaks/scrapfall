@@ -89,3 +89,23 @@ test("fuller spruce silhouette retains the existing near triangle budget and nea
   far.dispose();
   trunk.dispose();
 });
+
+test("needle spruce keeps finite UVs and geometry budgets across both quality tiers", () => {
+  const near = env.spruceGeo(),
+    far = env.farSpruceGeo();
+  const position = near.getAttribute("position");
+  const uv = near.getAttribute("uv");
+  assert.equal(uv.count, position.count);
+  for (const value of uv.array) assert.ok(Number.isFinite(value) && value >= 0 && value <= 1);
+  assert.ok(position.count / 3 <= 380);
+  assert.ok(far.getAttribute("position").count / 3 <= 88);
+  for (const low of [true, false, true, false]) {
+    env.setGeometryDetail(near, low);
+    assert.equal(near.getAttribute("position"), position);
+    assert.equal(near.getAttribute("uv"), uv);
+    assert.equal(near.drawRange.count, near.userData.detailCounts[low ? "low" : "high"]);
+    assert.ok(near.drawRange.count / 3 <= (low ? 280 : 380));
+  }
+  near.dispose();
+  far.dispose();
+});

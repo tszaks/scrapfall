@@ -394,6 +394,24 @@ function windowAt(
   };
   const [ax, az, bx, bz] = along(w / 2);
   lface(g, F, ax, az, bx, bz, y, y + h, [0, 0, 1, 1]);
+  // Timber reveals surround the recessed pane without introducing a false doorway.
+  const frameGeo = k.detail;
+  const frameStart = frameGeo.n;
+  frameGeo.mat(T.board, 0, 0).col("#65503c");
+  const edge = (along: number, yy: number, ww: number, hh: number) => {
+    const x =
+      faceDir === 0 ? lx + along : faceDir === 2 ? lx - along : lx + (faceDir === 1 ? 0.19 : -0.19);
+    const z =
+      faceDir === 1 ? lz + along : faceDir === 3 ? lz - along : lz + (faceDir === 2 ? 0.19 : -0.19);
+    const horizontal = faceDir === 0 || faceDir === 2;
+    lbox(frameGeo, F, x, z, yy, horizontal ? ww : 0.14, hh, horizontal ? 0.14 : ww);
+  };
+  edge(-w / 2 - 0.055, y - 0.06, 0.11, h + 0.12);
+  edge(w / 2 + 0.055, y - 0.06, 0.11, h + 0.12);
+  edge(0, y + h, w + 0.22, 0.12);
+  edge(0, y + h * 0.48, w, 0.045);
+  frameGeo.excludeSince(frameStart);
+  frameGeo.highDetailSince(frameStart);
   // shutters, a flower box and a snowy sill (detail)
   const dg = k.detail;
   dg.mat(T.plain, 0, 0).col(shutter);
@@ -588,6 +606,34 @@ function gableHouse(
       dg.tri(p[0] + 0.05, p[1], p[2], p[0] - 0.05, p[1], p[2], p[0], p[1] - len, p[2]);
     }
   }
+  // Exposed rafters and gable framing give the broad roof a readable structure.
+  // They sit above the playable storeys and share the existing distance-detail batch.
+  const roofDetail = k.detail;
+  const roofStart = roofDetail.n;
+  roofDetail.mat(T.board, 0, 0).col("#684d36");
+  for (const side of [-1, 1]) {
+    const ex = side < 0 ? -ovS : W + ovS;
+    for (let z = -ovF + 0.3; z < D + ovF; z += 1.15) {
+      const outer = L3(F, ex, eave - 0.2, z);
+      const inner = L3(F, side < 0 ? 0.7 : W - 0.7, wallTop + 0.7 * tanP - 0.2, z);
+      tube(roofDetail, outer, inner, 0.095, 4);
+    }
+  }
+  for (const z of [-0.07, D + 0.07]) {
+    const top = L3(F, W / 2, ridge - 0.3, z);
+    const bottom = L3(F, W / 2, wallTop + 0.15, z);
+    tube(roofDetail, bottom, top, 0.105, 4);
+    for (const side of [-1, 1])
+      tube(
+        roofDetail,
+        L3(F, W / 2 + side * W * 0.32, wallTop + 0.12, z),
+        L3(F, W / 2, wallTop + rise * 0.72, z),
+        0.085,
+        4,
+      );
+  }
+  roofDetail.excludeSince(roofStart);
+  roofDetail.highDetailSince(roofStart);
   // snowy ridge cap
   g.mat(T.snow, 0, 0).col(SNOW);
   tube(g, L3(F, W / 2, ridge + 0.4, -ovF), L3(F, W / 2, ridge + 0.4, D + ovF), 0.22, 5);

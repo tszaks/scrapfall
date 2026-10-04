@@ -1,0 +1,172 @@
+[
+  {
+    "map": "whiteout",
+    "pose": {
+      "name": "street",
+      "x": 10,
+      "z": 79,
+      "y": 0.25949031114578247,
+      "yaw": 0,
+      "pitch": 0
+    },
+    "actual": {
+      "position": [
+        10,
+        1.8594903111457826,
+        79
+      ],
+      "look": {
+        "yaw": 0,
+        "pitch": 0
+      },
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 16.7,
+        "miss": 0,
+        "cpu": 0,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      }
+    },
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "pose": {
+      "name": "street-side",
+      "x": 10,
+      "z": 79,
+      "y": 0.25949031114578247,
+      "yaw": 1.5707963267948966,
+      "pitch": 0
+    },
+    "actual": {
+      "position": [
+        10,
+        1.8594903111457826,
+        79
+      ],
+      "look": {
+        "yaw": 1.5707963267948966,
+        "pitch": 0
+      },
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 16.7,
+        "miss": 0,
+        "cpu": 0,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      }
+    },
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "pose": {
+      "name": "random-0",
+      "x": 14.959965124726295,
+      "z": 83.83467286452651,
+      "y": 0.25949031114578247,
+      "yaw": 4.141817934816138,
+      "pitch": 0
+    },
+    "actual": {
+      "position": [
+        14.959965124726295,
+        1.8594903111457826,
+        83.83467286452651
+      ],
+      "look": {
+        "yaw": 4.141817934816138,
+        "pitch": 0
+      },
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 16.7,
+        "miss": 0,
+        "cpu": 0,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      }
+    },
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "pose": {
+      "name": "random-1",
+      "x": 33.89045024290681,
+      "z": 109.57601228356361,
+      "y": 0.4457401669575751,
+      "yaw": 2.80636402629189,
+      "pitch": 0
+    },
+    "actual": {
+      "position": [
+        33.89045024290681,
+        2.045740166957575,
+        109.57601228356361
+      ],
+      "look": {
+        "yaw": 2.80636402629189,
+        "pitch": 0
+      },
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 16.7,
+        "miss": 0,
+        "cpu": 0,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      }
+    },
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "pose": {
+      "name": "random-2",
+      "x": -3.0235756188631058,
+      "z": 110.67844971641898,
+      "y": 0.10809438536808977,
+      "yaw": 2.3875837236227677,
+      "pitch": 0
+    },
+    "actual": {
+      "position": [
+        -3.0235756188631058,
+        1.7080943853680899,
+        110.67844971641898
+      ],
+      "look": {
+        "yaw": 2.3875837236227677,
+        "pitch": 0
+      },
+      "quality": {
+        "dpr": 1,
+        "tier": "high",
+        "vsync": 16.7,
+        "miss": 0,
+        "cpu": 0,
+        "targetFps": 60,
+        "targetMet": false,
+        "recovery": "idle",
+        "log": []
+      }
+    },
+    "errors": []
+  }
+]

@@ -1,10 +1,9 @@
 import { prepareDetailGeometry } from "../environment/detailQuality";
-// Snow-laden spruce for Whiteout Pass: one near model (jagged drooping tiers, snow on
-// every tier, a visible trunk) and one far model (two cones), both unit-height, drawn as
-// instanced meshes per chunk so the whole forest costs a couple of dozen draw calls.
+// Snow-laden spruce: cutout needle sprays nearby and solid boughs at distance.
+// Both unit-height models share the existing instanced forest and trunk collision.
 import * as THREE from "three";
 
-type Build = { pos: number[]; col: number[]; nor: number[] };
+type Build = { pos: number[]; col: number[]; nor: number[]; uv: number[] };
 const _c = new THREE.Color();
 
 function tri(b: Build, a: number[], c: number[], d: number[], col: string, k = 1) {
@@ -26,42 +25,7 @@ function tri(b: Build, a: number[], c: number[], d: number[], col: string, k = 1
     b.pos.push(p[0]!, p[1]!, p[2]!);
     b.nor.push(nx, ny, nz);
     b.col.push(_c.r, _c.g, _c.b);
-  }
-}
-
-/**
- * One tier of a snow-laden spruce: a white snow shelf sloping up from a jagged rim, a band
- * of dark drooping branch tips below the rim, and (low tiers) a dark underside.
- */
-function tier(
-  b: Build,
-  y: number,
-  r: number,
-  pts: number,
-  rot: number,
-  under: boolean,
-  shelf: number,
-) {
-  const rim: number[][] = [];
-  for (let i = 0; i < pts * 2; i++) {
-    const a = rot + (i / (pts * 2)) * Math.PI * 2;
-    const tip = i % 2 === 0;
-    const rr = tip ? r : r * 0.74;
-    rim.push([Math.cos(a) * rr, y - (tip ? r * 0.1 : 0), Math.sin(a) * rr]);
-  }
-  const apex = [0, y + r * shelf, 0];
-  const fringe = r * 0.34;
-  for (let i = 0; i < rim.length; i++) {
-    const p = rim[i]!;
-    const q = rim[(i + 1) % rim.length]!;
-    // snow shelf, thinner (showing needles) towards the branch tips
-    triC(b, p, apex, q, i % 2 ? RIM2 : RIM, SNOWC, i % 2 ? RIM : RIM2);
-    // needle fringe hanging below the rim
-    const pd = [p[0]! * 0.9, p[1]! - fringe, p[2]! * 0.9];
-    const qd = [q[0]! * 0.9, q[1]! - fringe, q[2]! * 0.9];
-    tri(b, p, q, pd, NEEDLE, i % 2 ? 0.85 : 1);
-    tri(b, q, qd, pd, NEEDLE, i % 2 ? 0.75 : 0.9);
-    if (under) tri(b, qd, [0, y - fringe * 0.6, 0], pd, "#3e5e4a");
+    b.uv.push(0.015, 0.015);
   }
 }
 
@@ -85,6 +49,7 @@ function toGeo(b: Build) {
   g.setAttribute("position", new THREE.Float32BufferAttribute(b.pos, 3));
   g.setAttribute("normal", new THREE.Float32BufferAttribute(b.nor, 3));
   g.setAttribute("color", new THREE.Float32BufferAttribute(b.col, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(b.uv, 2));
   g.computeBoundingSphere();
   return g;
 }
@@ -96,7 +61,7 @@ const RIM2 = "#8ea49c";
 
 /** near spruce, unit height, base radius ~0.22 */
 export function spruceGeo(narrow = false, trunkOnly = false) {
-  const b: Build = { pos: [], col: [], nor: [] };
+  const b: Build = { pos: [], col: [], nor: [], uv: [] };
   // trunk
   const tr = 0.024;
   for (let i = 0; i < 5; i++) {
@@ -111,95 +76,69 @@ export function spruceGeo(narrow = false, trunkOnly = false) {
     tri(b, p1, q0, q1, "#4a3526");
   }
   if (trunkOnly) return toGeo(b);
-  // Open, irregular branch whorls. Snow rests on individual boughs, not solid cones.
-  // Match the existing far-crown envelope; ski routes and trunk collision do not change.
-  const n = narrow ? 9 : 8;
+  // Radial branches carry interleaved needle sprays. Each spray has a fine cutout
+  // silhouette rather than a solid triangular snow shelf; irregular levels overlap.
   const highDetail: [number, number][] = [];
   const rBase = narrow ? 0.17 : 0.225;
-  for (let level = 0; level < n; level++) {
-    const detailStart = b.pos.length / 3;
-    const t = level / n;
-    const y = 0.11 + t * 0.76;
-    for (let arm = 0; arm < 7; arm++) {
-      const a = (arm * Math.PI * 2) / 7 + level * 1.73;
-      const r = rBase * (1 - t * 0.82) * (0.86 + 0.14 * Math.sin(arm * 7 + level * 3));
+  const card = (root: number[], tip: number[], width: number, a: number, roll: number) => {
+    const ux = -Math.sin(a) * Math.cos(roll),
+      uz = Math.cos(a) * Math.cos(roll);
+    const uy = Math.sin(roll);
+    const A = [root[0]! - ux * width, root[1]! - uy * width, root[2]! - uz * width];
+    const B = [root[0]! + ux * width, root[1]! + uy * width, root[2]! + uz * width];
+    const C = [tip[0]! + ux * width * 0.6, tip[1]! + uy * width * 0.6, tip[2]! + uz * width * 0.6];
+    const D = [tip[0]! - ux * width * 0.6, tip[1]! - uy * width * 0.6, tip[2]! - uz * width * 0.6];
+    const start = b.uv.length;
+    tri(b, A, B, C, "#ffffff");
+    tri(b, A, C, D, "#ffffff");
+    b.uv.splice(start, 12, 0.05, 0.12, 0.95, 0.12, 0.95, 0.98, 0.05, 0.12, 0.95, 0.98, 0.05, 0.98);
+  };
+  const levels = 12;
+  for (let level = 0; level < levels; level++) {
+    const t = level / levels;
+    const y = 0.1 + t * 0.84;
+    const arms = 6;
+    for (let arm = 0; arm < arms; arm++) {
+      const a = (arm * Math.PI * 2) / arms + level * 2.399;
+      const radius =
+        rBase * Math.pow(1 - t, 0.78) * (0.82 + 0.18 * Math.sin(arm * 3.7 + level * 1.9));
       const dx = Math.cos(a),
         dz = Math.sin(a);
-      for (let twig = 0; twig < 3; twig++) {
-        const twigStart = b.pos.length / 3;
-        const f = 0.15 + twig * 0.28;
-        const width = r * (1 - f) * 0.78;
-        // Lift the inner bough and droop its tips: adjacent whorls overlap in
-        // silhouette instead of reading as flat shelves on a bare pole.
-        const cy = y + (1 - f) * 0.055 - f * r * 0.18;
-        const root = [dx * r * f, cy, dz * r * f];
-        const tip = [dx * r * (f + 0.28), cy - r * 0.12, dz * r * (f + 0.28)];
-        const left = [root[0]! - dz * width, cy - r * 0.07, root[2]! + dx * width];
-        const right = [root[0]! + dz * width, cy - r * 0.07, root[2]! - dx * width];
-        tri(b, root, left, tip, NEEDLE, 0.85 + f * 0.15);
-        tri(b, root, tip, right, NEEDLE);
-        const hanging = [root[0]!, cy - Math.max(r * 0.34, 0.04), root[2]!];
-        tri(b, left, hanging, tip, NEEDLE, 0.8);
-        tri(b, tip, hanging, right, NEEDLE, 0.85);
-        // A narrow snow ridge leaves needles visible along each edge.
-        const ridge = [root[0]!, cy + r * 0.12, root[2]!];
-        const snowTip = [tip[0]! * 0.91, tip[1]! + r * 0.035, tip[2]! * 0.91];
-        triC(
-          b,
-          ridge,
-          [root[0]! - dz * width * 0.72, cy, root[2]! + dx * width * 0.72],
-          snowTip,
-          SNOWC,
-          RIM,
-          RIM2,
-        );
-        triC(
-          b,
-          ridge,
-          snowTip,
-          [root[0]! + dz * width * 0.72, cy, root[2]! - dx * width * 0.72],
-          SNOWC,
-          RIM2,
-          RIM,
-        );
-        if (twig === 1) highDetail.push([twigStart, b.pos.length / 3 - twigStart]);
-      }
+      const root = [dx * 0.01, y + radius * 0.15, dz * 0.01];
+      const tip = [dx * radius, y - radius * 0.2, dz * radius];
+      // Branch wood connects the trunk to its needle spray, retaining visible gaps.
+      tri(
+        b,
+        [root[0]! - dz * 0.005, root[1]!, root[2]! + dx * 0.005],
+        tip,
+        [root[0]! + dz * 0.005, root[1]! - 0.007, root[2]! - dx * 0.005],
+        "#51422f",
+      );
+      card(root, tip, radius * 0.4, a, 0.25 * Math.sin(level + arm));
+      const detailStart = b.pos.length / 3;
+      card(root, tip, radius * 0.32, a, Math.PI * 0.38);
+      if (level % 2 || arm % 2) highDetail.push([detailStart, b.pos.length / 3 - detailStart]);
     }
-    if (narrow ? level % 3 === 1 : level === 1 || level === 5)
-      highDetail.push([detailStart, b.pos.length / 3 - detailStart]);
   }
-  // snowy leader at the top
-  tier(b, 0.9, rBase * 0.12, 4, 0.3, false, 0.9);
-  const tip = [0, 1, 0];
-  const base = 0.88;
-  for (let i = 0; i < 4; i++) {
-    const a0 = (i / 4) * Math.PI * 2;
-    const a1 = ((i + 1) / 4) * Math.PI * 2;
-    tri(
-      b,
-      [Math.cos(a0) * 0.02, base, Math.sin(a0) * 0.02],
-      tip,
-      [Math.cos(a1) * 0.02, base, Math.sin(a1) * 0.02],
-      SNOWC,
-    );
-  }
+  card([0, 0.88, 0], [0, 1, 0], 0.028, 0, 0);
+  card([0, 0.88, 0], [0, 1, 0], 0.028, Math.PI / 2, 0);
   const geometry = toGeo(b);
   prepareDetailGeometry(geometry, highDetail);
   return geometry;
 }
 
-/** far spruce: three snow shelves over short dark fringes, a fraction of the near cost */
+/** Solid overlapping boughs retain a forest silhouette beyond the needle texture mip range. */
 export function farSpruceGeo() {
-  const b: Build = { pos: [], col: [], nor: [] };
+  const b: Build = { pos: [], col: [], nor: [], uv: [] };
   const shelf = (y: number, r: number, rot: number) => {
-    const n = 10;
+    const n = 8;
     const rim: number[][] = [];
     for (let i = 0; i < n; i++) {
       const a = rot + (i / n) * Math.PI * 2;
-      const rr = i % 2 ? r * 0.72 : r;
+      const rr = i % 2 ? r * 0.68 : r * (0.94 + 0.06 * Math.sin(i * 4.1 + rot));
       rim.push([Math.cos(a) * rr, y - (i % 2 ? 0 : r * 0.1), Math.sin(a) * rr]);
     }
-    const apex = [0, y + r * 1.0, 0];
+    const apex = [0, y + r * 0.7, 0];
     for (let i = 0; i < n; i++) {
       const p = rim[i]!;
       const q = rim[(i + 1) % n]!;
@@ -227,9 +166,77 @@ export function farSpruceGeo() {
       "#4a3526",
     );
   }
-  shelf(0.16, 0.225, 0);
-  shelf(0.4, 0.175, 0.6);
-  shelf(0.62, 0.12, 1.2);
-  shelf(0.82, 0.07, 1.8);
+  shelf(0.12, 0.225, 0);
+  shelf(0.31, 0.184, 2.399);
+  shelf(0.50, 0.144, 4.798);
+  shelf(0.69, 0.102, 7.197);
+  shelf(0.88, 0.043, 9.596);
   return toGeo(b);
+}
+
+/** Original needle-and-snow spray atlas. The solid corner also serves trunks/far meshes. */
+export function spruceTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const c = canvas.getContext("2d")!;
+  c.fillStyle = "white";
+  c.fillRect(0, 248, 12, 8);
+  let seed = 731;
+  const rand = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+    return (seed >>> 0) / 4294967296;
+  };
+  c.lineCap = "round";
+  const branch = (x: number, y: number, tx: number, ty: number, snow: boolean) => {
+    c.strokeStyle = "#493e2d";
+    c.lineWidth = 2.3;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.lineTo(tx, ty);
+    c.stroke();
+    const dx = tx - x,
+      dy = ty - y,
+      len = Math.hypot(dx, dy),
+      nx = -dy / len,
+      ny = dx / len;
+    for (let j = 0; j < 22; j++) {
+      const t = j / 22,
+        bx = x + dx * t,
+        by = y + dy * t,
+        needle = 5 + (1 - t) * 7 + rand() * 4;
+      for (const side of [-1, 1]) {
+        c.strokeStyle = ["#263e30", "#36533d", "#476047", "#567152"][Math.floor(rand() * 4)]!;
+        c.lineWidth = 2.6;
+        c.beginPath();
+        c.moveTo(bx, by);
+        c.lineTo(
+          bx + nx * needle * side + (dx / len) * 4,
+          by + ny * needle * side + (dy / len) * 4,
+        );
+        c.stroke();
+      }
+    }
+    if (snow) {
+      for (let j = 2; j < 10; j++) {
+        const t = j / 12,
+          bx = x + dx * t,
+          by = y + dy * t;
+        c.fillStyle = j % 3 ? "#dce5e9" : "#f2f5f6";
+        c.beginPath();
+        c.ellipse(bx, by - 2, 5 + rand() * 3, 3 + rand() * 2, Math.atan2(dy, dx), 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  };
+  branch(128, 222, 128, 15, false);
+  for (let i = 0; i < 10; i++) {
+    const y = 210 - i * 18,
+      width = 80 * (1 - i / 13);
+    branch(128, y, 128 - width, y - 32, i % 3 !== 1);
+    branch(128, y - 6, 128 + width * (0.8 + rand() * 0.2), y - 43, i % 3 !== 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
 }
