@@ -42,6 +42,7 @@ const report = {
   fixedRoute: process.env.FIXED_ROUTE === "1",
   stationary: process.env.STATIONARY === "1",
   actualTrafficOccupants: true,
+  sceneMethodVersion: 2,
   weather: process.env.WEATHER || "rain",
   wave: Number(process.env.WAVE || 1),
   seconds,
@@ -155,6 +156,7 @@ try {
         await p.waitForFunction(() => window.__rsCars && window.__rsCarBatch);
         const posesPath = `${OUT}/driver-scene.json`;
         const savedScene = fs.existsSync(posesPath) ? JSON.parse(fs.readFileSync(posesPath, "utf8")) : null;
+        if(savedScene && savedScene.sceneMethodVersion !== 2)throw new Error("Use a fresh OUT: previous scene was captured before enemy warm-up");
         row.driverScene = await p.evaluate(({savedScene}) => {
           const r = __rs;
           const cars = savedScene?.cars ?? __rsCars.map(c => ({x:c.x,z:c.z,yaw:c.yawVis,park:c.park,type:c.v.type}));
@@ -167,11 +169,8 @@ try {
           const camera = savedScene?.camera ?? {x:p.x+Math.sin(p.yaw)*5,z:p.z+Math.cos(p.yaw)*5,y:0,yaw:p.yaw,pitch:-0.09};
           r.playtest.warp(camera.x,camera.y,camera.z);r.look.current.yaw=camera.yaw;r.look.current.pitch=camera.pitch;window.__driverBenchCamera=camera;
           r.invuln.current=1e6;r.trigger.current=false;r.pending.current.fill(null);
-          const enemies=savedScene?.enemies ?? r.enemies.map((e,i)=>({i,x:e.x,y:e.y,z:e.z,alive:e.alive}));
-          for(const p of enemies){const e=r.enemies[p.i];Object.assign(e,p);if(e.alive)e.frozen=1e6;}
-          return {cars,camera,enemies,actualTrafficCaller:true};
+          return {cars,camera,actualTrafficCaller:true,sceneMethodVersion:2};
         },{savedScene});
-        if(!savedScene)fs.writeFileSync(posesPath,JSON.stringify(row.driverScene,null,2));
         await p.waitForTimeout(10000);
         if (process.env.WAVE)
           await p.evaluate((n) => {
@@ -182,15 +181,30 @@ try {
             __rs.invuln.current = 1e6;
           }, Number(process.env.WAVE));
         if (process.env.WAVE) await p.waitForTimeout(8000);
-        if (report.stationary) await p.evaluate(() => {
-          __rs.pending.current.fill(null);
-          for (const enemy of __rs.enemies) if (enemy.alive) enemy.frozen = 1e6;
-        });
+        row.driverScene.enemies = await p.evaluate((savedEnemies) => {
+          const r=__rs;
+          r.pending.current.fill(null);
+          const live=r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive);
+          if(!live.length)throw new Error("No live enemies after warm-up");
+          if(savedEnemies) {
+            if(savedEnemies.length!==live.length)throw new Error("Enemy count mismatch");
+            for(const p of savedEnemies) {
+              const e=r.enemies[p.i];
+              if(!e?.alive || e.kind!==p.kind)throw new Error("Enemy identity mismatch");
+              e.x=p.x;e.z=p.z;e.yaw=p.yaw;e.hp=p.hp;
+            }
+          }
+          for(const {e} of live)e.frozen=1e6;
+          return live.map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp}));
+        },savedScene?.enemies ?? null);
+        if(!savedScene)fs.writeFileSync(posesPath,JSON.stringify(row.driverScene,null,2));
+        await p.waitForTimeout(1000);
         row.setup = await p.evaluate(() => {
           const r = __rs;
           r.invuln.current = 1e6;
           r.equip("pistol");
           return {
+            enemyPoses: r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive).map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp})),
             drivers: window.__rsCarBatch?.group.getObjectByName("ambient-drivers")?.count ?? 0,
             hud: document.body.innerText.slice(0, 500),
             camera: r.camera.position.toArray(),
@@ -213,6 +227,7 @@ try {
             aimStats: r.aimStats.current,
           };
         });
+        if(JSON.stringify(row.setup.enemyPoses)!==JSON.stringify(row.driverScene.enemies))throw new Error("Enemy poses drifted after restoration");
         let cdp;
         if (process.env.PROFILE && engine === "chromium") {
           cdp = await context.newCDPSession(p);
@@ -462,6 +477,7 @@ try {
                 over16_7: warmMs.filter((x) => x > 1000 / 60).length,
                 frames: warmMs.length,
               },
+              enemyPosesEnd: r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive).map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp})),
               driversEnd: window.__rsCarBatch?.group.getObjectByName("ambient-drivers")?.count ?? 0,
               programsEnd: r.gl.info.programs.length,
               gpuTimerAvailable: !!timer,
@@ -503,6 +519,7 @@ try {
             stationary: report.stationary,
           },
         );
+        if(JSON.stringify(row.metrics.enemyPosesEnd)!==JSON.stringify(row.driverScene.enemies))throw new Error("Enemy poses drifted during measurement");
         if (traceSession) {
           const completed = new Promise((resolve) =>
             traceSession.once("Tracing.tracingComplete", resolve),

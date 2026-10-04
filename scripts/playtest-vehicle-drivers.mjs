@@ -29,13 +29,22 @@ async function snapshot(name) {
               });
           });
           const c = r.playtest.driveCars.get("city-0");
+          const sl=__rsCarBatch.slots[0],mesh=__rsCarBatch.group.getObjectByName("ambient-drivers");
+          const target=sl.body.clone().multiply(sl.model.driverSeat).elements;
+          let targetInstances=0;
+          for(let i=0;i<mesh.count;i++) {
+            let match=true;
+            for(let k=0;k<16;k++)if(Math.abs(mesh.instanceMatrix.array[i*16+k]-target[k])>1e-3){match=false;break;}
+            if(match)targetInstances++;
+          }
           return {
             self: r.net.current.self,
             role: r.net.current.role,
             vehicle: r.playtest.myVehicle()?.id ?? null,
-            car: { owner: c.owner, speed: c.speed, brake: c.brake, x: c.x, z: c.z, yaw: c.yaw },
+            car: { hp:c.hp, owner: c.owner, speed: c.speed, brake: c.brake, x: c.x, z: c.z, yaw: c.yaw },
             rigs,
             driver: __rsCarBatch.slots[0].driver,
+            targetInstances,
             driverCount: __rsCarBatch.group.getObjectByName("ambient-drivers").count,
             cameraDistance: Math.hypot(r.camera.position.x-c.x,r.camera.position.z-c.z),
           };
@@ -45,7 +54,7 @@ async function snapshot(name) {
   for(const state of states) {
     const expected=!!state.car.owner && state.car.owner!==state.self;
     assert.equal(state.driver,expected,`${name}: ${state.role} driver visibility`);
-    if(expected && state.cameraDistance<22)assert.ok(state.driverCount>0,`${name}: near remote driver rendered`);
+    if(!expected)assert.equal(state.targetInstances,0,`${name}: target driver absent`);
   }
   report.checks.push({ name, pages:states });
   return states;
@@ -98,6 +107,7 @@ try {
   await wait(150);
   let s = await snapshot("guest-entered-hidden");
   assert.equal(s[1].vehicle, "city-0");
+  assert.equal(s[0].targetInstances,1,"host renders exactly the guest car driver");
   assert.equal(s[0].rigs.find((r) => r.id === guest).visible, false);
   assert.equal(s[1].rigs.find((r) => r.id === "local").visible, false);
   await h.screenshot({ path: `out/remote-hidden.png`.replace("out/", `${out}/`) });
@@ -155,6 +165,7 @@ try {
   s = await snapshot("guest-exit-restores-body");
   assert.equal(s[0].car.owner, "");
   assert.equal(s[0].rigs.find((r) => r.id === guest).visible, true);
+  assert.equal(s[1].rigs.find((r) => r.id === "local").visible, true,"local body restored on ordinary exit");
   await h.screenshot({ path: `${out}/remote-restored.png` });
   await g.evaluate(() => __pad.down(2));
   await wait(850);
@@ -175,6 +186,7 @@ try {
   const r = await ctx.newPage();
   pages.push(r);
   r.on("pageerror", (e) => report.errors.push(e.message));
+  r.on("console",m=>{if(m.type()==="error")report.errors.push(m.text());});
   await r.goto(`${base}/game/?seed=11&debug=1&quality=low`);
   await r.getByRole("textbox", { name: "Room code" }).fill(code);
   await r.getByRole("button", { name: /^JOIN$/ }).click();
@@ -186,11 +198,19 @@ try {
     vehicle: __rs.playtest.myVehicle()?.id ?? null,
   }));
   assert.equal(report.rejoin.vehicle, null);
+  await r.waitForFunction(()=>window.__rs?.playtest?.driveCars.get("city-0")?.claimed,null,{timeout:120000});
+  await r.evaluate(()=>{const t=__rs.playtest,c=t.driveCars.get("city-0");t.warp(c.x,__rs.groundAt(c.x,c.z),c.z-6);__rs.look.current.yaw=Math.PI;});
   await g.evaluate(() => __pad.down(2));
   await wait(850);
   await g.evaluate(() => __pad.up(2));
   await wait(300);
-  await snapshot("rejoined-peer-sees-seated-driver");
+  s=await snapshot("rejoined-peer-sees-seated-driver");
+  assert.equal(s[0].vehicle,"city-0","new host reentered target car");
+  assert.equal(s[0].car.owner,s[0].self);
+  assert.equal(s[1].car.owner,s[0].self,"rejoined guest received ownership");
+  assert.equal(s[1].targetInstances,1,"rejoined guest renders target occupant");
+  assert.equal(s[0].rigs.find(r=>r.id==="local").visible,false);
+  assert.equal(s[1].rigs.find(r=>r.id===s[0].self).visible,false);
   await g.evaluate(() => {
     const r = __rs,
       c = r.playtest.driveCars.get("city-0");
@@ -203,7 +223,11 @@ try {
     if (!hit) throw Error("damage fixture missed car");
   });
   await wait(300);
-  assert.equal((await snapshot("wreck-ejects"))[0].vehicle, null);
+  s=await snapshot("wreck-ejects");
+  for(const state of s){assert.equal(state.car.hp,0);assert.equal(state.car.owner,"");assert.equal(state.driver,false);assert.equal(state.targetInstances,0);}
+  assert.equal(s[0].vehicle,null);
+  assert.equal(s[0].rigs.find(r=>r.id==="local").visible,true,"local standing body restored after wreck");
+  assert.equal(s[1].rigs.find(r=>r.id===s[0].self).visible,true,"remote standing body restored after wreck");
   assert.deepEqual(report.errors, []);
 } catch (e) {
   report.failure = e.stack;
