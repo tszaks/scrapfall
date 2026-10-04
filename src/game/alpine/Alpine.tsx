@@ -1103,7 +1103,11 @@ export const AlpineScene = memo(function AlpineScene({
     };
   }, [built]);
   useEffect(() => () => Object.values(geos).forEach((g) => g.dispose()), [geos]);
-  useGeometryDetail([geos.spruce]);
+  const detailGeos = useMemo(
+    () => [geos.spruce, ...built.chunks.map((c) => c.detail)],
+    [geos.spruce, built],
+  );
+  useGeometryDetail(detailGeos);
 
   // instanced forest per chunk (near + far LOD) and the far ring
   // The near / mid forest meshes are built here, each with its own instance-colour buffer,
