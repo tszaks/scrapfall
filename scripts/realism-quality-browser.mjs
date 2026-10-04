@@ -14,9 +14,7 @@ try {
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text());
     });
-    await page.goto(
-      `${base}/game/?map=${map}&seed=7&time=sunset&tour=1&debug=1&quality=high`,
-    );
+    await page.goto(`${base}/game/?map=${map}&seed=7&time=sunset&tour=1&debug=1&quality=high`);
     await page.getByRole("button", { name: /^start$/i }).click({ timeout: 90000 });
     await page.getByRole("button", { name: /enter arena/i }).click();
     await page.waitForFunction(() => window.__rs?.camera, null, { timeout: 120000 });
@@ -103,7 +101,7 @@ try {
         row.relief.length === 1 && row.relief[0] === (tier !== "low"),
         `${map} relief ${JSON.stringify(row)}`,
       );
-      if (map !== "gulch") {
+      {
         assert.ok(row.objects > 0);
         assert.ok(tier === "low" ? row.submitted < row.full : row.submitted === row.full);
       }

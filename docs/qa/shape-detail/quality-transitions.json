@@ -1,0 +1,346 @@
+[
+  {
+    "map": "vice",
+    "rows": [
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 3208605,
+        "submitted": 3208605,
+        "objects": 37,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 2229,
+          "textures": 175
+        }
+      },
+      {
+        "pref": "low",
+        "tier": "low",
+        "full": 3208605,
+        "submitted": 2490945,
+        "objects": 37,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 2229,
+          "textures": 175
+        }
+      },
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 3208605,
+        "submitted": 3208605,
+        "objects": 37,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 2229,
+          "textures": 175
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "low",
+        "full": 3208605,
+        "submitted": 2490945,
+        "objects": 37,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 2229,
+          "textures": 175
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "high",
+        "full": 3208605,
+        "submitted": 3208605,
+        "objects": 37,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 2229,
+          "textures": 175
+        }
+      }
+    ],
+    "errors": []
+  },
+  {
+    "map": "pier",
+    "rows": [
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 702312,
+        "submitted": 702312,
+        "objects": 5,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1942,
+          "textures": 165
+        }
+      },
+      {
+        "pref": "low",
+        "tier": "low",
+        "full": 702312,
+        "submitted": 647160,
+        "objects": 5,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1942,
+          "textures": 165
+        }
+      },
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 702312,
+        "submitted": 702312,
+        "objects": 5,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1942,
+          "textures": 165
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "low",
+        "full": 702312,
+        "submitted": 647160,
+        "objects": 5,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1943,
+          "textures": 165
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "high",
+        "full": 702312,
+        "submitted": 702312,
+        "objects": 5,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1943,
+          "textures": 165
+        }
+      }
+    ],
+    "errors": []
+  },
+  {
+    "map": "whiteout",
+    "rows": [
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 43602,
+        "submitted": 43602,
+        "objects": 2,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1845,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "low",
+        "tier": "low",
+        "full": 43602,
+        "submitted": 32010,
+        "objects": 2,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1845,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 43602,
+        "submitted": 43602,
+        "objects": 2,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1845,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "low",
+        "full": 43602,
+        "submitted": 32010,
+        "objects": 2,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1845,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "high",
+        "full": 43602,
+        "submitted": 43602,
+        "objects": 2,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1846,
+          "textures": 160
+        }
+      }
+    ],
+    "errors": []
+  },
+  {
+    "map": "gulch",
+    "rows": [
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 3683532,
+        "submitted": 3683532,
+        "objects": 57,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1798,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "low",
+        "tier": "low",
+        "full": 3683532,
+        "submitted": 3619272,
+        "objects": 57,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1798,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "high",
+        "tier": "high",
+        "full": 3683532,
+        "submitted": 3683532,
+        "objects": 57,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1798,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "low",
+        "full": 3683532,
+        "submitted": 3619272,
+        "objects": 57,
+        "changed": 0,
+        "relief": [
+          false
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1798,
+          "textures": 160
+        }
+      },
+      {
+        "pref": "auto",
+        "tier": "high",
+        "full": 3683532,
+        "submitted": 3683532,
+        "objects": 57,
+        "changed": 0,
+        "relief": [
+          true
+        ],
+        "sameWorld": true,
+        "memory": {
+          "geometries": 1799,
+          "textures": 160
+        }
+      }
+    ],
+    "errors": []
+  }
+]

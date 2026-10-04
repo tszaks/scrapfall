@@ -1,4 +1,20 @@
-import test from "node:test";
+import test, { after } from "node:test";
+// The world's sliced builder owns a browser MessageChannel. Close test-owned ports.
+const NativeChannel = globalThis.MessageChannel;
+const channels = [];
+globalThis.MessageChannel = class extends NativeChannel {
+  constructor() {
+    super();
+    channels.push(this);
+  }
+};
+after(() => {
+  for (const c of channels) {
+    c.port1.close();
+    c.port2.close();
+  }
+  globalThis.MessageChannel = NativeChannel;
+});
 import assert from "node:assert/strict";
 import { rolldown } from "rolldown";
 import { resolve } from "node:path";
