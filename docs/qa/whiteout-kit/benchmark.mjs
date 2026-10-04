@@ -47,7 +47,7 @@ const report = {
   cpuThrottle: Number(process.env.CPU_THROTTLE || 1),
   repeats,
   soak: process.env.SOAK === "1",
-  method: `Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
+  method: `${process.env.STATIONARY === "1" ? "Stationary rendering diagnostic: frozen enemies, no movement or firing." : "Headless browser active combat diagnostic."} Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. ${engine === "chromium" ? "Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement." : "WebKit uses its default frame pacing."} Separate scene startup and warm-up. Not native Safari or physical display FPS.`,
   dirty: !!execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim(),
   cases: [],
 };

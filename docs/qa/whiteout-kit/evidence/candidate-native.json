@@ -18,7 +18,7 @@
   "cpuThrottle": 1,
   "repeats": 1,
   "soak": false,
-  "method": "Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement. Separate scene startup and warm-up. Not native Safari or physical display FPS.",
+  "method": "Stationary rendering diagnostic: three frozen enemies, pending spawns cleared, no movement or firing. GPU vsync and frame-rate limit disabled; 10-second warm-up and 20-second measurement. Not physical display FPS or combat endurance. This description corrects the generic runner label retained in runnerMethodLabel.",
   "dirty": true,
   "cases": [
     {
@@ -28,7 +28,7 @@
       "consoleErrors": [],
       "navThroughMenuToSceneMs": 1867,
       "setup": {
-        "hud": "12 / 128 · R\nSKI BLUE · E\nSKI RED · E\nNW · 328°\nWHITEOUT PASS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "hud": "12 / 128 \u00b7 R\nSKI BLUE \u00b7 E\nSKI RED \u00b7 E\nNW \u00b7 328\u00b0\nWHITEOUT PASS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 0\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY",
         "camera": [
           10,
           1.8594903111457826,
@@ -1317,7 +1317,7 @@
           "geometries": 1862,
           "textures": 162
         },
-        "hud": "12 / 987 · R\nSKI BLUE · E\nSKI RED · E\nN · 0°\nWHITEOUT PASS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "hud": "12 / 987 \u00b7 R\nSKI BLUE \u00b7 E\nSKI RED \u00b7 E\nN \u00b7 0\u00b0\nWHITEOUT PASS \u00b7 OVERCLOCK\nWAVE 1/12\nKILLS 0\n\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\u2666\n\u25c6 0\n1\n\u25a0 PISTOL 140\nSELF REVIVE \u00b7 1 KIT\nTAC SPRINT READY\nF PHASE DASH \u00b7 READY",
         "quality": {
           "dpr": 2,
           "tier": "high",
@@ -1431,5 +1431,6 @@
     }
   ],
   "browserVersion": "151.0.7922.34",
-  "ended": "2026-10-04T18:18:06.742Z"
+  "ended": "2026-10-04T18:18:06.742Z",
+  "runnerMethodLabel": "Headless browser active combat diagnostic. Real simulation with invulnerability and ammunition assistance; movement inputs and target aiming scripted. Chromium runs with GPU vsync and frame-rate limiting disabled for headroom measurement. Separate scene startup and warm-up. Not native Safari or physical display FPS."
 }

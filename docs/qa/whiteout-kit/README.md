@@ -9,7 +9,7 @@ Tree placement, trunk collision, playable structures and long enemy approaches a
 - Independent review found a missing chalet quality-update hook; fixed before acceptance. All 13 detail geometries subsequently matched LOW and HIGH ranges across four live transitions, without replacing buffers or the scene.
 - Actual keyboard W/A/S/D moved 7.21–7.85 m per two-second leg; Enter fired the weapon. Zero browser errors.
 - Full local suite: 61 tests passed before the added foliage test; the final focused foliage suite passed all three tests. Current-head CI is required before merge.
-- Typecheck, production build and repo-map pass. All eight map/time smoke cases pass with zero errors. Whiteout co-op host transfer and rejoin preserve wave 5 and three enemies at HP 2/1/1, with zero page errors.
+- Typecheck, production build and repo-map pass. All eight map/time smoke cases pass with zero errors. Whiteout co-op host transfer preserves wave 5 and three enemies at HP 2/1/1. The rejoined guest reports its guest role and wave 5; its enemy HP was not separately recorded. Zero page errors occurred.
 - Five matched player-eye poses in sunset and night (20 PNGs) use the same seeded cameras before/after. All captures have zero errors. Built and served Alpine asset hashes match their isolated source directories.
 
 ## Limits
