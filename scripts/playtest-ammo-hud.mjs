@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 const base = process.env.BASE ?? 'http://127.0.0.1:4187';
 const out = process.env.OUT ?? 'docs/evidence/ammo-hud';
 fs.mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ args: ['--use-angle=metal'] });
+const browser = await chromium.launch({ args: process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const errors = [], results = [];
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, hasTouch: true });
 page.on('pageerror', e => errors.push(e.message));
@@ -59,6 +59,16 @@ try {
   await page.evaluate(() => __rs.playtest.releaseVehicle(__rs.playtest.driving.self));
   await hud.waitFor();
   results.push('Driving hides ammo; exit restores it');
+  for (const [id, glyph] of [['Xbox Wireless Controller', 'X'], ['DualSense Wireless Controller', '□'], ['Nintendo Switch Pro Controller', 'Y']]) {
+    await page.evaluate(id => {
+      window.testPad = { id, index: 0, connected: true, mapping: 'standard', axes: [0, 0, 0.7, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+      Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => window.testPad ? [window.testPad] : [] });
+    }, id);
+    await page.waitForFunction(glyph => document.querySelector('.ammo-hud-hint')?.textContent === `${glyph} · RELOAD`, glyph);
+    results.push(`${id} reload glyph`);
+  }
+  await capture('controller');
+  await page.evaluate(() => { window.testPad = null; });
   await page.setViewportSize({ width: 844, height: 390 });
   await page.dispatchEvent('canvas', 'pointerdown', { pointerType: 'touch', pointerId: 7 });
   await page.waitForFunction(() => document.querySelector('[data-ammo-hud]')?.dataset.touch === 'true');
@@ -82,6 +92,17 @@ try {
   await capture('touch-portrait');
   assert.ok(await page.getByText('ROTATE YOUR DEVICE', { exact: true }).isVisible());
   results.push('390x844 retains existing rotate-device screen');
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.keyboard.press('ArrowDown');
+  await page.evaluate(() => {
+    const r = __rs;
+    r.playtest.warp(r.city.spawn.x, r.groundAt(r.city.spawn.x, r.city.spawn.z), r.city.spawn.z);
+    Object.assign(r.moveState, { airborne: true, feet: r.moveState.feet + 0.2, vy: -1, fallTop: r.moveState.feet + 35 });
+  });
+  await page.waitForFunction(() => __rs.healthRef.current <= 0);
+  await page.waitForFunction(() => !document.querySelector('[data-ammo-hud]'));
+  await capture('downed');
+  results.push('Downing fall removes ammo HUD');
   assert.deepEqual(errors, []);
 } finally {
   fs.writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 2));

@@ -4,10 +4,14 @@
     "Reload progress, loaded/reserve counts and keyboard label",
     "Pause hides ammo; resume restores it",
     "Driving hides ammo; exit restores it",
+    "Xbox Wireless Controller reload glyph",
+    "DualSense Wireless Controller reload glyph",
+    "Nintendo Switch Pro Controller reload glyph",
     "844x390 touch HUD clears buttons, minimap and self-revive indicator",
     "667px landscape HUD clears controls and indicators",
     "568px landscape HUD clears controls and indicators",
-    "390x844 retains existing rotate-device screen"
+    "390x844 retains existing rotate-device screen",
+    "Downing fall removes ammo HUD"
   ],
   "errors": []
 }
