@@ -1,3 +1,4 @@
+import { myVehicle } from "./driving";
 import { wheelWorld, wheelEye } from "./beach/wheelRide";
 import { createPortal, useFrame } from "@react-three/fiber";
 import { groundY } from "./terrain";
@@ -53,8 +54,24 @@ export function RemotePlayers({
       // a DOWN teammate lies on the ground waiting for a revive; a dead one is spectating
       // (invisible to everyone) until the next wave
       const down = !!p && p.hp <= 0 && squad.get(p.id)?.st === DOWN;
-      g.visible = !!p && (p.hp > 0 || down);
+      const car = p ? myVehicle(p.id) : null;
+      const driving = !!car;
+      g.visible = !!p && (p.hp > 0 || down) && !driving;
+      g.userData["playerId"] = p?.id;
+      if (p && car) {
+        p.rx = car.x;
+        p.rz = car.z;
+        p.ry = p.yaw;
+        g.userData["driving"] = true;
+        continue;
+      }
       if (!p || (p.hp <= 0 && !down)) continue;
+      if (g.userData["driving"]) {
+        p.rx = p.x;
+        p.rz = p.z;
+        p.ry = p.yaw;
+        g.userData["driving"] = false;
+      }
 
       const k = Math.min(1, delta * 12);
       p.rx += (p.x - p.rx) * k;

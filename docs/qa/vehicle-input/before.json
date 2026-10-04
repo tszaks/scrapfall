@@ -1,0 +1,109 @@
+{
+  "errors": [],
+  "assets": [
+    "https://szakacsmedia.com/game/assets/index-CNoDNd9f.js",
+    "https://szakacsmedia.com/game/assets/react-SIfiwpqq.js",
+    "https://szakacsmedia.com/game/assets/layout-C4JxSPAx.js",
+    "https://szakacsmedia.com/game/assets/terrain-IhuqYnkp.js",
+    "https://szakacsmedia.com/game/assets/routes-B5buXxL3.js",
+    "https://szakacsmedia.com/game/assets/level-B2Jvf_EE.js",
+    "https://szakacsmedia.com/game/assets/look-BCQEJiYe.js",
+    "https://szakacsmedia.com/game/assets/world-DzBs8Oja.js",
+    "https://szakacsmedia.com/game/assets/detailQuality-Brnz3_dx.js",
+    "https://szakacsmedia.com/game/assets/scannedSurface-Ch8alfyF.js",
+    "https://szakacsmedia.com/game/assets/soloBounds-CThOlUxp.js",
+    "https://szakacsmedia.com/game/assets/build-Blw8_zzJ.js",
+    "https://szakacsmedia.com/game/assets/slice-Du1KgBBX.js",
+    "https://szakacsmedia.com/game/assets/cityLayout-yMY0Bl5d.js",
+    "https://szakacsmedia.com/game/assets/staticCollision-DlvsqBFg.js",
+    "https://szakacsmedia.com/game/assets/events-803f4abc.esm-DbMtFYwA.js",
+    "https://szakacsmedia.com/game/assets/movement-D9oN3f26.js",
+    "https://szakacsmedia.com/game/assets/lighting-BrDkxuh1.js",
+    "https://szakacsmedia.com/game/assets/cityTextures-DVchPMkN.js",
+    "https://szakacsmedia.com/game/assets/layout-CNfjnHkO.js",
+    "https://szakacsmedia.com/game/assets/weather-BLWN1PSk.js",
+    "https://szakacsmedia.com/game/assets/ride-LYsXLjFR.js",
+    "https://szakacsmedia.com/game/assets/trafficCore-7wOy1ts3.js",
+    "https://szakacsmedia.com/game/assets/audio-Di40Cqzw.js",
+    "https://szakacsmedia.com/game/assets/timeOfDay-dU6G3_oH.js",
+    "https://szakacsmedia.com/game/assets/sky-DDOWFxcP.js",
+    "https://szakacsmedia.com/game/assets/beachLayout-ZAUtd5GP.js",
+    "https://szakacsmedia.com/game/assets/kit-DCwx9avB.js",
+    "https://szakacsmedia.com/game/assets/squadState-22bmDdeX.js",
+    "https://szakacsmedia.com/game/assets/driving-Bznl6df7.js",
+    "https://szakacsmedia.com/game/assets/sfx-3_lAuk6X.js",
+    "https://szakacsmedia.com/game/assets/CityRain-DGp2ey7o.js",
+    "https://szakacsmedia.com/game/assets/TimeScene-CV881eda.js",
+    "https://szakacsmedia.com/game/assets/mapHooks-CqRBYVQH.js",
+    "https://szakacsmedia.com/game/assets/ambience-HLGQDPEU.js",
+    "https://szakacsmedia.com/game/assets/storm-DrUEAM-j.js",
+    "https://szakacsmedia.com/game/assets/trainSim-DWPzEbxX.js",
+    "https://szakacsmedia.com/game/assets/layout-Cg-ChHag.js",
+    "https://szakacsmedia.com/game/assets/plan-C4CZDolg.js",
+    "https://szakacsmedia.com/game/assets/textures-C2v_zRUz.js",
+    "https://szakacsmedia.com/game/assets/spiral-ByI9YBCd.js",
+    "https://szakacsmedia.com/game/assets/vehicles-Vxzeo2YT.js",
+    "https://szakacsmedia.com/game/assets/facade-BN3FyA_r.js",
+    "https://szakacsmedia.com/game/assets/belfry-D0kS2bw7.js",
+    "https://szakacsmedia.com/game/assets/adapters-GeDMp5db.js",
+    "https://szakacsmedia.com/game/assets/cityAccess-D3M4Jwqc.js",
+    "https://szakacsmedia.com/game/assets/cityMesh-BuFt-GQ5.js",
+    "https://szakacsmedia.com/game/assets/foliage-CmLoGn2P.js",
+    "https://szakacsmedia.com/game/assets/cityGeo-bzBFe3ex.js",
+    "https://szakacsmedia.com/game/assets/cars-Dpp6W8GO.js",
+    "https://szakacsmedia.com/game/assets/CityMap-Dncx2xRw.js",
+    "https://szakacsmedia.com/game/assets/surfaceRelief-CjMvhpSF.js",
+    "https://szakacsmedia.com/game/assets/Traffic-3br5d0Pi.js"
+  ],
+  "setup": {
+    "car": {
+      "id": "city-0",
+      "x": -29.609980422108055,
+      "z": -6,
+      "yaw": -1.5707963267948966,
+      "width": 0.91,
+      "owner": ""
+    },
+    "player": [
+      -29.609980422108055,
+      1.6,
+      -4.09
+    ],
+    "pad": "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)"
+  },
+  "square": {
+    "vehicle": null,
+    "hint": "INTERACT TO DRIVE",
+    "use": false,
+    "pad": {
+      "kind": "pad",
+      "padType": "ps",
+      "padConnected": true
+    }
+  },
+  "keyboard": {
+    "vehicle": "city-0",
+    "hint": "DRIVING · INTERACT TO EXIT"
+  },
+  "parked": {
+    "car": {
+      "x": -392,
+      "z": -283,
+      "rot": 1.5707963267948966,
+      "v": {
+        "type": "police",
+        "len": 4.7,
+        "wid": 1.84,
+        "wheel": 0.36672295399010185,
+        "color": 1381656,
+        "extras": 0,
+        "mass": 1.1
+      }
+    },
+    "registered": false,
+    "after": {
+      "vehicle": null,
+      "hint": ""
+    }
+  }
+}
