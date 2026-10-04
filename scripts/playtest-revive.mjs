@@ -53,11 +53,17 @@ try {
     });
   const requestRecoverySync = async (target) => {
     const receipt = `RECOVERY SYNC ${++syncRequest}`;
-    await h.evaluate((receipt) => {
-      window.__syncReceipt = receipt;
-    }, receipt);
-    await target.evaluate(() => __rs.net.current.broadcast({ type: "world-ready" }));
-    await target.getByText(receipt, { exact: true }).waitFor({ timeout: 10000 });
+    const id = await target.evaluate(() => __rs.net.current.self);
+    await h.evaluate(
+      ({ id, receipt }) => {
+        window.__syncReceipt = receipt;
+        // Exercise the real recover/connect(true)/joined/world-ready path while
+        // keeping the existing host alive in this isolated test room.
+        __rs.net.current.sendTo(id, { type: "handoff", members: __rs.net.current.peers() });
+      },
+      { id, receipt },
+    );
+    await target.getByText(receipt).waitFor({ timeout: 20000 });
   };
 
   for (const p of [h, g])
@@ -200,6 +206,29 @@ try {
   assert.ok(Math.hypot(respawn.x - dead.x, respawn.z - dead.z) > 10, "respawn leaves rooftop");
   results.push({ name: "full death next-wave spawn", dead, respawn });
   console.log("PASS full death next-wave spawn");
+  if (process.env.RECOVERY_SYNC) {
+    const wave = await g.evaluate(() => __rs.wave.current);
+    await h.close();
+    await g.waitForFunction(() => __rs.net.current.role === "host", null, { timeout: 45000 });
+    assert.equal(await g.evaluate(() => __rs.wave.current), wave, "host transfer retains wave");
+    const newcomer = await ctx.newPage();
+    newcomer.on("pageerror", (error) => errors.push(error.message));
+    await newcomer.goto(`${base}/game/?debug=1&quality=low`);
+    await newcomer.getByRole("textbox", { name: "Room code" }).fill(code);
+    await newcomer.getByRole("button", { name: /^JOIN$/ }).click();
+    await newcomer.waitForFunction(
+      (wave) => window.__rs?.net.current.role === "guest" && __rs.wave.current === wave,
+      wave,
+      { timeout: 45000 },
+    );
+    results.push({
+      name: "host transfer and same-code rejoin",
+      wave,
+      host: await pose(g),
+      guest: await pose(newcomer),
+    });
+    console.log("PASS host transfer and same-code rejoin");
+  }
   assert.deepEqual(errors, []);
 } finally {
   clearTimeout(watchdog);
