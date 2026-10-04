@@ -22,10 +22,11 @@
 .ammo-hud[data-touch="true"] {
   bottom: calc(max(20px, env(safe-area-inset-bottom)) + 232px);
 }
-/* On landscape phones sit beside Sprint, clear of the movement thumb and right buttons. */
-@media (min-width: 640px) and (max-height: 540px) {
+/* On landscape phones use the gap between the movement thumb and minimap. */
+@media (orientation: landscape) and (max-height: 540px) {
   .ammo-hud[data-touch="true"] {
     left: calc(max(20px, env(safe-area-inset-left)) + 76px);
-    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 96px);
+    bottom: max(20px, env(safe-area-inset-bottom));
+    width: 144px;
   }
 }
