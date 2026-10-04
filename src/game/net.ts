@@ -92,6 +92,7 @@ const PREFIX = import.meta.env?.DEV ? "scrapfall-dev-arena-v25-" : "scrapfall-ts
 const HEARTBEAT = 5000;
 /** player-to-player chatter the host forwards to the other guests */
 const RELAYED = new Set(["t", "fire", "dep", "ping", "pick", "shard", "haz"]);
+const SNAPSHOT_MESSAGES = new Set(["snap", "status", "hazset", "pst", "diff", "mut"]);
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function makeCode() {
@@ -129,7 +130,7 @@ async function room(code: string, initialHost: boolean, opts: Opts): Promise<Net
   const poses = new Map<string, NetMsg>();
   const remember = (m: NetMsg) => {
     if (m.type === "seed") { snapshots.clear(); poses.clear(); }
-    if (["snap", "status", "hazset", "pst", "diff", "mut"].includes(m.type))
+    if (SNAPSHOT_MESSAGES.has(m.type))
       snapshots.set(m.type, m.type === "status" ? { ...m, banner: false } : m);
     if (m.type === "t") poses.set(m.from, m);
   };

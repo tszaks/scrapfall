@@ -8899,6 +8899,7 @@ export function Game() {
     setRerolls(0);
     let last = simulationNow();
     const id = setInterval(() => {
+      if (simulationPause.paused) return;
       const now = simulationNow();
       const seconds = Math.floor((now - last) / 1000);
       if (seconds > 0) { last += seconds * 1000; setShopLeft(s => Math.max(0, s - seconds)); }
@@ -8998,6 +8999,7 @@ export function Game() {
     let last = simulationNow();
     const period = 14000 / regenRate;
     const id = window.setInterval(() => {
+      if (simulationPause.paused) return;
       const now = simulationNow();
       const ticks = Math.floor((now - last) / period);
       if (ticks > 0) { last += ticks * period; setHealth(h => h > 0 ? Math.min(maxHp, h + ticks) : h); }
