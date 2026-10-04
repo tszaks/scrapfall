@@ -22,3 +22,11 @@ Hardware: MacBook Pro, Apple M4 Max. Functional checks use isolated Chromium wit
 Fixtures deliberately position a registered moving-traffic car and players on open ground. These are controlled regression checks, not natural gameplay or proof that scenery-parked cars are drivable. Parked-car conversion, stopped-car collision, spawn range, revive position and the final ammo HUD are separate work.
 
 No new sustained60fps claim. Browser behavior and regression evidence do not establish universal performance across devices or browsers.
+
+## Recorded results
+
+Runtime source: `cb57f36` (precise hull sweep correction included). [Before](before.json): simulated Square failed and E entered the same car. [Final controller results](controller.json):30 named checks,0 errors. [Final co-op](coop.json): enemy test round reduced hull HP100→90; guest braking stopped the host-authoritative car; local/remote standing rigs hid in the car and restored on exit, including host transfer and actual wreck ejection. [Whiteout ski results](ski.json): Square tap entered both blue/red runs without starting reload,0 errors.
+
+[Hold progress](hold-progress.png), [local driver without standing rig](local-driver.png), [remote driver hidden](remote-hidden.png), [remote restored on exit](remote-restored.png), [Square starts red ski run](red-square-start.png).
+
+Local full `npm run check` plus repo-map:73 tests, typecheck, build and8 map/time smoke cases passed on `c2c7c02`. The subsequent small hull-point/sweep correction passed typecheck/build,7 focused tests and all final browser suites above. Final PR CI repeats the complete repository gate on the final head. An abnormal generated output directory stalled one local staging attempt; it was preserved separately and clean staging succeeded. This was a local build artifact issue, not a runtime exception.
