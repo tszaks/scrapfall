@@ -401,21 +401,21 @@ export function CityTraffic({
       });
   }, [cars, director, batch]);
 
-  // a moving car touched an enemy (host only). Small ones get thrown aside and hurt;
-  // big ones (brute, vanguard, elites, mini-boss, boss) stop the car and just take a knock.
+  // Ambient traffic yields to robots. An unavoidable contact only bumps them;
+  // it must never kill the approaching wave or award combat rewards offscreen.
   const contact = (c: Car, idx: number, big: boolean) => {
     const L = link.current;
     const tt = trafficClock.t;
     const last = enemyHit.current.get(idx) ?? -9;
-    if (tt - last < 0.8 || !L.hurtEnemy) return;
+    if (!L.active || tt - last < 0.8 || !L.hurtEnemy) return;
     enemyHit.current.set(idx, tt);
     const e = L.enemies[idx]!;
     const yaw = headingOf(c);
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
     const side = (e.x - c.x) * cos - (e.z - c.z) * sin >= 0 ? 1 : -1;
-    if (big) L.hurtEnemy(idx, 1, 0, 0);
-    else L.hurtEnemy(idx, Math.round(2 + c.speed * c.v.mass * 0.35), cos * side, -sin * side);
+    if (big) L.hurtEnemy(idx, 0, 0, 0);
+    else L.hurtEnemy(idx, 0, cos * side, -sin * side);
   };
 
   useFrame((state, raw) => {
@@ -452,7 +452,7 @@ export function CityTraffic({
           players.push(s);
         }
       }
-      const onEnemyContact = L.isHost && L.hurtEnemy ? contact : undefined;
+      const onEnemyContact = L.active && L.isHost && L.hurtEnemy ? contact : undefined;
       // far cars (nobody within FAR_SIM) run at a quarter of the rate with a 4x step;
       // pursuit cars always run at the full rate
       markFar(cars, players, FAR_SIM);

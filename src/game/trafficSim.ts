@@ -1288,13 +1288,15 @@ export function stepCars(
         }
       }
     }
-    // big enemies (brutes, vanguards, elites, mini-boss, boss) are obstacles: brake for them
+    // Yield to every ground robot, then resume as soon as its lane is clear.
+    // Flying enemies use a negative radius and never obstruct road traffic.
+    const enemyLookahead = Math.max(9, c.speed * c.speed / 14 + 2);
     for (const e of env.enemies) {
-      if (!e.alive || !e.big) continue;
+      if (!e.alive || e.r < 0) continue;
       const dx = e.x - c.x;
       const dz = e.z - c.z;
       const a = dx * fx + dz * fz;
-      if (a > 0 && a < half + e.r + 9 && Math.abs(dx * -fz + dz * fx) < hw + e.r + 0.3)
+      if (a > 0 && a < half + e.r + enemyLookahead && Math.abs(dx * -fz + dz * fx) < hw + e.r + 0.3)
         lim(a - half - e.r - 0.8, null);
     }
     // slow for the corner
