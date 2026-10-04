@@ -3878,11 +3878,11 @@ function World({
     already = false,
     bodyR = 0.55,
   ) => {
-    // Enemy arrivals use the requested long approach on large maps. Small arenas
+    // Halve the large-map street approach; initial arrivals and recoveries share this ring. Small arenas
     // and the isolated summit scale the ring to their reachable footprint.
     if (rMin >= 25) {
       const summit = alpineMap && (zone === 1 || (zone === undefined && alpineZone(camera.position.x,camera.position.z) === 1));
-      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF);
+      const minimum = !big ? 16 : summit || (zone ?? 0) >= ROOF_KEY ? 18 : Math.min(400, PLAY_HALF) / 2;
       rMin = minimum; rMax = minimum * 1.5;
     }
     // arenas have no traffic, but props still occupy real space the cells miss
