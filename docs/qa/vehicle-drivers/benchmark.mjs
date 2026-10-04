@@ -42,14 +42,15 @@ const report = {
   fixedRoute: process.env.FIXED_ROUTE === "1",
   stationary: process.env.STATIONARY === "1",
   actualTrafficOccupants: true,
-  sceneMethodVersion: 2,
+  sceneMethodVersion: 3,
   weather: process.env.WEATHER || "rain",
   wave: Number(process.env.WAVE || 1),
   seconds,
   cpuThrottle: Number(process.env.CPU_THROTTLE || 1),
   repeats,
   soak: process.env.SOAK === "1",
-  method: "Stationary driver rendering comparison using the actual Traffic caller, without an occupant override. Matched frozen traffic/enemy transforms and camera. Ten-second warm-up then measured uncapped Metal rendering. No movement/firing; separate entry/exit and co-op tests establish interaction behavior. These figures are not physical display FPS or endurance results.",
+  method:
+    "Stationary driver rendering comparison using the actual Traffic caller, without an occupant override. Matched frozen traffic/enemy transforms and camera; enemy coordinate getters prevent recovery relocation in this rendering-only fixture. Ten-second warm-up then measured uncapped Metal rendering. No movement/firing; separate entry/exit and co-op tests establish interaction behavior. These figures are not physical display FPS or endurance results.",
   dirty: !!execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim(),
   cases: [],
 };
@@ -155,22 +156,59 @@ try {
           });
         await p.waitForFunction(() => window.__rsCars && window.__rsCarBatch);
         const posesPath = `${OUT}/driver-scene.json`;
-        const savedScene = fs.existsSync(posesPath) ? JSON.parse(fs.readFileSync(posesPath, "utf8")) : null;
-        if(savedScene && savedScene.sceneMethodVersion !== 2)throw new Error("Use a fresh OUT: previous scene was captured before enemy warm-up");
-        row.driverScene = await p.evaluate(({savedScene}) => {
-          const r = __rs;
-          const cars = savedScene?.cars ?? __rsCars.map(c => ({x:c.x,z:c.z,yaw:c.yawVis,park:c.park,type:c.v.type}));
-          for(let i=0;i<__rsCars.length;i++) {
-            const c=__rsCars[i],p=cars[i];
-            if(!p||c.v.type!==p.type)throw new Error("Traffic identity mismatch");
-            Object.assign(c,{x:p.x,px:p.x,z:p.z,pz:p.z,yaw:p.yaw,pyaw:p.yaw,yawVis:p.yaw,driven:true,speed:0,park:p.park});
-          }
-          const p = cars.find(c=>c.type==="sedan"&&!c.park);
-          const camera = savedScene?.camera ?? {x:p.x+Math.sin(p.yaw)*5,z:p.z+Math.cos(p.yaw)*5,y:0,yaw:p.yaw,pitch:-0.09};
-          r.playtest.warp(camera.x,camera.y,camera.z);r.look.current.yaw=camera.yaw;r.look.current.pitch=camera.pitch;window.__driverBenchCamera=camera;
-          r.invuln.current=1e6;r.trigger.current=false;r.pending.current.fill(null);
-          return {cars,camera,actualTrafficCaller:true,sceneMethodVersion:2};
-        },{savedScene});
+        const savedScene = fs.existsSync(posesPath)
+          ? JSON.parse(fs.readFileSync(posesPath, "utf8"))
+          : null;
+        if (savedScene && savedScene.sceneMethodVersion !== 3)
+          throw new Error("Use a fresh OUT: previous scene was captured before enemy warm-up");
+        row.driverScene = await p.evaluate(
+          ({ savedScene }) => {
+            const r = __rs;
+            const cars =
+              savedScene?.cars ??
+              __rsCars.map((c) => ({
+                x: c.x,
+                z: c.z,
+                yaw: c.yawVis,
+                park: c.park,
+                type: c.v.type,
+              }));
+            for (let i = 0; i < __rsCars.length; i++) {
+              const c = __rsCars[i],
+                p = cars[i];
+              if (!p || c.v.type !== p.type) throw new Error("Traffic identity mismatch");
+              Object.assign(c, {
+                x: p.x,
+                px: p.x,
+                z: p.z,
+                pz: p.z,
+                yaw: p.yaw,
+                pyaw: p.yaw,
+                yawVis: p.yaw,
+                driven: true,
+                speed: 0,
+                park: p.park,
+              });
+            }
+            const p = cars.find((c) => c.type === "sedan" && !c.park);
+            const camera = savedScene?.camera ?? {
+              x: p.x + Math.sin(p.yaw) * 5,
+              z: p.z + Math.cos(p.yaw) * 5,
+              y: 0,
+              yaw: p.yaw,
+              pitch: -0.09,
+            };
+            r.playtest.warp(camera.x, camera.y, camera.z);
+            r.look.current.yaw = camera.yaw;
+            r.look.current.pitch = camera.pitch;
+            window.__driverBenchCamera = camera;
+            r.invuln.current = 1e6;
+            r.trigger.current = false;
+            r.pending.current.fill(null);
+            return { cars, camera, actualTrafficCaller: true, sceneMethodVersion: 3 };
+          },
+          { savedScene },
+        );
         await p.waitForTimeout(10000);
         if (process.env.WAVE)
           await p.evaluate((n) => {
@@ -182,29 +220,54 @@ try {
           }, Number(process.env.WAVE));
         if (process.env.WAVE) await p.waitForTimeout(8000);
         row.driverScene.enemies = await p.evaluate((savedEnemies) => {
-          const r=__rs;
+          const r = __rs;
           r.pending.current.fill(null);
-          const live=r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive);
-          if(!live.length)throw new Error("No live enemies after warm-up");
-          if(savedEnemies) {
-            if(savedEnemies.length!==live.length)throw new Error("Enemy count mismatch");
-            for(const p of savedEnemies) {
-              const e=r.enemies[p.i];
-              if(!e?.alive || e.kind!==p.kind)throw new Error("Enemy identity mismatch");
-              e.x=p.x;e.z=p.z;e.yaw=p.yaw;e.hp=p.hp;
+          const live = r.enemies.map((e, i) => ({ i, e })).filter(({ e }) => e.alive);
+          if (!live.length) throw new Error("No live enemies after warm-up");
+          if (savedEnemies) {
+            if (savedEnemies.length !== live.length) throw new Error("Enemy count mismatch");
+            for (const p of savedEnemies) {
+              const e = r.enemies[p.i];
+              if (!e?.alive || e.kind !== p.kind) throw new Error("Enemy identity mismatch");
+              e.x = p.x;
+              e.z = p.z;
+              e.yaw = p.yaw;
+              e.hp = p.hp;
             }
           }
-          for(const {e} of live)e.frozen=1e6;
-          return live.map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp}));
-        },savedScene?.enemies ?? null);
-        if(!savedScene)fs.writeFileSync(posesPath,JSON.stringify(row.driverScene,null,2));
+          for (const { e } of live) {
+            e.frozen = 1e6;
+            // Off-screen recovery can reposition even frozen enemies; lock this
+            // stationary rendering fixture in both builds, not shipped gameplay.
+            for (const key of ["x", "z"]) {
+              const value = e[key];
+              Object.defineProperty(e, key, {
+                configurable: true,
+                get: () => value,
+                set: () => {},
+              });
+            }
+          }
+          return live.map(({ i, e }) => ({
+            i,
+            kind: e.kind,
+            x: e.x,
+            z: e.z,
+            yaw: e.yaw ?? 0,
+            hp: e.hp,
+          }));
+        }, savedScene?.enemies ?? null);
+        if (!savedScene) fs.writeFileSync(posesPath, JSON.stringify(row.driverScene, null, 2));
         await p.waitForTimeout(1000);
         row.setup = await p.evaluate(() => {
           const r = __rs;
           r.invuln.current = 1e6;
           r.equip("pistol");
           return {
-            enemyPoses: r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive).map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp})),
+            enemyPoses: r.enemies
+              .map((e, i) => ({ i, e }))
+              .filter(({ e }) => e.alive)
+              .map(({ i, e }) => ({ i, kind: e.kind, x: e.x, z: e.z, yaw: e.yaw ?? 0, hp: e.hp })),
             drivers: window.__rsCarBatch?.group.getObjectByName("ambient-drivers")?.count ?? 0,
             hud: document.body.innerText.slice(0, 500),
             camera: r.camera.position.toArray(),
@@ -227,7 +290,8 @@ try {
             aimStats: r.aimStats.current,
           };
         });
-        if(JSON.stringify(row.setup.enemyPoses)!==JSON.stringify(row.driverScene.enemies))throw new Error("Enemy poses drifted after restoration");
+        if (JSON.stringify(row.setup.enemyPoses) !== JSON.stringify(row.driverScene.enemies))
+          throw new Error("Enemy poses drifted after restoration");
         let cdp;
         if (process.env.PROFILE && engine === "chromium") {
           cdp = await context.newCDPSession(p);
@@ -477,7 +541,17 @@ try {
                 over16_7: warmMs.filter((x) => x > 1000 / 60).length,
                 frames: warmMs.length,
               },
-              enemyPosesEnd: r.enemies.map((e,i)=>({i,e})).filter(({e})=>e.alive).map(({i,e})=>({i,kind:e.kind,x:e.x,z:e.z,yaw:e.yaw??0,hp:e.hp})),
+              enemyPosesEnd: r.enemies
+                .map((e, i) => ({ i, e }))
+                .filter(({ e }) => e.alive)
+                .map(({ i, e }) => ({
+                  i,
+                  kind: e.kind,
+                  x: e.x,
+                  z: e.z,
+                  yaw: e.yaw ?? 0,
+                  hp: e.hp,
+                })),
               driversEnd: window.__rsCarBatch?.group.getObjectByName("ambient-drivers")?.count ?? 0,
               programsEnd: r.gl.info.programs.length,
               gpuTimerAvailable: !!timer,
@@ -519,7 +593,8 @@ try {
             stationary: report.stationary,
           },
         );
-        if(JSON.stringify(row.metrics.enemyPosesEnd)!==JSON.stringify(row.driverScene.enemies))throw new Error("Enemy poses drifted during measurement");
+        if (JSON.stringify(row.metrics.enemyPosesEnd) !== JSON.stringify(row.driverScene.enemies))
+          throw new Error("Enemy poses drifted during measurement");
         if (traceSession) {
           const completed = new Promise((resolve) =>
             traceSession.once("Tracing.tracingComplete", resolve),

@@ -77,3 +77,24 @@ Reports and matched scene metadata are in `performance/`. Run `benchmark.mjs` wi
 Local candidate `401fbfb` integrates reviewed controller head `1d0dad2` and its revive-main dependency. The two-peer run passed actual controller entry, host-authoritative steering/braking, enemy hull damage, ordinary exit, host transfer, rejoin and wreck ejection with zero page/console errors. Assertions compare the target seat matrix against rendered instance matrices, so another nearby car cannot satisfy the occupant check. The observing peer renders exactly one target occupant while both standing rigs are hidden; local driving renders no seated duplicate. Ordinary exit and wreck restore local/remote standing bodies and remove the seated target. After transfer, a newly joined observer sees one target occupant only after successful reentry and synchronized ownership.
 
 Evidence is `coop-report.json`, `coop-remote-hidden.png` and `coop-remote-restored.png`. The successful rerun fixed a test readiness race by waiting for the rejoined page's vehicle state before positioning its observer. The reviewer-requested local ordinary-exit body assertion also passed against the captured report. These are local integration results, not production proof.
+
+
+## Corrected fixed-pose comparison and remaining performance gate
+
+The first corrected baseline failed the new end-position assertion: the off-screen enemy recovery system can reposition frozen enemies. That run was discarded. The final rendering-only fixture additionally locks enemy x/z coordinates with runtime getters in both builds; this does not change production gameplay. All four successful runs assert identical post-warm-up enemy identities, positions, facing and health at setup and measurement end. Traffic/camera also match exactly.
+
+Released controller main `01f723e` and driver candidate `0b0dd35` use the same runtime controller/revive code. Hardware, quality, resolution and alternating order match the first comparison above. To stay within the shared-machine window, these replacement samples measure 10 seconds after 10 seconds of warm-up and one settling second. One nearby occupant adds exactly one draw call and 348 triangles in every measured frame. Full reports are in `performance-locked/`; background desktop activity remains recorded.
+
+| Metric | Native baseline → candidate | 4× CPU baseline → candidate |
+| --- | --- | --- |
+| Frame p95 | 6.1 → 6.9 ms | 15.6 → 18.3 ms |
+| Frame p99 | 6.9 → 7.7 ms | 20.7 → 33.8 ms |
+| Worst frame | 21.2 → 43.6 ms | 120.0 → 171.9 ms |
+| Frames over 25 / 50 ms | 0 / 0 → 2 / 0 | 7 / 1 → 27 / 1 |
+| Render submission mean | 2.79 → 3.55 ms | 7.36 → 8.33 ms |
+| GPU render-pass p95 | 4.74 → 6.50 ms | 3.55 → 4.70 ms |
+| Draw calls | 280 → 281 | 280 → 281 |
+| Triangles | 2,275,320 → 2,275,668 | 2,275,320 → 2,275,668 |
+| Navigation through menu to scene | 3.20 → 3.30 s | 12.10 → 12.71 s |
+
+The candidate is slower in these samples. Native p99 still has headroom against 16.7 ms, but the throttled tail is worse and the evidence does not establish a no-regression result. Source inspection found redundant matrix/color uploads on every frame; a bounded update-only-when-changed optimization is now under review and requires its own measurement before activation. No sustained 60 fps or scalability claim is made.

@@ -1446,6 +1446,7 @@ export class CarBatch {
     this.driver = inst(driverGeometry(), M.body, vehicles.length, true);
     this.driver.name = "ambient-drivers";
     this.driver.receiveShadow = true;
+    this.driver.instanceColor!.setUsage(THREE.DynamicDrawUsage);
     for (const [k, n] of exCounts) this.extras.set(k, inst(extraOf(k), M.plain, n, false));
     if (lamps > 0) {
       const box = new THREE.BoxGeometry(1, 1, 1);
@@ -1577,6 +1578,8 @@ export class CarBatch {
     const tier = quality().tier;
     const driver2 = (tier === "low" ? 22 : tier === "medium" ? 32 : CAR_NEAR) ** 2;
     this.driver.count = 0;
+    let driverMatrixDirty = false;
+    let driverColorDirty = false;
     this.ln = 0;
     this.wn = 0;
     const visit = (sl: Slot) => {
@@ -1614,8 +1617,23 @@ export class CarBatch {
         put(g.near, sl);
         if (sl.driver && sl.model.driverSeat && d2 < driver2) {
           const i = this.driver.count++;
-          this.driver.setMatrixAt(i, _m2.multiplyMatrices(sl.body, sl.model.driverSeat));
-          this.driver.setColorAt(i, _c.fromArray(sl.driverRgb));
+          _m2.multiplyMatrices(sl.body, sl.model.driverSeat);
+          const matrices = this.driver.instanceMatrix.array as Float32Array;
+          const colors = this.driver.instanceColor!.array as Float32Array;
+          for (let k = 0; k < 16; k++) {
+            const value = Math.fround(_m2.elements[k]!);
+            if (matrices[i * 16 + k] !== value) {
+              matrices[i * 16 + k] = value;
+              driverMatrixDirty = true;
+            }
+          }
+          for (let k = 0; k < 3; k++) {
+            const value = Math.fround(sl.driverRgb[k]!);
+            if (colors[i * 3 + k] !== value) {
+              colors[i * 3 + k] = value;
+              driverColorDirty = true;
+            }
+          }
         }
         for (const w of sl.wheels) {
           _m.compose(
@@ -1647,8 +1665,8 @@ export class CarBatch {
     const wn = this.wn;
     this.driver.visible = this.driver.count > 0;
     if (this.driver.visible) {
-      this.driver.instanceMatrix.needsUpdate = true;
-      this.driver.instanceColor!.needsUpdate = true;
+      if (driverMatrixDirty) this.driver.instanceMatrix.needsUpdate = true;
+      if (driverColorDirty) this.driver.instanceColor!.needsUpdate = true;
     }
     this.wheel.count = wn;
     this.wheel.visible = wn > 0;

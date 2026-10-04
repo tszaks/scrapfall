@@ -1,0 +1,1357 @@
+{
+  "engine": "chromium",
+  "started": "2026-10-04T20:01:18.545Z",
+  "commit": "0b0dd35",
+  "viewport": [
+    1280,
+    800
+  ],
+  "dpr": 2,
+  "quality": "high",
+  "extra": "&time=sunset",
+  "foliage": false,
+  "fixedRoute": false,
+  "stationary": true,
+  "actualTrafficOccupants": true,
+  "sceneMethodVersion": 3,
+  "weather": "sunny",
+  "wave": 1,
+  "seconds": 10,
+  "cpuThrottle": 4,
+  "repeats": 1,
+  "soak": false,
+  "method": "Stationary driver rendering comparison using the actual Traffic caller, without an occupant override. Matched frozen traffic/enemy transforms and camera; enemy coordinate getters prevent recovery relocation in this rendering-only fixture. Ten-second warm-up then measured uncapped Metal rendering. No movement/firing; separate entry/exit and co-op tests establish interaction behavior. These figures are not physical display FPS or endurance results.",
+  "dirty": true,
+  "cases": [
+    {
+      "map": "vice",
+      "repeat": 0,
+      "errors": [],
+      "consoleErrors": [],
+      "navThroughMenuToSceneMs": 12714,
+      "driverScene": {
+        "cars": [
+          {
+            "x": -17.343240145053716,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 4,
+            "z": -94.45191838398576,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -208,
+            "z": -86.97465235453099,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 184.91377659588846,
+            "z": -136,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 8,
+            "z": 86.26669573325664,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -33.92732860280201,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -104,
+            "z": 163.30370453007518,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -104,
+            "z": 209.57354686154258,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -104,
+            "z": 144.3146278328076,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -192.21746624032707,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 61.10647283036262,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -54.73448947856203,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -37.365602036081256,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -104,
+            "z": 49.24759993989021,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": 151.12347682558,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 108,
+            "z": 91.040112657547,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": -146.46683924993295,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -188.92804293202235,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 4,
+            "z": 218.64214414609802,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 155.69468289932237,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": 76.04187206501142,
+            "z": -2,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "van"
+          },
+          {
+            "x": -144.2303420136869,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 19.8750475118123,
+            "z": 2,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": 94.08863789856433,
+            "yaw": 0,
+            "park": 0,
+            "type": "bus"
+          },
+          {
+            "x": -216,
+            "z": 69.17427447337657,
+            "yaw": 0,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 88.01607159916519,
+            "z": 238,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 121.15560057099908,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 208,
+            "z": -102.84015680263026,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -31.340304217375813,
+            "z": -136,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -145.96904978407753,
+            "z": 246,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -216,
+            "z": 56.605561144575475,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": -108,
+            "z": -59.79802171893418,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -8,
+            "z": 67.18369225312024,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -70.17296069527045,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 216,
+            "z": -52.41719434065537,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 142.8302303235233,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 33.14494942555204,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 70.41086693985388,
+            "z": 124,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": -108,
+            "z": -124.50709257747978,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 63.836685770582406,
+            "z": 6,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 104,
+            "z": 60.964826319292186,
+            "yaw": 0,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -108,
+            "z": 31.135975452996792,
+            "yaw": 0,
+            "park": 0,
+            "type": "pickup"
+          },
+          {
+            "x": 108,
+            "z": -84.26469356838614,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 70.48596258909727,
+            "z": -140,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -108,
+            "z": 173.61607669282705,
+            "yaw": 0,
+            "park": 0,
+            "type": "bus"
+          },
+          {
+            "x": 180.48334849138018,
+            "z": -6,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sports"
+          },
+          {
+            "x": -216,
+            "z": 199.8261441619115,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": -8,
+            "z": -93.17381721742451,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -204,
+            "z": 46.56408159069717,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -144.45694701287894,
+            "z": 124,
+            "yaw": 1.5707963267948966,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": -212,
+            "z": 153.15588515616955,
+            "yaw": 0,
+            "park": 0,
+            "type": "suv"
+          },
+          {
+            "x": 204,
+            "z": -72.5694161138518,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -4,
+            "z": -81.47612823821605,
+            "yaw": 0,
+            "park": 0,
+            "type": "van"
+          },
+          {
+            "x": 108,
+            "z": -66.24929024271667,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": -118.9724614819698,
+            "z": -2,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "taxi"
+          },
+          {
+            "x": 53.26451341861859,
+            "z": 120,
+            "yaw": -1.5707963267948966,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": -108,
+            "z": -21.9666469572857,
+            "yaw": 0,
+            "park": 0,
+            "type": "compact"
+          },
+          {
+            "x": 108,
+            "z": 51.192725839167835,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "sedan"
+          },
+          {
+            "x": 212,
+            "z": -103.60647652325945,
+            "yaw": 3.141592653589793,
+            "park": 0,
+            "type": "police"
+          },
+          {
+            "x": 104,
+            "z": -82.70815828543157,
+            "yaw": 0,
+            "park": 0,
+            "type": "sedan"
+          }
+        ],
+        "camera": {
+          "x": 189.91377659588846,
+          "z": -136,
+          "y": 0,
+          "yaw": 1.5707963267948966,
+          "pitch": -0.09
+        },
+        "actualTrafficCaller": true,
+        "sceneMethodVersion": 3,
+        "enemies": [
+          {
+            "i": 0,
+            "kind": "drifter",
+            "x": -154.24026649034025,
+            "z": -115.39087456978804,
+            "yaw": 1.6306267936278345,
+            "hp": 2
+          },
+          {
+            "i": 1,
+            "kind": "drifter",
+            "x": -52.778031009542225,
+            "z": -0.6810525173895497,
+            "yaw": 2.079449581331286,
+            "hp": 2
+          },
+          {
+            "i": 2,
+            "kind": "drifter",
+            "x": 0.16371862533513054,
+            "z": 143.73025956741137,
+            "yaw": 2.5455535389939348,
+            "hp": 2
+          },
+          {
+            "i": 3,
+            "kind": "drifter",
+            "x": -107.82116040323348,
+            "z": -13.647947643298554,
+            "yaw": 1.9607054704759275,
+            "hp": 2
+          }
+        ]
+      },
+      "setup": {
+        "enemyPoses": [
+          {
+            "i": 0,
+            "kind": "drifter",
+            "x": -154.24026649034025,
+            "z": -115.39087456978804,
+            "yaw": 1.6306267936278345,
+            "hp": 2
+          },
+          {
+            "i": 1,
+            "kind": "drifter",
+            "x": -52.778031009542225,
+            "z": -0.6810525173895497,
+            "yaw": 2.079449581331286,
+            "hp": 2
+          },
+          {
+            "i": 2,
+            "kind": "drifter",
+            "x": 0.16371862533513054,
+            "z": 143.73025956741137,
+            "yaw": 2.5455535389939348,
+            "hp": 2
+          },
+          {
+            "i": 3,
+            "kind": "drifter",
+            "x": -107.82116040323348,
+            "z": -13.647947643298554,
+            "yaw": 1.9607054704759275,
+            "hp": 2
+          }
+        ],
+        "drivers": 1,
+        "hud": "12 / 128 · R\nW · 270°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "camera": [
+          189.91377659588846,
+          1.6,
+          -136
+        ],
+        "keys": {},
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+        "quality": {
+          "dpr": 2,
+          "tier": "high",
+          "vsync": 12.08,
+          "miss": 0.013,
+          "cpu": 10.8,
+          "targetFps": 60,
+          "targetMet": true,
+          "recovery": "idle",
+          "log": []
+        },
+        "warm": [
+          {
+            "frame": 555,
+            "ms": 221,
+            "programs": 82,
+            "before": 62
+          },
+          {
+            "frame": 566,
+            "ms": 113,
+            "programs": 100,
+            "before": 84
+          },
+          {
+            "frame": 577,
+            "ms": 778,
+            "programs": 134,
+            "before": 100
+          },
+          {
+            "frame": 588,
+            "ms": 571,
+            "programs": 216,
+            "before": 139
+          },
+          {
+            "frame": 599,
+            "ms": 114,
+            "programs": 233,
+            "before": 219
+          }
+        ],
+        "startupLong": [
+          {
+            "start": 65.40000003576279,
+            "duration": 53
+          },
+          {
+            "start": 210.20000004768372,
+            "duration": 567
+          },
+          {
+            "start": 849.7000000476837,
+            "duration": 78
+          },
+          {
+            "start": 1217.1000000238419,
+            "duration": 363
+          },
+          {
+            "start": 1606.800000011921,
+            "duration": 122
+          },
+          {
+            "start": 1848,
+            "duration": 70
+          },
+          {
+            "start": 2262.400000035763,
+            "duration": 59
+          },
+          {
+            "start": 3171.7000000476837,
+            "duration": 52
+          },
+          {
+            "start": 3462.600000023842,
+            "duration": 100
+          },
+          {
+            "start": 5287.200000047684,
+            "duration": 120
+          },
+          {
+            "start": 5460,
+            "duration": 54
+          },
+          {
+            "start": 5516.700000047684,
+            "duration": 53
+          },
+          {
+            "start": 5614.300000011921,
+            "duration": 123
+          },
+          {
+            "start": 5739.400000035763,
+            "duration": 97
+          },
+          {
+            "start": 5838.400000035763,
+            "duration": 112
+          },
+          {
+            "start": 5954.200000047684,
+            "duration": 185
+          },
+          {
+            "start": 6141.5,
+            "duration": 198
+          },
+          {
+            "start": 6341.700000047684,
+            "duration": 74
+          },
+          {
+            "start": 6417.5,
+            "duration": 152
+          },
+          {
+            "start": 6571.600000023842,
+            "duration": 128
+          },
+          {
+            "start": 6701.200000047684,
+            "duration": 83
+          },
+          {
+            "start": 6785.700000047684,
+            "duration": 227
+          },
+          {
+            "start": 7014.400000035763,
+            "duration": 102
+          },
+          {
+            "start": 7156.800000011921,
+            "duration": 150
+          },
+          {
+            "start": 7310.200000047684,
+            "duration": 265
+          },
+          {
+            "start": 7579.300000011921,
+            "duration": 360
+          },
+          {
+            "start": 7942.5,
+            "duration": 157
+          },
+          {
+            "start": 8102.200000047684,
+            "duration": 191
+          },
+          {
+            "start": 8296.600000023842,
+            "duration": 267
+          },
+          {
+            "start": 8566.400000035763,
+            "duration": 127
+          },
+          {
+            "start": 8695.5,
+            "duration": 120
+          },
+          {
+            "start": 8818.700000047684,
+            "duration": 203
+          },
+          {
+            "start": 9024.400000035763,
+            "duration": 215
+          },
+          {
+            "start": 9241,
+            "duration": 57
+          },
+          {
+            "start": 9301,
+            "duration": 93
+          },
+          {
+            "start": 9395.900000035763,
+            "duration": 184
+          },
+          {
+            "start": 9582.300000011921,
+            "duration": 75
+          },
+          {
+            "start": 9659.400000035763,
+            "duration": 182
+          },
+          {
+            "start": 9844.300000011921,
+            "duration": 110
+          },
+          {
+            "start": 9956.400000035763,
+            "duration": 50
+          },
+          {
+            "start": 10454.300000011921,
+            "duration": 748
+          },
+          {
+            "start": 11472.400000035763,
+            "duration": 795
+          },
+          {
+            "start": 12267.5,
+            "duration": 154
+          },
+          {
+            "start": 12460.800000011921,
+            "duration": 264
+          },
+          {
+            "start": 12864.800000011921,
+            "duration": 158
+          },
+          {
+            "start": 13029.300000011921,
+            "duration": 110
+          },
+          {
+            "start": 13152.300000011921,
+            "duration": 103
+          },
+          {
+            "start": 13255.900000035763,
+            "duration": 722
+          },
+          {
+            "start": 14019.900000035763,
+            "duration": 281
+          },
+          {
+            "start": 14303.600000023842,
+            "duration": 130
+          },
+          {
+            "start": 14442.200000047684,
+            "duration": 881
+          },
+          {
+            "start": 15327.400000035763,
+            "duration": 609
+          },
+          {
+            "start": 15941.200000047684,
+            "duration": 154
+          },
+          {
+            "start": 16235.700000047684,
+            "duration": 159
+          },
+          {
+            "start": 19119,
+            "duration": 89
+          }
+        ],
+        "assets": [
+          {
+            "url": "http://127.0.0.1:5294/game/assets/react-SIfiwpqq.js",
+            "bytes": 8185,
+            "duration": 7.199999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/index-CSldLqkl.js",
+            "bytes": 332698,
+            "duration": 11.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/routes-_4Orfddh.js",
+            "bytes": 692682,
+            "duration": 14.099999964237213
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/terrain-IhuqYnkp.js",
+            "bytes": 5625,
+            "duration": 7.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/layout-C4JxSPAx.js",
+            "bytes": 12615,
+            "duration": 8
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/slice-Du1KgBBX.js",
+            "bytes": 377953,
+            "duration": 12
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/staticCollision-DlvsqBFg.js",
+            "bytes": 45942,
+            "duration": 12.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/look-BCQEJiYe.js",
+            "bytes": 367675,
+            "duration": 11.899999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/level-KFkIfW9K.js",
+            "bytes": 10885,
+            "duration": 11
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/soloBounds-CThOlUxp.js",
+            "bytes": 967,
+            "duration": 13.200000047683716
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/build-Blw8_zzJ.js",
+            "bytes": 41895,
+            "duration": 14
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cityLayout-yMY0Bl5d.js",
+            "bytes": 16685,
+            "duration": 13.599999964237213
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/world-EbJB5tkO.js",
+            "bytes": 24669,
+            "duration": 13.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/detailQuality-Brnz3_dx.js",
+            "bytes": 3125,
+            "duration": 13.699999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/scannedSurface-Ch8alfyF.js",
+            "bytes": 2728,
+            "duration": 13.800000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/lighting-BrDkxuh1.js",
+            "bytes": 16481,
+            "duration": 14.5
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/weather-CHBh75OO.js",
+            "bytes": 1190,
+            "duration": 14.699999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/events-803f4abc.esm-CsSL6zcv.js",
+            "bytes": 168130,
+            "duration": 15.199999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cityTextures-DVchPMkN.js",
+            "bytes": 12033,
+            "duration": 14.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/layout-CNfjnHkO.js",
+            "bytes": 26092,
+            "duration": 15.600000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/movement-D9oN3f26.js",
+            "bytes": 2609,
+            "duration": 16.80000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/ride-78nA208y.js",
+            "bytes": 54607,
+            "duration": 16.900000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/audio-Di40Cqzw.js",
+            "bytes": 21727,
+            "duration": 16.899999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/trafficCore-7wOy1ts3.js",
+            "bytes": 993,
+            "duration": 17.30000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/timeOfDay-dU6G3_oH.js",
+            "bytes": 4311,
+            "duration": 17.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/sky-DDOWFxcP.js",
+            "bytes": 8196,
+            "duration": 17.399999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/squadState-BRTvFo1z.js",
+            "bytes": 4215,
+            "duration": 19.69999998807907
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/kit-DCwx9avB.js",
+            "bytes": 18259,
+            "duration": 20
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/driving-DtY365K0.js",
+            "bytes": 3832,
+            "duration": 20
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/beachLayout-ZAUtd5GP.js",
+            "bytes": 27290,
+            "duration": 19.799999952316284
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/sfx-3_lAuk6X.js",
+            "bytes": 3797,
+            "duration": 18.80000001192093
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/CityRain-BD8utO3s.js",
+            "bytes": 35489,
+            "duration": 19.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/ambience-HLGQDPEU.js",
+            "bytes": 32675,
+            "duration": 20.099999964237213
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/mapHooks-CqRBYVQH.js",
+            "bytes": 938,
+            "duration": 19.900000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/TimeScene-4pExpcRW.js",
+            "bytes": 7704,
+            "duration": 20.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/layout-Cg-ChHag.js",
+            "bytes": 70187,
+            "duration": 20.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/trainSim-DWPzEbxX.js",
+            "bytes": 2696,
+            "duration": 19.900000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/storm-DrUEAM-j.js",
+            "bytes": 9680,
+            "duration": 20.100000023841858
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/plan-C4CZDolg.js",
+            "bytes": 5480,
+            "duration": 1.5999999642372131
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/textures-C2v_zRUz.js",
+            "bytes": 25489,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/spiral-ByI9YBCd.js",
+            "bytes": 742,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/vehicles-Vxzeo2YT.js",
+            "bytes": 1939,
+            "duration": 0.8999999761581421
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/facade-BN3FyA_r.js",
+            "bytes": 714,
+            "duration": 0.9000000357627869
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/belfry-D0kS2bw7.js",
+            "bytes": 801,
+            "duration": 1
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/adapters-GeDMp5db.js",
+            "bytes": 5836,
+            "duration": 1.699999988079071
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cityAccess-D3M4Jwqc.js",
+            "bytes": 3335,
+            "duration": 1.0999999642372131
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cityMesh-CjxmChc4.js",
+            "bytes": 39838,
+            "duration": 1.899999976158142
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/foliage-CmLoGn2P.js",
+            "bytes": 1514,
+            "duration": 1.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cityGeo-bzBFe3ex.js",
+            "bytes": 5327,
+            "duration": 1.5
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/cars-BnhIPaJE.js",
+            "bytes": 24894,
+            "duration": 1.4000000357627869
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/CityMap-BrpwgHHa.js",
+            "bytes": 6321,
+            "duration": 3.300000011920929
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/surfaceRelief-CjMvhpSF.js",
+            "bytes": 1127,
+            "duration": 2.400000035762787
+          },
+          {
+            "url": "http://127.0.0.1:5294/game/assets/Traffic-BuC5OjXe.js",
+            "bytes": 64419,
+            "duration": 2.5
+          }
+        ],
+        "enemies": 4,
+        "aimStats": {
+          "shot": 0,
+          "hit": 0
+        }
+      },
+      "metrics": {
+        "measurementStart": 25512.30000001192,
+        "programsStart": 253,
+        "shaderEvents": [],
+        "shaderCalls": [],
+        "frameHitches": [
+          {
+            "elapsed": 2.67239999998808,
+            "ms": 171.90000000000146,
+            "renderSubmitMs": 7.800000011920929,
+            "rafCallbackMs": 0.5,
+            "programs": 253
+          }
+        ],
+        "warmAfter10s": {
+          "p95": 34.400000000001455,
+          "p99": 34.400000000001455,
+          "worst": 34.400000000001455,
+          "over16_7": 1,
+          "frames": 1
+        },
+        "enemyPosesEnd": [
+          {
+            "i": 0,
+            "kind": "drifter",
+            "x": -154.24026649034025,
+            "z": -115.39087456978804,
+            "yaw": 1.6306267936278345,
+            "hp": 2
+          },
+          {
+            "i": 1,
+            "kind": "drifter",
+            "x": -52.778031009542225,
+            "z": -0.6810525173895497,
+            "yaw": 2.079449581331286,
+            "hp": 2
+          },
+          {
+            "i": 2,
+            "kind": "drifter",
+            "x": 0.16371862533513054,
+            "z": 143.73025956741137,
+            "yaw": 2.5455535389939348,
+            "hp": 2
+          },
+          {
+            "i": 3,
+            "kind": "drifter",
+            "x": -107.82116040323348,
+            "z": -13.647947643298554,
+            "yaw": 1.9607054704759275,
+            "hp": 2
+          }
+        ],
+        "driversEnd": 1,
+        "programsEnd": 253,
+        "gpuTimerAvailable": true,
+        "gpuRenderPassSamples": 35,
+        "gpuRenderPassP95": 4.702583,
+        "shots": 0,
+        "fps": 68.68460985544284,
+        "p50": 13.899999999997817,
+        "p95": 18.299999999999272,
+        "p99": 33.79999999999927,
+        "worst": 171.90000000000146,
+        "over16_7": 53,
+        "over50": 1,
+        "over25": 27,
+        "frames": 688,
+        "renderSubmitMean": 8.326995643977677,
+        "renderSubmitP95": 10.400000035762787,
+        "callbackMean": 1.8854240097249169,
+        "callbackP95": 12.700000047683716,
+        "callsMean": 281,
+        "callsMax": 281,
+        "trianglesMean": 2275668,
+        "enemiesMax": 4,
+        "enemiesMean": 4,
+        "poses": [
+          {
+            "t": -0.013200000011922385,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 0.8944999999880784,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 1.6715999999880806,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 2.764199999988079,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 3.6289999999880784,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 4.542799999988078,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 5.44409999998808,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 6.290499999988079,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 7.142199999988079,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 7.944799999988078,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 8.748899999988076,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          },
+          {
+            "t": 9.57109999998808,
+            "p": [
+              189.91377659588846,
+              1.6,
+              -136
+            ],
+            "hp": 16,
+            "enemies": 4,
+            "wave": 1
+          }
+        ],
+        "longTasks": [
+          {
+            "start": 28029.5,
+            "duration": 156
+          }
+        ],
+        "memoryStart": {
+          "geometries": 745,
+          "textures": 164
+        },
+        "memoryEnd": {
+          "geometries": 745,
+          "textures": 164
+        },
+        "hud": "12 / 987 · R\nW · 270°\nVICE HEIGHTS · OVERCLOCK\nWAVE 1/12\nKILLS 0\n♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦♦\n◆ 0\n1\n■ PISTOL 140\nSELF REVIVE · 1 KIT\nTAC SPRINT READY\nF PHASE DASH · READY",
+        "quality": {
+          "dpr": 2,
+          "tier": "high",
+          "vsync": 12.73,
+          "miss": 0,
+          "cpu": 11.6,
+          "targetFps": 60,
+          "targetMet": true,
+          "recovery": "idle",
+          "log": []
+        },
+        "warm": [
+          {
+            "frame": 555,
+            "ms": 221,
+            "programs": 82,
+            "before": 62
+          },
+          {
+            "frame": 566,
+            "ms": 113,
+            "programs": 100,
+            "before": 84
+          },
+          {
+            "frame": 577,
+            "ms": 778,
+            "programs": 134,
+            "before": 100
+          },
+          {
+            "frame": 588,
+            "ms": 571,
+            "programs": 216,
+            "before": 139
+          },
+          {
+            "frame": 599,
+            "ms": 114,
+            "programs": 233,
+            "before": 219
+          }
+        ]
+      }
+    }
+  ],
+  "browserVersion": "151.0.7922.34",
+  "ended": "2026-10-04T20:01:55.281Z"
+}

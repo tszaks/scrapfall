@@ -74,6 +74,15 @@ test("occupants default empty, toggle without collision changes, and follow car 
     batch.contactBounds(0).equals(before),
     "visual occupant never changes collision bounds",
   );
+  const matrixVersion = mesh.instanceMatrix.version;
+  const colorVersion = mesh.instanceColor.version;
+  batch.commit(c);
+  assert.equal(
+    mesh.instanceMatrix.version,
+    matrixVersion,
+    "stationary drivers reuse uploaded transforms",
+  );
+  assert.equal(mesh.instanceColor.version, colorVersion, "unchanged shirts reuse uploaded colors");
   const m = new api.Matrix4();
   mesh.getMatrixAt(0, m);
   assert.ok(
@@ -84,7 +93,34 @@ test("occupants default empty, toggle without collision changes, and follow car 
   batch.commit(c);
   mesh.getMatrixAt(0, m);
   assert.ok(new api.Vector3().setFromMatrixPosition(m).x < 0, "seat turns with the vehicle");
+  assert.ok(
+    mesh.instanceMatrix.version > matrixVersion,
+    "moving drivers upload changed transforms",
+  );
+  assert.equal(
+    mesh.instanceColor.version,
+    colorVersion,
+    "turning does not upload unchanged shirt colors",
+  );
+  batch.place(0, 0, 0, 0, 0, { driver: true });
+  batch.place(1, 3, 0, 0, 0, { driver: true });
+  batch.commit(c);
+  assert.equal(mesh.count, 2);
+  const secondColor = Array.from(mesh.instanceColor.array.slice(3, 6));
   batch.place(0, 0, 0, 0, 0, { driver: false });
+  batch.commit(c);
+  assert.equal(mesh.count, 1);
+  mesh.getMatrixAt(0, m);
+  assert.ok(
+    new api.Vector3().setFromMatrixPosition(m).x > 3,
+    "remaining occupant repacks its own transform",
+  );
+  assert.deepEqual(
+    Array.from(mesh.instanceColor.array.slice(0, 3)),
+    secondColor,
+    "remaining occupant repacks its own shirt color",
+  );
+  batch.place(1, 3, 0, 0, 0, { driver: false });
   batch.commit(c);
   assert.equal(mesh.count, 0);
   batch.dispose();
