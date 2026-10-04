@@ -16,6 +16,11 @@ export const UP = 0;
 export const DOWN = 1;
 export const DEAD = 2;
 
+/** Zero health includes both a revivable player and a fully dead spectator. */
+export function playerLifeState(dead: boolean, downed: boolean) {
+  return !dead ? UP : downed ? DOWN : DEAD;
+}
+
 export type PState = { st: number; bleed: number; prog: number; by: string; grace?: number };
 /** everyone's state by player id ("host" for the host), mirrored from the host */
 export const squad = new Map<string, PState>();
