@@ -1,3 +1,4 @@
+import { vehicleEntry, resetVehicleEntry } from "./vehicleControls";
 import { MeleeView } from "./MeleeView";
 import { meleeGear, subwayNear, subwayExit, trafficRoof, carryOnCar } from "./travelExtras";
 import { claimShard } from "./shardLedger";
@@ -16,7 +17,7 @@ import { bodyContacts, worldContact, type Body } from "./projectileContact";
 import { separateEnemies } from "./separate";
 import { abandonTarget } from "./enemyAI";
 import { matchEnvironment } from "./matchEnvironment";
-import { aimInput, aimState, stepAim, aimSensitivity } from "./input/aim";
+import { aimInput, aimState, clearAim, stepAim, aimSensitivity } from "./input/aim";
 import { sightOf, viewModelPos } from "./art/sights";
 import {
   accReset,
@@ -371,11 +372,14 @@ import { HudOverlay, SquadDriver } from "./Squad";
 import { handleSquadMsg, resetSquad, showToast } from "./squadState";
 import { pings, aimPing, clearPings, pingMsg, pingFromMsg, type PingWorld } from "./ping";
 import {
+  DEAD,
   DOWN,
+  UP,
   REVIVE_HP,
   REVIVE_RANGE,
   me as squadMe,
   myRevive,
+  playerLifeState,
   reviveInterrupted,
   squad,
   squad as downTable,
@@ -2911,6 +2915,7 @@ function World({
       Object.assign(handle, {
         ords,
         hitLog,
+        takeHit,
         packLead,
         blocks,
         keys,
@@ -3265,6 +3270,7 @@ function World({
     r.yaw = Number(m.yaw ?? 0);
     r.pitch = Math.max(-1.2, Math.min(1.2, Number(m.pt ?? 0)));
     r.hp = Number(m.hp ?? MAX_HP);
+    if (r.hp <= 0) releaseVehicle(id);
     r.weapon = String(m.w ?? "pistol");
     r.az = Number(m.az ?? 0);
     if (m.ap !== undefined) r.ap = Number(m.ap); // elevator button presses (host compares counts) // building access: which zone (roof / lobby / car) and floor height
@@ -3404,7 +3410,7 @@ function World({
       if(m.type==="vehicle-explosion" && m.from==="host" && !isHostRef.current){playFx("#ff9a3a",1,4,1,Number(m.x),Number(m.z));return;}
       if(m.type==="flare-fx" && m.from==="host" && !isHostRef.current){playFx("#ff9a3a",.8,3.2,.65,Number(m.x),Number(m.z));return;}
       if (m.type === "t") {
-        if(isHostRef.current && Array.isArray(m.drive))driveInput(String(m.from),Number(m.drive[0]),Number(m.drive[1]));
+        if(isHostRef.current && Array.isArray(m.drive))driveInput(String(m.from),Number(m.drive[0]),Number(m.drive[1]),Number(m.drive[2]) || 0);
         upsertRemote(m);
         return;
       }
@@ -3721,10 +3727,13 @@ function World({
     camGround.current = camera.position.y - EYE;
     cancelJump(camGround.current);
   };
-  const wasDead = useRef(dead);
+  const previousLife = useRef(playerLifeState(dead, downed));
   useEffect(() => {
-    if (wasDead.current && !dead && !downed) placeAtSpawn();
-    wasDead.current = dead;
+    const life = playerLifeState(dead, downed);
+    // A revive keeps the current feet, facing and building/stair state. Only a
+    // fully dead spectator returning at the next wave goes back to spawn.
+    if (previousLife.current === DEAD && life === UP) placeAtSpawn();
+    previousLife.current = life;
   }, [dead, downed]); // eslint-disable-line react-hooks/exhaustive-deps
   // the roster (my player number) can arrive just after the new arena: re-place before the match starts
   const lastSpawnNum = useRef(0);
@@ -4549,6 +4558,8 @@ function World({
     () =>
       subscribeInputReset(() => {
         trigger.current = false;
+        resetVehicleEntry();
+        driving.use = false;
         abilFire.current = false;
         burstQueue.current = 0;
       }),
@@ -4889,7 +4900,7 @@ function World({
     dryWaves.current = placed > 0 ? 0 : dryWaves.current + 1;
   };
 
-  const outOfBounds = (p: { x: number; y: number; z: number }) =>
+  const outOfBounds = (p: { x: number; y: number; z: number }, preciseTraffic = false) =>
     wheelSolid(p) ||
     ((staticCollisionReady() && accPlayer.zone !== 1 ? undefined : bulletBlocked(p.x, p.y, p.z)) ??
       // the beach's ground decides shots itself (they fly over railings, stop on decks and the
@@ -4899,7 +4910,9 @@ function World({
       (shotStop(blocks, p.x, p.y, p.z) ||
         Math.abs(p.x) > HALF ||
         Math.abs(p.z) > HALF ||
-        (big !== null && hitsTraffic(p.x, p.y, p.z))));
+        (!preciseTraffic && big !== null && hitsTraffic(p.x, p.y, p.z))));
+  // Swept enemy shots already query the rendered hull ray; the padded point probe must not stop them early.
+  const enemyWorldStop = (p: { x: number; y: number; z: number }) => outOfBounds(p, true);
   // the local player's collision: interiors (lobby, car, stairwell) have their own walls
   const pBlocked = (x: number, z: number, r: number) => {
     const feet = moveState.feet;
@@ -4944,6 +4957,7 @@ function World({
     v.visible =
       !menuCam &&
       !deadRef.current &&
+      !myVehicle() &&
       (getViewMode() === "first" || aimState.scoped) &&
       !(sg.type === "scope" && aimState.blend > 0.96); // spectators carry no weapon
 
@@ -4985,7 +4999,7 @@ function World({
     const delta = Math.min(rawDelta, 0.05);
     const cam = state.camera;
     const sg = sightOf(weapon.current, stats.current);
-    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current, 4 / sg.adsIn);
+    stepAim(delta, gameOver || !locked || deadRef.current || downedRef.current || !!myVehicle(), 4 / sg.adsIn);
     aimState.scoped = sg.type === "scope" && aimState.blend > 0.1;
     const lens = cam as THREE.PerspectiveCamera;
     const wantedFov = fov + ((sg.fovAbs ?? fov * sg.fovMul) - fov) * aimState.blend;
@@ -5113,15 +5127,30 @@ function World({
       roll,
     );
 
+    if (gameOver || deadRef.current || downedRef.current) {
+      const owner = netRef.current?.self ?? "host";
+      const car = myVehicle(owner);
+      if (car) {
+        const exit = vehicleExit(car, blocks);
+        releaseVehicle(owner);
+        if (exit) {cam.position.set(exit.x,exit.y+EYE,exit.z);camGround.current=exit.y;cancelJump(exit.y);}
+        else placeAtSpawn();
+      }
+      if(ski.active){resetSki();}
+    }
+
     if (gameOver || !locked) return;
 
     const n = netRef.current;
     const isH = isHostRef.current;
     const spectating = deadRef.current;
     driving.self = n?.self ?? "host";
-    if (spectating || downedRef.current) {releaseVehicle(driving.self); if(ski.active){resetSki();placeAtSpawn();}}
+    stepPadActions({ inCar: accessActive() && accPlayer.inCar, driving: !!myVehicle(),
+      nearbyCar: !spectating && !downedRef.current && !ski.active ? nearbyVehicle(cam.position.x,cam.position.z,moveState.feet)?.id ?? "" : "", dt: delta });
     if (driving.use) {
       driving.use=false;
+      const requestedCar = vehicleEntry.requested;
+      vehicleEntry.requested = "";
       const vehicle=myVehicle();
       if(vehicle) {
         const exit=vehicleExit(vehicle,blocks);
@@ -5133,11 +5162,12 @@ function World({
         if(alpineMap && startSki(alpineMap.alpine,cam.position.x,cam.position.z)) {look.current.yaw=Math.PI+ski.yaw;showToast("SKIS ON · MOVE TO STEER · BACK TO BRAKE");}
         else {
           const c=nearbyVehicle(cam.position.x,cam.position.z,moveState.feet);
-          if(c){
+          if(c && (!requestedCar || c.id === requestedCar)){
             if(isH)claimVehicle(c.id,driving.self,cam.position.x,cam.position.z);
             else n?.broadcast({type:"vehicle-use",id:c.id});
             look.current.yaw=Math.PI+c.yaw;
-            showToast("DRIVE · FORWARD / BACK · LEFT / RIGHT · INTERACT TO EXIT");
+            clearAim();
+            showToast("VEHICLE ENTERED");
           }else if(city && subwayNear(city,cam.position.x,cam.position.z)){
             const exit=subwayExit(city,cam.position.x,cam.position.z,blocks);
             if(exit){resetAccessPlayer();cam.position.set(exit.x,exit.y+EYE,exit.z);camGround.current=exit.y;cancelJump(exit.y);showToast("SUBWAY · ARRIVED AT NEXT STATION");}
@@ -5154,9 +5184,6 @@ function World({
       } else showToast("SAFE RETURN AVAILABLE WHEN ALIVE · 30s COOLDOWN");
     }
 
-    // controller buttons: one-shots go through touchInput below; A / X press the floor button
-    // in an elevator car
-    stepPadActions({ inCar: accessActive() && accPlayer.inCar });
     // on-screen controls
     if (touchInput.ability) {
       touchInput.ability = false;
@@ -5226,8 +5253,9 @@ function World({
     MOVE.set(0, 0, 0)
       .addScaledVector(FORWARD, fwd < 0 ? fwd * SPEED.backpedal : fwd)
       .addScaledVector(RIGHT, strafe * SPEED.strafe);
-    driving.inputGas=fwd;driving.inputSteer=strafe;
-    if(isH){driveInput(driving.self,fwd,strafe);stepDriving(delta,blocks);}
+    const driveGas = (k.has("KeyW") ? 1 : 0) - (k.has("KeyS") ? 1 : 0) + touchInput.moveZ + padOut.gas;
+    driving.inputGas=driveGas;driving.inputSteer=strafe;driving.inputBrake=padOut.brake;
+    if(isH){driveInput(driving.self,driveGas,strafe,padOut.brake);stepDriving(delta,blocks);}
     if (wheelRide.cabin >= 0 || myVehicle() || ski.active) {MOVE.set(0, 0, 0);slide.current.x=slide.current.z=0;}
     const moving = MOVE.lengthSq() > 0.0004;
     if (MOVE.lengthSq() > 1) MOVE.normalize();
@@ -5601,7 +5629,7 @@ function World({
     playerMeleeCooldown.current=Math.max(0,playerMeleeCooldown.current-delta);
     if(supply.melee){
       supply.melee=false;
-      if(playerMeleeCooldown.current<=0 && !spectating && !downedRef.current && !myRevive.target){
+      if(playerMeleeCooldown.current<=0 && !myVehicle() && !spectating && !downedRef.current && !myRevive.target){
         playerMeleeCooldown.current=.7;meleeGear.swing=.35;gunKick();playSfx("thud");
         cam.getWorldDirection(FORWARD);
         let target=-1,best=2.6;
@@ -5611,6 +5639,7 @@ function World({
       }
     }
     fireCd.current -= delta;
+    if (myVehicle()) burstQueue.current = 0;
     if (burstQueue.current > 0 && !spectating && held === weapon.current) {
       burstTimer.current -= delta;
       if (burstTimer.current <= 0) {
@@ -5626,7 +5655,7 @@ function World({
         }
       }
     } else if (
-      (trigger.current || touchInput.fire || padOut.fire) &&
+      (trigger.current || touchInput.fire || padOut.fire) && !myVehicle() &&
       canFire() &&
       held === weapon.current &&
       !spectating &&
@@ -5671,7 +5700,7 @@ function World({
         tTimer.current = 0.05;
         n.broadcast({
           type: "t",
-          drive: [driving.inputGas,driving.inputSteer],
+          drive: [driving.inputGas,driving.inputSteer,driving.inputBrake],
           ski: ski.active ? 1 : 0,
           travelY: ski.active || myVehicle() || Number.isFinite(trafficRoof(cam.position.x,cam.position.z,moveState.feet)) ? camGround.current : undefined,
           x: cam.position.x,
@@ -6269,7 +6298,7 @@ function World({
         t.id = null;
         t.x = cam.position.x;
         t.z = cam.position.z;
-        t.y = cam.position.y;
+        t.y = vehicle ? groundY(vehicle.x, vehicle.z) + Math.min(0.9, vehicle.height * 0.5) : cam.position.y;
         t.fx = lf.fx;
         t.fz = lf.fz;
         t.zn = myZone();
@@ -6295,7 +6324,9 @@ function World({
           t.id = r.id;
           t.x = r.x;
           t.z = r.z;
-          t.y = ry;
+          const car = myVehicle(r.id);
+          t.x = car?.x ?? t.x; t.z = car?.z ?? t.z;
+          t.y = car ? groundY(car.x, car.z) + Math.min(0.9, car.height * 0.5) : ry;
           t.fx = -Math.sin(r.yaw);
           t.fz = -Math.cos(r.yaw);
           t.zn = remoteZone(r);
@@ -7286,9 +7317,18 @@ function World({
               enemyShotFrom,
               b.pos,
               enemyShotTargets.current,
-              outOfBounds,
+              enemyWorldStop,
             );
             if (hit !== undefined) b.active = false;
+            if (hit === null) {
+              // The hull protects a seated occupant, but takes the intercepted shot.
+              const limit = firstWorldHit(enemyShotFrom, b.pos, enemyWorldStop) ?? 0;
+              const car = damageVehicle(enemyShotFrom, b.pos, b.damage, Math.min(1, limit + 0.0001));
+              if (car && car.hp <= 0) {
+                playFx("#ff9a3a",1,4,1,car.x,car.z);
+                n?.broadcast({type:"vehicle-explosion",x:car.x,z:car.z});
+              }
+            }
             if (hit) {
               if (hit.id === null) takeHit(b.damage, b.src || "shot");
               else n?.sendTo(hit.id, { type: "hurt", dmg: b.damage, src: b.src || "shot" });

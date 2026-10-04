@@ -1,0 +1,17 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "active": true,
+      "name": "blue",
+      "remaining": 0,
+      "hint": "SKIING · BACK TO BRAKE"
+    },
+    {
+      "active": true,
+      "name": "red",
+      "remaining": 0,
+      "hint": "SKIING · BACK TO BRAKE"
+    }
+  ]
+}

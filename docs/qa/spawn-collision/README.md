@@ -29,3 +29,24 @@ Released baseline `3cbda85` and candidate runtime `911b25c` were tested in isola
 Matched starting views: [before](before-approach.png), [after](after-approach.png). Results after the same held-forward input: [before: car crossed](before-walk-result.png), [after: stopped outside car](after-walk-result.png). Raw [baseline report](before.json) and [candidate report](after.json) include coordinates and entry/exit evidence.
 
 Limits: no physical-controller testing, fresh co-op browser run or sustained-frame-rate claim for this follow-up; controller/co-op changes are covered separately by PR #48. Scope does not make scenery-only parked cars drivable. Room v24 is pending integration after controller release v23; re-review and integration checks are required after merging that release.
+
+## Untouched natural engagement
+
+A separate Vice Heights seed 11 run reached actual enemy melee contact without moving the player, firing, warping, spawning enemies or enabling invulnerability after entering the game. The checked candidate was `b1c24d66f48d46eb5247135034d06b74cdcbe523`, Chromium 151.0.7922.34/Metal, 1280×800 on Apple M4 Max.
+
+| Observation | Prior live long-range run | Shorter-range candidate |
+| --- | --- | --- |
+| First sampled health loss | 265.419 seconds | 140.309 seconds |
+| Health at contact | 15 / 16 | 15 / 16 |
+| Player position throughout | x −57, z −28 | x −57, z −28 |
+| Shots fired in candidate | — | 0 |
+| Candidate nearest enemy at contact | — | 1.000 metre, line of sight clear |
+| Browser errors | 0 | 0 |
+
+All four candidate enemies remained alive on wave 1 at contact, with generation 1. Sampling was every five seconds: these are first observed damage times, not exact hit timestamps. This is one untouched scenario and demonstrates actual engagement after the distance reduction; it is not a general arrival-time or performance guarantee. The earlier live report did not record its build SHA, so it is labeled as a prior long-range run rather than an exact-head binary comparison. The separately replayed stopped-car comparison above does identify both builds.
+
+Raw reports: [prior long-range](natural-before.json), [shorter-range candidate](natural-after.json). Contact screenshots: [before](natural-before-contact.png), [after](natural-after-contact.png). Browser and local server were closed when the run finished. This evidence was collected before integrating controller PR #48; repeat integration validation on the resulting head.
+
+## Local controller integration preparation
+
+Controller PR #48 head `1d0dad24010cb457a739bbfe6ab2dbad4f2fbd0d` (including released revive main `e39d9330cb78584188c33d910ef18004771e3e23`) is integrated locally for preparation. The merge retains all controller interactions, analog braking, steering and driver-body cleanup. Relative to that controller head, `driving.ts` adds only the traffic-depth import and exit-candidate collision check. Both collision and controller regression suites remain in `npm test`; room namespace stays v24 with the v23 protocol history retained. Final released-main integration, full checks and browser verification remain release gates before this branch is pushed.
