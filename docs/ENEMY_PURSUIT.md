@@ -11,7 +11,7 @@ Enemies were updated every simulation frame, including far from the player. The 
 - A rendered obstacle could occupy the next coarse waypoint. A local search aimed at that exact point could never finish.
 - Ranged enemies held their preferred distance behind cover. A player standing tightly against a wall could also be unreachable as an exact full-body endpoint.
 
-The draft stores clearance-checked coarse edges, follows the target field across those edges, and validates local routes with the existing full-body sweep. A persistent bounded A* detour keeps its chosen side of an obstacle. Blocked coarse endpoints advance along the same descending field to a clear endpoint. Player endpoints allow a collision-free approach within 1 m. Ranged hold decisions use cached shot visibility including rendered geometry.
+The draft stores clearance-checked coarse edges, follows the target field across those edges, and validates local routes with the existing full-body sweep. A persistent bounded A* detour keeps its chosen side of an obstacle. Blocked coarse endpoints advance along the same descending field to a clear endpoint. Player endpoints allow a collision-free approach within 1 m (or one body radius for larger enemies). Ranged hold decisions use cached shot visibility including rendered geometry.
 
 Steering still uses the existing staggered memo. The local planner shares a 512-node search budget per simulation frame, a 24 m search radius, a 2 m lattice, and a 0.5 s failed-search backoff. Physical movement remains authoritative and checks every step. Obstacle stalls retry in place; they no longer teleport enemies to hidden spawn points. Existing explicit zone/range relocation rules are outside this change.
 

@@ -71,7 +71,9 @@ export class PursuitDetour {
     // A player fits closer to a wall than a larger enemy. Only the actual player
     // goal permits a melee approach; a coarse waypoint must still be reached exactly.
     const goalTolerance =
-      distance <= RANGE && desired.x === target.x && desired.z === target.z ? 1 : 0;
+      distance <= RANGE && desired.x === target.x && desired.z === target.z
+        ? Math.max(1, radius)
+        : 0;
     if (
       goalTolerance &&
       distance <= goalTolerance &&

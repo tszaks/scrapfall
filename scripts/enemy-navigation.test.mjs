@@ -276,24 +276,29 @@ test("ranged hold sees mesh-only cover and approaches around it", () => {
   assert.ok(Math.hypot(e.x + 6, e.z) > 1);
 });
 
-test("wall-adjacent player remains reachable without demanding an overlapping goal", () => {
-  const detours = new p.PursuitDetour(),
-    e = { x: -5, z: 0 },
-    t = { x: 0.55, z: 0 };
-  const probe = { segmentClear: (ax, az, bx, bz, r) => Math.max(ax, bx) <= 1 - r };
-  for (let i = 0; i < 100; i++) {
-    const wp = detours.resolve(e, t, t, i / 10, 0.6, probe),
-      dx = wp.x - e.x,
-      dz = wp.z - e.z,
-      d = Math.hypot(dx, dz),
-      s = Math.min(0.1, d);
-    const x = e.x + (dx / (d || 1)) * s,
-      z = e.z + (dz / (d || 1)) * s;
-    assert.ok(probe.segmentClear(e.x, e.z, x, z, 0.6));
-    e.x = x;
-    e.z = z;
+test("wall-adjacent players remain reachable for normal, elite and boss bodies", () => {
+  for (const radius of [0.6, 0.96, 1.5, 1.6, 2.4]) {
+    const detours = new p.PursuitDetour(),
+      e = { x: -5, z: 0 },
+      t = { x: 0.55, z: 0 };
+    const probe = { segmentClear: (ax, az, bx, bz, r) => Math.max(ax, bx) <= 1 - r };
+    for (let i = 0; i < 100; i++) {
+      const wp = detours.resolve(e, t, t, i / 10, radius, probe);
+      const dx = wp.x - e.x,
+        dz = wp.z - e.z,
+        d = Math.hypot(dx, dz),
+        step = Math.min(0.1, d);
+      const x = e.x + (dx / (d || 1)) * step,
+        z = e.z + (dz / (d || 1)) * step;
+      assert.ok(probe.segmentClear(e.x, e.z, x, z, radius));
+      e.x = x;
+      e.z = z;
+    }
+    assert.ok(
+      Math.hypot(e.x - t.x, e.z - t.z) <= Math.max(1, radius) + 0.001,
+      `radius ${radius} approaches inside attack range`,
+    );
   }
-  assert.ok(Math.hypot(e.x - t.x, e.z - t.z) <= 1.001);
 });
 
 test("a mesh occupying the next coarse centroid does not pin distant pursuit", () => {
