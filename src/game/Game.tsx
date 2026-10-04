@@ -160,7 +160,7 @@ import { desperadoDir, desperadoTick, marshalTick } from "./western/enemyAI";
 import { westernMinimap } from "./western/minimap";
 import { Minimap, type MapFeed } from "./Minimap";
 import { alpineMinimap, cityMinimap } from "./cityMinimap";
-import { hitsTraffic, liveCars, type TrafficLink } from "./trafficCore";
+import { hitsTraffic, liveCars, trafficStepFree, type TrafficLink } from "./trafficCore";
 import { ARENA_SUN, worldLook, type TimeOfDay } from "./lighting";
 import { arenaSunsetSky } from "./sky";
 import { NightStars, SkyDome, TimeDriver, TimeLights } from "./TimeScene";
@@ -5189,6 +5189,7 @@ function World({
     const overlapping = pBlocked(cam.position.x, cam.position.z, 0.4);
     const walkTo = (x: number, z: number) =>
       !ski.active && !myVehicle() && !pBlocked(x, z, overlapping ? 0.1 : 0.4) &&
+      trafficStepFree(cam.position.x, cam.position.z, x, z, 0.4, moveState.feet) &&
       (accPlayer.zone === 1 || terrainStep(cam.position.x, cam.position.z, x, z, moveState.feet)) &&
       (staticCollisionReady() ||
         structureFloor(x, z, camGround.current) !== undefined ||
