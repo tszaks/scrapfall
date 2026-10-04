@@ -191,6 +191,8 @@ import {
   worldFx,
 } from "./terrain";
 import { steerTo } from "./steerCache";
+import { connectNavigation } from "./navigation";
+import { pursuitSteering, pursuitHasShot, pursuitGoal } from "./pursuitSteering";
 import { alpine, decodeAlpine, encodeAlpine } from "./alpine/weather";
 import { decodeWeather, encodeWeather } from "./cityWeather";
 import { alpineZone, type AlpineLayout } from "./alpine/layout";
@@ -3109,7 +3111,10 @@ function World({
   }, [blocks, enemies, theme, pingWorld]);
 
   // (roofs of access buildings get their own nav cells, walled off from the street)
-  const solid = useMemo(() => closeRaised(patchNav(solidGrid(blocks))), [blocks]);
+  const solid = useMemo(
+    () => connectNavigation(closeRaised(patchNav(solidGrid(blocks))), blocks),
+    [blocks],
+  );
   /** flow-field cache key: the nav cell a field toward this target starts from (level.ts navTarget) */
   const navKey = (t: { x: number; z: number }) => {
     const [i, j] = navTarget(solid, t.x, t.z, blocks);
@@ -3218,12 +3223,20 @@ function World({
     st: null as { radius: number } | null,
     blocks: [] as Block[],
     solid: null as NavGrid | null,
+    time: 0,
+    refine(point: { x: number; z: number }) {
+      const { e, t, st, blocks } = this;
+      return pursuitSteering(
+        e!, t!, point, this.time, blocks,
+        st!.radius * (e!.elite ? 1.6 : 1), hitBandInto(e!.kind, EB_BAND)[1],
+      );
+    },
     los() {
       const { e, t, st, blocks } = this;
       return clearLine(blocks, e!.x, e!.z, t!.x, t!.z, Math.min(st!.radius, 0.8) * 0.9);
     },
     route() {
-      const { e, t, solid, blocks } = this;
+      const { e, t, st, solid, blocks } = this;
       const [ni, nj] = navTarget(solid!, t!.x, t!.z, blocks);
       const dist = fields.current.get(ni * 1000 + nj);
       // close in: the fine field knows the 2 m corridors the nav grid can't see
@@ -3231,11 +3244,22 @@ function World({
         ? fines.current.get(toCell(t!.x) * 1000 + toCell(t!.z))
         : undefined;
       const fs = ff ? fineStep(ff, e!.x, e!.z, FINE_SCRATCH) : null;
-      if (fs) return fs;
+      if (fs && dist)
+        return pursuitGoal(
+          solid!, dist, e!, fs, blocks,
+          st!.radius * (e!.elite ? 1.6 : 1), hitBandInto(e!.kind, EB_BAND)[1], ff,
+        );
       // at the field's own cell (the target is right there, e.g. against a railing)
       // walk straight at it instead of parking on the cell centre
-      if (dist && dist[toNav(e!.x) * solid!.n + toNav(e!.z)]! > 0)
-        return nextWaypoint(solid!, dist, e!.x, e!.z, WP_SCRATCH);
+      if (dist && dist[toNav(e!.x) * solid!.n + toNav(e!.z)]! > 0) {
+        const point = nextWaypoint(solid!, dist, e!.x, e!.z, WP_SCRATCH);
+        return point
+          ? pursuitGoal(
+              solid!, dist, e!, point, blocks,
+              st!.radius * (e!.elite ? 1.6 : 1), hitBandInto(e!.kind, EB_BAND)[1],
+            )
+          : null;
+      }
       return null;
     },
   }).current;
@@ -6502,9 +6526,8 @@ function World({
               e.z = q.z;
               e.stuckFor = 0;
             } else {
-              // wedged on a corner the coarse nav grid thinks is open: once it has made no
-              // progress for 3 s and nobody can see it, it re-enters from another hidden spot
-              // (the boss too: a wedged boss is a turret, and a sealed-in one never dies)
+              // Record stalled pursuit for diagnostics and retry its route in place.
+              // An obstacle must not recycle a living enemy to a hidden spawn.
               const moved = e.lastX === undefined ? 99 : Math.hypot(e.x - e.lastX, e.z - e.lastZ!);
               // (a melee type standing still short of its target is stuck too, even in plain sight)
               const melee =
@@ -6514,19 +6537,7 @@ function World({
                 e.kind === "vanguard";
               e.stuckFor =
                 moved < 0.5 && (dmin > 18 || (melee && dmin > 3)) ? (e.stuckFor ?? 0) + 1 : 0;
-              const seen = targets.some((t) => clearLine(blocks, t.x, t.z, e.x, e.z, 0.1));
-              if ((e.stuckFor >= 3 && !seen) || e.stuckFor >= 8) {
-                const hidden = e.kind !== "boss";
-                const er = STATS[e.kind].radius * (e.elite ? 1.6 : 1);
-                const q = accOn
-                  ? spot(25, 45, hidden, zoneOf(e.x, e.z), zoneOf(e.x, e.z) >= ROOF_KEY, er)
-                  : spot(25, 45, hidden, zoneFor(e.x, e.z), false, er);
-                if(targets.some(t=>Math.hypot(t.x-e.x,t.z-e.z)<40 || clearLine(blocks,t.x,t.z,e.x,e.z,.1))) continue;
-              if(!bodyFree(blocks,q.x,q.z,STATS[e.kind].radius,2))continue;
-              e.x = q.x;
-                e.z = q.z;
-                e.stuckFor = 0;
-              }
+              if (e.stuckFor >= 3) e.svT = 0;
             }
             e.lastX = e.x;
             e.lastZ = e.z;
@@ -6639,6 +6650,7 @@ function World({
           steerProbe.st = st;
           steerProbe.blocks = blocks;
           steerProbe.solid = solid;
+          steerProbe.time = state.clock.elapsedTime;
           const wp = steerTo(e, target, state.clock.elapsedTime, steerProbe);
           tx = wp.x;
           tz = wp.z;
@@ -6678,6 +6690,8 @@ function World({
             spMul = 1.45;
           }
         }
+        // Range alone must not park a ranged enemy on the far side of cover.
+        if (dir <= 0 && !pursuitHasShot(e, target, state.clock.elapsedTime, blocks)) dir = 1;
         if (e.swing > 0) dir = 0;
         const step =
           st.speed *
@@ -6730,23 +6744,10 @@ function World({
             !blocked(blocks, tx, tz, r) && climbable(fx, fz, tx, tz) && ebFree(tx, tz);
           if (can(e.x, e.z, nx, e.z)) e.x = nx;
           if (can(e.x, e.z, e.x, nz)) e.z = nz;
-          // wedged on a thin prop (a bus shelter post, a bench) the nav grid can't see: slide
-          // sideways round it instead of pushing into it forever
-          const want = Math.hypot(nx - ox, nz - oz);
-          if (want > 1e-4 && Math.hypot(e.x - ox, e.z - oz) < want * 0.2) {
-            const px = -(nz - oz);
-            const pz = nx - ox;
-            const side = Math.sin(ei * 12.9898 + ((performance.now() / 1500) | 0)) > 0 ? 1 : -1;
-            for (const sgn of [side, -side]) {
-              const sx = ox + px * sgn;
-              const sz = oz + pz * sgn;
-              if (can(ox, oz, sx, sz)) {
-                e.x = sx;
-                e.z = sz;
-                break;
-              }
-            }
-          }
+          // Rejected movement invalidates steering promptly; the local planner keeps its
+          // chosen detour instead of reversing a sidestep every few seconds.
+          if (Math.hypot(nx - ox, nz - oz) > 1e-4 && Math.hypot(e.x - ox, e.z - oz) < 1e-5)
+            e.svT = Math.min(e.svT ?? 0, state.clock.elapsedTime + 0.05);
         }
 
         if (

@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "serve:static": "node scripts/serve-static.mjs",
-    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/playtest-feedback.test.mjs scripts/room-recovery.test.mjs scripts/map-availability.test.mjs scripts/environment-detail.test.mjs scripts/natural-forms.test.mjs scripts/traffic-enemies.test.mjs scripts/traffic-body.test.mjs scripts/vehicle-controls.test.mjs",
+    "test": "node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/playtest-feedback.test.mjs scripts/room-recovery.test.mjs scripts/map-availability.test.mjs scripts/environment-detail.test.mjs scripts/natural-forms.test.mjs scripts/traffic-enemies.test.mjs scripts/traffic-body.test.mjs scripts/vehicle-controls.test.mjs scripts/enemy-navigation.test.mjs",
     "smoke": "node scripts/smoke.mjs",
     "typecheck": "tsc --noEmit",
     "check": "npm test && npm run typecheck && npm run build && npm run smoke",
