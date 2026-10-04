@@ -32,7 +32,7 @@ async function snap(name) {
       aim: r.aimState.on,
       rigs,
       hint: document.querySelector('[data-testid="travel-hint"]')?.innerText ?? "",
-      ammo: document.querySelector('[data-testid="ammo-hud"]')?.innerText ?? "",
+      ammo: document.querySelector('[data-ammo-hud]')?.innerText ?? "",
     };
   });
   report.checks.push({ name, ...v });
@@ -123,10 +123,18 @@ try {
   const coast = await snap("coast");
   assert.ok(coast.car.speed < full.car.speed && coast.car.speed > full.car.speed - 2);
   await down(6);
-  await wait(1300);
-  assert.equal((await snap("brake-stop")).car.speed, 0);
+  await p.waitForFunction(() => __rs.playtest.myVehicle().speed <= 0, null, { polling: "raf" });
+  const stopped = await snap("brake-through-zero");
+  assert.ok(stopped.car.speed > -0.3);
+  await wait(700);
+  const reversed = await snap("held-brake-reverses");
+  assert.ok(reversed.car.speed < -1 && reversed.car.speed > -4);
+  await up(6);
+  await down(7);
+  await p.waitForFunction(() => __rs.playtest.myVehicle().speed >= 0, null, { polling: "raf" });
   await wait(500);
-  assert.equal((await snap("brake-stays-stopped")).car.speed, 0);
+  assert.ok((await snap("forward-after-reverse")).car.speed > 1);
+  await up(7);
   assert.equal((await snap("no-driving-shots")).shots, shots);
   await up(6);
   await p.keyboard.press("v");
@@ -211,7 +219,7 @@ try {
   await down(2);
   await wait(200);
   s = await snap("square-reloads-away-from-car");
-  assert.match(s.hint, /RELOADING/);
+  assert.match(s.ammo, /RELOADING/);
   await up(2);
   await wait(2500);
   assert.deepEqual(report.errors, []);
