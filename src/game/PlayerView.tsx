@@ -1,4 +1,6 @@
 import { myVehicle } from "./driving";
+import { VehicleCamera } from "./vehicleCamera";
+import { baseGroundY } from "./terrain";
 import { aimState } from "./input/aim";
 import { firstWorldHit } from "./enemyProjectiles";
 import { KeyHint } from "./input/Glyph";
@@ -153,7 +155,19 @@ export function PlayerView({
   prepare: MutableRefObject<PreparePlayer | null>;
 }) {
   const rig = useMemo(newPlayerRig, []);
-  useEffect(() => () => rig.dispose(), [rig]);
+  const chase = useMemo(() => new VehicleCamera(viewCamera), []);
+  const sweep = useMemo(() => {
+    const pointStop = (p: { x: number; y: number; z: number }) => stop(test.set(p.x, p.y, p.z));
+    return (from: THREE.Vector3, to: THREE.Vector3) => firstWorldHit(from, to, pointStop);
+  }, [stop]);
+  useEffect(
+    () => () => {
+      rig.dispose();
+      chase.reset();
+      shoulderView.active = false;
+    },
+    [rig, chase],
+  );
   useEffect(
     () =>
       subscribeActions((a, down, repeat) => {
@@ -170,11 +184,12 @@ export function PlayerView({
     prepare.current = (camera, time, dt) => {
       artFrame();
       eye.copy(camera.position);
+      const vehicle = !hidden.current && !downed.current ? myVehicle() : null;
       const on =
         (!hidden.current || downed.current) && getViewMode() === "third" && !aimState.scoped;
-      shoulderView.active = on;
+      shoulderView.active = on || !!vehicle;
       rig.mesh.visible = false;
-      if (on) {
+      if (on && !vehicle) {
         updateViewCamera(camera, stop);
         const distance = shoulderView.distance;
         rig.mesh.visible = distance > 0.85 && !myVehicle();
@@ -188,12 +203,26 @@ export function PlayerView({
     };
     return () => {
       prepare.current = null;
+      shoulderView.active = false;
     };
-  }, [prepare, rig, hidden, downed, look, recoil, seated, airborne, stop]);
+  }, [prepare, rig, hidden, downed, look, recoil, seated, airborne, stop, chase]);
 
-  useFrame(({ camera, gl, scene }) => {
-    const on = shoulderView.active;
-    if (on) updateViewCamera(camera, stop);
+  useFrame(({ camera, gl, scene }, dt) => {
+    const vehicle = !hidden.current && !downed.current ? myVehicle() : null;
+    const on =
+      !!vehicle ||
+      ((!hidden.current || downed.current) && getViewMode() === "third" && !aimState.scoped);
+    shoulderView.active = on;
+    if (vehicle) {
+      chase.update(camera, vehicle, baseGroundY(vehicle.x, vehicle.z), dt, sweep);
+      shoulderView.origin.copy(viewCamera.position);
+      viewCamera.getWorldDirection(shoulderView.direction);
+      shoulderView.distance = viewCamera.position.distanceTo(camera.position);
+      rig.mesh.visible = false;
+    } else {
+      chase.reset();
+      if (on) updateViewCamera(camera, stop);
+    }
     // the single scene render per frame; PostFx layers its bloom on top of it
     renderWithPost(gl, scene, on ? viewCamera : camera);
   }, 1);

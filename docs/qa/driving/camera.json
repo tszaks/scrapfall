@@ -1,0 +1,243 @@
+{
+  "kind": "Functional headless scripted fixture, not a performance benchmark or physical controller test",
+  "base": "http://127.0.0.1:5307",
+  "checks": [
+    {
+      "name": "on-foot-before",
+      "position": [
+        -19.44,
+        1.6,
+        -7.91
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -19.44,
+          1.6,
+          -7.91
+        ],
+        "fov": 75,
+        "logical": true
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "entered-chase",
+      "vehicle": "city-0",
+      "position": [
+        -19.69,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -13.44135926782971,
+          3.181616784008886,
+          -5.40603231773801
+        ],
+        "fov": 83,
+        "logical": false
+      },
+      "shoulder": true,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "forward",
+      "vehicle": "city-0",
+      "position": [
+        -20.819696440084403,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -14.10004773927485,
+          3.181616784008886,
+          -5.9999904582590355
+        ],
+        "fov": 83,
+        "logical": false
+      },
+      "shoulder": true,
+      "car": {
+        "x": -20.569696440084403,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "exit-restores",
+      "position": [
+        -20.59957487130663,
+        1.6,
+        -8.299592252408665
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -20.59957487130663,
+          1.6,
+          -8.299592252408665
+        ],
+        "fov": 75,
+        "logical": true
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "saved-third-person-entry",
+      "vehicle": "city-0",
+      "position": [
+        -20.84957487130663,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -14.425155430906807,
+          3.181616784008886,
+          -6
+        ],
+        "fov": 83,
+        "logical": false
+      },
+      "shoulder": true,
+      "car": {
+        "x": -20.59957487130663,
+        "z": -6,
+        "half": 2.3,
+        "width": 0.91,
+        "height": 1.33
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "ownership-loss-restores-third-person",
+      "position": [
+        -20.84957487130663,
+        1.6,
+        -6.459969453914369
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -20.04233994414605,
+          1.5810053050786508,
+          -6.628487972432888
+        ],
+        "fov": 75,
+        "logical": false
+      },
+      "shoulder": true,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "largest-vehicle-framing",
+      "vehicle": "city-23",
+      "position": [
+        -19.69,
+        1.9500000000000002,
+        -6
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -9.962362465903317,
+          6.490788665355183,
+          -5.999999999999999
+        ],
+        "fov": 83,
+        "logical": false
+      },
+      "shoulder": true,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "half": 4.4,
+        "width": 1.2,
+        "height": 2.75
+      },
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "death-or-down-ejects-and-restores",
+      "position": [
+        -19.44,
+        0.45,
+        -8.2
+      ],
+      "fov": 75,
+      "view": {
+        "position": [
+          -19.44,
+          0.45,
+          -8.2
+        ],
+        "fov": 75,
+        "logical": true
+      },
+      "shoulder": false,
+      "car": null,
+      "rigs": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  ],
+  "errors": []
+}
