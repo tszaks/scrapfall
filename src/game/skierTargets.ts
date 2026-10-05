@@ -1,3 +1,4 @@
+import { simulationNow } from "./simulationPause";
 /** Sporting NPC targets share stable indices; only the host decides a hit. */
 export const skierTargets: {
   x: number;
@@ -20,7 +21,7 @@ export function hitSkier(
     index = -1;
   for (let i = 0; i < skierTargets.length; i++) {
     const s = skierTargets[i]!;
-    if (!s.active || s.downUntil > performance.now()) continue;
+    if (!s.active || s.downUntil > simulationNow()) continue;
     const t = Math.max(
       0,
       Math.min(limit, ((s.x - a.x) * dx + (s.y + 0.9 - a.y) * dy + (s.z - a.z) * dz) / len),
@@ -38,14 +39,14 @@ export function hitSkier(
 }
 export function downSkier(i: number) {
   const s = skierTargets[i];
-  if (s) s.downUntil = performance.now() + 20000;
+  if (s) s.downUntil = simulationNow() + 20000;
 }
 export function encodeSkiers() {
-  return skierTargets.map((s) => Math.max(0, s.downUntil - performance.now()));
+  return skierTargets.map((s) => Math.max(0, s.downUntil - simulationNow()));
 }
 export function decodeSkiers(a: number[]) {
   a.forEach((t, i) => {
     const s = skierTargets[i];
-    if (s && Number.isFinite(t)) s.downUntil = performance.now() + Math.max(0, Math.min(20000, t));
+    if (s && Number.isFinite(t)) s.downUntil = simulationNow() + Math.max(0, Math.min(20000, t));
   });
 }
