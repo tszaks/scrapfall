@@ -33,7 +33,7 @@
           "visible": false
         }
       ],
-      "hint": "HOLD □ TO ENTER · 38%",
+      "hint": "HOLD □ TO ENTER · 39%",
       "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
     },
     {
@@ -312,10 +312,10 @@
       "name": "half-trigger",
       "vehicle": "city-0",
       "car": {
-        "x": -20.953269119965174,
+        "x": -20.9518001099639,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 3.0005999999642357,
+        "speed": 2.999099999964236,
         "gas": 0.5,
         "brake": 0
       },
@@ -346,10 +346,10 @@
       "name": "full-trigger",
       "vehicle": "city-0",
       "car": {
-        "x": -27.050640420256062,
+        "x": -27.01867512017908,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 9.048000000178808,
+        "speed": 9.020100000143046,
         "gas": 1,
         "brake": 0
       },
@@ -380,10 +380,10 @@
       "name": "coast",
       "vehicle": "city-0",
       "car": {
-        "x": -31.382940519140522,
+        "x": -31.41971628274313,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 8.296146324822054,
+        "speed": 8.253837356075504,
         "gas": 0,
         "brake": 0
       },
@@ -414,7 +414,7 @@
       "name": "brake-through-zero",
       "vehicle": "city-0",
       "car": {
-        "x": -33.207578347957934,
+        "x": -33.15930934651757,
         "z": -6,
         "yaw": -1.5707963267948966,
         "speed": 0,
@@ -448,10 +448,10 @@
       "name": "held-brake-reverses",
       "vehicle": "city-0",
       "car": {
-        "x": -32.34004258801777,
+        "x": -32.29174943642851,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": -2.4496499999165526,
+        "speed": -2.4496500001251684,
         "gas": 0,
         "brake": 1
       },
@@ -482,10 +482,10 @@
       "name": "forward-after-reverse",
       "vehicle": "city-0",
       "car": {
-        "x": -32.95551453606698,
+        "x": -32.88643134840841,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 3.0486000001430513,
+        "speed": 3,
         "gas": 1,
         "brake": 0
       },
@@ -513,13 +513,149 @@
       "ammo": "PISTOL12 / 128□ · RELOAD"
     },
     {
+      "name": "pause-held-reverse",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.10151095241832,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.20404999983310698,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": ""
+    },
+    {
+      "name": "pause-freezes-reverse",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.10151095241832,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.20404999983310698,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": ""
+    },
+    {
+      "name": "resume-held-L2-requires-neutral",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.08508922225129,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "light-L2-rearms-after-neutral",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.801714093526414,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.7005249999687075,
+        "gas": 0,
+        "brake": 0.25
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
       "name": "no-driving-shots",
       "vehicle": "city-0",
       "car": {
-        "x": -32.95551453606698,
+        "x": -32.786273972727514,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 3.0486000001430513,
+        "speed": 0,
         "gas": 1,
         "brake": 0
       },
@@ -550,10 +686,10 @@
       "name": "local-body-hidden",
       "vehicle": "city-0",
       "car": {
-        "x": -33.850298726425436,
+        "x": -32.786273972727514,
         "z": -6,
         "yaw": -1.5707963267948966,
-        "speed": 2.638802432789403,
+        "speed": 0,
         "gas": 0,
         "brake": 0
       },
@@ -584,7 +720,7 @@
       "name": "exit",
       "vehicle": null,
       "car": {
-        "x": -34.234199695407476,
+        "x": -32.786273972727514,
         "z": -6,
         "yaw": -1.5707963267948966,
         "speed": 0,
@@ -652,10 +788,10 @@
       "name": "keyboard-forward-left",
       "vehicle": "city-0",
       "car": {
-        "x": -20.071020258430195,
-        "z": -5.895242588088429,
-        "yaw": -1.2495491567625987,
-        "speed": 2.751600000143053,
+        "x": -20.050432561775274,
+        "z": -5.902092080974061,
+        "yaw": -1.2603985668111943,
+        "speed": 2.7041999999284743,
         "gas": 1,
         "brake": 0
       },
@@ -686,11 +822,11 @@
       "name": "keyboard-forward-right",
       "vehicle": "city-0",
       "car": {
-        "x": -20.072256821485503,
-        "z": -6.105204971867081,
-        "yaw": -1.8926998992282542,
-        "speed": 2.698300606999083,
-        "gas": 0,
+        "x": -20.066283826837182,
+        "z": -6.103151333246282,
+        "yaw": -1.8895426668113364,
+        "speed": 2.7408000000715256,
+        "gas": 1,
         "brake": 0
       },
       "shots": 0,
@@ -720,11 +856,11 @@
       "name": "keyboard-reverse-left",
       "vehicle": "city-0",
       "car": {
-        "x": -19.053175536504167,
-        "z": -5.961385401473564,
-        "yaw": -1.765330964295064,
-        "speed": -1.63625,
-        "gas": -1,
+        "x": -19.06617491767806,
+        "z": -5.963887708075334,
+        "yaw": -1.7588638112435677,
+        "speed": -1.56960656855672,
+        "gas": 0,
         "brake": 0
       },
       "shots": 0,
@@ -754,11 +890,11 @@
       "name": "keyboard-reverse-right",
       "vehicle": "city-0",
       "car": {
-        "x": -19.051779627907326,
-        "z": -6.038972882620654,
-        "yaw": -1.3791371276503812,
-        "speed": -1.5940913460589383,
-        "gas": 0,
+        "x": -19.0686153457643,
+        "z": -6.0356388529383045,
+        "yaw": -1.3839717168144898,
+        "speed": -1.6026499999165538,
+        "gas": -1,
         "brake": 0
       },
       "shots": 0,
@@ -788,11 +924,11 @@
       "name": "pad-forward-right",
       "vehicle": "city-0",
       "car": {
-        "x": -20.068895500683933,
-        "z": -6.104035689578531,
-        "yaw": -1.8909217068114867,
-        "speed": 2.7468000000715245,
-        "gas": 1,
+        "x": -20.067366146486428,
+        "z": -6.103520811910197,
+        "yaw": -1.890115034218299,
+        "speed": 2.683857218470056,
+        "gas": 0,
         "brake": 0
       },
       "shots": 0,

@@ -9,7 +9,7 @@
           "role": "host",
           "vehicle": null,
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
             "x": -19.44,
@@ -22,7 +22,7 @@
               "visible": false
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
               "visible": false
             },
             {
@@ -36,11 +36,11 @@
           ]
         },
         {
-          "self": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
           "role": "guest",
           "vehicle": "city-0",
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
             "x": -19.44,
@@ -76,12 +76,12 @@
           "role": "host",
           "vehicle": null,
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
-            "speed": -2.4503500000834464,
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -2.3649499999582773,
             "brake": 1,
-            "x": -19.164292138448932,
-            "z": -5.865242735137086,
-            "yaw": -1.8225838818056301
+            "x": -19.3103914475601,
+            "z": -5.876612214342813,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -89,7 +89,7 @@
               "visible": false
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
               "visible": false
             },
             {
@@ -103,16 +103,16 @@
           ]
         },
         {
-          "self": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
           "role": "guest",
           "vehicle": "city-0",
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
-            "speed": -2.2756999999582765,
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -2.1902999998331074,
             "brake": 0,
-            "x": -19.279193212598674,
-            "z": -5.894800679745975,
-            "yaw": -1.8225838818056301
+            "x": -19.420035649536352,
+            "z": -5.909192789209176,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -143,12 +143,12 @@
           "role": "host",
           "vehicle": null,
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -19.06638229219337,
+            "z": -5.804105338363855,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -156,7 +156,7 @@
               "visible": false
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
               "visible": false
             },
             {
@@ -170,16 +170,485 @@
           ]
         },
         {
-          "self": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
           "role": "guest",
           "vehicle": "city-0",
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -19.06638229219337,
+            "z": -5.804105338363855,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "host-pause-during-guest-reverse",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.503825000010431,
+            "brake": 0,
+            "x": -18.92530754027589,
+            "z": -5.762185232842934,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.4604249999895693,
+            "brake": 0,
+            "x": -18.948404671986122,
+            "z": -5.769048503452049,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shared-pause-freezes-reverse",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.503825000010431,
+            "brake": 0,
+            "x": -18.92530754027589,
+            "z": -5.762185232842934,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.4604249999895693,
+            "brake": 0,
+            "x": -18.948404671986122,
+            "z": -5.769048503452049,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-held-L2-after-resume-requires-neutral",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.92072847916407,
+            "z": -5.760824573175735,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.92072847916407,
+            "z": -5.760824573175735,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-light-reverse-rearms-after-neutral",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.4543000000000002,
+            "brake": 0.2,
+            "x": -18.77750953285324,
+            "z": -5.718267324197149,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": -0.43673000002503415,
+            "brake": 0,
+            "x": -18.788300425000788,
+            "z": -5.72147381813984,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-menu-clears-reverse-without-pausing-host",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.662154792689226,
+            "z": -5.683989873311805,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.662154792689226,
+            "z": -5.683989873311805,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "guest-menu-resume-held-L2-requires-neutral",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.662154792689226,
+            "z": -5.683989873311805,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.662154792689226,
+            "z": -5.683989873311805,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "host",
+              "visible": true
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "short-pause-held-L2-requires-neutral",
+      "pages": [
+        {
+          "self": "host",
+          "role": "host",
+          "vehicle": null,
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
+          },
+          "rigs": [
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            },
+            {
+              "id": "local",
+              "visible": false
+            }
+          ]
+        },
+        {
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+          "role": "guest",
+          "vehicle": "city-0",
+          "car": {
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
+            "speed": 0,
+            "brake": 0,
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -213,9 +682,9 @@
             "owner": "",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -223,7 +692,7 @@
               "visible": false
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
               "visible": true
             },
             {
@@ -237,16 +706,16 @@
           ]
         },
         {
-          "self": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
           "role": "guest",
           "vehicle": null,
           "car": {
             "owner": "",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -277,12 +746,12 @@
           "role": "host",
           "vehicle": null,
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -290,7 +759,7 @@
               "visible": false
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+              "id": "scrapfall-ts-arena-v25-62DY-ayemay8t",
               "visible": false
             },
             {
@@ -304,16 +773,16 @@
           ]
         },
         {
-          "self": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+          "self": "scrapfall-ts-arena-v25-62DY-ayemay8t",
           "role": "guest",
           "vehicle": "city-0",
           "car": {
-            "owner": "scrapfall-ts-arena-v24-76YX-6u3xp3e0",
+            "owner": "scrapfall-ts-arena-v25-62DY-ayemay8t",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -347,9 +816,9 @@
             "owner": "host",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -383,9 +852,9 @@
             "owner": "",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -419,9 +888,9 @@
             "owner": "",
             "speed": 0,
             "brake": 0,
-            "x": -18.95454571757448,
-            "z": -5.811286119535384,
-            "yaw": -1.8225838818056301
+            "x": -18.66211009551675,
+            "z": -5.683976591628433,
+            "yaw": -1.8596347217727187
           },
           "rigs": [
             {
@@ -429,7 +898,7 @@
               "visible": true
             },
             {
-              "id": "scrapfall-ts-arena-v24-76YX-faf8n050",
+              "id": "scrapfall-ts-arena-v25-62DY-y93ie0nm",
               "visible": true
             },
             {
@@ -445,22 +914,39 @@
       ]
     }
   ],
+  "shortPause": {
+    "before": {
+      "brake": 0.25,
+      "inputAge": 8.599999964237213
+    },
+    "paused": {
+      "paused": true,
+      "brake": 0,
+      "speed": 0
+    },
+    "duration": 102,
+    "resumed": {
+      "paused": false,
+      "brake": 0,
+      "speed": 0
+    }
+  },
   "enemyHullDamage": 90,
   "hullProbe": {
     "car": {
       "isBox3": true,
       "min": {
-        "x": -21.561187827612123,
-        "y": -0.011506577721592803,
-        "z": -7.496046106439842
+        "x": -21.143810055842167,
+        "y": -0.05662335574086824,
+        "z": -7.354789826563199
       },
       "max": {
-        "x": -16.352951989550245,
-        "y": 1.0099999904632568,
-        "z": -4.127824813230922
+        "x": -16.185033354471962,
+        "y": 1.340000033378601,
+        "z": -4.01453713788028
       }
     },
-    "ray": 0.3610683352477453,
+    "ray": 0.21258579423505022,
     "damaged": [
       {
         "id": "city-0",
@@ -471,11 +957,11 @@
       {
         "active": false,
         "pos": [
-          -19.834545718766574,
+          -20.932110100285122,
           0.6,
-          -5.811286119535384
+          -5.683976591628433
         ],
-        "life": 0.9688000000119209
+        "life": 0.9827000000476838
       }
     ]
   },
