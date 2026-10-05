@@ -1,6 +1,6 @@
 # Enemy pursuit routing draft
 
-Original functional evidence base: `15540cf9` (includes the half-distance approach and stopped-car fix). Source integration base: `bacff4378b011ca0348db8cb10b900212361f979`, including released pause, recovery, HUD and vehicle changes. The earlier browser traces below predate this integration; fresh integrated build/browser and quantitative performance checks remain pending.
+Original functional evidence base: `15540cf9` (includes the half-distance approach and stopped-car fix). Source integration base: `bacff4378b011ca0348db8cb10b900212361f979`, including released pause, recovery, HUD and vehicle changes. The browser traces below predate this integration. Current integrated validation and the performance hold are tracked in [PR #56](https://github.com/tszaks/scrapfall/pull/56).
 
 ## Problem and change
 
