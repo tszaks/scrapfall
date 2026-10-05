@@ -113,3 +113,55 @@ test("a public client cannot join a development room by its code", async () => {
     host.close();
   }
 });
+
+test("only the host changes pause; paused gameplay is discarded and health stays connected", async () => {
+  const logs = [[], [], []], handles = [];
+  const opts = i => ({onMsg:m=>logs[i].push(m), onPeers:()=>{}});
+  try {
+    const h = await net.hostRoom(opts(0)); handles.push(h);
+    const g = await net.joinRoom(h.code, opts(1)); handles.push(g);
+    const other = await net.joinRoom(h.code, opts(2)); handles.push(other);
+    await wait(()=>logs[1].some(m=>m.type==='pause-state'));
+    for (const type of ['pause','resume','pause-state','authority','begin','seed'])
+      g.broadcast({type,from:'host',paused:true});
+    g.setPaused(true);
+    await new Promise(r=>setTimeout(r,30));
+    assert.equal(h.paused,false); assert.equal(other.paused,false);
+    assert.equal(logs[0].some(m=>['pause','resume','pause-state','authority','begin','seed'].includes(m.type)),false);
+    h.setPaused(true);
+    await wait(()=>g.paused && other.paused);
+    const start = logs[0].length;
+    for (const type of ['t','hit','blast','vehicle-use','rv','haz','take','fire','shard-claim']) g.broadcast({type,x:999});
+    await new Promise(r=>setTimeout(r,1100));
+    assert.deepEqual(logs[0].slice(start).filter(m=>m.type!=='peer-heartbeat'),[]);
+    assert.equal(h.peers().length,2);
+    assert.ok(logs[0].slice(start).some(m=>m.type==='peer-heartbeat'));
+    h.setPaused(false); await wait(()=>!g.paused && !other.paused);
+    g.broadcast({type:'hit',i:1});
+    await wait(()=>logs[0].some(m=>m.type==='hit' && m.i===1));
+    assert.equal(logs[0].some(m=>m.x===999),false,'no queued gameplay bursts on resume');
+  } finally { handles.forEach(h=>h.close()); }
+});
+
+test("paused join and host migration retain pause and replay state without a recovery banner", async () => {
+  const logs=[[],[],[]], handles=[];
+  const opts=i=>({onMsg:m=>logs[i].push(m),onPeers:()=>{}});
+  try {
+    const h=await net.hostRoom(opts(0));handles.push(h);
+    const a=await net.joinRoom(h.code,opts(1));handles.push(a);
+    h.broadcast({type:'snap',run:[5,13.25,20],e:[10,20]});
+    h.broadcast({type:'status',w:5,rem:20,banner:true});
+    h.setPaused(true);await wait(()=>a.paused);
+    const b=await net.joinRoom(h.code,opts(2));handles.push(b);
+    await wait(()=>b.paused);
+    b.broadcast({type:'world-ready'});
+    await wait(()=>logs[2].some(m=>m.type==='snap'));
+    assert.deepEqual(logs[2].find(m=>m.type==='snap').run,[5,13.25,20]);
+    assert.equal(logs[2].find(m=>m.type==='status').banner,false);
+    h.close();await wait(()=>a.role==='host'||b.role==='host');
+    const successor=a.role==='host'?a:b, guest=successor===a?b:a;
+    await wait(()=>successor.peers().length===1);
+    assert.equal(successor.paused,true);assert.equal(guest.paused,true);
+    successor.setPaused(false);await wait(()=>!guest.paused);
+  } finally {handles.forEach(h=>h.close());}
+});

@@ -1,9 +1,11 @@
+import { simulationNow } from "./simulationPause";
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { registerDriveCar, driveCars, driving } from "./driving";
 import { registerStaticInstances } from "./staticCollision";
 // Moving traffic for the city map, and the map's parked cars. Every vehicle draws through one
 // CarBatch (art/cars.ts): an InstancedMesh per vehicle type and LOD, plus shared wheel, glass
 // and lamp meshes, updated in one useFrame.
-import { useFrame } from "@react-three/fiber";
+
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
@@ -351,7 +353,7 @@ export function CityTraffic({
     };
     L.decode = (a) => {
       if (!Array.isArray(a) || (a.length - 1) % CAR_FIELDS !== 0) return;
-      const now = performance.now();
+      const now = simulationNow();
       hostClock.current = { t: a[0]! / 100, at: now };
       for (let o = 1; o + CAR_FIELDS - 1 < a.length; o += CAR_FIELDS) {
         const i = a[o]!;
@@ -422,7 +424,7 @@ export function CityTraffic({
     const dt = Math.min(raw, 0.05);
     const L = link.current;
     const guest = L.role === "guest";
-    const now = performance.now();
+    const now = simulationNow();
     if (guest && hostClock.current)
       trafficClock.t = hostClock.current.t + (now - hostClock.current.at) / 1000;
     if (!guest) {

@@ -38,6 +38,34 @@ try {
   for (const p of [h, g])
     await p.waitForFunction(() => window.__rs?.wave.current >= 1, null, { timeout: 45000 });
   console.log("both in room");
+  let syncRequest = 0;
+  if (process.env.RECOVERY_SYNC)
+    await h.evaluate(() => {
+      const net = __rs.net.current,
+        send = net.sendTo;
+      net.sendTo = (id, message) => {
+        send(id, message);
+        if (message.type === "status" && window.__syncReceipt) {
+          send(id, { type: "event", name: window.__syncReceipt });
+          window.__syncReceipt = "";
+        }
+      };
+    });
+  const requestRecoverySync = async (target) => {
+    const receipt = `RECOVERY SYNC ${++syncRequest}`;
+    const id = await target.evaluate(() => __rs.net.current.self);
+    await h.evaluate(
+      ({ id, receipt }) => {
+        window.__syncReceipt = receipt;
+        // Exercise the real recover/connect(true)/joined/world-ready path while
+        // keeping the existing host alive in this isolated test room.
+        __rs.net.current.sendTo(id, { type: "handoff", members: __rs.net.current.peers() });
+      },
+      { id, receipt },
+    );
+    await target.getByText(receipt).waitFor({ timeout: 20000 });
+  };
+
   for (const p of [h, g])
     await p.evaluate(() => {
       __rs.invuln.current = 1e6;
@@ -107,6 +135,13 @@ try {
     });
     await target.waitForFunction(() => __rs.downedRef.current, null, { timeout: 10000 });
     const before = await pose(target);
+    if (process.env.RECOVERY_SYNC && name === "guest roof") {
+      await requestRecoverySync(target);
+      const synced = await pose(target);
+      assert.equal(synced.hp, 0, "same-wave reconnect must not revive a downed guest");
+      assert.equal(synced.down, true);
+      results.push({ name: "downed same-wave recovery sync", synced });
+    }
     assert.ok(
       Math.hypot(before.x - location.a.x, before.z - location.a.z) < 0.1,
       `${name} downed position`,
@@ -147,6 +182,13 @@ try {
     timeout: 10000,
   });
   const dead = await pose(g);
+  if (process.env.RECOVERY_SYNC) {
+    await requestRecoverySync(g);
+    const synced = await pose(g);
+    assert.equal(synced.hp, 0, "same-wave reconnect must not respawn a dead guest");
+    assert.equal(synced.down, false);
+    results.push({ name: "dead same-wave recovery sync", synced });
+  }
   await g.waitForTimeout(500);
   assert.equal((await pose(g)).hp, 0, "bleed-out stays dead before next wave");
   await h.evaluate(() => {
@@ -164,6 +206,29 @@ try {
   assert.ok(Math.hypot(respawn.x - dead.x, respawn.z - dead.z) > 10, "respawn leaves rooftop");
   results.push({ name: "full death next-wave spawn", dead, respawn });
   console.log("PASS full death next-wave spawn");
+  if (process.env.RECOVERY_SYNC) {
+    const wave = await g.evaluate(() => __rs.wave.current);
+    await h.close();
+    await g.waitForFunction(() => __rs.net.current.role === "host", null, { timeout: 45000 });
+    assert.equal(await g.evaluate(() => __rs.wave.current), wave, "host transfer retains wave");
+    const newcomer = await ctx.newPage();
+    newcomer.on("pageerror", (error) => errors.push(error.message));
+    await newcomer.goto(`${base}/game/?debug=1&quality=low`);
+    await newcomer.getByRole("textbox", { name: "Room code" }).fill(code);
+    await newcomer.getByRole("button", { name: /^JOIN$/ }).click();
+    await newcomer.waitForFunction(
+      (wave) => window.__rs?.net.current.role === "guest" && __rs.wave.current === wave,
+      wave,
+      { timeout: 45000 },
+    );
+    results.push({
+      name: "host transfer and same-code rejoin",
+      wave,
+      host: await pose(g),
+      guest: await pose(newcomer),
+    });
+    console.log("PASS host transfer and same-code rejoin");
+  }
   assert.deepEqual(errors, []);
 } finally {
   clearTimeout(watchdog);

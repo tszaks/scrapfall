@@ -8,7 +8,8 @@ import {
   boundsMayTouchBody,
 } from "../staticCollision";
 import { useMemo, useEffect, type MutableRefObject } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
+import { simulationNow } from "../simulationPause";
 import * as THREE from "three";
 import { artMaterial, artFrame } from "../art/kit";
 import { snowVehicle, skiModel } from "./models";
@@ -281,7 +282,7 @@ export function AlpineLife({
         v.set(x, floor + 0.04, z);
         const target=skierTargets[idx]!;
         Object.assign(target,{x,y:floor,z,active:on});
-        const fallen=target.downUntil>performance.now();
+        const fallen=target.downUntil>simulationNow();
         const fade = on && !fallen ? Math.min(1, local / 0.8, (duration - local) / 0.8) : 0;
         scale.setScalar(Math.max(0, fade));
         m.compose(v, q, scale);
