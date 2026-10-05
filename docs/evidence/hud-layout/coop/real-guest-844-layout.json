@@ -1,0 +1,50 @@
+[
+  {
+    "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+    "text": "N · 0°",
+    "x": 390.125,
+    "y": 84,
+    "w": 63.75,
+    "h": 23.703125
+  },
+  {
+    "name": "hud-match",
+    "text": "VICE HEIGHTSOVERCLOCKWAVE 1/12KILLS",
+    "x": 20,
+    "y": 20,
+    "w": 148,
+    "h": 56.984375
+  },
+  {
+    "name": "hud-loadout",
+    "text": "1■ PISTOL 140Q / E · SWITCH WEAPON",
+    "x": 176,
+    "y": 20,
+    "w": 508,
+    "h": 60.796875
+  },
+  {
+    "name": "hud-vitals",
+    "text": "HEALTH16 / 16◆ 0DTN4 · 2P■ HOST 16",
+    "x": 692,
+    "y": 20,
+    "w": 132,
+    "h": 70.171875
+  },
+  {
+    "name": "PISTOL ammunition",
+    "text": "PISTOL12 / 128R · RELOAD",
+    "x": 20,
+    "y": 285.40625,
+    "w": 168,
+    "h": 84.59375
+  },
+  {
+    "name": "absolute bottom-5 right-5",
+    "text": "",
+    "x": 632,
+    "y": 178,
+    "w": 192,
+    "h": 192
+  }
+]

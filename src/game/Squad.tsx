@@ -1,3 +1,4 @@
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { avState, AV_WARN, runAt } from "./events/avalanche";
 import { actionLabel } from "./input/labels";
 import { subscribeActions, subscribeInputReset } from "./input/remap";
@@ -6,7 +7,7 @@ import { presentationCamera } from "./PlayerView";
 // layer that draws them over the 3D view (world-anchored markers, the downed teammates'
 // direction and distance, the revive ring, the map-event banner).
 import { moveState } from "./input/movement";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 

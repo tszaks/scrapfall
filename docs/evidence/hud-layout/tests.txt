@@ -1,0 +1,134 @@
+
+> scrapfall@1.0.6 test
+> node --test scripts/game-physics.test.mjs scripts/ads.test.mjs scripts/quality-recovery.test.mjs scripts/weapon-flight.test.mjs scripts/movement.test.mjs scripts/enemy-body.test.mjs scripts/net-relay.test.mjs scripts/playtest-feedback.test.mjs scripts/room-recovery.test.mjs scripts/map-availability.test.mjs scripts/environment-detail.test.mjs scripts/natural-forms.test.mjs scripts/traffic-enemies.test.mjs scripts/traffic-body.test.mjs scripts/vehicle-controls.test.mjs
+
+centre coverage:
+pistol    hip 0.0%  ads 14.6%
+scatter   hip 0.1%  ads 14.4%
+smg       hip 0.0%  ads 11.8%
+rail      hip 0.4%  ads 13.9%
+cannon    hip 0.8%  ads 20.0%
+rebound   hip 0.9%  ads 15.6%
+harpoon   hip 0.2%  ads 9.4%
+cryo      hip 0.4%  ads 11.0%
+flak      hip 1.4%  ads 15.1%
+tesla     hip 0.0%  ads 19.1%
+revolver  hip 0.1%  ads 15.1%
+minigun   hip 0.3%  ads 11.4%
+crossbow  hip 0.0%  ads 16.4%
+plasma    hip 0.0%  ads 12.0%
+voidorb   hip 0.3%  ads 12.0%
+shatter   hip 0.3%  ads 10.2%
+sniper    hip 1.9%  ads 13.5%
+group radius (RMS, 100 shots @20m):
+pistol    hip 0.163m stand / 0.233m walk | ads 0.058m stand / 0.085m walk
+scatter   hip 2.587m stand / 2.798m walk | ads 1.730m stand / 1.809m walk
+smg       hip 0.302m stand / 0.400m walk | ads 0.081m stand / 0.119m walk
+rail      hip 0.209m stand / 0.293m walk | ads 0.023m stand / 0.055m walk
+cannon    hip 0.349m stand / 0.461m walk | ads 0.128m stand / 0.170m walk
+rebound   hip 0.326m stand / 0.430m walk | ads 0.116m stand / 0.156m walk
+harpoon   hip 0.233m stand / 0.316m walk | ads 0.035m stand / 0.067m walk
+cryo      hip 0.279m stand / 0.370m walk | ads 0.093m stand / 0.127m walk
+flak      hip 0.349m stand / 0.461m walk | ads 0.128m stand / 0.170m walk
+tesla     hip 0.256m stand / 0.340m walk | ads 0.058m stand / 0.090m walk
+revolver  hip 0.151m stand / 0.221m walk | ads 0.047m stand / 0.073m walk
+minigun   hip 0.407m stand / 0.512m walk | ads 0.163m stand / 0.203m walk
+crossbow  hip 0.233m stand / 0.316m walk | ads 0.023m stand / 0.055m walk
+plasma    hip 1.104m stand / 1.225m walk | ads 0.685m stand / 0.731m walk
+voidorb   hip 0.326m stand / 0.430m walk | ads 0.116m stand / 0.156m walk
+shatter   hip 0.233m stand / 0.337m walk | ads 0.093m stand / 0.133m walk
+sniper    hip 0.582m stand / 0.721m walk | ads 0.000m stand / 0.053m walk
+✔ every gun's sight mark lands within 1px of screen centre when aimed (4.746625ms)
+✔ aimed guns leave the reticle's centre box at most 25% covered (179.43825ms)
+✔ ADS is tighter than hipfire for every gun (5.24325ms)
+✔ sustained fire blooms and recovers; the first aimed shot from rest is exact (0.187583ms)
+✔ optic side supports meet their hood instead of leaving a floating top bar (0.384125ms)
+✔ reflex and holographic sight lines have no opaque geometry in front of the eye (2.71925ms)
+✔ iron sight wings join their mounting shoe (0.180708ms)
+✔ all ground kinds use physical collision, flying and spectral exceptions remain explicit (0.979458ms)
+✔ a walker cannot enter a stationary or rotated car, including a hollow mesh (0.471541ms)
+✔ an overlapped enemy can escape a car with small steps at any frame rate (2.395291ms)
+✔ body sweep catches a thin prop on a long charge and allows a clear route around it (2.789625ms)
+✔ rotated wide vehicles retain collision at their outer corners (0.160167ms)
+(node:6317) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cached broadleaf templates recover detail after low-first construction and preserve collision exclusions (33.959875ms)
+✔ spruce quality transitions retain vertex colours and restore full branches without rebuilding instances (10.304625ms)
+✔ Pier sand scan flag excludes skate concrete, parking asphalt, and bluff terrain (1274.160042ms)
+✔ facade relief is bounded, optional, non-solid and leaves real room cutouts empty (8.267583ms)
+✔ branched crowns stay under 2000 triangles per tree with reduced LOW detail (0.902208ms)
+✔ joining survives world construction but an absent peer still times out (0.617625ms)
+✔ established connections retain host and guest silence limits (0.089375ms)
+✔ gravity integration preserves the same trajectory across frame rates (0.176833ms)
+✔ sight zero is reached at fixed speed for level, uphill and downhill shots (0.168458ms)
+✔ Longshot has a 50m zero and drops below that sight line farther away (0.072084ms)
+✔ unreachable and degenerate sight inputs remain finite (0.06ms)
+✔ shared seed deterministically selects all four weather conditions (2.841166ms)
+✔ co-op ignores local URL overrides while solo diagnostics may select weather (0.137791ms)
+✔ Dry Gulch's reserved landmarks exist on every seed (190139.391334ms)
+✔ Pier arcade reserves the entire exit including a stall canopy (0.283583ms)
+✔ Pier doorway reservations follow all four facade orientations (0.080958ms)
+✔ Pier swim boundary has a continuous four-metre float rhythm outside the deck (0.091875ms)
+✔ public builds reject development maps through direct choice and room seed (0.976167ms)
+✔ development builds retain Nuketown without changing map indices (0.109833ms)
+✔ middle movement pace preserves sprint ratios and jump height (0.376792ms)
+✔ existing warnings keep at least the prior escape distance (0.066833ms)
+✔ sagebrush stays rooted, non-colliding and within the old triangle budget across quality changes (44.576625ms)
+✔ fuller spruce silhouette retains the existing near triangle budget and near/far crown scale (2.174834ms)
+✔ needle spruce keeps finite UVs and geometry budgets across both quality tiers (3.542625ms)
+✔ endpoint refuses cleanly when the env vars are missing, without calling Cloudflare (0.412875ms)
+✔ endpoint calls Cloudflare's documented API and strips browser-blocked port 53 (24.454916ms)
+✔ endpoint reports an upstream failure without echoing the token (0.619542ms)
+✔ client loader uses the relay list and caches it (0.573417ms)
+✔ client falls back to STUN only on any failure, and retries next time (0.627458ms)
+✔ client gives up on a slow endpoint inside the timeout (51.752125ms)
+✔ join failures get distinct messages (0.241416ms)
+✔ dead enemy snapshots preserve each death location for guest money drops (0.440417ms)
+✔ reload fills a magazine from remaining ammo without creating ammo (1.92925ms)
+✔ changing weapon cancels the prior reload (0.077875ms)
+✔ two squad members cannot award the same shared money twice (0.440334ms)
+✔ recovery distinguishes downed revives from fully dead wave respawns (0.5695ms)
+✔ host and guest revives use the current floor and survive repeated downs (5.382666ms)
+✔ bleed-out stays dead until wave health returns, including mirrored squad state (0.206875ms)
+✔ a held revive survives damage and finishes in two seconds (0.092666ms)
+✔ empty combat pools participate in warm-up and retain their hidden state (0.705667ms)
+✔ ammo purchases preserve upgraded or above-capacity reserves (0.080583ms)
+✔ an old empty Field Dressing binding gets a free key without stealing a custom key (0.459625ms)
+(node:6323) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ recovery retains sharper graphics when a 30 Hz cadence and CPU cost remain unchanged (0.739ms)
+✔ a quality increase that worsens frame time is rolled back (0.072458ms)
+✔ a cadence-neutral increase that overloads CPU is rolled back (0.053ms)
+✔ visibility or loading reset discards a partial probe and delays the next one (0.059083ms)
+✔ recovery waits for three stable slow windows and rejects transient pressure (0.071958ms)
+✔ host departure keeps code, elects one survivor, reconnects others and accepts a new join (2548.969791ms)
+✔ exact code validation rejects transcribed five-character codes (0.623416ms)
+✔ a public client cannot join a development room by its code (6.1835ms)
+✔ stopped car blocks entry from both sides and both ends at rotated headings (0.943792ms)
+✔ walk slides along outside, and jumping above a roof is clear (0.10025ms)
+✔ car arriving around a player allows outward escape but not deeper penetration (0.067375ms)
+✔ live car position moves the obstacle and exit query sees adjacent vehicles (0.055584ms)
+✔ player squeezed between two arriving cars can escape along the gap (0.182916ms)
+✔ escaping one car cannot enter a shallower overlap with another car (0.046208ms)
+✔ traffic yields to a small robot and resumes when it clears (step0.016666666666666666) (7.305042ms)
+✔ traffic yields to a small robot and resumes when it clears (step0.06666666666666667) (4.6955ms)
+✔ flyers and dead enemies do not stop traffic (1.36675ms)
+✔ player-controlled vehicles remain outside ambient simulation (0.576458ms)
+✔ partial entry cancels on release; full hold fires once until released (0.56175ms)
+✔ target loss/change and pause reset require release and a new hold (0.119167ms)
+✔ button held before approaching cannot automatically enter a car (0.083542ms)
+✔ analog throttle accelerates smoothly; coasting slows gradually (0.1575ms)
+✔ brakes win over throttle, reach zero and never engage reverse (0.155042ms)
+✔ invalid network values cannot poison vehicle motion (0.089583ms)
+✔ right steering follows the vehicle frame in forward and reverse, at every heading (0.113291ms)
+✔ fast rounds hit a tiny hornet and stop at a thin wall at 20/30/60/120 fps (5.398042ms)
+✔ Shredder reaches 60m in under 0.15s; rockets keep their original pace (0.116667ms)
+✔ 600m/s Longshot retains a 50m zero and mild long-range drop (0.1275ms)
+ℹ tests 82
+ℹ suites 0
+ℹ pass 82
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 190891.950042

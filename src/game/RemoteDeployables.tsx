@@ -1,6 +1,7 @@
 // Other players' turrets and mines. Visual copies only: the owner's client fires them and
 // the host applies the damage through the normal "hit" messages.
-import { useFrame } from "@react-three/fiber";
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
+import { simulationNow } from "./simulationPause";
 import { groundY } from "./terrain";
 import { useRef } from "react";
 import type * as THREE from "three";
@@ -20,7 +21,7 @@ export function RemoteDeployables({
   useFrame(() => {
     let ti = 0;
     let mi = 0;
-    const now = performance.now();
+    const now = simulationNow();
     deps.current.forEach((d, id) => {
       if (now - d.at > 5000) {
         deps.current.delete(id);

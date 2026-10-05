@@ -1,0 +1,58 @@
+[
+  {
+    "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+    "text": "N · 0°",
+    "x": 252.125,
+    "y": 84,
+    "w": 63.75,
+    "h": 23.703125
+  },
+  {
+    "name": "hud-match",
+    "text": "VICE HEIGHTSOVERCLOCKWAVE 12/12KILL",
+    "x": 20,
+    "y": 20,
+    "w": 148,
+    "h": 56.984375
+  },
+  {
+    "name": "hud-loadout",
+    "text": "■ PISTOL 140L1 / R1 · SWITCH WEAPON",
+    "x": 176,
+    "y": 20,
+    "w": 232,
+    "h": 60.796875
+  },
+  {
+    "name": "hud-vitals",
+    "text": "HEALTH16 / 16◆ 0ABCD · 4P■ HOST DOW",
+    "x": 416,
+    "y": 20,
+    "w": 132,
+    "h": 83.96875
+  },
+  {
+    "name": "PISTOL ammunition",
+    "text": "PISTOL12 / 128□ · RELOAD",
+    "x": 20,
+    "y": 215.40625,
+    "w": 168,
+    "h": 84.59375
+  },
+  {
+    "name": "hud-boss absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]",
+    "text": "THE AVALANCHE ENGINE",
+    "x": 238,
+    "y": 112,
+    "w": 100,
+    "h": 36.375
+  },
+  {
+    "name": "absolute bottom-5 right-5",
+    "text": "",
+    "x": 356,
+    "y": 108,
+    "w": 192,
+    "h": 192
+  }
+]
