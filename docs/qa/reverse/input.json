@@ -1,0 +1,1196 @@
+{
+  "simulatedController": "DualSense via built-in padshim; not physical hardware",
+  "errors": [],
+  "checks": [
+    {
+      "name": "partial-hold",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER · 39%",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "release-cancel",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "range-cancel",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "pause-cancel",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "E TO DRIVE",
+      "ammo": "PISTOL\n12 / 128\nR · RELOAD"
+    },
+    {
+      "name": "disconnect-cancel",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "entered",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "hold-does-not-exit",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "before-driving",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "stick-no-throttle",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "half-trigger",
+      "vehicle": "city-0",
+      "car": {
+        "x": -20.9518001099639,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 2.999099999964236,
+        "gas": 0.5,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "full-trigger",
+      "vehicle": "city-0",
+      "car": {
+        "x": -27.01867512017908,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 9.020100000143046,
+        "gas": 1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "coast",
+      "vehicle": "city-0",
+      "car": {
+        "x": -31.41971628274313,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 8.253837356075504,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "brake-through-zero",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.15930934651757,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 1
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "held-brake-reverses",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.29174943642851,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -2.4496500001251684,
+        "gas": 0,
+        "brake": 1
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "forward-after-reverse",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.88643134840841,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 3,
+        "gas": 1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "pause-held-reverse",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.10151095241832,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.20404999983310698,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": ""
+    },
+    {
+      "name": "pause-freezes-reverse",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.10151095241832,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.20404999983310698,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": ""
+    },
+    {
+      "name": "resume-held-L2-requires-neutral",
+      "vehicle": "city-0",
+      "car": {
+        "x": -33.08508922225129,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "light-L2-rearms-after-neutral",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.801714093526414,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": -0.7005249999687075,
+        "gas": 0,
+        "brake": 0.25
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "no-driving-shots",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.786273972727514,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "local-body-hidden",
+      "vehicle": "city-0",
+      "car": {
+        "x": -32.786273972727514,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "exit",
+      "vehicle": null,
+      "car": {
+        "x": -32.786273972727514,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "keyboard-entry",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "keyboard-forward-left",
+      "vehicle": "city-0",
+      "car": {
+        "x": -20.050432561775274,
+        "z": -5.902092080974061,
+        "yaw": -1.2603985668111943,
+        "speed": 2.7041999999284743,
+        "gas": 1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "keyboard-forward-right",
+      "vehicle": "city-0",
+      "car": {
+        "x": -20.066283826837182,
+        "z": -6.103151333246282,
+        "yaw": -1.8895426668113364,
+        "speed": 2.7408000000715256,
+        "gas": 1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "keyboard-reverse-left",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.06617491767806,
+        "z": -5.963887708075334,
+        "yaw": -1.7588638112435677,
+        "speed": -1.56960656855672,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "keyboard-reverse-right",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.0686153457643,
+        "z": -6.0356388529383045,
+        "yaw": -1.3839717168144898,
+        "speed": -1.6026499999165538,
+        "gas": -1,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "DRIVING · E TO EXIT",
+      "ammo": "PISTOL12 / 128R · RELOAD"
+    },
+    {
+      "name": "pad-forward-right",
+      "vehicle": "city-0",
+      "car": {
+        "x": -20.067366146486428,
+        "z": -6.103520811910197,
+        "yaw": -1.890115034218299,
+        "speed": 2.683857218470056,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "toggle-aim-on",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": true,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n12 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "entry-clears-toggle-aim",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 0,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL12 / 128□ · RELOAD"
+    },
+    {
+      "name": "trigger-before-entry",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 3,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER · 85%",
+      "ammo": "PISTOL\n9 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "held-trigger-entry",
+      "vehicle": "city-0",
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 3,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "R2 ACCELERATE · L2 BRAKE · LEFT STICK STEER · □ EXIT",
+      "ammo": "PISTOL9 / 128□ · RELOAD"
+    },
+    {
+      "name": "held-trigger-exit",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 3,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n9 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "exit-requires-trigger-release",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 3,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "HOLD □ TO ENTER",
+      "ammo": "PISTOL\n9 / 128\n□ · RELOAD"
+    },
+    {
+      "name": "square-reloads-away-from-car",
+      "vehicle": null,
+      "car": {
+        "x": -19.44,
+        "z": -6,
+        "yaw": -1.5707963267948966,
+        "speed": 0,
+        "gas": 0,
+        "brake": 0
+      },
+      "shots": 3,
+      "aim": false,
+      "rigs": [
+        {
+          "id": "local",
+          "visible": true
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        },
+        {
+          "id": "local",
+          "visible": false
+        }
+      ],
+      "hint": "",
+      "ammo": "PISTOL\n1 / 136\nRELOADING · 0.9s"
+    }
+  ]
+}

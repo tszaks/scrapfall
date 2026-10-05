@@ -113,6 +113,12 @@ export function driveInput(owner: string, gas: number, steer: number, brake = 0)
   c.steer = Number.isFinite(steer) ? Math.max(-1, Math.min(1, steer)) : 0;
   c.inputAt = performance.now();
 }
+export function clearDriveInputs() {
+  for (const c of driveCars.values()) {
+    c.gas = c.brake = c.steer = 0;
+    c.inputAt = -Infinity;
+  }
+}
 function clear(c: DriveCar, x: number, z: number, yaw: number, blocks: Block[]) {
   const y = groundY(x, z),
     sn = Math.sin(yaw),
@@ -143,7 +149,7 @@ export function stepDriving(dt: number, blocks: Block[]) {
   for (const c of driveCars.values()) {
     if (!c.claimed || c.hp <= 0) continue;
     const live = !!c.owner && performance.now() - c.inputAt < 500;
-    c.speed = vehicleSpeed(c.speed, live ? c.gas : 0, live ? c.brake : 1, c.topSpeed, dt);
+    c.speed = vehicleSpeed(c.speed, live ? c.gas : 0, live ? c.brake : 1, c.topSpeed, dt, !live);
     const count = Math.max(1, Math.ceil((Math.abs(c.speed) * dt) / 0.2));
     for (let i = 0; i < count; i++) {
       const yaw = vehicleTurn(c.yaw, live ? c.steer : 0, c.speed, dt / count);
