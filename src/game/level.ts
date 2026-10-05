@@ -524,6 +524,8 @@ export type NavGrid = {
   px: Float32Array;
   pz: Float32Array;
   n: number;
+  /** Directed, clearance-checked links in DIRS order. */
+  links?: Uint8Array;
 };
 
 export function solidGrid(blocks: Block[]): NavGrid {
@@ -598,10 +600,12 @@ export function navTarget(nav: NavGrid, x: number, z: number, blocks?: Block[]):
   const r = navTargetOut;
   r[0] = ti;
   r[1] = tj;
-  if (!strictNav()) return r;
+  if (!strictNav() && !nav.links) return r;
   const n = nav.n;
   const gy = groundY(x, z);
-  const same = (k: number) => !nav.g[k] && Math.abs(groundY(nav.px[k]!, nav.pz[k]!) - gy) < 1.2;
+  const same = (k: number) =>
+    !nav.g[k] && (!nav.links || nav.links[k] !== 0) &&
+    Math.abs(groundY(nav.px[k]!, nav.pz[k]!) - gy) < 1.2;
   if (same(ti * n + tj)) return r;
   // prefer the nearest open cell on the same level that has a clear walk to the point, so an
   // enemy that arrives there can step straight to a player standing along a railing
@@ -734,12 +738,15 @@ export function flowField(nav: NavGrid, ti: number, tj: number, maxD = Infinity)
     const ci = Math.floor(c / n);
     const cj = c - ci * n;
     const dc = dist[c]!;
-    for (const [di, dj] of DIRS) {
+    for (let direction = 0; direction < DIRS.length; direction++) {
+      const [di, dj] = DIRS[direction]!;
       const ni = ci + di;
       const nj = cj + dj;
       if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
       const k = ni * n + nj;
       if (solid[k]) continue;
+      const reverse = direction < 4 ? direction ^ 1 : 11 - direction;
+      if (nav.links && !(nav.links[k]! & (1 << reverse))) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
       if (!structurePathClear(nav.px[c]!, nav.pz[c]!, nav.px[k]!, nav.pz[k]!)) continue;
       const nd = dc + (di && dj ? 1.414 : 1);
@@ -768,10 +775,12 @@ export function nextWaypoint(
   let best = dist[ci * n + cj]!;
   let bi = ci;
   let bj = cj;
-  for (const [di, dj] of DIRS) {
+  for (let direction = 0; direction < DIRS.length; direction++) {
+    const [di, dj] = DIRS[direction]!;
     const ni = ci + di;
     const nj = cj + dj;
     if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+    if (nav.links && !(nav.links[ci * n + cj]! & (1 << direction))) continue;
     if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
     if (!structurePathClear(x, z, nav.px[ni * n + nj]!, nav.pz[ni * n + nj]!)) continue;
     const d = dist[ni * n + nj]!;
@@ -781,6 +790,7 @@ export function nextWaypoint(
       bj = nj;
     }
   }
+  if (bi === ci && bj === cj) return null;
   const k = bi * n + bj;
   if (NAV_SCALE === 1) {
     out.x = cellCenter(bi);
