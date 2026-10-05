@@ -418,6 +418,8 @@ export function HudOverlay({
         const show = age < 2.8;
         const td = show ? "block" : "none";
         if (te.style.display !== td) te.style.display = td;
+        const active = show ? "true" : "false";
+        if (te.dataset["active"] !== active) te.dataset["active"] = active;
         if (show) {
           te.style.opacity = String(Math.min(1, (2.8 - age) / 0.5));
           if (te.textContent !== hudToast.text) te.textContent = hudToast.text;
@@ -545,7 +547,9 @@ export function HudOverlay({
       </div>
       <div
         ref={toastEl}
-        className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]"
+        data-hud-toast
+        data-active="false"
+        className="hud-context-notice rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]"
         style={{ display: "none" }}
       />
       <div

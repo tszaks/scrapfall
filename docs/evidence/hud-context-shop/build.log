@@ -1,0 +1,174 @@
+
+> scrapfall@1.0.6 build
+> vite build && node scripts/stage-static.mjs
+
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+vite v8.1.5 building client environment for production...
+[2Ktransforming...✓ 1032 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/assets/routes-BNThod4E.css                8.83 kB │ gzip:   2.16 kB
+dist/client/assets/styles-BA74kBfD.css               99.81 kB │ gzip:  16.61 kB
+dist/client/assets/westernMarkers-FK9EB02v.js         0.19 kB │ gzip:   0.17 kB
+dist/client/assets/facade-BN3FyA_r.js                 0.71 kB │ gzip:   0.43 kB
+dist/client/assets/spiral-ByI9YBCd.js                 0.74 kB │ gzip:   0.40 kB
+dist/client/assets/belfry-D0kS2bw7.js                 0.80 kB │ gzip:   0.49 kB
+dist/client/assets/mapHooks-CqRBYVQH.js               0.93 kB │ gzip:   0.52 kB
+dist/client/assets/soloBounds-CThOlUxp.js             0.96 kB │ gzip:   0.52 kB
+dist/client/assets/surfaceRelief-CjMvhpSF.js          1.12 kB │ gzip:   0.54 kB
+dist/client/assets/weather-DPYZjDwJ.js                1.19 kB │ gzip:   0.62 kB
+dist/client/assets/terrain-BPZW-2Nh.js                1.25 kB │ gzip:   0.70 kB
+dist/client/assets/foliage-CmLoGn2P.js                1.51 kB │ gzip:   0.78 kB
+dist/client/assets/trafficCore-LOJD9UAy.js            1.85 kB │ gzip:   0.84 kB
+dist/client/assets/vehicles-Vxzeo2YT.js               1.93 kB │ gzip:   0.95 kB
+dist/client/assets/movement-D9oN3f26.js               2.60 kB │ gzip:   1.15 kB
+dist/client/assets/beachAccess-DiqpOfoQ.js            2.61 kB │ gzip:   1.37 kB
+dist/client/assets/trainSim-DWPzEbxX.js               2.69 kB │ gzip:   1.28 kB
+dist/client/assets/scannedSurface-Ch8alfyF.js         2.72 kB │ gzip:   1.39 kB
+dist/client/assets/detailQuality-Brnz3_dx.js          3.12 kB │ gzip:   1.46 kB
+dist/client/assets/alpineAccess-tQ2aaIBc.js           3.17 kB │ gzip:   1.56 kB
+dist/client/assets/cityAccess-D3M4Jwqc.js             3.33 kB │ gzip:   1.70 kB
+dist/client/assets/sfx-CC9XtXKc.js                    3.79 kB │ gzip:   1.08 kB
+dist/client/assets/driving-CyDYegGn.js                4.04 kB │ gzip:   1.85 kB
+dist/client/assets/squadState-C2TPY1a2.js             4.30 kB │ gzip:   2.12 kB
+dist/client/assets/timeOfDay-dU6G3_oH.js              4.31 kB │ gzip:   1.96 kB
+dist/client/assets/models-DaVHvvwf.js                 4.89 kB │ gzip:   1.92 kB
+dist/client/assets/cityGeo-bzBFe3ex.js                5.32 kB │ gzip:   2.31 kB
+dist/client/assets/plan-C4CZDolg.js                   5.48 kB │ gzip:   2.53 kB
+dist/client/assets/terrain-IhuqYnkp.js                5.62 kB │ gzip:   2.33 kB
+dist/client/assets/adapters-GeDMp5db.js               5.83 kB │ gzip:   2.45 kB
+dist/client/assets/AlpineMap-DrFSruqc.js              6.19 kB │ gzip:   2.92 kB
+dist/client/assets/CityMap-BAOdZLyQ.js                6.32 kB │ gzip:   2.92 kB
+dist/client/assets/TimeScene-PepTyhem.js              7.70 kB │ gzip:   3.40 kB
+dist/client/assets/react-SIfiwpqq.js                  8.18 kB │ gzip:   3.16 kB
+dist/client/assets/sky-DDOWFxcP.js                    8.19 kB │ gzip:   3.77 kB
+dist/client/assets/materials-To_4BN_p.js              8.69 kB │ gzip:   3.54 kB
+dist/client/assets/storm-upA6Qvek.js                  9.68 kB │ gzip:   4.30 kB
+dist/client/assets/level-Ch4BxSGq.js                 10.88 kB │ gzip:   4.53 kB
+dist/client/assets/cityTextures-DVchPMkN.js          12.03 kB │ gzip:   4.62 kB
+dist/client/assets/layout-C4JxSPAx.js                12.61 kB │ gzip:   5.58 kB
+dist/client/assets/lighting-BrDkxuh1.js              16.48 kB │ gzip:   6.60 kB
+dist/client/assets/cityLayout-yMY0Bl5d.js            16.68 kB │ gzip:   7.33 kB
+dist/client/assets/kit-DCwx9avB.js                   18.25 kB │ gzip:   6.91 kB
+dist/client/assets/Western-CBWTTcNa.js               20.19 kB │ gzip:   8.13 kB
+dist/client/assets/audio-CPHPTJGK.js                 22.58 kB │ gzip:   7.85 kB
+dist/client/assets/cars-Dpp6W8GO.js                  23.30 kB │ gzip:   9.11 kB
+dist/client/assets/world-BZOEw2h1.js                 24.66 kB │ gzip:  10.51 kB
+dist/client/assets/textures-C2v_zRUz.js              25.48 kB │ gzip:   9.28 kB
+dist/client/assets/layout-CNfjnHkO.js                26.09 kB │ gzip:  11.23 kB
+dist/client/assets/beachLayout-BID03mob.js           27.29 kB │ gzip:  11.40 kB
+dist/client/assets/ambience-Dko--I1Y.js              32.67 kB │ gzip:  11.32 kB
+dist/client/assets/CityRain-Dtu76tGF.js              35.48 kB │ gzip:  13.60 kB
+dist/client/assets/cityMesh-BuFt-GQ5.js              39.83 kB │ gzip:  15.78 kB
+dist/client/assets/BeachMap-LCorIJNu.js              40.24 kB │ gzip:  14.51 kB
+dist/client/assets/build-Blw8_zzJ.js                 41.89 kB │ gzip:  15.64 kB
+dist/client/assets/Alpine-Dg-HIi2q.js                42.78 kB │ gzip:  15.87 kB
+dist/client/assets/staticCollision-DlvsqBFg.js       45.94 kB │ gzip:  15.00 kB
+dist/client/assets/WesternMap-DXuf9AHM.js            47.53 kB │ gzip:  17.78 kB
+dist/client/assets/beachMesh-DAqP1a35.js             49.80 kB │ gzip:  18.27 kB
+dist/client/assets/ride-CWrKmpJ0.js                  54.60 kB │ gzip:  19.32 kB
+dist/client/assets/Traffic-BXQcV4iS.js               64.34 kB │ gzip:  24.81 kB
+dist/client/assets/layout-Cg-ChHag.js                70.18 kB │ gzip:  27.73 kB
+dist/client/assets/mesh-RQSVESX_.js                  83.35 kB │ gzip:  29.85 kB
+dist/client/assets/events-803f4abc.esm-CygBqGEG.js  168.13 kB │ gzip:  53.61 kB
+dist/client/assets/index-DGwrYiDd.js                332.73 kB │ gzip: 107.03 kB
+dist/client/assets/look-BCQEJiYe.js                 367.67 kB │ gzip:  90.61 kB
+dist/client/assets/slice-Du1KgBBX.js                377.95 kB │ gzip: 100.94 kB
+dist/client/assets/routes-DuA7kPGd.js               697.59 kB │ gzip: 228.66 kB
+
+✓ built in 471ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+vite v8.1.5 building ssr environment for production...
+[2Ktransforming...✓ 315 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/server/assets/materials-DPwbp-iV.js                       0.09 kB │ gzip:   0.08 kB
+dist/server/assets/build-BvfSfMee.js                           0.15 kB │ gzip:   0.12 kB
+dist/server/assets/empty-plugin-adapters-PKEmbFL4.js           0.25 kB │ gzip:   0.18 kB
+dist/server/assets/westernMarkers-K6NQhQHf.js                  0.32 kB │ gzip:   0.24 kB
+dist/server/assets/rolldown-runtime-D7D4PA-g.js                0.36 kB │ gzip:   0.25 kB
+dist/server/assets/facade-CpookDGn.js                          1.38 kB │ gzip:   0.69 kB
+dist/server/assets/belfry-D1ZiJIxU.js                          1.44 kB │ gzip:   0.68 kB
+dist/server/assets/surfaceRelief-CfybEY1u.js                   1.47 kB │ gzip:   0.66 kB
+dist/server/assets/mapHooks-9gLFwH_C.js                        1.48 kB │ gzip:   0.69 kB
+dist/server/assets/slice-CaeTOQXH.js                           1.60 kB │ gzip:   0.82 kB
+dist/server/assets/start-DB8bbkPU.js                           1.60 kB │ gzip:   0.73 kB
+dist/server/assets/spiral-IHYQhcnZ.js                          1.64 kB │ gzip:   0.72 kB
+dist/server/assets/weather-DOE2WHMm.js                         1.66 kB │ gzip:   0.80 kB
+dist/server/assets/_tanstack-start-manifest_v-DOnEXfPe.js      2.03 kB │ gzip:   0.85 kB
+dist/server/assets/terrain-DVj6SdR3.js                         2.28 kB │ gzip:   0.98 kB
+dist/server/assets/foliage-VFvojHd1.js                         2.80 kB │ gzip:   1.12 kB
+dist/server/assets/soloBounds-B3AiXmos.js                      2.81 kB │ gzip:   1.18 kB
+dist/server/assets/createCsrfMiddleware-CzDnfCzL.js            3.25 kB │ gzip:   1.04 kB
+dist/server/assets/vehicles-DIV_YvsC.js                        3.31 kB │ gzip:   1.37 kB
+dist/server/assets/scannedSurface-BNmGnEYv.js                  3.63 kB │ gzip:   1.66 kB
+dist/server/assets/look-Dd1tyX-C.js                            3.81 kB │ gzip:   1.67 kB
+dist/server/assets/trafficCore-RWHDB4aA.js                     4.57 kB │ gzip:   1.88 kB
+dist/server/server.js                                          4.61 kB │ gzip:   1.92 kB
+dist/server/assets/beachAccess-BDZi9-4s.js                     4.87 kB │ gzip:   1.97 kB
+dist/server/assets/router-nWhhsae3.js                          5.14 kB │ gzip:   1.99 kB
+dist/server/assets/sfx-BxC61iad.js                             5.75 kB │ gzip:   1.46 kB
+dist/server/assets/alpineAccess-Cxrrht-4.js                    6.08 kB │ gzip:   2.27 kB
+dist/server/assets/cityAccess-Crs8jd8a.js                      6.26 kB │ gzip:   2.46 kB
+dist/server/assets/movement-a0yezZzA.js                        6.62 kB │ gzip:   2.71 kB
+dist/server/assets/detailQuality-CuRwcoPb.js                   6.69 kB │ gzip:   2.53 kB
+dist/server/assets/trainSim-CrIRsHGC.js                        6.71 kB │ gzip:   2.58 kB
+dist/server/assets/driving-BTlSXLao.js                         7.75 kB │ gzip:   2.75 kB
+dist/server/assets/models-C1fHHh04.js                          8.20 kB │ gzip:   2.45 kB
+dist/server/assets/timeOfDay-BIAVnYAi.js                       8.76 kB │ gzip:   3.40 kB
+dist/server/assets/squadState-CKWt4k--.js                      8.96 kB │ gzip:   3.62 kB
+dist/server/assets/adapters-Ds6ni4wc.js                        9.55 kB │ gzip:   3.24 kB
+dist/server/assets/plan-DIi7J18d.js                            9.97 kB │ gzip:   3.44 kB
+dist/server/assets/cityGeo-Bl2TmBaw.js                        10.54 kB │ gzip:   3.60 kB
+dist/server/assets/CityMap-DIpiFFWA.js                        10.56 kB │ gzip:   3.76 kB
+dist/server/assets/AlpineMap-BQmw0V-G.js                      10.88 kB │ gzip:   3.79 kB
+dist/server/assets/TimeScene-DfGUOCJc.js                      12.38 kB │ gzip:   4.79 kB
+dist/server/assets/terrain-D2hMZUX7.js                        13.02 kB │ gzip:   4.62 kB
+dist/server/assets/staticCollision-D41-5D3z.js                13.49 kB │ gzip:   4.10 kB
+dist/server/assets/sky-DtDf3pj2.js                            16.25 kB │ gzip:   5.77 kB
+dist/server/assets/storm-BpUOO5wQ.js                          18.35 kB │ gzip:   6.50 kB
+dist/server/assets/kit-CFJ8y_FD.js                            18.60 kB │ gzip:   6.78 kB
+dist/server/assets/cityTextures-CkyxCRw6.js                   20.54 kB │ gzip:   6.20 kB
+dist/server/assets/level-BnPAP9ge.js                          23.42 kB │ gzip:   7.43 kB
+dist/server/assets/layout-BndPyFCg.js                         24.44 kB │ gzip:   7.86 kB
+dist/server/assets/lighting-fs9aPm8l.js                       26.55 kB │ gzip:   8.67 kB
+dist/server/assets/cityLayout-ClqNJH6E.js                     34.01 kB │ gzip:  10.19 kB
+dist/server/assets/Western-CRluIaYq.js                        39.25 kB │ gzip:  13.44 kB
+dist/server/assets/audio-BR5XIk_9.js                          40.92 kB │ gzip:  11.73 kB
+dist/server/assets/textures-B4VSfKmQ.js                       41.93 kB │ gzip:  11.82 kB
+dist/server/assets/cars-Dbv8XQe_.js                           42.12 kB │ gzip:  12.48 kB
+dist/server/assets/world-CMmlKg7m.js                          46.42 kB │ gzip:  14.91 kB
+dist/server/assets/layout-DlTikaAL.js                         46.81 kB │ gzip:  14.25 kB
+dist/server/assets/beachLayout-C5OuLJIE.js                    50.79 kB │ gzip:  15.84 kB
+dist/server/assets/CityRain-DRAHxEE-.js                       53.88 kB │ gzip:  17.24 kB
+dist/server/assets/ambience-GLTSrmjl.js                       55.54 kB │ gzip:  15.86 kB
+dist/server/assets/Alpine-DtTU1---.js                         62.46 kB │ gzip:  19.67 kB
+dist/server/assets/BeachMap-S2axi5X3.js                       64.24 kB │ gzip:  18.86 kB
+dist/server/assets/server-Mehd3y-V.js                         66.95 kB │ gzip:  16.99 kB
+dist/server/assets/cityMesh-DkMyhZa1.js                       68.86 kB │ gzip:  20.47 kB
+dist/server/assets/beachMesh-BbfqDZ83.js                      80.47 kB │ gzip:  23.17 kB
+dist/server/assets/WesternMap-WvxG2Fhi.js                     81.61 kB │ gzip:  23.32 kB
+dist/server/assets/ride-D6WW4AC4.js                           95.35 kB │ gzip:  25.47 kB
+dist/server/assets/Traffic-CTUWMrW0.js                       113.74 kB │ gzip:  35.27 kB
+dist/server/assets/layout-CKGhiTLg.js                        130.79 kB │ gzip:  38.93 kB
+dist/server/assets/mesh-Cn6nTiVt.js                          142.35 kB │ gzip:  38.83 kB
+dist/server/assets/routes-C4iZ3_lV.js                      1,101.70 kB │ gzip: 297.41 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/game/access/build.ts is dynamically imported by src/game/worldBuild.ts but also statically imported by src/game/access/AccessScene.tsx, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/game/western/materials.ts is dynamically imported by src/game/western/Western.tsx but also statically imported by src/game/western/Blockades.tsx, src/game/western/Train.tsx, src/game/western/Western.tsx, dynamic import will not move module into another chunk.
+
+✓ built in 231ms
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+[prerender] Prerendering pages...
+[prerender] Concurrency: 14
+[prerender] Crawling: /
+[prerender] Prerendered 1 pages:
+[prerender] - /
+[stage-static] dist/client -> dist/site/game

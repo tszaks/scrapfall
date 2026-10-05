@@ -11,6 +11,7 @@ import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
 import { TravelView } from "./TravelView";
 import { AmmoHud } from "./ui/AmmoHud";
 import { HudTop } from "./ui/HudLayout";
+import "./ui/hud-context.css";
 import { playerRecovery, requestRecovery } from "./playerRecovery";
 import { pingSurface } from "./playtestSurface";
 import { FLIGHT } from "./weaponFlight";
@@ -9436,12 +9437,14 @@ export function Game() {
         )}
 
         {pickupMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[58%] -translate-x-1/2 rounded-md border-2 border-[#2b2118] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
+          <div data-hud-notice="pickup" className="hud-context-notice rounded-md border-2 border-[#2b2118] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#2b2118] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {GUNS[weapon].name} ACQUIRED ·{" "}
             {dev.kind === "pad" ? (
               <>
                 <KeyHint action="prevGun" /> / <KeyHint action="nextGun" /> TO SWAP
               </>
+            ) : dev.kind === "touch" ? (
+              "TAP WEAPON TO SELECT"
             ) : (
               <>
                 PRESS{" "}
@@ -9457,7 +9460,7 @@ export function Game() {
           </div>
         )}
         {crateMsg && locked && !ended && (
-          <div className="absolute left-1/2 top-[63%] -translate-x-1/2 rounded-md border-2 border-[#1aa6b8] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#14646e] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
+          <div data-hud-notice="crate" className="hud-context-notice rounded-md border-2 border-[#1aa6b8] bg-[#f3e6cf]/92 px-4 py-2 text-xs font-bold tracking-[0.25em] text-[#14646e] shadow-[3px_3px_0_0_rgba(43,33,24,0.5)]">
             {crateMsg} DEPLOYED
           </div>
         )}

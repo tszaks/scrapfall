@@ -117,13 +117,14 @@ try {
       (el) => !el.children.length && el.textContent.includes("UNLIMITED USE"),
     );
     if (!toast) throw new Error("Spawn toast fixture unavailable");
-    toast.dataset.hudToastFixture = "true";
-    const style = document.createElement("style");
-    style.id = "toast-fixture-style";
-    style.textContent =
-      "[data-hud-toast-fixture] { display: block !important; opacity: 1 !important; }";
-    document.head.append(style);
+    const fixture = toast.cloneNode(true);
+    fixture.dataset.hudToastFixture = "true";
+    fixture.dataset.active = "true";
+    fixture.style.display = "block";
+    fixture.style.opacity = "1";
+    toast.parentElement.append(fixture);
   });
+  report.toastLayout = await assertHudLayout(g, out, "coop-touch-568-notice");
   const hitTargets = await g.locator("button:visible").evaluateAll((buttons) =>
     buttons.map((button) => {
       const r = button.getBoundingClientRect();
@@ -160,10 +161,10 @@ try {
   report.toastInput = {
     hitTargets,
     aimActivatedAndClearedViaTouch: true,
-    fixture: "Existing toast forced visible with CSS",
+    fixture: "Visible clone of existing toast with active presentation state",
   };
   await input.detach();
-  await g.evaluate(() => document.getElementById("toast-fixture-style").remove());
+  await g.evaluate(() => document.querySelector("[data-hud-toast-fixture]").remove());
   await g.evaluate(() => {
     window.testPad = {
       id: "DualSense Wireless Controller",

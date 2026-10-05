@@ -43,6 +43,10 @@ export function TravelView({
       : ski.hint || driving.hint;
     if (hint.current) {
       hint.current.style.display = text ? "block" : "none";
+      const active = text ? "true" : "false";
+      const mode = vehicleEntry.progress > 0 ? "hold" : "help";
+      if (hint.current.dataset["active"] !== active) hint.current.dataset["active"] = active;
+      if (hint.current.dataset["mode"] !== mode) hint.current.dataset["mode"] = mode;
       const carHint =
         inputDevice.kind === "pad" && text === "INTERACT TO DRIVE"
           ? `HOLD ${actionLabel("use")} TO ENTER${vehicleEntry.progress > 0 ? ` · ${Math.round(vehicleEntry.progress * 100)}%` : ""}`
@@ -91,18 +95,16 @@ export function TravelView({
         <div
           ref={hint}
           data-testid="travel-hint"
+          data-hud-travel
+          data-active="false"
+          data-mode="help"
+          className="hud-context-notice"
           style={{
-            position: "absolute",
-            bottom: 125,
-            left: "50%",
-            transform: "translateX(-50%)",
             background: "#171717dd",
             color: "white",
             padding: "8px 12px",
             borderRadius: 6,
             fontFamily: "monospace",
-            maxWidth: "calc(100vw - 32px)",
-            textAlign: "center",
           }}
         />
       </Html>
