@@ -3,7 +3,7 @@ import fs from "node:fs";
 export async function assertHudLayout(page, out, name) {
   const regions = await page
     .locator(
-      "[data-hud-match], [data-hud-loadout], [data-hud-vitals], [data-compass], [data-ammo-hud], [data-minimap], .hud-wave-banner, .hud-boss, button:visible",
+      "[data-hud-match], [data-hud-loadout], [data-hud-vitals], [data-compass], [data-ammo-hud], [data-minimap], .hud-wave-banner, .hud-boss, .hud-context-notice, button:visible",
     )
     .evaluateAll((els) =>
       els
@@ -39,7 +39,7 @@ export async function assertHudLayout(page, out, name) {
       );
     }
   const strip = await page.locator("[data-hud-inventory]").boundingBox(),
-    active = await page.locator('[data-active="true"]').boundingBox();
+    active = await page.locator('[data-inventory-weapon][data-active="true"]').boundingBox();
   assert.ok(
     active.x >= strip.x - 0.5 && active.x + active.width <= strip.x + strip.width + 0.5,
     `${name}: selected weapon clipped`,

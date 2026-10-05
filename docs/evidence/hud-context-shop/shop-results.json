@@ -1,0 +1,150 @@
+{
+  "checks": [
+    {
+      "name": "opening-shop-mid-reload-hides-entire-ammo-box"
+    },
+    {
+      "name": "touch-568",
+      "box": {
+        "x": 96,
+        "y": 132,
+        "width": 216,
+        "height": 168
+      }
+    },
+    {
+      "name": "touch-667",
+      "box": {
+        "x": 143.5,
+        "y": 132,
+        "width": 220,
+        "height": 223
+      }
+    },
+    {
+      "name": "touch-844",
+      "box": {
+        "x": 232,
+        "y": 132,
+        "width": 220,
+        "height": 238
+      }
+    },
+    {
+      "name": "touch-scroll-[data-shop-actions]",
+      "before": 68,
+      "after": 18
+    },
+    {
+      "name": "touch-scroll-[data-shop-offers]",
+      "before": 120,
+      "after": 70
+    },
+    {
+      "name": "emulated-safe-area-shop",
+      "box": {
+        "x": 123,
+        "y": 132,
+        "width": 162,
+        "height": 167
+      }
+    },
+    {
+      "name": "all-actions-reachable-and-touch-purchase",
+      "reachable": [
+        {
+          "text": "AMMO +50% · ◆ 8",
+          "reachable": true
+        },
+        {
+          "text": "SELF REVIVEKIT READY",
+          "reachable": true
+        },
+        {
+          "text": "FIELD DRESSING+5 HP · 16/16◆ 6",
+          "reachable": true
+        },
+        {
+          "text": "REROLLDOUBLES EACH USE◆ 4",
+          "reachable": true
+        },
+        {
+          "text": "PLAYER UPGRADEKINETIC FORCE+20% Impact ForceLEVEL 0◆ 6",
+          "reachable": true
+        },
+        {
+          "text": "PLAYER UPGRADENANO MEND+1 Nano-RegenLEVEL 0◆ 12",
+          "reachable": true
+        },
+        {
+          "text": "PLAYER UPGRADEPHASE SHIFT+6% dodge chanceLEVEL 0◆ 10",
+          "reachable": true
+        }
+      ],
+      "before": 45,
+      "after": 39
+    },
+    {
+      "name": "next-wave-restores-combat-hud"
+    },
+    {
+      "name": "controller-long-offer-safe-insets-fixture",
+      "text": "D-PAD ◀PISTOL MOD · USES A SLOTEXECUTIONER HAMMERPistol: double damage vs enemies under half max healthLEVEL 0◆ 11",
+      "visible": true,
+      "height": 145.390625,
+      "available": 167
+    },
+    {
+      "name": "controller-focus-scroll-and-purchase",
+      "focused": [
+        {
+          "text": "AMMO +50% · ◆ 8",
+          "visible": true,
+          "reachable": true
+        },
+        {
+          "text": "D-PAD ▼REROLLDOUBLES EACH USE◆ 5",
+          "visible": true,
+          "reachable": true
+        },
+        {
+          "text": "D-PAD ◀PLAYER UPGRADENANITE PLATING+15% Armor PlatingLEVEL 0◆ 11",
+          "visible": true,
+          "reachable": true
+        },
+        {
+          "text": "D-PAD ▲PLAYER UPGRADERECHARGE COILS+12% ability rechargeLEVEL 0◆ 9",
+          "visible": true,
+          "reachable": true
+        },
+        {
+          "text": "D-PAD ▶PLAYER UPGRADESHARD MAGNET+1.5m pickup rangeLEVEL 0◆ 4",
+          "visible": true,
+          "reachable": true
+        }
+      ],
+      "before": 84,
+      "after": 76
+    },
+    {
+      "name": "actionable-feedback-hides-shop-without-hidden-purchases"
+    },
+    {
+      "name": "repeated-pause-resume-preserves-shop"
+    },
+    {
+      "name": "second-shop-close-restores-combat-hud"
+    },
+    {
+      "name": "desktop-shop",
+      "box": {
+        "x": 244,
+        "y": 433.25,
+        "width": 792,
+        "height": 262.75
+      }
+    }
+  ],
+  "errors": [],
+  "method": "Real intermission shop and purchase handlers; debug enemy kills fund the shopping fixture."
+}

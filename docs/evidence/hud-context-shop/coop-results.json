@@ -1,0 +1,476 @@
+{
+  "method": "Real host/guest room and network boss/status messages; longest boss name and three downed teammates are explicit DOM layout fixtures.",
+  "checks": [
+    {
+      "name": "real-guest-844",
+      "regions": [
+        {
+          "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+          "text": "N · 0°",
+          "x": 390.125,
+          "y": 84,
+          "w": 63.75,
+          "h": 23.703125
+        },
+        {
+          "name": "hud-match",
+          "text": "VICE HEIGHTSOVERCLOCKWAVE 1/12KILLS",
+          "x": 20,
+          "y": 20,
+          "w": 148,
+          "h": 56.984375
+        },
+        {
+          "name": "hud-loadout",
+          "text": "1■ PISTOL 140Q / E · SWITCH WEAPON",
+          "x": 176,
+          "y": 20,
+          "w": 508,
+          "h": 60.796875
+        },
+        {
+          "name": "hud-vitals",
+          "text": "HEALTH16 / 16◆ 0URRB · 2P■ HOST 16",
+          "x": 692,
+          "y": 20,
+          "w": 132,
+          "h": 70.171875
+        },
+        {
+          "name": "PISTOL ammunition",
+          "text": "PISTOL12 / 128R · RELOAD",
+          "x": 20,
+          "y": 285.40625,
+          "w": 168,
+          "h": 84.59375
+        },
+        {
+          "name": "absolute bottom-5 right-5",
+          "text": "",
+          "x": 632,
+          "y": 178,
+          "w": 192,
+          "h": 192
+        }
+      ]
+    },
+    {
+      "name": "coop-touch-568-boss-fixture",
+      "regions": [
+        {
+          "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+          "text": "N · 0°",
+          "x": 252.125,
+          "y": 84,
+          "w": 63.75,
+          "h": 23.703125
+        },
+        {
+          "name": "hud-match",
+          "text": "VICE HEIGHTSOVERCLOCKWAVE 12/12KILL",
+          "x": 12,
+          "y": 61,
+          "w": 220,
+          "h": 52.1875
+        },
+        {
+          "name": "hud-loadout",
+          "text": "■ PISTOL 140",
+          "x": 64,
+          "y": 12,
+          "w": 352,
+          "h": 43
+        },
+        {
+          "name": "hud-vitals",
+          "text": "HEALTH16 / 16◆ 0ABCD · 4P■ HOST DOW",
+          "x": 424,
+          "y": 12,
+          "w": 132,
+          "h": 70.1875
+        },
+        {
+          "name": "PISTOL ammunition",
+          "text": "PISTOL12 / 128TAP · RELOAD",
+          "x": 96,
+          "y": 215.40625,
+          "w": 144,
+          "h": 84.59375
+        },
+        {
+          "name": "hud-boss absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]",
+          "text": "THE AVALANCHE ENGINE",
+          "x": 238,
+          "y": 112,
+          "w": 100,
+          "h": 36.375
+        },
+        {
+          "name": "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]",
+          "text": "",
+          "x": 280,
+          "y": 220,
+          "w": 92,
+          "h": 92
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "SPRINT2× TAC",
+          "x": 20,
+          "y": 136,
+          "w": 68,
+          "h": 68
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "RELOAD",
+          "x": 388,
+          "y": 88,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "MELEE",
+          "x": 444,
+          "y": 88,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "USE",
+          "x": 500,
+          "y": 88,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "AIM",
+          "x": 320,
+          "y": 156,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "JUMP",
+          "x": 376,
+          "y": 144,
+          "w": 60,
+          "h": 60
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "PING",
+          "x": 444,
+          "y": 156,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "REVIVE",
+          "x": 500,
+          "y": 156,
+          "w": 48,
+          "h": 48
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "PHASEABILITY",
+          "x": 380,
+          "y": 234,
+          "w": 66,
+          "h": 66
+        },
+        {
+          "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+          "text": "FIRE",
+          "x": 462,
+          "y": 214,
+          "w": 86,
+          "h": 86
+        },
+        {
+          "name": "Pause",
+          "text": "",
+          "x": 12,
+          "y": 12,
+          "w": 40,
+          "h": 40
+        }
+      ]
+    },
+    {
+      "name": "coop-controller-568-boss-fixture",
+      "regions": [
+        {
+          "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+          "text": "N · 0°",
+          "x": 252.125,
+          "y": 84,
+          "w": 63.75,
+          "h": 23.703125
+        },
+        {
+          "name": "hud-match",
+          "text": "VICE HEIGHTSOVERCLOCKWAVE 12/12KILL",
+          "x": 20,
+          "y": 20,
+          "w": 148,
+          "h": 56.984375
+        },
+        {
+          "name": "hud-loadout",
+          "text": "■ PISTOL 140L1 / R1 · SWITCH WEAPON",
+          "x": 176,
+          "y": 20,
+          "w": 232,
+          "h": 60.796875
+        },
+        {
+          "name": "hud-vitals",
+          "text": "HEALTH16 / 16◆ 0ABCD · 4P■ HOST DOW",
+          "x": 416,
+          "y": 20,
+          "w": 132,
+          "h": 83.96875
+        },
+        {
+          "name": "PISTOL ammunition",
+          "text": "PISTOL12 / 128□ · RELOAD",
+          "x": 20,
+          "y": 215.40625,
+          "w": 168,
+          "h": 84.59375
+        },
+        {
+          "name": "hud-boss absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]",
+          "text": "THE AVALANCHE ENGINE",
+          "x": 238,
+          "y": 112,
+          "w": 100,
+          "h": 36.375
+        },
+        {
+          "name": "absolute bottom-5 right-5",
+          "text": "",
+          "x": 356,
+          "y": 108,
+          "w": 192,
+          "h": 192
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "toastLayout": {
+    "name": "coop-touch-568-notice",
+    "regions": [
+      {
+        "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+        "text": "N · 0°",
+        "x": 252.125,
+        "y": 84,
+        "w": 63.75,
+        "h": 23.703125
+      },
+      {
+        "name": "hud-context-notice rounded-md bg-[#2b2118]/85 px-4 py-1.5 text-xs font-bold tracking-[0.25em] text-[#f3e6cf]",
+        "text": "BASEBALL BAT · B MELEE · UNLIMITED ",
+        "x": 96,
+        "y": 156,
+        "w": 216,
+        "h": 37
+      },
+      {
+        "name": "hud-match",
+        "text": "VICE HEIGHTSOVERCLOCKWAVE 12/12KILL",
+        "x": 12,
+        "y": 61,
+        "w": 220,
+        "h": 52.1875
+      },
+      {
+        "name": "hud-loadout",
+        "text": "■ PISTOL 140",
+        "x": 64,
+        "y": 12,
+        "w": 352,
+        "h": 43
+      },
+      {
+        "name": "hud-vitals",
+        "text": "HEALTH16 / 16◆ 0ABCD · 4P■ HOST DOW",
+        "x": 424,
+        "y": 12,
+        "w": 132,
+        "h": 70.1875
+      },
+      {
+        "name": "PISTOL ammunition",
+        "text": "PISTOL12 / 128TAP · RELOAD",
+        "x": 96,
+        "y": 215.40625,
+        "w": 144,
+        "h": 84.59375
+      },
+      {
+        "name": "hud-boss absolute left-1/2 top-20 w-80 -translate-x-1/2 text-center text-xs tracking-[0.3em] text-[#2b2118]",
+        "text": "THE AVALANCHE ENGINE",
+        "x": 238,
+        "y": 112,
+        "w": 100,
+        "h": 36.375
+      },
+      {
+        "name": "absolute bottom-3 right-[13.5rem] origin-bottom-right scale-[0.55]",
+        "text": "",
+        "x": 280,
+        "y": 220,
+        "w": 92,
+        "h": 92
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "SPRINT2× TAC",
+        "x": 20,
+        "y": 136,
+        "w": 68,
+        "h": 68
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "RELOAD",
+        "x": 388,
+        "y": 88,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "MELEE",
+        "x": 444,
+        "y": 88,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "USE",
+        "x": 500,
+        "y": 88,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "AIM",
+        "x": 320,
+        "y": 156,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "JUMP",
+        "x": 376,
+        "y": 144,
+        "w": 60,
+        "h": 60
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "PING",
+        "x": 444,
+        "y": 156,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "REVIVE",
+        "x": 500,
+        "y": 156,
+        "w": 48,
+        "h": 48
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "PHASEABILITY",
+        "x": 380,
+        "y": 234,
+        "w": 66,
+        "h": 66
+      },
+      {
+        "name": "pointer-events-auto flex touch-none flex-col items-center justify-center rounded-full border-2 font-mono text-[11px] font-bold tracking-widest shadow-lg backdrop-blur-sm transition-transform active:scale-95 border-[#f3e6cf]/90 bg-[#2b2118]/55 text-[#f3e6cf] active:bg-[#b3261e]/70",
+        "text": "FIRE",
+        "x": 462,
+        "y": 214,
+        "w": 86,
+        "h": 86
+      },
+      {
+        "name": "Pause",
+        "text": "",
+        "x": 12,
+        "y": 12,
+        "w": 40,
+        "h": 40
+      }
+    ]
+  },
+  "toastInput": {
+    "hitTargets": [
+      {
+        "label": "SPRINT2× TAC",
+        "reachable": true
+      },
+      {
+        "label": "RELOAD",
+        "reachable": true
+      },
+      {
+        "label": "MELEE",
+        "reachable": true
+      },
+      {
+        "label": "USE",
+        "reachable": true
+      },
+      {
+        "label": "AIM",
+        "reachable": true
+      },
+      {
+        "label": "JUMP",
+        "reachable": true
+      },
+      {
+        "label": "PING",
+        "reachable": true
+      },
+      {
+        "label": "REVIVE",
+        "reachable": true
+      },
+      {
+        "label": "PHASEABILITY",
+        "reachable": true
+      },
+      {
+        "label": "FIRE",
+        "reachable": true
+      },
+      {
+        "label": "Pause",
+        "reachable": true
+      }
+    ],
+    "aimActivatedAndClearedViaTouch": true,
+    "fixture": "Visible clone of existing toast with active presentation state"
+  }
+}
