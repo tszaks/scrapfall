@@ -1,3 +1,5 @@
+import { simulationNow } from "../simulationPause";
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 import {
   boundsMayTouchBody,
   geometryBody,
@@ -12,7 +14,7 @@ import {
 // every guest see the same train. The train blocks bullets, bumps players hard, flattens
 // small enemies, whistles well before it arrives, and never stops for you (it stops once:
 // to deliver the Iron Marshal).
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
@@ -612,7 +614,7 @@ export function WesternTrain({
     ];
     L.decode = (a) => {
       if (!Array.isArray(a) || a.length < 3) return;
-      hostClock.current = { t: a[0]! / 100, at: performance.now() };
+      hostClock.current = { t: a[0]! / 100, at: simulationNow() };
       trainClock.bossAt = a[1]! / 100;
       trainClock.bossFrom = a[2]! / 100;
       if (a.length > 3) riderSync.decode?.(a.slice(3));
@@ -661,7 +663,7 @@ export function WesternTrain({
     syncEnv(mats.car);
     const L = link.current;
     const guest = L.role === "guest";
-    const now = performance.now();
+    const now = simulationNow();
     // ---- the clock: fixed steps on the host, the host's clock on guests ----
     if (guest) {
       if (hostClock.current)

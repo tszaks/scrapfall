@@ -15,6 +15,10 @@ export function PauseScreen({
   cls,
   bought,
   multiplayer,
+  roomPaused,
+  recovering,
+  isHost,
+  onPause,
   onResume,
   onRecover,
   ammoCost,
@@ -32,6 +36,10 @@ export function PauseScreen({
   /** this run's bought shop cards, with what each does (Toby 1.0.3 stats overhaul) */
   bought: { id: string; name: string; lvl: number; color: string; mod: boolean; effects: { text: string; tone?: "good" | "bad" | "flat" }[] }[];
   multiplayer: boolean;
+  roomPaused: boolean;
+  recovering: boolean;
+  isHost: boolean;
+  onPause: () => void;
   onResume: () => void;
   onRecover: () => void;
   ammoCost: number;
@@ -45,21 +53,24 @@ export function PauseScreen({
   return (
     <Scrim strong className="ui-root flex touch-auto items-center justify-center overflow-y-auto overscroll-contain p-4">
       <Panel className={`ui-rise my-auto w-full max-w-md ${compact ? "p-4" : "p-6"}`}>
-        <SectionLabel>MATCH ON HOLD</SectionLabel>
+        <SectionLabel>{recovering ? "CONNECTION RECOVERY" : roomPaused ? "MATCH ON HOLD" : "MATCH STILL LIVE"}</SectionLabel>
         <h2 className={`font-black tracking-[0.12em] ${compact ? "text-xl" : "text-3xl"}`}>
-          PAUSED
+          {recovering ? "RECONNECTING" : roomPaused ? (multiplayer ? "PAUSED BY HOST" : "PAUSED") : "GAME MENU"}
         </h2>
+        {roomPaused && !isHost && <p className="mt-2 text-sm">Waiting for the host to resume.</p>}
+        {!roomPaused && multiplayer && <p className="mt-2 text-sm">The room keeps playing while your menu is open.</p>}
         <div className="mt-1.5 text-[11px] font-bold tracking-[0.2em] opacity-70">
           WAVE {wave}/{totalWaves} · {score} KILLS · {difficultyName}
         </div>
         <Hazard className="mt-3" />
 
         <div className={`flex flex-col gap-2 ${compact ? "mt-3" : "mt-4"}`}>
-          <MenuButton data-pad-start variant="primary" size="md" onClick={onResume}>
-            Resume
+          <MenuButton data-pad-start variant="primary" size="md" disabled={recovering || (roomPaused && !isHost)} onClick={onResume}>
+            {roomPaused && multiplayer ? "Resume room" : "Resume"}
           </MenuButton>
+          {isHost && multiplayer && !roomPaused && !recovering && <MenuButton variant="line" size="sm" onClick={onPause}>Pause room</MenuButton>}
           <MenuButton variant="line" size="sm" disabled={!canBuyAmmo} onClick={onBuyAmmo}>Buy ammo +50% · ◆ {ammoCost}</MenuButton>
-          <MenuButton variant="line" size="sm" onClick={onRecover}>Return to safe spawn</MenuButton>
+          <MenuButton variant="line" size="sm" disabled={roomPaused || recovering} onClick={onRecover}>Return to safe spawn</MenuButton>
           <p className="text-xs opacity-70">Stuck? Return without losing health or gear. Available every 30 seconds.</p>
           <div className="flex gap-2">
             <MenuButton variant="line" size="sm" className="flex-1" onClick={onSettings}>

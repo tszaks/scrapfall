@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scrapfall controller check</title>
+  <style>
+    body {
+      font: 18px system-ui;
+      background: #151920;
+      color: #eef2f6;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    button,
+    select {
+      font: inherit;
+      padding: 12px;
+      margin: 5px;
+    }
+    h2 {
+      color: #ffd177;
+    }
+    pre {
+      white-space: pre-wrap;
+      font-size: 14px;
+      background: #222936;
+      padding: 16px;
+    }
+    small {
+      color: #bcc5d0;
+    }
+  </style>
+  <h1>Check your actual controller</h1>
+  <p>
+    This page reads only the controller exposed to this browser. No keyboard capture, game actions,
+    rumble, settings changes, or uploads. Keep this tab visible during the check.
+  </p>
+  <p>
+    Use the same browser and connection as the game. Press any controller button once to make it
+    visible, then release everything.
+  </p>
+  <label
+    >Connection
+    <select id="connection">
+      <option>Unknown</option>
+      <option>Bluetooth</option>
+      <option>USB</option>
+    </select></label
+  >
+  <label
+    >Controller
+    <select id="controller"></select
+  ></label>
+  <p>
+    <button id="start">Start guided check</button
+    ><button id="skip" disabled>Skip this control</button><button id="stop" disabled>Stop</button
+    ><button id="save" disabled>Download report</button>
+  </p>
+  <h2 id="instruction">Waiting for controller…</h2>
+  <p id="progress"></p>
+  <pre id="live"></pre>
+  <pre id="results"></pre>
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+    const steps = [
+      "Cross (✕)",
+      "Circle (○)",
+      "Square (□)",
+      "Triangle (△)",
+      "L1",
+      "R1",
+      "L2 slowly all the way",
+      "R2 slowly all the way",
+      "Options",
+      "Create",
+      "L3 (click left stick)",
+      "R3 (click right stick)",
+      "D-pad up",
+      "D-pad down",
+      "D-pad left",
+      "D-pad right",
+      "Left stick right",
+      "Left stick down",
+      "Right stick right",
+      "Right stick down",
+    ];
+    const round = (v) => (Number.isFinite(v) ? Math.round(v * 10000) / 10000 : null);
+    const snapshot = (p) => ({
+      id: p.id,
+      mapping: p.mapping,
+      index: p.index,
+      connected: p.connected,
+      buttons: Array.from(p.buttons, (b) => ({
+        value: round(typeof b === "number" ? b : b.value),
+        pressed: typeof b === "number" ? b > 0.5 : b.pressed,
+        touched: typeof b === "number" ? false : b.touched,
+      })),
+      axes: Array.from(p.axes, round),
+    });
+    let report = null,
+      phase = "idle",
+      step = 0,
+      baseline = null,
+      since = 0,
+      samples = [],
+      peak = 0,
+      extrema = null,
+      transitions = [],
+      previous = null,
+      sampleStart = 0,
+      truncated = false,
+      neutralSince = 0,
+      last = 0,
+      padKey = "";
+    const identity = (p) =>
+      JSON.stringify([p.id, p.index, p.mapping, p.buttons.length, p.axes.length]);
+    const delta = (p, b) =>
+      Math.max(
+        0,
+        ...p.buttons.map((v, i) => Math.abs(v.value - (b.buttons[i]?.value ?? 0))),
+        ...p.axes.map((v, i) => Math.abs(v - (b.axes[i] ?? 0))),
+      );
+    function finish(message) {
+      phase = "idle";
+      $("instruction").textContent = message;
+      $("start").disabled = false;
+      $("stop").disabled = true;
+      $("skip").disabled = true;
+      $("save").disabled = !report;
+    }
+    function next() {
+      step++;
+      samples = [];
+      peak = 0;
+      extrema = null;
+      transitions = [];
+      previous = null;
+      sampleStart = 0;
+      truncated = false;
+      neutralSince = 0;
+      since = 0;
+      if (step >= steps.length) {
+        finish("Check complete. Download the report.");
+        return;
+      }
+      phase = "release";
+    }
+    function renderResults() {
+      $("results").textContent = report.samples
+        .map((s) => `${s.control}: ${s.skipped ? "skipped" : s.changes.join(", ") || "no change"}`)
+        .join("\n");
+    }
+    $("start").onclick = () => {
+      report = {
+        format: "scrapfall-physical-gamepad-v1",
+        browser: navigator.userAgent,
+        connection: $("connection").value,
+        startedAt: new Date().toISOString(),
+        samples: [],
+      };
+      phase = "baseline";
+      step = 0;
+      since = 0;
+      baseline = null;
+      samples = [];
+      peak = 0;
+      extrema = null;
+      transitions = [];
+      previous = null;
+      sampleStart = 0;
+      truncated = false;
+      neutralSince = 0;
+      padKey = "";
+      $("start").disabled = true;
+      $("stop").disabled = false;
+      $("skip").disabled = false;
+      $("save").disabled = true;
+      renderResults();
+    };
+    $("stop").onclick = () => finish("Stopped. You can download the partial report.");
+    $("skip").onclick = () => {
+      if (phase === "baseline") return;
+      report.samples.push({ control: steps[step], skipped: true });
+      renderResults();
+      next();
+    };
+    $("save").onclick = () => {
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "scrapfall-controller-report.json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    function tick(t) {
+      requestAnimationFrame(tick);
+      if (t - last < 50) return;
+      last = t;
+      if (document.hidden) {
+        since = 0;
+        return;
+      }
+      let pads;
+      try {
+        pads = Array.from(navigator.getGamepads?.() ?? []).filter((p) => p && p.connected);
+      } catch (e) {
+        finish(`Controller unavailable: ${e.message}`);
+        return;
+      }
+      const options = pads.map((p) => String(p.index));
+      if ([...$("controller").options].map((o) => o.value).join() !== options.join()) {
+        const old = $("controller").value;
+        $("controller").replaceChildren(
+          ...pads.map((p) => {
+            const o = document.createElement("option");
+            o.value = p.index;
+            o.textContent = p.id;
+            return o;
+          }),
+        );
+        if (options.includes(old)) $("controller").value = old;
+      }
+      const raw = pads.find((p) => String(p.index) === $("controller").value);
+      if (!raw) {
+        $("live").textContent = "No controller visible. Press and release a controller button.";
+        since = 0;
+        return;
+      }
+      const p = snapshot(raw);
+      $("live").textContent = JSON.stringify(p, null, 2);
+      if (phase === "idle") return;
+      if (padKey && identity(p) !== padKey) {
+        finish("Controller changed. Start a new check for this controller.");
+        return;
+      }
+      padKey = identity(p);
+      if (phase === "baseline") {
+        $("instruction").textContent = "Release all buttons and center both sticks for 2 seconds.";
+        if (p.buttons.some((b) => b.pressed)) {
+          baseline = null;
+          since = 0;
+          return;
+        }
+        if (!baseline || delta(p, baseline) > 0.12) {
+          baseline = p;
+          since = t;
+        }
+        if (!since) since = t;
+        if (t - since > 2000) {
+          report.neutral = p;
+          baseline = p;
+          phase = "press";
+          since = 0;
+        }
+        return;
+      }
+      $("progress").textContent = `${step + 1} / ${steps.length}`;
+      const d = delta(p, baseline);
+      if (phase === "release") {
+        $("instruction").textContent = "Release and center everything…";
+        if (d > 0.18) {
+          since = 0;
+          return;
+        }
+        if (!since) since = t;
+        if (t - since > 450) {
+          phase = "press";
+          since = 0;
+        }
+        return;
+      }
+      $("instruction").textContent = `Press / move ${steps[step]}, hold briefly, then release.`;
+      // Capture low travel and pressed transitions too. The larger guide threshold
+      // decides when a deliberate gesture completes, not which values are evidence.
+      if (d > 0.01 || samples.length) {
+        if (!extrema) {
+          sampleStart = t;
+          extrema = {
+            buttons: p.buttons.map((b) => ({ min: b.value, max: b.value })),
+            axes: p.axes.map((v) => ({ min: v, max: v })),
+          };
+          samples.push({ elapsedMs: 0, ...baseline });
+          previous = baseline;
+        }
+        const elapsedMs = Math.round(t - sampleStart);
+        p.buttons.forEach((b, i) => {
+          extrema.buttons[i].min = Math.min(extrema.buttons[i].min, b.value);
+          extrema.buttons[i].max = Math.max(extrema.buttons[i].max, b.value);
+          if (b.pressed !== previous.buttons[i].pressed) {
+            if (transitions.length < 1200)
+              transitions.push({ elapsedMs, button: i, value: b.value, pressed: b.pressed });
+            else truncated = true;
+          }
+        });
+        p.axes.forEach((v, i) => {
+          extrema.axes[i].min = Math.min(extrema.axes[i].min, v);
+          extrema.axes[i].max = Math.max(extrema.axes[i].max, v);
+        });
+        if (samples.length < 1200) samples.push({ elapsedMs, ...p });
+        else truncated = true;
+        previous = p;
+      }
+      if (d > 0.25) {
+        if (!since) since = t;
+        peak = Math.max(peak, d);
+        neutralSince = 0;
+        return;
+      }
+      if (peak <= 0.25 || !samples.length || t - since < 200) return;
+      const neutral =
+        p.buttons.every(
+          (b, i) =>
+            Math.abs(b.value - baseline.buttons[i].value) < 0.02 &&
+            b.pressed === baseline.buttons[i].pressed,
+        ) && p.axes.every((v, i) => Math.abs(v - baseline.axes[i]) < 0.12);
+      if (!neutral) {
+        neutralSince = 0;
+        return;
+      }
+      if (!neutralSince) neutralSince = t;
+      if (t - neutralSince < 150) return;
+      const changes = [];
+      for (let i = 0; i < p.buttons.length; i++) {
+        const range = extrema.buttons[i];
+        if (range.max - baseline.buttons[i].value > 0.2)
+          changes.push(`button ${i} max ${range.max}`);
+      }
+      for (let i = 0; i < p.axes.length; i++) {
+        const range = extrema.axes[i];
+        if (
+          Math.max(Math.abs(range.min - baseline.axes[i]), Math.abs(range.max - baseline.axes[i])) >
+          0.2
+        )
+          changes.push(`axis ${i}: ${range.min}…${range.max}`);
+      }
+      report.samples.push({
+        control: steps[step],
+        changes,
+        readings: samples,
+        extrema,
+        pressedTransitions: transitions,
+        truncated,
+        released: p,
+      });
+      renderResults();
+      next();
+    }
+    requestAnimationFrame(tick);
+  </script>
+</html>

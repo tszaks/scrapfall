@@ -1,0 +1,11 @@
+# Held brake into reverse
+
+L2/S brakes forward motion to zero, then a continued hold eases into reverse. R2/W first stops reverse motion before accelerating forward. Reverse acceleration is 3.5 m/s², capped at the smaller of 8 m/s or 35% of top speed. Both forward and brake pedals held together stop the car. Stale or released ownership input only brakes and cannot start reversing.
+
+This increment preserves the released camera, renderer, vehicle art and raw controller mapping. It changes no protocol fields. The wider chase camera remains held in PR #52 for further validation.
+
+Released main `91205f6c573da6b1dfd1f29607013851cc1a02c8` is integrated, including recovery, raw analog trigger normalization and host pause. Independent source review identified and then cleared a short-pause integration issue: cached guest pedals are now expired at both room pause boundaries, without changing velocity or ownership. The small `Game.tsx` hook was coordinated with the release owner. Runtime and test source: `b94f91eb47b72ae772e651dc60381e26200b1b54`.
+
+Twelve focused controls tests cover analog pressure, keyboard parity, stale input, cached guest pedals and direction changes at 30/60/120 Hz. All 98 unit tests, typecheck, production build and repo-map checks pass. Eight Metal smoke cases (all four offered maps at night and sunset) pass with zero errors. The isolated build on port 5310 passes 35 fresh input checkpoints and 15 fresh two-client checkpoints with zero page errors. These include host-authoritative reverse, both-pedal braking, long pause, held-trigger neutral rearming, light reverse, guest-local menu, hull damage, host transfer, exit, rejoin and wreck ejection. The additional short host pause lasted 102 ms with an 8.6 ms-old guest L2 input: immediate pause and resume both had zero brake and speed. See [input.json](input.json) and [coop.json](coop.json).
+
+The headless Chromium playtests use Metal and the built-in DualSense shim, with diagnostic vehicle positioning on a known clear route. Co-op control checks use tour mode and an explicit enemy-projectile hull probe. This is not physical controller or Safari validation. No performance benchmark was run for this release and no FPS improvement is claimed.

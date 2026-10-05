@@ -169,3 +169,117 @@ test("an old empty Field Dressing binding gets a free key without stealing a cus
     else globalThis.localStorage = oldStorage;
   }
 });
+
+test("only a new wave grants recovery across repeated and reordered syncs", () => {
+  const state = { seed: 11, wave: 0 };
+  assert.equal(
+    revive.advanceRecoveryWave(state, 1, 11, true),
+    false,
+    "world initialization is not a wave start",
+  );
+  assert.equal(state.wave, 0);
+  assert.equal(revive.advanceRecoveryWave(state, 1, 11), true);
+  assert.equal(revive.advanceRecoveryWave(state, 1, 11), false, "same-wave reconnect");
+  assert.equal(revive.advanceRecoveryWave(state, 3, 11), true, "missed waves during reconnect");
+  assert.equal(
+    revive.advanceRecoveryWave(state, 2, 11),
+    false,
+    "late status cannot roll progress back",
+  );
+  assert.equal(
+    revive.advanceRecoveryWave(state, 3, 11),
+    false,
+    "batched or repeated current status",
+  );
+  assert.equal(state.wave, 3);
+  // Host transfer retains this run's tracker; only a new run starts a new one.
+  assert.equal(revive.advanceRecoveryWave(state, 3, 11), false);
+  assert.equal(revive.advanceRecoveryWave({ seed: 12, wave: 0 }, 1, 12), true);
+  const nextRun = { seed: 12, wave: 0 };
+  assert.equal(
+    revive.advanceRecoveryWave(nextRun, 10, 11),
+    false,
+    "old world callback during rebuild",
+  );
+  assert.equal(nextRun.wave, 0);
+  assert.equal(revive.advanceRecoveryWave(nextRun, 1, 12), true);
+  for (const invalid of [0, -1, NaN, Infinity, 3.5])
+    assert.equal(revive.advanceRecoveryWave(state, invalid, 11), false);
+  assert.equal(state.wave, 3);
+});
+
+test("the shared Game status callback recovers health only once per real wave", async () => {
+  const source = await readFile(new URL("../src/game/Game.tsx", import.meta.url), "utf8");
+  const tree = ts.createSourceFile(
+    "Game.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let callback;
+  const visit = (node) => {
+    if (ts.isJsxAttribute(node) && node.name.getText(tree) === "onStatus")
+      callback = node.initializer.expression.getText(tree);
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  assert.ok(callback, "World recovery callback is present");
+  const compiled = ts.transpileModule(`return (${callback});`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const tracker = { current: { seed: 11, wave: 0 } },
+    built = { seed: 11 };
+  let health = 0;
+  const perks = { current: { mend: 1 } };
+  const onStatus = new Function(
+    "advanceRecoveryWave",
+    "recoveryWave",
+    "built",
+    "setStatus",
+    "setBanner",
+    "perksRef",
+    "maxHp",
+    "multiplayer",
+    "setHealth",
+    compiled,
+  )(
+    revive.advanceRecoveryWave,
+    tracker,
+    built,
+    () => {},
+    () => {},
+    perks,
+    16,
+    true,
+    (change) => {
+      health = change(health);
+    },
+  );
+  onStatus(1, 0, false, true, true);
+  assert.equal(health, 0, "initialization must not revive");
+  onStatus(1, 5, false, true);
+  assert.equal(health, 16);
+  health = 0;
+  onStatus(1, 5, false, true);
+  assert.equal(health, 0, "same-wave status must not revive");
+  onStatus(2, 5, false, false);
+  assert.equal(health, 16, "missed banner still recovers at the next wave");
+  health = 0;
+  onStatus(1, 5, false, true);
+  onStatus(2, 5, false, true);
+  assert.equal(health, 0, "reordered and duplicate callbacks do not revive again");
+  health = 5;
+  onStatus(2, 5, false, true);
+  assert.equal(health, 5, "same-wave reconnect must not grant Mend");
+  onStatus(3, 5, false, true);
+  assert.equal(health, 8);
+  tracker.current = { seed: 12, wave: 0 };
+  health = 0;
+  onStatus(10, 5, false, true);
+  assert.equal(health, 0, "old world cannot recover a new run while rebuilding");
+  assert.equal(tracker.current.wave, 0);
+  built.seed = 12;
+  onStatus(1, 5, false, true);
+  assert.equal(health, 16);
+});

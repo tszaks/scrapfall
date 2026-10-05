@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
+import { rolldown } from "rolldown";
 const { outputText } = ts.transpileModule(
   await readFile(new URL("../src/game/vehicleControls.ts", import.meta.url), "utf8"),
   { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } },
@@ -60,11 +61,11 @@ test("analog throttle accelerates smoothly; coasting slows gradually", () => {
   const coast = v.vehicleSpeed(full, 0, 0, 22, 1);
   assert.ok(coast < full && coast > full - 3);
 });
-test("brakes win over throttle, reach zero and never engage reverse", () => {
+test("both pedals brake; holding L2 alone eases into reverse", () => {
   let speed = 20;
   for (let i = 0; i < 300; i++) speed = v.vehicleSpeed(speed, 1, 1, 22, 1 / 60);
   assert.equal(speed, 0);
-  assert.equal(v.vehicleSpeed(0, 0, 1, 22, 1), 0);
+  assert.equal(v.vehicleSpeed(0, 0, 1, 22, 1 / 60), -3.5 / 60);
   assert.ok(v.vehicleSpeed(0, -1, 0, 22, 1) < 0, "keyboard reverse remains explicit");
 });
 test("invalid network values cannot poison vehicle motion", () =>
@@ -84,4 +85,86 @@ test("right steering follows the vehicle frame in forward and reverse, at every 
     }
   }
   assert.equal(v.vehicleTurn(1, 1, 0, 1), 1, "stationary car does not pivot");
+});
+
+for (const hz of [30, 60, 120]) {
+  test(`held L2/S and R2/W stop before changing direction at ${hz} Hz`, () => {
+    let trigger = 12,
+      keyboard = 12,
+      sawZero = false;
+    for (let i = 0; i < hz * 5; i++) {
+      const before = trigger;
+      trigger = v.vehicleSpeed(trigger, 0, 0.7, 22, 1 / hz);
+      keyboard = v.vehicleSpeed(keyboard, -0.7, 0, 22, 1 / hz);
+      assert.equal(trigger, keyboard);
+      if (trigger === 0) sawZero = true;
+      if (before > 0) assert.ok(trigger >= 0, "braking frame cannot cross zero");
+    }
+    assert.ok(sawZero && trigger < -4 && trigger >= -8);
+    sawZero = false;
+    for (let i = 0; i < hz * 3; i++) {
+      const before = trigger;
+      trigger = v.vehicleSpeed(trigger, 0.6, 0, 22, 1 / hz);
+      if (trigger === 0) sawZero = true;
+      if (before < 0) assert.ok(trigger <= 0);
+    }
+    assert.ok(sawZero && trigger > 0);
+  });
+}
+test("reverse pressure stays analog and stale inputs only brake", () => {
+  let half = 0,
+    full = 0;
+  for (let i = 0; i < 120; i++) {
+    half = v.vehicleSpeed(half, 0, 0.5, 22, 1 / 60);
+    full = v.vehicleSpeed(full, 0, 1, 22, 1 / 60);
+  }
+  assert.ok(full < half && Math.abs(full - half * 2) < 1e-8);
+  for (const start of [-10, 0, 10]) {
+    let speed = start;
+    for (let i = 0; i < 300; i++) speed = v.vehicleSpeed(speed, 0, 1, 22, 1 / 60, true);
+    assert.equal(speed, 0);
+  }
+});
+
+test("pause invalidates fresh guest pedals without changing velocity or ownership", async () => {
+  const mocks = {
+    "./level": "export const boundaryBlocked=()=>false;",
+    "./staticCollision": "export const staticBody=()=>false;",
+    "./terrain": "export const baseGroundY=()=>0, terrainStep=()=>true;",
+    "./trafficCore": "export const liveCars=[], trafficDepth=()=>0;",
+  };
+  const bundle = await rolldown({
+    input: new URL("../src/game/driving.ts", import.meta.url).pathname,
+    platform: "node",
+    plugins: [{
+      name: "empty-road",
+      resolveId(id) { if (id in mocks) return "\0" + id; },
+      load(id) { return mocks[id.slice(1)]; },
+    }],
+  });
+  const { output } = await bundle.generate({ format: "esm" });
+  await bundle.close();
+  const d = await import(`data:text/javascript;base64,${Buffer.from(output[0].code).toString("base64")}`);
+  const car = d.registerDriveCar("guest-car", 2, 1, 1.5);
+  car.claimed = true;
+  car.owner = "guest";
+  for (const speed of [0, -6, 6]) {
+    car.speed = speed;
+    d.driveInput("guest", 0, 0.5, 0.25);
+    assert.ok(performance.now() - car.inputAt < 500);
+    d.clearDriveInputs();
+    assert.equal(car.owner, "guest");
+    assert.equal(car.speed, speed);
+    assert.equal(car.gas, 0);
+    assert.equal(car.brake, 0);
+    assert.equal(car.steer, 0);
+    d.stepDriving(1 / 60, []);
+    assert.ok(Math.abs(car.speed) <= Math.abs(speed));
+    if (speed === 0) assert.equal(car.speed, 0, "short pause cannot reuse held L2 to reverse");
+    else assert.equal(Math.sign(car.speed), Math.sign(speed));
+  }
+  car.speed = 0;
+  d.driveInput("guest", 0, 0, 0.25);
+  d.stepDriving(1 / 60, []);
+  assert.equal(car.speed, -3.5 * 0.25 / 60, "fresh rearmed input retains analog pressure");
 });

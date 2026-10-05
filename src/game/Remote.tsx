@@ -1,6 +1,7 @@
+import { useSimulationFrame as useFrame } from "./useSimulationFrame";
 import { myVehicle } from "./driving";
 import { wheelWorld, wheelEye } from "./beach/wheelRide";
-import { createPortal, useFrame } from "@react-three/fiber";
+import { createPortal } from "@react-three/fiber";
 import { groundY } from "./terrain";
 import { remoteFloorY } from "./access/world";
 import { alpine } from "./alpine/weather";

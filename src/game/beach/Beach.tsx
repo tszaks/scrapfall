@@ -1,3 +1,4 @@
+import { useSimulationFrame as useFrame } from "../useSimulationFrame";
 import { foliageDepthMaterial } from "../environment/foliageDepth";
 import { useGeometryDetail } from "../environment/detailQuality";
 import { scannedSurface } from "../environment/scannedSurface";
@@ -12,7 +13,7 @@ import { trafficClock } from "../trafficCore";
 // moving waterline and breaking-wave foam, instanced palms, and the moving set pieces: the
 // Ferris wheel (one transform + 20 instanced gondolas + colour-cycling LEDs in a shader), the
 // coaster train, the drop tower, the carousel and the beach bonfires.
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { MutableRefObject } from "react";
 import * as THREE from "three";
