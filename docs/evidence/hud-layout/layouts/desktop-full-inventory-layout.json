@@ -1,0 +1,58 @@
+[
+  {
+    "name": "absolute left-1/2 top-16 -translate-x-1/2 rounded bg-black/75 px-3 py-1 text-sm font-bold text-white",
+    "text": "N · 0°",
+    "x": 608.125,
+    "y": 84,
+    "w": 63.75,
+    "h": 23.703125
+  },
+  {
+    "name": "hud-match",
+    "text": "VICE HEIGHTSOVERCLOCKWAVE 1/12KILLS",
+    "x": 20,
+    "y": 20,
+    "w": 220,
+    "h": 69.984375
+  },
+  {
+    "name": "hud-loadout",
+    "text": "1■ PISTOL 99992■ SCATTER 99993■ BUZ",
+    "x": 252,
+    "y": 20,
+    "w": 820,
+    "h": 60.796875
+  },
+  {
+    "name": "hud-vitals",
+    "text": "HEALTH16 / 16◆ 0SCRAP",
+    "x": 1084,
+    "y": 20,
+    "w": 176,
+    "h": 58.375
+  },
+  {
+    "name": "LONGSHOT ammunition",
+    "text": "LONGSHOT4 / 9995R · RELOAD",
+    "x": 20,
+    "y": 523.40625,
+    "w": 168,
+    "h": 84.59375
+  },
+  {
+    "name": "hud-wave-banner absolute left-1/2 top-[30%] text-center",
+    "text": "WAVE 11 OF 12",
+    "x": 496,
+    "y": 208.49102783203125,
+    "w": 288,
+    "h": 86.5
+  },
+  {
+    "name": "absolute bottom-5 right-5",
+    "text": "",
+    "x": 1068,
+    "y": 508,
+    "w": 192,
+    "h": 192
+  }
+]
