@@ -6,7 +6,7 @@ import { meleeGear, subwayNear, subwayExit, trafficRoof, carryOnCar } from "./tr
 import { claimShard } from "./shardLedger";
 import { supply, magazine, beginReload, tickReload, resetSupply, refillAmmo, AMMO_COST } from "./weaponSupply";
 import { hitSkier, downSkier, encodeSkiers, decodeSkiers } from "./skierTargets";
-import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehicle, releaseVehicle, driveInput, stepDriving, vehicleExit, encodeDriving, decodeDriving } from "./driving";
+import { damageVehicle, driving, driveCars, myVehicle, nearbyVehicle, claimVehicle, releaseVehicle, driveInput, clearDriveInputs, stepDriving, vehicleExit, encodeDriving, decodeDriving } from "./driving";
 import { ski, startSki, stepSki, resetSki } from "./alpine/ski";
 import { TravelView } from "./TravelView";
 import { AmmoHud } from "./ui/AmmoHud";
@@ -8151,6 +8151,7 @@ export function Game() {
 
   const applyRoomPause = (paused: boolean) => {
     const wasPaused = roomPausedRef.current;
+    if (paused !== wasPaused) clearDriveInputs();
     roomPausedRef.current = paused;
     setRoomPaused(paused);
     setSimulationPaused(paused || recoveringRoomRef.current);

@@ -113,6 +113,12 @@ export function driveInput(owner: string, gas: number, steer: number, brake = 0)
   c.steer = Number.isFinite(steer) ? Math.max(-1, Math.min(1, steer)) : 0;
   c.inputAt = performance.now();
 }
+export function clearDriveInputs() {
+  for (const c of driveCars.values()) {
+    c.gas = c.brake = c.steer = 0;
+    c.inputAt = -Infinity;
+  }
+}
 function clear(c: DriveCar, x: number, z: number, yaw: number, blocks: Block[]) {
   const y = groundY(x, z),
     sn = Math.sin(yaw),

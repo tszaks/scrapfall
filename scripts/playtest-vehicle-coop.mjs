@@ -42,7 +42,7 @@ async function snapshot(name) {
 }
 try {
   for (const p of [h, g])
-    await p.goto(`${base}/game/?map=vice&seed=11&debug=1&padshim=ps&quality=low`);
+    await p.goto(`${base}/game/?map=vice&seed=11&debug=1&padshim=ps&quality=low&tour=1`);
   await h.getByRole("button", { name: "HOST A ROOM" }).click({ timeout: 120000 });
   await h.getByRole("button", { name: /TAP TO COPY/ }).waitFor({ timeout: 45000 });
   const code = (await h.getByRole("button", { name: /TAP TO COPY/ }).innerText())
@@ -110,6 +110,68 @@ try {
   await g.evaluate(() => { __pad.up(7); __pad.up(6); });
   await wait(150);
   assert.equal((await snapshot("both-pedals-stop-before-hull-probe"))[0].car.speed, 0);
+  await g.evaluate(() => __pad.down(6, 0.25));
+  await wait(600);
+  await h.keyboard.press("Escape");
+  for (const p of [h, g]) await p.waitForFunction(() => __rs.simulationPause.paused);
+  await wait(200);
+  const pausedCars = (await snapshot("host-pause-during-guest-reverse")).map(p => p.car);
+  await wait(900);
+  assert.deepEqual((await snapshot("shared-pause-freezes-reverse")).map(p => p.car), pausedCars);
+  await h.getByRole("button", { name: "Resume room" }).click();
+  for (const p of [h, g]) await p.waitForFunction(() => !__rs.simulationPause.paused);
+  await wait(800);
+  s = await snapshot("guest-held-L2-after-resume-requires-neutral");
+  assert.equal(s[0].car.speed, 0);
+  assert.equal(s[0].car.brake, 0);
+  assert.equal(s[0].car.owner, guest);
+  await g.evaluate(() => __pad.up(6));
+  await wait(150);
+  await g.evaluate(() => __pad.down(6, 0.2));
+  await wait(700);
+  s = await snapshot("guest-light-reverse-rearms-after-neutral");
+  assert.equal(s[0].car.brake, 0.2);
+  assert.ok(s[0].car.speed < -0.25 && s[0].car.speed > -1.2);
+  await g.keyboard.press("Escape");
+  await g.getByRole("heading", { name: "GAME MENU" }).waitFor();
+  await wait(900);
+  assert.equal(await h.evaluate(() => __rs.simulationPause.paused), false);
+  assert.equal((await snapshot("guest-menu-clears-reverse-without-pausing-host"))[0].car.speed, 0);
+  await g.getByRole("button", { name: /^Resume$/ }).click();
+  await wait(500);
+  s = await snapshot("guest-menu-resume-held-L2-requires-neutral");
+  assert.equal(s[0].car.speed, 0);
+  assert.equal(s[0].car.brake, 0);
+  await g.evaluate(() => __pad.up(6));
+  await wait(150);
+  await g.evaluate(() => __pad.down(6, 0.25));
+  await h.waitForFunction(() => __rs.playtest.driveCars.get("city-0").brake === 0.25);
+  report.shortPause = await h.evaluate(async () => {
+    const c = __rs.playtest.driveCars.get("city-0");
+    c.speed = 0;
+    const before = { brake: c.brake, inputAge: performance.now() - c.inputAt };
+    const start = performance.now();
+    __rs.playtest.emitControl("pause");
+    const paused = { paused: __rs.simulationPause.paused, brake: c.brake, speed: c.speed };
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const resume = [...document.querySelectorAll("button")].find(b => b.textContent.trim() === "Resume room");
+    if (!resume) throw Error("short-pause resume button missing");
+    resume.click();
+    return { before, paused, duration: performance.now() - start,
+      resumed: { paused: __rs.simulationPause.paused, brake: c.brake, speed: c.speed } };
+  });
+  assert.equal(report.shortPause.before.brake, 0.25);
+  assert.ok(report.shortPause.before.inputAge < 500);
+  assert.ok(report.shortPause.before.inputAge + report.shortPause.duration < 500,
+    "cached input would still be fresh at resume");
+  assert.deepEqual(report.shortPause.paused, { paused: true, brake: 0, speed: 0 });
+  assert.deepEqual(report.shortPause.resumed, { paused: false, brake: 0, speed: 0 });
+  await wait(500);
+  s = await snapshot("short-pause-held-L2-requires-neutral");
+  assert.equal(s[0].car.speed, 0);
+  assert.equal(s[0].car.brake, 0);
+  await g.evaluate(() => __pad.up(6));
+  await wait(150);
   const hullBefore = await h.evaluate(() => __rs.playtest.driveCars.get("city-0").hp);
   await h.evaluate(() => {
     const r = __rs,
