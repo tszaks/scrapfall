@@ -1,31 +1,40 @@
 <div align="center">
 
-# Scrapfall · Vice Heights
+# Scrapfall
 
-**A wave-survival shooter played in the browser, fought across real-scale maps.**
-Solo or co-op with up to four players. No install, no account.
+A wave-survival shooter played in the browser, fought across real-scale maps. Solo or co-op with up to four players. No install, no account.
 
-### [▶ Play at szakacsmedia.com/game](https://szakacsmedia.com/game/)
+<a href="https://github.com/tszaks/scrapfall/actions/workflows/ci.yml"><img src="https://github.com/tszaks/scrapfall/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<img src="https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey" alt="All rights reserved">
+<img src="https://img.shields.io/badge/Node-20.19%2B-339933" alt="Node 20.19 or later">
+
+### [Play at szakacsmedia.com/game](https://szakacsmedia.com/game/)
+
+<img src="docs/images/hero-vice-heights.png" width="860" alt="First-person view on Vice Heights, wave 1 of 12, with the HUD and minimap">
 
 </div>
 
 ---
 
-A standalone game by **Tyler and Toby Szakacs** ([Szakacs Media](https://szakacsmedia.com)). Fight twelve waves of scrap-built robots across
-four large real-scale maps. Each map has its own boss,
-hazard, traffic and events.
+Scrapfall is a standalone game by **Tyler and Toby Szakacs** ([Szakacs Media](https://szakacsmedia.com)). You fight twelve waves of scrap-built robots across four large real-scale maps. Each map has its own boss, hazard, traffic and events.
+
+It is made for anyone with a browser and a few minutes: play alone, or send a room code to up to three friends. The source is public so you can read it and learn from it. It is not open for reuse: see [License](#license).
 
 ## Maps
 
 | Map | Setting | Boss |
 | --- | --- | --- |
-| **Vice Heights** | A GTA-style downtown with 480 m towers, a park, a boardwalk, traffic, police chases, elevators and rooftops | The Kingpin |
+| **Vice Heights** | A big-city downtown with 480 m towers, a park, a boardwalk, traffic, police chases, elevators and rooftops | The Kingpin |
 | **Dry Gulch** | A railroad boomtown with a walk-in saloon, jail, bank and livery, a stagecoach, a sheriff's posse and a freight train | The Iron Marshal |
 | **Pacific Pier** | A beach town with a rideable Ferris wheel, a coaster, a skate park and a coast road | The Kraken Rig |
 | **Whiteout Pass** | An alpine ski village with a rideable chairlift, a summit lodge and a clock-tower belfry | The Avalanche Engine |
 
 The four big maps are built at real scale (1 unit = 1 metre, about 800 × 800 m). Solo play
 seals off a smaller 560 m area with in-world blockades; co-op opens the whole map.
+
+<p align="center">
+  <img src="docs/images/pacific-pier.png" width="640" alt="Pacific Pier at sunset, with the Ferris wheel and entrance sign in the distance">
+</p>
 
 ## Features
 
@@ -88,7 +97,9 @@ JUMP and SPRINT buttons appear; tap SPRINT twice for a tactical sprint.
 
 </details>
 
-## Run it locally
+## Quick start
+
+To play, open [szakacsmedia.com/game](https://szakacsmedia.com/game/). To run it locally:
 
 You need Node.js 20.19 or newer.
 
@@ -123,7 +134,7 @@ The full map, with every folder, is in [docs/REPO_MAP.md](docs/REPO_MAP.md). If 
 | `src/game/Game.tsx` | The game loop, weapons, enemies, waves, HUD and co-op |
 | `src/game/cityLayout.ts`, `City.tsx`, `cityMesh.ts` | Vice Heights: the generator and the renderer |
 | `src/game/western/`, `beach/`, `alpine/` | The other maps |
-| `src/game/nuketown/` | Nuketown (hidden, work in progress — only reachable with `?map=nuketown`) |
+| `src/game/nuketown/` | Nuketown (work in progress; hidden in production, reachable only in the dev server with `?map=nuketown`) |
 | `src/game/access/` | Elevators, stairs, ladders and rooftops, shared by every map |
 | `src/game/trafficSim.ts`, `Traffic.tsx`, `pursuit.ts` | Traffic and police chases |
 | `src/game/terrain.ts`, `soloBounds.ts`, `posts.ts` | Ground height, solo blockades, thin-prop collision |
@@ -131,6 +142,23 @@ The full map, with every folder, is in [docs/REPO_MAP.md](docs/REPO_MAP.md). If 
 | `src/game/art/` | Guns, robots and vehicles |
 | `src/game/ambience.ts`, `audio.ts` | Procedural sound and music |
 | `src/game/net.ts` | Co-op over PeerJS |
+
+## FAQ
+
+**Does it phone home?**
+There is no analytics, no ads and no account. The game makes two kinds of network requests, both for co-op only. To find other players it uses the public PeerJS signalling service and a public Google STUN server, then connects browser to browser. To relay traffic when a direct link is blocked, it asks `/game/api/turn` (`api/turn.ts`) for short-lived Cloudflare TURN credentials. If that endpoint is missing or slow, co-op falls back to STUN only. Solo play makes no game requests beyond loading the page and its assets.
+
+**Why does co-op sometimes fail to connect?**
+Some networks (phone hotspots, strict firewalls) block direct links. The TURN relay covers most of these cases. Host and guest must both load the same build, because the room name carries a version prefix.
+
+**Can I reuse the code or art?**
+Please ask first. See [CONTRIBUTING.md](CONTRIBUTING.md) and [LICENSE](LICENSE).
+
+## Contributing
+
+The source is public to read. The license reserves all rights, so outside code contributions are not accepted by default. Bug reports and ideas are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first. Security problems go through [SECURITY.md](SECURITY.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Agents and maintainers: start with [AGENTS.md](AGENTS.md).
+
+Docs: [repo map](docs/REPO_MAP.md) · [performance](docs/performance.md) · [controller diagnostics](docs/controller-diagnostics.md) · [upstream sync](docs/UPSTREAM.md) · [changelog](CHANGELOG.md)
 
 ## Credits
 
@@ -143,5 +171,4 @@ Made by **Tyler Szakacs** and **Toby Szakacs** at [Szakacs Media](https://szakac
 
 ## License
 
-The source is public to read and learn from. All rights reserved: see [LICENSE](LICENSE).
-Please ask before reusing the code or assets.
+All rights reserved. The source is public to read and learn from: see [LICENSE](LICENSE). Please ask before reusing the code or assets.

@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in Scrapfall does not work as it should
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a solo game on ...
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: map
+    attributes:
+      label: Map
+      options:
+        - Vice Heights
+        - Dry Gulch
+        - Pacific Pier
+        - Whiteout Pass
+        - Not map specific
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Solo
+        - Co-op host
+        - Co-op guest
+  - type: input
+    id: difficulty
+    attributes:
+      label: Difficulty and wave
+      placeholder: "Overclock, wave 7"
+  - type: input
+    id: device
+    attributes:
+      label: Browser, device and input
+      placeholder: "Safari 26 on a MacBook, keyboard and mouse"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, a `?seed=N` value, or console errors.
