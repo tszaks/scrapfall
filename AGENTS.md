@@ -100,3 +100,10 @@ This changes often, so check open PRs (`gh pr list`) before starting.
 | Menus and HUD | `src/game/ui/` |
 | Rendering | `src/game/PostFx.tsx` (if present), lighting, and the final render |
 | Performance | `quality.ts`, `QualityGovernor.tsx`, hot paths |
+
+## Documentation and public files
+
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` and `CHANGELOG.md` are public-facing. Keep facts in them true to the code, and add a line to `CHANGELOG.md` under `[Unreleased]` for anything players notice.
+- **Do not change `LICENSE`.** It is custom (all rights reserved). Outside code contributions are not accepted by default: see `CONTRIBUTING.md`.
+- Do not compare the game to other games in public docs, and do not put keys, personal data or `/Users/<name>` paths in the repo. The TURN key id and token (`api/turn.ts`) stay in server environment variables.
+- Screenshots in `docs/images/` are used by the README. Evidence images live under `docs/evidence/` and `docs/qa/`.
