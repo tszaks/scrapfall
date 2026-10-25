@@ -37,6 +37,8 @@ const out = { x: 0, z: 0 };
 export type SteerProbe = {
   los: () => boolean;
   route: () => { x: number; z: number } | null;
+  /** Full-body local detour, evaluated only when the memo expires. */
+  refine?: (point: { x: number; z: number }) => { x: number; z: number };
 };
 
 /**
@@ -60,7 +62,8 @@ export function steerTo<T extends { x: number; z: number }>(
     out.z = e.svZ!;
     return out;
   }
-  const p = probe.los() ? t : (probe.route() ?? t);
+  let p = probe.los() ? t : (probe.route() ?? t);
+  if (probe.refine) p = probe.refine(p);
   const jit = Math.abs(Math.sin(e.x * 12.9898 + e.z * 78.233));
   e.svT = time + TTL * (0.6 + 0.8 * jit);
   e.svX = p.x;

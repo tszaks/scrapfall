@@ -13,9 +13,11 @@ import {
   type NavGrid,
   fineStep,
   type FineField,
+  nextWaypoint,
 } from "./level";
 import { climbable, groundY } from "./terrain";
 import { steerTo } from "./steerCache";
+import { pursuitSteering, pursuitHasShot, pursuitGoal } from "./pursuitSteering";
 import {
   NEW_STATS,
   FLYERS,
@@ -272,6 +274,19 @@ const wpProbe = {
   e: null as Bot | null,
   t: null as Target | null,
   ctx: null as AICtx | null,
+  refine(point: { x: number; z: number }) {
+    const { e, t, ctx } = this;
+    if (FLYERS.has(e!.kind)) return point;
+    return pursuitSteering(
+      e!,
+      t!,
+      point,
+      ctx!.time,
+      ctx!.blocks,
+      bodyR(e!),
+      hitBandInto(e!.kind, _band)[1],
+    );
+  },
   los() {
     const { e, t, ctx } = this;
     return clearLine(ctx!.blocks, e!.x, e!.z, t!.x, t!.z, rad(e!) * 0.9);
@@ -280,10 +295,33 @@ const wpProbe = {
     const { e, t, ctx } = this;
     const ff = ctx!.fineFor?.(t!);
     const fs = ff ? fineStep(ff, e!.x, e!.z, _fsOut) : null;
-    if (fs) return fs;
     const dist = ctx!.fieldFor(t!);
+    if (fs && dist)
+      return FLYERS.has(e!.kind)
+        ? fs
+        : pursuitGoal(
+            ctx!.solid,
+            dist,
+            e!,
+            fs,
+            ctx!.blocks,
+            bodyR(e!),
+            hitBandInto(e!.kind, _band)[1],
+            ff,
+          );
     if (!dist) return null;
-    return descend(ctx!.solid, dist, e!.x, e!.z, null, _descOut);
+    const point = descend(ctx!.solid, dist, e!.x, e!.z, null, _descOut);
+    return point && !FLYERS.has(e!.kind)
+      ? pursuitGoal(
+          ctx!.solid,
+          dist,
+          e!,
+          point,
+          ctx!.blocks,
+          bodyR(e!),
+          hitBandInto(e!.kind, _band)[1],
+        )
+      : point;
   },
 };
 
@@ -308,6 +346,7 @@ function descend(
   bias: { px: number; pz: number; fx: number; fz: number; w: number } | null,
   out: { x: number; z: number },
 ) {
+  if (!bias) return nextWaypoint(nav, dist, x, z, out);
   const { g: solid, n } = nav;
   const ci = toNav(x);
   const cj = toNav(z);
@@ -330,6 +369,23 @@ function descend(
       const nj = cj + dj;
       if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
       const k = ni * n + nj;
+      const direction =
+        di === 1
+          ? dj === 0
+            ? 0
+            : dj === 1
+              ? 4
+              : 5
+          : di === -1
+            ? dj === 0
+              ? 1
+              : dj === 1
+                ? 6
+                : 7
+            : dj === 1
+              ? 2
+              : 3;
+      if (nav.links && !(nav.links[ci * n + cj]! & (1 << direction))) continue;
       if (solid[k]) continue;
       if (di && dj && (solid[(ci + di) * n + cj] || solid[ci * n + cj + dj])) continue;
       let c = dist[k]!;
@@ -357,6 +413,8 @@ function descend(
 
 /** approach (1), hold (0) or back off (-1) along the route to the target */
 function approach(e: Bot, t: Target, dir: number, speed: number, ctx: AICtx) {
+  // A firing-distance band is useful only when the target is visible.
+  if (dir <= 0 && !pursuitHasShot(e, t, ctx.time, ctx.blocks)) dir = 1;
   if (dir === 0) return;
   const wp = waypoint(e, t, ctx);
   if (dir > 0) walk(e, wp.x, wp.z, speed * ctx.delta, ctx);
